@@ -4,6 +4,7 @@ import { copyFile, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
+import type { Resource } from '../../src/domain/contracts';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { defaultPlaygroundDirectory } from '../../tools/playground/main';
@@ -11,6 +12,8 @@ import { remoteSamples } from '../../tools/playground/catalog';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { verifyRawOrientation } from './raw-orientation';
+import { countOf, exists, patchSettings, pressButton, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
@@ -99,6 +102,58 @@ const orientation = await verifyRawOrientation(
   root,
   path.join(files, 'Ricoh-GR-III.DNG'),
 );
+
+const pageDelay = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+/** Decodes the camera rendition and reports its derivation and picture size. */
+async function cameraRendition(file: string) {
+  const source = await window.viewer.resource(file);
+  let child: Resource | undefined;
+  try {
+    child = await window.viewer.imageRendition(source.id, {
+      mode: 'camera',
+      requestID: crypto.randomUUID(),
+    });
+    const image = new Image();
+    image.src = child.url;
+    await image.decode();
+    return {
+      kind: child.derivation!.kind,
+      decoder: child.derivation!.decoder,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+    };
+  } finally {
+    if (child) await window.viewer.release(child.id);
+    await window.viewer.release(source.id);
+  }
+}
+
+function selectRow(row: string): void {
+  document.querySelector<HTMLElement>(row)!.click();
+  document.querySelector<HTMLElement>('.folder-explorer')!.focus();
+}
+
+/** Whether Quick Preview shows a decoded picture; when given, other than `prior` and with
+ * `label` in the preview text. */
+function pictureShown(label?: string, prior?: string): boolean {
+  const img = document.querySelector<HTMLImageElement>('.quick-preview .image-stage img');
+  return (
+    !!img &&
+    img.complete &&
+    img.naturalWidth > 0 &&
+    (!prior || img.src !== prior) &&
+    (!label || document.querySelector('.quick-preview')!.textContent.includes(label))
+  );
+}
+
+const cameraRecoveryOffered = () =>
+  !!document.querySelector('.quick-preview .empty-state') &&
+  [...document.querySelectorAll('.quick-preview button')].some(
+    (button) => button.textContent.trim() === 'Use camera preview',
+  );
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [],
@@ -111,14 +166,14 @@ try {
       await command('Input.dispatchKeyEvent', { type, key, code, windowsVirtualKeyCode: n });
   };
   const capture = async (name: string) => {
-    await evaluate('new Promise(r=>setTimeout(r,250))');
+    await evaluate(pageCall(pageDelay, 250));
     const image = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
     const target = path.join(root, name + '.png');
     await writeFile(target, Buffer.from(image.data, 'base64'), { flag: 'wx' });
     captures.push(target);
   };
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+    () => evaluate(countOf('[data-file-path]')),
     (n) => n === 4,
     'camera files',
   );
@@ -127,14 +182,7 @@ try {
     const times = [];
     for (let pass = 0; pass < 2; pass++) {
       const start = Date.now();
-      const result = await evaluate<{
-        kind: string;
-        width: number;
-        height: number;
-        decoder: string;
-      }>(
-        `(async()=>{const source=await window.viewer.resource(${JSON.stringify(file)});let child;try{child=await window.viewer.imageRendition(source.id,{mode:'camera',requestID:crypto.randomUUID()});const image=new Image();image.src=child.url;await image.decode();return {kind:child.derivation.kind,decoder:child.derivation.decoder,width:image.naturalWidth,height:image.naturalHeight}}finally{if(child)await window.viewer.release(child.id);await window.viewer.release(source.id)}})()`,
-      );
+      const result = await evaluate(pageCall(cameraRendition, file));
       assert.equal(result.kind, 'camera');
       assert.equal(result.decoder, 'LibRaw 0.22.2');
       assert.ok(
@@ -144,39 +192,29 @@ try {
       );
       times.push(Date.now() - start);
     }
-    await evaluate(
-      `(()=>{document.querySelector(${JSON.stringify(`[data-file-path="${file}"]`)}).click();document.querySelector('.folder-explorer').focus()})()`,
-    );
+    await evaluate(pageCall(selectRow, `[data-file-path="${file}"]`));
     await key(' ', 'Space', 32);
     await until(
-      () =>
-        evaluate<boolean>(
-          '(()=>{const img=document.querySelector(".quick-preview .image-stage img");return !!img?.complete&&img.naturalWidth>0&&document.querySelector(".quick-preview").textContent.includes("Camera preview")})()',
-        ),
+      () => evaluate(pageCall(pictureShown, 'Camera preview')),
       Boolean,
       'camera preview picture',
     );
     if (name === originals[0]) await capture('raw-camera-dark');
-    const prior = await evaluate<string>(
-      'document.querySelector(".quick-preview .image-stage img").src',
+    const prior = await evaluate(
+      pageCall(
+        () => document.querySelector<HTMLImageElement>('.quick-preview .image-stage img')!.src,
+      ),
     );
-    await evaluate(
-      '[...document.querySelectorAll(".quick-preview button")].find(b=>b.textContent.trim()==="Render RAW").click()',
-    );
+    await evaluate(pressButton('Render RAW', '.quick-preview'));
     await until(
-      () =>
-        evaluate<boolean>(
-          `(()=>{const img=document.querySelector('.quick-preview .image-stage img');return !!img?.complete&&img.naturalWidth>0&&img.src!==${JSON.stringify(prior)}&&document.querySelector('.quick-preview').textContent.includes('RAW rendition')})()`,
-        ),
+      () => evaluate(pageCall(pictureShown, 'RAW rendition', prior)),
       Boolean,
       'independent RAW rendition',
     );
     if (name === originals[0]) {
-      await evaluate(
-        `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-      );
+      await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
       await until(
-        () => evaluate<string>('document.documentElement.dataset.look'),
+        () => evaluate(pageCall(() => document.documentElement.dataset.look)),
         (look) => look === 'light',
         'light theme',
       );
@@ -189,14 +227,12 @@ try {
       });
       await capture('raw-render-narrow');
       await command('Emulation.clearDeviceMetricsOverride');
-      await evaluate(
-        `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'dark'}],s.revision))`,
-      );
+      await evaluate(patchSettings({ path: 'settings.appearance', value: 'dark' }));
     }
     await key('Escape', 'Escape', 27);
     await until(
-      () => evaluate<boolean>('!document.querySelector(".quick-preview")'),
-      Boolean,
+      () => evaluate(exists('.quick-preview')),
+      (shown) => !shown,
       'RAW closes',
     );
     observations.push({
@@ -207,61 +243,35 @@ try {
     });
   }
   const cameraOnlyFile = path.join(files, 'Camera-only.DNG');
-  await evaluate(
-    `(()=>{document.querySelector(${JSON.stringify(`[data-file-path="${cameraOnlyFile}"]`)}).click();document.querySelector('.folder-explorer').focus()})()`,
-  );
+  await evaluate(pageCall(selectRow, `[data-file-path="${cameraOnlyFile}"]`));
   await key(' ', 'Space', 32);
+  await until(() => evaluate(pageCall(pictureShown)), Boolean, 'camera-only image');
+  await evaluate(pressButton('Render RAW', '.quick-preview'));
   await until(
-    () =>
-      evaluate<boolean>(
-        '(()=>{const img=document.querySelector(".quick-preview .image-stage img");return !!img?.complete&&img.naturalWidth>0})()',
-      ),
-    Boolean,
-    'camera-only image',
-  );
-  await evaluate(
-    '[...document.querySelectorAll(".quick-preview button")].find(b=>b.textContent.trim()==="Render RAW").click()',
-  );
-  await until(
-    () =>
-      evaluate<boolean>(
-        '!!document.querySelector(".quick-preview .empty-state")&&[...document.querySelectorAll(".quick-preview button")].some(b=>b.textContent.trim()==="Use camera preview")',
-      ),
+    () => evaluate(pageCall(cameraRecoveryOffered)),
     Boolean,
     'RAW failure offers camera recovery',
   );
   await capture('raw-camera-recovery');
-  await evaluate(
-    '[...document.querySelectorAll(".quick-preview button")].find(b=>b.textContent.trim()==="Use camera preview").click()',
-  );
-  await until(
-    () =>
-      evaluate<boolean>(
-        '(()=>{const img=document.querySelector(".quick-preview .image-stage img");return !!img?.complete&&img.naturalWidth>0})()',
-      ),
-    Boolean,
-    'camera image recovered',
-  );
+  await evaluate(pressButton('Use camera preview', '.quick-preview'));
+  await until(() => evaluate(pageCall(pictureShown)), Boolean, 'camera image recovered');
   await key('Escape', 'Escape', 27);
   await until(
-    () => evaluate<boolean>('!document.querySelector(".quick-preview")'),
-    Boolean,
+    () => evaluate(exists('.quick-preview')),
+    (shown) => !shown,
     'recovered preview closes',
   );
   const broken = path.join(files, 'Broken.nef');
-  await evaluate(
-    `(()=>{document.querySelector(${JSON.stringify(`[data-file-path="${broken}"]`)}).click();document.querySelector('.folder-explorer').focus()})()`,
-  );
+  await evaluate(pageCall(selectRow, `[data-file-path="${broken}"]`));
   await key(' ', 'Space', 32);
   await until(
-    () =>
-      evaluate<string>('document.querySelector(".quick-preview .empty-state")?.textContent||""'),
+    () => evaluate(textOf('.quick-preview .empty-state')),
     (text) => text.includes('Preview unavailable'),
     'corrupt RAW refusal',
   );
   await capture('raw-invalid');
   await key('Escape', 'Escape', 27);
-  assert.equal((await evaluate<unknown[]>('window.viewer.jobs()')).length, 0);
+  assert.equal((await evaluate(pageCall(() => window.viewer.jobs()))).length, 0);
   for (const name of originals) {
     assert.equal(await hash(path.join(files, name)), hashes[name]);
     assert.equal(
@@ -271,7 +281,10 @@ try {
   }
 } catch (error) {
   if (connection)
-    console.log('RAW UI:', await connection.evaluate('document.body.innerText.slice(-4000)'));
+    console.log(
+      'RAW UI:',
+      await connection.evaluate(pageCall(() => document.body.innerText.slice(-4000))),
+    );
   throw error;
 } finally {
   await app.close(connection);

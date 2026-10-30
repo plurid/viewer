@@ -5,11 +5,14 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
+import type { Resource } from '../../src/domain/contracts';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { defaultPlaygroundDirectory } from '../../tools/playground/main';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { countOf, exists, patchSettings, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
@@ -67,6 +70,101 @@ const state: SavedState = {
 };
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
 await writeFile(path.join(profile, 'settings.json'), JSON.stringify(settings), { flag: 'wx' });
+
+/** Chromium's count of decoded audio bytes, outside the DOM types. */
+interface DecodingVideo extends HTMLVideoElement {
+  webkitAudioDecodedByteCount?: number;
+}
+
+const pageDelay = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+function videoBounds() {
+  const r = document.querySelector('.quick-preview video')!.getBoundingClientRect();
+  return { x: r.x, y: r.y, width: r.width, height: r.height };
+}
+
+function selectRow(row: string): void {
+  document.querySelector<HTMLElement>(row)!.click();
+  document.querySelector<HTMLElement>('.folder-explorer')!.focus();
+}
+
+/** Whether the compatibility copy shows a decoded picture, with its size and duration. */
+function compatiblePicture() {
+  const v = document.querySelector<HTMLVideoElement>('.quick-preview video');
+  return {
+    ready:
+      !!v &&
+      v.readyState >= 2 &&
+      v.videoWidth > 0 &&
+      document.querySelector('.quick-preview')!.textContent.includes('Compatibility copy') &&
+      !document.querySelector('.media-loading'),
+    width: v?.videoWidth ?? 0,
+    height: v?.videoHeight ?? 0,
+    duration: v && Number.isFinite(v.duration) ? v.duration : 0,
+  };
+}
+
+function playback() {
+  const v = document.querySelector<DecodingVideo>('.quick-preview video')!;
+  return {
+    seconds: v.currentTime,
+    frames: v.getVideoPlaybackQuality().totalVideoFrames,
+    audio: v.webkitAudioDecodedByteCount ?? 0,
+  };
+}
+
+function pauseAt(seconds: number): void {
+  const video = document.querySelector<HTMLVideoElement>('.quick-preview video')!;
+  video.pause();
+  video.currentTime = seconds;
+}
+
+function seekedTo(seconds: number): boolean {
+  const v = document.querySelector<HTMLVideoElement>('.quick-preview video')!;
+  return !v.seeking && v.currentTime >= seconds && v.readyState >= 2;
+}
+
+/** Times a warm rendition and checks it serves a 512-byte tail range. */
+async function warmRendition(file: string) {
+  const source = await window.viewer.resource(file);
+  let child: Resource | undefined;
+  try {
+    const start = performance.now();
+    child = await window.viewer.videoRendition(source.id, crypto.randomUUID());
+    const response = await fetch(child.url, { headers: { Range: 'bytes=-512' } });
+    const bytes = await response.arrayBuffer();
+    if (response.status !== 206 || bytes.byteLength !== 512)
+      throw Error('Derived media range failure');
+    return {
+      warmMilliseconds: performance.now() - start,
+      rangeStatus: response.status,
+      rangeBytes: bytes.byteLength,
+    };
+  } finally {
+    if (child) await window.viewer.release(child.id);
+    await window.viewer.release(source.id);
+  }
+}
+
+/** Starts a rendition, cancels it 50 ms later, and reports whether it was cancelled. */
+async function cancelledRendition(file: string) {
+  const source = await window.viewer.resource(file),
+    requestID = crypto.randomUUID(),
+    start = performance.now();
+  const pending = window.viewer.videoRendition(source.id, requestID);
+  setTimeout(() => window.viewer.cancelDocument(source.id, requestID), 50);
+  try {
+    const child = await pending;
+    await window.viewer.release(child.id);
+    return { cancelled: false, ms: performance.now() - start };
+  } catch {
+    return { cancelled: true, ms: performance.now() - start };
+  } finally {
+    await window.viewer.release(source.id);
+  }
+}
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [],
@@ -79,15 +177,13 @@ try {
       await command('Input.dispatchKeyEvent', { type, key, code, windowsVirtualKeyCode: n });
   };
   const capture = async (name: string) => {
-    await evaluate('new Promise(r=>setTimeout(r,150))');
+    await evaluate(pageCall(pageDelay, 150));
     const image = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
     const target = path.join(root, name + '.png');
     const bytes = Buffer.from(image.data, 'base64');
     await writeFile(target, bytes, { flag: 'wx' });
     if (name === 'video-copy-light') {
-      const bounds = await evaluate<{ x: number; y: number; width: number; height: number }>(
-        '(()=>{const r=document.querySelector(".quick-preview video").getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}})()',
-      );
+      const bounds = await evaluate(pageCall(videoBounds));
       const require = createRequire(import.meta.url),
         sharp = require(
           path.resolve(
@@ -115,69 +211,52 @@ try {
     captures.push(target);
   };
   const preview = async (source: string) => {
-    await evaluate(
-      `(()=>{document.querySelector(${JSON.stringify(`[data-file-path="${source}"]`)}).click();document.querySelector('.folder-explorer').focus()})()`,
-    );
+    await evaluate(pageCall(selectRow, `[data-file-path="${source}"]`));
     await key(' ', 'Space', 32);
   };
   const close = async () => {
     await key('Escape', 'Escape', 27);
     await until(
-      () => evaluate<boolean>('!document.querySelector(".quick-preview")'),
-      Boolean,
+      () => evaluate(exists('.quick-preview')),
+      (shown) => !shown,
       'preview closes',
     );
   };
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+    () => evaluate(countOf('[data-file-path]')),
     (n) => n === 3,
     'video corpus',
   );
   await preview(file);
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".media-converting")'),
+    () => evaluate(exists('.media-converting')),
     Boolean,
     'automatic compatibility conversion',
   );
   await capture('video-converting');
   const info = await until(
-    () =>
-      evaluate<{ ready: boolean; width: number; height: number; duration: number }>(
-        '(()=>{const v=document.querySelector(".quick-preview video");return {ready:!!v&&v.readyState>=2&&v.videoWidth>0&&document.querySelector(".quick-preview").textContent.includes("Compatibility copy")&&!document.querySelector(".media-loading"),width:v?.videoWidth??0,height:v?.videoHeight??0,duration:Number.isFinite(v?.duration)?v.duration:0}})()',
-      ),
+    () => evaluate(pageCall(compatiblePicture)),
     (v) => v.ready,
     'compatible picture',
     120000,
   );
   assert.ok(info.width <= 1280 && info.height <= 720 && info.duration > 32 && info.duration < 34);
-  await evaluate('document.querySelector(".quick-preview video").play()');
+  await evaluate(
+    pageCall(() => document.querySelector<HTMLVideoElement>('.quick-preview video')!.play()),
+  );
   const played = await until(
-    () =>
-      evaluate<{ seconds: number; frames: number; audio: number }>(
-        '(()=>{const v=document.querySelector(".quick-preview video");return {seconds:v.currentTime,frames:v.getVideoPlaybackQuality().totalVideoFrames,audio:v.webkitAudioDecodedByteCount??0}})()',
-      ),
+    () => evaluate(pageCall(playback)),
     (v) => v.seconds > 0.3 && v.frames > 3 && v.audio > 0,
     'actual picture and audio advance',
     10000,
   );
   observations.push({ info, played });
-  await evaluate(
-    'document.querySelector(".quick-preview video").pause();document.querySelector(".quick-preview video").currentTime=12',
-  );
-  await until(
-    () =>
-      evaluate<boolean>(
-        '(()=>{const v=document.querySelector(".quick-preview video");return !v.seeking&&v.currentTime>=12&&v.readyState>=2})()',
-      ),
-    Boolean,
-    'seek to later video frame',
-  );
+  await evaluate(pageCall(pauseAt, 12));
+  await until(() => evaluate(pageCall(seekedTo, 12)), Boolean, 'seek to later video frame');
   await capture('video-copy-dark');
-  await evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () => evaluate<string>('document.documentElement.dataset.look'),
+    () => evaluate(pageCall(() => document.documentElement.dataset.look)),
     (look) => look === 'light',
     'light theme',
   );
@@ -191,32 +270,28 @@ try {
   await capture('video-copy-narrow');
   await command('Emulation.clearDeviceMetricsOverride');
   await close();
-  observations.push(
-    await evaluate(
-      `(async()=>{const source=await window.viewer.resource(${JSON.stringify(file)});let child;try{const start=performance.now();child=await window.viewer.videoRendition(source.id,crypto.randomUUID());const response=await fetch(child.url,{headers:{Range:'bytes=-512'}});const bytes=await response.arrayBuffer();if(response.status!==206||bytes.byteLength!==512)throw Error('Derived media range failure');return {warmMilliseconds:performance.now()-start,rangeStatus:response.status,rangeBytes:bytes.byteLength}}finally{if(child)await window.viewer.release(child.id);await window.viewer.release(source.id)}})()`,
-    ),
-  );
-  const cancelled = await evaluate<{ cancelled: boolean; ms: number }>(
-    `(async()=>{const source=await window.viewer.resource(${JSON.stringify(cancelFile)}),requestID=crypto.randomUUID(),start=performance.now();const pending=window.viewer.videoRendition(source.id,requestID);setTimeout(()=>window.viewer.cancelDocument(source.id,requestID),50);try{const child=await pending;await window.viewer.release(child.id);return {cancelled:false,ms:performance.now()-start}}catch(error){return {cancelled:true,ms:performance.now()-start}}finally{await window.viewer.release(source.id)}})()`,
-  );
+  observations.push(await evaluate(pageCall(warmRendition, file)));
+  const cancelled = await evaluate(pageCall(cancelledRendition, cancelFile));
   assert.ok(cancelled.cancelled && cancelled.ms < 5000);
   observations.push(cancelled);
   await preview(path.join(files, 'Broken.mkv'));
   await until(
-    () =>
-      evaluate<string>('document.querySelector(".quick-preview .empty-state")?.textContent||""'),
+    () => evaluate(textOf('.quick-preview .empty-state')),
     (text) => text.includes('Compatibility preview unavailable'),
     'corrupt video refusal',
   );
   await capture('video-invalid');
   await close();
-  assert.equal((await evaluate<unknown[]>('window.viewer.jobs()')).length, 0);
+  assert.equal((await evaluate(pageCall(() => window.viewer.jobs()))).length, 0);
   assert.equal(await hash(original), before);
   assert.equal(await hash(file), before);
   assert.equal(await hash(cancelFile), before);
 } catch (error) {
   if (connection)
-    console.log('Video UI:', await connection.evaluate('document.body.innerText.slice(-4000)'));
+    console.log(
+      'Video UI:',
+      await connection.evaluate(pageCall(() => document.body.innerText.slice(-4000))),
+    );
   throw error;
 } finally {
   await app.close(connection);

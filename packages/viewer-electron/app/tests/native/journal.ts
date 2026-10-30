@@ -5,16 +5,16 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import {
-  CURRENT_STATE_VERSION,
-  type OperationJob,
-  type SavedState,
-} from '../../src/domain/contracts';
-import type { JournalPage } from '../../src/domain/journal/events';
+import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
+import type { GitActionRequest } from '../../src/domain/comparison/git-actions';
+import type { ChatDocument } from '../../src/domain/models/chat';
+import type { LocalServerAction } from '../../src/domain/previews/web';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { animationFrames, click, countOf, exists, patchSettings, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -107,6 +107,49 @@ const candidate = {
   executable: await hash(binary),
   archive: await hash(path.join(path.dirname(path.dirname(binary)), 'Resources/app.asar')),
 };
+
+const searchFocused = () =>
+  document.activeElement?.getAttribute('aria-label') === 'Search commands';
+
+/** The text of the first match; refuses a missing element. */
+function requiredText(selector: string): string {
+  const element = document.querySelector(selector);
+  if (!element) throw new Error('Nothing matches: ' + selector);
+  return element.textContent;
+}
+
+const journalPage = () => window.viewer.journalQuery({ filter: {}, limit: 200 });
+
+const copy = (sources: string[], destination: string) =>
+  window.viewer.operate({ kind: 'copy', sources, destination });
+
+const serverAction = (id: string, action: LocalServerAction) =>
+  window.viewer.localServerAction(id, action);
+
+/** Chat answers `create` with the new conversation. */
+const createChat = (paths: string[]) =>
+  window.viewer.chat({ kind: 'create', paths }) as Promise<ChatDocument>;
+
+/** A request to a provider that does not exist, so nothing reaches the network. */
+const sendToAbsentProvider = (id: string) =>
+  window.viewer
+    .chat({
+      kind: 'send',
+      id,
+      text: 'Synthetic test request',
+      providerID: 'absent-fixture-provider',
+    })
+    .catch(() => null);
+
+/** The renderer has no route to write Journal records itself. */
+const noJournalAppend = () =>
+  (window.viewer as unknown as Record<string, unknown>).journalAppend === undefined;
+
+function journalGeometry(): number[] {
+  const rect = document.querySelector('.journal-plane')!.getBoundingClientRect();
+  return [rect.x, rect.y, rect.width, rect.height, innerWidth, innerHeight];
+}
+
 const app = await ownedApp(binary, profile);
 let main: Awaited<ReturnType<typeof app.connect>> | undefined;
 let failure: unknown;
@@ -114,38 +157,22 @@ try {
   main = await app.connect();
   const connection = main;
   const { evaluate, command } = connection;
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".folder-plane")'),
-    Boolean,
-    'folder loaded',
-  );
+  await until(() => evaluate(exists('.folder-plane')), Boolean, 'folder loaded');
   const palette = async (label: string) => {
-    await evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
-    await until(
-      () =>
-        evaluate<boolean>(
-          'document.activeElement?.getAttribute("aria-label") === "Search commands"',
-        ),
-      Boolean,
-      'palette ready',
-    );
+    await evaluate(click('[aria-label="Commands (⌘K)"]'));
+    await until(() => evaluate(pageCall(searchFocused)), Boolean, 'palette ready');
     await command('Input.insertText', { text: label });
     await until(
-      () =>
-        evaluate<string>(
-          'document.querySelector(".command-result[aria-selected=true]")?.textContent ?? ""',
-        ),
+      () => evaluate(textOf('.command-result[aria-selected=true]')),
       (text) => text.includes(label),
       label,
     );
-    await evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
+    await evaluate(click('.command-result[aria-selected=true]'));
   };
-  const query = () => evaluate<JournalPage>('window.viewer.journalQuery({filter:{},limit:200})');
-  const operation = await evaluate<string>(
-    `window.viewer.operate(${JSON.stringify({ kind: 'copy', sources: [source], destination })})`,
-  );
+  const query = () => evaluate(pageCall(journalPage));
+  const operation = await evaluate(pageCall(copy, [source], destination));
   await until(
-    () => evaluate<OperationJob[]>('window.viewer.jobs()'),
+    () => evaluate(pageCall(() => window.viewer.jobs())),
     (jobs) => jobs.some((job) => job.id === operation && job.status === 'completed'),
     'real copy completed',
   );
@@ -162,7 +189,7 @@ try {
   checks.push('real file copy, start/completion trace and retained source');
   const gitID = crypto.randomUUID();
   await evaluate(
-    `window.viewer.gitAction(${JSON.stringify({
+    pageCall((request: GitActionRequest) => window.viewer.gitAction(request), {
       id: gitID,
       kind: 'status',
       target: {
@@ -173,7 +200,7 @@ try {
         directory: folder,
         selection: [],
       },
-    })})`,
+    }),
   );
   await until(
     query,
@@ -182,16 +209,12 @@ try {
     'actual read-only Git process completion',
   );
   checks.push('real hardened Git status process start/exit in one trace');
-  const server = await evaluate<{ id: string }>(
-    `window.viewer.localServerStart(${JSON.stringify(folder)},'folder')`,
+  const server = await evaluate(
+    pageCall((root: string) => window.viewer.localServerStart(root, 'folder'), folder),
   );
-  await evaluate(`window.viewer.localServerAction(${JSON.stringify(server.id)},'stop')`);
-  const chat = await evaluate<{ id: string }>(
-    `window.viewer.chat({kind:'create',paths:[${JSON.stringify(folder)}]})`,
-  );
-  await evaluate(
-    `window.viewer.chat({kind:'send',id:${JSON.stringify(chat.id)},text:'Synthetic test request',providerID:'absent-fixture-provider'}).catch(()=>null)`,
-  );
+  await evaluate(pageCall(serverAction, server.id, 'stop'));
+  const chat = await evaluate(pageCall(createChat, [folder]));
+  await evaluate(pageCall(sendToAbsentProvider, chat.id));
   await until(
     query,
     (page) => page.records.some((record) => record.source === 'chat' && record.phase === 'failed'),
@@ -200,44 +223,29 @@ try {
   checks.push('local server start/stop and a rejected model request, no provider network');
   await palette('Open Journal');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".journal-event").length'),
+    () => evaluate(countOf('.journal-event')),
     (count) => count > 0,
     'virtualized Journal rows',
   );
   await palette('Dock plane');
+  await until(() => evaluate(exists('.journal-plane')), Boolean, 'docked Journal');
+  await evaluate(click('.journal-event'));
+  await until(() => evaluate(exists('.journal-details')), Boolean, 'event inspector');
+  assert.equal(await evaluate(pageCall(noJournalAppend)), true);
+  const rowsBefore = await evaluate(pageCall(requiredText, '.journal-rows'));
+  await evaluate(pageCall(serverAction, server.id, 'restart'));
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".journal-plane")'),
-    Boolean,
-    'docked Journal',
-  );
-  await evaluate('document.querySelector(".journal-event").click()');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".journal-details")'),
-    Boolean,
-    'event inspector',
-  );
-  assert.equal(await evaluate<boolean>('window.viewer.journalAppend === undefined'), true);
-  const rowsBefore = await evaluate<string>('document.querySelector(".journal-rows").textContent');
-  await evaluate(`window.viewer.localServerAction(${JSON.stringify(server.id)},'restart')`);
-  await until(
-    () => evaluate<string>('document.querySelector(".journal-follow").textContent'),
+    () => evaluate(textOf('.journal-follow')),
     (text) => text.includes('new'),
     'paused unread indicator',
   );
-  assert.equal(
-    await evaluate<string>('document.querySelector(".journal-rows").textContent'),
-    rowsBefore,
-  );
+  assert.equal(await evaluate(pageCall(requiredText, '.journal-rows')), rowsBefore);
   checks.push('paused rows remain stable; unseen activity is explicit; no renderer append API');
   const bounds = async () => {
     let previous = '';
     let stable = 0;
     await until(
-      () =>
-        evaluate<number[]>(`(() => {
-        const rect = document.querySelector('.journal-plane').getBoundingClientRect();
-        return [rect.x, rect.y, rect.width, rect.height, innerWidth, innerHeight];
-      })()`),
+      () => evaluate(pageCall(journalGeometry)),
       (geometry) => {
         const current = JSON.stringify(geometry.map((value) => Math.round(value * 10)));
         stable = current === previous ? stable + 1 : 0;
@@ -252,9 +260,7 @@ try {
       },
       'Journal geometry',
     );
-    await evaluate(
-      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-    );
+    await evaluate(animationFrames(2));
   };
   const capture = async (name: string, width: number, height: number) => {
     await command('Emulation.setDeviceMetricsOverride', {
@@ -275,22 +281,17 @@ try {
   };
   await capture('desktop-dark.png', 1440, 900);
   await capture('minimum-dark.png', 760, 650);
-  const revision = await evaluate<number>(
-    'window.viewer.settingsGet().then(snapshot=>snapshot.revision)',
-  );
-  await evaluate(
-    `window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],${revision})`,
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await capture('desktop-light.png', 1440, 900);
   checks.push('dark/light and narrow native renderer captures');
-  await evaluate('document.querySelector(".journal-follow").click()');
-  const preview = await evaluate<{ text: string; count: number }>(
-    'window.viewer.journalExportPreview({filter:{},limit:200})',
+  await evaluate(click('.journal-follow'));
+  const preview = await evaluate(
+    pageCall(() => window.viewer.journalExportPreview({ filter: {}, limit: 200 })),
   );
   assert.ok(preview.count > 0);
   assert.ok(!preview.text.includes(source) && !preview.text.includes('Synthetic test request'));
   checks.push('bounded exact export preview excludes paths and request content');
-  await evaluate(`window.viewer.localServerAction(${JSON.stringify(server.id)},'stop')`);
+  await evaluate(pageCall(serverAction, server.id, 'stop'));
   const final = await query();
   const fileTrace = final.records.filter((record) => record.taskID === operation);
   assert.equal(fileTrace.length, 2);
@@ -298,15 +299,11 @@ try {
   assert.equal(fileTrace[0]?.origin.workspaceID, initial.activeWorkspace);
   assert.equal(fileTrace[0]?.origin.planeID, 'folder');
   checks.push('actual desktop service origin and correlation agree with the generated workspace');
-  await evaluate('document.querySelector(\'[aria-label="Event source"]\').click()');
+  await evaluate(click('[aria-label="Event source"]'));
+  await until(() => evaluate(exists('[data-menu-id="choice:git"]')), Boolean, 'Git source choice');
+  await evaluate(click('[data-menu-id="choice:git"]'));
   await until(
-    () => evaluate<boolean>('!!document.querySelector(\'[data-menu-id="choice:git"]\')'),
-    Boolean,
-    'Git source choice',
-  );
-  await evaluate('document.querySelector(\'[data-menu-id="choice:git"]\').click()');
-  await until(
-    () => evaluate<string>('document.querySelector(\'[aria-label="Event source"]\').textContent'),
+    () => evaluate(textOf('[aria-label="Event source"]')),
     (text) => text.includes('Git'),
     'saved source filter',
   );
@@ -345,20 +342,17 @@ if (!failure) {
     connection = await restored.connect();
     const read = connection;
     await until(
-      () =>
-        read.evaluate<string>(
-          'document.querySelector(\'.journal-plane [aria-label="Event source"]\')?.textContent ?? ""',
-        ),
+      () => read.evaluate(textOf('.journal-plane [aria-label="Event source"]')),
       (text) => text.includes('Git'),
       'cold restored Journal filter',
     );
-    const history = await read.evaluate<JournalPage>(
-      'window.viewer.journalQuery({filter:{source:"git"},limit:200})',
+    const history = await read.evaluate(
+      pageCall(() => window.viewer.journalQuery({ filter: { source: 'git' }, limit: 200 })),
     );
     assert.equal(history.records.filter((record) => record.phase === 'started').length, 1);
     assert.equal(history.records.filter((record) => record.phase === 'succeeded').length, 1);
-    assert.equal((await read.evaluate<OperationJob[]>('window.viewer.jobs()')).length, 1);
-    assert.deepEqual(await read.evaluate('window.viewer.localServers()'), []);
+    assert.equal((await read.evaluate(pageCall(() => window.viewer.jobs()))).length, 1);
+    assert.deepEqual(await read.evaluate(pageCall(() => window.viewer.localServers())), []);
     checks.push(
       'cold restore retains filters/history without replaying Git, file operations or servers',
     );

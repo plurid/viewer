@@ -16,6 +16,8 @@ import { Notes } from '../../src/desktop/editing/notes';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { NativeInteractions } from './runtime/interactions';
+import { animationFrames, exists, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -113,6 +115,54 @@ await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 const address = server.address();
 assert.ok(address && typeof address !== 'string');
 const endpoint = `http://127.0.0.1:${address.port}/v1`;
+/** The event delivery the debugger script below puts in place of the app's own. */
+type DeliveryWindow = {
+  generatedTaskDelivery?: {
+    dispatch(event: unknown): void;
+    ack: { id: string; error?: string } | null;
+  };
+};
+
+const dispatchTask = (event: unknown) =>
+  (window as unknown as DeliveryWindow).generatedTaskDelivery!.dispatch(event);
+const deliveryAck = () => (window as unknown as DeliveryWindow).generatedTaskDelivery!.ack;
+const speechStatus = () => window.viewer.speech({ kind: 'status' }) as Promise<SpeechStatus>;
+const scrollFields = (top: number) => {
+  document.querySelector('.task-request-fields')!.scrollTop = top;
+};
+const fitsWidth = () => document.documentElement.scrollWidth <= innerWidth;
+
+function fixtureReady() {
+  return {
+    fixture: !!(window as unknown as DeliveryWindow).generatedTaskDelivery,
+    folder: !!document.querySelector('.folder-explorer'),
+    body: document.body.innerText.slice(0, 1000),
+  };
+}
+
+function commandLineState() {
+  return {
+    row: document.querySelector('.command-result[aria-selected=true]')?.textContent || '',
+    input: document.querySelector<HTMLInputElement>('[aria-label="Command line"]')?.value || '',
+    active: document.activeElement?.outerHTML.slice(0, 400) || '',
+  };
+}
+
+const taskForm = () => ({
+  form: !!document.querySelector('.task-request-dialog'),
+  body: document.body.innerText.slice(-2200),
+});
+
+/** Whether the task form's footer lies inside the window and nothing overflows its width. */
+function footerFits(): boolean {
+  const rect = document.querySelector('.task-request-dialog footer')!.getBoundingClientRect();
+  return (
+    rect.bottom <= innerHeight &&
+    rect.top >= 0 &&
+    document.documentElement.scrollWidth <= innerWidth
+  );
+}
+
 const app = await ownedApp(binary, profile, { mode: 'foreground' });
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 let tasks: AgentTaskWorkflows | undefined;
@@ -145,9 +195,7 @@ try {
   await until(
     () =>
       page
-        .evaluate<{ fixture: boolean; folder: boolean; body: string }>(
-          '({fixture:!!window.generatedTaskDelivery,folder:!!document.querySelector(".folder-explorer"),body:document.body.innerText.slice(0,1000)})',
-        )
+        .evaluate(pageCall(fixtureReady))
         .catch(() => ({ fixture: false, folder: false, body: 'Loading' })),
     (value) => value.fixture && value.folder,
     'Owned renderer fixture ready',
@@ -181,11 +229,15 @@ try {
     present: async (bundle) => {
       const id = randomUUID();
       await page.evaluate(
-        `window.generatedTaskDelivery.dispatch(${JSON.stringify({ type: 'agent-task', id, bundle, deadline: Date.now() + 24000 })})`,
+        pageCall(dispatchTask, {
+          type: 'agent-task',
+          id,
+          bundle,
+          deadline: Date.now() + 24000,
+        }),
       );
       const ack = await until(
-        () =>
-          page.evaluate<{ id: string; error?: string } | null>('window.generatedTaskDelivery.ack'),
+        () => page.evaluate(pageCall(deliveryAck)),
         (value) => value?.id === id,
         'Durable live task acknowledgement',
       );
@@ -230,8 +282,8 @@ try {
   );
   const actions = new NativeInteractions({ evaluate: page.evaluate, command: page.command, until });
   await until(
-    () => page.evaluate<boolean>('!document.querySelector("[data-plurid-motion]")'),
-    Boolean,
+    () => page.evaluate(exists('[data-plurid-motion]')),
+    (moving) => !moving,
     'Task camera settled',
   );
   await page.command('Emulation.setFocusEmulationEnabled', { enabled: true });
@@ -241,19 +293,13 @@ try {
     `task-new "Review the next change" --repo "${repo}" --branch feature/next --path "${path.join(root, 'Next')}" --workspace target`,
   );
   await until(
-    () =>
-      page.evaluate<{ row: string; input: string; active: string }>(
-        '({row:document.querySelector(".command-result[aria-selected=true]")?.textContent || "",input:document.querySelector(\'[aria-label="Command line"]\')?.value || "",active:document.activeElement?.outerHTML.slice(0,400) || ""})',
-      ),
+    () => page.evaluate(pageCall(commandLineState)),
     (value) => value.row.includes('task-new'),
     'Task command rendered',
   );
   await actions.key('Enter', 'Enter');
   await until(
-    () =>
-      page.evaluate<{ form: boolean; body: string }>(
-        '({form:!!document.querySelector(".task-request-dialog"),body:document.body.innerText.slice(-2200)})',
-      ),
+    () => page.evaluate(pageCall(taskForm)),
     (value) => value.form,
     'Typed task form',
   );
@@ -265,9 +311,7 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await target.evaluate(
-      'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-    );
+    await target.evaluate(animationFrames(2));
     const image = await target.command<{ data: string }>('Page.captureScreenshot', {
       format: 'png',
     });
@@ -279,36 +323,56 @@ try {
     ['desktop', 1000, 760],
     ['minimum', 760, 540],
   ] as const) {
-    await page.evaluate('document.querySelector(".task-request-fields").scrollTop=0');
+    await page.evaluate(pageCall(scrollFields, 0));
     await capture(page, 'task-form-' + label, width, height);
-    await page.evaluate('document.querySelector(".task-request-fields").scrollTop=100000');
+    await page.evaluate(pageCall(scrollFields, 100000));
     await capture(page, 'task-form-fields-' + label, width, height);
-    assert.equal(
-      await page.evaluate<boolean>(
-        '(()=>{const el=document.querySelector(".task-request-dialog footer");const r=el.getBoundingClientRect();return r.bottom<=innerHeight&&r.top>=0&&document.documentElement.scrollWidth<=innerWidth})()',
-      ),
-      true,
-    );
+    assert.equal(await page.evaluate(pageCall(footerFits)), true);
   }
   await actions.button('Cancel', '.task-request-dialog');
   checks.push(
     'Typed task command opens editable parameters; scrolling retains reachable actions at desktop and minimum size; cancel makes no second worktree',
   );
-  await page.evaluate('window.viewer.openSettings("settings.speech")');
+  await page.evaluate(pageCall(() => window.viewer.openSettings('settings.speech')));
   const preferences = await app.connect(true);
   await until(
-    () => preferences.evaluate<boolean>('!!document.querySelector(".speech-preferences")'),
+    () => preferences.evaluate(exists('.speech-preferences')),
     Boolean,
     'Speech settings',
   );
   await preferences.evaluate(
-    `window.viewer.speech({kind:'provider-save',provider:{id:${JSON.stringify(providerID)},kind:'compatible',name:'Generated loopback speech',endpoint:${JSON.stringify(endpoint)},model:'generated-speech'}})`,
+    pageCall(
+      (id: string, endpoint: string) =>
+        window.viewer.speech({
+          kind: 'provider-save',
+          provider: {
+            id,
+            kind: 'compatible',
+            name: 'Generated loopback speech',
+            endpoint,
+            model: 'generated-speech',
+          },
+        }),
+      providerID,
+      endpoint,
+    ),
   );
   await preferences.evaluate(
-    `window.viewer.speech({kind:'provider-key',id:${JSON.stringify(providerID)},key:${JSON.stringify(secret)}})`,
+    pageCall(
+      (id: string, key: string) => window.viewer.speech({ kind: 'provider-key', id, key }),
+      providerID,
+      secret,
+    ),
   );
   await preferences.evaluate(
-    `window.viewer.speech({kind:'preferences',preferences:{backend:'hosted',providerID:${JSON.stringify(providerID)},language:'en',microphone:''}})`,
+    pageCall(
+      (providerID: string) =>
+        window.viewer.speech({
+          kind: 'preferences',
+          preferences: { backend: 'hosted', providerID, language: 'en', microphone: '' },
+        }),
+      providerID,
+    ),
   );
   const settingsActions = new NativeInteractions({
     evaluate: preferences.evaluate,
@@ -319,7 +383,7 @@ try {
     mode = current;
     await settingsActions.button('Check connection and model');
     await until(
-      () => preferences.evaluate<SpeechStatus>('window.viewer.speech({kind:"status"})'),
+      () => preferences.evaluate(pageCall(speechStatus)),
       (status) =>
         status.hosted?.providers[0]?.check?.outcome ===
         (current === 'available'
@@ -329,9 +393,7 @@ try {
             : 'auth-error'),
       'Metadata check ' + current,
     );
-    const status = await preferences.evaluate<SpeechStatus>(
-      'window.viewer.speech({kind:"status"})',
-    );
+    const status = await preferences.evaluate(pageCall(speechStatus));
     assert.equal(status.hosted?.providers[0]?.allowed, false);
     assert.ok(!JSON.stringify(status).includes(secret));
     if (current !== 'missing')
@@ -340,13 +402,14 @@ try {
         ['minimum', 760, 540],
       ] as const) {
         await preferences.evaluate(
-          '[...document.querySelectorAll(".speech-hosted h3")].find(el=>el.textContent==="Connection and model").scrollIntoView({block:"start"})',
+          pageCall(() =>
+            [...document.querySelectorAll('.speech-hosted h3')]
+              .find((heading) => heading.textContent === 'Connection and model')!
+              .scrollIntoView({ block: 'start' }),
+          ),
         );
         await capture(preferences, 'speech-check-' + current + '-' + label, width, height);
-        assert.equal(
-          await preferences.evaluate<boolean>('document.documentElement.scrollWidth<=innerWidth'),
-          true,
-        );
+        assert.equal(await preferences.evaluate(pageCall(fitsWidth)), true);
       }
   }
   assert.equal(requests, 3);
@@ -359,11 +422,11 @@ try {
     resumed = await restored.connect();
   try {
     await until(
-      () => resumed.evaluate<string>('document.body.textContent || ""'),
+      () => resumed.evaluate(textOf('body')),
       (text) => text.includes('Generated live task'),
       'Live task restored',
     );
-    const status = await resumed.evaluate<SpeechStatus>('window.viewer.speech({kind:"status"})');
+    const status = await resumed.evaluate(pageCall(speechStatus));
     assert.equal(status.hosted?.providers[0]?.check, undefined);
     assert.equal(status.hosted?.providers[0]?.allowed, false);
     assert.equal(requests, 3);

@@ -8,14 +8,15 @@ import { parse } from 'jsonc-parser';
 import { CURRENT_STATE_VERSION } from '../../src/domain/contracts';
 import type { SavedState } from '../../src/domain/contracts';
 import { defaultSettings } from '../../src/domain/services';
-import type { ApplicationSettings, SettingsSnapshot } from '../../src/domain/services';
-import type { ModelDataPermission } from '../../src/domain/models/permissions';
+import type { ApplicationSettings } from '../../src/domain/services';
 import type { ProviderCheckResult } from '../../src/domain/models/provider-checks';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { hashFile } from '../../tools/qualification/source';
 import { ownedApp, until } from '../owned-app';
 import { NativeInteractions } from './runtime/interactions';
+import { exists, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -137,6 +138,50 @@ const stage = async (name: string, detail: unknown = {}) => {
   });
   console.log('Live model stage: ' + name);
 };
+type LiveCheck = { pending?: boolean; value?: ProviderCheckResult; error?: string };
+type LiveCheckWindow = { __liveModelCheck: LiveCheck };
+
+const permissionOf = (id: string) => window.viewer.providerPermissionGet(id);
+const checkGeneration = (providerID: string) =>
+  window.viewer.providerCheck({ providerID, kind: 'chat-schema' });
+
+/** Starts a live structured-output check without waiting; the outcome lands on the window. */
+function startProviderCheck(providerID: string): void {
+  const page = window as unknown as LiveCheckWindow;
+  page.__liveModelCheck = { pending: true };
+  void window.viewer.providerCheck({ providerID, kind: 'chat-schema' }).then(
+    (value) => {
+      page.__liveModelCheck = { value };
+    },
+    (error: Error) => {
+      page.__liveModelCheck = { error: error.message };
+    },
+  );
+}
+
+/** Changes one provider's model at the current settings revision. */
+const setProviderModel = (id: string, model: string) =>
+  window.viewer.settingsGet().then((snapshot) =>
+    window.viewer.settingsPatch(
+      [
+        {
+          path: 'settings.providers',
+          value: snapshot.settings.providers.map((provider) =>
+            provider.id === id ? { ...provider, model } : provider,
+          ),
+        },
+      ],
+      snapshot.revision,
+    ),
+  );
+
+const proposedLine = () =>
+  document.querySelector(
+    '.prompt-finder .command-result[aria-selected=true] .command-result-text > span',
+  )?.textContent ||
+  document.querySelector('.prompt-finder .command-result[aria-selected=true]')?.textContent ||
+  '';
+
 const app = await ownedApp(binary, profile, { mode: 'foreground' });
 let main: Awaited<ReturnType<typeof app.connect>> | undefined;
 let passed = false;
@@ -145,14 +190,9 @@ try {
   const { evaluate, command } = main;
   const actions = new NativeInteractions({ evaluate, command, until });
   const checkProvider = async () => {
-    await evaluate(
-      `window.__liveModelCheck={pending:true};window.viewer.providerCheck({providerID:${JSON.stringify(provider.id)},kind:'chat-schema'}).then(value=>{window.__liveModelCheck={value}},error=>{window.__liveModelCheck={error:error.message}});undefined`,
-    );
+    await evaluate(pageCall(startProviderCheck, provider.id));
     const result = await until(
-      () =>
-        evaluate<{ pending?: boolean; value?: ProviderCheckResult; error?: string }>(
-          'window.__liveModelCheck',
-        ),
+      () => evaluate(pageCall(() => (window as unknown as LiveCheckWindow).__liveModelCheck)),
       (result) => !result.pending,
       'Live provider check finished',
       30000,
@@ -161,30 +201,20 @@ try {
     assert.ok(result.value);
     return result.value;
   };
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".folder-explorer")'),
-    Boolean,
-    'Generated folder ready',
-  );
-  await evaluate('window.viewer.openSettings("settings.providers")');
+  await until(() => evaluate(exists('.folder-explorer')), Boolean, 'Generated folder ready');
+  await evaluate(pageCall(() => window.viewer.openSettings('settings.providers')));
   const settingsWindow = await app.connect(true);
   const controls = new NativeInteractions({ ...settingsWindow, until });
   await until(
-    () => settingsWindow.evaluate<boolean>('!!document.querySelector(".settings-provider")'),
+    () => settingsWindow.evaluate(exists('.settings-provider')),
     Boolean,
     'Models settings ready',
   );
-  assert.equal(
-    await evaluate(`window.viewer.providerPermissionGet(${JSON.stringify(provider.id)})`),
-    null,
-  );
+  assert.equal(await evaluate(pageCall(permissionOf, provider.id)), null);
   await stage('discovering-models');
   await controls.button('Connect and load models', '.settings-provider[open]');
   const status = await until(
-    () =>
-      settingsWindow.evaluate<string>(
-        'document.querySelector(".settings-provider[open] .model-summary")?.textContent || ""',
-      ),
+    () => settingsWindow.evaluate(textOf('.settings-provider[open] .model-summary')),
     (text) => text.includes('Connected') || text.includes('Connection failed'),
     'Live model discovery',
     30000,
@@ -193,8 +223,12 @@ try {
     status.includes('Connected'),
     'Stored provider connection failed; inspect the isolated Settings window.',
   );
-  const models = await settingsWindow.evaluate<string[]>(
-    '[...document.querySelectorAll(".settings-provider[open] datalist option")].map(option=>option.value)',
+  const models = await settingsWindow.evaluate(
+    pageCall(() =>
+      [
+        ...document.querySelectorAll<HTMLOptionElement>('.settings-provider[open] datalist option'),
+      ].map((option) => option.value),
+    ),
   );
   assert.ok(models.length);
   checks.push({
@@ -205,7 +239,7 @@ try {
     await controls.click('[aria-label="Default model for Ask Viewer"]');
     await controls.click('[data-menu-id=' + JSON.stringify('choice:' + id) + ']');
     await until(
-      () => evaluate<SettingsSnapshot>('window.viewer.settingsGet()'),
+      () => evaluate(pageCall(() => window.viewer.settingsGet())),
       (value) => value.settings.prompts.providerID === id,
       'Default model saved',
     );
@@ -215,10 +249,7 @@ try {
     detail: 'Changed through the UI and restored to the live provider.',
   });
   await assert.rejects(
-    () =>
-      evaluate(
-        `window.viewer.providerCheck({providerID:${JSON.stringify(provider.id)},kind:'chat-schema'})`,
-      ),
+    () => evaluate(pageCall(checkGeneration, provider.id)),
     /Allow this provider/,
   );
   checks.push({
@@ -233,10 +264,7 @@ try {
   });
   await controls.button('Allow selected data', '.settings-provider[open]');
   const permission = await until(
-    () =>
-      evaluate<ModelDataPermission | null>(
-        `window.viewer.providerPermissionGet(${JSON.stringify(provider.id)})`,
-      ),
+    () => evaluate(pageCall(permissionOf, provider.id)),
     (value) => value?.level === 'names',
     'Operator model consent',
     600000,
@@ -249,21 +277,15 @@ try {
   assert.equal(compatible.outcome, 'passed', compatible.detail);
   await actions.click('[aria-label="Commands (⌘K)"]');
   await actions.field('Search commands', '>sort by date modified, newest first');
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Ask in words"]')`),
-    Boolean,
-    'Ask in words',
-  );
+  await until(() => evaluate(exists('[aria-label="Ask in words"]')), Boolean, 'Ask in words');
   await actions.key('Enter', 'Enter');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".prompt-finder.has-line")'),
+    () => evaluate(exists('.prompt-finder.has-line')),
     Boolean,
     'Live command proposal',
     30000,
   );
-  const line = await evaluate<string>(
-    'document.querySelector(".prompt-finder .command-result[aria-selected=true] .command-result-text > span")?.textContent || document.querySelector(".prompt-finder .command-result[aria-selected=true]")?.textContent || ""',
-  );
+  const line = await evaluate(pageCall(proposedLine));
   assert.match(line, /sort\.modified/, 'Model proposed the requested sort action.');
   await actions.key('Enter', 'Enter');
   await until(
@@ -278,30 +300,22 @@ try {
   checks.push({ name: 'Ask Viewer', detail: { line, sort: 'modified', descending: true } });
   await actions.capture(path.join(root, 'asked-and-sorted.png'));
   await settingsWindow.evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.providers',value:s.settings.providers.map(p=>p.id===${JSON.stringify(provider.id)}?{...p,model:'viewer-unavailable-qualification-model'}:p)}],s.revision))`,
+    pageCall(setProviderModel, provider.id, 'viewer-unavailable-qualification-model'),
   );
   const failed = await checkProvider();
   assert.equal(failed.outcome, 'http-error');
   assert.ok([400, 404].includes(failed.httpStatus ?? 0));
   checks.push({ name: 'Unavailable remote model', detail: failed });
-  await settingsWindow.evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.providers',value:s.settings.providers.map(p=>p.id===${JSON.stringify(provider.id)}?{...p,model:${JSON.stringify(provider.model)}}:p)}],s.revision))`,
-  );
+  await settingsWindow.evaluate(pageCall(setProviderModel, provider.id, provider.model));
   await stage('revoking-test-permission');
   await controls.button('Revoke access', '.settings-provider[open]');
   await until(
-    () =>
-      evaluate<ModelDataPermission | null>(
-        `window.viewer.providerPermissionGet(${JSON.stringify(provider.id)})`,
-      ),
+    () => evaluate(pageCall(permissionOf, provider.id)),
     (value) => value === null,
     'Sharing revoked',
   );
   await assert.rejects(
-    () =>
-      evaluate(
-        `window.viewer.providerCheck({providerID:${JSON.stringify(provider.id)},kind:'chat-schema'})`,
-      ),
+    () => evaluate(pageCall(checkGeneration, provider.id)),
     /Allow this provider/,
   );
   checks.push({ name: 'Revocation', detail: 'Subsequent native generation was rejected.' });
@@ -311,7 +325,11 @@ try {
   if (main) {
     await main
       .evaluate(
-        `window.viewer.providerPermissionSet(${JSON.stringify(provider.id)},${JSON.stringify(provider.endpoint)},null)`,
+        pageCall(
+          (id: string, endpoint: string) => window.viewer.providerPermissionSet(id, endpoint, null),
+          provider.id,
+          provider.endpoint,
+        ),
       )
       .catch(() => {});
     await app.close(main);

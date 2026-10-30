@@ -4,15 +4,22 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import {
-  CURRENT_STATE_VERSION,
-  type OperationJob,
-  type SavedState,
-} from '../../src/domain/contracts';
+import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import {
+  animationFrames,
+  buttonState,
+  click,
+  countOf,
+  exists,
+  pressButton,
+  textOf,
+  valueOf,
+} from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -85,107 +92,116 @@ await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state
 const hash = (data: Buffer) => createHash('sha256').update(data).digest('hex');
 const observations: unknown[] = [];
 
+type RowMatch = 'file' | 'text';
+
+function selectRow(selector: string) {
+  const row = document.querySelector<HTMLElement>(selector)!;
+  row.click();
+  row.focus();
+}
+
+/** Adds the `index`th row to the selection, as a Command-click does. */
+function commandClickRow(index: number) {
+  const row = document.querySelectorAll('[data-file-path]')[index]!;
+  row.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }));
+}
+
+function selectField(selector: string) {
+  const field = document.querySelector<HTMLInputElement>(selector)!;
+  field.focus();
+  field.select();
+}
+
+function isChecked(selector: string) {
+  return document.querySelector<HTMLInputElement>(selector)!.checked;
+}
+
+function chooseSavedRecipe(name: string) {
+  const button = [...document.querySelectorAll<HTMLElement>('[data-menu-id]')].find((button) =>
+    button.textContent.includes(name),
+  );
+  if (!button) throw new Error('Saved recipe missing');
+  button.click();
+}
+
+function unmetTargets() {
+  return [...document.querySelectorAll('[data-optimization-file]')].filter((row) =>
+    row.textContent.includes('Target not met'),
+  ).length;
+}
+
+/** Retries the row for one file name, or the first row whose text includes `value`. */
+function retryRow(match: RowMatch, value: string) {
+  const row = [...document.querySelectorAll<HTMLElement>('[data-optimization-file]')].find((row) =>
+    match === 'file' ? row.dataset.optimizationFile === value : row.textContent.includes(value),
+  )!;
+  [...row.querySelectorAll('button')]
+    .find((button) => button.textContent.trim() === 'Retry')!
+    .click();
+}
+
 async function session(restart: boolean) {
   const app = await ownedApp(binary!, profile);
   let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
   try {
     connection = await app.connect();
     const { evaluate, command } = connection;
-    const click = async (label: string, scope = '.optimize-dialog') => {
-      await evaluate(
-        `(()=>{const button=[...document.querySelectorAll(${JSON.stringify(scope + ' button')})].find(button=>button.textContent.trim()===${JSON.stringify(label)});if(!button||button.disabled)throw new Error('Unavailable action: '+${JSON.stringify(label)});button.click()})()`,
-      );
+    const press = async (label: string) => {
+      await evaluate(pressButton(label, '.optimize-dialog'));
     };
     const input = async (label: string, value: string) => {
-      await evaluate(
-        `(()=>{const field=document.querySelector(${JSON.stringify(`[aria-label="${label}"]`)});field.focus();field.select()})()`,
-      );
+      await evaluate(pageCall(selectField, `[aria-label="${label}"]`));
       await command('Input.insertText', { text: value });
     };
     const capture = async (name: string) => {
-      await evaluate(
-        'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-      );
+      await evaluate(animationFrames(2));
       const image = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
       await writeFile(path.join(root, name + '.png'), Buffer.from(image.data, 'base64'), {
         flag: 'wx',
       });
     };
     await until(
-      () => evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+      () => evaluate(countOf('[data-file-path]')),
       (count) => count === 3,
       'collection inputs',
     );
-    await evaluate(
-      'document.querySelector("[data-file-path]").click();document.querySelector("[data-file-path]").focus()',
-    );
-    for (const index of [1, 2])
-      await evaluate(
-        `document.querySelectorAll('[data-file-path]')[${index}].dispatchEvent(new MouseEvent('click',{bubbles:true,metaKey:true}))`,
-      );
+    await evaluate(pageCall(selectRow, '[data-file-path]'));
+    for (const index of [1, 2]) await evaluate(pageCall(commandClickRow, index));
     await until(
-      () => evaluate<string>('document.querySelector(".folder-status").textContent'),
+      () => evaluate(textOf('.folder-status')),
       (text) => text.includes('3 selected'),
       'all collection sources selected',
     );
-    await evaluate('document.querySelector(\'[aria-label="Commands (⌘K)"]\').click()');
+    await evaluate(click('[aria-label="Commands (⌘K)"]'));
     await command('Input.insertText', { text: 'Optimize' });
     await until(
-      () =>
-        evaluate<string>(
-          'document.querySelector(".command-result[aria-selected=true]")?.textContent||""',
-        ),
+      () => evaluate(textOf('.command-result[aria-selected=true]')),
       (text) => text.includes('Optimize'),
       'Optimize command',
     );
-    await evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
-    await until(
-      () => evaluate<boolean>('!!document.querySelector(".optimize-dialog")'),
-      Boolean,
-      'batch dialog',
-    );
-    await evaluate('document.querySelector(".optimization-recipes summary").click()');
+    await evaluate(click('.command-result[aria-selected=true]'));
+    await until(() => evaluate(exists('.optimize-dialog')), Boolean, 'batch dialog');
+    await evaluate(click('.optimization-recipes summary'));
     if (restart) {
-      await evaluate(
-        'document.querySelector(\'[aria-label="Saved optimization recipe"]\').click()',
-      );
+      await evaluate(click('[aria-label="Saved optimization recipe"]'));
       await until(
-        () => evaluate<boolean>(`!!document.querySelector('[data-menu-id^="choice:"]')`),
+        () => evaluate(exists('[data-menu-id^="choice:"]')),
         Boolean,
         'saved recipe choice',
       );
-      await evaluate(
-        `(()=>{const button=[...document.querySelectorAll('[data-menu-id]')].find(button=>button.textContent.includes('Images under 300 kB'));if(!button)throw new Error('Saved recipe missing');button.click()})()`,
-      );
-      assert.equal(
-        await evaluate('document.querySelector(\'[aria-label="Target size"]\').value'),
-        '300',
-      );
-      assert.equal(
-        await evaluate('document.querySelector(".optimization-preserve input").checked'),
-        true,
-      );
-      assert.equal(
-        await evaluate(
-          'document.querySelector(\'[aria-label="Optimization output folder"]\').value',
-        ),
-        files,
-      );
+      await evaluate(pageCall(chooseSavedRecipe, 'Images under 300 kB'));
+      assert.equal(await evaluate(valueOf('[aria-label="Target size"]')), '300');
+      assert.equal(await evaluate(pageCall(isChecked, '.optimization-preserve input')), true);
+      assert.equal(await evaluate(valueOf('[aria-label="Optimization output folder"]')), files);
       await input('Target size', '1.024');
-      await click('Prepare candidates');
+      await press('Prepare candidates');
       await until(
-        () =>
-          evaluate<number>(
-            `[...document.querySelectorAll('[data-optimization-file]')].filter(row=>row.textContent.includes('Target not met')).length`,
-          ),
+        () => evaluate(pageCall(unmetTargets)),
         (count) => count === 3,
         'honest unmet targets',
         60000,
       );
-      assert.equal(
-        await evaluate('document.querySelectorAll(".optimize-results input:checked").length'),
-        0,
-      );
+      assert.equal(await evaluate(countOf('.optimize-results input:checked')), 0);
       await capture('unmet-targets-dark');
       observations.push({
         recipe: 'restored after restart',
@@ -195,64 +211,51 @@ async function session(restart: boolean) {
       });
       return;
     }
-    await evaluate('document.querySelector(".optimization-target-toggle input").click()');
+    await evaluate(click('.optimization-target-toggle input'));
     await input('Target size', '300');
     await input('Optimization recipe name', 'Images under 300 kB');
-    await click('Save recipe');
+    await press('Save recipe');
     await until(
-      () => evaluate<string>('document.querySelector(".optimization-recipes summary").textContent'),
+      () => evaluate(textOf('.optimization-recipes summary')),
       (text) => text.includes('Images under 300 kB'),
       'saved recipe',
     );
     await input('Optimization output folder', output);
-    assert.equal(
-      await evaluate('document.querySelector(".optimization-preserve input").checked'),
-      true,
-    );
-    await click('Prepare candidates');
+    assert.equal(await evaluate(pageCall(isChecked, '.optimization-preserve input')), true);
+    await press('Prepare candidates');
     await until(
-      () => evaluate<string>('document.querySelector(".optimize-results").textContent'),
+      () => evaluate(textOf('.optimize-results')),
       (text) => text.includes('Target met') && !text.includes('Preparing'),
       'mixed success and failure',
       60000,
     );
-    assert.equal(
-      await evaluate('document.querySelectorAll(".optimize-results input:checked").length'),
-      2,
-    );
+    assert.equal(await evaluate(countOf('.optimize-results input:checked')), 2);
     await writeFile(sources[2]!, jpeg);
-    await evaluate(
-      `(()=>{const row=[...document.querySelectorAll('[data-optimization-file]')].find(row=>row.dataset.optimizationFile==='Retry.jpg');[...row.querySelectorAll('button')].find(button=>button.textContent.trim()==='Retry').click()})()`,
-    );
+    await evaluate(pageCall(retryRow, 'file', 'Retry.jpg'));
     await until(
-      () => evaluate<number>('document.querySelectorAll(".optimize-results input:checked").length'),
+      () => evaluate(countOf('.optimize-results input:checked')),
       (count) => count === 3,
       'individual retry',
       60000,
     );
     await writeFile(sources[0]!, jpeg);
-    await click('Save 3 smaller copies');
+    await press('Save 3 smaller copies');
     await until(
-      () => evaluate<string>('document.querySelector(".dialog-error")?.textContent||""'),
+      () => evaluate(textOf('.dialog-error')),
       (text) => text.includes('source changed'),
       'stale source rejected',
     );
-    await evaluate(
-      `(()=>{const row=[...document.querySelectorAll('[data-optimization-file]')].find(row=>row.textContent.includes('Left/Photo.jpg'));[...row.querySelectorAll('button')].find(button=>button.textContent.trim()==='Retry').click()})()`,
-    );
+    await evaluate(pageCall(retryRow, 'text', 'Left/Photo.jpg'));
     await until(
-      () =>
-        evaluate<boolean>(
-          `[...document.querySelectorAll('.optimize-dialog button')].some(button=>button.textContent.trim()==='Save 3 smaller copies'&&!button.disabled)`,
-        ),
-      Boolean,
+      () => evaluate(buttonState('Save 3 smaller copies', '.optimize-dialog')),
+      (state) => state === 'enabled',
       'refreshed source candidate',
       60000,
     );
     await capture('recipe-batch-dark');
-    await click('Save 3 smaller copies');
+    await press('Save 3 smaller copies');
     const jobs = await until(
-      () => evaluate<OperationJob[]>('window.viewer.jobs()'),
+      () => evaluate(pageCall(() => window.viewer.jobs())),
       (jobs) => jobs.length === 2 && jobs.every((job) => job.status === 'completed'),
       'relative folder outputs',
       30000,
@@ -279,7 +282,7 @@ async function session(restart: boolean) {
     if (connection)
       console.log(
         'Batch surface:',
-        await connection.evaluate('document.body.innerText.slice(-6000)'),
+        await connection.evaluate(pageCall(() => document.body.innerText.slice(-6000))),
       );
     throw error;
   } finally {

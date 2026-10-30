@@ -10,11 +10,12 @@ import { promisify } from 'node:util';
 import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
 import { defaultSettings, type ModelProvider } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
-import type { ChatDocument, ChatSummary } from '../../src/domain/models/chat';
-import type { AgentAccessState } from '../../src/domain/agents/clients';
+import type { ChatDocument, ChatRequest, ChatSummary } from '../../src/domain/models/chat';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { requestAgent } from './runtime/agent-client';
+import { click, countOf, exists, pressButton, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 if (process.platform !== 'darwin') throw new Error('This acceptance requires macOS.');
 const interactive = process.argv.includes('--interactive');
@@ -173,38 +174,59 @@ async function operator(instruction: string) {
   operatorSteps.push(instruction);
   await save();
 }
+type NativeStatus = 'pending' | 'resolved' | 'rejected';
+interface NativeOutcome {
+  status: NativeStatus;
+  value?: unknown;
+  error?: string;
+}
+interface NativeCallWindow {
+  __nativeAcceptance: NativeOutcome;
+  viewer: Record<string, (...args: unknown[]) => Promise<unknown>>;
+}
+
+/** Starts a native dialog call and records how it ends, without awaiting it. */
+function startNativeCall(method: string, args: unknown[]): void {
+  const page = window as unknown as NativeCallWindow;
+  page.__nativeAcceptance = { status: 'pending' };
+  page.viewer[method]!(...args).then(
+    (value) => {
+      page.__nativeAcceptance = { status: 'resolved', value };
+    },
+    (error: Error) => {
+      page.__nativeAcceptance = { status: 'rejected', error: error.message };
+    },
+  );
+}
+
+const nativeOutcome = () => (window as unknown as NativeCallWindow).__nativeAcceptance;
+
+function clickFileRow(file: string): void {
+  [...document.querySelectorAll<HTMLElement>('[data-file-path]')]
+    .find((row) => row.getAttribute('data-file-path') === file)!
+    .click();
+}
+
 async function nativeCall(connection: typeof main, method: string, args: unknown[], label: string) {
   // Start the real native dialog without a debugger RPC timing out while the person reads it.
-  await connection.evaluate(`(() => {
-    window.__nativeAcceptance = {status:'pending'};
-    window.viewer[${JSON.stringify(method)}](...${JSON.stringify(args)}).then(
-      value => {window.__nativeAcceptance = {status:'resolved',value};},
-      error => {window.__nativeAcceptance = {status:'rejected',error:error.message};}
-    );
-  })()`);
+  await connection.evaluate(pageCall(startNativeCall, method, args));
   return until(
-    () =>
-      connection.evaluate<{ status: string; value?: unknown; error?: string }>(
-        'window.__nativeAcceptance',
-      ),
+    () => connection.evaluate(pageCall(nativeOutcome)),
     (value) => value.status !== 'pending',
     label,
     300_000,
   );
 }
 async function palette(label: string) {
-  await main.evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+  await main.evaluate(click('[aria-label="Commands (⌘K)"]'));
   await until(
-    () => main.evaluate<string>('document.activeElement?.getAttribute("aria-label")'),
+    () => main.evaluate(pageCall(() => document.activeElement?.getAttribute('aria-label'))),
     (value) => value === 'Search commands',
     'command input',
   );
   await main.command('Input.insertText', { text: label });
   await until(
-    () =>
-      main.evaluate<string>(
-        'document.querySelector(".command-result[aria-selected=true]")?.textContent ?? ""',
-      ),
+    () => main.evaluate(textOf('.command-result[aria-selected=true]')),
     (value) => value.includes(label),
     label,
   );
@@ -213,17 +235,15 @@ async function palette(label: string) {
 }
 try {
   await until(
-    () => main.evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+    () => main.evaluate(countOf('[data-file-path]')),
     (count) => count > 0,
     'generated folder',
   );
-  await main.evaluate('window.viewer.openSettings()');
+  await main.evaluate(pageCall(() => window.viewer.openSettings()));
   let preferences = await viewer.connect(true);
-  const installed = await preferences.evaluate<{
-    path: string;
-    installed: boolean;
-    executable: boolean;
-  }>('window.viewer.shellCommand("install")');
+  const installed = await preferences.evaluate(
+    pageCall(() => window.viewer.shellCommand('install')),
+  );
   assert.equal(installed.path, path.join(shellHome, '.local/bin/viewer'));
   assert.ok(installed.installed && installed.executable);
   const invokeShell = (args: string[]) =>
@@ -301,7 +321,7 @@ try {
         'The terminal flag opens the configured shell; operator confirms the native execution and terminal.',
       );
     }
-    const status = await main.evaluate<{ registered: boolean }>('window.viewer.hotkeyStatus()');
+    const status = await main.evaluate(pageCall(() => window.viewer.hotkeyStatus()));
     assert.ok(status.registered, 'The physical shortcut must actually be registered.');
     await operator(
       'Focus Viewer, press ⌥Space to drop it from the screen top, press it again to hide it, then once more to show it. Check that it toggles without another app receiving Space.',
@@ -320,23 +340,24 @@ try {
       'physical-hotkey',
       'Operator exercised the registered global shortcut and observed drop-down/show/hide.',
     );
-    await main.evaluate('window.viewer.openSettings()');
+    await main.evaluate(pageCall(() => window.viewer.openSettings()));
     preferences = await viewer.connect(true);
-    await preferences.evaluate(
-      `Array.from(document.querySelectorAll('.settings-navigation button')).find(button =>
-        button.textContent.trim() === 'Models').click()`,
-    );
+    await preferences.evaluate(pressButton('Models', '.settings-navigation'));
     await operator(
       'In Viewer Settings → Models, enter the Gemini API key privately for “Gemini acceptance”, then click outside the password field to save it. Leave the model field set to ' +
         provider.model +
         '. Do not paste the key into this terminal or chat.',
     );
-    const configured = await preferences.evaluate<boolean>(
-      `window.viewer.settingsGet().then(snapshot => snapshot.credentials.includes(${JSON.stringify(provider.id)}))`,
+    const configured = await preferences.evaluate(
+      pageCall(
+        (id: string) =>
+          window.viewer.settingsGet().then((snapshot) => snapshot.credentials.includes(id)),
+        provider.id,
+      ),
     );
     assert.ok(configured, 'The key must be saved privately through Viewer.');
-    const models = await preferences.evaluate<string[]>(
-      `window.viewer.providerModels(${JSON.stringify(provider.id)})`,
+    const models = await preferences.evaluate(
+      pageCall((id: string) => window.viewer.providerModels(id), provider.id),
     );
     assert.ok(models.includes(provider.model), 'The selected Gemini model must be available.');
     console.log('OPERATOR: Cancel the next model-data permission dialog.');
@@ -349,7 +370,7 @@ try {
     assert.equal(denied.status, 'rejected');
     assert.equal(
       await preferences.evaluate(
-        `window.viewer.providerPermissionGet(${JSON.stringify(provider.id)})`,
+        pageCall((id: string) => window.viewer.providerPermissionGet(id), provider.id),
       ),
       null,
     );
@@ -364,31 +385,33 @@ try {
     );
     assert.equal(allowed.status, 'resolved');
 
-    await main.evaluate(
-      `Array.from(document.querySelectorAll('[data-file-path]')).find(row =>
-        row.getAttribute('data-file-path') === ${JSON.stringify(file)}).click()`,
-    );
+    await main.evaluate(pageCall(clickFileRow, file));
     await palette('Chat about files');
     await until(
-      () => main.evaluate<boolean>('!!document.querySelector("[aria-label=\"Chat message\"]")'),
+      () => main.evaluate(exists('[aria-label="Chat message"]')),
       Boolean,
       'actual Chat plane',
     );
-    const history = await main.evaluate<ChatSummary[]>('window.viewer.chat({kind:"list"})');
+    const history = await main.evaluate(
+      pageCall(() => window.viewer.chat({ kind: 'list' }) as Promise<ChatSummary[]>),
+    );
     const conversation = history[0];
     assert.ok(conversation);
     await main.evaluate(
-      `window.viewer.chat(${JSON.stringify({
+      pageCall((request: ChatRequest) => window.viewer.chat(request), {
         kind: 'send',
         id: conversation.id,
         providerID: provider.id,
         text: 'Read the attached generated note and quote its acceptance token. Reply briefly.',
-      })})`,
+      }),
     );
     const replied = await until(
       () =>
-        main.evaluate<ChatDocument>(
-          `window.viewer.chat({kind:'open',id:${JSON.stringify(conversation.id)}})`,
+        main.evaluate(
+          pageCall(
+            (id: string) => window.viewer.chat({ kind: 'open', id }) as Promise<ChatDocument>,
+            conversation.id,
+          ),
         ),
       (document) => document.status !== 'running',
       'live Gemini response',
@@ -417,7 +440,7 @@ try {
       'cancelled shared agent consent',
     );
     const access = () =>
-      preferences.evaluate<AgentAccessState>('window.viewer.agentAccess({kind:"state"})');
+      preferences.evaluate(pageCall(() => window.viewer.agentAccess({ kind: 'state' })));
     assert.equal((await access()).enabled, false);
     console.log(
       'OPERATOR: Allow the next shared-agent dialog; it grants only metadata, navigation and proposals. No file changes are applied.',
@@ -441,7 +464,7 @@ try {
       await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
     ) as { socket: string };
     const configuration = JSON.parse(
-      await preferences.evaluate<string>('window.viewer.agentToken()'),
+      await preferences.evaluate(pageCall(() => window.viewer.agentToken())),
     ) as { mcpServers: { viewer: { env: { VIEWER_AGENT_TOKEN: string } } } };
     const token = configuration.mcpServers.viewer.env.VIEWER_AGENT_TOKEN;
     const metadata = await requestAgent<{ content: { text: string }[] }>(connection.socket, token, {
@@ -474,8 +497,8 @@ try {
     );
     assert.equal(uninstalled.status, 'resolved');
     assert.equal(
-      await preferences.evaluate<boolean>(
-        'window.viewer.shellCommand("status").then(value => value.installed)',
+      await preferences.evaluate(
+        pageCall(() => window.viewer.shellCommand('status').then((value) => value.installed)),
       ),
       false,
     );

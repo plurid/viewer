@@ -13,6 +13,8 @@ import { localSamples } from '../../tools/playground/catalog';
 import { temporaryRoot } from '../../tools/temporary';
 import { modelHeapSummary } from '../../tools/qualification/heap';
 import { ownedApp, until } from '../owned-app';
+import { animationFrames, click, countOf, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -159,6 +161,113 @@ await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1,
 });
 await writeFile(stateFile, JSON.stringify(initial), { flag: 'wx' });
 const saved = async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
+
+interface FrameSummary {
+  samples: number;
+  median?: number;
+  p95?: number;
+  maximum?: number;
+  longTasks: number[];
+}
+interface ProbeWindow {
+  __viewerMixedProbe: { stop(): FrameSummary };
+}
+
+const focusedLabel = () => document.activeElement?.getAttribute('aria-label');
+
+/** The median, 95th percentile and longest of 90 animation-frame intervals. */
+const frameIntervals = () =>
+  new Promise<{ median: number; p95: number; maximum: number }>((resolve) => {
+    const frames: number[] = [];
+    let last = performance.now();
+    const step = (now: number) => {
+      frames.push(now - last);
+      last = now;
+      if (frames.length < 90) requestAnimationFrame(step);
+      else {
+        frames.sort((a, b) => a - b);
+        resolve({ median: frames[45]!, p95: frames[85]!, maximum: frames.at(-1)! });
+      }
+    };
+    requestAnimationFrame(step);
+  });
+
+/** Each browser surface's frame count, a painted pixel, loading and culling state. */
+const browserFrames = () =>
+  [...document.querySelectorAll<HTMLCanvasElement>('.browser-surface canvas')].map((canvas) => ({
+    frames: canvas.dataset.frames,
+    pixel: [...canvas.getContext('2d')!.getImageData(10, 10, 1, 1).data],
+    loading: !!canvas.closest('.browser-plane')!.querySelector('[aria-label="Stop loading"]'),
+    culled: canvas.closest<HTMLElement>('[data-plurid-plane]')!.dataset.pluridCulled,
+  }));
+
+const browserDiagnostics = () =>
+  Promise.all(
+    ['browser-0', 'browser-1'].map(async (id) => ({
+      state: await window.viewer.browser({ kind: 'state', id }),
+      plane: document
+        .querySelector('[data-viewer-plane="' + id + '"]')
+        ?.closest('[data-plurid-plane]')
+        ?.outerHTML.slice(0, 600),
+    })),
+  );
+
+const browserStates = () =>
+  Promise.all(['browser-0', 'browser-1'].map((id) => window.viewer.browser({ kind: 'state', id })));
+
+/** Samples frame intervals and long tasks until `__viewerMixedProbe.stop()`. */
+function startMixedProbe() {
+  const frames: number[] = [],
+    tasks: number[] = [];
+  let last = performance.now(),
+    tick = 0;
+  const sample = (now: number) => {
+    if (frames.length < 512) frames.push(now - last);
+    last = now;
+    tick = requestAnimationFrame(sample);
+  };
+  tick = requestAnimationFrame(sample);
+  const observer = new PerformanceObserver((list) =>
+    tasks.push(...list.getEntries().map((entry) => entry.duration)),
+  );
+  observer.observe({ type: 'longtask' });
+  (window as unknown as ProbeWindow).__viewerMixedProbe = {
+    stop() {
+      cancelAnimationFrame(tick);
+      observer.disconnect();
+      frames.sort((a, b) => a - b);
+      return {
+        samples: frames.length,
+        median: frames[Math.floor(frames.length / 2)],
+        p95: frames[Math.floor(frames.length * 0.95)],
+        maximum: frames.at(-1),
+        longTasks: tasks,
+      };
+    },
+  };
+}
+
+const stopMixedProbe = () => (window as unknown as ProbeWindow).__viewerMixedProbe.stop();
+
+/** The plane is framed wide enough and the space has stopped moving. */
+function planeFramed(id: string) {
+  const bounds = document
+    .querySelector(`.plane-controls[data-viewer-plane="${id}"]`)!
+    .closest('[data-plurid-plane]')!
+    .getBoundingClientRect();
+  return bounds.width >= 375 && !document.querySelector('[data-plurid-motion]');
+}
+
+/** Each plane header's overflow and whether Frame and Dock are shown. */
+const headerGeometry = () =>
+  [...document.querySelectorAll<HTMLElement>('.plane-controls')].map((header) => ({
+    id: header.dataset.viewerPlane,
+    overflow: header.scrollWidth - header.clientWidth,
+    frame: !!header.querySelector('[aria-label="Frame plane"]')?.getClientRects().length,
+    dock: !![...header.querySelectorAll('button')]
+      .find((button) => /^(Dock|Undock) plane$/.test(button.getAttribute('aria-label') ?? ''))
+      ?.getClientRects().length,
+  }));
 const app = await ownedApp(binary, profile, { environment: { SHELL: '/bin/sh' } });
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [];
@@ -192,41 +301,38 @@ try {
     mobile: false,
   });
   const palette = async (label: string) => {
-    await evaluate('document.querySelector(\'[aria-label="Commands (⌘K)"]\').click()');
+    await evaluate(click('[aria-label="Commands (⌘K)"]'));
     await until(
-      () => evaluate<string>('document.activeElement?.getAttribute("aria-label")'),
+      () => evaluate(pageCall(focusedLabel)),
       (value) => value === 'Search commands',
       'Palette focus',
     );
     await command('Input.insertText', { text: label });
     await until(
-      () =>
-        evaluate<string>(
-          'document.querySelector(".command-result[aria-selected=true]")?.textContent',
-        ),
-      (value) => value?.includes(label),
+      () => evaluate(textOf('.command-result[aria-selected=true]')),
+      (value) => value.includes(label),
       label,
     );
-    await evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
+    await evaluate(click('.command-result[aria-selected=true]'));
   };
   await until(
-    () => evaluate<number>('document.querySelectorAll(".plane-controls").length'),
+    () => evaluate(countOf('.plane-controls')),
     (count) => count === 20,
     'Twenty plane headers',
   );
   await until(
-    () => evaluate<number>('document.querySelectorAll(".model-info").length'),
+    () => evaluate(countOf('.model-info')),
     (count) => count === 3,
     'Three model previews',
     30000,
   );
   await until(
-    () => evaluate<number>('document.querySelectorAll(".xterm").length'),
+    () => evaluate(countOf('.xterm')),
     (count) => count === 2,
     'Two terminal views',
   );
   await until(
-    () => evaluate<number>('document.querySelectorAll(".browser-plane").length'),
+    () => evaluate(countOf('.browser-plane')),
     (count) => count === 2,
     'Two browser views',
   );
@@ -263,17 +369,7 @@ try {
     const heap = await command('Runtime.getHeapUsage');
     const dom = await command('Memory.getDOMCounters');
     const metrics = await command('Performance.getMetrics');
-    const responsiveness = await evaluate(`new Promise(resolve => {
-      const frames = [];
-      let last = performance.now();
-      const step = now => {
-        frames.push(now - last);
-        last = now;
-        if (frames.length < 90) requestAnimationFrame(step);
-        else { frames.sort((a,b) => a-b); resolve({median:frames[45],p95:frames[85],maximum:frames.at(-1)}); }
-      };
-      requestAnimationFrame(step);
-    })`);
+    const responsiveness = await evaluate(pageCall(frameIntervals));
     const resources = await command<{ targetInfos: { type: string }[] }>('Target.getTargets');
     const record = {
       phase,
@@ -292,15 +388,7 @@ try {
   };
   const browserReadiness = async (phase: string) => {
     const started = performance.now();
-    const inspectFrames = () =>
-      evaluate<{ frames?: string; pixel: number[]; loading: boolean; culled: string }[]>(`
-      [...document.querySelectorAll('.browser-surface canvas')].map(canvas => ({
-        frames: canvas.dataset.frames,
-        pixel: [...canvas.getContext('2d').getImageData(10, 10, 1, 1).data],
-        loading: !!canvas.closest('.browser-plane').querySelector('[aria-label="Stop loading"]'),
-        culled: canvas.closest('[data-plurid-plane]').dataset.pluridCulled,
-      }))
-    `);
+    const inspectFrames = () => evaluate(pageCall(browserFrames));
     const frames = await until(
       inspectFrames,
       (frames) =>
@@ -314,18 +402,10 @@ try {
       'Visible browsers finish loading and retain painted pixels',
       30000,
     ).catch(async (error: unknown) => {
-      console.error(
-        'Browser readiness diagnostics:',
-        await evaluate(`Promise.all(["browser-0", "browser-1"].map(async id => ({
-          state: await window.viewer.browser({kind: "state", id}),
-          plane: document.querySelector('[data-viewer-plane="' + id + '"]')?.closest('[data-plurid-plane]')?.outerHTML.slice(0, 600),
-        })))`),
-      );
+      console.error('Browser readiness diagnostics:', await evaluate(pageCall(browserDiagnostics)));
       throw error;
     });
-    const state = await evaluate<object>(
-      'Promise.all(["browser-0", "browser-1"].map(id => window.viewer.browser({kind:"state",id})))',
-    );
+    const state = await evaluate(pageCall(browserStates));
     const record = { phase, state, frames, pageRequests, readinessMs: performance.now() - started };
     observations.push(record);
     console.log(JSON.stringify(record));
@@ -334,15 +414,7 @@ try {
   await palette('Frame all');
   await browserReadiness('browser-initial');
   await measure('twenty-warm');
-  await evaluate(`(() => {
-    const frames = [], tasks = [];
-    let last = performance.now(), tick = 0;
-    const sample = now => { if (frames.length < 512) frames.push(now - last); last = now; tick = requestAnimationFrame(sample); };
-    tick = requestAnimationFrame(sample);
-    const observer = new PerformanceObserver(list => tasks.push(...list.getEntries().map(entry => entry.duration)));
-    observer.observe({type:'longtask'});
-    window.__viewerMixedProbe = {stop() { cancelAnimationFrame(tick); observer.disconnect(); frames.sort((a,b)=>a-b); return { samples: frames.length, median: frames[Math.floor(frames.length/2)], p95: frames[Math.floor(frames.length*.95)], maximum: frames.at(-1), longTasks: tasks }; }};
-  })()`);
+  await evaluate(pageCall(startMixedProbe));
   for (let step = 0; step < 12; step += 1) {
     await command('Input.dispatchMouseEvent', {
       type: 'mouseWheel',
@@ -351,26 +423,21 @@ try {
       deltaX: step % 2 ? 70 : -70,
       deltaY: step % 2 ? 40 : -40,
     });
-    await evaluate('new Promise(resolve => requestAnimationFrame(resolve))');
+    await evaluate(animationFrames(1));
   }
   for (const pane of panes.slice(4, 10)) {
     const selector = `.plane-controls[data-viewer-plane="${pane.id}"] [aria-label="Frame plane"]`;
-    await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
-    await evaluate(
-      'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-    );
+    await evaluate(click(selector));
+    await evaluate(animationFrames(2));
     await until(
-      () =>
-        evaluate<boolean>(
-          `(() => { const bounds = document.querySelector('.plane-controls[data-viewer-plane="${pane.id}"]').closest('[data-plurid-plane]').getBoundingClientRect(); return bounds.width >= 375 && !document.querySelector('[data-plurid-motion]'); })()`,
-        ),
+      () => evaluate(pageCall(planeFramed, pane.id)),
       Boolean,
       'Frame navigation ' + pane.id,
     );
   }
   observations.push({
     phase: 'during-navigation',
-    ...(await evaluate<object>('window.__viewerMixedProbe.stop()')),
+    ...(await evaluate(pageCall(stopMixedProbe))),
   });
   await palette('Tiling: Grid');
   await browserReadiness('browser-after-cycles');
@@ -383,7 +450,7 @@ try {
   for (let cycle = 0; cycle < cycleCount; cycle += 1) {
     for (const id of closing) {
       const selector = `.plane-controls[data-viewer-plane="${id}"] [aria-label="Close plane"]`;
-      await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+      await evaluate(click(selector));
       await until(
         saved,
         (state) => !state.workspaces[0]!.panes.some((pane) => pane.id === id),
@@ -391,19 +458,19 @@ try {
       );
     }
     await until(
-      () => evaluate<number>('document.querySelectorAll(".plane-controls").length'),
+      () => evaluate(countOf('.plane-controls')),
       (count) => count === 10,
       'Ten remaining planes',
     );
     await measure('ten-after-close-' + cycle);
     for (let index = 0; index < closing.length; index += 1) await palette('Undo arrangement');
     await until(
-      () => evaluate<number>('document.querySelectorAll(".plane-controls").length'),
+      () => evaluate(countOf('.plane-controls')),
       (count) => count === 20,
       'Twenty reopened views',
     );
     await until(
-      () => evaluate<number>('document.querySelectorAll(".model-info").length'),
+      () => evaluate(countOf('.model-info')),
       (count) => count === 3,
       'Reopened models',
     );
@@ -436,26 +503,19 @@ try {
     'Closed views do not accumulate detached trees',
   );
   await palette('Tiling: Grid');
-  await evaluate(
-    `document.querySelector('.plane-controls[data-viewer-plane="folder-0"] .plane-related').click()`,
-  );
+  await evaluate(click('.plane-controls[data-viewer-plane="folder-0"] .plane-related'));
   await until(
-    () => evaluate<string>('document.activeElement?.getAttribute("aria-label")'),
+    () => evaluate(pageCall(focusedLabel)),
     (label) => label === 'Search Related planes',
     'Related-plane keyboard search',
   );
   await command('Input.insertText', { text: 'Terminal' });
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".choice-menu .command-result[aria-selected=true]")?.textContent',
-      ),
-    (value) => value?.includes('Terminal ·'),
+    () => evaluate(textOf('.choice-menu .command-result[aria-selected=true]')),
+    (value) => value.includes('Terminal ·'),
     'Tool identity in related planes',
   );
-  await evaluate(
-    'document.querySelector(".choice-menu .command-result[aria-selected=true]").click()',
-  );
+  await evaluate(click('.choice-menu .command-result[aria-selected=true]'));
   const selected = await until(
     saved,
     (state) => state.workspaces[0]!.activePane?.startsWith('terminal-'),
@@ -463,7 +523,7 @@ try {
   );
   const terminal = selected.workspaces[0]!.activePane!;
   await evaluate(
-    `document.querySelector('.plane-controls[data-viewer-plane="${terminal}"] [aria-label="Back to parent plane"]').click()`,
+    click(`.plane-controls[data-viewer-plane="${terminal}"] [aria-label="Back to parent plane"]`),
   );
   await until(saved, (state) => state.workspaces[0]!.activePane === 'folder-0', 'Return to parent');
   await palette('Tiling: Grid');
@@ -477,18 +537,13 @@ try {
           deviceScaleFactor: 1,
           mobile: false,
         });
-        await evaluate('new Promise(resolve => setTimeout(resolve, 1000))');
-        await browserReadiness(`browser-${look}-${width}`);
-        const geometry = await evaluate<object[]>(
-          `[...document.querySelectorAll('.plane-controls')].map(header => ({id:header.dataset.viewerPlane,overflow:header.scrollWidth-header.clientWidth,frame:!!header.querySelector('[aria-label="Frame plane"]')?.getClientRects().length,dock:!![...header.querySelectorAll('button')].find(button => /^(Dock|Undock) plane$/.test(button.getAttribute('aria-label') ?? ''))?.getClientRects().length}))`,
+        await evaluate(
+          pageCall((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)), 1000),
         );
+        await browserReadiness(`browser-${look}-${width}`);
+        const geometry = await evaluate(pageCall(headerGeometry));
         observations.push({ phase: 'header-geometry', look, width, geometry });
-        for (const header of geometry as {
-          id: string;
-          overflow: number;
-          frame: boolean;
-          dock: boolean;
-        }[]) {
+        for (const header of geometry) {
           assert.ok(header.overflow <= 1, 'Header controls fit: ' + header.id);
           assert.ok(header.frame && header.dock, 'Frame and Dock remain reachable: ' + header.id);
         }

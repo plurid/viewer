@@ -7,6 +7,8 @@ import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { click, exists, pressButton, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -60,6 +62,29 @@ await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1,
   flag: 'wx',
 });
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
+const listJobs = () => window.viewer.jobs();
+const focusedLabel = () => document.activeElement?.getAttribute('aria-label');
+
+/** The centre of the New folder form's Create button, for a real pointer click. */
+function createButtonCentre() {
+  const dialog = document.querySelector('dialog[aria-label="New folder"]')!;
+  const button = [...dialog.querySelectorAll('button')].find(
+    (button) => button.textContent.trim() === 'Create',
+  )!;
+  const bounds = button.getBoundingClientRect();
+  return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+}
+
+function pageDiagnostic() {
+  return {
+    text: document.body.innerText,
+    dialogs: [...document.querySelectorAll('dialog')].map((dialog) => ({
+      label: dialog.getAttribute('aria-label'),
+      open: dialog.open,
+    })),
+  };
+}
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 try {
@@ -71,15 +96,11 @@ try {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".folder-explorer")'),
-    Boolean,
-    'Folder explorer',
-  );
+  await until(() => evaluate(exists('.folder-explorer')), Boolean, 'Folder explorer');
   const openPalette = async (query: string) => {
-    await evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+    await evaluate(click('[aria-label="Commands (⌘K)"]'));
     await until(
-      () => evaluate<string>('document.activeElement?.getAttribute("aria-label")'),
+      () => evaluate(pageCall(focusedLabel)),
       (label) => label === 'Search commands',
       'Command search',
     );
@@ -87,26 +108,18 @@ try {
   };
   await openPalette('New folder');
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".command-result[aria-selected=true]")?.textContent',
-      ),
-    (text) => text?.includes('New folder'),
+    () => evaluate(textOf('.command-result[aria-selected=true]')),
+    (text) => text.includes('New folder'),
     'New folder command',
   );
-  await evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
+  await evaluate(click('.command-result[aria-selected=true]'));
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('dialog[aria-label="New folder"] input')`),
+    () => evaluate(exists('dialog[aria-label="New folder"] input')),
     Boolean,
     'New folder form',
   );
   await command('Input.insertText', { text: 'Manual folder' });
-  const createButton = await evaluate<{ x: number; y: number }>(`(() => {
-    const dialog = document.querySelector('dialog[aria-label="New folder"]');
-    const button = [...dialog.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Create');
-    const bounds = button.getBoundingClientRect();
-    return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
-  })()`);
+  const createButton = await evaluate(pageCall(createButtonCentre));
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', ...createButton });
   await command('Input.dispatchMouseEvent', {
     type: 'mousePressed',
@@ -132,28 +145,24 @@ try {
   ).join(' | ');
   await openPalette(':' + line);
   await until(
-    () => evaluate<string>('document.activeElement?.getAttribute("aria-label")'),
+    () => evaluate(pageCall(focusedLabel)),
     (label) => label === 'Command line',
     'Command line',
   );
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter' });
   if (process.env.VIEWER_TEST_COLLISION === '1') {
     await until(
-      () => evaluate<boolean>('!!document.querySelector(".operations-panel .collision")'),
+      () => evaluate(exists('.operations-panel .collision')),
       Boolean,
       'Collision decision is visible',
     );
-    const jobs = await evaluate<{ status: string }[]>('window.viewer.jobs()');
+    const jobs = await evaluate(pageCall(listJobs));
     assert.equal(
       jobs.filter((job) => ['queued', 'running', 'collision'].includes(job.status)).length,
       1,
       'The command line waits instead of flooding the queue with its remaining steps.',
     );
-    await evaluate(`(() => {
-      const panel = document.querySelector('.operations-panel');
-      const skip = [...panel.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Skip');
-      skip.click();
-    })()`);
+    await evaluate(pressButton('Skip', '.operations-panel'));
   }
   await until(
     () => readdir(folder),
@@ -171,30 +180,22 @@ try {
   );
 } catch (error) {
   if (connection) {
-    const diagnostic = await connection
-      .evaluate(
-        `({
-      text: document.body.innerText,
-      dialogs: [...document.querySelectorAll('dialog')].map((dialog) => ({ label: dialog.getAttribute('aria-label'), open: dialog.open })),
-    })`,
-      )
-      .catch(() => undefined);
+    const diagnostic = await connection.evaluate(pageCall(pageDiagnostic)).catch(() => undefined);
     console.log(
       JSON.stringify({
         diagnostic,
         files: await readdir(folder),
-        jobs: await connection.evaluate('window.viewer.jobs()').catch(() => undefined),
+        jobs: await connection.evaluate(pageCall(listJobs)).catch(() => undefined),
       }),
     );
   }
   throw error;
 } finally {
   if (connection) {
-    const jobs =
-      await connection.evaluate<{ id: string; status: string }[]>('window.viewer.jobs()');
+    const jobs = await connection.evaluate(pageCall(listJobs));
     for (const job of jobs)
       if (['queued', 'running', 'collision'].includes(job.status))
-        await connection.evaluate(`window.viewer.cancelJob(${JSON.stringify(job.id)})`);
+        await connection.evaluate(pageCall((id: string) => window.viewer.cancelJob(id), job.id));
   }
   await app.close(connection);
   console.log('Preserved:', root);

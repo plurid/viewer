@@ -8,6 +8,18 @@ import { columnName } from '../../src/domain/previews/documents/office';
 import { officeFixture } from '../office-fixtures';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import {
+  animationFrames,
+  attributeOf,
+  click,
+  countOf,
+  exists,
+  focus,
+  patchSettings,
+  pressButton,
+  textOf,
+} from './runtime/page';
+import { pageCall } from './runtime/page-function';
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
@@ -91,6 +103,70 @@ const state: SavedState = {
 };
 await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1, settings, ui }));
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state));
+
+const searchFocused = () =>
+  document.activeElement?.getAttribute('aria-label') === 'Search commands';
+
+const pause = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+/** The file path of every matching row, in order. */
+const filePaths = (selector: string) =>
+  Array.from(document.querySelectorAll<HTMLElement>(selector), (row) => row.dataset.filePath);
+
+const textsOf = (selector: string) =>
+  Array.from(document.querySelectorAll(selector), (element) => element.textContent);
+
+/** The text of the first match; refuses a missing element. */
+function requiredText(selector: string): string {
+  const element = document.querySelector(selector);
+  if (!element) throw new Error('Nothing matches: ' + selector);
+  return element.textContent;
+}
+
+/** Which column is active, which rows lead to the selection, and what is selected. */
+function columnScope() {
+  return {
+    active: Array.from(
+      document.querySelectorAll<HTMLElement>('.file-column.is-active-column'),
+      (column) => column.dataset.folderPath,
+    ),
+    ancestors: Array.from(
+      document.querySelectorAll<HTMLElement>('.file-row.is-path-ancestor'),
+      (row) => row.dataset.filePath,
+    ),
+    selected: Array.from(
+      document.querySelectorAll<HTMLElement>('.file-row[aria-selected=true]'),
+      (row) => row.dataset.filePath,
+    ),
+  };
+}
+
+function codeText() {
+  const code = getComputedStyle(document.querySelector('.code-scroll')!);
+  return {
+    font: code.fontSize,
+    line: code.lineHeight,
+    property: getComputedStyle(document.querySelector('.code-scroll .token.property')!).color,
+    plain: code.color,
+  };
+}
+
+function scrollToLastColumn(): void {
+  const scroller = document.querySelector('.data-scroll')!;
+  scroller.scrollLeft = 100000;
+  scroller.dispatchEvent(new Event('scroll'));
+}
+
+function pressCell(reference: string): void {
+  [...document.querySelectorAll<HTMLElement>('.workbook-cell')]
+    .find((cell) => cell.getAttribute('aria-label')!.startsWith(reference + ':'))!
+    .click();
+}
+
+const noFolderOverride = (folder: string) =>
+  window.viewer.settingsGet().then((snapshot) => !snapshot.settings.folders[folder]);
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [];
@@ -99,37 +175,23 @@ try {
   const { command, evaluate } = connection;
   const clickFile = async (file: string) => {
     const selector = `[data-file-path=${JSON.stringify(file)}]`;
-    await until(
-      () => evaluate<boolean>('!!document.querySelector(' + JSON.stringify(selector) + ')'),
-      Boolean,
-      'file row ' + path.basename(file),
-    );
-    await evaluate('document.querySelector(' + JSON.stringify(selector) + ').click()');
+    await until(() => evaluate(exists(selector)), Boolean, 'file row ' + path.basename(file));
+    await evaluate(click(selector));
   };
   const capture = async (name: string) => {
-    await evaluate('new Promise(resolve=>setTimeout(resolve,300))');
-    await evaluate(
-      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-    );
+    await evaluate(pageCall(pause, 300));
+    await evaluate(animationFrames(2));
     const value = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
     await writeFile(path.join(root, name + '.png'), Buffer.from(value.data, 'base64'), {
       flag: 'wx',
     });
   };
   const runCommand = async (label: string) => {
-    await evaluate('document.querySelector(\'[aria-label="Commands (⌘K)"]\').click()');
-    await until(
-      () =>
-        evaluate<boolean>('document.activeElement?.getAttribute("aria-label")==="Search commands"'),
-      Boolean,
-      'command input',
-    );
+    await evaluate(click('[aria-label="Commands (⌘K)"]'));
+    await until(() => evaluate(pageCall(searchFocused)), Boolean, 'command input');
     await command('Input.insertText', { text: label });
     await until(
-      () =>
-        evaluate<string>(
-          'document.querySelector(\'.command-result[aria-selected="true"]\')?.textContent || ""',
-        ),
+      () => evaluate(textOf('.command-result[aria-selected="true"]')),
       (value) => value.includes(label),
       label,
     );
@@ -141,41 +203,26 @@ try {
         windowsVirtualKeyCode: 13,
       });
     await until(
-      () => evaluate<boolean>('!document.querySelector(\'[aria-label="Search commands"]\')'),
+      () =>
+        evaluate(pageCall(() => document.querySelector('[aria-label="Search commands"]') === null)),
       Boolean,
       'command closed',
     );
-    await evaluate(
-      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-    );
+    await evaluate(animationFrames(2));
   };
   await clickFile(collection);
   await clickFile(notes);
   await clickFile(yaml);
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".structured-viewer")'),
-    Boolean,
-    'YAML inspector',
-  );
-  const scope = await evaluate<{ active: string[]; ancestors: string[]; selected: string[] }>(
-    '({active:Array.from(document.querySelectorAll(".file-column.is-active-column"),column=>column.dataset.folderPath),ancestors:Array.from(document.querySelectorAll(".file-row.is-path-ancestor"),row=>row.dataset.filePath),selected:Array.from(document.querySelectorAll(".file-row[aria-selected=true]"),row=>row.dataset.filePath)})',
-  );
+  await until(() => evaluate(exists('.structured-viewer')), Boolean, 'YAML inspector');
+  const scope = await evaluate(pageCall(columnScope));
   assert.deepEqual(scope.active, [notes]);
   assert.deepEqual(scope.selected, [yaml]);
   assert.ok(scope.ancestors.includes(collection) && scope.ancestors.includes(notes));
-  await evaluate('document.querySelector(\'[aria-label="Commands (⌘K)"]\').click()');
-  await until(
-    () =>
-      evaluate<boolean>('document.activeElement?.getAttribute("aria-label")==="Search commands"'),
-    Boolean,
-    'grouping command input',
-  );
+  await evaluate(click('[aria-label="Commands (⌘K)"]'));
+  await until(() => evaluate(pageCall(searchFocused)), Boolean, 'grouping command input');
   await command('Input.insertText', { text: 'Group by kind' });
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(\'.command-result[aria-selected="true"]\')?.textContent || ""',
-      ),
+    () => evaluate(textOf('.command-result[aria-selected="true"]')),
     (value) => value.includes('Group by kind'),
     'grouping command',
   );
@@ -193,25 +240,22 @@ try {
   });
   const headings = await until(
     () =>
-      evaluate<string[]>(
-        'Array.from(document.querySelectorAll(' +
-          JSON.stringify(
-            '[data-folder-path=' + JSON.stringify(notes) + '] .file-group-label .section-label',
-          ) +
-          '),heading=>heading.textContent)',
+      evaluate(
+        pageCall(
+          textsOf,
+          '[data-folder-path=' + JSON.stringify(notes) + '] .file-group-label .section-label',
+        ),
       ),
     (value) => ['CSS files', 'XLSX files', 'YAML files'].every((label) => value.includes(label)),
     'kind sections inside browsed child column',
   );
   observations.push({ groupedColumn: notes, headings });
   assert.deepEqual(
-    await evaluate<string[]>(
-      'Array.from(document.querySelectorAll(".file-row[aria-selected=true]"),row=>row.dataset.filePath)',
-    ),
+    await evaluate(pageCall(filePaths, '.file-row[aria-selected=true]')),
     [yaml],
     'Grouping keeps the selected source.',
   );
-  await evaluate('document.querySelector(".folder-explorer").focus()');
+  await evaluate(focus('.folder-explorer'));
   for (const [key, expected] of [
     ['ArrowUp', book],
     ['ArrowDown', yaml],
@@ -229,96 +273,58 @@ try {
       windowsVirtualKeyCode: key === 'ArrowUp' ? 38 : 40,
     });
     await until(
-      () =>
-        evaluate<string[]>(
-          'Array.from(document.querySelectorAll(".file-row[aria-selected=true]"),row=>row.dataset.filePath)',
-        ),
+      () => evaluate(pageCall(filePaths, '.file-row[aria-selected=true]')),
       (value) => value.length === 1 && value[0] === expected,
       'selection skips group headers',
     );
   }
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".structured-viewer")'),
+    () => evaluate(exists('.structured-viewer')),
     Boolean,
     'YAML inspector after grouped keyboard navigation',
   );
-  const treeButton = (text: string) =>
-    evaluate(
-      'Array.from(document.querySelectorAll(".structured-viewer button")).find(button=>button.textContent.trim()===' +
-        JSON.stringify(text) +
-        ').click()',
-    );
+  const treeButton = (text: string) => evaluate(pressButton(text, '.structured-viewer'));
   await treeButton('Expand all');
   await until(
-    () => evaluate<string>('document.querySelector(".structured-viewer").textContent'),
+    () => evaluate(textOf('.structured-viewer')),
     (text) => text.includes('one') && text.includes('↪'),
     'expanded YAML aliases',
   );
   await capture('columns-data-dark');
   await treeButton('Collapse all');
-  assert.equal(await evaluate<number>('document.querySelectorAll(".structured-row").length'), 1);
+  assert.equal(await evaluate(countOf('.structured-row')), 1);
   await treeButton('Expand all');
   await clickFile(css);
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".code-scroll .token.property")'),
-    Boolean,
-    'CSS highlighting',
-  );
-  const text = await evaluate<{ font: string; line: string; property: string; plain: string }>(
-    '({font:getComputedStyle(document.querySelector(".code-scroll")).fontSize,line:getComputedStyle(document.querySelector(".code-scroll")).lineHeight,property:getComputedStyle(document.querySelector(".code-scroll .token.property")).color,plain:getComputedStyle(document.querySelector(".code-scroll")).color})',
-  );
+  await until(() => evaluate(exists('.code-scroll .token.property')), Boolean, 'CSS highlighting');
+  const text = await evaluate(pageCall(codeText));
   assert.equal(text.font, '16px');
   assert.equal(text.line, '20px');
   assert.notEqual(text.property, text.plain);
   await capture('columns-code-dark');
   await clickFile(book);
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".workbook-cell")'),
-    Boolean,
-    'wide worksheet',
-  );
-  const count = await evaluate<number>(
-    'document.querySelectorAll(".data-header [role=columnheader]").length',
-  );
+  await until(() => evaluate(exists('.workbook-cell')), Boolean, 'wide worksheet');
+  const count = await evaluate(countOf('.data-header [role=columnheader]'));
   assert.ok(count > 1 && count < 20, 'Wide worksheets render only the visible columns.');
-  await evaluate(
-    'document.querySelector(".data-scroll").scrollLeft=100000;document.querySelector(".data-scroll").dispatchEvent(new Event("scroll"))',
-  );
+  await evaluate(pageCall(scrollToLastColumn));
   await until(
-    () => evaluate<string>('document.querySelector(".data-header").textContent'),
+    () => evaluate(textOf('.data-header')),
     (text) => text.includes('IV'),
     'last original column',
   );
-  await evaluate(
-    'Array.from(document.querySelectorAll(".workbook-cell")).find(button=>button.getAttribute("aria-label").startsWith("IV2:")).click()',
-  );
-  assert.ok(
-    (
-      await evaluate<string>('document.querySelector(".workbook-cell-detail").textContent')
-    ).includes('IV2'),
-  );
+  await evaluate(pageCall(pressCell, 'IV2'));
+  assert.ok((await evaluate(pageCall(requiredText, '.workbook-cell-detail'))).includes('IV2'));
   await capture('wide-sheet-dark');
-  await evaluate(
-    'window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:"settings.appearance",value:"light"}],s.revision))',
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () => evaluate<string>('document.documentElement.dataset.look'),
+    () => evaluate(pageCall(() => document.documentElement.dataset.look)),
     (value) => value === 'light',
     'light theme',
   );
   await clickFile(yaml);
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".structured-viewer")'),
-    Boolean,
-    'restored YAML',
-  );
+  await until(() => evaluate(exists('.structured-viewer')), Boolean, 'restored YAML');
   await capture('columns-data-light');
   const displayed = () =>
-    evaluate<string[]>(
-      'Array.from(document.querySelectorAll(' +
-        JSON.stringify('[data-folder-path=' + JSON.stringify(notes) + '] .file-row') +
-        '),row=>row.dataset.filePath)',
-    );
+    evaluate(pageCall(filePaths, '[data-folder-path=' + JSON.stringify(notes) + '] .file-row'));
   await runCommand('Ungroup files');
   await runCommand('Sort by name');
   await until(
@@ -338,18 +344,9 @@ try {
   await runCommand('Hide hidden files');
   await until(displayed, (value) => !value.includes(hidden), 'child hidden files hidden');
   await runCommand('Reset this folder’s view');
-  await until(
-    () =>
-      evaluate<boolean>(
-        'window.viewer.settingsGet().then(s=>!s.settings.folders[' + JSON.stringify(notes) + '])',
-      ),
-    Boolean,
-    'child overrides reset',
-  );
+  await until(() => evaluate(pageCall(noFolderOverride, notes)), Boolean, 'child overrides reset');
   assert.equal(
-    await evaluate<boolean>(
-      'window.viewer.settingsGet().then(s=>!s.settings.folders[' + JSON.stringify(files) + '])',
-    ),
+    await evaluate(pageCall(noFolderOverride, files)),
     true,
     'Ancestor preferences stayed intact.',
   );
@@ -357,48 +354,43 @@ try {
   await runCommand('Use as default folder view');
   await until(
     () =>
-      evaluate<boolean>(
-        'window.viewer.settingsGet().then(s=>s.settings.browsing.mode==="columns"&&s.settings.browsing.sort==="size"&&s.settings.browsing.descending)',
+      evaluate(
+        pageCall(() =>
+          window.viewer
+            .settingsGet()
+            .then(
+              ({ settings: { browsing } }) =>
+                browsing.mode === 'columns' && browsing.sort === 'size' && browsing.descending,
+            ),
+        ),
       ),
     Boolean,
     'current column exported as defaults',
   );
   await runCommand('Grid view');
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".folder-explorer")?.getAttribute("aria-label") || ""',
-      ),
+    () => evaluate(attributeOf('.folder-explorer', 'aria-label')),
     (value) => value === 'Folder ' + notes,
     'view change enters browsed child',
   );
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".grid-scroll")'),
-    Boolean,
-    'child grid view',
-  );
+  await until(() => evaluate(exists('.grid-scroll')), Boolean, 'child grid view');
   await runCommand('Columns view');
   await runCommand('Parent folder');
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".folder-explorer")?.getAttribute("aria-label") || ""',
-      ),
+    () => evaluate(attributeOf('.folder-explorer', 'aria-label')),
     (value) => value === 'Folder ' + collection,
     'parent of browsed folder',
   );
   await clickFile(notes);
   await runCommand('Search this folder…');
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".folder-explorer")?.getAttribute("aria-label") || ""',
-      ),
+    () => evaluate(attributeOf('.folder-explorer', 'aria-label')),
     (value) => value === 'Folder ' + notes,
     'search enters browsed child',
   );
   await until(
-    () => evaluate<boolean>('document.activeElement?.getAttribute("aria-label")==="Find files"'),
+    () =>
+      evaluate(pageCall(() => document.activeElement?.getAttribute('aria-label') === 'Find files')),
     Boolean,
     'child search is focused',
   );
@@ -413,7 +405,7 @@ try {
   if (connection)
     console.log(
       'Inspection surface:',
-      await connection.evaluate('document.body.innerText.slice(-5000)'),
+      await connection.evaluate(pageCall(() => document.body.innerText.slice(-5000))),
     );
   throw error;
 } finally {

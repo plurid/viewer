@@ -13,6 +13,8 @@ import { readerSamples } from '../../tools/playground/reader-samples';
 import { defaultPlaygroundDirectory } from '../../tools/playground/main';
 import { officeFixture } from '../office-fixtures';
 import { ownedApp, until } from '../owned-app';
+import { animationFrames, exists, patchSettings, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -89,6 +91,62 @@ await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1,
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
 type App = Awaited<ReturnType<typeof ownedApp>>;
 type Connection = Awaited<ReturnType<App['connect']>>;
+
+interface ReaderWindow {
+  __readerCopied?: string;
+}
+
+/** Presses a Quick Preview button by accessible name or text, enabled or not. */
+function pressDialogButton(label: string): void {
+  const button = [...document.querySelectorAll<HTMLElement>('.quick-preview-dialog button')].find(
+    (button) => button.getAttribute('aria-label') === label || button.textContent.trim() === label,
+  );
+  if (!button) throw new Error('Missing button');
+  button.click();
+}
+
+/** Types into a Quick Preview field found by accessible name or label text. */
+function fillPreviewInput(label: string, value: string): void {
+  const input = [...document.querySelectorAll('.quick-preview input')].find(
+    (input) =>
+      input.getAttribute('aria-label') === label ||
+      input.closest('label')?.textContent.trim() === label,
+  );
+  if (!input) throw new Error('Missing input');
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function selectRow(row: string): void {
+  document.querySelector<HTMLElement>(row)!.click();
+  document.querySelector<HTMLElement>('.folder-explorer')!.focus();
+}
+
+const readerReady = (selector: string) =>
+  !!document.querySelector('.quick-preview ' + selector) &&
+  !document.querySelector('.quick-preview .loading');
+
+/** Records clipboard writes on the page instead of changing the system clipboard. */
+function captureClipboard(): void {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: async (value: string) => {
+        (window as unknown as ReaderWindow).__readerCopied = value;
+      },
+    },
+  });
+}
+
+const readerCopied = () => (window as unknown as ReaderWindow).__readerCopied;
+
+function cellCentre(row: number, column: number) {
+  const cell = document.querySelector(`.quick-preview [id$="-${row}-${column}"]`)!;
+  const rect = cell.getBoundingClientRect();
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+}
+
+const chapterScrollTop = () => document.querySelector('.epub-chapter')!.scrollTop;
 function driver(connection: Connection) {
   const { evaluate, command } = connection;
   const key = async (key: string, code: string, virtual: number, modifiers = 0) => {
@@ -101,43 +159,20 @@ function driver(connection: Connection) {
         modifiers,
       });
   };
-  const button = (label: string) =>
-    evaluate(
-      `(() => { const button = Array.from(document.querySelectorAll('.quick-preview-dialog button')).find(button => button.getAttribute('aria-label') === ${JSON.stringify(label)} || button.textContent.trim() === ${JSON.stringify(label)}); if (!button) throw new Error('Missing button'); button.click(); })()`,
-    );
-  const fill = (label: string, value: string) =>
-    evaluate(
-      `(() => { const input = Array.from(document.querySelectorAll('.quick-preview input')).find(input => input.getAttribute('aria-label') === ${JSON.stringify(label)} || input.closest('label')?.textContent.trim() === ${JSON.stringify(label)}); if (!input) throw new Error('Missing input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', { bubbles: true })); })()`,
-    );
+  const button = (label: string) => evaluate(pageCall(pressDialogButton, label));
+  const fill = (label: string, value: string) => evaluate(pageCall(fillPreviewInput, label, value));
   const open = async (name: string, selector: string) => {
-    const file = path.join(files, name);
-    await until(
-      () =>
-        evaluate<boolean>(
-          `!!document.querySelector(${JSON.stringify(`[data-file-path="${file}"]`)})`,
-        ),
-      Boolean,
-      'File available',
-    );
-    await evaluate(
-      `document.querySelector(${JSON.stringify(`[data-file-path="${file}"]`)}).click(); document.querySelector('.folder-explorer').focus()`,
-    );
+    const row = `[data-file-path="${path.join(files, name)}"]`;
+    await until(() => evaluate(exists(row)), Boolean, 'File available');
+    await evaluate(pageCall(selectRow, row));
     await key(' ', 'Space', 32);
-    await until(
-      () =>
-        evaluate<boolean>(
-          `!!document.querySelector(${JSON.stringify('.quick-preview ' + selector)}) && !document.querySelector('.quick-preview .loading')`,
-        ),
-      Boolean,
-      'Reader ready',
-      20000,
-    );
+    await until(() => evaluate(pageCall(readerReady, selector)), Boolean, 'Reader ready', 20000);
   };
   const close = async () => {
     await button('Close');
     await until(
-      () => evaluate<boolean>('!document.querySelector(".quick-preview")'),
-      Boolean,
+      () => evaluate(exists('.quick-preview')),
+      (shown) => !shown,
       'Preview closed',
     );
   };
@@ -149,13 +184,11 @@ function driver(connection: Connection) {
       mobile: false,
     });
     await until(
-      () => evaluate<boolean>('!document.querySelector("[data-plurid-motion]")'),
-      Boolean,
+      () => evaluate(exists('[data-plurid-motion]')),
+      (moving) => !moving,
       'Settled reader',
     );
-    await evaluate(
-      'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-    );
+    await evaluate(animationFrames(2));
     const shot = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
     await writeFile(path.join(captures, name + '.png'), Buffer.from(shot.data, 'base64'), {
       flag: 'wx',
@@ -173,13 +206,9 @@ try {
   let d = driver(connection);
   await d.open('Selection.xlsx', '[role="grid"]');
   // Capture the requested payload without replacing the person's operating-system clipboard.
-  await connection.evaluate(
-    `Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { window.__readerCopied = value; } } })`,
-  );
+  await connection.evaluate(pageCall(captureClipboard));
   const rect = (row: number, column: number) =>
-    connection!.evaluate<{ x: number; y: number }>(
-      `(() => { const cell = document.querySelector('.quick-preview [id$="-${row}-${column}"]'); const rect = cell.getBoundingClientRect(); return { x: rect.x + rect.width/2, y: rect.y + rect.height/2 }; })()`,
-    );
+    connection!.evaluate(pageCall(cellCentre, row, column));
   const a = await rect(1, 1),
     b = await rect(3, 2);
   await connection.command('Input.dispatchMouseEvent', { type: 'mouseMoved', ...a });
@@ -203,16 +232,13 @@ try {
     clickCount: 1,
   });
   await until(
-    () =>
-      connection!.evaluate<string>(
-        `document.querySelector('[aria-label="Selected range"]').textContent`,
-      ),
+    () => connection!.evaluate(textOf('[aria-label="Selected range"]')),
     (value) => value === 'A1:B3',
     'Pointer range',
   );
   await d.button('Copy');
   await until(
-    () => connection!.evaluate<string>('window.__readerCopied'),
+    () => connection!.evaluate(pageCall(readerCopied)),
     (text) => text === 'Part 1\t1\nPart 2\t2\nPart 3\t3',
     'Pointer range payload',
   );
@@ -221,25 +247,19 @@ try {
   await d.button('Go');
   await d.key('ArrowDown', 'ArrowDown', 40, 8);
   await d.key('ArrowDown', 'ArrowDown', 40, 8);
-  await until(
-    () => connection!.evaluate<boolean>(`!!document.querySelector('[id$="-101-1"]')`),
-    Boolean,
-    'Next worksheet page',
-  );
+  await until(() => connection!.evaluate(exists('[id$="-101-1"]')), Boolean, 'Next worksheet page');
   await d.key('ArrowRight', 'ArrowRight', 39, 8);
   await d.key('ArrowDown', 'ArrowDown', 40, 8);
   await d.button('Copy');
   const expected = [99, 100, 101, 102].map((n) => `Part ${n}\t${n}`).join('\n');
   await until(
-    () => connection!.evaluate<string>('window.__readerCopied'),
+    () => connection!.evaluate(pageCall(readerCopied)),
     (text) => text === expected,
     'Range across visible page boundary',
   );
-  await connection.evaluate(
-    `window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([{ path: 'settings.appearance', value: 'light' }], snapshot.revision))`,
-  );
+  await connection.evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () => connection!.evaluate<string>('document.documentElement.dataset.look'),
+    () => connection!.evaluate(pageCall(() => document.documentElement.dataset.look)),
     (look) => look === 'light',
     'Light appearance',
   );
@@ -247,23 +267,25 @@ try {
   checks.push('Mouse drag, Shift-arrow extension across worksheet pages and exact TSV payload');
   await d.close();
   await d.open('Published book.epub', '.epub-chapter');
-  await connection.evaluate(`document.querySelector('.epub-chapter').scrollTop = 420`);
+  await connection.evaluate(
+    pageCall(() => {
+      document.querySelector('.epub-chapter')!.scrollTop = 420;
+    }),
+  );
   await d.button('Bookmarks');
   await d.fill('Bookmark name', 'Return to the poem');
   await d.button('Add bookmark');
   await d.button('Next chapter');
   await d.button('Return to the poem');
   await until(
-    () => connection!.evaluate<number>('document.querySelector(".epub-chapter").scrollTop'),
+    () => connection!.evaluate(pageCall(chapterScrollTop)),
     (top) => top === 420,
     'Bookmark reading position',
   );
   await d.capture('bookmarks-minimum-light', 760);
-  await connection.evaluate(
-    `window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([{ path: 'settings.appearance', value: 'dark' }], snapshot.revision))`,
-  );
+  await connection.evaluate(patchSettings({ path: 'settings.appearance', value: 'dark' }));
   await until(
-    () => connection!.evaluate<string>('document.documentElement.dataset.look'),
+    () => connection!.evaluate(pageCall(() => document.documentElement.dataset.look)),
     (look) => look === 'dark',
     'Dark appearance',
   );
@@ -283,7 +305,7 @@ try {
   await d.button('Bookmarks');
   await d.button('Return to the poem');
   await until(
-    () => connection!.evaluate<number>('document.querySelector(".epub-chapter").scrollTop'),
+    () => connection!.evaluate(pageCall(chapterScrollTop)),
     (top) => top === 420,
     'Bookmark after restart and file revision',
   );
@@ -293,10 +315,7 @@ try {
   await d.close();
   await d.open('Selection.xlsx', '[role="grid"]');
   await until(
-    () =>
-      connection!.evaluate<string>(
-        `document.querySelector('[aria-label="Selected range"]').textContent`,
-      ),
+    () => connection!.evaluate(textOf('[aria-label="Selected range"]')),
     (value) => value === 'A99:B102',
     'Restored worksheet range',
   );

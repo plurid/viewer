@@ -14,6 +14,16 @@ import { defaultPlaygroundDirectory } from '../../tools/playground/main';
 import { qualificationSamples } from '../../tools/playground/qualification-samples';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import {
+  attributeOf,
+  buttonState,
+  countOf,
+  exists,
+  patchSettings,
+  pressButton,
+  textOf,
+} from './runtime/page';
+import { pageCall } from './runtime/page-function';
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
@@ -53,6 +63,97 @@ const sourceHashes = new Map(
 const checks: string[] = [],
   captures: string[] = [];
 type Connection = Awaited<ReturnType<Awaited<ReturnType<typeof ownedApp>>['connect']>>;
+
+/** The navigation field, range status, first rendered source row and sheet name. */
+function worksheetState() {
+  const first = document.querySelector('.data-scroll .data-row[aria-rowindex]');
+  return {
+    value: document.querySelector<HTMLInputElement>('.worksheet-navigation input')?.value,
+    range: document.querySelector('.worksheet-navigation [role=status]')?.textContent,
+    firstRow: first ? Number(first.getAttribute('aria-rowindex')) - 1 : undefined,
+    ready: !!document.querySelector('.office-viewer .data-scroll'),
+    name: document.querySelector('.data-scroll')?.getAttribute('aria-label'),
+  };
+}
+
+function chooseTab(name: string): void {
+  [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+    .find(
+      (tab) => tab.textContent.trim() === name || tab.textContent.trim() === name + ' (hidden)',
+    )!
+    .click();
+}
+
+function selectRowField(): void {
+  const input = document.querySelector<HTMLInputElement>('.worksheet-navigation input')!;
+  input.focus();
+  input.select();
+}
+
+const pageDelay = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+/** Whether a navigation control leaves its bar, how many there are, and the bar's opacity. */
+function navigationBounds() {
+  const nav = document.querySelector('.worksheet-navigation')!,
+    box = nav.getBoundingClientRect();
+  let opacity = 1,
+    node: Element | null = nav;
+  while (node) {
+    opacity *= Number(getComputedStyle(node).opacity);
+    node = node.parentElement;
+  }
+  return {
+    overflow: [...nav.querySelectorAll('button,input')].some((node) => {
+      const r = node.getBoundingClientRect();
+      return r.left < box.left - 1 || r.right > box.right + 1;
+    }),
+    controls: nav.querySelectorAll('button,input').length,
+    opacity,
+  };
+}
+
+const innerTextOf = (selector: string) => document.querySelector<HTMLElement>(selector)!.innerText;
+
+/** Reads one worksheet page through a fresh resource lease. */
+async function worksheetPage(file: string, sheet: string, fromRow: number) {
+  const resource = await window.viewer.resource(file);
+  try {
+    return await window.viewer.document(resource.id, {
+      requestID: crypto.randomUUID(),
+      sheet,
+      fromRow,
+      limit: 100,
+    });
+  } finally {
+    await window.viewer.release(resource.id);
+  }
+}
+
+/** Times one public worksheet page and counts its loaded cells. */
+async function timedWorksheetPage(file: string, sheet: string, fromRow: number) {
+  const resource = await window.viewer.resource(file);
+  try {
+    const start = performance.now(),
+      { office } = await window.viewer.document(resource.id, {
+        requestID: crypto.randomUUID(),
+        sheet,
+        fromRow,
+        limit: 100,
+      });
+    if (office?.kind !== 'workbook') throw new Error('Not a worksheet page');
+    return {
+      page: office.page!,
+      cells: office.sheets
+        .find((sheet) => sheet.loaded)!
+        .rows.reduce((n, row) => n + row.cells.length, 0),
+      ms: performance.now() - start,
+    };
+  } finally {
+    await window.viewer.release(resource.id);
+  }
+}
+
 async function run(
   file: string,
   name: string,
@@ -131,23 +232,14 @@ async function run(
       mobile: false,
     });
     await check(connection);
-    assert.equal((await connection.evaluate<unknown[]>('window.viewer.jobs()')).length, 0);
+    assert.equal((await connection.evaluate(pageCall(() => window.viewer.jobs()))).length, 0);
   } finally {
     await app.close(connection);
   }
 }
 async function ready(connection: Connection, from: number, name?: string) {
   await until(
-    () =>
-      connection.evaluate<{
-        value?: string;
-        range?: string;
-        firstRow?: number;
-        ready: boolean;
-        name?: string;
-      }>(
-        `(()=>{const first=document.querySelector('.data-scroll .data-row[aria-rowindex]');return {value:document.querySelector('.worksheet-navigation input')?.value,range:document.querySelector('.worksheet-navigation [role=status]')?.textContent,firstRow:first?Number(first.getAttribute('aria-rowindex'))-1:undefined,ready:!!document.querySelector('.office-viewer .data-scroll'),name:document.querySelector('.data-scroll')?.getAttribute('aria-label')}})()`,
-      ),
+    () => connection.evaluate(pageCall(worksheetState)),
     (value) =>
       Boolean(
         value.ready &&
@@ -162,10 +254,7 @@ async function ready(connection: Connection, from: number, name?: string) {
   );
 }
 async function choose(connection: Connection, value: string) {
-  const name = JSON.stringify(value);
-  await connection.evaluate(
-    `[...document.querySelectorAll('[role="tab"]')].find(tab => tab.textContent.trim() === ${name} || tab.textContent.trim() === ${name} + ' (hidden)').click()`,
-  );
+  await connection.evaluate(pageCall(chooseTab, value));
 }
 
 async function press(
@@ -184,9 +273,7 @@ async function press(
     });
 }
 async function jump(connection: Connection, row: number) {
-  await connection.evaluate(
-    '(()=>{const input=document.querySelector(".worksheet-navigation input");input.focus();input.select()})()',
-  );
+  await connection.evaluate(pageCall(selectRowField));
   await connection.command('Input.insertText', { text: String(row) });
   await press(connection, 'Enter', 'Enter', 13);
   await ready(connection, row);
@@ -196,14 +283,8 @@ async function capture(connection: Connection, name: string) {
     stable = 0;
   const bounds = await until(
     async () => {
-      await connection.evaluate('new Promise(resolve=>setTimeout(resolve,120))');
-      const value = await connection.evaluate<{
-        overflow: boolean;
-        controls: number;
-        opacity: number;
-      }>(
-        `(()=>{const nav=document.querySelector('.worksheet-navigation'),box=nav.getBoundingClientRect();let opacity=1,node=nav;while(node){opacity*=Number(getComputedStyle(node).opacity);node=node.parentElement}return {overflow:[...nav.querySelectorAll('button,input')].some(node=>{const r=node.getBoundingClientRect();return r.left<box.left-1||r.right>box.right+1}),controls:nav.querySelectorAll('button,input').length,opacity}})()`,
-      );
+      await connection.evaluate(pageCall(pageDelay, 120));
+      const value = await connection.evaluate(pageCall(navigationBounds));
       const current = JSON.stringify(value);
       stable = previous === current ? stable + 1 : 0;
       previous = current;
@@ -232,37 +313,24 @@ try {
     async (connection) => {
       await ready(connection, 2500, 'Measurements');
       assert.equal(
-        await connection.evaluate<string>(
-          'document.querySelector(".data-scroll .evidence-cell")?.textContent.trim()',
+        await connection.evaluate(
+          pageCall(() => document.querySelector('.data-scroll .evidence-cell')?.textContent.trim()),
         ),
         '2500',
       );
-      assert.equal(
-        await connection.evaluate<string>(
-          'document.querySelector(".data-scroll").getAttribute("aria-rowcount")',
-        ),
-        '2601',
-      );
+      assert.equal(await connection.evaluate(attributeOf('.data-scroll', 'aria-rowcount')), '2601');
       await capture(connection, 'citation-dark');
-      await connection.evaluate(
-        '[...document.querySelectorAll(".worksheet-navigation button")].find(button=>button.textContent==="Next").click()',
-      );
+      await connection.evaluate(pressButton('Next', '.worksheet-navigation'));
       await ready(connection, 2600);
       assert.equal(
-        await connection.evaluate<boolean>(
-          '[...document.querySelectorAll(".worksheet-navigation button")].find(button=>button.textContent==="Next").disabled',
-        ),
-        true,
+        await connection.evaluate(buttonState('Next', '.worksheet-navigation')),
+        'disabled',
       );
-      await connection.evaluate(
-        '[...document.querySelectorAll(".worksheet-navigation button")].find(button=>button.textContent==="Previous").click()',
-      );
+      await connection.evaluate(pressButton('Previous', '.worksheet-navigation'));
       await ready(connection, 2500);
       await jump(connection, 1200);
       assert.ok(
-        (
-          await connection.evaluate<string>('document.querySelector(".data-scroll").innerText')
-        ).includes('1200'),
+        (await connection.evaluate(pageCall(innerTextOf, '.data-scroll'))).includes('1200'),
       );
       await choose(connection, 'Hidden');
       await ready(connection, 1, 'Hidden');
@@ -272,42 +340,31 @@ try {
         'Original cell citation A2500 loads directly, Next reaches final row 2600, Previous returns, Enter jumps to row 1200 and each sheet remembers its position.',
       );
       await assert.rejects(
-        () =>
-          connection.evaluate(
-            `(async()=>{const resource=await window.viewer.resource(${JSON.stringify(generated)});try{return await window.viewer.document(resource.id,{requestID:crypto.randomUUID(),sheet:'External',fromRow:1,limit:100})}finally{await window.viewer.release(resource.id)}})()`,
-          ),
+        () => connection.evaluate(pageCall(worksheetPage, generated, 'External', 1)),
         /worksheet/,
       );
       await choose(connection, 'Broken');
       await until(
-        () =>
-          connection.evaluate<string>(
-            'document.querySelector(".office-viewer .empty-state")?.textContent||""',
-          ),
+        () => connection.evaluate(textOf('.office-viewer .empty-state')),
         (text) => text.includes('Worksheet page unavailable'),
         'malformed worksheet refusal',
       );
-      assert.equal(
-        await connection.evaluate<boolean>('!!document.querySelector(".worksheet-navigation")'),
-        false,
-      );
-      await connection.evaluate('new Promise(resolve=>setTimeout(resolve,400))');
+      assert.equal(await connection.evaluate(exists('.worksheet-navigation')), false);
+      await connection.evaluate(pageCall(pageDelay, 400));
       const errorShot = await connection.command<{ data: string }>('Page.captureScreenshot', {
         format: 'png',
       });
       const errorPath = path.join(root, 'page-error-dark.png');
       await writeFile(errorPath, Buffer.from(errorShot.data, 'base64'), { flag: 'wx' });
       captures.push(errorPath);
-      await connection.evaluate(
-        '[...document.querySelectorAll(".empty-state button")].find(button=>button.textContent==="First worksheet").click()',
-      );
+      await connection.evaluate(pressButton('First worksheet', '.empty-state'));
       await ready(connection, 1, 'Measurements');
       await choose(connection, 'Empty');
       await ready(connection, 1, 'Empty');
       assert.ok(
-        (
-          await connection.evaluate<string>('document.querySelector(".office-viewer").innerText')
-        ).includes('No stored rows in this sheet.'),
+        (await connection.evaluate(pageCall(innerTextOf, '.office-viewer'))).includes(
+          'No stored rows in this sheet.',
+        ),
       );
       checks.push(
         'External worksheet targets fail without being fetched; First worksheet recovers and true empty sheets remain explicit.',
@@ -316,12 +373,8 @@ try {
   );
   await run(publicFile, 'PublicProfile', undefined, async (connection) => {
     await ready(connection, 1, 'Documents Per Project');
-    const observed = await connection.evaluate<{
-      page: { lastRow: number };
-      cells: number;
-      ms: number;
-    }>(
-      `(async()=>{const resource=await window.viewer.resource(${JSON.stringify(publicFile)});try{const start=performance.now(),value=await window.viewer.document(resource.id,{requestID:crypto.randomUUID(),sheet:'Documents Per Project',fromRow:5000,limit:100});return {page:value.office.page,cells:value.office.sheets.find(sheet=>sheet.loaded).rows.reduce((n,row)=>n+row.cells.length,0),ms:performance.now()-start}}finally{await window.viewer.release(resource.id)}})()`,
+    const observed = await connection.evaluate(
+      pageCall(timedWorksheetPage, publicFile, 'Documents Per Project', 5000),
     );
     assert.equal(observed.page.lastRow, 5392);
     assert.ok(observed.cells > 0 && observed.cells <= 25600);
@@ -329,16 +382,10 @@ try {
     await capture(connection, 'public-row-5000-dark');
     await choose(connection, 'Documents Analysis');
     await ready(connection, 1, 'Documents Analysis');
-    assert.ok(
-      (await connection.evaluate<number>(
-        'document.querySelectorAll(".data-scroll .data-row[aria-rowindex]").length',
-      )) > 0,
-    );
-    await connection.evaluate(
-      "window.viewer.settingsGet().then(snapshot=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],snapshot.revision))",
-    );
+    assert.ok((await connection.evaluate(countOf('.data-scroll .data-row[aria-rowindex]'))) > 0);
+    await connection.evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
     await until(
-      () => connection.evaluate<string>('document.documentElement.dataset.look'),
+      () => connection.evaluate(pageCall(() => document.documentElement.dataset.look)),
       (look) => look === 'light',
       'light worksheet',
     );

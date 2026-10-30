@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { copyFile, lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { DocumentData } from '../../src/domain/services';
 import { defaultSettings } from '../../src/domain/services';
 import { CURRENT_STATE_VERSION } from '../../src/domain/contracts';
 import type { SavedState } from '../../src/domain/contracts';
@@ -13,6 +12,8 @@ import { temporaryRoot } from '../../tools/temporary';
 import { readerSamples } from '../../tools/playground/reader-samples';
 import { defaultPlaygroundDirectory } from '../../tools/playground/main';
 import { ownedApp, until } from '../owned-app';
+import { click, countOf, exists, pressButton } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -43,6 +44,88 @@ for (const sample of samples) {
 const observations: unknown[] = [];
 type App = Awaited<ReturnType<typeof ownedApp>>;
 type Connection = Awaited<ReturnType<App['connect']>>;
+
+interface ReaderWindow {
+  __readerReturn: number;
+}
+
+const bookReady = () =>
+  !!document.querySelector('.quick-preview .epub-chapter') &&
+  !document.querySelector('.quick-preview .loading');
+
+function selectRow(row: string): void {
+  document.querySelector<HTMLElement>(row)!.click();
+  document.querySelector<HTMLElement>('.folder-explorer')!.focus();
+}
+
+function pressChapter(index: number): void {
+  document.querySelectorAll<HTMLElement>('.epub-body nav button')[index]!.click();
+}
+
+/** The index of the chapter button marked as the current page, or -1. */
+const currentChapter = () =>
+  [...document.querySelectorAll('.epub-body nav button')].findIndex(
+    (button) => button.getAttribute('aria-current') === 'page',
+  );
+
+/** Sets an input's value through the native setter so React sees the change. */
+function fillField(selector: string, value: string): void {
+  const input = document.querySelector<HTMLInputElement>(selector)!;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/** Reads the whole publication through a fresh resource lease. */
+async function documentData(file: string) {
+  const resource = await window.viewer.resource(file);
+  try {
+    return await window.viewer.document(resource.id);
+  } finally {
+    await window.viewer.release(resource.id);
+  }
+}
+
+/** The first note reference the published chapter source links to. */
+function noteReference(html: string) {
+  const source = new DOMParser().parseFromString(html, 'text/html');
+  return [...source.querySelectorAll('a')]
+    .find(
+      (link) =>
+        link.getAttribute('epub:type')?.split(/\s+/).includes('noteref') ||
+        /^xnotes\.xhtml#/.test(link.getAttribute('href') || ''),
+    )
+    ?.getAttribute('href');
+}
+
+/** Scrolls into the chapter, records the position on `window`, then follows the note link. */
+function followNote(href: string): boolean {
+  const article = document.querySelector('.epub-chapter')!;
+  const link = [...article.querySelectorAll('a')].find(
+    (link) => link.getAttribute('href') === href,
+  );
+  if (!link) return false;
+  article.scrollTop = Math.min(400, article.scrollHeight - article.clientHeight);
+  (window as unknown as ReaderWindow).__readerReturn = article.scrollTop;
+  link.click();
+  return true;
+}
+
+const returnedToReading = () =>
+  Math.abs(
+    document.querySelector('.epub-chapter')!.scrollTop -
+      (window as unknown as ReaderWindow).__readerReturn,
+  ) < 2;
+
+/** Scrolls the chapter and flushes the preview so the position is saved. */
+function rememberScroll(): number {
+  const article = document.querySelector('.epub-chapter')!;
+  article.scrollTop = Math.min(500, article.scrollHeight - article.clientHeight);
+  article.dispatchEvent(new Event('scroll'));
+  window.dispatchEvent(new Event('viewer-preview-flush'));
+  return article.scrollTop;
+}
+
+const chapterScrollTop = () => document.querySelector('.epub-chapter')!.scrollTop;
 
 async function makeProfile(name: string) {
   const profile = path.join(root, name);
@@ -100,30 +183,17 @@ function reader(connection: Connection) {
       await command('Input.dispatchKeyEvent', { type, key, code, windowsVirtualKeyCode: virtual });
   };
   const ready = () =>
-    until(
-      () =>
-        evaluate<boolean>(
-          '!!document.querySelector(".quick-preview .epub-chapter") && !document.querySelector(".quick-preview .loading")',
-        ),
-      Boolean,
-      'Public EPUB ready',
-      20000,
-    );
+    until(() => evaluate(pageCall(bookReady)), Boolean, 'Public EPUB ready', 20000);
   return {
     ready,
-    text: () => evaluate<string>('document.querySelector(".quick-preview")?.innerText || ""'),
+    text: () =>
+      evaluate(
+        pageCall(() => document.querySelector<HTMLElement>('.quick-preview')?.innerText ?? ''),
+      ),
     open: async (name: string) => {
-      await until(
-        () =>
-          evaluate<boolean>(
-            `!!document.querySelector(${JSON.stringify(`[data-file-path="${path.join(files, name)}"]`)})`,
-          ),
-        Boolean,
-        'Book listing',
-      );
-      await evaluate(
-        `(() => { const row = document.querySelector(${JSON.stringify(`[data-file-path="${path.join(files, name)}"]`)}); row.click(); document.querySelector('.folder-explorer').focus(); })()`,
-      );
+      const row = `[data-file-path="${path.join(files, name)}"]`;
+      await until(() => evaluate(exists(row)), Boolean, 'Book listing');
+      await evaluate(pageCall(selectRow, row));
       const start = performance.now();
       await key(' ', 'Space', 32);
       await ready();
@@ -132,32 +202,22 @@ function reader(connection: Connection) {
     close: async () => {
       await key('Escape', 'Escape', 27);
       await until(
-        () => evaluate<boolean>('!document.querySelector(".quick-preview")'),
-        Boolean,
+        () => evaluate(exists('.quick-preview')),
+        (shown) => !shown,
         'Book closed',
       );
     },
     chapter: async (index: number) => {
-      await evaluate(`document.querySelectorAll('.epub-body nav button')[${index}].click()`);
+      await evaluate(pageCall(pressChapter, index));
       await until(
-        () =>
-          evaluate<number>(
-            'Array.from(document.querySelectorAll(".epub-body nav button")).findIndex(button => button.getAttribute("aria-current") === "page")',
-          ),
+        () => evaluate(pageCall(currentChapter)),
         (value) => value === index,
         'Selected publication chapter',
       );
     },
-    selected: () =>
-      evaluate<number>(
-        'Array.from(document.querySelectorAll(".epub-body nav button")).findIndex(button => button.getAttribute("aria-current") === "page")',
-      ),
-    fill: (selector: string, value: string) =>
-      evaluate(
-        `(() => { const input = document.querySelector(${JSON.stringify(selector)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)}); input.dispatchEvent(new Event('input', { bubbles: true })); })()`,
-      ),
-    click: (selector: string) =>
-      evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`),
+    selected: () => evaluate(pageCall(currentChapter)),
+    fill: (selector: string, value: string) => evaluate(pageCall(fillField, selector, value)),
+    click: (selector: string) => evaluate(click(selector)),
     capture: async (name: string, width = 1280, height = 900) => {
       await command('Emulation.setDeviceMetricsOverride', {
         width,
@@ -167,8 +227,12 @@ function reader(connection: Connection) {
       });
       await until(
         () =>
-          evaluate<boolean>(
-            '!!document.querySelector(".epub-chapter") && !document.querySelector("[data-plurid-motion]")',
+          evaluate(
+            pageCall(
+              () =>
+                !!document.querySelector('.epub-chapter') &&
+                !document.querySelector('[data-plurid-motion]'),
+            ),
           ),
         Boolean,
         'Capture settled',
@@ -197,22 +261,21 @@ try {
       });
       let ui = reader(connection);
       const cold = await ui.open(sample.name);
-      const data = await evaluate<DocumentData>(
-        `(async () => { const resource = await window.viewer.resource(${JSON.stringify(path.join(files, sample.name))}); try { return await window.viewer.document(resource.id); } finally { await window.viewer.release(resource.id); } })()`,
-      );
+      const data = await evaluate(pageCall(documentData, path.join(files, sample.name)));
       assert.ok(data.chapters?.length);
-      assert.equal(
-        await evaluate('document.querySelectorAll(".epub-body nav button").length'),
-        data.chapters.length,
-      );
+      assert.equal(await evaluate(countOf('.epub-body nav button')), data.chapters.length);
       const main = data.chapters.findIndex((chapter) => chapter.html.length > 10000);
       const imageChapter = data.chapters.findIndex((chapter) => /<img\b/i.test(chapter.html));
       if (imageChapter >= 0 && data.epub?.images.length) {
         await ui.chapter(imageChapter);
         await until(
           () =>
-            evaluate<boolean>(
-              'Array.from(document.querySelectorAll(".epub-image img")).some(image => image.complete && image.naturalWidth > 0)',
+            evaluate(
+              pageCall(() =>
+                [...document.querySelectorAll<HTMLImageElement>('.epub-image img')].some(
+                  (image) => image.complete && image.naturalWidth > 0,
+                ),
+              ),
             ),
           Boolean,
           'Publication illustration decoded',
@@ -223,65 +286,53 @@ try {
       );
       if (notes >= 0) {
         await ui.chapter(notes);
-        const sourceLink = await evaluate<string | undefined>(`(() => {
-          const source = new DOMParser().parseFromString(${JSON.stringify(data.chapters[notes]!.html)}, 'text/html');
-          return Array.from(source.querySelectorAll('a')).find(link =>
-            link.getAttribute('epub:type')?.split(/\\s+/).includes('noteref') ||
-            /^xnotes\\.xhtml#/.test(link.getAttribute('href') || '')
-          )?.getAttribute('href');
-        })()`);
+        const sourceLink = await evaluate(pageCall(noteReference, data.chapters[notes]!.html));
         assert.ok(sourceLink, 'Published note reference');
         const target = epubReference(data.chapters[notes]!.path!, sourceLink);
         assert.ok(target?.fragment, 'Published note target');
         const destination = data.chapters.findIndex((chapter) => chapter.path === target.path);
         assert.ok(destination >= 0, 'Note content is available');
-        const selected = await evaluate<boolean>(`(() => {
-          const article = document.querySelector('.epub-chapter');
-          const link = Array.from(article.querySelectorAll('a')).find(link => link.getAttribute('href') === ${JSON.stringify('#' + encodeURIComponent(target.fragment))});
-          if (!link) return false;
-          article.scrollTop = Math.min(400, article.scrollHeight - article.clientHeight);
-          window.__readerReturn = article.scrollTop;
-          link.click(); return true;
-        })()`);
+        const selected = await evaluate(
+          pageCall(followNote, '#' + encodeURIComponent(target.fragment)),
+        );
         assert.ok(selected, 'Published internal note link');
         await until(
-          () =>
-            evaluate<boolean>(
-              `!!document.querySelector('[aria-label="Back to reading position"]')`,
-            ),
+          () => evaluate(exists('[aria-label="Back to reading position"]')),
           Boolean,
           'Publication link history',
         );
         assert.equal(await ui.selected(), destination, 'Note opens its actual content document');
         await until(
-          () => evaluate<string>('document.activeElement?.getAttribute("data-epub-anchor") || ""'),
+          () =>
+            evaluate(
+              pageCall(() => document.activeElement?.getAttribute('data-epub-anchor') ?? ''),
+            ),
           (anchor) => anchor === target.fragment,
           'Published footnote target receives focus',
         );
         await ui.click('[aria-label="Back to reading position"]');
         assert.equal(await ui.selected(), notes, 'Return restores the referring chapter');
         await until(
-          () =>
-            evaluate<boolean>(
-              'Math.abs(document.querySelector(".epub-chapter").scrollTop - window.__readerReturn) < 2',
-            ),
+          () => evaluate(pageCall(returnedToReading)),
           Boolean,
           'Return from published footnote',
         );
       }
-      await evaluate(
-        `Array.from(document.querySelectorAll('.quick-preview button')).find(button => button.textContent.trim() === 'Find in book').click()`,
-      );
+      await evaluate(pressButton('Find in book', '.quick-preview'));
       const query = sample.search;
       await ui.fill('[aria-label="Search book text"]', query);
       await until(ui.text, (text) => /\d+\+? matches/.test(text), 'Published book search', 20000);
-      const matches = await evaluate<number>('document.querySelectorAll(".epub-search li").length');
+      const matches = await evaluate(countOf('.epub-search li'));
       assert.ok(matches > 0 && matches <= 200);
       await ui.click('.epub-search li:last-child button');
       assert.ok(
         (
-          await evaluate<string>(
-            'Array.from(document.querySelectorAll("[data-epub-match]")).map(node => node.textContent).join("")',
+          await evaluate(
+            pageCall(() =>
+              [...document.querySelectorAll('[data-epub-match]')]
+                .map((node) => node.textContent)
+                .join(''),
+            ),
           )
         )
           .toLowerCase()
@@ -294,19 +345,15 @@ try {
         (text) => text.includes('0 matches'),
         'Rapid search owns its last query',
       );
-      await evaluate(
-        `Array.from(document.querySelectorAll('.quick-preview button')).find(button => button.textContent.trim() === 'Find in book').click()`,
-      );
+      await evaluate(pressButton('Find in book', '.quick-preview'));
       const rememberedChapter = main >= 0 ? main : Math.min(1, data.chapters.length - 1);
       await ui.chapter(rememberedChapter);
-      const rememberedScroll = await evaluate<number>(
-        `(() => { const article = document.querySelector('.epub-chapter'); article.scrollTop = Math.min(500, article.scrollHeight - article.clientHeight); article.dispatchEvent(new Event('scroll')); window.dispatchEvent(new Event('viewer-preview-flush')); return article.scrollTop; })()`,
-      );
+      const rememberedScroll = await evaluate(pageCall(rememberScroll));
       await ui.close();
       const warm = await ui.open(sample.name);
       assert.equal(await ui.selected(), rememberedChapter);
       await until(
-        () => evaluate<number>('document.querySelector(".epub-chapter").scrollTop'),
+        () => evaluate(pageCall(chapterScrollTop)),
         (top) => Math.abs(top - rememberedScroll) < 2,
         'Warm publication reading position',
       );
@@ -322,7 +369,7 @@ try {
       await ui.open(sample.name);
       assert.equal(await ui.selected(), rememberedChapter);
       await until(
-        () => connection!.evaluate<number>('document.querySelector(".epub-chapter").scrollTop'),
+        () => connection!.evaluate(pageCall(chapterScrollTop)),
         (top) => Math.abs(top - rememberedScroll) < 2,
         'Cold publication reading position',
       );

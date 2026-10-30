@@ -1,18 +1,25 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { inspectInstall, updatedManifest, verifyDistribution } from '../tools/lib/plurid-registry';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const plan = {
   direct: ['@plurid/a'],
   versions: { '@plurid/a': '0.0.0-2', '@plurid/b': '0.0.0-3' },
 };
+let root: string;
+beforeEach(async () => {
+  root = await temporaryRoot('viewer-plurid-registry-');
+});
+afterEach(async () => {
+  await trashTemporary(root);
+});
+
 function fixture() {
-  // Retained by design under the workspace's artifact preservation policy.
-  const workspace = mkdtempSync(path.join(os.tmpdir(), 'viewer-plurid-registry-'));
+  const workspace = mkdtempSync(path.join(root, 'workspace-'));
   const app = path.join(workspace, 'app');
   mkdirSync(app);
   writeFileSync(
@@ -86,7 +93,7 @@ describe('Plurid registry qualification', () => {
   });
   it('rejects a linked installation root', () => {
     const f = fixture();
-    const workspace = mkdtempSync(path.join(os.tmpdir(), 'viewer-plurid-linked-root-'));
+    const workspace = mkdtempSync(path.join(root, 'linked-root-'));
     const app = path.join(workspace, 'app');
     mkdirSync(app);
     writeFileSync(

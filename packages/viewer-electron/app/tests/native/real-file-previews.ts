@@ -12,6 +12,8 @@ import { remoteSamples } from '../../tools/playground/catalog';
 import { defaultPlaygroundDirectory } from '../../tools/playground/main';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { countOf, exists, pressButton } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
@@ -92,6 +94,79 @@ await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1,
   flag: 'wx',
 });
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
+
+/** Reads the document through a fresh resource lease and summarises its Office content. */
+async function inspectDocument(file: string) {
+  const start = performance.now(),
+    resource = await window.viewer.resource(file);
+  try {
+    const value = await window.viewer.document(resource.id),
+      office = value.office;
+    return {
+      ms: performance.now() - start,
+      kind: office?.kind,
+      blocks: office?.kind === 'word' ? office.blocks.length : undefined,
+      sheets:
+        office?.kind === 'workbook'
+          ? office.sheets.map((sheet) => ({
+              name: sheet.name,
+              rows: sheet.rows.length,
+              columns: sheet.columns,
+              truncated: sheet.truncated,
+            }))
+          : undefined,
+      truncated: value.truncated,
+      coverage: value.coverageReason,
+      characters: value.text.length,
+    };
+  } finally {
+    await window.viewer.release(resource.id);
+  }
+}
+
+function selectRow(row: string): void {
+  document.querySelector<HTMLElement>(row)!.click();
+  document.querySelector<HTMLElement>('.folder-explorer')!.focus();
+}
+
+function officeViewChoices(): boolean {
+  return [...document.querySelectorAll('.preview-toolbar button')].some((button) =>
+    ['Layout', 'Print layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
+  );
+}
+
+/** Whether `selector` shows decoded content, plus any error, warning and decoded dimensions. */
+function previewState(selector: string) {
+  const root = document.querySelector('.quick-preview');
+  const image = root?.querySelector<HTMLImageElement>('.image-stage img');
+  const media = root?.querySelector<HTMLVideoElement | HTMLAudioElement>('video,audio');
+  const canvas = root?.querySelector<HTMLCanvasElement>('.pdf-sheet canvas');
+  const content = root?.querySelector(selector);
+  const mediaReady = !!media && media.readyState >= 2;
+  return {
+    ready:
+      !!content &&
+      (!image || (image.complete && image.naturalWidth > 0)) &&
+      (!canvas || canvas.width > 0) &&
+      (!media || (mediaReady && !root!.querySelector('.media-loading'))),
+    error: root?.querySelector<HTMLElement>('.empty-state')?.innerText || '',
+    warning: root?.querySelector('.inline-warning')?.textContent || '',
+    // An audio element has no picture size, so audio-only media reports none.
+    media:
+      media && mediaReady
+        ? {
+            duration: media.duration,
+            width: 'videoWidth' in media ? media.videoWidth : undefined,
+            height: 'videoHeight' in media ? media.videoHeight : undefined,
+          }
+        : undefined,
+    image: image?.complete ? { width: image.naturalWidth, height: image.naturalHeight } : undefined,
+  };
+}
+
+const pageDelay = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [];
@@ -104,14 +179,14 @@ try {
       await command('Input.dispatchKeyEvent', { type, key, code, windowsVirtualKeyCode });
   };
   const capture = async (name: string) => {
-    await evaluate('new Promise(resolve=>setTimeout(resolve,300))');
+    await evaluate(pageCall(pageDelay, 300));
     const value = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
     await writeFile(path.join(root, name + '.png'), Buffer.from(value.data, 'base64'), {
       flag: 'wx',
     });
   };
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+    () => evaluate(countOf('[data-file-path]')),
     (count) => count === corpus.length,
     'public qualification corpus',
   );
@@ -123,10 +198,7 @@ try {
       ? 'ZIP directory was not found'
       : undefined;
     if (['docx', 'xlsx'].includes(extension)) {
-      const read = () =>
-        evaluate(
-          `(async()=>{const start=performance.now(),resource=await window.viewer.resource(${JSON.stringify(file)});try{const value=await window.viewer.document(resource.id);return {ms:performance.now()-start,kind:value.office?.kind,blocks:value.office?.blocks?.length,sheets:value.office?.sheets?.map(sheet=>({name:sheet.name,rows:sheet.rows.length,columns:sheet.columns,truncated:sheet.truncated})),truncated:value.truncated,coverage:value.coverageReason,characters:value.text.length}}finally{await window.viewer.release(resource.id)}})()`,
-        );
+      const read = () => evaluate(pageCall(inspectDocument, file));
       if (expectedRejection) {
         await assert.rejects(read, (error: Error) => error.message.includes(expectedRejection));
         observations.push({
@@ -138,70 +210,27 @@ try {
         const cold = await read(),
           warm = await read();
         observations.push({ file: sample.path, cold, warm });
-        assert.ok((cold as { characters: number }).characters > 0);
+        assert.ok(cold.characters > 0);
         if (sample.path.endsWith('poi-large-workbook.xlsx')) {
-          const value = cold as {
-            truncated: boolean;
-            sheets: { name: string; rows: number; columns: number; truncated: boolean }[];
-          };
-          assert.equal(value.truncated, true);
-          assert.equal(value.sheets.length, 2);
-          assert.equal(value.sheets[0].name, 'Documents Per Project');
-          assert.ok(value.sheets[0].rows > 0 && value.sheets[0].rows <= 2000);
-          assert.ok(value.sheets[0].columns > 0 && value.sheets[0].columns <= 256);
-          assert.equal(value.sheets[0].truncated, true);
+          assert.equal(cold.truncated, true);
+          const sheets = cold.sheets!;
+          assert.equal(sheets.length, 2);
+          assert.equal(sheets[0].name, 'Documents Per Project');
+          assert.ok(sheets[0].rows > 0 && sheets[0].rows <= 2000);
+          assert.ok(sheets[0].columns > 0 && sheets[0].columns <= 256);
+          assert.equal(sheets[0].truncated, true);
         }
       }
     }
-    await evaluate(
-      `(()=>{const row=document.querySelector(${JSON.stringify(`[data-file-path="${file}"]`)});row.click();document.querySelector('.folder-explorer').focus()})()`,
-    );
+    await evaluate(pageCall(selectRow, `[data-file-path="${file}"]`));
     await press(' ', 'Space', 32);
-    await until(
-      () => evaluate<boolean>('!!document.querySelector(".quick-preview")'),
-      Boolean,
-      'Quick Preview ' + extension,
-    );
+    await until(() => evaluate(exists('.quick-preview')), Boolean, 'Quick Preview ' + extension);
     if (extension === 'docx') {
-      await until(
-        () =>
-          evaluate<boolean>(
-            `[...document.querySelectorAll('.preview-toolbar button')].some(button=>['Layout','Print layout','Reading','Sheet'].includes(button.textContent.trim()))`,
-          ),
-        Boolean,
-        'Office view choices',
-      );
-      await evaluate(
-        '[...document.querySelectorAll(".preview-toolbar button")].find(b=>b.textContent.trim()==="Reading").click()',
-      );
+      await until(() => evaluate(pageCall(officeViewChoices)), Boolean, 'Office view choices');
+      await evaluate(pressButton('Reading', '.preview-toolbar'));
     }
     const result = await until(
-      () =>
-        evaluate<{
-          ready: boolean;
-          error: string;
-          warning: string;
-          media?: { duration: number; width: number; height: number };
-          image?: { width: number; height: number };
-        }>(
-          `(() => {
-            const root = document.querySelector('.quick-preview');
-            const image = root?.querySelector('.image-stage img');
-            const media = root?.querySelector('video,audio');
-            const canvas = root?.querySelector('.pdf-sheet canvas');
-            const content = root?.querySelector(${JSON.stringify(previewSelectors.get(extension) ?? 'video,audio')});
-            const mediaReady = media && media.readyState >= 2;
-            return {
-              ready: !!content && (!image || image.complete && image.naturalWidth > 0)
-                && (!canvas || canvas.width > 0)
-                && (!media || mediaReady && !root.querySelector('.media-loading')),
-              error: root?.querySelector('.empty-state')?.innerText || '',
-              warning: root?.querySelector('.inline-warning')?.textContent || '',
-              media: mediaReady ? { duration: media.duration, width: media.videoWidth, height: media.videoHeight } : undefined,
-              image: image?.complete ? { width: image.naturalWidth, height: image.naturalHeight } : undefined,
-            };
-          })()`,
-        ),
+      () => evaluate(pageCall(previewState, previewSelectors.get(extension) ?? 'video,audio')),
       (value) => value.ready || value.error,
       'decoded ' + extension,
       20000,
@@ -213,20 +242,28 @@ try {
       assert.equal(result.error, '', extension + ' content opens');
     if (extension === 'pdf')
       assert.equal(
-        (await evaluate<{ pages: number }>(`window.viewer.pdfInspect(${JSON.stringify(file)})`))
-          .pages,
+        (await evaluate(pageCall((file: string) => window.viewer.pdfInspect(file), file))).pages,
         178,
       );
     if (result.ready && result.media && !result.media.width) {
       assert.ok(result.warning.includes('No video picture'));
-      await evaluate('document.querySelector(".quick-preview audio").play()');
+      await evaluate(
+        pageCall(() => document.querySelector<HTMLAudioElement>('.quick-preview audio')!.play()),
+      );
       await until(
-        () => evaluate<number>('document.querySelector(".quick-preview audio").currentTime'),
+        () =>
+          evaluate(
+            pageCall(
+              () => document.querySelector<HTMLAudioElement>('.quick-preview audio')!.currentTime,
+            ),
+          ),
         (seconds) => seconds > 0.15,
         'partial video audio actually advances',
         5000,
       );
-      await evaluate('document.querySelector(".quick-preview audio").pause()');
+      await evaluate(
+        pageCall(() => document.querySelector<HTMLAudioElement>('.quick-preview audio')!.pause()),
+      );
     }
     observations.push({
       file: sample.path,
@@ -242,12 +279,12 @@ try {
     await capture('preview-' + path.basename(sample.path).replace(/[^a-zA-Z0-9.-]/g, '-'));
     await press('Escape', 'Escape', 27);
     await until(
-      () => evaluate<boolean>('!document.querySelector(".quick-preview")'),
-      Boolean,
+      () => evaluate(exists('.quick-preview')),
+      (shown) => !shown,
       'preview closes',
     );
   }
-  assert.equal((await evaluate<unknown[]>('window.viewer.jobs()')).length, 0);
+  assert.equal((await evaluate(pageCall(() => window.viewer.jobs()))).length, 0);
   for (const sample of corpus) {
     assert.equal(await hash(path.join(corpusDirectory, sample.path)), sample.sha256);
     assert.equal(await hash(path.join(files, path.basename(sample.path))), sample.sha256);
@@ -258,7 +295,7 @@ try {
   if (connection)
     console.log(
       'Qualification surface:',
-      await connection.evaluate('document.body.innerText.slice(-5000)'),
+      await connection.evaluate(pageCall(() => document.body.innerText.slice(-5000))),
     );
   throw error;
 } finally {

@@ -9,10 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { CURRENT_STATE_VERSION, type Pane, type SavedState } from '../../src/domain/contracts';
 import { defaultSettings } from '../../src/domain/services';
-import type { LocalServer } from '../../src/domain/previews/web';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { attributeOf, click, countOf, exists, pressButton, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
+import type { PageExpression } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
@@ -179,6 +181,150 @@ const frameIn = (tree: FrameTree, url: string): FrameTree | undefined =>
     ? tree
     : tree.childFrames?.map((child) => frameIn(child, url)).find(Boolean);
 
+interface PlaneNode {
+  routeDivisions: {
+    plane: { parameters: { id?: string } };
+    path: { parameters: { id?: string } };
+  };
+  children?: PlaneNode[];
+}
+/** The parts of the engine's public ref this check reads. */
+interface EngineRef {
+  camera?: { frame?: unknown };
+  tree?: { get?: () => PlaneNode[] };
+}
+interface Hook {
+  memoizedState: { current?: EngineRef } | null;
+  next: Hook | null;
+}
+interface Fiber {
+  memoizedState: Hook | null;
+  return: Fiber | null;
+}
+
+const frameSource = () => document.querySelector('.html-preview-frame')?.getAttribute('src') ?? '';
+
+const documentSummary = () => ({
+  title: document.title,
+  color: getComputedStyle(document.body).backgroundColor,
+  heading: document.querySelector('h1')?.textContent,
+  ready: document.readyState,
+});
+
+const frameAttributes = () => ({
+  sandbox: document.querySelector('iframe')!.getAttribute('sandbox'),
+  srcdoc: document.querySelector('iframe')!.getAttribute('srcdoc'),
+});
+
+const sourceShown = () =>
+  document.querySelector('[role=tab][id$=source-tab]')?.getAttribute('aria-selected') === 'true' &&
+  !!document.querySelector('.code-scroll');
+
+/** The notice's place below the surface, and whether the preview footer's button takes a click. */
+function noticeLayout() {
+  const surface = document.querySelector('.workspace-surface')!.getBoundingClientRect();
+  const notice = document.querySelector('.notice')!;
+  const status = notice.getBoundingClientRect();
+  const button = document.querySelector('.preview-info [aria-label="Open file in default app"]')!;
+  const rect = button.getBoundingClientRect();
+  const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  return {
+    width: innerWidth,
+    height: innerHeight,
+    surfaceBottom: surface.bottom,
+    noticeTop: status.top,
+    noticeBottom: status.bottom,
+    footerBottom: rect.bottom,
+    buttonVisible:
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.left >= 0 &&
+      rect.right <= innerWidth &&
+      rect.top >= surface.top &&
+      rect.bottom <= surface.bottom + 1,
+    hit: button.contains(hit),
+    noticePosition: getComputedStyle(notice).position,
+  };
+}
+
+/** The generated page's own report, its styles and whether its image decoded. */
+const pageState = (): Record<string, string | undefined> => ({
+  ...document.documentElement.dataset,
+  background: getComputedStyle(document.body).backgroundColor,
+  color: getComputedStyle(document.querySelector('h1')!).color,
+  image: String((document.getElementById('asset-image') as HTMLImageElement).naturalWidth),
+});
+
+/** Has the page's own script fetch each target. */
+function runProbes(targets: Record<string, string>) {
+  document.documentElement.dataset.probeTargets = JSON.stringify(targets);
+  document.dispatchEvent(new Event('run-owned-probes'));
+}
+
+const probeResults = () =>
+  document.documentElement.dataset.probesDone === 'true'
+    ? (JSON.parse(document.documentElement.dataset.probeResults!) as Record<string, string>)
+    : null;
+
+const localServers = () => window.viewer.localServers();
+
+const serverViewID = () =>
+  document.querySelector('.server-plane')?.closest<HTMLElement>('[data-viewer-pane]')?.dataset
+    .viewerPane || '';
+
+/** Whether the engine tree nests `viewID` under the folder plane, found through React's fiber. */
+function linkedToFolder(viewID: string): boolean {
+  const element = document.querySelector('[data-viewer-plane="server-folder"]')!;
+  const key = Object.keys(element).find((key) => key.startsWith('__reactFiber'))!;
+  const first = (element as unknown as Record<string, Fiber | undefined>)[key];
+  for (let fiber = first ?? null; fiber; fiber = fiber.return) {
+    for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+      const api = hook.memoizedState?.current;
+      if (!api?.camera?.frame || !api.tree?.get) continue;
+      const host = (node: PlaneNode) =>
+        node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id;
+      return api.tree
+        .get()
+        .some(
+          (node) =>
+            host(node) === 'server-folder' &&
+            node.children?.some((child) => host(child) === viewID),
+        );
+    }
+  }
+  return false;
+}
+
+const logRows = () =>
+  Array.from(document.querySelectorAll<HTMLTableRowElement>('.server-log tbody tr')).map((row) =>
+    Array.from(row.cells).map((cell) => cell.textContent),
+  );
+
+const logStatuses = () =>
+  Array.from(document.querySelectorAll<HTMLTableRowElement>('.server-log tbody tr')).map(
+    (row) => row.cells[3]!.textContent,
+  );
+
+/** Sets the request filter through the native setter, so React sees the input event. */
+function setRequestFilter(value: string) {
+  const input = document.querySelector('[aria-label="Filter server requests"]')!;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+const hasStatusChoice = (text: string) =>
+  Array.from(document.querySelectorAll('[role="dialog"][aria-label="Request status"] button')).some(
+    (button) => button.textContent.includes(text),
+  );
+
+function pressStatusChoice(text: string) {
+  Array.from(
+    document.querySelectorAll<HTMLElement>('[role="dialog"][aria-label="Request status"] button'),
+  )
+    .find((button) => button.textContent.includes(text))!
+    .click();
+}
+
 async function world(main: Connection, url: string) {
   let sessionId: string | undefined;
   const ready = await until(
@@ -220,8 +366,8 @@ async function world(main: Connection, url: string) {
     },
     sessionId,
   );
-  return <T = unknown>(expression: string) =>
-    main.evaluate<T>(expression, {
+  return <R>(expression: PageExpression<R>) =>
+    main.evaluate(expression, {
       contextId: context.executionContextId,
       sessionId,
       userGesture: false,
@@ -238,35 +384,30 @@ async function html() {
   try {
     main = await app.connect();
     const url = await until(
-      () =>
-        main!.evaluate<string>(
-          'document.querySelector(".html-preview-frame")?.getAttribute("src") ?? ""',
-        ),
+      () => main!.evaluate(pageCall(frameSource)),
       (value) => value.startsWith('viewer-html:'),
       'actual HTML plane iframe',
     );
     const inspect = await world(main, url);
     const page = await until(
-      () =>
-        inspect<{ title: string; color: string; heading: string; ready: string }>(
-          '({title:document.title,color:getComputedStyle(document.body).backgroundColor,heading:document.querySelector("h1")?.textContent,ready:document.readyState})',
-        ),
+      () => inspect(pageCall(documentSummary)),
       (value) =>
         value.ready === 'complete' &&
         (!chairSample || (value.title.includes('FORME') && value.color === 'rgb(244, 241, 234)')),
       'user HTML document and inline CSS',
     );
     if (chairSample) {
-      await inspect('window.scrollTo({top:160,behavior:"instant"})');
+      await inspect(pageCall(() => window.scrollTo({ top: 160, behavior: 'instant' })));
       await until(
-        () => inspect<boolean>('document.getElementById("header").classList.contains("scrolled")'),
+        () =>
+          inspect(
+            pageCall(() => document.getElementById('header')!.classList.contains('scrolled')),
+          ),
         Boolean,
         'original inline scroll script',
       );
     }
-    const attributes = await main.evaluate<{ sandbox: string; srcdoc: string | null }>(
-      '({sandbox:document.querySelector("iframe").getAttribute("sandbox"),srcdoc:document.querySelector("iframe").getAttribute("srcdoc")})',
-    );
+    const attributes = await main.evaluate(pageCall(frameAttributes));
     assert.equal(attributes.sandbox, 'allow-scripts');
     assert.equal(attributes.srcdoc, null);
     const image = await main.command<{ data: string }>('Page.captureScreenshot', {
@@ -275,21 +416,14 @@ async function html() {
     });
     const screenshot = path.join(app.evidenceDirectory, 'html-preview.png');
     await writeFile(screenshot, Buffer.from(image.data, 'base64'), { flag: 'wx', mode: 0o600 });
-    await main.evaluate('document.querySelector("[role=tab][id$=source-tab]").click()');
+    await main.evaluate(click('[role=tab][id$=source-tab]'));
     await until(
-      () =>
-        main!.evaluate<boolean>(
-          'document.querySelector("[role=tab][id$=source-tab]")?.getAttribute("aria-selected")==="true" && !!document.querySelector(".code-scroll")',
-        ),
+      () => main!.evaluate(pageCall(sourceShown)),
       Boolean,
       'source toggle without editing',
     );
-    await main.evaluate('document.querySelector("[role=tab][id$=preview-tab]").click()');
-    await until(
-      () => main!.evaluate<boolean>('!!document.querySelector(".html-preview-frame")'),
-      Boolean,
-      'preview toggle',
-    );
+    await main.evaluate(click('[role=tab][id$=preview-tab]'));
+    await until(() => main!.evaluate(exists('.html-preview-frame')), Boolean, 'preview toggle');
     checks.push({ id: 'actual-html-render', detail: { page, attributes, screenshot } });
     await noticeFooter(main, app, directory);
     await save();
@@ -311,9 +445,7 @@ async function noticeFooter(main: Connection, app: Application, directory: strin
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await main.evaluate(
-    `document.querySelector('[data-viewer-plane="chair-preview"] [aria-label="Dock plane"]').click()`,
-  );
+  await main.evaluate(click('[data-viewer-plane="chair-preview"] [aria-label="Dock plane"]'));
   const missing = path.join(root, 'Missing generated page.html');
   const invocation = await promisify(execFile)(binary, [missing], {
     cwd: files,
@@ -333,36 +465,12 @@ async function noticeFooter(main: Connection, app: Application, directory: strin
     { flag: 'wx', mode: 0o600 },
   );
   await until(
-    () => main.evaluate<string>('document.querySelector(".notice")?.textContent ?? ""'),
+    () => main.evaluate(textOf('.notice')),
     (value) => value.includes('Missing generated page.html'),
     'actual CLI error notice',
   );
   const layout = await until(
-    () =>
-      main.evaluate<{
-        width: number;
-        height: number;
-        surfaceBottom: number;
-        noticeTop: number;
-        noticeBottom: number;
-        footerBottom: number;
-        buttonVisible: boolean;
-        hit: boolean;
-        noticePosition: string;
-      }>(`(() => {
-    const surface = document.querySelector('.workspace-surface').getBoundingClientRect();
-    const notice = document.querySelector('.notice');
-    const status = notice.getBoundingClientRect();
-    const button = document.querySelector('.preview-info [aria-label="Open file in default app"]');
-    const rect = button.getBoundingClientRect();
-    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-    return {
-      width: innerWidth, height: innerHeight, surfaceBottom: surface.bottom,
-      noticeTop: status.top, noticeBottom: status.bottom, footerBottom: rect.bottom,
-      buttonVisible: rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= innerWidth && rect.top >= surface.top && rect.bottom <= surface.bottom + 1,
-      hit: button.contains(hit), noticePosition: getComputedStyle(notice).position,
-    };
-  })()`),
+    () => main.evaluate(pageCall(noticeLayout)),
     (value) =>
       value.width === 780 &&
       value.height === 560 &&
@@ -382,25 +490,22 @@ async function noticeFooter(main: Connection, app: Application, directory: strin
 }
 
 async function command(main: Connection, label: string) {
-  await main.evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+  await main.evaluate(click('[aria-label="Commands (⌘K)"]'));
   await until(
     () =>
-      main.evaluate<boolean>(
-        'document.activeElement?.getAttribute("aria-label") === "Search commands"',
+      main.evaluate(
+        pageCall(() => document.activeElement?.getAttribute('aria-label') === 'Search commands'),
       ),
     Boolean,
     'command palette input',
   );
   await main.command('Input.insertText', { text: label });
   await until(
-    () =>
-      main.evaluate<string>(
-        'document.querySelector(".command-result[aria-selected=true]")?.textContent ?? ""',
-      ),
+    () => main.evaluate(textOf('.command-result[aria-selected=true]')),
     (text) => text.includes(label),
     label,
   );
-  await main.evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
+  await main.evaluate(click('.command-result[aria-selected=true]'));
 }
 
 async function isolation() {
@@ -426,19 +531,13 @@ async function isolation() {
   try {
     main = await app.connect();
     const url = await until(
-      () =>
-        main!.evaluate<string>(
-          'document.querySelector(".html-preview-frame")?.getAttribute("src") ?? ""',
-        ),
+      () => main!.evaluate(pageCall(frameSource)),
       (value) => value.startsWith('viewer-html:'),
       'generated HTML frame',
     );
     const inspect = await world(main, url);
     const state = await until(
-      () =>
-        inspect<Record<string, string>>(
-          '({...document.documentElement.dataset, background:getComputedStyle(document.body).backgroundColor, color:getComputedStyle(document.querySelector("h1")).color, image:String(document.getElementById("asset-image").naturalWidth)})',
-        ),
+      () => inspect(pageCall(pageState)),
       (value) =>
         value.inlineScript === 'executed' &&
         value.assetScript === 'executed' &&
@@ -453,9 +552,11 @@ async function isolation() {
     assert.equal(state.background, 'rgb(1, 2, 3)');
     assert.equal(state.color, 'rgb(4, 5, 6)');
     resource = await main.evaluate(
-      `window.viewer.resource(${JSON.stringify(path.join(files, 'other.html'))})`,
+      pageCall((file: string) => window.viewer.resource(file), path.join(files, 'other.html')),
     );
-    other = await main.evaluate(`window.viewer.htmlPreview(${JSON.stringify(resource!.id)})`);
+    other = await main.evaluate(
+      pageCall((id: string) => window.viewer.htmlPreview(id), resource.id),
+    );
     const targets = {
       same: new URL('message.json', url).href,
       remote: `http://127.0.0.1:${address.port}/blocked`,
@@ -463,14 +564,9 @@ async function isolation() {
       resource: resource!.url,
       other: other!.url,
     };
-    await inspect(
-      `document.documentElement.dataset.probeTargets = ${JSON.stringify(JSON.stringify(targets))}; document.dispatchEvent(new Event('run-owned-probes'));`,
-    );
+    await inspect(pageCall(runProbes, targets));
     const results = await until(
-      () =>
-        inspect<Record<string, string> | null>(
-          'document.documentElement.dataset.probesDone === "true" ? JSON.parse(document.documentElement.dataset.probeResults) : null',
-        ),
+      () => inspect(pageCall(probeResults)),
       Boolean,
       'opaque page fetch isolation',
     );
@@ -485,9 +581,9 @@ async function isolation() {
     );
   } finally {
     if (main && other)
-      await main.evaluate(`window.viewer.htmlPreviewClose(${JSON.stringify(other.id)})`);
+      await main.evaluate(pageCall((id: string) => window.viewer.htmlPreviewClose(id), other.id));
     if (main && resource)
-      await main.evaluate(`window.viewer.release(${JSON.stringify(resource.id)})`);
+      await main.evaluate(pageCall((id: string) => window.viewer.release(id), resource.id));
     await app.close(main);
     await new Promise<void>((resolve, reject) =>
       trap.close((error) => (error ? reject(error) : resolve())),
@@ -516,22 +612,19 @@ async function server() {
   try {
     main = await app.connect();
     await until(
-      () => main!.evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+      () => main!.evaluate(countOf('[data-file-path]')),
       (count) => count > 0,
       'generated server folder',
     );
     await command(main, 'Start local server');
     const running = await until(
-      () => main!.evaluate<LocalServer[]>('window.viewer.localServers()'),
+      () => main!.evaluate(pageCall(localServers)),
       (rows) => rows.some((row) => row.state === 'running'),
       'actual local server command',
     );
     const current = running.find((row) => row.state === 'running')!;
     const viewID = await until(
-      () =>
-        main!.evaluate<string>(
-          'document.querySelector(".server-plane")?.closest("[data-viewer-pane]")?.dataset.viewerPane || ""',
-        ),
+      () => main!.evaluate(pageCall(serverViewID)),
       Boolean,
       'server view ID',
     );
@@ -540,20 +633,7 @@ async function server() {
     assert.match(await response.text(), /Generated site/);
     assert.match(await (await fetch(new URL('style.css', current.url))).text(), /rgb\(4, 5, 6\)/);
     const linked = await until(
-      () =>
-        main!.evaluate<boolean>(`(() => {
-      const element = document.querySelector('[data-viewer-plane="server-folder"]');
-      const key = Object.keys(element).find(key => key.startsWith('__reactFiber'));
-      for (let fiber = element[key]; fiber; fiber = fiber.return) {
-        for (let hook = fiber.memoizedState; hook; hook = hook.next) {
-          const api = hook.memoizedState?.current;
-          if (!api?.camera?.frame || !api?.tree?.get) continue;
-          const host = node => node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id;
-          return api.tree.get().some(node => host(node) === 'server-folder' && node.children?.some(child => host(child) === ${JSON.stringify(viewID)}));
-        }
-      }
-      return false;
-    })()`),
+      () => main!.evaluate(pageCall(linkedToFolder, viewID)),
       Boolean,
       'server child belongs to captured folder',
     );
@@ -582,48 +662,32 @@ async function server() {
       404,
     );
     assert.equal((await fetch(new URL('script.js', current.url), { method: 'HEAD' })).status, 200);
-    await main.evaluate(`document.querySelector('[aria-label="Refresh request log"]').click()`);
+    await main.evaluate(click('[aria-label="Refresh request log"]'));
     const rows = await until(
-      () =>
-        main!.evaluate<string[][]>(
-          `Array.from(document.querySelectorAll('.server-log tbody tr')).map(row => Array.from(row.cells).map(cell => cell.textContent))`,
-        ),
+      () => main!.evaluate(pageCall(logRows)),
       (value) => value.length >= 4,
       'request log rows',
     );
     assert.ok(rows.some((row) => row[1] === 'HEAD' && row[3] === '200'));
     assert.ok(rows.some((row) => row[2] === '/missing' && row[3] === '404'));
     assert.ok(!JSON.stringify(rows).includes('synthetic-query'));
-    const setQuery = (value: string) =>
-      main!.evaluate(`(() => {
-      const input = document.querySelector('[aria-label="Filter server requests"]');
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)});
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    })()`);
+    const setQuery = (value: string) => main!.evaluate(pageCall(setRequestFilter, value));
     await setQuery('/missing');
     await until(
-      () => main!.evaluate<number>('document.querySelectorAll(".server-log tbody tr").length'),
+      () => main!.evaluate(countOf('.server-log tbody tr')),
       (value) => value === 1,
       'path filter',
     );
     await setQuery('');
-    await main.evaluate(`document.querySelector('[aria-label="Request status"]').click()`);
+    await main.evaluate(click('[aria-label="Request status"]'));
     await until(
-      () =>
-        main!.evaluate<boolean>(
-          `!!Array.from(document.querySelectorAll('[role="dialog"][aria-label="Request status"] button')).find(button => button.textContent.includes('4xx'))`,
-        ),
+      () => main!.evaluate(pageCall(hasStatusChoice, '4xx')),
       Boolean,
       'request status choices',
     );
-    await main.evaluate(
-      `Array.from(document.querySelectorAll('[role="dialog"][aria-label="Request status"] button')).find(button => button.textContent.includes('4xx')).click()`,
-    );
+    await main.evaluate(pageCall(pressStatusChoice, '4xx'));
     await until(
-      () =>
-        main!.evaluate<string[]>(
-          'Array.from(document.querySelectorAll(".server-log tbody tr")).map(row => row.cells[3].textContent)',
-        ),
+      () => main!.evaluate(pageCall(logStatuses)),
       (value) => value.length === 1 && value[0] === '404',
       '4xx status filter',
     );
@@ -635,24 +699,22 @@ async function server() {
       Buffer.from(screenshot.data, 'base64'),
       { flag: 'wx', mode: 0o600 },
     );
-    await main.evaluate(`document.querySelector('[aria-label="Clear request log"]').click()`);
+    await main.evaluate(click('[aria-label="Clear request log"]'));
     await until(
-      () => main!.evaluate<string>('document.querySelector(".server-log-footer").textContent'),
+      () => main!.evaluate(textOf('.server-log-footer')),
       (value) => value.includes('0 of 0'),
       'cleared request log',
     );
-    await main.evaluate(
-      `Array.from(document.querySelectorAll('.server-summary button')).find(button => button.textContent.trim() === 'Stop').click()`,
-    );
+    await main.evaluate(pressButton('Stop', '.server-summary'));
     await until(
-      () => main!.evaluate<string>('document.querySelector(".server-state").dataset.state'),
+      () => main!.evaluate(attributeOf('.server-state', 'data-state')),
       (value) => value === 'stopped',
       'Stop button',
     );
     await stopped(current.url);
-    await main.evaluate(`document.querySelector('[aria-label="Restart server"]').click()`);
+    await main.evaluate(click('[aria-label="Restart server"]'));
     const restarted = await until(
-      () => main!.evaluate<LocalServer[]>('window.viewer.localServers()'),
+      () => main!.evaluate(pageCall(localServers)),
       (value) => value.some((row) => row.state === 'running'),
       'restart server',
     );
@@ -669,33 +731,20 @@ async function server() {
     });
     await save();
 
-    await main.evaluate(
-      `document.querySelector('[data-viewer-plane="${viewID}"] [aria-label="Close plane"]').click()`,
-    );
+    await main.evaluate(click(`[data-viewer-plane="${viewID}"] [aria-label="Close plane"]`));
     await until(
-      () => main!.evaluate<LocalServer[]>('window.viewer.localServers()'),
+      () => main!.evaluate(pageCall(localServers)),
       (value) => value.some((row) => row.id === live.id && row.state === 'running'),
       'closing server view keeps its listener',
     );
     assert.equal((await fetch(live.url)).status, 200);
     await command(main, 'Local servers');
-    await until(
-      () => main!.evaluate<boolean>('!!document.querySelector(".server-list-row")'),
-      Boolean,
-      'local server manager',
-    );
-    await main.evaluate(
-      'Array.from(document.querySelectorAll(".server-list-row button")).find(button=>button.textContent.trim()==="Show plane").click()',
-    );
-    await until(
-      () => main!.evaluate<boolean>('!!document.querySelector(".server-plane")'),
-      Boolean,
-      'reattached server view',
-    );
+    await until(() => main!.evaluate(exists('.server-list-row')), Boolean, 'local server manager');
+    await main.evaluate(pressButton('Show plane', '.server-list-row'));
+    await until(() => main!.evaluate(exists('.server-plane')), Boolean, 'reattached server view');
     assert.equal(
-      (await main.evaluate<LocalServer[]>('window.viewer.localServers()')).find(
-        (server) => server.state === 'running',
-      )!.id,
+      (await main.evaluate(pageCall(localServers))).find((server) => server.state === 'running')!
+        .id,
       live.id,
     );
     assert.equal((await fetch(live.url)).status, 200);

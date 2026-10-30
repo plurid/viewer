@@ -11,6 +11,9 @@ import { qualificationSamples } from '../../tools/playground/qualification-sampl
 import { temporaryRoot } from '../../tools/temporary';
 import { fidelityWord, fidelityWorkbook } from '../office-fidelity-fixtures';
 import { ownedApp, until } from '../owned-app';
+import { click, countOf, exists, patchSettings, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
+
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
@@ -49,16 +52,117 @@ const before = await Promise.all(files.map(hash));
 const captures: string[] = [],
   observations: unknown[] = [];
 type Connection = Awaited<ReturnType<Awaited<ReturnType<typeof ownedApp>>['connect']>>;
+type WorkbookValues = 'formatted' | 'stored';
+
+/** The Office view's opacity, multiplied through its ancestors. */
+function viewOpacity() {
+  let element = document.querySelector('.data-scroll,.office-document'),
+    opacity = 1;
+  while (element) {
+    opacity *= Number(getComputedStyle(element).opacity);
+    element = element.parentElement;
+  }
+  return opacity;
+}
+
+const officeViewChoices = () =>
+  [...document.querySelectorAll('.preview-toolbar button')].some((button) =>
+    ['Layout', 'Print layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
+  );
+
+function pressToolbarButton(label: string) {
+  [...document.querySelectorAll<HTMLElement>('.preview-toolbar button')]
+    .find((button) => button.textContent.trim() === label)!
+    .click();
+}
+
+function scrollGrid(left: number) {
+  document.querySelector('.data-scroll')!.scrollLeft = left;
+}
+
+function scrollDocument(top: number) {
+  document.querySelector('.office-document-scroll')!.scrollTop = top;
+}
+
+function selectPageField() {
+  const input = document.querySelector<HTMLInputElement>('.worksheet-navigation input')!;
+  input.focus();
+  input.select();
+}
+
+/** Whether a workbook part is refused as an image, which only DOCX files serve. */
+async function workbookImageRefused(file: string) {
+  const resource = await window.viewer.resource(file);
+  try {
+    await window.viewer.officeImage(resource.id, 'xl/styles.xml', crypto.randomUUID());
+    return false;
+  } catch (error) {
+    return (error as Error).message.includes('DOCX');
+  } finally {
+    await window.viewer.release(resource.id);
+  }
+}
+
+function studyImageShown() {
+  const image = document.querySelector<HTMLImageElement>('img[alt="Material study"]');
+  return !!image && image.complete && image.naturalWidth > 0;
+}
+
+/** Refuses an unrelated part, serves a related image, and expires it with the resource. */
+async function wordImageAuthority(file: string) {
+  const resource = await window.viewer.resource(file);
+  let refused = false;
+  try {
+    await window.viewer.officeImage(resource.id, 'word/media/diagram.svg', crypto.randomUUID());
+  } catch (error) {
+    refused = (error as Error).message.includes('relationship');
+  }
+  const image = await window.viewer.officeImage(
+    resource.id,
+    'word/media/study.png',
+    crypto.randomUUID(),
+  );
+  const live = (await fetch(image.url)).status;
+  await window.viewer.release(resource.id);
+  const expired = (await fetch(image.url)).status;
+  return { refused, live, expired };
+}
+
+const decodedImage = () =>
+  [...document.querySelectorAll<HTMLImageElement>('.office-document img')].some(
+    (image) => image.complete && image.naturalWidth > 0,
+  );
+
+/** The workbook's sheet count and how many of its first cells carry a formatted value. */
+async function workbookCoverage(file: string) {
+  const resource = await window.viewer.resource(file);
+  try {
+    const { office } = await window.viewer.document(resource.id, {
+      fromRow: 1,
+      limit: 100,
+      requestID: crypto.randomUUID(),
+    });
+    if (office?.kind !== 'workbook') throw new Error('No workbook content: ' + file);
+    return {
+      sheets: office.sheets.length,
+      formatted: office.sheets
+        .flatMap((sheet) => sheet.rows.flatMap((row) => row.cells))
+        .filter((cell) => cell.formatted !== undefined).length,
+    };
+  } finally {
+    await window.viewer.release(resource.id);
+  }
+}
+
 async function capture(connection: Connection, name: string) {
   await until(
-    () =>
-      connection.evaluate<number>(
-        `(()=>{let n=document.querySelector('.data-scroll,.office-document'),v=1;while(n){v*=Number(getComputedStyle(n).opacity);n=n.parentElement}return v})()`,
-      ),
+    () => connection.evaluate(pageCall(viewOpacity)),
     (value) => value > 0.999,
     'Settled Office capture',
   );
-  await connection.evaluate('new Promise(r=>setTimeout(r,200))');
+  await connection.evaluate(
+    pageCall((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)), 200),
+  );
   const image = await connection.command<{ data: string }>('Page.captureScreenshot', {
     format: 'png',
   });
@@ -66,10 +170,12 @@ async function capture(connection: Connection, name: string) {
   await writeFile(file, Buffer.from(image.data, 'base64'), { flag: 'wx' });
   captures.push(file);
 }
-async function click(connection: Connection, label: string) {
-  await connection.evaluate(
-    `(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(label)});if(!b)throw Error('Missing '+${JSON.stringify(label)});b.click()})()`,
-  );
+/** Shows workbook values formatted or as stored, from the toolbar's More menu. */
+async function showValues(connection: Connection, values: WorkbookValues) {
+  const choice = `.choice-menu [data-menu-id="choice:${values}"]`;
+  await connection.evaluate(click('button[aria-label="Preview options"]'));
+  await until(() => connection.evaluate(exists(choice)), Boolean, 'Preview options');
+  await connection.evaluate(click(choice));
 }
 async function run(file: string, check: (connection: Connection) => Promise<void>) {
   const profile = path.join(root, path.basename(file) + '-Profile');
@@ -129,27 +235,19 @@ async function run(file: string, check: (connection: Connection) => Promise<void
     });
     if (file.endsWith('.docx')) {
       await until(
-        () =>
-          connection!.evaluate<boolean>(
-            `[...document.querySelectorAll('.preview-toolbar button')].some(button=>['Layout','Print layout','Reading','Sheet'].includes(button.textContent.trim()))`,
-          ),
+        () => connection!.evaluate(pageCall(officeViewChoices)),
         Boolean,
         'Office layout/reading choices',
       );
-      await connection.evaluate(
-        '[...document.querySelectorAll(".preview-toolbar button")].find(b=>b.textContent.trim()==="Reading").click()',
-      );
+      await connection.evaluate(pageCall(pressToolbarButton, 'Reading'));
     }
     await until(
-      () =>
-        connection!.evaluate<boolean>(
-          '!!document.querySelector(".office-viewer .data-scroll,.office-document")',
-        ),
+      () => connection!.evaluate(exists('.office-viewer .data-scroll,.office-document')),
       Boolean,
       'Office document ready',
     );
     await check(connection);
-    assert.equal((await connection.evaluate<unknown[]>('window.viewer.jobs()')).length, 0);
+    assert.equal((await connection.evaluate(pageCall(() => window.viewer.jobs()))).length, 0);
   } finally {
     await app.close(connection);
   }
@@ -158,36 +256,37 @@ try {
   await run(book, async (connection) => {
     const { evaluate, command } = connection;
     await until(
-      () => evaluate<string>('document.querySelector(".workbook-merged-cell")?.textContent'),
+      () => evaluate(textOf('.workbook-merged-cell')),
       (text) => text === 'Quarterly materials',
       'Merged title',
     );
     assert.equal(
-      await evaluate<string>(
-        'document.querySelector(".workbook-merged-cell").parentElement.getAttribute("aria-colspan")',
+      await evaluate(
+        pageCall(() =>
+          document
+            .querySelector('.workbook-merged-cell')!
+            .parentElement!.getAttribute('aria-colspan'),
+        ),
       ),
       '3',
     );
-    await evaluate('document.querySelector(".data-scroll").scrollLeft=500');
+    await evaluate(pageCall(scrollGrid, 500));
     await until(
-      () => evaluate<boolean>(`!!document.querySelector('button[aria-label="G2: $1,234.50"]')`),
+      () => evaluate(exists('button[aria-label="G2: $1,234.50"]')),
       Boolean,
       'Formatted cached formula',
     );
-    await evaluate(`document.querySelector('button[aria-label="G2: $1,234.50"]').click()`);
+    await evaluate(click('button[aria-label="G2: $1,234.50"]'));
+    assert.equal(await evaluate(textOf('[aria-label="Selected range"]')), 'G2');
     assert.match(
-      await evaluate<string>('document.querySelector(".workbook-cell-detail").textContent'),
-      /G2Saved value: 1234.5 · Formula: SUM\(D2\)/,
+      await evaluate(textOf('.workbook-cell-detail')),
+      /Saved value: 1234.5 · Formula: SUM\(D2\)/,
     );
     await capture(connection, 'workbook-formatted-dark');
-    await click(connection, 'Stored');
-    assert.ok(
-      await evaluate<boolean>(`!!document.querySelector('button[aria-label="G2: 1234.5"]')`),
-    );
-    await click(connection, 'Formatted');
-    await evaluate(
-      '(()=>{const input=document.querySelector(".worksheet-navigation input");input.focus();input.select()})()',
-    );
+    await showValues(connection, 'stored');
+    await until(() => evaluate(exists('button[aria-label="G2: 1234.5"]')), Boolean, 'Stored value');
+    await showValues(connection, 'formatted');
+    await evaluate(pageCall(selectPageField));
     await command('Input.insertText', { text: '100' });
     for (const type of ['keyDown', 'keyUp'])
       await command('Input.dispatchKeyEvent', {
@@ -198,22 +297,20 @@ try {
         ...(type === 'keyDown' ? { text: '\r' } : {}),
       });
     await until(
-      () => evaluate<string>('document.querySelector(".workbook-merged-cell")?.textContent'),
-      (text) => text?.includes('Continued from A3'),
+      () => evaluate(textOf('.workbook-merged-cell')),
+      (text) => text.includes('Continued from A3'),
       'Cross-page merged anchor',
     );
-    await evaluate('document.querySelector(".data-scroll").scrollLeft=0');
-    await evaluate('document.querySelector(".workbook-merged-cell").click()');
+    await evaluate(pageCall(scrollGrid, 0));
+    await evaluate(click('.workbook-merged-cell'));
     assert.match(
-      await evaluate<string>('document.querySelector(".workbook-cell-detail").textContent'),
+      await evaluate(textOf('.workbook-cell-detail')),
       /A3Continued source range.*Merged A3:C104/,
     );
     await capture(connection, 'workbook-continued-dark');
-    await evaluate(
-      "window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))",
-    );
+    await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
     await until(
-      () => evaluate<string>('document.documentElement.dataset.look'),
+      () => evaluate(pageCall(() => document.documentElement.dataset.look)),
       (look) => look === 'light',
       'Light Office theme',
     );
@@ -225,9 +322,7 @@ try {
       mobile: false,
     });
     await capture(connection, 'workbook-narrow');
-    const guard = await evaluate(
-      `(async()=>{const r=await window.viewer.resource(${JSON.stringify(book)});try {await window.viewer.officeImage(r.id,'xl/styles.xml',crypto.randomUUID());return false}catch(e){return e.message.includes('DOCX')}finally{await window.viewer.release(r.id)}})()`,
-    );
+    const guard = await evaluate(pageCall(workbookImageRefused, book));
     assert.equal(guard, true);
     observations.push(
       'Workbook formatted/stored, cached formula, cross-page source anchor and non-DOCX image refusal pass.',
@@ -235,56 +330,32 @@ try {
   });
   await run(word, async (connection) => {
     const { evaluate } = connection;
-    await until(
-      () =>
-        evaluate<boolean>(
-          `(()=>{const i=document.querySelector('img[alt="Material study"]');return !!i&&i.complete&&i.naturalWidth>0})()`,
-        ),
-      Boolean,
-      'Embedded Word pixels',
-    );
+    await until(() => evaluate(pageCall(studyImageShown)), Boolean, 'Embedded Word pixels');
+    assert.equal(await evaluate(textOf('.office-document p')), 'Before the image.After the image.');
     assert.equal(
-      await evaluate<string>('document.querySelector(".office-document p").textContent'),
-      'Before the image.After the image.',
-    );
-    assert.equal(
-      await evaluate<string>(
-        'getComputedStyle(document.querySelector(".office-document")).fontSize',
+      await evaluate(
+        pageCall(() => getComputedStyle(document.querySelector('.office-document')!).fontSize),
       ),
       '16px',
     );
     await capture(connection, 'word-image-dark');
-    await evaluate('document.querySelector(".office-document-scroll").scrollTop=10000');
+    await evaluate(pageCall(scrollDocument, 10000));
     await until(
-      () =>
-        evaluate<boolean>(
-          `!!document.querySelector('.office-image-placeholder[aria-label*="External images"]')`,
-        ),
+      () => evaluate(exists('.office-image-placeholder[aria-label*="External images"]')),
       Boolean,
       'External image placeholder',
     );
     await capture(connection, 'word-table-placeholders');
-    const guarded = await evaluate(
-      `(async()=>{const r=await window.viewer.resource(${JSON.stringify(word)});let refused=false;try{await window.viewer.officeImage(r.id,'word/media/diagram.svg',crypto.randomUUID())}catch(e){refused=e.message.includes('relationship')}const image=await window.viewer.officeImage(r.id,'word/media/study.png',crypto.randomUUID());const live=(await fetch(image.url)).status;await window.viewer.release(r.id);const expired=(await fetch(image.url)).status;return {refused,live,expired}})()`,
-    );
+    const guarded = await evaluate(pageCall(wordImageAuthority, word));
     assert.deepEqual(guarded, { refused: true, live: 200, expired: 404 });
-    await evaluate(
-      "window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))",
-    );
+    await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
     await until(
-      () => evaluate<string>('document.documentElement.dataset.look'),
+      () => evaluate(pageCall(() => document.documentElement.dataset.look)),
       (look) => look === 'light',
       'Light Word',
     );
-    await evaluate('document.querySelector(".office-document-scroll").scrollTop=0');
-    await until(
-      () =>
-        evaluate<boolean>(
-          `(()=>{const i=document.querySelector('img[alt="Material study"]');return !!i&&i.complete&&i.naturalWidth>0})()`,
-        ),
-      Boolean,
-      'Reopened image',
-    );
+    await evaluate(pageCall(scrollDocument, 0));
+    await until(() => evaluate(pageCall(studyImageShown)), Boolean, 'Reopened image');
     await capture(connection, 'word-image-light');
     await connection.command('Emulation.setDeviceMetricsOverride', {
       width: 760,
@@ -300,15 +371,12 @@ try {
   });
   await run(files[2]!, async (connection) => {
     await until(
-      () => connection.evaluate<number>('document.querySelectorAll(".office-document img").length'),
+      () => connection.evaluate(countOf('.office-document img')),
       (count) => count > 0,
       'Public Word embedded media',
     );
     await until(
-      () =>
-        connection.evaluate<boolean>(
-          '[...document.querySelectorAll(".office-document img")].some(i=>i.complete&&i.naturalWidth>0)',
-        ),
+      () => connection.evaluate(pageCall(decodedImage)),
       Boolean,
       'Public Word decoded image',
     );
@@ -319,13 +387,11 @@ try {
   });
   await run(files[3]!, async (connection) => {
     await until(
-      () => connection.evaluate<number>('document.querySelectorAll(".workbook-cell").length'),
+      () => connection.evaluate(countOf('.workbook-cell')),
       (count) => count > 0,
       'Public workbook cells',
     );
-    const coverage = await connection.evaluate(
-      `(async()=>{const r=await window.viewer.resource(${JSON.stringify(files[3])});try{const d=await window.viewer.document(r.id,{fromRow:1,limit:100,requestID:crypto.randomUUID()});return {sheets:d.office.sheets.length,formatted:d.office.sheets.flatMap(s=>s.rows.flatMap(r=>r.cells)).filter(c=>c.formatted!==undefined).length}}finally{await window.viewer.release(r.id)}})()`,
-    );
+    const coverage = await connection.evaluate(pageCall(workbookCoverage, files[3]!));
     await capture(connection, 'public-workbook');
     observations.push(coverage);
   });

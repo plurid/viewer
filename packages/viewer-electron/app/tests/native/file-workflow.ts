@@ -4,11 +4,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import {
-  CURRENT_STATE_VERSION,
-  type SavedState,
-  type OperationJob,
-} from '../../src/domain/contracts';
+import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
@@ -16,6 +12,8 @@ import { sizedImageFixture } from '../fixtures';
 import { workbenchPDF } from '../pdf-fixtures';
 import { ownedApp, until } from '../owned-app';
 import { NativeInteractions } from './runtime/interactions';
+import { countOf, exists, focus, textOf, valueOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -90,6 +88,24 @@ let outputHash: string | undefined;
 let bufferID: string | undefined;
 let exportID: string | undefined;
 
+const listJobs = () => window.viewer.jobs();
+const canvasDrawn = (selector: string) =>
+  !!document.querySelector<HTMLCanvasElement>(selector)?.width;
+const paletteText = () =>
+  document.querySelector('.command-results')?.textContent ||
+  document.querySelector('.command-palette')?.textContent ||
+  '';
+
+function doubleClick(selector: string): void {
+  document.querySelector(selector)!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+}
+
+/** The decoded size of the image viewer's picture, or zero before it loads. */
+function imageSize() {
+  const image = document.querySelector<HTMLImageElement>('.image-viewer img');
+  return { width: image?.naturalWidth || 0, height: image?.naturalHeight || 0 };
+}
+
 for (let launch = 0; launch < 2; launch++) {
   const app = await ownedApp(binary, profile);
   let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
@@ -107,7 +123,7 @@ for (let launch = 0; launch < 2; launch++) {
     const choose = async (name: string) => {
       const selector = '[data-file-path=' + JSON.stringify(path.join(files, name)) + ']';
       await actions.click('.folder-explorer:not(.search-explorer) ' + selector);
-      await evaluate('document.querySelector(".folder-explorer:not(.search-explorer)").focus()');
+      await evaluate(focus('.folder-explorer:not(.search-explorer)'));
     };
     const open = async (name: string) => {
       await actions.palette('Files');
@@ -117,7 +133,7 @@ for (let launch = 0; launch < 2; launch++) {
     };
     const readyPDF = () =>
       until(
-        () => evaluate<boolean>('!!document.querySelector(".pdf-viewer canvas")?.width'),
+        () => evaluate(pageCall(canvasDrawn, '.pdf-viewer canvas')),
         Boolean,
         'Rendered PDF',
         30000,
@@ -125,7 +141,7 @@ for (let launch = 0; launch < 2; launch++) {
 
     if (launch === 0) {
       await until(
-        () => evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+        () => evaluate(countOf('[data-file-path]')),
         (count) => count === 3,
         'Initial folder',
       );
@@ -133,26 +149,17 @@ for (let launch = 0; launch < 2; launch++) {
       await actions.click('.search-content-option input');
       await actions.field('Find file by name', needle);
       await until(
-        () =>
-          evaluate<string>(
-            'document.querySelector(".command-results")?.textContent || document.querySelector(".command-palette")?.textContent || ""',
-          ),
+        () => evaluate(pageCall(paletteText)),
         (text) => text.includes('Journal.txt'),
         'Content-only match',
         30000,
       );
       await actions.button('Open results');
       const match = '.search-explorer [data-file-path=' + JSON.stringify(note) + ']';
+      await until(() => evaluate(exists(match)), Boolean, 'Content result row');
+      await evaluate(pageCall(doubleClick, match));
       await until(
-        () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(match)})`),
-        Boolean,
-        'Content result row',
-      );
-      await evaluate(
-        `document.querySelector(${JSON.stringify(match)}).dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))`,
-      );
-      await until(
-        () => evaluate<string>('document.querySelector(".preview-plane")?.textContent || ""'),
+        () => evaluate(textOf('.preview-plane')),
         (text) => text.includes(needle),
         'Linked content passage',
       );
@@ -180,7 +187,7 @@ for (let launch = 0; launch < 2; launch++) {
       await actions.text('.page-number', '3');
       await actions.key('Enter', 'Enter');
       await until(
-        () => evaluate<string>('document.querySelector(".page-number")?.value'),
+        () => evaluate(valueOf('.page-number')),
         (page) => page === '3',
         'Third page',
       );
@@ -190,7 +197,7 @@ for (let launch = 0; launch < 2; launch++) {
       await choose('Photo.png');
       await actions.palette('Images for web');
       await until(
-        () => evaluate<boolean>('!!document.querySelector(".image-tools-dialog canvas")?.width'),
+        () => evaluate(pageCall(canvasDrawn, '.image-tools-dialog canvas')),
         Boolean,
         'Image tool source',
       );
@@ -198,7 +205,7 @@ for (let launch = 0; launch < 2; launch++) {
       await actions.field('Output height', '64');
       await actions.button('Export image', '.image-tools-dialog');
       const jobs = await until(
-        () => evaluate<OperationJob[]>('window.viewer.jobs()'),
+        () => evaluate(pageCall(listJobs)),
         (jobs) => jobs.some((job) => job.status === 'completed'),
         'Completed export',
         30000,
@@ -211,15 +218,12 @@ for (let launch = 0; launch < 2; launch++) {
       outputHash = await hash(output);
       await actions.button('Open result', '.image-tools-dialog');
       const result = await until(
-        () =>
-          evaluate<{ width: number; height: number }>(
-            `(() => { const image=document.querySelector('.image-viewer img'); return {width:image?.naturalWidth||0,height:image?.naturalHeight||0}; })()`,
-          ),
+        () => evaluate(pageCall(imageSize)),
         (result) => result.width > 0,
         'Exported image decoded',
       );
       assert.deepEqual(result, { width: 96, height: 64 });
-      if (await evaluate<boolean>('!!document.querySelector(".quick-preview-dialog")'))
+      if (await evaluate(exists('.quick-preview-dialog')))
         await actions.button('Open linked plane', '.quick-preview-dialog');
       await until(
         async () =>
@@ -246,30 +250,23 @@ for (let launch = 0; launch < 2; launch++) {
           (pane) => pane.type === 'preview' && pane.path === note && pane.bufferID === bufferID,
         ),
       );
-      const jobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
+      const jobs = await evaluate(pageCall(listJobs));
       assert.equal(jobs.length, 1, 'Cold restoration must not re-export the file');
       assert.equal(jobs[0]!.id, exportID);
       assert.equal(await hash(output), outputHash);
       await actions.palette('Manual.pdf');
       await readyPDF();
       await until(
-        () => evaluate<string>('document.querySelector(".page-number")?.value'),
+        () => evaluate(valueOf('.page-number')),
         (page) => page === '3',
         'PDF page restored after restart',
       );
       await actions.palette('Journal.txt');
-      await until(
-        () => evaluate<boolean>('!!document.querySelector(".text-editing .cm-content")'),
-        Boolean,
-        'Restored editor',
-      );
-      await evaluate('document.querySelector(".text-editing .cm-content").focus()');
+      await until(() => evaluate(exists('.text-editing .cm-content')), Boolean, 'Restored editor');
+      await evaluate(focus('.text-editing .cm-content'));
       await actions.key('ArrowUp', 'ArrowUp', 4);
       await until(
-        () =>
-          evaluate<string>(
-            'document.querySelector(".text-editing .cm-content")?.textContent || ""',
-          ),
+        () => evaluate(textOf('.text-editing .cm-content')),
         (text) => text.includes(draft),
         'Unsaved edit restored after restart',
       );
@@ -287,7 +284,7 @@ for (let launch = 0; launch < 2; launch++) {
     connection = undefined;
   } catch (error) {
     const visible = await connection
-      ?.evaluate<string>('document.body.innerText')
+      ?.evaluate(pageCall(() => document.body.innerText))
       .catch(() => 'Renderer unavailable');
     await writeFile(
       path.join(root, 'failure-' + launch + '.json'),

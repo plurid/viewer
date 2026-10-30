@@ -9,6 +9,8 @@ import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { click, exists, focus, pressButton, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -18,6 +20,11 @@ const root = await temporaryRoot('viewer-native-preview-recovery-');
 const files = path.join(root, 'Files');
 await mkdir(files);
 const observations: unknown[] = [];
+
+const windowFocus = () => window.dispatchEvent(new Event('focus'));
+const browserState = () =>
+  window.viewer.browser({ kind: 'state', id: 'browser' }).catch(() => undefined);
+
 async function profile(name: string, pane: Pane) {
   const directory = path.join(root, name);
   await mkdir(directory);
@@ -86,83 +93,60 @@ try {
       await readFile(path.join(previewProfile, 'viewer-state-v1.json'), 'utf8'),
     ) as SavedState;
   await until(
-    () => evaluate<string>('document.querySelector(".code-scroll")?.textContent'),
-    (text) => text?.includes('Original reference'),
+    () => evaluate(textOf('.code-scroll')),
+    (text) => text.includes('Original reference'),
     'Original text',
   );
   await writeFile(original, 'Externally changed reference text.\n');
   await until(
-    () => evaluate<string>('document.querySelector(".code-scroll")?.textContent'),
-    (text) => text?.includes('Externally changed'),
+    () => evaluate(textOf('.code-scroll')),
+    (text) => text.includes('Externally changed'),
     'External replacement refreshed',
   );
   await rename(original, renamed);
-  await evaluate('window.dispatchEvent(new Event("focus"))');
+  await evaluate(pageCall(windowFocus));
   await until(
-    () => evaluate<string>('document.querySelector(".preview-recovery")?.textContent'),
-    (text) => text?.includes('last loaded version'),
+    () => evaluate(textOf('.preview-recovery')),
+    (text) => text.includes('last loaded version'),
     'Missing-file notice',
   );
-  await evaluate(
-    '[...document.querySelectorAll(".preview-recovery button")].find(b=>b.textContent==="Find renamed file").click()',
-  );
+  await evaluate(pressButton('Find renamed file', '.preview-recovery'));
   await until(
     saved,
     (state) => state.workspaces[0]?.panes[0]?.path === renamed,
     'Clean view follows confirmed identity',
   );
   await until(
-    () => evaluate<string>('document.querySelector(".code-scroll")?.textContent'),
-    (text) => text?.includes('Externally changed'),
+    () => evaluate(textOf('.code-scroll')),
+    (text) => text.includes('Externally changed'),
     'Renamed content retained',
   );
   const parked = path.join(root, 'Parked Files');
   await rename(files, parked);
-  await evaluate('window.dispatchEvent(new Event("focus"))');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".preview-recovery")'),
-    Boolean,
-    'Unreachable folder notice',
-  );
+  await evaluate(pageCall(windowFocus));
+  await until(() => evaluate(exists('.preview-recovery')), Boolean, 'Unreachable folder notice');
   await rename(parked, files);
-  await evaluate(
-    '[...document.querySelectorAll(".preview-recovery button")].find(b=>b.textContent==="Check again").click()',
-  );
+  await evaluate(pressButton('Check again', '.preview-recovery'));
   await until(
-    () => evaluate<boolean>('!document.querySelector(".preview-recovery")'),
-    Boolean,
+    () => evaluate(exists('.preview-recovery')),
+    (shown) => !shown,
     'Restored folder recovered',
   );
-  await evaluate(
-    '[...document.querySelectorAll("button")].find(b=>b.textContent.trim()==="Edit").click()',
-  );
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".text-editing .cm-content")'),
-    Boolean,
-    'Editing view',
-  );
-  await evaluate('document.querySelector(".text-editing .cm-content").focus()');
+  await evaluate(pressButton('Edit'));
+  await until(() => evaluate(exists('.text-editing .cm-content')), Boolean, 'Editing view');
+  await evaluate(focus('.text-editing .cm-content'));
   await command('Input.insertText', { text: 'Retained unsaved marker.\n' });
   await writeFile(renamed, 'Another application changed the file again.\n');
   await until(
-    () => evaluate<string>('document.querySelector(".text-editing .editing-bar")?.textContent'),
-    (text) => text?.includes('changed on disk'),
+    () => evaluate(textOf('.text-editing .editing-bar')),
+    (text) => text.includes('changed on disk'),
     'Dirty conflict preserved',
   );
-  assert.match(
-    await evaluate<string>('document.querySelector(".cm-content").textContent'),
-    /Retained unsaved marker/,
-  );
+  assert.match(await evaluate(textOf('.cm-content')), /Retained unsaved marker/);
   await rename(renamed, moved);
-  await evaluate('window.dispatchEvent(new Event("focus"))');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".preview-recovery")'),
-    Boolean,
-    'Missing dirty file notice',
-  );
-  await evaluate(
-    '[...document.querySelectorAll(".preview-recovery button")].find(b=>b.textContent==="Find renamed file").click()',
-  );
+  await evaluate(pageCall(windowFocus));
+  await until(() => evaluate(exists('.preview-recovery')), Boolean, 'Missing dirty file notice');
+  await evaluate(pressButton('Find renamed file', '.preview-recovery'));
   await until(
     saved,
     (state) => state.workspaces[0]?.panes.some((p) => p.type === 'preview' && p.path === moved),
@@ -172,15 +156,15 @@ try {
   const draft = state.workspaces[0]!.panes.find((p) => p.id === 'file');
   assert.equal(draft?.path, renamed, 'Dirty editor stays attached to its original draft');
   await until(
-    () => evaluate<{ buffers: { id: string }[] }>('window.viewer.bufferList()'),
+    () => evaluate(pageCall(() => window.viewer.bufferList())),
     (value) => value.buffers.length > 0,
     'Draft persisted',
   );
-  const buffers = await evaluate<{ buffers: { id: string }[] }>('window.viewer.bufferList()');
-  const retained = await evaluate<{ text: string }>(
-    `window.viewer.bufferRead(${JSON.stringify(buffers.buffers[0]!.id)})`,
+  const buffers = await evaluate(pageCall(() => window.viewer.bufferList()));
+  const retained = await evaluate(
+    pageCall((id: string) => window.viewer.bufferRead(id), buffers.buffers[0]!.id),
   );
-  assert.match(retained.text, /Retained unsaved marker/);
+  assert.match(retained!.text, /Retained unsaved marker/);
   assert.equal(await readFile(moved, 'utf8'), 'Another application changed the file again.\n');
   observations.push({
     externalWrite: true,
@@ -213,37 +197,27 @@ try {
   connection = await app.connect();
   const { evaluate } = connection;
   await until(
-    () =>
-      evaluate<{ title: string }>(
-        'window.viewer.browser({kind:"state",id:"browser"}).catch(()=>undefined)',
-      ),
+    () => evaluate(pageCall(browserState)),
     (state) => state?.title === 'Recovered reference site',
     'Initial browser page',
   );
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  await evaluate(
-    `document.querySelector('.browser-navigation [aria-label="Reload page"]').click()`,
-  );
+  await evaluate(click('.browser-navigation [aria-label="Reload page"]'));
   await until(
-    () => evaluate<string>('document.querySelector(".browser-error")?.textContent'),
+    () => evaluate(textOf('.browser-error')),
     Boolean,
     'Stopped listener produces recoverable error',
   );
   await new Promise<void>((resolve) => server.listen(address.port, '127.0.0.1', resolve));
-  await evaluate(
-    '[...document.querySelectorAll(".browser-error button")].find(b=>b.textContent.trim()==="Retry").click()',
-  );
+  await evaluate(pressButton('Retry', '.browser-error'));
   await until(
-    () =>
-      evaluate<{ title: string; error?: string }>(
-        'window.viewer.browser({kind:"state",id:"browser"}).catch(()=>undefined)',
-      ),
+    () => evaluate(pageCall(browserState)),
     (state) => state?.title === 'Recovered reference site' && !state.error,
     'Same-address browser recovery',
   );
   await until(
-    () => evaluate<boolean>('!document.querySelector(".browser-error")'),
-    Boolean,
+    () => evaluate(exists('.browser-error')),
+    (shown) => !shown,
     'Obsolete failure clears',
   );
   observations.push({ stoppedListener: true, retryAtSameAddress: true, urlPreserved: true });

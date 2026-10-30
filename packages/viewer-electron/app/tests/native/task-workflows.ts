@@ -14,6 +14,8 @@ import { AgentSessions } from '../../src/desktop/agents/sessions';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { NativeInteractions } from './runtime/interactions';
+import { click, countOf, exists, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -162,6 +164,53 @@ const app = await ownedApp(binary, profile, { environment: { SHELL: '/bin/sh' } 
 const captures: string[] = [];
 const checks: string[] = [];
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
+/** A task tool row found by the start of its kind label, by its text or by its exact title. */
+type ToolRow = 'kind' | 'text' | 'title';
+
+function openTaskTool(by: ToolRow, value: string): void {
+  const row = [...document.querySelectorAll('.task-tool-row')].find((row) =>
+    by === 'kind'
+      ? row.querySelector('.task-tool-kind')?.textContent.startsWith(value)
+      : by === 'text'
+        ? row.textContent.includes(value)
+        : row.querySelector('strong')?.textContent === value,
+  );
+  row!.querySelector('button')!.click();
+}
+
+/** The agent session's box, whether its centre hits it, and its nearest ancestors' styles. */
+function sessionProjection() {
+  const element = document.querySelector('.chat-plane[aria-label="Agent session"]')!;
+  const rect = element.getBoundingClientRect();
+  const hit = element.contains(
+    document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2),
+  );
+  const ancestors = [];
+  let parent: Element | null = element;
+  while (parent && ancestors.length < 12) {
+    const style = getComputedStyle(parent);
+    ancestors.push({
+      class: parent.className,
+      display: style.display,
+      visibility: style.visibility,
+      opacity: style.opacity,
+      transform: style.transform,
+    });
+    parent = parent.parentElement;
+  }
+  return {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    width: innerWidth,
+    height: innerHeight,
+    paneWidth: rect.width,
+    paneHeight: rect.height,
+    hit,
+    ancestors,
+  };
+}
 
 async function verifyRestoredTask(
   binary: string,
@@ -202,47 +251,29 @@ async function verifyRestoredTask(
       'feature/generated-task',
     );
     await actions.palette('Generated branch task');
-    await evaluate(`(() => {
-      const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.querySelector('.task-tool-kind')?.textContent.startsWith('note ·'));
-      row.querySelector('button').click();
-    })()`);
+    await evaluate(pageCall(openTaskTool, 'kind', 'note ·'));
     await until(
-      () => evaluate<string>('document.querySelector(".note-plane")?.textContent || ""'),
+      () => evaluate(textOf('.note-plane')),
       (text) => text.includes('Keep the task context'),
       'Restored edited task note',
     );
     await actions.palette('Generated branch task');
-    await until(
-      () => evaluate<boolean>('!!document.querySelector(".task-plane")'),
-      Boolean,
-      'Restored task',
-    );
-    await evaluate(`(() => {
-      const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.textContent.includes('Git changes'));
-      row.querySelector('button').click();
-    })()`);
-    await until(
-      () => evaluate<boolean>('!!document.querySelector(".git-review")'),
-      Boolean,
-      'Restored Git tool',
-    );
+    await until(() => evaluate(exists('.task-plane')), Boolean, 'Restored task');
+    await evaluate(pageCall(openTaskTool, 'text', 'Git changes'));
+    await until(() => evaluate(exists('.git-review')), Boolean, 'Restored Git tool');
     await actions.click('[aria-label="Review changes"]');
     await actions.button('Unstaged', '.choice-menu');
     await until(
-      () => evaluate<number>('document.querySelectorAll(".git-review-hunk").length'),
+      () => evaluate(countOf('.git-review-hunk')),
       (count) => count === 2,
       'Restored working edits',
     );
     await actions.visible('.git-review');
     await actions.capture(path.join(root, 'restored-git-review.png'));
     await actions.palette('Generated branch task');
-    await evaluate(`(() => {
-      const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.textContent.includes('Generated review conversation'));
-      row.querySelector('button').click();
-    })()`);
+    await evaluate(pageCall(openTaskTool, 'text', 'Generated review conversation'));
     await until(
-      () =>
-        evaluate<string>('document.querySelector(".session-reported-status")?.textContent || ""'),
+      () => evaluate(textOf('.session-reported-status')),
       (text) => text.includes('Reported waiting'),
       'Restored reported session',
     );
@@ -275,11 +306,7 @@ try {
   };
   const saved = async () =>
     JSON.parse(await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8')) as SavedState;
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".folder-explorer")'),
-    Boolean,
-    'Folder',
-  );
+  await until(() => evaluate(exists('.folder-explorer')), Boolean, 'Folder');
   await actions.palette('New task from branch');
   await actions.field('Branch task name', 'Generated branch task');
   await actions.field('New branch name', 'feature/generated-task');
@@ -293,22 +320,11 @@ try {
     30000,
   );
   assert.equal((await git(checkout, 'branch', '--show-current')).trim(), 'feature/generated-task');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".task-plane")'),
-    Boolean,
-    'Task overview',
-  );
+  await until(() => evaluate(exists('.task-plane')), Boolean, 'Task overview');
   await capture('task-tools');
   checks.push('One action creates a worktree, task and four durable tools');
-  await evaluate(`(() => {
-    const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.querySelector('.task-tool-kind')?.textContent.startsWith('note ·'));
-    row.querySelector('button').click();
-  })()`);
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".note-plane")'),
-    Boolean,
-    'Task note mounted',
-  );
+  await evaluate(pageCall(openTaskTool, 'kind', 'note ·'));
+  await until(() => evaluate(exists('.note-plane')), Boolean, 'Task note mounted');
   await actions.button('Source');
   await actions.text(
     '.note-plane .cm-content',
@@ -322,12 +338,9 @@ try {
   );
   await actions.palette('Task workflow acceptance');
   await actions.palette('Generated branch task');
-  await evaluate(`(() => {
-    const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.querySelector('.task-tool-kind')?.textContent.startsWith('note ·'));
-    row.querySelector('button').click();
-  })()`);
+  await evaluate(pageCall(openTaskTool, 'kind', 'note ·'));
   await until(
-    () => evaluate<string>('document.querySelector(".note-plane")?.textContent || ""'),
+    () => evaluate(textOf('.note-plane')),
     (text) => text.includes('Keep the task context'),
     'Task note retained after workspace switch',
   );
@@ -337,13 +350,10 @@ try {
     .replace('line 2\n', 'first edit\n')
     .replace('line 27\n', 'second edit\n');
   await writeFile(path.join(checkout, 'source.txt'), changed);
-  await evaluate(`(() => {
-    const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.textContent.includes('Git changes'));
-    row.querySelector('button').click();
-  })()`);
+  await evaluate(pageCall(openTaskTool, 'text', 'Git changes'));
   await actions.button('Refresh', '.git-review');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".git-review-hunk").length'),
+    () => evaluate(countOf('.git-review-hunk')),
     (count) => count === 2,
     'Two review hunks',
   );
@@ -357,13 +367,17 @@ try {
   assert.equal(await readFile(path.join(checkout, 'source.txt'), 'utf8'), changed);
   await until(
     () =>
-      evaluate<boolean>(
-        `document.querySelector('[aria-label="Review changes"]')?.disabled === false`,
+      evaluate(
+        pageCall(
+          () =>
+            document.querySelector<HTMLButtonElement>('[aria-label="Review changes"]')?.disabled ===
+            false,
+        ),
       ),
     Boolean,
     'Review ready after staging',
   );
-  await evaluate(`document.querySelector('[aria-label="Review changes"]').click()`);
+  await evaluate(click('[aria-label="Review changes"]'));
   await actions.button('Staged', '.choice-menu');
   await actions.button('Unstage hunk 1', '.git-review');
   await until(
@@ -373,10 +387,7 @@ try {
   );
   checks.push('Real Git stages and unstages one hunk without changing the working file');
   await actions.palette('Generated branch task');
-  await evaluate(`(() => {
-    const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.querySelector('strong')?.textContent === 'Checkout');
-    row.querySelector('button').click();
-  })()`);
+  await evaluate(pageCall(openTaskTool, 'title', 'Checkout'));
   await actions.palette('Generated workflow');
   await actions.field('Run label', 'literal $(touch marker) {directory}');
   await capture('workflow-parameters');
@@ -422,35 +433,11 @@ try {
   await actions.button('Attach conversation…', '.task-plane');
   await actions.button('Attach', '.session-library');
   await until(
-    () => evaluate<string>('document.querySelector(".session-reported-status")?.textContent'),
-    (text) => text?.includes('Reported waiting'),
+    () => evaluate(textOf('.session-reported-status')),
+    (text) => text.includes('Reported waiting'),
     'Reported status',
   );
-  const observeSession = () =>
-    evaluate<{
-      left: number;
-      top: number;
-      right: number;
-      bottom: number;
-      width: number;
-      height: number;
-      paneWidth: number;
-      paneHeight: number;
-      hit: boolean;
-      ancestors: unknown[];
-    }>(`(() => {
-    const element = document.querySelector('.chat-plane[aria-label="Agent session"]');
-    const rect = element.getBoundingClientRect();
-    const hit = element.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2));
-    const ancestors = [];
-    let parent = element;
-    while (parent && ancestors.length < 12) {
-      const style = getComputedStyle(parent);
-      ancestors.push({ class: parent.className, display: style.display, visibility: style.visibility, opacity: style.opacity, transform: style.transform });
-      parent = parent.parentElement;
-    }
-    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: innerWidth, height: innerHeight, paneWidth: rect.width, paneHeight: rect.height, hit, ancestors };
-  })()`);
+  const observeSession = () => evaluate(pageCall(sessionProjection));
   const projected = await until(
     observeSession,
     (rect) =>
@@ -488,16 +475,10 @@ try {
     'Durable session link',
   );
   await actions.palette('Notes…');
+  await until(() => evaluate(exists('.notes-library-row')), Boolean, 'Saved note');
+  await evaluate(click('.notes-library-row button[aria-label^="Move "][aria-label$=" to Trash"]'));
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".notes-library-row")'),
-    Boolean,
-    'Saved note',
-  );
-  await evaluate(
-    `document.querySelector('.notes-library-row button[aria-label^="Move "][aria-label$=" to Trash"]').click()`,
-  );
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector('dialog[aria-label="Move to Trash?"]')`),
+    () => evaluate(exists('dialog[aria-label="Move to Trash?"]')),
     Boolean,
     'Note Trash presenter',
   );

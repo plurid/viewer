@@ -10,6 +10,16 @@ import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import {
+  attributeOf,
+  click,
+  countOf,
+  exists,
+  patchSettings,
+  pressButton,
+  textOf,
+} from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -141,6 +151,35 @@ const candidate = {
   executable: await hash(binary),
   archive: await hash(path.join(path.dirname(path.dirname(binary)), 'Resources/app.asar')),
 };
+/** The picker's box, or the viewport while it is closed. */
+function pickerBox() {
+  const rect = document.querySelector('.worktrees-dialog')?.getBoundingClientRect();
+  return rect ? [rect.x, rect.y, rect.width, rect.height] : [innerWidth, innerHeight];
+}
+
+function chooseWorktree(branch: string) {
+  [...document.querySelectorAll<HTMLElement>('.worktree-option')]
+    .find((row) => row.querySelector('.worktree-branch')!.textContent === branch)!
+    .click();
+}
+
+const branchLabels = () =>
+  [...document.querySelectorAll('.git-branch')].map((button) => button.textContent);
+
+/** Opens the changes of the newest view whose branch label includes `branch`. */
+function openBranchChanges(branch: string) {
+  [...document.querySelectorAll<HTMLElement>('.git-branch')]
+    .filter((button) => button.textContent.includes(branch))
+    .at(-1)!
+    .click();
+}
+
+function selectChange(file: string) {
+  [...document.querySelectorAll<HTMLElement>('.git-review-file')]
+    .find((button) => button.textContent.includes(file))!
+    .click();
+}
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 let failure: unknown;
@@ -148,25 +187,22 @@ try {
   connection = await app.connect();
   const { evaluate, command } = connection;
   const palette = async (label: string) => {
-    await evaluate('document.querySelector(\'[aria-label="Commands (⌘K)"]\').click()');
+    await evaluate(click('[aria-label="Commands (⌘K)"]'));
     await until(
       () =>
-        evaluate<boolean>(
-          'document.activeElement?.getAttribute("aria-label") === "Search commands"',
+        evaluate(
+          pageCall(() => document.activeElement?.getAttribute('aria-label') === 'Search commands'),
         ),
       Boolean,
       'palette input',
     );
     await command('Input.insertText', { text: label });
     await until(
-      () =>
-        evaluate<string>(
-          'document.querySelector(".command-result[aria-selected=true]")?.textContent ?? ""',
-        ),
+      () => evaluate(textOf('.command-result[aria-selected=true]')),
       (text) => text.includes(label),
       label,
     );
-    await evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
+    await evaluate(click('.command-result[aria-selected=true]'));
   };
   const capture = async (name: string, width: number, height: number) => {
     await command('Emulation.setDeviceMetricsOverride', {
@@ -178,11 +214,7 @@ try {
     let previous = '';
     let stable = 0;
     await until(
-      () =>
-        evaluate<number[]>(`(() => {
-      const rect = document.querySelector('.worktrees-dialog')?.getBoundingClientRect();
-      return rect ? [rect.x,rect.y,rect.width,rect.height] : [innerWidth,innerHeight];
-    })()`),
+      () => evaluate(pageCall(pickerBox)),
       (values) => {
         const current = JSON.stringify(values.map((value) => Math.round(value * 10)));
         stable = current === previous ? stable + 1 : 0;
@@ -200,44 +232,29 @@ try {
     });
   };
   await until(
-    () => evaluate<string>('document.querySelector(".git-branch")?.textContent ?? ""'),
+    () => evaluate(textOf('.git-branch')),
     (text) => text.includes('main') && text.includes('Clean'),
     'main branch label and count',
   );
   await palette('Open worktree…');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".worktree-option").length'),
+    () => evaluate(countOf('.worktree-option')),
     (count) => count === 2,
     'two registered checkouts',
   );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.worktree-option')).find(row => row.querySelector('.worktree-branch').textContent === 'feature').click()`,
-  );
+  await evaluate(pageCall(chooseWorktree, 'feature'));
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".worktree-inspection [role=status]")?.textContent ?? ""',
-      ),
+    () => evaluate(textOf('.worktree-inspection [role=status]')),
     (text) => text.includes('2 changes'),
     'feature change count',
   );
   await capture('picker-dark.png', 1440, 900);
   await capture('picker-minimum-dark.png', 760, 650);
-  const revision = await evaluate<number>(
-    'window.viewer.settingsGet().then(snapshot=>snapshot.revision)',
-  );
-  await evaluate(
-    `window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],${revision})`,
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await capture('picker-light.png', 1440, 900);
-  await evaluate(
-    `Array.from(document.querySelectorAll('.worktrees-dialog footer button')).find(button=>button.textContent === 'Open beside').click()`,
-  );
+  await evaluate(pressButton('Open beside', '.worktrees-dialog footer'));
   await until(
-    () =>
-      evaluate<string[]>(
-        'Array.from(document.querySelectorAll(".git-branch")).map(button=>button.textContent)',
-      ),
+    () => evaluate(pageCall(branchLabels)),
     (labels) =>
       labels.length === 2 &&
       labels.some((label) => label.includes('feature') && label.includes('2 changes')),
@@ -258,16 +275,10 @@ try {
     [mainFolder, featureFolder].sort(),
   );
   await palette('Open worktree…');
+  await until(() => evaluate(exists('.worktree-option')), Boolean, 'worktree picker reopened');
+  await evaluate(pressButton('Another view beside', '.worktrees-dialog footer'));
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".worktree-option")'),
-    Boolean,
-    'worktree picker reopened',
-  );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.worktrees-dialog footer button')).find(button=>button.textContent === 'Another view beside').click()`,
-  );
-  await until(
-    () => evaluate<number>('document.querySelectorAll(".git-branch").length'),
+    () => evaluate(countOf('.git-branch')),
     (count) => count === 3,
     'another view of same checkout',
   );
@@ -279,28 +290,25 @@ try {
   assert.equal(three.workspaces[0]?.panes.filter((pane) => pane.path === featureFolder).length, 2);
   checks.push('another view has a distinct plane ID while retaining the same checkout path');
   await writeFile(path.join(featureFolder, 'notes.txt'), 'Updated feature proposal\n');
-  await evaluate(
-    `Array.from(document.querySelectorAll('.git-branch')).filter(button=>button.textContent.includes('feature')).at(-1).click()`,
-  );
+  await evaluate(pageCall(openBranchChanges, 'feature'));
   await until(
-    () => evaluate<number>('document.querySelectorAll(".git-change").length'),
+    () => evaluate(countOf('.git-review-file')),
     (count) => count === 2,
     'linked changes list',
   );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.git-change')).find(row=>row.querySelector('.git-change-path').textContent.includes('notes.txt')).querySelector('button').click()`,
-  );
+  await evaluate(pageCall(selectChange, 'notes.txt'));
   await until(
-    () => evaluate<string>('document.querySelector(".cm-merge-b .cm-content")?.textContent ?? ""'),
+    () => evaluate(textOf('.git-review-path')),
+    (selected) => selected === 'notes.txt',
+    'selected change',
+  );
+  await evaluate(pressButton('Open diff', '.git-review'));
+  await until(
+    () => evaluate(textOf('.cm-merge-b .cm-content')),
     (text) => text.includes('Updated feature proposal'),
     'working checkout diff',
   );
-  assert.equal(
-    await evaluate<string>(
-      'document.querySelector(".cm-merge-b .cm-content").getAttribute("contenteditable")',
-    ),
-    'true',
-  );
+  assert.equal(await evaluate(attributeOf('.cm-merge-b .cm-content', 'contenteditable')), 'true');
   assert.equal(await readFile(path.join(mainFolder, 'notes.txt'), 'utf8'), 'Main baseline\n');
   assert.deepEqual(await Promise.all(indices.map(hash)), baseline.indices);
   assert.equal(
@@ -332,7 +340,7 @@ if (!failure) {
     next = await reopened.connect();
     const read = next;
     await until(
-      () => read.evaluate<number>('document.querySelectorAll(".git-branch").length'),
+      () => read.evaluate(countOf('.git-branch')),
       (count) => count === 3,
       'cold restored checkout views',
     );

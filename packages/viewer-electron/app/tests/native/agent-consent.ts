@@ -11,6 +11,8 @@ import { defaultSettings } from '../../src/domain/services';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { packagedAgentClient } from './runtime/agent-client';
+import { buttonState, patchSettings, pressButton } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.platform, 'darwin');
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
@@ -125,15 +127,33 @@ const input = interactive
   : undefined;
 type Application = Awaited<ReturnType<typeof ownedApp>>;
 type Connection = Awaited<ReturnType<Application['connect']>>;
+type ReviewOutcome = { pending: boolean; state?: AgentAccessState; error?: string };
+type ReviewWindow = { __agentConsentAcceptance: ReviewOutcome };
 let app: Application | undefined;
 let main: Connection | undefined;
 let preferences: Connection | undefined;
 let client: ReturnType<typeof packagedAgentClient> | undefined;
 let credential = '';
 
+const disableAgents = () => window.viewer.agentAccess({ kind: 'enable', enabled: false });
+
+/** Opens a native review without waiting for it; the outcome lands on the window for `until`. */
+function startReview(request: AgentAccessRequest): void {
+  const page = window as unknown as ReviewWindow;
+  page.__agentConsentAcceptance = { pending: true };
+  void window.viewer.agentAccess(request).then(
+    (state) => {
+      page.__agentConsentAcceptance = { pending: false, state };
+    },
+    (error: Error) => {
+      page.__agentConsentAcceptance = { pending: false, error: error.message };
+    },
+  );
+}
+
 async function access(): Promise<AgentAccessState> {
   assert.ok(preferences);
-  return preferences.evaluate<AgentAccessState>('window.viewer.agentAccess({kind:"state"})');
+  return preferences.evaluate(pageCall(() => window.viewer.agentAccess({ kind: 'state' })));
 }
 
 async function passed(id: string, detail: unknown) {
@@ -145,19 +165,14 @@ async function passed(id: string, detail: unknown) {
 async function connect() {
   app = await ownedApp(binary, profile, { mode: interactive ? 'foreground' : 'hidden' });
   main = await app.connect();
-  await main.evaluate('window.viewer.openSettings()');
+  await main.evaluate(pageCall(() => window.viewer.openSettings()));
   preferences = await app.connect(true);
   await until(
-    () =>
-      preferences!.evaluate<boolean>(
-        `Array.from(document.querySelectorAll('.settings-navigation button')).some(button => button.textContent.trim() === 'Agents')`,
-      ),
-    Boolean,
+    () => preferences!.evaluate(buttonState('Agents', '.settings-navigation')),
+    (state) => state !== 'missing',
     'agent Settings category',
   );
-  await preferences.evaluate(
-    `Array.from(document.querySelectorAll('.settings-navigation button')).find(button => button.textContent.trim() === 'Agents').click()`,
-  );
+  await preferences.evaluate(pressButton('Agents', '.settings-navigation'));
   evidenceDirectories.push(app.evidenceDirectory);
 }
 
@@ -169,17 +184,11 @@ async function nativeReview(stage: string, instruction: string, request: AgentAc
   console.log('READY ' + stage + ': ' + instruction);
   // The supervisor starts the scenario only after telling the operator what to review.
   assert.equal((await input.question('Type run to show this native dialog: ')).trim(), 'run');
-  await preferences.evaluate(`(() => {
-    window.__agentConsentAcceptance = {pending: true};
-    window.viewer.agentAccess(${JSON.stringify(request)}).then(
-      state => {window.__agentConsentAcceptance = {pending: false, state};},
-      error => {window.__agentConsentAcceptance = {pending: false, error: error.message};}
-    );
-  })()`);
+  await preferences.evaluate(pageCall(startReview, request));
   const outcome = await until(
     () =>
-      preferences!.evaluate<{ pending: boolean; state?: AgentAccessState; error?: string }>(
-        'window.__agentConsentAcceptance',
+      preferences!.evaluate(
+        pageCall(() => (window as unknown as ReviewWindow).__agentConsentAcceptance),
       ),
     (value) => !value.pending,
     stage + ' native result',
@@ -226,7 +235,11 @@ async function agentTool<T>(name: string, args: Record<string, unknown> = {}): P
 
 async function reviewedCommandBoundary() {
   assert.ok(main);
-  await main.evaluate(`document.querySelector('.folder-explorer').focus({preventScroll:true})`);
+  await main.evaluate(
+    pageCall(() =>
+      document.querySelector<HTMLElement>('.folder-explorer')!.focus({ preventScroll: true }),
+    ),
+  );
   const catalog = await until(
     () => agentTool<{ commands: { id: string }[] }>('list_commands'),
     (value) => value.commands.some((command) => command.id === 'refresh'),
@@ -247,17 +260,12 @@ async function reviewedCommandBoundary() {
   });
   assert.equal(proposal.requiresUserReview, true);
   await until(
-    () =>
-      main!.evaluate<boolean>(
-        `Array.from(document.querySelectorAll('dialog[open] button')).some(button => button.textContent === 'Reject')`,
-      ),
-    Boolean,
+    () => main!.evaluate(buttonState('Reject', 'dialog[open]')),
+    (state) => state !== 'missing',
     'agent proposal review before execution',
   );
   // Rejecting this read-only proposal grants no authority and never starts its command.
-  await main.evaluate(
-    `Array.from(document.querySelectorAll('dialog[open] button')).find(button => button.textContent === 'Reject').click()`,
-  );
+  await main.evaluate(pressButton('Reject', 'dialog[open]'));
   await until(
     () => agentTool<{ status: string }>('get_proposal', { id: proposal.id }),
     (value) => value.status === 'rejected',
@@ -277,10 +285,12 @@ async function reviewedCommandBoundary() {
 
 async function patchRequested(enabled: boolean, roots: string[]) {
   assert.ok(preferences);
-  await preferences.evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
-    {path: 'settings.agents.enabled', value: ${enabled}},
-    {path: 'settings.agents.roots', value: ${JSON.stringify(roots)}}
-  ], snapshot.revision))`);
+  await preferences.evaluate(
+    patchSettings(
+      { path: 'settings.agents.enabled', value: enabled },
+      { path: 'settings.agents.roots', value: roots },
+    ),
+  );
 }
 
 try {
@@ -292,8 +302,13 @@ try {
   assert.deepEqual(initial.pending.roots, [allowed]);
   await assert.rejects(lstat(path.join(profile, 'agent-connection-v1.json')), { code: 'ENOENT' });
   assert.ok(main);
-  const refused = await main.evaluate<string>(
-    `window.viewer.agentAccess({kind:'enable',enabled:true}).then(() => '', error => error.message)`,
+  const refused = await main.evaluate(
+    pageCall(() =>
+      window.viewer.agentAccess({ kind: 'enable', enabled: true }).then(
+        () => '',
+        (error: Error) => error.message,
+      ),
+    ),
   );
   assert.match(refused, /settings|window|available/i);
   await passed('configuration-does-not-authorize', {
@@ -327,7 +342,7 @@ try {
       assert.deepEqual(enabled.roots, []);
       assert.deepEqual([...enabled.capabilities].sort(), ['metadata', 'navigation', 'propose']);
       const configuration = JSON.parse(
-        await preferences!.evaluate<string>('window.viewer.agentToken()'),
+        await preferences!.evaluate(pageCall(() => window.viewer.agentToken())),
       ) as {
         mcpServers: { viewer: { env: { VIEWER_AGENT_TOKEN: string } } };
       };
@@ -364,11 +379,14 @@ try {
       await reviewedCommandBoundary();
 
       await preferences!.evaluate(
-        `window.viewer.agentAccess({kind:'remove-folder',root:${JSON.stringify(allowed)}})`,
+        pageCall(
+          (root: string) => window.viewer.agentAccess({ kind: 'remove-folder', root }),
+          allowed,
+        ),
       );
       await assert.rejects(metadata(client, file), /outside|authorized folders/i);
       await passed('folder-revocation-live-client', { roots: (await access()).roots });
-      await preferences!.evaluate('window.viewer.agentAccess({kind:"enable",enabled:false})');
+      await preferences!.evaluate(pageCall(disableAgents));
       assert.equal((await access()).enabled, false);
       await assert.rejects(metadata(client, file), /disconnected|disabled|invalid|outside/i);
       await client.close();
@@ -434,9 +452,7 @@ try {
   result.error = error instanceof Error ? error.stack : String(error);
   result.stage = 'failed';
   // Revoke a partially completed test grant without granting or approving anything new.
-  await preferences
-    ?.evaluate('window.viewer.agentAccess({kind:"enable",enabled:false})')
-    .catch(() => {});
+  await preferences?.evaluate(pageCall(disableAgents)).catch(() => {});
   await save();
   throw error;
 } finally {

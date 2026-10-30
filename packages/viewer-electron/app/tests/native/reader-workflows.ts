@@ -11,6 +11,17 @@ import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { readerBookFixture } from '../fixtures/reader-book';
 import { officeFixture } from '../office-fixtures';
+import {
+  animationFrames,
+  click,
+  countOf,
+  exists,
+  focus,
+  pressButton,
+  textOf,
+  valueOf,
+} from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -38,6 +49,62 @@ for (const [name, bytes] of Object.entries(fixtures))
   await writeFile(path.join(files, name), bytes, { flag: 'wx' });
 const checks: string[] = [];
 type Connection = Awaited<ReturnType<Awaited<ReturnType<typeof ownedApp>>['connect']>>;
+
+interface EpubWindow {
+  __epubUnsafe?: unknown;
+}
+
+/** Sets an input's value through the native setter so React sees the change. */
+function fillField(selector: string, value: string): void {
+  const field = document.querySelector<HTMLInputElement>(selector)!;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, value);
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function menuItemShown(label: string): boolean {
+  return [...document.querySelectorAll('[role="menuitem"]')].some(
+    (item) => item.textContent.trim() === label,
+  );
+}
+
+function pressMenuItem(label: string): void {
+  [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    .find((item) => item.textContent.trim() === label)!
+    .click();
+}
+
+/** The reader's effective opacity, running motion, and whether the plane fits the window. */
+function captureState() {
+  let element: Element | null = document.querySelector(
+    '.search-explorer, .data-viewer, .epub-viewer',
+  );
+  let opacity = 1;
+  while (element) {
+    opacity *= Number(getComputedStyle(element).opacity);
+    element = element.parentElement;
+  }
+  const header = document.querySelector('.plane-controls')!.getBoundingClientRect();
+  const footer = document
+    .querySelector('.folder-status, .preview-plane > footer, .preview-status')
+    ?.getBoundingClientRect();
+  return {
+    opacity,
+    motion: !!document.querySelector('[data-plurid-motion]'),
+    fits:
+      header.left >= 0 &&
+      header.right <= innerWidth + 1 &&
+      (!footer || footer.bottom <= innerHeight + 1),
+  };
+}
+
+/** Whether the empty-result message lies inside the file table. */
+function emptyMessageInTable(): boolean {
+  const table = document.querySelector('.file-table')!.getBoundingClientRect();
+  const message = document.querySelector('.empty-state strong')!.getBoundingClientRect();
+  return message.top >= table.top && message.bottom <= table.bottom;
+}
+
+const chapterScrollTop = () => document.querySelector('.epub-chapter')!.scrollTop;
 
 async function run(
   name: string,
@@ -110,13 +177,9 @@ async function run(
 function helpers(connection: Connection) {
   const { evaluate, command } = connection;
   return {
-    text: () => evaluate<string>('document.body.innerText'),
-    click: (selector: string) =>
-      evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`),
-    fill: (selector: string, value: string) =>
-      evaluate(
-        `(() => { const field = document.querySelector(${JSON.stringify(selector)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(field, ${JSON.stringify(value)}); field.dispatchEvent(new Event('input', { bubbles: true })); })()`,
-      ),
+    text: () => evaluate(pageCall(() => document.body.innerText)),
+    click: (selector: string) => evaluate(click(selector)),
+    fill: (selector: string, value: string) => evaluate(pageCall(fillField, selector, value)),
     key: async (key: string, code: string, virtual: number, modifiers = 0) => {
       for (const type of ['keyDown', 'keyUp'])
         await command('Input.dispatchKeyEvent', {
@@ -134,43 +197,27 @@ function helpers(connection: Connection) {
         deviceScaleFactor: 1,
         mobile: false,
       });
-      await evaluate(
-        'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-      );
-      await evaluate(`document.querySelector('[aria-label="Layout"]').click()`);
+      await evaluate(animationFrames(2));
+      await evaluate(click('[aria-label="Layout"]'));
       await until(
-        () =>
-          evaluate<boolean>(
-            `Array.from(document.querySelectorAll('[role="menuitem"]')).some(item => item.textContent.trim() === 'Fill workspace')`,
-          ),
+        () => evaluate(pageCall(menuItemShown, 'Fill workspace')),
         Boolean,
         'Plane size action',
       );
-      await evaluate(
-        `Array.from(document.querySelectorAll('[role="menuitem"]')).find(item => item.textContent.trim() === 'Fill workspace').click()`,
-      );
+      await evaluate(pageCall(pressMenuItem, 'Fill workspace'));
       await until(
-        () =>
-          evaluate<{ opacity: number; motion: boolean }>(`(() => {
-        let element = document.querySelector('.search-explorer, .data-viewer, .epub-viewer'), opacity = 1;
-        while (element) { opacity *= Number(getComputedStyle(element).opacity); element = element.parentElement; }
-        const header = document.querySelector('.plane-controls').getBoundingClientRect();
-        const footer = document.querySelector('.folder-status, .preview-plane > footer, .preview-status')?.getBoundingClientRect();
-        return { opacity, motion: !!document.querySelector('[data-plurid-motion]'), fits: header.left >= 0 && header.right <= innerWidth + 1 && (!footer || footer.bottom <= innerHeight + 1) };
-      })()`),
-        (state) => state.opacity > 0.999 && !state.motion && 'fits' in state && state.fits === true,
+        () => evaluate(pageCall(captureState)),
+        (state) => state.opacity > 0.999 && !state.motion && state.fits,
         'Settled capture ' + label,
       );
       const { data } = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
       await writeFile(path.join(root, label + '.png'), Buffer.from(data, 'base64'), { flag: 'wx' });
-      const overflow = await evaluate<number>('document.documentElement.scrollWidth - innerWidth');
+      const overflow = await evaluate(
+        pageCall(() => document.documentElement.scrollWidth - innerWidth),
+      );
       assert.ok(overflow <= 1, label + ' window overflow');
       if (label.startsWith('search-')) {
-        const visible = await evaluate<boolean>(`(() => {
-          const table = document.querySelector('.file-table').getBoundingClientRect();
-          const message = document.querySelector('.empty-state strong').getBoundingClientRect();
-          return message.top >= table.top && message.bottom <= table.bottom;
-        })()`);
+        const visible = await evaluate(pageCall(emptyMessageInTable));
         assert.ok(visible, 'Search empty result stays visible with expanded coverage');
       }
     },
@@ -219,30 +266,29 @@ try {
     async (connection) => {
       const { evaluate } = connection,
         ui = helpers(connection);
-      await until(
-        () => evaluate<boolean>('!!document.querySelector("[role=grid]")'),
-        Boolean,
-        'Worksheet grid',
-      );
-      await evaluate('document.querySelector("[role=grid]").focus()');
+      await until(() => evaluate(exists('[role=grid]')), Boolean, 'Worksheet grid');
+      await evaluate(focus('[role=grid]'));
       await ui.key('ArrowRight', 'ArrowRight', 39);
       await until(ui.text, (text) => text.includes('Formula: 1+1'), 'Keyboard formula inspection');
       await ui.fill('[aria-label="Cell address"]', 'B101');
       await evaluate(
-        `document.querySelector('[aria-label="Cell address"]').closest('form').requestSubmit()`,
+        pageCall(() =>
+          document.querySelector('[aria-label="Cell address"]')!.closest('form')!.requestSubmit(),
+        ),
       );
       await until(
-        () =>
-          evaluate<string>(`document.querySelector('[aria-label="Cell address"]')?.value || ''`),
+        () => evaluate(valueOf('[aria-label="Cell address"]')),
         (value) => value === 'B101',
         'Address across pages',
       );
       await until(ui.text, (text) => text.includes('Formula: 101+1'), 'Loaded address formula');
-      assert.equal(await evaluate('document.activeElement?.getAttribute("role")'), 'grid');
+      assert.equal(
+        await evaluate(pageCall(() => document.activeElement?.getAttribute('role'))),
+        'grid',
+      );
       await ui.key('PageUp', 'PageUp', 33);
       await until(
-        () =>
-          evaluate<string>(`document.querySelector('[aria-label="Cell address"]')?.value || ''`),
+        () => evaluate(valueOf('[aria-label="Cell address"]')),
         (value) => value !== 'B101' && !!value,
         'Page up across a boundary',
       );
@@ -250,10 +296,7 @@ try {
       await until(ui.text, (text) => text.includes('Hidden source'), 'Control Page Up worksheet');
       await ui.key('PageDown', 'PageDown', 34, 2);
       await until(
-        () =>
-          evaluate<string>(
-            'document.querySelector("[role=tab][aria-selected=true]")?.textContent || ""',
-          ),
+        () => evaluate(textOf('[role=tab][aria-selected=true]')),
         (value) => value.trim() === 'Measurements',
         'Control Page Down worksheet',
       );
@@ -269,17 +312,28 @@ try {
       const { evaluate } = connection,
         ui = helpers(connection);
       await until(
-        () => evaluate<boolean>('document.querySelector(".epub-image img")?.naturalWidth > 0'),
+        () =>
+          evaluate(
+            pageCall(
+              () =>
+                (document.querySelector<HTMLImageElement>('.epub-image img')?.naturalWidth ?? 0) >
+                0,
+            ),
+          ),
         Boolean,
         'Authorized illustration',
       );
-      assert.equal(await evaluate('window.__epubUnsafe'), undefined);
       assert.equal(
-        await evaluate('document.querySelectorAll(".epub-chapter img[src^=http]").length'),
-        0,
+        await evaluate(pageCall(() => (window as unknown as EpubWindow).__epubUnsafe)),
+        undefined,
       );
-      await evaluate('document.querySelector(".epub-chapter").scrollTop = 320');
-      const before = await evaluate<number>('document.querySelector(".epub-chapter").scrollTop');
+      assert.equal(await evaluate(countOf('.epub-chapter img[src^=http]')), 0);
+      await evaluate(
+        pageCall(() => {
+          document.querySelector('.epub-chapter')!.scrollTop = 320;
+        }),
+      );
+      const before = await evaluate(pageCall(chapterScrollTop));
       await ui.click('.epub-chapter a');
       await until(
         ui.text,
@@ -288,18 +342,16 @@ try {
       );
       await ui.click('[aria-label="Back to reading position"]');
       await until(
-        () => evaluate<number>('document.querySelector(".epub-chapter").scrollTop'),
+        () => evaluate(pageCall(chapterScrollTop)),
         (value) => Math.abs(value - before) < 2,
         'Return to book scroll',
       );
-      await evaluate(
-        'Array.from(document.querySelectorAll("button")).find(button => button.textContent.trim() === "Find in book").click()',
-      );
+      await evaluate(pressButton('Find in book'));
       await ui.fill('[aria-label="Search book text"]', 'copper circuit');
       await until(ui.text, (text) => text.includes('2 matches'), 'Book search across formatting');
       await ui.click('.epub-search li:last-child button');
       await until(
-        () => evaluate<string>('document.querySelector("[data-epub-match]")?.textContent || ""'),
+        () => evaluate(textOf('[data-epub-match]')),
         (value) => value === 'copper circuit',
         'Highlighted search location',
       );

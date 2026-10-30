@@ -13,11 +13,20 @@ import {
 } from '../../src/domain/contracts';
 import type { TerminalEvent } from '../../src/domain/automation/actions';
 import { gitTerminalProfileID } from '../../src/domain/comparison/git-actions';
-import type { GitReply } from '../../src/domain/comparison/git';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import {
+  animationFrames,
+  attributeOf,
+  click,
+  exists,
+  focus,
+  pressButton,
+  textOf,
+} from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.platform, 'darwin', 'This acceptance uses the direct macOS build.');
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1', 'Every fixture and artifact must be retained.');
@@ -238,49 +247,301 @@ const workspace = (state: SavedState) => {
   return value;
 };
 
+interface Acceptance extends Capture {
+  bytes: number;
+  release: () => void;
+}
+type AcceptanceWindow = { __viewerGitAcceptance?: Acceptance };
+/** The parts of React's fiber tree and of the Plurid engine ref that framing reads. */
+interface EngineRef {
+  camera: {
+    frame: unknown;
+    moveBy(move: { pan: { x: number; y: number } }, options: { animate: boolean }): void;
+    get(): unknown;
+    motion(): unknown;
+  };
+  tree: { get: unknown };
+  inspect(): { view: unknown };
+}
+/** A hook's ref may hold anything; only an engine has a camera that frames and a tree. */
+interface Hook {
+  memoizedState?: { current?: Partial<EngineRef> | null } | null;
+  next: Hook | null;
+}
+interface Fiber {
+  memoizedState: Hook | null;
+  return: Fiber | null;
+}
+type FiberHost = Element & Record<string, Fiber | undefined>;
+type Bounds = { left: number; right: number; top: number; bottom: number };
+interface HitTarget {
+  tag: string;
+  className: string;
+  label: string | null;
+  control: string | null;
+  overlay: string | null;
+}
+interface Appearance {
+  fontFamily: string;
+  bodyFontFamily: string;
+  background: string;
+  border: string;
+  borderWidth: number;
+  motion: string;
+  transform: string;
+  textarea: Bounds;
+  actions: Bounds;
+  layout: { textarea: Bounds; actions: Bounds };
+  plane: Bounds;
+  viewport: Bounds;
+  send: Bounds;
+  sendHit: boolean;
+  sendPointerEvents: string;
+  hitTarget: HitTarget | null;
+  hitStack: HitTarget[];
+  disabled: boolean;
+}
+
+/**
+ * Runs the selected command. With a pause, it first pans the camera away through the public
+ * engine ref, then keeps the renderer busy for that long after the next frame.
+ */
+async function runSelectedCommand(pause: number) {
+  if (pause > 0) {
+    const marker = document.querySelector('[data-viewer-plane]') as FiberHost;
+    const key = Object.keys(marker).find((key) => key.startsWith('__reactFiber'))!;
+    let api: EngineRef | undefined;
+    for (let fiber: Fiber | null | undefined = marker[key]; fiber && !api; fiber = fiber.return) {
+      for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+        const current = hook.memoizedState?.current;
+        if (current?.camera?.frame && current.tree?.get) {
+          api = current as EngineRef;
+          break;
+        }
+      }
+    }
+    if (!api) throw new Error('The owned framing test needs the public engine ref.');
+    api.camera.moveBy({ pan: { x: 600, y: 0 } }, { animate: false });
+  }
+  document.querySelector<HTMLElement>('.command-result[aria-selected=true]')!.click();
+  if (pause > 0) await new Promise((resolve) => requestAnimationFrame(resolve));
+  const end = performance.now() + pause;
+  while (performance.now() < end) {
+    // bounded scheduling stress in this owned renderer
+  }
+}
+
+/** The first match's box as [x, y, width, height], or [] without one. */
+function boxOf(selector: string) {
+  const element = document.querySelector(selector);
+  if (!element) return [];
+  const rect = element.getBoundingClientRect();
+  return [rect.x, rect.y, rect.width, rect.height];
+}
+
+/** Records terminal events from now on, within a bounded budget. */
+function subscribeTerminalEvents() {
+  const state = { events: [], overflow: false, bytes: 0 } as unknown as Acceptance;
+  (window as unknown as AcceptanceWindow).__viewerGitAcceptance = state;
+  state.release = window.viewer.onEvent((value) => {
+    if (value.type !== 'terminal') return;
+    const bytes = JSON.stringify(value.event).length;
+    if (state.events.length >= 2000 || state.bytes + bytes > 262144) {
+      state.overflow = true;
+      return;
+    }
+    state.bytes += bytes;
+    state.events.push({ sequence: state.events.length, event: value.event });
+  });
+}
+
+function observedEvents(): Capture {
+  const state = (window as unknown as AcceptanceWindow).__viewerGitAcceptance!;
+  return { events: state.events, overflow: state.overflow };
+}
+
+/** The public xterm rows as text, or null when the terminal draws no rows. */
+function terminalRows(selector: string) {
+  const rows = document.querySelector(selector);
+  return rows ? [...rows.children].map((row) => row.textContent).join('\n') : null;
+}
+
+function pointerDown(selector: string) {
+  document
+    .querySelector(selector)!
+    .dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+}
+
+/** The header's box as JSON while its view is idle, or null while it moves. */
+function idleHeaderBox(selector: string) {
+  const header = document.querySelector(selector);
+  const view = header?.closest('[data-plurid-entity="PluridView"]');
+  if (!header || !view || (view.getAttribute('data-plurid-motion') ?? 'idle') !== 'idle')
+    return null;
+  const rect = header.getBoundingClientRect();
+  return JSON.stringify([rect.x, rect.y, rect.width, rect.height]);
+}
+
+function commitForm() {
+  const dialog = document.querySelector('.git-commit-dialog')!;
+  return {
+    message: dialog.querySelector('textarea')!.value,
+    enabled: !dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled,
+    folder: dialog.querySelector('.git-commit-folder')!.textContent,
+  };
+}
+
+/** The Chat composer's styles and boxes, and what lies under the Send button. */
+function chatComposerAppearance(): Appearance | null {
+  const textarea = document.querySelector<HTMLTextAreaElement>('.chat-composer textarea');
+  const view = textarea?.closest('[data-plurid-entity="PluridView"]');
+  if (!textarea || !view) return null;
+  const form = textarea.closest('form')!;
+  const send = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const actions = form.querySelector<HTMLElement>('.chat-composer-actions');
+  if (!send || !actions) return null;
+  const style = getComputedStyle(textarea);
+  const rect = (element: Element): Bounds => {
+    const r = element.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+  };
+  // Offset coordinates measure the actual flex layout, before Plurid's perspective.
+  // Projected axis-aligned bounds can overlap while their local boxes remain separated.
+  const layout = (element: HTMLElement): Bounds => {
+    let top = 0,
+      left = 0;
+    for (
+      let current: HTMLElement | null = element;
+      current;
+      current = current.offsetParent as HTMLElement | null
+    ) {
+      top += current.offsetTop;
+      left += current.offsetLeft;
+    }
+    return { left, right: left + element.offsetWidth, top, bottom: top + element.offsetHeight };
+  };
+  const sendBounds = rect(send);
+  const hitX = (sendBounds.left + sendBounds.right) / 2;
+  const hitY = (sendBounds.top + sendBounds.bottom) / 2;
+  const hit = document.elementFromPoint(hitX, hitY);
+  const describe = (element: Element): HitTarget => ({
+    tag: element.tagName,
+    className: typeof element.className === 'string' ? element.className : '',
+    label: element.getAttribute('aria-label'),
+    control: element.closest('[data-plurid-control]')?.getAttribute('data-plurid-control') ?? null,
+    overlay: element.closest('[data-plurid-overlay]')?.getAttribute('data-plurid-overlay') ?? null,
+  });
+  return {
+    fontFamily: style.fontFamily,
+    bodyFontFamily: getComputedStyle(document.body).fontFamily,
+    background: style.backgroundColor,
+    border: style.borderTopStyle,
+    borderWidth: parseFloat(style.borderTopWidth),
+    textarea: rect(textarea),
+    motion: view.getAttribute('data-plurid-motion') ?? 'idle',
+    transform: getComputedStyle(textarea.closest('[data-plurid-plane]')!).transform,
+    actions: rect(actions),
+    layout: { textarea: layout(textarea), actions: layout(actions) },
+    plane: rect(textarea.closest('.chat-plane')!),
+    viewport: rect(document.querySelector('.workspace-surface')!),
+    send: sendBounds,
+    sendHit: hit === send || send.contains(hit),
+    sendPointerEvents: getComputedStyle(send).pointerEvents,
+    hitTarget: hit ? describe(hit) : null,
+    hitStack: document.elementsFromPoint(hitX, hitY).slice(0, 6).map(describe),
+    disabled: send.disabled,
+  };
+}
+
+/** Camera, visibility and ancestor scroll state around an obstructed Send button. */
+function framingSnapshot() {
+  const marker = (document.querySelector('.chat-plane')?.closest('[data-viewer-plane]') ||
+    document.querySelector('[data-viewer-plane]')) as FiberHost | null;
+  const key = marker && Object.keys(marker).find((key) => key.startsWith('__reactFiber'));
+  let api: EngineRef | undefined;
+  for (
+    let fiber: Fiber | null | undefined = key ? marker![key] : undefined;
+    fiber && !api;
+    fiber = fiber.return
+  ) {
+    for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+      const current = hook.memoizedState?.current;
+      if (current?.camera?.frame && current.tree?.get) {
+        api = current as EngineRef;
+        break;
+      }
+    }
+  }
+  const box = (element: Element) => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  };
+  const send = document.querySelector<HTMLElement>('.chat-composer button[type="submit"]');
+  const rect = send?.getBoundingClientRect();
+  const hit = rect && document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  const ancestors = [];
+  for (let element = send; element; element = element.parentElement) {
+    ancestors.push({
+      tag: element.tagName,
+      className: element.className,
+      scrollLeft: element.scrollLeft,
+      scrollTop: element.scrollTop,
+      bounds: box(element),
+    });
+  }
+  return {
+    at: performance.now(),
+    visibility: document.visibilityState,
+    camera: api?.camera.get(),
+    motion: api?.camera.motion(),
+    view: api?.inspect().view,
+    send: send && box(send),
+    sendHit: !!hit && (hit === send || send!.contains(hit)),
+    ancestors,
+  };
+}
+
+function searchInputState() {
+  const input = document.querySelector<HTMLInputElement>('[aria-label="Search commands"]')!;
+  return { query: input.value, focused: document.activeElement === input };
+}
+
+function dismissMinimap() {
+  document
+    .querySelector('[data-plurid-overlay="minimap"]')!
+    .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+}
+
+/** Whether resizing the terminal is refused, and why. */
+function resizeOutcome(id: string) {
+  return window.viewer.terminalResize(id, 80, 24).then(
+    () => ({ rejected: false, message: '' }),
+    (error: Error) => ({ rejected: true, message: error.message }),
+  );
+}
+
 async function palette(main: Connection, label: string) {
-  await main.evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+  await main.evaluate(click('[aria-label="Commands (⌘K)"]'));
   await until(
     () =>
-      main.evaluate<boolean>(
-        'document.activeElement?.getAttribute("aria-label") === "Search commands"',
+      main.evaluate(
+        pageCall(() => document.activeElement?.getAttribute('aria-label') === 'Search commands'),
       ),
     Boolean,
     'palette input',
   );
   await main.command('Input.insertText', { text: label });
   await until(
-    () =>
-      main.evaluate<string>(
-        'document.querySelector(".command-result[aria-selected=true]")?.textContent ?? ""',
-      ),
+    () => main.evaluate(textOf('.command-result[aria-selected=true]')),
     (text) => text.includes(label),
     'palette command ' + label,
   );
   const framePause =
     label === 'Frame plane' ? Number(process.env.VIEWER_TEST_FRAME_PAUSE_MS ?? 0) : 0;
   assert.ok(Number.isInteger(framePause) && framePause >= 0 && framePause <= 3000);
-  await main.evaluate(`(async () => {
-    if (${framePause} > 0) {
-      const marker = document.querySelector('[data-viewer-plane]');
-      const key = Object.keys(marker).find(key => key.startsWith('__reactFiber'));
-      let api;
-      for (let fiber = marker[key]; fiber && !api; fiber = fiber.return) {
-        for (let hook = fiber.memoizedState; hook; hook = hook.next) {
-          const current = hook.memoizedState?.current;
-          if (current?.camera?.frame && current?.tree?.get) { api = current; break; }
-        }
-      }
-      if (!api) throw new Error('The owned framing test needs the public engine ref.');
-      api.camera.moveBy({pan: {x: 600, y: 0}}, {animate: false});
-    }
-    document.querySelector('.command-result[aria-selected=true]').click();
-    if (${framePause} > 0) await new Promise(resolve => requestAnimationFrame(resolve));
-    const end = performance.now() + ${framePause};
-    while (performance.now() < end) { /* bounded scheduling stress in this owned renderer */ }
-  })()`);
+  await main.evaluate(pageCall(runSelectedCommand, framePause));
   await until(
-    () => main.evaluate<boolean>(`!!document.querySelector('[aria-label="Search commands"]')`),
+    () => main.evaluate(exists('[aria-label="Search commands"]')),
     (open) => !open,
     'palette dismissed',
   );
@@ -289,13 +550,7 @@ async function capture(main: Connection, directory: string, name: string, select
   let previous = '';
   let stable = 0;
   await until(
-    () =>
-      main.evaluate<number[]>(`(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
-      if (!element) return [];
-      const rect = element.getBoundingClientRect();
-      return [rect.x, rect.y, rect.width, rect.height];
-    })()`),
+    () => main.evaluate(pageCall(boxOf, selector)),
     (geometry) => {
       const current = JSON.stringify(geometry);
       stable = current === previous ? stable + 1 : 0;
@@ -304,9 +559,7 @@ async function capture(main: Connection, directory: string, name: string, select
     },
     'settled screenshot ' + name,
   );
-  await main.evaluate(
-    'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-  );
+  await main.evaluate(animationFrames(2));
   const screenshot = await main.command<{ data: string }>('Page.captureScreenshot', {
     format: 'png',
   });
@@ -315,40 +568,17 @@ async function capture(main: Connection, directory: string, name: string, select
   return file;
 }
 async function subscribe(main: Connection) {
-  await main.evaluate(`(() => {
-    const state = { events: [], overflow: false, bytes: 0 };
-    window.__viewerGitAcceptance = state;
-    state.release = window.viewer.onEvent(value => {
-      if (value.type !== 'terminal') return;
-      const bytes = JSON.stringify(value.event).length;
-      if (state.events.length >= 2000 || state.bytes + bytes > 262144) {
-        state.overflow = true;
-        return;
-      }
-      state.bytes += bytes;
-      state.events.push({ sequence: state.events.length, event: value.event });
-    });
-  })()`);
+  await main.evaluate(pageCall(subscribeTerminalEvents));
 }
-const observed = (main: Connection) =>
-  main.evaluate<Capture>(
-    '({ events: window.__viewerGitAcceptance.events, overflow: window.__viewerGitAcceptance.overflow })',
-  );
+const observed = (main: Connection) => main.evaluate(pageCall(observedEvents));
 async function screen(main: Connection, id: string, expected: string) {
   await until(
-    () =>
-      main.evaluate<boolean>(
-        `!!document.querySelector(${JSON.stringify(`[data-terminal-id="${id}"] .xterm-screen`)})`,
-      ),
+    () => main.evaluate(exists(`[data-terminal-id="${id}"] .xterm-screen`)),
     Boolean,
     'terminal screen ' + id,
   );
   return until(
-    () =>
-      main.evaluate<string | null>(`(() => {
-    const rows = document.querySelector(${JSON.stringify(`[data-terminal-id="${id}"] .xterm-rows`)});
-    return rows ? Array.from(rows.children).map(row => row.textContent).join('\\n') : null;
-  })()`),
+    () => main.evaluate(pageCall(terminalRows, `[data-terminal-id="${id}"] .xterm-rows`)),
     (text) => text === null || text.includes(expected),
     'public terminal output ' + id,
   );
@@ -356,26 +586,13 @@ async function screen(main: Connection, id: string, expected: string) {
 async function activate(main: Connection, id: string) {
   await palette(main, 'Frame all planes');
   const selector = `[data-viewer-plane="${id}"]`;
-  await until(
-    () => main.evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
-    Boolean,
-    'saved plane header ' + id,
-  );
-  await main.evaluate(
-    `document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))`,
-  );
+  await until(() => main.evaluate(exists(selector)), Boolean, 'saved plane header ' + id);
+  await main.evaluate(pageCall(pointerDown, selector));
   await palette(main, 'Frame plane');
   let previous = '';
   let stable = 0;
   await until(
-    () =>
-      main.evaluate<string | null>(`(() => {
-        const header = document.querySelector(${JSON.stringify(selector)});
-        const view = header?.closest('[data-plurid-entity="PluridView"]');
-        if (!header || !view || (view.getAttribute('data-plurid-motion') ?? 'idle') !== 'idle') return null;
-        const rect = header.getBoundingClientRect();
-        return JSON.stringify([rect.x, rect.y, rect.width, rect.height]);
-      })()`),
+    () => main.evaluate(pageCall(idleHeaderBox, selector)),
     (geometry) => {
       stable = geometry !== null && geometry === previous ? stable + 1 : 0;
       previous = geometry ?? '';
@@ -386,12 +603,8 @@ async function activate(main: Connection, id: string) {
 }
 async function backToFolder(main: Connection, id: string) {
   const selector = `[data-viewer-plane="${id}"] [aria-label="Back to parent plane"]`;
-  await until(
-    () => main.evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
-    Boolean,
-    'linked parent control',
-  );
-  await main.evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+  await until(() => main.evaluate(exists(selector)), Boolean, 'linked parent control');
+  await main.evaluate(click(selector));
   await until(
     saved,
     (state) => workspace(state).activePane === folderID,
@@ -465,23 +678,15 @@ async function commitDialog(main: Connection, app: Application) {
   const before = (await observed(main)).events.length;
   await palette(main, 'Commit staged changes…');
   await until(
-    () => main.evaluate<boolean>('!!document.querySelector(".git-commit-dialog[open] textarea")'),
+    () => main.evaluate(exists('.git-commit-dialog[open] textarea')),
     Boolean,
     'actual commit message dialog',
   );
   const message = 'Generated message — never submitted\n\nNo mutation approval is requested.';
-  await main.evaluate('document.querySelector(".git-commit-dialog textarea").focus()');
+  await main.evaluate(focus('.git-commit-dialog textarea'));
   await main.command('Input.insertText', { text: message });
   const form = await until(
-    () =>
-      main.evaluate<{ message: string; enabled: boolean; folder: string }>(`(() => {
-    const dialog = document.querySelector('.git-commit-dialog');
-    return {
-      message: dialog.querySelector('textarea').value,
-      enabled: !dialog.querySelector('button[type="submit"]').disabled,
-      folder: dialog.querySelector('.git-commit-folder').textContent,
-    };
-  })()`),
+    () => main.evaluate(pageCall(commitForm)),
     (value) => value.enabled && value.message === message,
     'commit message form state',
   );
@@ -495,11 +700,9 @@ async function commitDialog(main: Connection, app: Application) {
     '.git-commit-dialog[open]',
   );
   // Cancel is the only form action used by this harness. Never submit or review Git mutations.
-  await main.evaluate(
-    `Array.from(document.querySelectorAll('.git-commit-dialog button')).find(button => button.textContent.trim() === 'Cancel').click()`,
-  );
+  await main.evaluate(pressButton('Cancel', '.git-commit-dialog'));
   await until(
-    () => main.evaluate<boolean>('!!document.querySelector(".git-commit-dialog")'),
+    () => main.evaluate(exists('.git-commit-dialog')),
     (open) => !open,
     'commit dialog cancelled',
   );
@@ -516,38 +719,10 @@ async function commitDialog(main: Connection, app: Application) {
 async function chatAppearance(main: Connection, app: Application) {
   await palette(main, 'Chat about files');
   await until(
-    () => main.evaluate<boolean>('!!document.querySelector(".chat-composer textarea")'),
+    () => main.evaluate(exists('.chat-composer textarea')),
     Boolean,
     'generated Chat composer',
   );
-  type Bounds = { left: number; right: number; top: number; bottom: number };
-  interface HitTarget {
-    tag: string;
-    className: string;
-    label: string | null;
-    control: string | null;
-    overlay: string | null;
-  }
-  interface Appearance {
-    fontFamily: string;
-    bodyFontFamily: string;
-    background: string;
-    border: string;
-    borderWidth: number;
-    motion: string;
-    transform: string;
-    textarea: Bounds;
-    actions: Bounds;
-    layout: { textarea: Bounds; actions: Bounds };
-    plane: Bounds;
-    viewport: Bounds;
-    send: Bounds;
-    sendHit: boolean;
-    sendPointerEvents: string;
-    hitTarget: HitTarget | null;
-    hitStack: HitTarget[];
-    disabled: boolean;
-  }
   const measurements: Array<Appearance & { width: number; height: number; screenshot: string }> =
     [];
   const detail = { measurements, sent: false, providerConfigured: false, completed: false };
@@ -566,57 +741,7 @@ async function chatAppearance(main: Connection, app: Application) {
     let previous = '';
     let stable = 0;
     const value = await until(
-      () =>
-        main.evaluate<Appearance | null>(`(() => {
-      const textarea = document.querySelector('.chat-composer textarea');
-      const view = textarea?.closest('[data-plurid-entity="PluridView"]');
-      if (!textarea || !view) return null;
-      const form = textarea.closest('form');
-      const send = form.querySelector('button[type="submit"]');
-      const actions = form.querySelector('.chat-composer-actions');
-      if (!send || !actions) return null;
-      const style = getComputedStyle(textarea);
-      const rect = element => {
-        const r = element.getBoundingClientRect();
-        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
-      };
-      // Offset coordinates measure the actual flex layout, before Plurid's perspective.
-      // Projected axis-aligned bounds can overlap while their local boxes remain separated.
-      const layout = element => {
-        let top = 0, left = 0;
-        for (let current = element; current; current = current.offsetParent) {
-          top += current.offsetTop;
-          left += current.offsetLeft;
-        }
-        return { left, right: left + element.offsetWidth, top, bottom: top + element.offsetHeight };
-      };
-      const sendBounds = rect(send);
-      const hitX = (sendBounds.left + sendBounds.right) / 2;
-      const hitY = (sendBounds.top + sendBounds.bottom) / 2;
-      const hit = document.elementFromPoint(hitX, hitY);
-      const describe = element => ({
-        tag: element.tagName,
-        className: typeof element.className === 'string' ? element.className : '',
-        label: element.getAttribute('aria-label'),
-        control: element.closest('[data-plurid-control]')?.getAttribute('data-plurid-control') ?? null,
-        overlay: element.closest('[data-plurid-overlay]')?.getAttribute('data-plurid-overlay') ?? null,
-      });
-      return {
-        fontFamily: style.fontFamily, bodyFontFamily: getComputedStyle(document.body).fontFamily,
-        background: style.backgroundColor, border: style.borderTopStyle,
-        borderWidth: parseFloat(style.borderTopWidth), textarea: rect(textarea),
-        motion: view.getAttribute('data-plurid-motion') ?? 'idle',
-        transform: getComputedStyle(textarea.closest('[data-plurid-plane]')).transform,
-        actions: rect(actions), layout: { textarea: layout(textarea), actions: layout(actions) },
-        plane: rect(textarea.closest('.chat-plane')),
-        viewport: rect(document.querySelector('.workspace-surface')), send: sendBounds,
-        sendHit: hit === send || send.contains(hit),
-        sendPointerEvents: getComputedStyle(send).pointerEvents,
-        hitTarget: hit ? describe(hit) : null,
-        hitStack: document.elementsFromPoint(hitX, hitY).slice(0, 6).map(describe),
-        disabled: send.disabled,
-      };
-    })()`),
+      () => main.evaluate(pageCall(chatComposerAppearance)),
       (current) => {
         if (!current || current.motion !== 'idle') {
           stable = 0;
@@ -660,33 +785,7 @@ async function chatAppearance(main: Connection, app: Application) {
       checks.push({ id: 'offscreen-framing-diagnostics', detail: samples });
       for (let sample = 0; sample < 5; sample++) {
         if (sample) await delay(500);
-        const snapshot = await main.evaluate(`(() => {
-          const marker = document.querySelector('.chat-plane')?.closest('[data-viewer-plane]') ||
-            document.querySelector('[data-viewer-plane]');
-          const key = marker && Object.keys(marker).find(key => key.startsWith('__reactFiber'));
-          let api;
-          for (let fiber = key && marker[key]; fiber && !api; fiber = fiber.return) {
-            for (let hook = fiber.memoizedState; hook; hook = hook.next) {
-              const current = hook.memoizedState?.current;
-              if (current?.camera?.frame && current?.tree?.get) { api = current; break; }
-            }
-          }
-          const box = element => {
-            const rect = element.getBoundingClientRect();
-            return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
-          };
-          const send = document.querySelector('.chat-composer button[type="submit"]');
-          const rect = send?.getBoundingClientRect();
-          const hit = rect && document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-          const ancestors = [];
-          for (let element = send; element; element = element.parentElement) {
-            ancestors.push({tag: element.tagName, className: element.className,
-              scrollLeft: element.scrollLeft, scrollTop: element.scrollTop, bounds: box(element)});
-          }
-          return {at: performance.now(), visibility: document.visibilityState,
-            camera: api?.camera.get(), motion: api?.camera.motion(), view: api?.inspect().view,
-            send: send && box(send), sendHit: !!hit && (hit === send || send.contains(hit)), ancestors};
-        })()`);
+        const snapshot = await main.evaluate(pageCall(framingSnapshot));
         samples.push({ sample, activePane: workspace(await saved()).activePane, snapshot });
       }
       await save();
@@ -710,9 +809,7 @@ async function chatAppearance(main: Connection, app: Application) {
 
 async function paletteAppearance(main: Connection, app: Application) {
   assert.equal(
-    await main.evaluate<boolean>(
-      '!!document.querySelector(\'.app-titlebar button[aria-label*="Overview"]\')',
-    ),
+    await main.evaluate(exists('.app-titlebar button[aria-label*="Overview"]')),
     false,
     'Overview has no persistent titlebar button.',
   );
@@ -724,67 +821,59 @@ async function paletteAppearance(main: Connection, app: Application) {
     await palette(main, command);
     const selector = `input[aria-label="${label}"]`;
     const placeholder = await until(
-      () =>
-        main.evaluate<string | null>(
-          `document.querySelector(${JSON.stringify(selector)})?.getAttribute('placeholder') ?? null`,
-        ),
+      () => main.evaluate(attributeOf(selector, 'placeholder')),
       (value) => value !== null,
       label + ' input',
     );
     assert.equal(placeholder, expected);
     placeholders[label] = placeholder!;
-    await main.evaluate(
-      'document.querySelector(\'.command-palette [aria-label="Close"]\').click()',
-    );
+    await main.evaluate(click('.command-palette [aria-label="Close"]'));
   }
-  await main.evaluate('document.querySelector(\'[aria-label="Commands (⌘K)"]\').click()');
+  await main.evaluate(click('[aria-label="Commands (⌘K)"]'));
   await until(
-    () => main.evaluate<boolean>('!!document.querySelector(\'[aria-label="Search commands"]\')'),
+    () => main.evaluate(exists('[aria-label="Search commands"]')),
     Boolean,
     'recent commands palette',
   );
   await main.command('Input.insertText', { text: 'Frame plane' });
   await until(
-    () =>
-      main.evaluate<boolean>('!!document.querySelector(\'[aria-label="Clear recent commands"]\')'),
+    () => main.evaluate(exists('[aria-label="Clear recent commands"]')),
     Boolean,
     'Clear recent control',
   );
-  await main.evaluate('document.querySelector(\'[aria-label="Clear recent commands"]\').click()');
+  await main.evaluate(click('[aria-label="Clear recent commands"]'));
   await until(
-    () =>
-      main.evaluate<boolean>('!!document.querySelector(\'[aria-label="Clear recent commands"]\')'),
+    () => main.evaluate(exists('[aria-label="Clear recent commands"]')),
     (shown) => !shown,
     'cleared recent commands',
   );
   assert.deepEqual(
-    await main.evaluate<{ query: string; focused: boolean }>(`(() => {
-      const input = document.querySelector('[aria-label="Search commands"]');
-      return { query: input.value, focused: document.activeElement === input };
-    })()`),
+    await main.evaluate(pageCall(searchInputState)),
     { query: 'Frame plane', focused: true },
     'Clearing recents preserves the current query and input focus.',
   );
-  await main.evaluate('document.querySelector(\'.command-palette [aria-label="Close"]\').click()');
+  await main.evaluate(click('.command-palette [aria-label="Close"]'));
   await palette(main, 'Show minimap');
   await until(
-    () => main.evaluate<boolean>('!!document.querySelector(\'[data-plurid-overlay="minimap"]\')'),
+    () => main.evaluate(exists('[data-plurid-overlay="minimap"]')),
     Boolean,
     'explicitly enabled minimap',
   );
   await palette(main, 'Overview');
   await until(
     () =>
-      main.evaluate<boolean>(
-        'document.querySelector(\'[data-plurid-overlay="minimap"]\')?.matches(":popover-open") ?? false',
+      main.evaluate(
+        pageCall(
+          () =>
+            document.querySelector('[data-plurid-overlay="minimap"]')?.matches(':popover-open') ??
+            false,
+        ),
       ),
     Boolean,
     'Overview command opens its map',
   );
   const screenshot = await capture(main, app.evidenceDirectory, 'overview-command', 'body');
-  await main.evaluate(`document.querySelector('[data-plurid-overlay="minimap"]').dispatchEvent(
-    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-  )`);
+  await main.evaluate(pageCall(dismissMinimap));
   checks.push({
     id: 'palette-refinements',
     detail: { placeholders, recentQueryPreserved: true, overviewCommand: true, screenshot },
@@ -812,7 +901,7 @@ async function phase(work: (main: Connection, app: Application) => Promise<void>
   } catch (error) {
     if (main) {
       const notice = await main
-        .evaluate<string>('document.querySelector(".notice")?.textContent ?? ""')
+        .evaluate(textOf('.notice'))
         .catch(() => 'Owned renderer unavailable');
       const events = await observed(main).catch(() => undefined);
       const screenshot = await capture(main, app.evidenceDirectory, 'failure', 'body').catch(
@@ -822,7 +911,12 @@ async function phase(work: (main: Connection, app: Application) => Promise<void>
     }
     throw error;
   } finally {
-    if (main) await main.evaluate('window.__viewerGitAcceptance?.release()').catch(() => {});
+    if (main)
+      await main
+        .evaluate(
+          pageCall(() => (window as unknown as AcceptanceWindow).__viewerGitAcceptance?.release()),
+        )
+        .catch(() => {});
     await app.close(main);
   }
 }
@@ -838,13 +932,13 @@ try {
       return;
     }
     assert.equal(
-      await main.evaluate<boolean>(
-        'window.viewer.settingsGet().then(value => value.settings.git.enabled)',
+      await main.evaluate(
+        pageCall(() => window.viewer.settingsGet().then((value) => value.settings.git.enabled)),
       ),
       false,
     );
-    const badges = await main.evaluate<GitReply>(
-      `window.viewer.git({ kind: 'status', path: ${JSON.stringify(repository)} })`,
+    const badges = await main.evaluate(
+      pageCall((path: string) => window.viewer.git({ kind: 'status', path }), repository),
     );
     assert.equal(badges.kind, 'disabled', 'Background Git badges remain opt-in.');
     await palette(main, 'Frame plane');
@@ -860,13 +954,7 @@ try {
         await activate(main, pane.id);
         const text = await screen(main, pane.id, 'This Git output is from a previous session.');
         if (text !== null) assert.match(text, /This Git output is from a previous session/);
-        const resize = await main.evaluate<{
-          rejected: boolean;
-          message: string;
-        }>(`window.viewer.terminalResize(${JSON.stringify(pane.id)}, 80, 24).then(
-        () => ({ rejected: false, message: '' }),
-        error => ({ rejected: true, message: error.message }),
-      )`);
+        const resize = await main.evaluate(pageCall(resizeOutcome, pane.id));
         assert.equal(resize.rejected, true, 'Saved Git output has no live native terminal.');
         assert.match(resize.message, /Terminal is no longer available/);
         const screenshot = await capture(
@@ -884,7 +972,7 @@ try {
       const closing = results[0]!;
       await activate(main, closing.id);
       const closeSelector = `[data-viewer-plane="${closing.id}"] [aria-label="Close plane"]`;
-      await main.evaluate(`document.querySelector(${JSON.stringify(closeSelector)}).click()`);
+      await main.evaluate(click(closeSelector));
       await until(
         saved,
         (state) =>

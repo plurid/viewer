@@ -6,8 +6,12 @@ import path from 'node:path';
 import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
+import type { BrowserRequest, BrowserSnapshot } from '../../src/domain/previews/browser';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { click, exists, patchSettings, textOf, valueOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
+import type { PageExpression } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -53,16 +57,74 @@ await writeFile(
 );
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state));
 const observations: unknown[] = [];
+type BrowserAction = Extract<BrowserRequest, { kind: 'action' }>['action'];
+const tilt = ' rotateY(20deg) rotateX(8deg)';
+
+/** What the guest page can reach of Viewer and Node. */
+function guestBridges() {
+  const page = window as unknown as { viewer?: unknown; require?: unknown };
+  return [typeof page.viewer, typeof page.require];
+}
+
+function compositedFrame() {
+  const canvas = document.querySelector<HTMLCanvasElement>('.browser-surface canvas')!;
+  return canvas.width > 300 && !!canvas.getContext('2d')!.getImageData(30, 30, 1, 1).data[3];
+}
+
+function surfaceSize() {
+  const rect = document.querySelector('.browser-surface')!.getBoundingClientRect();
+  return { width: rect.width, height: rect.height };
+}
+
+const browserState = () =>
+  window.viewer.browser({ kind: 'state', id: 'browser' }) as Promise<BrowserSnapshot>;
+
+const browserAction = (action: BrowserAction) =>
+  window.viewer.browser({ kind: 'action', id: 'browser', action });
+
+/** Adds `tilt` to the browser plane's transform, or takes it off again. */
+function tiltBrowserPlane(tilt: string, on: boolean) {
+  const plane = document
+    .querySelector('.browser-plane')!
+    .closest<HTMLElement>('[data-plurid-plane]')!;
+  plane.style.transform = on
+    ? plane.style.transform + tilt
+    : plane.style.transform.replace(tilt, '');
+}
+
+/** The red, green and blue of one displayed surface pixel. */
+const canvasPixel = (x: number, y: number) =>
+  Array.from(
+    document
+      .querySelector<HTMLCanvasElement>('.browser-surface canvas')!
+      .getContext('2d')!
+      .getImageData(x, y, 1, 1).data,
+  ).slice(0, 3);
+
+/** Where a point of the untransformed surface lands on screen. */
+function surfacePoint(x: number, y: number) {
+  const surface = document.querySelector('.browser-surface')!,
+    probe = document.createElement('span');
+  probe.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:0;height:0`;
+  surface.append(probe);
+  const rect = probe.getBoundingClientRect();
+  probe.remove();
+  return { x: rect.left, y: rect.top };
+}
+
+function selectionLength() {
+  const input = document.querySelector<HTMLInputElement>('#input')!;
+  return input.selectionEnd! - input.selectionStart!;
+}
+
+const showBrowser = (visible: boolean) =>
+  window.viewer.browser({ kind: 'viewport', id: 'browser', width: 960, height: 640, visible });
 let app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 try {
   connection = await app.connect();
   const { command, evaluate } = connection;
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".browser-surface canvas")'),
-    Boolean,
-    'browser surface',
-  );
+  await until(() => evaluate(exists('.browser-surface canvas')), Boolean, 'browser surface');
   const target = await until(
     async () =>
       (
@@ -77,49 +139,28 @@ try {
     targetId: target!.id,
     flatten: true,
   });
-  const guest = <T>(expression: string) => evaluate<T>(expression, { sessionId });
+  const guest = <R>(expression: PageExpression<R>) => evaluate(expression, { sessionId });
   await until(
-    () => guest<string>('document.readyState'),
+    () => guest(pageCall(() => document.readyState)),
     (value) => value === 'complete',
     'guest ready',
   );
-  assert.deepEqual(await guest('[typeof window.viewer,typeof window.require]'), [
-    'undefined',
-    'undefined',
-  ]);
-  await until(
-    () =>
-      evaluate<boolean>(
-        '(() => { const canvas=document.querySelector(".browser-surface canvas");return canvas.width>300 && !!canvas.getContext("2d").getImageData(30,30,1,1).data[3]; })()',
-      ),
-    Boolean,
-    'composited frame',
-    10000,
-  );
+  assert.deepEqual(await guest(pageCall(guestBridges)), ['undefined', 'undefined']);
+  await until(() => evaluate(pageCall(compositedFrame)), Boolean, 'composited frame', 10000);
   // the page fills its plane: a collapsed surface still composites, but shows nothing and takes no
   // clicks
-  const shown = await evaluate<{ width: number; height: number }>(
-    `(() => { const rect = document.querySelector('.browser-surface').getBoundingClientRect(); return { width: rect.width, height: rect.height }; })()`,
-  );
+  const shown = await evaluate(pageCall(surfaceSize));
   assert.ok(
     shown.width > 300 && shown.height > 200,
     'browser surface fills its plane: ' + JSON.stringify(shown),
   );
-  const snapshot = await evaluate('window.viewer.browser({kind:"state",id:"browser"})');
+  const snapshot = await evaluate(pageCall(browserState));
   observations.push(snapshot);
   console.log('Browser state:', JSON.stringify(snapshot));
-  await evaluate(
-    'document.querySelector(".browser-plane").closest("[data-plurid-plane]").style.transform+=" rotateY(20deg) rotateX(8deg)"',
-  );
-  const pixel = (x: number) =>
-    evaluate<number[]>(
-      `Array.from(document.querySelector('.browser-surface canvas').getContext('2d').getImageData(${x},255,1,1).data).slice(0,3)`,
-    );
-  const point = (x: number, y: number) =>
-    evaluate<{ x: number; y: number }>(
-      `(() => {const surface=document.querySelector('.browser-surface'),probe=document.createElement('span');probe.style.cssText='position:absolute;left:${x}px;top:${y}px;width:0;height:0';surface.append(probe);const rect=probe.getBoundingClientRect();probe.remove();return{x:rect.left,y:rect.top};})()`,
-    );
-  const click = async (x: number, y: number) => {
+  await evaluate(pageCall(tiltBrowserPlane, tilt, true));
+  const pixel = (x: number) => evaluate(pageCall(canvasPixel, x, 255));
+  const point = (x: number, y: number) => evaluate(pageCall(surfacePoint, x, y));
+  const clickAt = async (x: number, y: number) => {
     const at = await point(x, y);
     await command('Input.dispatchMouseEvent', {
       type: 'mousePressed',
@@ -134,9 +175,9 @@ try {
       ...at,
     });
   };
-  await click(90, 145);
+  await clickAt(90, 145);
   await until(
-    () => guest<string>('document.querySelector("#result").textContent'),
+    () => guest(textOf('#result')),
     (value) => value === 'Clicked',
     'rotated pointer click',
   );
@@ -145,17 +186,17 @@ try {
     (value) => value.join(',') === '0,204,102',
     'displayed clicked pixels',
   );
-  await click(80, 90);
+  await clickAt(80, 90);
   await command('Input.insertText', { text: 'Typed through a rotated plane' });
   await until(
-    () => guest<string>('document.querySelector("#input").value'),
+    () => guest(valueOf('#input')),
     (value) => value === 'Typed through a rotated plane',
     'rotated text input',
   );
   await command('Input.imeSetComposition', { text: '你好', selectionStart: 2, selectionEnd: 2 });
   await command('Input.insertText', { text: '你好' });
   await until(
-    () => guest<string>('document.querySelector("#input").value'),
+    () => guest(valueOf('#input')),
     (value) => value === 'Typed through a rotated plane你好',
     'actual composition proxy',
   );
@@ -164,23 +205,16 @@ try {
     (value) => value.join(',') === '68,119,238',
     'displayed text-entry pixels',
   );
-  await click(180, 90);
-  await click(180, 90);
+  await clickAt(180, 90);
+  await clickAt(180, 90);
   await until(
-    () =>
-      guest<number>(
-        'document.querySelector("#input").selectionEnd-document.querySelector("#input").selectionStart',
-      ),
+    () => guest(pageCall(selectionLength)),
     (value) => value > 0,
     'rotated double-click selection',
   );
-  await evaluate(
-    'window.viewer.browser({kind:"viewport",id:"browser",width:960,height:640,visible:false})',
-  );
-  await evaluate(
-    'window.viewer.browser({kind:"viewport",id:"browser",width:960,height:640,visible:true})',
-  );
-  assert.ok((await guest<string>('document.querySelector("#input").value')).includes('Typed'));
+  await evaluate(pageCall(showBrowser, false));
+  await evaluate(pageCall(showBrowser, true));
+  assert.ok((await guest(valueOf('#input'))).includes('Typed'));
   await until(
     () => pixel(30),
     (value) => value.join(',') === '0,204,102',
@@ -198,54 +232,45 @@ try {
     culling: 'state retained',
   });
   await evaluate(
-    'window.viewer.browser({kind:"navigate",id:"browser",url:' +
-      JSON.stringify(`http://127.0.0.1:${port}/second`) +
-      '})',
+    pageCall(
+      (url: string) => window.viewer.browser({ kind: 'navigate', id: 'browser', url }),
+      `http://127.0.0.1:${port}/second`,
+    ),
   );
   await until(
-    () => evaluate<{ back: boolean }>('window.viewer.browser({kind:"state",id:"browser"})'),
+    () => evaluate(pageCall(browserState)),
     (value) => value.back,
     'navigation history',
   );
-  await evaluate('window.viewer.browser({kind:"action",id:"browser",action:"back"})');
+  await evaluate(pageCall(browserAction, 'back'));
   await until(
-    () => evaluate<{ url: string }>('window.viewer.browser({kind:"state",id:"browser"})'),
+    () => evaluate(pageCall(browserState)),
     (value) => value.url === url,
     'back navigation',
   );
-  await evaluate('window.viewer.browser({kind:"action",id:"browser",action:"zoom-in"})');
-  assert.ok(
-    (await evaluate<{ zoom: number }>('window.viewer.browser({kind:"state",id:"browser"})')).zoom >
-      1,
-  );
-  await evaluate('window.viewer.browser({kind:"action",id:"browser",action:"zoom-reset"})');
+  await evaluate(pageCall(browserAction, 'zoom-in'));
+  assert.ok((await evaluate(pageCall(browserState))).zoom > 1);
+  await evaluate(pageCall(browserAction, 'zoom-reset'));
   const capture = async (name: string) => {
-    await evaluate('new Promise(resolve=>setTimeout(resolve,400))');
+    await evaluate(
+      pageCall((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)), 400),
+    );
     const shot = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
     await writeFile(path.join(root, name + '.png'), Buffer.from(shot.data, 'base64'), {
       flag: 'wx',
     });
   };
-  await evaluate(
-    'window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:"settings.appearance",value:"light"}],s.revision))',
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () => evaluate<string>('document.documentElement.dataset.look'),
+    () => evaluate(pageCall(() => document.documentElement.dataset.look)),
     (value) => value === 'light',
     'light browser chrome',
   );
   await capture('browser-light');
-  await evaluate(
-    'document.querySelector(".browser-plane").closest("[data-plurid-plane]").style.transform=document.querySelector(".browser-plane").closest("[data-plurid-plane]").style.transform.replace(" rotateY(20deg) rotateX(8deg)","")',
-  );
-  await evaluate(
-    'document.querySelector("[data-viewer-plane=browser] [aria-label=\\"Dock plane\\"]").click()',
-  );
+  await evaluate(pageCall(tiltBrowserPlane, tilt, false));
+  await evaluate(click('[data-viewer-plane=browser] [aria-label="Dock plane"]'));
   await until(
-    () =>
-      evaluate<boolean>(
-        '!!document.querySelector("[data-viewer-plane=browser] [aria-label=\\"Reveal space\\"]")',
-      ),
+    () => evaluate(exists('[data-viewer-plane=browser] [aria-label="Reveal space"]')),
     Boolean,
     'docked browser view',
   );
@@ -256,7 +281,10 @@ try {
     mobile: false,
   });
   await until(
-    () => evaluate<number>('document.querySelector(".browser-plane").getBoundingClientRect().left'),
+    () =>
+      evaluate(
+        pageCall(() => document.querySelector('.browser-plane')!.getBoundingClientRect().left),
+      ),
     (value) => value >= -2 && value < 50,
     'browser follows narrow viewport',
   );
@@ -282,24 +310,33 @@ try {
   });
   await until(
     () =>
-      connection!.evaluate<string>('document.documentElement?.dataset.cookie || ""', {
-        sessionId: restarted.sessionId,
-      }),
+      connection!.evaluate(
+        pageCall(() => document.documentElement?.dataset.cookie || ''),
+        { sessionId: restarted.sessionId },
+      ),
     (value) => value?.includes('viewer_fixture=retained'),
     'cookie persistence after application restart',
   );
-  await connection.evaluate('window.viewer.browser({kind:"close",id:"browser"})');
-  const bitmap = await connection.evaluate<{ transport: string }>(
-    'window.viewer.browser({kind:"open",id:"browser",url:' +
-      JSON.stringify(url) +
-      ',width:960,height:640,texture:false})',
+  await connection.evaluate(
+    pageCall(() => window.viewer.browser({ kind: 'close', id: 'browser' })),
+  );
+  const bitmap = await connection.evaluate(
+    pageCall(
+      (url: string) =>
+        window.viewer.browser({
+          kind: 'open',
+          id: 'browser',
+          url,
+          width: 960,
+          height: 640,
+          texture: false,
+        }) as Promise<BrowserSnapshot>,
+      url,
+    ),
   );
   assert.equal(bitmap.transport, 'bitmap');
   await until(
-    () =>
-      connection!.evaluate<number[]>(
-        'Array.from(document.querySelector(".browser-surface canvas").getContext("2d").getImageData(30,255,1,1).data).slice(0,3)',
-      ),
+    () => connection!.evaluate(pageCall(canvasPixel, 30, 255)),
     (value) => value.join(',') === '238,51,68',
     'bitmap fallback pixels',
   );
@@ -321,7 +358,9 @@ try {
   if (connection)
     console.log(
       'Browser failure surface:',
-      await connection.evaluate('document.querySelector(".browser-plane")?.innerText'),
+      await connection.evaluate(
+        pageCall(() => document.querySelector<HTMLElement>('.browser-plane')?.innerText),
+      ),
     );
   throw error;
 } finally {

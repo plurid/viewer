@@ -6,11 +6,16 @@ import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
+import type { ReceiptReply } from '../../src/domain/automation/receipts';
+import type { NoteReply } from '../../src/domain/editing/notes';
 import type { TaskArea } from '../../src/domain/workspaces/tasks';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { click as clickOn, countOf, exists, patchSettings, textOf } from './runtime/page';
+import type { PageExpression } from './runtime/page-function';
+import { pageCall } from './runtime/page-function';
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
@@ -113,45 +118,100 @@ const captures: string[] = [],
 let receiptID = '',
   noteID = '',
   terminalSessionID = '';
+/** A task tool row found by the start of its kind label or by its exact title. */
+type ToolRow = 'kind' | 'title';
+type ReceiptRead = Extract<ReceiptReply, { kind: 'receipt' }>;
+type NoteList = Extract<NoteReply, { kind: 'list' }>;
+
+const listServers = () => window.viewer.localServers();
+const readReceipt = (id: string) =>
+  window.viewer.receipts({ kind: 'read', id }) as Promise<ReceiptRead>;
+const focusedLabel = () => document.activeElement?.getAttribute('aria-label');
+const pause = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+const scrollTaskBody = (top: number) => {
+  document.querySelector('.task-body')!.scrollTop = top;
+};
+
+/** Whether `scope` (the document when null) holds an enabled button labelled `label`; presses
+ * the first when asked. */
+function enabledButton(label: string, scope: string | null, press: boolean): boolean {
+  const root = scope === null ? document : document.querySelector(scope);
+  const button = [...(root?.querySelectorAll('button') ?? [])].find(
+    (button) => button.textContent.trim() === label && !button.disabled,
+  );
+  if (press) button!.click();
+  return !!button;
+}
+
+function selectField(selector: string): void {
+  const field = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!;
+  field.focus();
+  field.select();
+}
+
+/** The preview plane's combined opacity and whether the camera still moves. */
+function previewSettled() {
+  let element = document.querySelector('.preview-plane');
+  let opacity = 1;
+  while (element) {
+    opacity *= Number(getComputedStyle(element).opacity);
+    element = element.parentElement;
+  }
+  return { opacity, motion: !!document.querySelector('[data-plurid-motion]') };
+}
+
+/** The task summary's height and how much of it its content uses, when it is shown. */
+function summaryFit() {
+  const summary = document.querySelector('.task-area-summary');
+  if (!summary) return;
+  const bounds = summary.getBoundingClientRect();
+  const lastChildBounds = summary.lastElementChild!.getBoundingClientRect();
+  return { height: bounds.height, used: lastChildBounds.bottom - bounds.top };
+}
+
+function openTaskTool(by: ToolRow, value: string): void {
+  const row = [...document.querySelectorAll('.task-tool-row')].find((row) =>
+    by === 'kind'
+      ? row.querySelector('.task-tool-kind')!.textContent.startsWith(value)
+      : row.querySelector('strong')!.textContent === value,
+  );
+  row!.querySelector('button')!.click();
+}
+
 try {
   connection = await app.connect();
-  const evaluate = <T = unknown>(expression: string) => connection!.evaluate<T>(expression),
+  const evaluate = <R>(expression: PageExpression<R>) => connection!.evaluate(expression),
     command = <T = unknown>(method: string, params: Record<string, unknown> = {}) =>
       connection!.command<T>(method, params);
-  const click = async (label: string, scope = 'document') => {
-    const source = () =>
-      `[...((${scope})?.querySelectorAll('button')??[])].find(b=>b.textContent.trim()===${JSON.stringify(label)}&&!b.disabled)`;
-    await until(() => evaluate<boolean>(`!!(${source()})`), Boolean, 'Enabled ' + label);
-    await evaluate(`(${source()}).click()`);
+  /** `scope`: a selector for the part of the window that holds the button. */
+  const click = async (label: string, scope?: string) => {
+    await until(
+      () => evaluate(pageCall(enabledButton, label, scope ?? null, false)),
+      Boolean,
+      'Enabled ' + label,
+    );
+    await evaluate(pageCall(enabledButton, label, scope ?? null, true));
   };
   const field = async (selector: string, text: string) => {
-    await until(
-      () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
-      Boolean,
-      'Field ' + selector,
-    );
-    await evaluate(
-      `(()=>{const i=document.querySelector(${JSON.stringify(selector)});i.focus();i.select()})()`,
-    );
+    await until(() => evaluate(exists(selector)), Boolean, 'Field ' + selector);
+    await evaluate(pageCall(selectField, selector));
     await command('Input.insertText', { text });
   };
   const palette = async (label: string) => {
-    await evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+    await evaluate(clickOn('[aria-label="Commands (⌘K)"]'));
     await until(
-      () => evaluate<string>('document.activeElement?.getAttribute("aria-label")'),
+      () => evaluate(pageCall(focusedLabel)),
       (value) => value === 'Search commands',
       'Palette focus',
     );
     await command('Input.insertText', { text: label });
     await until(
-      () =>
-        evaluate<string>(
-          'document.querySelector(".command-result[aria-selected=true]")?.textContent',
-        ),
-      (value) => value?.includes(label),
+      () => evaluate(textOf('.command-result[aria-selected=true]')),
+      (value) => value.includes(label),
       'Palette ' + label,
     );
-    await evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
+    await evaluate(clickOn('.command-result[aria-selected=true]'));
   };
   const capture = async (name: string, width = 1440) => {
     await command('Emulation.setDeviceMetricsOverride', {
@@ -160,41 +220,15 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await evaluate('new Promise((resolve) => setTimeout(resolve, 350))');
+    await evaluate(pageCall(pause, 350));
     if (name.includes('unavailable')) {
       await until(
-        () =>
-          evaluate<{ opacity: number; motion: boolean }>(`(() => {
-            let element = document.querySelector('.preview-plane');
-            let opacity = 1;
-
-            while (element) {
-              opacity *= Number(getComputedStyle(element).opacity);
-              element = element.parentElement;
-            }
-
-            return {
-              opacity,
-              motion: !!document.querySelector('[data-plurid-motion]'),
-            };
-          })()`),
+        () => evaluate(pageCall(previewSettled)),
         (state) => state.opacity > 0.999 && !state.motion,
         'Settled receipt error capture',
       );
     }
-    const summary = await evaluate<{ height: number; used: number } | undefined>(
-      `(() => {
-        const summary = document.querySelector('.task-area-summary');
-        if (!summary) return;
-
-        const bounds = summary.getBoundingClientRect();
-        const lastChildBounds = summary.lastElementChild.getBoundingClientRect();
-        return {
-          height: bounds.height,
-          used: lastChildBounds.bottom - bounds.top,
-        };
-      })()`,
-    );
+    const summary = await evaluate(pageCall(summaryFit));
     if (summary)
       assert.ok(
         summary.height - summary.used < 40,
@@ -207,26 +241,18 @@ try {
   };
   const focusTask = async () => {
     await palette('Task delivery');
-    await until(
-      () => evaluate<boolean>('!!document.querySelector(".task-plane")'),
-      Boolean,
-      'Task overview',
-    );
+    await until(() => evaluate(exists('.task-plane')), Boolean, 'Task overview');
   };
   const closePane = async (id: string) => {
     const selector = `.plane-controls[data-viewer-plane="${id}"] [aria-label="Close plane"]`;
-    await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+    await evaluate(clickOn(selector));
     await until(
       saved,
       (state) => !state.workspaces[0]!.panes.some((pane) => pane.id === id),
       'Closed task view',
     );
   };
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".folder-explorer")'),
-    Boolean,
-    'Checkout folder',
-  );
+  await until(() => evaluate(exists('.folder-explorer')), Boolean, 'Checkout folder');
   await palette('New task area…');
   await field('input[aria-label="New task name"]', 'Task delivery');
   await capture('task-create-dialog-dark');
@@ -239,7 +265,7 @@ try {
   assert.equal((await task()).checkout.branch, 'main');
   assert.equal((await task()).checkout.commit, baseline.commit);
   await capture('task-empty-dark');
-  await click('+ Note', "document.querySelector('.task-plane')");
+  await click('+ Note', '.task-plane');
   const noteState = await until(
     saved,
     (state) => state.workspaces[0]!.panes.some((pane) => pane.type === 'note'),
@@ -250,10 +276,20 @@ try {
   if (note.type !== 'note') throw Error('Missing note');
   noteID = note.documentID;
   await evaluate(
-    `window.viewer.notes(${JSON.stringify({ kind: 'write', id: noteID, revision: 0, title: 'Task design', text: '# Plan\nKeep source truth and inspect outcomes.' })})`,
+    pageCall(
+      (id: string) =>
+        window.viewer.notes({
+          kind: 'write',
+          id,
+          revision: 0,
+          title: 'Task design',
+          text: '# Plan\nKeep source truth and inspect outcomes.',
+        }),
+      noteID,
+    ),
   );
   await until(
-    () => evaluate<string>('document.querySelector(".note-reading h1")?.textContent'),
+    () => evaluate(textOf('.note-reading h1')),
     (value) => value === 'Plan',
     'Task note content',
   );
@@ -261,15 +297,19 @@ try {
   await focusTask();
   await until(
     () =>
-      evaluate<boolean>(
-        `[...document.querySelectorAll('.task-tool-row strong')].some(n=>n.textContent==='Task design')`,
+      evaluate(
+        pageCall(
+          (title: string) =>
+            [...document.querySelectorAll('.task-tool-row strong')].some(
+              (node) => node.textContent === title,
+            ),
+          'Task design',
+        ),
       ),
     Boolean,
     'Retained note title',
   );
-  await evaluate(
-    `[...document.querySelectorAll('.task-tool-row')].find(n=>n.querySelector('strong').textContent==='Task design').querySelector('button').click()`,
-  );
+  await evaluate(pageCall(openTaskTool, 'title', 'Task design'));
   const noteAgain = await until(
     saved,
     (state) =>
@@ -284,30 +324,26 @@ try {
     'Closing a note view preserves task membership and the same private document; reopening creates a fresh view ID.',
   );
   await focusTask();
-  await click('+ Checklist', "document.querySelector('.task-plane')");
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".note-checklist")'),
-    Boolean,
-    'Task checklist',
-  );
+  await click('+ Checklist', '.task-plane');
+  await until(() => evaluate(exists('.note-checklist')), Boolean, 'Task checklist');
   await field('input[aria-label="New checklist item"]', 'Review the saved diff');
   await click('Add');
   await focusTask();
-  await click('+ Chat', "document.querySelector('.task-plane')");
+  await click('+ Chat', '.task-plane');
   await until(
     saved,
     (state) => state.workspaces[0]!.panes.some((pane) => pane.type === 'chat'),
     'Task conversation',
   );
   await focusTask();
-  await click('+ Changes', "document.querySelector('.task-plane')");
+  await click('+ Changes', '.task-plane');
   await until(
     saved,
     (state) => state.workspaces[0]!.panes.some((pane) => pane.type === 'git-changes'),
     'Task Git view',
   );
   await focusTask();
-  await click('+ Terminal', "document.querySelector('.task-plane')");
+  await click('+ Terminal', '.task-plane');
   const terminalState = await until(
     saved,
     (state) => state.workspaces[0]!.panes.some((pane) => pane.type === 'terminal'),
@@ -317,13 +353,13 @@ try {
   assert.equal(terminal.type, 'terminal');
   if (terminal.type !== 'terminal') throw Error('No terminal');
   terminalSessionID = terminal.taskSessionID!;
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".xterm")'),
-    Boolean,
-    'Terminal pixels',
-  );
+  await until(() => evaluate(exists('.xterm')), Boolean, 'Terminal pixels');
   await evaluate(
-    `window.viewer.terminalWrite(${JSON.stringify(terminal.id)},${JSON.stringify(`printf terminal-once >> '${terminalCounter.replaceAll("'", "'\\''")}'\n`)})`,
+    pageCall(
+      (id: string, data: string) => window.viewer.terminalWrite(id, data),
+      terminal.id,
+      `printf terminal-once >> '${terminalCounter.replaceAll("'", "'\\''")}'\n`,
+    ),
   );
   await until(
     () => readFile(terminalCounter, 'utf8').catch(() => ''),
@@ -332,9 +368,7 @@ try {
   );
   await closePane(terminal.id);
   await focusTask();
-  await evaluate(
-    `[...document.querySelectorAll('.task-tool-row')].find(n=>n.querySelector('.task-tool-kind').textContent.startsWith('terminal')).querySelector('button').click()`,
-  );
+  await evaluate(pageCall(openTaskTool, 'kind', 'terminal'));
   await until(
     saved,
     (state) =>
@@ -348,23 +382,16 @@ try {
     'Note, checklist, chat, Git and terminal tools attach; reopening a logical terminal never replays prior input.',
   );
   await focusTask();
-  await click('+ Server', "document.querySelector('.task-plane')");
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".server-plane")'),
-    Boolean,
-    'Stopped server view',
-  );
+  await click('+ Server', '.task-plane');
+  await until(() => evaluate(exists('.server-plane')), Boolean, 'Stopped server view');
   assert.equal(
-    (await evaluate<unknown[]>('window.viewer.localServers()')).length,
+    (await evaluate(pageCall(listServers))).length,
     0,
     'Task creation does not start servers',
   );
-  await click('Start', "document.querySelector('.server-plane')");
+  await click('Start', '.server-plane');
   const servers = await until(
-    () =>
-      evaluate<{ url: string; port: number; paneID: string; state: string }[]>(
-        'window.viewer.localServers()',
-      ),
+    () => evaluate(pageCall(listServers)),
     (values) => values.some((value) => value.state === 'running'),
     'Started server',
   );
@@ -377,16 +404,14 @@ try {
     serverPane = serverState.workspaces[0]!.panes.find((pane) => pane.type === 'server')!;
   await closePane(serverPane.id);
   await focusTask();
-  await evaluate(
-    `[...document.querySelectorAll('.task-tool-row')].find(n=>n.querySelector('.task-tool-kind').textContent.startsWith('server')).querySelector('button').click()`,
-  );
-  const attached = await evaluate<{ port: number }[]>('window.viewer.localServers()');
+  await evaluate(pageCall(openTaskTool, 'kind', 'server'));
+  const attached = await evaluate(pageCall(listServers));
   assert.equal(attached.length, 1);
   assert.equal(attached[0]!.port, server.port);
   await focusTask();
-  await click('+ Browser', "document.querySelector('.task-plane')");
+  await click('+ Browser', '.task-plane');
   await field('input[aria-label="Task browser address"]', server.url);
-  await click('Open browser', "document.querySelector('.task-plane')");
+  await click('Open browser', '.task-plane');
   await until(
     saved,
     (state) => state.workspaces[0]!.panes.some((pane) => pane.type === 'browser'),
@@ -400,12 +425,12 @@ try {
     'Server view starts only explicitly, closing/reattaching keeps one listener, and a browser links its local URL.',
   );
   await focusTask();
-  await click('Run command…', "document.querySelector('.task-plane')");
+  await click('Run command…', '.task-plane');
   await field(
     '.run-command-dialog textarea',
     `printf command-once >> '${counter.replaceAll("'", "'\\''")}' && printf task-command-output`,
   );
-  await click('Run', "document.querySelector('.run-command-dialog')");
+  await click('Run', '.run-command-dialog');
   await until(
     () => readFile(counter, 'utf8').catch(() => ''),
     (value) => value === 'command-once',
@@ -421,34 +446,31 @@ try {
   if (receipt.reference.kind !== 'receipt') throw Error('No receipt');
   receiptID = receipt.reference.receiptID;
   await until(
-    () =>
-      evaluate<{ kind: string; receipt: { status: string; output: string; exitCode: number } }>(
-        `window.viewer.receipts({kind:'read',id:${JSON.stringify(receiptID)}})`,
-      ),
+    () => evaluate(pageCall(readReceipt, receiptID)),
     (value) =>
       value.receipt.status === 'completed' && value.receipt.output.includes('task-command-output'),
     'Completed durable receipt',
   );
   await focusTask();
-  await evaluate(`document.querySelector('[aria-label="Hide command progress"]')?.click()`);
-  await capture('task-populated-dark');
-  await evaluate('document.querySelector(".task-body").scrollTop=100000');
-  await capture('task-outcomes-dark');
-  await evaluate('document.querySelector(".task-body").scrollTop=0');
   await evaluate(
-    `[...document.querySelectorAll('.task-tool-row')].find(n=>n.querySelector('.task-tool-kind').textContent.startsWith('receipt')).querySelector('button').click()`,
+    pageCall(() =>
+      document.querySelector<HTMLElement>('[aria-label="Hide command progress"]')?.click(),
+    ),
   );
+  await capture('task-populated-dark');
+  await evaluate(pageCall(scrollTaskBody, 100000));
+  await capture('task-outcomes-dark');
+  await evaluate(pageCall(scrollTaskBody, 0));
+  await evaluate(pageCall(openTaskTool, 'kind', 'receipt'));
   await until(
-    () => evaluate<string>('document.querySelector(".receipt-output")?.textContent'),
+    () => evaluate(textOf('.receipt-output')),
     (value) => value === 'task-command-output',
     'Receipt output',
   );
   await capture('receipt-dark');
-  await evaluate(
-    "window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))",
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () => evaluate<string>('document.documentElement.dataset.look'),
+    () => evaluate(pageCall(() => document.documentElement.dataset.look)),
     (value) => value === 'light',
     'Task light',
   );
@@ -456,7 +478,7 @@ try {
   await focusTask();
   await capture('task-populated-light');
   await capture('task-narrow-light', 760);
-  await click('Arrange open tools', "document.querySelector('.task-plane')");
+  await click('Arrange open tools', '.task-plane');
   await capture('task-arranged-light');
   checks.push(
     'Manual command runs once and its private completed receipt records stdout, cwd, times and exit code without inferring test success.',
@@ -468,13 +490,9 @@ try {
   app = await ownedApp(binary, profile, { environment: { SHELL: '/bin/sh' } });
   connection = await app.connect();
   const next = connection;
-  await until(
-    () => next.evaluate<boolean>('!!document.querySelector(".task-plane")'),
-    Boolean,
-    'Cold task restore',
-  );
+  await until(() => next.evaluate(exists('.task-plane')), Boolean, 'Cold task restore');
   assert.equal(
-    (await next.evaluate<unknown[]>('window.viewer.localServers()')).length,
+    (await next.evaluate(pageCall(listServers))).length,
     0,
     'Server stays stopped after restart',
   );
@@ -486,42 +504,38 @@ try {
         member.reference.kind === 'terminal' && member.reference.sessionID === terminalSessionID,
     ),
   );
-  const restoredReceipt = await next.evaluate<{ receipt: { output: string; exitCode: number } }>(
-    `window.viewer.receipts({kind:'read',id:${JSON.stringify(receiptID)}})`,
-  );
+  const restoredReceipt = await next.evaluate(pageCall(readReceipt, receiptID));
   assert.equal(restoredReceipt.receipt.output, 'task-command-output');
   assert.equal(restoredReceipt.receipt.exitCode, 0);
   assert.equal(await readFile(counter, 'utf8'), 'command-once');
   assert.equal(await readFile(terminalCounter, 'utf8'), 'terminal-once');
-  const notes = await next.evaluate<{ kind: string; notes: { id: string }[] }>(
-    'window.viewer.notes({kind:"list"})',
+  const notes = await next.evaluate(
+    pageCall(() => window.viewer.notes({ kind: 'list' }) as Promise<NoteList>),
   );
   assert.ok(notes.notes.some((note) => note.id === noteID));
   assert.equal(await hash(original), baseline.original);
   assert.equal(await hash(path.join(folder, '.git/index')), baseline.index);
   assert.equal(await git('rev-parse', 'HEAD'), baseline.commit);
-  assert.equal((await next.evaluate<unknown[]>('window.viewer.jobs()')).length, 0);
+  assert.equal((await next.evaluate(pageCall(() => window.viewer.jobs()))).length, 0);
   const receiptFiles = await readdir(path.join(profile, 'command-receipts'));
   assert.ok(receiptFiles.some((file) => file === receiptID + '.json'));
   checks.push(
     'Cold restore keeps task references, documents and command output; no command, terminal input or server is replayed. Original reference, index and commit remain unchanged.',
   );
   await palette('Tasks…');
-  await click('Command history', "document.querySelector('.tasks-dialog')");
+  await click('Command history', '.tasks-dialog');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".tasks-list button").length'),
+    () => evaluate(countOf('.tasks-list button')),
     (count) => count === 1,
     'Cold command history',
   );
   await capture('command-history-light');
-  await click('Done', "document.querySelector('.tasks-dialog')");
+  await click('Done', '.tasks-dialog');
   await focusTask();
-  await evaluate(
-    `[...document.querySelectorAll('.task-tool-row')].find(n=>n.querySelector('.task-tool-kind').textContent.startsWith('server')).querySelector('button').click()`,
-  );
-  await click('Start', "document.querySelector('.server-plane')");
+  await evaluate(pageCall(openTaskTool, 'kind', 'server'));
+  await click('Start', '.server-plane');
   const restarted = await until(
-    () => evaluate<{ url: string; state: string }[]>('window.viewer.localServers()'),
+    () => evaluate(pageCall(listServers)),
     (servers) => servers.some((server) => server.state === 'running'),
     'Explicit server restart',
   );
@@ -566,7 +580,8 @@ try {
   app = await ownedApp(binary, errorProfile, { environment: { SHELL: '/bin/sh' } });
   connection = await app.connect();
   await until(
-    () => evaluate<boolean>(`document.body.textContent.includes('Command receipt unavailable')`),
+    () =>
+      evaluate(pageCall(() => document.body.textContent.includes('Command receipt unavailable'))),
     Boolean,
     'Missing receipt recovery',
   );

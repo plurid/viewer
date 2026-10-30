@@ -13,6 +13,8 @@ import { readerSamples } from '../../tools/playground/reader-samples';
 import { defaultPlaygroundDirectory } from '../../tools/playground/main';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { click, exists, pressButton, textOf, valueOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -45,6 +47,33 @@ const hash = async (file: string) =>
     .update(await readFile(file))
     .digest('hex');
 const checks: string[] = [];
+
+const documentReady = (selector: string) =>
+  !!document.querySelector(selector) && !document.querySelector('.preview-body .loading');
+
+/** Scrolls the chapter and flushes the preview so the position is saved. */
+function scrollChapter(top: number): void {
+  const chapter = document.querySelector('.epub-chapter')!;
+  chapter.scrollTop = top;
+  chapter.dispatchEvent(new Event('scroll'));
+  window.dispatchEvent(new Event('viewer-preview-flush'));
+}
+
+/** Sets an input's value through the native setter so React sees the change. */
+function fillField(selector: string, value: string): void {
+  const input = document.querySelector<HTMLInputElement>(selector)!;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/** Selects an empty worksheet cell when the page shows one. */
+function selectEmptyCell(): boolean {
+  const cell = document.querySelector<HTMLElement>('.workbook-cell[aria-label$=": Empty"]');
+  if (!cell) return false;
+  cell.click();
+  return true;
+}
+
 const marker = 'Externally updated document qualification marker';
 let passed = false;
 try {
@@ -107,62 +136,44 @@ try {
     try {
       connection = await app.connect();
       const { evaluate } = connection;
-      const text = () => evaluate<string>('document.body.innerText');
-      const click = (label: string) =>
-        evaluate(
-          `Array.from(document.querySelectorAll('.preview-recovery button')).find(button => button.textContent.trim() === ${JSON.stringify(label)}).click()`,
-        );
-      const focus = () => evaluate(`window.dispatchEvent(new Event('focus'))`);
+      const text = () => evaluate(pageCall(() => document.body.innerText));
+      const press = (label: string) => evaluate(pressButton(label, '.preview-recovery'));
+      const focus = () => evaluate(pageCall(() => window.dispatchEvent(new Event('focus'))));
       const ready = () =>
         until(
-          () =>
-            evaluate<boolean>(
-              `!!document.querySelector(${JSON.stringify(scenario.selector)}) && !document.querySelector('.preview-body .loading')`,
-            ),
+          () => evaluate(pageCall(documentReady, scenario.selector)),
           Boolean,
           'Document ready ' + scenario.kind,
           20000,
         );
       await ready();
       if (scenario.kind === 'epub') {
-        await evaluate(`document.querySelectorAll('.epub-body nav button')[0].click()`);
-        await evaluate(
-          `(() => { const chapter = document.querySelector('.epub-chapter'); chapter.scrollTop = 480; chapter.dispatchEvent(new Event('scroll')); window.dispatchEvent(new Event('viewer-preview-flush')); })()`,
-        );
+        await evaluate(click('.epub-body nav button'));
+        await evaluate(pageCall(scrollChapter, 480));
       } else {
+        await evaluate(pageCall(fillField, '[aria-label="Cell address"]', 'B5000'));
         await evaluate(
-          `(() => { const input = document.querySelector('[aria-label="Cell address"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'B5000'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`,
-        );
-        await evaluate(
-          `document.querySelector('[aria-label="Cell address"]').closest('form').requestSubmit()`,
+          pageCall(() =>
+            document.querySelector('[aria-label="Cell address"]')!.closest('form')!.requestSubmit(),
+          ),
         );
         await until(
-          () =>
-            evaluate<string>(`document.querySelector('[aria-label="Cell address"]')?.value || ''`),
+          () => evaluate(valueOf('[aria-label="Cell address"]')),
           (value) => value === 'B5000',
           'Deep workbook position',
         );
         await until(
-          () =>
-            evaluate<string>(
-              `document.querySelector('.worksheet-navigation [role="status"]')?.textContent || ''`,
-            ),
+          () => evaluate(textOf('.worksheet-navigation [role="status"]')),
           (value) => value.startsWith('Rows 5,000'),
           'Deep worksheet loaded',
         );
       }
       const position = (): Promise<string | number> =>
         scenario.kind === 'epub'
-          ? evaluate<number>(`document.querySelector('.epub-chapter')?.scrollTop ?? -1`)
-          : evaluate<string>(`document.querySelector('[aria-label="Cell address"]')?.value || ''`);
+          ? evaluate(pageCall(() => document.querySelector('.epub-chapter')?.scrollTop ?? -1))
+          : evaluate(valueOf('[aria-label="Cell address"]'));
       const previous = await position();
-      const emptySelected =
-        scenario.kind === 'xlsx' &&
-        (await evaluate<boolean>(`(() => {
-        const cell = document.querySelector('.workbook-cell[aria-label$=": Empty"]');
-        if (!cell) return false;
-        cell.click(); return true;
-      })()`));
+      const emptySelected = scenario.kind === 'xlsx' && (await evaluate(pageCall(selectEmptyCell)));
       const retainedPosition = emptySelected ? await position() : previous;
       await rename(original, renamed);
       await focus();
@@ -172,7 +183,7 @@ try {
         'Renamed document notice',
       );
       assert.equal(await position(), retainedPosition, 'Retained position while renamed');
-      await click('Find renamed file');
+      await press('Find renamed file');
       await until(
         async () =>
           JSON.parse(
@@ -199,10 +210,10 @@ try {
       );
       assert.equal(await position(), retainedPosition, 'Retained position while unavailable');
       await rename(parked, files);
-      await click('Check again');
+      await press('Check again');
       await until(
-        () => evaluate<boolean>('!document.querySelector(".preview-recovery")'),
-        Boolean,
+        () => evaluate(exists('.preview-recovery')),
+        (shown) => !shown,
         'Returned location',
       );
       await ready();
@@ -242,7 +253,7 @@ try {
         'Modified document refreshes current version',
         20000,
       );
-      assert.equal(await evaluate('!!document.querySelector(".preview-recovery")'), false);
+      assert.equal(await evaluate(exists('.preview-recovery')), false);
       await writeFile(renamed, 'An external application has not finished writing this archive.');
       await focus();
       await until(
@@ -274,7 +285,7 @@ try {
         });
         await writeFile(
           path.join(directory, 'failure.txt'),
-          await connection.evaluate<string>('document.body.innerText'),
+          await connection.evaluate(pageCall(() => document.body.innerText)),
           { flag: 'wx' },
         );
       }

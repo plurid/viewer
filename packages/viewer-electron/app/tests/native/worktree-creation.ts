@@ -10,6 +10,18 @@ import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import {
+  attributeOf,
+  buttonState,
+  click,
+  countOf,
+  exists,
+  patchSettings,
+  pressButton,
+  textOf,
+  valueOf,
+} from './runtime/page';
+import { pageCall } from './runtime/page-function';
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 const binary = process.env.VIEWER_TEST_BINARY;
@@ -94,50 +106,45 @@ await writeFile(stateFile, JSON.stringify(state), { flag: 'wx' });
 const saved = async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
 const captures: string[] = [],
   checks: string[] = [];
+
+function selectField(selector: string) {
+  const field = document.querySelector<HTMLInputElement>(selector)!;
+  field.focus();
+  field.select();
+}
+
 let app = await ownedApp(binary, profile),
   connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 try {
   connection = await app.connect();
   const { evaluate, command } = connection;
-  const click = async (label: string) =>
-    evaluate(
-      `(()=>{const b=[...document.querySelectorAll('.worktrees-dialog button')].find(b=>b.textContent.trim()===${JSON.stringify(label)});if(!b)throw Error('Missing button');b.click()})()`,
-    );
+  const press = async (label: string) => evaluate(pressButton(label, '.worktrees-dialog'));
   const type = async (selector: string, value: string) => {
-    await evaluate(
-      `(()=>{const i=document.querySelector(${JSON.stringify(selector)});i.focus();i.select()})()`,
-    );
+    await evaluate(pageCall(selectField, selector));
     await command('Input.insertText', { text: value });
   };
   const palette = async () => {
-    await evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+    await evaluate(click('[aria-label="Commands (⌘K)"]'));
     await until(
-      () => evaluate<string>('document.activeElement?.getAttribute("aria-label")'),
+      () => evaluate(pageCall(() => document.activeElement?.getAttribute('aria-label'))),
       (value) => value === 'Search commands',
       'Commands focus',
     );
     await command('Input.insertText', { text: 'Open worktree…' });
     await until(
-      () =>
-        evaluate<string>(
-          'document.querySelector(".command-result[aria-selected=true]")?.textContent',
-        ),
-      (value) => value?.includes('Open worktree…'),
+      () => evaluate(textOf('.command-result[aria-selected=true]')),
+      (value) => value.includes('Open worktree…'),
       'Worktree command',
     );
-    await evaluate('document.querySelector(".command-result[aria-selected=true]").click()');
+    await evaluate(click('.command-result[aria-selected=true]'));
     await until(
-      () =>
-        evaluate<boolean>('!!document.querySelector(".worktrees-dialog button:not([disabled])")'),
+      () => evaluate(exists('.worktrees-dialog button:not([disabled])')),
       Boolean,
       'Worktree picker',
     );
     await until(
-      () =>
-        evaluate<boolean>(
-          `[...document.querySelectorAll('.worktrees-dialog button')].some(b=>b.textContent.trim()==='Create worktree…'&&!b.disabled)`,
-        ),
-      Boolean,
+      () => evaluate(buttonState('Create worktree…', '.worktrees-dialog')),
+      (state) => state === 'enabled',
       'Creation available',
     );
   };
@@ -148,47 +155,40 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await evaluate('new Promise(r=>setTimeout(r,400))');
+    await evaluate(
+      pageCall((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)), 400),
+    );
     const image = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' }),
       file = path.join(root, name + '.png');
     await writeFile(file, Buffer.from(image.data, 'base64'), { flag: 'wx' });
     captures.push(file);
   };
   await until(
-    () => evaluate<string>('document.querySelector(".git-branch")?.textContent'),
-    (value) => value?.includes('main'),
+    () => evaluate(textOf('.git-branch')),
+    (value) => value.includes('main'),
     'Source checkout',
   );
   await palette();
-  await click('Create worktree…');
+  await press('Create worktree…');
   await type('input[aria-label="New branch name"]', 'invalid branch');
   assert.equal(
-    await evaluate<boolean>(
-      `document.querySelector('input[aria-label="New branch name"]').getAttribute('aria-invalid')==='true'`,
-    ),
-    true,
+    await evaluate(attributeOf('input[aria-label="New branch name"]', 'aria-invalid')),
+    'true',
   );
   await capture('create-invalid-name-dark');
   await type('input[aria-label="New branch name"]', 'feature/spatial');
   const destination = path.join(root, 'Repository-feature-spatial');
-  assert.equal(
-    await evaluate<string>(
-      `document.querySelector('input[aria-label="Worktree destination"]').value`,
-    ),
-    destination,
-  );
+  assert.equal(await evaluate(valueOf('input[aria-label="Worktree destination"]')), destination);
   await capture('create-new-dark');
   await capture('create-new-narrow-dark', 760);
-  await evaluate(
-    "window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))",
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () => evaluate<string>('document.documentElement.dataset.look'),
+    () => evaluate(pageCall(() => document.documentElement.dataset.look)),
     (value) => value === 'light',
     'Light worktree',
   );
   await capture('create-new-light');
-  await click('Create and open');
+  await press('Create and open');
   await until(
     saved,
     (value) =>
@@ -207,7 +207,7 @@ try {
   checks.push(
     'New branch created at pinned commit in sibling folder with linked folder and Git changes.',
   );
-  await evaluate(`document.querySelector('[aria-label="Back to parent plane"]').click()`);
+  await evaluate(click('[aria-label="Back to parent plane"]'));
   await until(
     saved,
     (value) =>
@@ -217,10 +217,10 @@ try {
     'Parent checkout focus',
   );
   await palette();
-  await click('Create worktree…');
-  await click('Existing branch');
+  await press('Create worktree…');
+  await press('Existing branch');
   await capture('create-existing-light');
-  await click('Create and open');
+  await press('Create and open');
   const existing = path.join(root, 'Repository-existing');
   await until(
     saved,
@@ -232,13 +232,13 @@ try {
   assert.equal(await hash(path.join(repo, 'notes.txt')), before.source);
   assert.equal(await hash(path.join(repo, '.git/index')), before.index);
   assert.equal(await git('branch', '--show-current'), 'main');
-  assert.equal((await evaluate<unknown[]>('window.viewer.jobs()')).length, 0);
+  assert.equal((await evaluate(pageCall(() => window.viewer.jobs()))).length, 0);
   await app.close(connection);
   connection = undefined;
   app = await ownedApp(binary, profile);
   connection = await app.connect();
   await until(
-    () => connection!.evaluate<number>('document.querySelectorAll(".folder-explorer").length'),
+    () => connection!.evaluate(countOf('.folder-explorer')),
     (count) => count === 3,
     'Restored worktree folders',
   );

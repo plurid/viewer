@@ -17,6 +17,17 @@ import { AgentTaskWorkflows } from '../../src/desktop/agents/task-workflow';
 import { Notes } from '../../src/desktop/editing/notes';
 import { ownedApp, until } from '../owned-app';
 import { temporaryRoot } from '../../tools/temporary';
+import {
+  animationFrames,
+  click,
+  countOf,
+  exists,
+  pressButton,
+  textOf,
+  valueOf,
+} from './runtime/page';
+import type { PageExpression } from './runtime/page-function';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -147,6 +158,55 @@ await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 const address = server.address();
 assert.ok(address && typeof address !== 'string');
 const endpoint = `http://127.0.0.1:${address.port}/v1`;
+type ToneWindow = { generatedSpeechContext: AudioContext };
+
+const speechStatus = () => window.viewer.speech({ kind: 'status' }) as Promise<SpeechStatus>;
+const scrollSettings = (top: number) => {
+  document.querySelector('.settings-page')!.scrollTop = top;
+};
+const recordedSeconds = () =>
+  Number(document.querySelector('.speech-level-row span')?.textContent.split(' /')[0] || 0);
+
+function pressIncluding(selector: string, text: string): void {
+  [...document.querySelectorAll<HTMLElement>(selector)]
+    .find((element) => element.textContent.includes(text))!
+    .click();
+}
+
+function scrollToEditor(): void {
+  document.querySelector('.settings-page')!.scrollTop =
+    document.querySelector<HTMLElement>('.speech-provider-editor')!.offsetTop;
+}
+
+function saveProviderInView(): boolean {
+  const rect = [...document.querySelectorAll('.speech-provider-editor button')]
+    .find((button) => button.textContent === 'Save provider')!
+    .getBoundingClientRect();
+  return rect.bottom <= innerHeight && rect.top >= 0;
+}
+
+/** Replaces the microphone with a 440 Hz tone, so no device is acquired. */
+function installGeneratedTone(): void {
+  navigator.mediaDevices.getUserMedia = async () => {
+    const context = new AudioContext({ sampleRate: 16000 }),
+      destination = context.createMediaStreamDestination();
+    const source = context.createOscillator();
+    source.frequency.value = 440;
+    source.connect(destination);
+    (window as unknown as ToneWindow).generatedSpeechContext = context;
+    await context.resume();
+    source.start();
+    return destination.stream;
+  };
+}
+
+/** Replaces the transcript through the native setter, so React sees an edit. */
+function setTranscript(text: string): void {
+  const field = document.querySelector<HTMLTextAreaElement>('textarea[aria-label=Transcript]')!;
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(field, text);
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 async function screenshot(
   page: Awaited<ReturnType<Awaited<ReturnType<typeof ownedApp>>['connect']>>,
   name: string,
@@ -159,9 +219,7 @@ async function screenshot(
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await page.evaluate(
-    'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-  );
+  await page.evaluate(animationFrames(2));
   const shot = await page.command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
   const file = path.join(screenshots, name + '-' + path.basename(root).split('-').at(-1) + '.png');
   await writeFile(file, Buffer.from(shot.data, 'base64'), { flag: 'wx' });
@@ -174,7 +232,7 @@ try {
     const page = await app.connect();
     try {
       await until(
-        () => page.evaluate<string>('document.body.innerText'),
+        () => page.evaluate(pageCall(() => document.body.innerText)),
         (text) => text.includes('Ship a useful workspace'),
         'restored task area',
       );
@@ -185,70 +243,86 @@ try {
           ? 'task references restored after restart'
           : 'real created checkout, private note and tool views load from the workflow bundle',
       );
-      await page.evaluate("window.viewer.openSettings('settings.speech')");
+      await page.evaluate(pageCall(() => window.viewer.openSettings('settings.speech')));
       const preferences = await app.connect(true);
-      const evaluate = <T>(expression: string) => preferences.evaluate<T>(expression);
+      const evaluate = <R>(expression: PageExpression<R>) => preferences.evaluate(expression);
       await until(
-        () => evaluate<string>("document.querySelector('.settings-page h1')?.textContent || ''"),
+        () => evaluate(textOf('.settings-page h1')),
         (value) => value === 'Speech',
         'speech settings',
       );
       if (!restored) {
         await until(
-          () => evaluate<boolean>('!!document.querySelector(\'[aria-label="Speech processing"]\')'),
+          () => evaluate(exists('[aria-label="Speech processing"]')),
           Boolean,
           'loaded speech controls',
         );
-        await evaluate('document.querySelector(\'[aria-label="Speech processing"]\').click()');
+        await evaluate(click('[aria-label="Speech processing"]'));
         await until(
-          () =>
-            evaluate<number>(
-              "document.querySelectorAll('.choice-menu button.command-result').length",
-            ),
+          () => evaluate(countOf('.choice-menu button.command-result')),
           Boolean,
           'processing choices',
         );
         await evaluate(
-          "[...document.querySelectorAll('.choice-menu button.command-result')].find(el=>el.textContent.includes('Hosted provider')).click()",
+          pageCall(pressIncluding, '.choice-menu button.command-result', 'Hosted provider'),
         );
-        await until(
-          () => evaluate<boolean>("!!document.querySelector('.speech-hosted')"),
-          Boolean,
-          'hosted section',
-        );
-        await evaluate(
-          "[...document.querySelectorAll('button')].find(el=>el.textContent==='Add speech provider').click()",
-        );
+        await until(() => evaluate(exists('.speech-hosted')), Boolean, 'hosted section');
+        await evaluate(pressButton('Add speech provider'));
         for (const [name, width, height] of [
           ['desktop', 1000, 760],
           ['minimum', 760, 540],
         ] as const) {
-          await evaluate("document.querySelector('.settings-page').scrollTop=0");
+          await evaluate(pageCall(scrollSettings, 0));
           await screenshot(preferences, 'hosted-provider-editor-' + name, width, height);
-          await evaluate(
-            "document.querySelector('.settings-page').scrollTop=document.querySelector('.speech-provider-editor').offsetTop",
-          );
+          await evaluate(pageCall(scrollToEditor));
           await screenshot(preferences, 'hosted-provider-editor-controls-' + name, width, height);
-          assert.equal(
-            await evaluate<boolean>(
-              "(()=>{const el=[...document.querySelectorAll('.speech-provider-editor button')].find(el=>el.textContent==='Save provider');const r=el.getBoundingClientRect();return r.bottom<=innerHeight&&r.top>=0})()",
-            ),
-            true,
-          );
+          assert.equal(await evaluate(pageCall(saveProviderInView)), true);
         }
         // Use the actual Settings IPC and OS-encrypted storage with a generated test credential.
         providerID = randomUUID();
         await evaluate(
-          `window.viewer.speech({kind:'provider-save',provider:{id:${JSON.stringify(providerID)},kind:'compatible',name:'Generated loopback speech',endpoint:${JSON.stringify(endpoint)},model:'generated-model'}})`,
+          pageCall(
+            (id: string, endpoint: string) =>
+              window.viewer.speech({
+                kind: 'provider-save',
+                provider: {
+                  id,
+                  kind: 'compatible',
+                  name: 'Generated loopback speech',
+                  endpoint,
+                  model: 'generated-model',
+                },
+              }),
+            providerID,
+            endpoint,
+          ),
         );
         await evaluate(
-          `window.viewer.speech({kind:'provider-key',id:${JSON.stringify(providerID)},key:${JSON.stringify(fakeKey)}})`,
+          pageCall(
+            (id: string, key: string) => window.viewer.speech({ kind: 'provider-key', id, key }),
+            providerID,
+            fakeKey,
+          ),
         );
         await evaluate(
-          `window.viewer.speech({kind:'preferences',preferences:{backend:'hosted',providerID:${JSON.stringify(providerID)},language:'en',microphone:''}})`,
+          pageCall(
+            (providerID: string) =>
+              window.viewer.speech({
+                kind: 'preferences',
+                preferences: { backend: 'hosted', providerID, language: 'en', microphone: '' },
+              }),
+            providerID,
+          ),
         );
-        const denied = await page.evaluate<string>(
-          `window.viewer.speech({kind:'begin',id:${JSON.stringify(randomUUID())}}).then(()=> 'UNEXPECTED',error=>error.message)`,
+        const denied = await page.evaluate(
+          pageCall(
+            (id: string) =>
+              window.viewer.speech({ kind: 'begin', id }).then(
+                () => 'UNEXPECTED',
+                (error: Error) => error.message,
+              ),
+            randomUUID(),
+          ),
         );
         assert.match(denied, /Allow this endpoint/);
         assert.equal(uploads, 0);
@@ -256,7 +330,7 @@ try {
           'real encrypted key storage, explicit provider selection, audio denied before consent, no upload on setup',
         );
       } else {
-        const status = await evaluate<SpeechStatus>("window.viewer.speech({kind:'status'})");
+        const status = await evaluate(pageCall(speechStatus));
         assert.equal(status.hosted?.providers[0]?.allowed, true);
         assert.equal(status.hosted?.providers[0]?.hasKey, true);
         assert.ok(!JSON.stringify(status).includes(fakeKey));
@@ -264,67 +338,50 @@ try {
           ['desktop', 1000, 760],
           ['minimum', 760, 540],
         ] as const) {
-          await evaluate("document.querySelector('.settings-page').scrollTop=0");
+          await evaluate(pageCall(scrollSettings, 0));
           await screenshot(preferences, 'hosted-provider-saved-' + name, width, height);
-          await evaluate("document.querySelector('.settings-page').scrollTop=100000");
+          await evaluate(pageCall(scrollSettings, 100000));
           await screenshot(preferences, 'hosted-provider-access-' + name, width, height);
           assert.equal(
-            await evaluate<boolean>('document.documentElement.scrollWidth > innerWidth'),
+            await evaluate(pageCall(() => document.documentElement.scrollWidth > innerWidth)),
             false,
           );
         }
         if (status.microphone === 'granted') {
           // Synthetic tone travels through the real AudioWorklet; no device is acquired.
-          await evaluate(`navigator.mediaDevices.getUserMedia=async()=>{
-            const context=new AudioContext({sampleRate:16000}), destination=context.createMediaStreamDestination();
-            const source=context.createOscillator();source.frequency.value=440;source.connect(destination);
-            window.generatedSpeechContext=context;await context.resume();source.start();return destination.stream;
-          }`);
-          await evaluate(
-            "[...document.querySelectorAll('button')].find(el=>el.textContent.trim()==='Test microphone and transcription').click()",
-          );
+          await evaluate(pageCall(installGeneratedTone));
+          await evaluate(pressButton('Test microphone and transcription'));
           await until(
-            () => evaluate<string>("document.querySelector('.speech-dialog')?.textContent || ''"),
+            () => evaluate(textOf('.speech-dialog')),
             (text) => text.includes('Finish and transcribe'),
             'generated recording begins',
           );
           await until(
             async () => {
-              const error = await evaluate<string>(
-                "document.querySelector('.speech-dialog [role=alert]')?.textContent || ''",
-              );
+              const error = await evaluate(textOf('.speech-dialog [role=alert]'));
               if (error) throw new Error('Generated recording stopped: ' + error);
-              return evaluate<number>(
-                "Number(document.querySelector('.speech-level-row span')?.textContent.split(' /')[0] || 0)",
-              );
+              return evaluate(pageCall(recordedSeconds));
             },
             (seconds) => seconds >= 1,
             'generated audio through worklet',
           );
-          await evaluate(
-            "[...document.querySelectorAll('.speech-dialog button')].find(el=>el.textContent.trim()==='Finish and transcribe').click()",
-          );
+          await evaluate(pressButton('Finish and transcribe', '.speech-dialog'));
           await until(
-            () =>
-              evaluate<string>(
-                "document.querySelector('textarea[aria-label=Transcript]')?.value || ''",
-              ),
+            () => evaluate(valueOf('textarea[aria-label=Transcript]')),
             (value) => value === 'Generated hosted transcript',
             'loopback transcript reviewed',
           );
           assert.equal(uploads, 1);
-          await evaluate(
-            "(()=>{const el=document.querySelector('textarea[aria-label=Transcript]');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,'Edited generated words');el.dispatchEvent(new Event('input',{bubbles:true}))})()",
-          );
+          await evaluate(pageCall(setTranscript, 'Edited generated words'));
           for (const [name, width, height] of [
             ['desktop', 1000, 760],
             ['minimum', 760, 540],
           ] as const)
             await screenshot(preferences, 'hosted-transcript-' + name, width, height);
+          await evaluate(pressButton('Done', '.speech-dialog'));
           await evaluate(
-            "[...document.querySelectorAll('.speech-dialog button')].find(el=>el.textContent.trim()==='Done').click()",
+            pageCall(() => (window as unknown as ToneWindow).generatedSpeechContext.close()),
           );
-          await evaluate('window.generatedSpeechContext.close()');
           checks.push(
             'synthetic tone captured through real AudioWorklet, one authenticated WAV upload to loopback, editable transcript and explicit Done',
           );
@@ -333,13 +390,12 @@ try {
             'capture skipped: native microphone permission has not been granted; no prompt was opened',
           );
         await evaluate(
-          `window.viewer.speech({kind:'provider-consent',id:${JSON.stringify(providerID)},allow:false})`,
+          pageCall(
+            (id: string) => window.viewer.speech({ kind: 'provider-consent', id, allow: false }),
+            providerID,
+          ),
         );
-        assert.equal(
-          (await evaluate<SpeechStatus>("window.viewer.speech({kind:'status'})")).hosted
-            ?.providers[0]?.allowed,
-          false,
-        );
+        assert.equal((await evaluate(pageCall(speechStatus))).hosted?.providers[0]?.allowed, false);
         checks.push(
           'provider, encrypted key and fixture consent restored; revoke returns to denied without recording',
         );
