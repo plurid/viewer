@@ -19,7 +19,7 @@ import { rankSuggestions } from '../src/renderer/commands/suggestions';
 
 const now = Date.UTC(2026, 9, 29);
 const day = 24 * 60 * 60 * 1000;
-const megabytes = 1024 * 1024;
+const megabytes = 1_000_000;
 const file = (name: string, size = 1000, parent = '/Users/a/Documents', extra = {}): FileEntry => {
   const extension = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
   const mime =

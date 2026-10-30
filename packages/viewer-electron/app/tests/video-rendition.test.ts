@@ -139,3 +139,42 @@ it('copies sound without a picture to AAC and checks it through its last frame',
     await source.close();
   }
 });
+it('counts the frames of a raw elementary stream, which states no duration', async () => {
+  const picture = {
+    format: {},
+    streams: [{ codec_type: 'video', codec_name: 'mpeg2video', width: 320, height: 240 }],
+  };
+  const run = (counted: unknown) => {
+    let count = 0;
+    return vi.fn<typeof runProcessor>(async () =>
+      Buffer.from(
+        ++count === 1
+          ? JSON.stringify(picture)
+          : count === 2
+            ? JSON.stringify(counted)
+            : count === 3
+              ? 'encoded'
+              : JSON.stringify(rendered(60)),
+      ),
+    );
+  };
+  // 24 frames at 12 a second: two seconds, as the copy's 60 frames at 30 are
+  const execute = run({ streams: [{ nb_read_packets: '24', r_frame_rate: '12/1' }] });
+  const result = await videoDecoder('/bundled', execute)(
+    { file, handle, info: await handle.stat() },
+    'video',
+    new AbortController().signal,
+  );
+  expect(result.extension).toBe('mp4');
+  const [, counting, descriptors] = execute.mock.calls[1]!;
+  expect(counting).toEqual(expect.arrayContaining(['-count_packets', '-select_streams', 'v:0']));
+  // the probe moved the inherited descriptor: the count reads its own
+  expect(descriptors).not.toEqual([handle.fd]);
+  await expect(
+    videoDecoder('/bundled', run({ streams: [] }))(
+      { file, handle, info: await handle.stat() },
+      'video',
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow('no supported duration');
+});

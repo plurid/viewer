@@ -143,8 +143,8 @@ describe('the Overview plane', () => {
       const found =
         request.query === query('files.large').query
           ? [
-              entry('/fixture/Movies/Trip.mov', { size: 4 * 1024 ** 3 }),
-              entry('/fixture/Backup.dmg', { size: 2 * 1024 ** 3 }),
+              entry('/fixture/Movies/Trip.mov', { size: 4 * 1000 ** 3 }),
+              entry('/fixture/Backup.dmg', { size: 2 * 1000 ** 3 }),
             ]
           : [];
       return {
@@ -225,7 +225,7 @@ describe('the Overview plane', () => {
     mount();
     await act(async () => {});
     const card = screen.getByText('Archives already extracted').closest('article')!;
-    expect(card.textContent).toContain('1 · 4.9 KB');
+    expect(card.textContent).toContain('1 · 5 KB');
     expect(within(card).getByRole('button', { name: 'Trip.zip' })).toBeTruthy();
     expect(within(card).queryByRole('button', { name: 'Kept.zip' })).toBeNull();
     fireEvent.click(within(card).getByRole('button', { name: 'Show all' }));

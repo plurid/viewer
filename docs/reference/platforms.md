@@ -11,8 +11,8 @@ source test does not establish complete support on another OS.
 | Linux               | Shared application work and adapters need executable qualification |
 | Mac App Store       | Separate sandbox, entitlement, signing and release gates           |
 
-The current Electron runtime sets the native macOS minimum; build tooling reads that target rather
-than the build machine's SDK default. The current local build requires macOS 13 or later.
+Viewer requires macOS 14 or later. Its native helpers are built for that target, not for the build
+machine's SDK, and the build stops if the Electron runtime needs a newer macOS.
 [Building](../development/builds.md) describes the supported development setup.
 
 ## Feature-specific differences
@@ -32,7 +32,8 @@ acceptance.
 
 The documented local package uses ad-hoc signing. Certificate signing, notarization and Store
 distribution have their own release checks. This repository does not represent a local test
-candidate as a publicly qualified installer.
+candidate as a publicly qualified installer. A direct release is a notarized disk image that checks
+a signed update feed; see [Install and update Viewer](../guides/install.md).
 
 See [release gates](../development/releases.md) for native permission, privacy, accessibility,
 architecture and distribution checks.

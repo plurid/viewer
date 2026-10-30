@@ -1,9 +1,7 @@
 import type { Resource } from '../../domain/contracts';
 import type { DocumentData } from '../../domain/services';
-import type {
-  WorksheetDocumentRequest,
-  WorksheetWindow,
-} from '../../domain/previews/documents/office';
+import type { WorksheetWindow } from '../../domain/previews/documents/office';
+import type { DocumentRequest } from '../../domain/previews/documents/requests';
 import { sourceVersion } from '../../domain/files/inspection';
 import type { PreviewContext } from './contracts';
 import { pathContains } from '../../domain/files/paths';
@@ -36,7 +34,13 @@ export class PreviewDocumentCache {
     };
   }
 
-  key(owner: string, resource: Resource, page?: Partial<WorksheetWindow>): string | undefined {
+  /** `message`, one message of a mailbox, is cached apart from the mailbox's list. */
+  key(
+    owner: string,
+    resource: Resource,
+    page?: Partial<WorksheetWindow>,
+    message?: number,
+  ): string | undefined {
     const file = resource.entry;
     // A symlink entry describes the link, not its target version. Its desktop
     // extraction cache already inspects the resolved target safely.
@@ -48,6 +52,7 @@ export class PreviewDocumentCache {
       page?.sheet || '',
       page?.fromRow ?? 1,
       page?.limit ?? 100,
+      message ?? null,
     ]);
   }
   get(key: string | undefined): DocumentData | undefined {
@@ -129,7 +134,9 @@ export function documentServices(
   resource: Resource,
   signal: AbortSignal,
 ): PreviewContext['services'] {
-  const key = (request?: Partial<WorksheetWindow>) => {
+  const key = (request?: Partial<WorksheetWindow> | DocumentRequest) => {
+    if (request && 'message' in request)
+      return previewDocuments.key(owner, resource, undefined, request.message);
     if (request?.sheet) {
       // The initial request lets the reader choose a visible sheet. Reuse that
       // same page when the user later selects its explicit name in the tabs.
@@ -142,7 +149,7 @@ export function documentServices(
   return {
     ...base,
     cachedDocument: (request) => (signal.aborted ? undefined : previewDocuments.get(key(request))),
-    document: (id: string, request?: WorksheetDocumentRequest) =>
+    document: (id: string, request?: DocumentRequest) =>
       id !== resource.id
         ? base.document(id, request)
         : previewDocuments.read(

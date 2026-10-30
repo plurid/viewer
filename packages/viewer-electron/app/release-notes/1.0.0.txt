@@ -1,0 +1,3 @@
+# Release notes for Viewer 1.0.0. Lines starting with # are left out.
+# Write a few short lines below: Check for Updates shows them in its dialog.
+# pnpm direct:release refuses to ship until there is text here.

@@ -13,7 +13,7 @@ pnpm playground --offline
 
 The default destination is the sibling `../viewer-playground`. Offline mode creates local samples
 and reports missing public downloads. Run `pnpm playground` to add the checksum-pinned public RAW
-photographs and video references; its first download is about 215 MiB. `pnpm playground --help`
+photographs and video references; its first download is about 440 MiB. `pnpm playground --help`
 lists destination options.
 
 The generator preserves changed files and existing scenarios. It does not open Viewer, add
@@ -30,6 +30,10 @@ generation does not need a separate Office/CAD app.
 | `previews/models`, `previews/drawings` | Mesh/CAD views, companions and DXF measurements                  |
 | `previews/archives`                    | Browse nested contents without extracting                        |
 | `previews/code-and-data`               | Languages, structured trees, tables and conventional filenames   |
+| `previews/certificates`                | A generated chain, keys, armor and provisioning profiles         |
+| `previews/shortcuts`                   | Web and email shortcuts, and one Viewer refuses to open          |
+| `previews/torrents`                    | A torrent of 241 files; its trackers are example addresses       |
+| `previews/binaries`                    | Hex view, header summaries and paging                            |
 | `projects/static-website`              | Start a local server and open its browser plane                  |
 | `git`                                  | Compare worktrees, staging and deliberately conflicted scenarios |
 | `edge-cases`                           | Explicit rejection cases and awkward filenames                   |

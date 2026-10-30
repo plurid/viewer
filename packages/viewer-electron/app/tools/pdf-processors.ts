@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { x as extract } from 'tar';
 import { download, hash, run } from './processors';
+import { compatibleMacOSMinimum } from './native-build/macos-target';
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sources = [
   {
@@ -51,7 +52,7 @@ export async function preparePDFProcessors(minimum: string, arch = process.arch)
     | undefined;
   if (existing) {
     if (
-      existing.minimum !== minimum ||
+      !compatibleMacOSMinimum(existing.minimum, minimum) ||
       existing.arch !== arch ||
       JSON.stringify(existing.sources) !== JSON.stringify(sources)
     )

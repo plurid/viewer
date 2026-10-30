@@ -18,6 +18,14 @@ recovery paths.
 An operation in which any item fails ends as failed, even when other items completed. Their outputs
 and Undo are kept, and its recovery paths name the last item that failed.
 
+A copy on one APFS volume is a clone: each file shares the original's disk blocks until either
+changes, so it finishes at once and takes no extra space at first. A folder is cloned file by file.
+On another volume, or one that cannot clone, Viewer copies the bytes. Either way the copy keeps the
+original's dates, permissions and extended attributes, and a file that changes while it is copied
+fails its item, leaving the original untouched.
+
+Sizes use decimal units, as Finder shows them: 1 KB is 1,000 bytes.
+
 ## Save and Undo
 
 Text Save rechecks the source version. External edits offer conflict recovery; unsaved drafts remain
@@ -27,6 +35,11 @@ saved document.
 The first save of an existing file in an editor session moves its previous version to the OS Trash.
 Saved or explicitly discarded private drafts also go to Trash. If that fails, Viewer keeps the draft
 reference available for retry instead of silently forgetting it.
+
+Many network shares have no Trash. There, your save or your **Replace** keeps the previous version
+beside the file under a free name, such as `Notes (previous).md`, and the operation's result names
+it. An agent's replacement on such a share fails and changes nothing: agents only move items to the
+Trash.
 
 Eligible operation Undo checks its receipt and outputs before reversal. A changed output may prevent
 Undo. Arrangement Undo affects views and geometry, independently of file changes. Git actions and
@@ -50,10 +63,12 @@ is an explicit measurement.
 
 ## Trash and Restore
 
-Move to Trash uses the OS Trash. In the sidebar's Trash browser, select an item for Quick Preview,
-known original-location details, Restore or **Restore to…**. Restore refuses replacement, unsafe
-parents, cross-disk fallback and changed identities. A missing original parent is not recreated
-automatically.
+Move to Trash uses the OS Trash. On a volume without a Trash it fails with a message, and the item
+stays where it is: Viewer never deletes it instead. Viewer knows such a volume by the error macOS
+gives for it, so another Trash failure is reported as itself. In the sidebar's Trash browser, select
+an item for Quick Preview, known original-location details, Restore or **Restore to…**. Restore
+refuses replacement, unsafe parents, cross-disk fallback and changed identities. A missing original
+parent is not recreated automatically.
 
 macOS original locations come from identity-matched Viewer receipts; Finder's items may require a
 destination. **Date added** is system directory metadata, not a fabricated deletion time. Full Disk
@@ -70,3 +85,9 @@ Restart does not blindly replay an operation. Inspect its receipt, completed out
 output before retrying. After a power failure, the last items of a copy can show as interrupted even
 though their copies are complete; the copies are kept. Reconnect unavailable locations and use
 offered recovery controls. [Troubleshooting](../guides/troubleshooting.md) lists common next steps.
+
+A copy leaves its bytes to macOS to write, as Finder does, because its originals stay where they
+are. After a power failure, a copy made in the seconds before it can be incomplete even when it
+shows as finished; copy it again. A move to another volume writes each file to permanent storage
+(`F_FULLFSYNC`), and then its folders, before it removes the originals. Text saves and operation
+receipts are written to permanent storage as well.

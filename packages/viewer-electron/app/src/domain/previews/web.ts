@@ -1,6 +1,8 @@
 export interface HtmlPreview {
   id: string;
   url: string;
+  /** A page served from a file's own parts: the resources it names that were not loaded. */
+  blocked?: number;
 }
 
 export interface LocalServer {

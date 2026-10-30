@@ -38,6 +38,7 @@ import { LinkedPlaneButton } from '../workspace/LinkedPlaneButton';
 import { rowsUnder, useMarquee, type MarqueeSelect } from './marquee';
 import { renderedImageFormats } from '../../domain/previews/images/rendered';
 import { thumbnailByteLimit } from '../../domain/previews/images/thumbnails';
+import { previewsAsFile } from '../../domain/previews/documents/embedded';
 import { PreviewActivity } from '../previews/activity';
 import { AppIcon, hasBundleIcon } from './app-icon';
 import {
@@ -740,7 +741,9 @@ export function ColumnsView({
   const activity = useContext(PreviewActivity);
   const selected =
     props.selection.length === 1
-      ? navigation.scope().find((entry) => entry.path === props.selection[0] && !entry.directory)
+      ? navigation
+          .scope()
+          .find((entry) => entry.path === props.selection[0] && previewsAsFile(entry))
       : undefined;
   useEffect(() => {
     const last = scroll.current?.lastElementChild as HTMLElement | undefined;
@@ -857,7 +860,7 @@ export function GalleryView(props: FileViewProps) {
   return (
     <div className="gallery-view">
       <div className="gallery-preview" ref={keepPreviewKeys}>
-        {selected && !selected.directory ? (
+        {selected && previewsAsFile(selected) ? (
           <HeldPreview path={selected.path} {...activity} />
         ) : selected && hasBundleIcon(selected) ? (
           // an application or bundle shows its own icon, as Finder's preview does

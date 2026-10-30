@@ -15,11 +15,17 @@ interface LoadedPreview {
   resourceID: string;
   signal: AbortSignal;
   revision: number;
+  message?: number;
   value: HtmlPreviewState;
 }
 
-/** A capability belongs to one resource revision; late grants are closed without mounting a frame. */
-export function useHtmlPreview(context: PreviewContext, revision: number): HtmlPreviewState {
+/** A capability belongs to one resource revision; late grants are closed without mounting a frame.
+ * `message`, one message of a mailbox, whose HTML body is the page. */
+export function useHtmlPreview(
+  context: PreviewContext,
+  revision: number,
+  message?: number,
+): HtmlPreviewState {
   const { resource, signal, services } = context;
   const [loaded, setLoaded] = useState<LoadedPreview>();
   const open = services.htmlPreview;
@@ -31,7 +37,7 @@ export function useHtmlPreview(context: PreviewContext, revision: number): HtmlP
       void close(preview.id).catch(report);
     };
     const accept = (value: HtmlPreviewState) => {
-      setLoaded({ resourceID: resource.id, signal, revision, value });
+      setLoaded({ resourceID: resource.id, signal, revision, message, value });
     };
     const stop = () => {
       cancelled = true;
@@ -50,7 +56,7 @@ export function useHtmlPreview(context: PreviewContext, revision: number): HtmlP
     }
     accept({ status: 'loading' });
     signal.addEventListener('abort', abort, { once: true });
-    void open(resource.id)
+    void (message === undefined ? open(resource.id) : open(resource.id, message))
       .then((preview) => {
         if (cancelled || signal.aborted) {
           release(preview);
@@ -73,12 +79,13 @@ export function useHtmlPreview(context: PreviewContext, revision: number): HtmlP
       signal.removeEventListener('abort', abort);
       stop();
     };
-  }, [resource.id, signal, revision, open, close]);
+  }, [resource.id, signal, revision, message, open, close]);
   if (signal.aborted) return { status: 'closed' };
   if (
     loaded?.resourceID !== resource.id ||
     loaded.signal !== signal ||
-    loaded.revision !== revision
+    loaded.revision !== revision ||
+    loaded.message !== message
   )
     return { status: 'loading' };
   return loaded.value;

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { columnName } from '../../../domain/previews/documents/office';
-import type { PreviewContext } from '../contracts';
+import type { PreviewContext, PreviewModule } from '../contracts';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
@@ -15,9 +15,52 @@ import OfficeLayoutPreview from './OfficeLayoutPreview';
 import { WorksheetTabs } from '../WorksheetTabs';
 import { worksheetTSV } from '../worksheet-copy';
 import type { TableAddress } from '../../../domain/previews/documents/table-navigation';
-import { officeFamily, readsOfficeContent } from '../../../domain/previews/documents/layout';
+import {
+  officeFamily,
+  readsOfficeContent,
+  sharedOfficeExtensions,
+} from '../../../domain/previews/documents/layout';
+import { choosePreview, previewModules } from '../registry';
+import { preloadPreviewModule } from '../module-loading';
 
+/** Office layout and content. A file with a shared name written as text goes to the preview ranked
+ * below Office for it: any ranked above has already handed it on. */
 export default function OfficePreview(context: PreviewContext) {
+  const { resource, services } = context;
+  const shared = sharedOfficeExtensions.includes(resource.entry.extension);
+  // undefined while its first bytes are read; null for the Office document it is
+  const [other, setOther] = useState<ComponentType<PreviewContext> | null | undefined>(
+    shared ? undefined : null,
+  );
+  useEffect(() => {
+    if (!shared) return;
+    let live = true;
+    void services
+      .read(resource.id, 4096)
+      .then((read) => {
+        if (read.binary) return null;
+        const rank = (module: PreviewModule) => module.detect(resource.entry);
+        const office = rank(previewModules.find((module) => module.id === 'office')!);
+        const below = previewModules.filter((module) => rank(module) < office);
+        return preloadPreviewModule(choosePreview(resource.entry, below));
+      })
+      .catch(() => null)
+      .then((Viewer) => {
+        if (live) setOther(() => Viewer);
+      });
+    return () => {
+      live = false;
+    };
+  }, [shared, resource.id, resource.entry, services]);
+  if (other === undefined) return <Loading />;
+  if (other) {
+    const Other = other;
+    return <Other {...context} />;
+  }
+  return <OfficeDocument {...context} />;
+}
+
+function OfficeDocument(context: PreviewContext) {
   const extension = context.resource.entry.extension;
   // OpenDocument and the older formats have the engine's layout only
   const content = readsOfficeContent(extension);

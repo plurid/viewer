@@ -53,4 +53,14 @@ describe('native save acknowledgement', () => {
     requests.acknowledge(secondToken, 2, { ok: true });
     await second;
   });
+
+  it('ends a stopped renderer’s pending saves as saved, and names the window a failure came from', async () => {
+    const requests = new WindowFlushRequests();
+    const stopped = requests.request(1, 'flush', () => {});
+    const other = requests.request(2, 'flush', () => {});
+    requests.released(1);
+    await expect(stopped).resolves.toBeUndefined();
+    requests.disconnected(2);
+    await expect(other).rejects.toMatchObject({ code: 'PERSISTENCE_WINDOW_CLOSED', owner: 2 });
+  });
 });

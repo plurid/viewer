@@ -130,13 +130,14 @@ function pagePicture(kind: Kind): Uint8Array {
 }
 
 /** A packaged OpenDocument: its MIME type first and stored, then the manifest, content and the
- * picture of its first page. */
-export function openDocument(kind: Kind): Uint8Array {
+ * picture of its first page. A template differs only in its MIME type. */
+export function openDocument(kind: Kind, template = false): Uint8Array {
+  const mime = kinds[kind].mime + (template ? '-template' : '');
   return zip({
-    mimetype: kinds[kind].mime,
+    mimetype: mime,
     'META-INF/manifest.xml': `<?xml version="1.0" encoding="UTF-8"?>
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">
-  <manifest:file-entry manifest:full-path="/" manifest:media-type="${kinds[kind].mime}"/>
+  <manifest:file-entry manifest:full-path="/" manifest:media-type="${mime}"/>
   <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
   <manifest:file-entry manifest:full-path="Thumbnails/thumbnail.png" manifest:media-type="image/png"/>
 </manifest:manifest>
@@ -309,6 +310,11 @@ function packageVariants(): Sample[] {
   );
 }
 
+const templates: [Kind, string][] = [
+  ['text', 'ott'],
+  ['spreadsheet', 'ots'],
+  ['presentation', 'otp'],
+];
 /** One file per OpenDocument kind, each also flat, and a Rich Text file. */
 export function officeSamples(): Sample[] {
   const kindsWithExtensions: [Kind, string, string][] = [
@@ -334,6 +340,15 @@ export function officeSamples(): Sample[] {
         flatOpenDocument(kind),
       ),
     ]),
+    ...templates.map(([kind, extension]) =>
+      sample(
+        `previews/documents/Field notes template.${extension}`,
+        [extension],
+        'Office layout',
+        `An OpenDocument ${kind} template, laid out as its document.`,
+        openDocument(kind, true),
+      ),
+    ),
     ...packageVariants(),
     sample(
       'previews/documents/Field notes.rtf',

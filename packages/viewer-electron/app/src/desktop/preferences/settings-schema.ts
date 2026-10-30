@@ -239,6 +239,10 @@ export const settingsSchema = z
       .object({ warnShortcut: z.boolean().default(true) })
       .strict()
       .default({ warnShortcut: true }),
+    updates: z
+      .object({ checkAtLaunch: z.boolean().default(true) })
+      .strict()
+      .default({ checkAtLaunch: true }),
     themes: z
       .array(themeSchema)
       .max(30)

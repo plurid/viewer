@@ -118,6 +118,7 @@ const application = Object.assign(new EventEmitter(), {
   getPath: () => native.profile,
   getAppPath: () => process.cwd(),
   getVersion: () => '0.0.0',
+  setAboutPanelOptions: vi.fn(),
   whenReady: () => native.ready,
   terminated: false,
   exit: vi.fn<(code: number) => void>(),

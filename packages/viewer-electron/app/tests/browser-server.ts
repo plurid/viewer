@@ -515,7 +515,15 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return actions.exportSummary(args[0] as string, scoped(args[1] as string));
     case 'document':
       if (args[1]) {
-        const { requestID, ...worksheet } = schemas.document.parse(args)[1]!;
+        const request = schemas.document.parse(args)[1]!;
+        if ('message' in request)
+          return resources.documentRead(
+            args[0] as string,
+            request.requestID,
+            (file, signal, format) =>
+              extractDocument(file, { signal, format, message: request.message }),
+          );
+        const { requestID, ...worksheet } = request;
         return resources.documentRead(args[0] as string, requestID, (file, signal, format) =>
           extractDocument(file, { signal, worksheet, format }),
         );
@@ -731,7 +739,10 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       throw new Error('macOS Quick Look and sharing are available in the installed Viewer app.');
     case 'reveal':
     case 'openExternal':
+    case 'openAddress':
       return;
+    case 'fileIdentity':
+      return null;
   }
 }
 const server = await createServer({

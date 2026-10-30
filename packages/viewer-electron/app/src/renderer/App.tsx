@@ -102,6 +102,7 @@ import { dialogOpen, overlayOpen } from './ui/modal';
 import { savedDefinitionsKey } from './state/saved-keys';
 import { isActiveJob } from '../domain/operations/jobs';
 import { invalidateThumbnails } from './explorer/thumbnail-cache';
+import { previewsAsFile } from '../domain/previews/documents/embedded';
 
 export function App() {
   const registry = useMemo(
@@ -723,11 +724,11 @@ function AppWindow() {
         !overlayOpen()
       ) {
         const context = registry.context(getState().activePane) || windowContext();
-        if (context.selection.some((file) => !file.directory)) {
+        if (context.selection.some(previewsAsFile)) {
           event.preventDefault();
           event.stopPropagation();
           quickPreview(
-            context.selection.filter((file) => !file.directory).map((file) => file.path),
+            context.selection.filter(previewsAsFile).map((file) => file.path),
             { paneID: context.paneID, workspaceID: context.workspaceID },
           );
           return;

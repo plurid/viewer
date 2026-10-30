@@ -167,7 +167,7 @@ it('leaves out oversized files and labels a file past the limit or without cues'
     },
   });
   const view = render(<MediaPreview {...context} />);
-  await screen.findByText('Movie.en.srt is larger than the 2 MB subtitle limit.');
+  await screen.findByText('Movie.en.srt is larger than the 2.1 MB subtitle limit.');
   expect(track(view.container)).toBeNull();
   expect(services.resource).not.toHaveBeenCalledWith('/Movies/Movie.srt');
   await choose('Movie.fr.srt');

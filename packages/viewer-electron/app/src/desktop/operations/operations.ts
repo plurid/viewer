@@ -41,6 +41,7 @@ import {
   aliasName,
   copyTree,
   keepBothName,
+  previousName,
   publish,
   syncDirectories,
   type CopyFingerprint,
@@ -64,12 +65,23 @@ interface UndoStep {
   directory?: boolean;
 }
 class ReceiptFailure extends Error {}
+/** Who asked for a job. An agent's replacements stay Trash-only: on a volume without a Trash they
+ * refuse, where the person's keep the previous version beside its replacement. */
+export type OperationActor = 'person' | 'agent';
+/** A volume without a Trash, as many network shares are. The native adapter reports it as ENOTSUP
+ * (Foundation's NSFeatureUnsupportedError), and no other Trash failure carries that code. */
+const withoutTrash = (error: unknown) => (error as NodeJS.ErrnoException)?.code === 'ENOTSUP';
+class NoTrash extends Error {
+  readonly code = 'VIEWER_NO_TRASH';
+}
 interface Target {
   path: string;
   replaces?: Replaced;
 }
 interface Task {
   reviewedFile?: ReviewedFile;
+  /** Absent for the person's own. */
+  actor?: OperationActor;
   job: OperationJob;
   request: OperationRequest;
   abort: AbortController;
@@ -309,8 +321,8 @@ export class Operations {
     }
     return result.reverse();
   }
-  start(request: OperationRequest, redo = false): string {
-    return this.startOperation(request, redo);
+  start(request: OperationRequest, actor: OperationActor = 'person'): string {
+    return this.startOperation(request, false, undefined, actor);
   }
 
   /** A native review pins the script through queueing, coordination and the OS Trash adapter. */
@@ -334,6 +346,7 @@ export class Operations {
     request: OperationRequest,
     redo = false,
     reviewedFile?: ReviewedFile,
+    actor: OperationActor = 'person',
   ): string {
     if (this.stopped) throw new Error('The file operation queue has closed.');
     if (
@@ -433,6 +446,7 @@ export class Operations {
     // A PDF is one output from every source; other conversions create one file per image.
     const task = this.add({ ...request, sources: roots }, singleOutput(request) ? 1 : roots.length);
     task.reviewedFile = reviewedFile;
+    if (actor === 'agent') task.actor = actor;
     this.queue.push(task);
     void this.run();
     return task.job.id;
@@ -896,7 +910,13 @@ export class Operations {
         }
         signal?.throwIfAborted();
         if (task.reviewedFile) await verifyReviewedFile({ ...task.reviewedFile, path: actual });
-        return this.trash(actual, task.reviewedFile);
+        return this.trash(actual, task.reviewedFile).catch((error: unknown) => {
+          if (withoutTrash(error))
+            throw new NoTrash(
+              `${path.basename(file)} was not moved: this volume has no Trash, and Viewer never deletes items.`,
+            );
+          throw error;
+        });
       },
       task.abort.signal,
     );
@@ -936,9 +956,42 @@ export class Operations {
     }
     await this.checkpoint(task);
   }
+  /**
+   * A replaced item is kept beside its replacement under a free name on a volume without a Trash,
+   * when the person replaces it; the name is returned. An agent's replacement refuses there.
+   */
+  private async keepReplaced(task: Task, destination: string, replaced: Replaced): Promise<string> {
+    if (task.actor === 'agent')
+      throw new Error(
+        `${path.basename(destination)} was not replaced: this volume has no Trash, and agents replace items only by moving them to the Trash.`,
+      );
+    const kept = await previousName(destination);
+    await publish(destination, kept, this.access, undefined, async () => {
+      if (!unchanged(await lstat(destination), replaced))
+        throw new Error(
+          'The existing item changed after Replace was chosen, so it was kept. Retry to review it again.',
+        );
+    });
+    const info = await lstat(kept);
+    task.undo.push({
+      from: kept,
+      to: destination,
+      identity: `${info.dev}:${info.ino}`,
+      modified: info.mtimeMs,
+      size: info.size,
+    });
+    task.job.errors.push({
+      path: kept,
+      message: `This volume has no Trash, so the previous version was kept beside it as ${path.basename(kept)}.`,
+    });
+    await this.checkpoint(task);
+    return kept;
+  }
   /** Put a replaced item back when its replacement could not be published. */
-  private async restoreReplaced(task: Task, destination: string): Promise<boolean> {
-    const step = task.undo.findLast((item) => item.trash && item.to === destination);
+  private async restoreReplaced(task: Task, destination: string, kept?: string): Promise<boolean> {
+    const step = task.undo.findLast(
+      (item) => item.to === destination && (kept ? item.from === kept : item.trash),
+    );
     if (!step) return false;
     try {
       if (await exists(destination)) return false;
@@ -967,16 +1020,22 @@ export class Operations {
   ): Promise<void> {
     // Without Replace, the exclusive publication below refuses an existing destination.
     await guard?.();
+    let kept: string | undefined;
     if (replaced) {
       await this.protection.check(destination, 'replaced');
-      await this.trashItem(task, destination, replaced);
+      await this.trashItem(task, destination, replaced).catch(async (error: unknown) => {
+        if (!(error instanceof NoTrash)) throw error;
+        kept = await this.keepReplaced(task, destination, replaced);
+      });
     }
     try {
       await publish(source, destination, this.access, this.transferJob(task), guard);
     } catch (error) {
-      if (replaced && !(await this.restoreReplaced(task, destination)))
+      if (replaced && !(await this.restoreReplaced(task, destination, kept)))
         throw new Error(
-          `${errorMessage(error)} The replaced item is in the Trash; Undo in Recent file operations can restore it.`,
+          kept
+            ? `${errorMessage(error)} The replaced item was kept as ${path.basename(kept)}.`
+            : `${errorMessage(error)} The replaced item is in the Trash; Undo in Recent file operations can restore it.`,
         );
       throw error;
     }
@@ -1188,7 +1247,15 @@ export class Operations {
     const fingerprints: CopyFingerprint[] = [];
     try {
       await this.checkpoint(task);
-      await copyTree(this.transferJob(task), source, staging, fingerprints, this.access);
+      // a move removes its sources once this copy is on permanent storage; a copy keeps them
+      await copyTree(
+        this.transferJob(task),
+        source,
+        staging,
+        fingerprints,
+        this.access,
+        move ? 'flushed' : 'written',
+      );
       this.check(task);
       // Do not clobber a file created while the transfer was in flight.
       if (!replaced && (await exists(destination)))

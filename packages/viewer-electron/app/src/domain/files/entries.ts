@@ -1,6 +1,11 @@
 import { zipContainers } from './containers';
 import type { FileEntry, SortKey } from '../contracts';
 import { modelFormats } from '../previews/models/formats';
+import { cameraRawFormats } from '../previews/images/rendered';
+import { mailFormats } from '../previews/mail/formats';
+import { certificateFormats } from '../previews/keys/certificates';
+import { provisionFormats } from '../previews/data/provision';
+import { shortcutFormats } from '../previews/data/shortcuts';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 export function indexEntries(entries: readonly FileEntry[]) {
@@ -58,10 +63,26 @@ export function sortEntries(
     return (value || collator.compare(a.name, b.name)) * (descending ? -1 : 1);
   });
 }
-export function formatBytes(value: number): string {
-  if (value < 1024) return `${value} B`;
-  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), 4);
-  return `${(value / 1024 ** index).toLocaleString(undefined, { maximumFractionDigits: 1 })} ${['B', 'KB', 'MB', 'GB', 'TB'][index]}`;
+/** How many digits a size keeps: one decimal, or every byte for a threshold a rounded figure could
+ * misstate. */
+export type SizePrecision = 'rounded' | 'exact';
+const sizeUnits = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
+/** Sizes in decimal units, as Finder shows them: 1 KB is 1,000 bytes. */
+export function formatBytes(value: number, precision: SizePrecision = 'rounded'): string {
+  if (!(value >= 1000)) return `${value} B`;
+  let power = Math.min(Math.floor(Math.log10(value) / 3), sizeUnits.length - 1);
+  // 999,960 bytes reads as 1 MB, not 1,000 KB
+  if (
+    precision === 'rounded' &&
+    power < sizeUnits.length - 1 &&
+    Math.round((value / 1000 ** power) * 10) >= 10_000
+  )
+    power++;
+  const digits = precision === 'exact' ? power * 3 : 1;
+  const amount = (value / 1000 ** power).toLocaleString(undefined, {
+    maximumFractionDigits: digits,
+  });
+  return `${amount} ${sizeUnits[power]}`;
 }
 /** Folders macOS shows as one item, with an icon of their own: applications and other bundles. */
 export const packageExtensions: ReadonlySet<string> = new Set([
@@ -110,13 +131,27 @@ export function fileFamily(entry: Pick<FileEntry, 'extension' | 'directory' | 'm
   if (modelFormats.includes(entry.extension)) return 'model';
   if (['zip', 'tar', 'gz', 'tgz', ...zipContainers].includes(entry.extension)) return 'archive';
   if (entry.extension === 'pdf') return 'pdf';
+  if (mailFormats.includes(entry.extension)) return 'mail';
   if (['csv', 'tsv', 'json', 'jsonl'].includes(entry.extension)) return 'data';
+  // certificates, armored keys, torrents and profiles, which Viewer reads field by field
+  if (
+    [...certificateFormats, 'asc', 'torrent', ...provisionFormats].some(
+      (format) => format === entry.extension,
+    )
+  )
+    return 'data';
+  if (shortcutFormats.some((format) => format === entry.extension)) return 'link';
   if (
     ['ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'go', 'sh', 'html', 'css', 'cpp', 'c', 'java'].includes(
       entry.extension,
     )
   )
     return 'code';
+  // painted and designed images in a ZIP, which no system MIME table names
+  if (['kra', 'ora', 'sketch'].includes(entry.extension)) return 'image';
+  if (cameraRawFormats.includes(entry.extension)) return 'image';
+  // sound no system MIME table names
+  if (['ape', 'mpa'].includes(entry.extension)) return 'audio';
   if (entry.mime.startsWith('image/')) return 'image';
   if (entry.mime.startsWith('audio/')) return 'audio';
   if (entry.mime.startsWith('video/')) return 'video';

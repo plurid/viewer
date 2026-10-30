@@ -10,6 +10,7 @@ export const officeFamilies = {
   dotm: 'word',
   odt: 'word',
   fodt: 'word',
+  ott: 'word',
   rtf: 'word',
   xls: 'workbook',
   xlsx: 'workbook',
@@ -19,6 +20,7 @@ export const officeFamilies = {
   xltm: 'workbook',
   ods: 'workbook',
   fods: 'workbook',
+  ots: 'workbook',
   ppt: 'presentation',
   pptx: 'presentation',
   pptm: 'presentation',
@@ -29,8 +31,13 @@ export const officeFamilies = {
   potm: 'presentation',
   odp: 'presentation',
   fodp: 'presentation',
+  otp: 'presentation',
   odg: 'drawing',
   fodg: 'drawing',
+  // the engine imports these into its drawing application; its Visio import fails on most files
+  pub: 'drawing',
+  emf: 'drawing',
+  wmf: 'drawing',
 } as const;
 export type OfficeFormat = keyof typeof officeFamilies;
 export type OfficeFamily = (typeof officeFamilies)[OfficeFormat];
@@ -42,6 +49,9 @@ export function officeFamily(extension: string): OfficeFamily | undefined {
   const format = extension.toLowerCase();
   return isOfficeFormat(format) ? officeFamilies[format] : undefined;
 }
+/** Extensions another format shares: `.pub` names Publisher documents and public keys. One written
+ * as text is no Office document. */
+export const sharedOfficeExtensions: readonly string[] = ['pub'];
 
 /**
  * The picture of its first page an OpenDocument package carries: a PNG, at most 256 pixels a side
@@ -52,7 +62,15 @@ export const openDocumentThumbnail = {
   bytes: 512 * 1024,
   side: 1024,
 } as const;
-const openDocumentPackages: readonly OfficeFormat[] = ['odt', 'ods', 'odp', 'odg'];
+const openDocumentPackages: readonly OfficeFormat[] = [
+  'odt',
+  'ods',
+  'odp',
+  'odg',
+  'ott',
+  'ots',
+  'otp',
+];
 export function carriesThumbnail(extension: string): boolean {
   const format = extension.toLowerCase();
   return isOfficeFormat(format) && openDocumentPackages.includes(format);

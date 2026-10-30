@@ -101,7 +101,7 @@ it('reads data and rotated logs with the preview of the file they were', async (
 });
 
 it('describes a kind with no text preview by name and expanded size, without expanding it', async () => {
-  const { context, services } = fixture('disk.img.gz', { size: 3 * 1024 * 1024 * 1024 });
+  const { context, services } = fixture('disk.img.gz', { size: 3 * 1000 ** 3 });
   render(<CompressedPreview {...context} />);
   await screen.findByText('disk.img');
   expect(
@@ -117,10 +117,10 @@ it('describes a kind with no text preview by name and expanded size, without exp
 });
 
 it('describes text past the limit, and names a file refused while expanding', async () => {
-  const large = fixture('huge.log.gz', { size: 9 * 1024 * 1024, previewable: false });
+  const large = fixture('huge.log.gz', { size: 9_000_000, previewable: false });
   render(<CompressedPreview {...large.context} />);
   await screen.findByText(
-    'Gzip-compressed, 9 MB expanded. Viewer expands up to 8 MB for a preview.',
+    'Gzip-compressed, 9 MB expanded. Viewer expands up to 8.4 MB for a preview.',
   );
   expect(large.services.archiveEntry).not.toHaveBeenCalled();
   cleanup();

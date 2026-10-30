@@ -1,11 +1,13 @@
 # Viewer documentation
 
-New to Viewer? Read [your first five minutes](guides/getting-started.md). Not running yet? Follow
+New to Viewer? [Install it](guides/install.md), then read
+[your first five minutes](guides/getting-started.md). To run it from source, follow
 [Build and run Viewer](development/builds.md). Something wrong? See
 [Get back to your work](guides/troubleshooting.md).
 
 ## Files
 
+- [Install and update Viewer](guides/install.md)
 - [Your first five minutes](guides/getting-started.md)
 - [Browse and organize](guides/files.md)
 - [Read and inspect files](guides/previews.md)

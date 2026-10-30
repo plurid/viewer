@@ -1,7 +1,7 @@
 # Your first five minutes
 
 Viewer opens as a file explorer on your Home folder. These five steps cover what you need on day
-one. If Viewer is not running yet, follow [Build and run Viewer](../development/builds.md).
+one. If Viewer is not installed yet, follow [Install and update Viewer](install.md).
 
 ## 1. Open a folder
 

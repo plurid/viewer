@@ -44,9 +44,9 @@ describe('preview extension contract', () => {
       'Letter.rtf',
     ])
       expect(choosePreview(file(name)).id).toBe('office');
-    // binary workbooks and Keynote have no engine filter
-    for (const name of ['Budget.xlsb', 'Slides.key'])
-      expect(choosePreview(file(name)).id).toBe('fallback');
+    // binary workbooks have no engine filter; Keynote shows the picture it saved, not a layout
+    expect(choosePreview(file('Budget.xlsb')).id).toBe('fallback');
+    expect(choosePreview(file('Slides.key')).id).toBe('embedded');
   });
   it('routes the formats added beside Office to their own modules', () => {
     const routes = {

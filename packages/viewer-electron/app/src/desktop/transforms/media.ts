@@ -39,6 +39,13 @@ export const mediaDemuxer = (extension: string): string => {
     amr: 'amr',
     ape: 'ape',
     wv: 'wv',
+    au: 'au',
+    snd: 'au',
+    m2v: 'mpegvideo',
+    f4v: 'mov',
+    // MPEG audio of any layer
+    mp2: 'mp3',
+    mpa: 'mp3',
   };
   const format = formats[extension.toLowerCase()];
   if (!format) throw new Error('Choose a supported audio or video file.');

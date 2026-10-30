@@ -12,6 +12,9 @@ import {
 import path from 'node:path';
 import type { OperationJob } from '../src/domain/contracts';
 import { Checkpoints } from '../src/desktop/operations/checkpoints';
+import { createOperationHandlers } from '../src/desktop/ipc/operation-handlers';
+import type { Operations } from '../src/desktop/operations/operations';
+import type { OperationPlans } from '../src/desktop/operations/operation-plans';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 import { removalBlocked } from './support/preservation';
 let root: string;
@@ -278,5 +281,36 @@ describe('reviewed content checkpoints', () => {
     expect(start).not.toHaveBeenCalled();
     await cold.close();
     await service.close();
+  });
+});
+
+describe('removing a checkpoint', () => {
+  const handlers = (answer: boolean) => {
+    const checkpoints = {
+      list: vi.fn(),
+      estimate: vi.fn(),
+      remove: vi.fn(async () => {}),
+      restore: vi.fn(),
+    };
+    const confirmCheckpointRemoval = vi.fn(async (_owner: number) => answer);
+    const table = createOperationHandlers({
+      operations: {} as Operations,
+      plans: {} as OperationPlans,
+      checkpoints: checkpoints as unknown as Checkpoints,
+      isAgent: () => false,
+      confirmCheckpointRemoval,
+    });
+    return { table, checkpoints, confirmCheckpointRemoval };
+  };
+  it('erases its saved copy only after the person confirms in the window that asked', async () => {
+    const declined = handlers(false);
+    await expect(declined.table.checkpoints([{ kind: 'remove', id: 'kept' }], 7)).resolves.toBe(
+      null,
+    );
+    expect(declined.confirmCheckpointRemoval).toHaveBeenCalledWith(7);
+    expect(declined.checkpoints.remove).not.toHaveBeenCalled();
+    const confirmed = handlers(true);
+    await confirmed.table.checkpoints([{ kind: 'remove', id: 'removed' }], 7);
+    expect(confirmed.checkpoints.remove).toHaveBeenCalledWith('removed');
   });
 });

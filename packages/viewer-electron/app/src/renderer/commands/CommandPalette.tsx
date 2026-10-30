@@ -18,6 +18,7 @@ import { useFolder } from '../explorer/useFolder';
 import { useSearch } from '../explorer/useSearch';
 import { useIndexedSearch } from '../explorer/useIndexedSearch';
 import { useWorkspace } from '../workspace/context';
+import { focusPlane } from '../workspace/sessions';
 import type { FileEntry } from '../../domain/contracts';
 import { calculate, paletteIntent, rankFrecent } from './smart-palette';
 import { LineFinder } from '../command-line/LineFinder';
@@ -37,6 +38,17 @@ import { palettePrefixes, type PaletteMode } from './palette-modes';
 import { clearRecentCommands } from './history';
 import { commandFolders } from './folders';
 import { suggestionsFor } from './suggestions';
+
+/**
+ * A command chosen in the palette acts on the workspace, so focus returns there, not to the title
+ * bar button that opened the palette. A command that moved focus itself keeps it.
+ */
+function returnToWorkspace(): void {
+  const active = document.activeElement;
+  if (active && active !== document.body && !active.closest('.app-titlebar')) return;
+  const pane = getState().activePane;
+  if (pane) focusPlane(pane);
+}
 
 export function CommandPalette({
   mode,
@@ -275,7 +287,7 @@ function CommandFinder({
           }
           onClose();
           requestAnimationFrame(() => {
-            void registry.run(command).catch(report);
+            void registry.run(command).then(returnToWorkspace, report);
           });
         }}
       />

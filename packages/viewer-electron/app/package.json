@@ -1,7 +1,7 @@
 {
   "name": "viewer-electron",
   "productName": "Viewer",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A spatial file manager with modular, powerful previews",
   "keywords": [
     "viewer",
@@ -43,6 +43,8 @@
     "test:mas": "tsx tests/mas-native.ts",
     "qualify": "tsx tools/qualification.ts",
     "direct:release": "tsx tools/direct-release.ts",
+    "updates:keys": "tsx tools/update-feed.ts keys",
+    "updates:verify": "tsx tools/update-feed.ts verify",
     "package": "tsx tools/trash-previous-build.ts && tsx tools/build-helpers.ts && electron-forge package",
     "make": "tsx tools/trash-previous-build.ts && tsx tools/build-helpers.ts && electron-forge make",
     "mas:preflight": "tsx tools/mas.ts preflight",

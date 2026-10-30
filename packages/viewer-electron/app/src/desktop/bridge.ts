@@ -150,6 +150,7 @@ import { planLegacyProfileRestoration } from './preferences/profile-migration';
 import { resolveWindowPreferences } from '../domain/preferences/presentation/resolver';
 import { modelEndpoint } from '../domain/models/permissions';
 import { WindowFlushRequests } from './windows/flush-requests';
+import type { RendererStop } from './windows/window-health';
 import { JournalStore } from './journal/store';
 import { JournalActivity } from './journal/activity';
 import { realHome } from './native/home';
@@ -163,6 +164,8 @@ interface WindowRecord {
   role: WindowRole;
   workspaceID?: string;
   ready?: boolean;
+  /** Its renderer crashed or stopped answering: it saves nothing more until it answers again. */
+  stopped?: boolean;
   paths: string[];
   launches: LaunchRequest[];
   catalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
@@ -341,6 +344,8 @@ export class Desktop {
       settingsCategory?(category: string): void;
       /** Records a renderer failure in the local diagnostic log. */
       diagnose?(detail: string): void;
+      /** Records a service's failure, as the windows are told of it. */
+      serviceError?(service: string, message: string): void;
     },
   ) {
     this.journal = new JournalStore(path.join(dataPath, 'journal'), () =>
@@ -915,17 +920,20 @@ export class Desktop {
         const resolved = agentCommandID(command, this.settings.snapshot().settings.customActions);
         if (resolved === 'trash') {
           return {
-            operationID: this.operations.start({
-              kind: 'trash',
-              sources: target.selection.map((file) => file.path),
-              expectedSources: target.selection.map((file) => ({
-                path: file.path,
-                version: sourceVersion(file),
-              })),
-              // a folder's contents are checked again as the move runs, not only at approval:
-              // a nested edit while it waited in the queue moved the changed folder
-              expectedContents: [...(contents ?? [])].map(([path, proof]) => ({ path, proof })),
-            }),
+            operationID: this.operations.start(
+              {
+                kind: 'trash',
+                sources: target.selection.map((file) => file.path),
+                expectedSources: target.selection.map((file) => ({
+                  path: file.path,
+                  version: sourceVersion(file),
+                })),
+                // a folder's contents are checked again as the move runs, not only at approval:
+                // a nested edit while it waited in the queue moved the changed folder
+                expectedContents: [...(contents ?? [])].map(([path, proof]) => ({ path, proof })),
+              },
+              'agent',
+            ),
           };
         }
         await this.sendAgentCommand(resolved, target);
@@ -961,17 +969,20 @@ export class Desktop {
           proposal,
         ),
       async (proposal) => ({
-        operationID: this.operations.start({
-          kind: 'convert',
-          sources: proposal.target!.selection.map((file) => file.path),
-          destination: proposal.transform!.destination,
-          name: proposal.transform!.name,
-          transform: proposal.transform!.plan,
-          expectedSources: proposal.target!.selection.map((file) => ({
-            path: file.path,
-            version: sourceVersion(file),
-          })),
-        }),
+        operationID: this.operations.start(
+          {
+            kind: 'convert',
+            sources: proposal.target!.selection.map((file) => file.path),
+            destination: proposal.transform!.destination,
+            name: proposal.transform!.name,
+            transform: proposal.transform!.plan,
+            expectedSources: proposal.target!.selection.map((file) => ({
+              path: file.path,
+              version: sourceVersion(file),
+            })),
+          },
+          'agent',
+        ),
       }),
       (setup, operationID) => this.speechModels.request(setup, operationID),
       (setup, progress) => this.agentTaskWorkflows.execute(setup, progress),
@@ -990,6 +1001,7 @@ export class Desktop {
         access,
         workspaceState: async () => this.workspaceCatalog,
         authorizeTask: (setup) => this.agentTaskWorkflows.authorize(setup),
+        version: app.getVersion(),
         // nothing is requested while config.jsonc and its last valid copy cannot be read
         agentAccess: new AgentAccess(dataPath, () => {
           const snapshot = this.settings.snapshot();
@@ -1152,8 +1164,28 @@ export class Desktop {
   /** Workspace windows whose renderer has published its commands, and so answers a flush. */
   private readyWindows(): BrowserWindow[] {
     return [...this.windows.values()]
-      .filter((item) => item.role === 'viewer' && item.ready)
+      .filter((item) => item.role === 'viewer' && item.ready && !item.stopped)
       .map(({ window }) => window);
+  }
+  /**
+   * A window whose renderer is gone, or hung past its grace (window-health.ts). Its last save is
+   * what it has: pending saves end, and closing it or Quit no longer waits for an answer. A gone
+   * renderer publishes its commands again once reloaded.
+   */
+  windowStopped(window: BrowserWindow, stop: RendererStop): void {
+    if (window.isDestroyed()) return;
+    const owner = window.webContents.id;
+    const record = this.windows.get(owner);
+    if (!record) return;
+    record.stopped = true;
+    if (stop === 'gone') record.ready = false;
+    this.flushes.released(owner);
+  }
+  /** The window's renderer answers again: recovered, or reloaded. */
+  windowResumed(window: BrowserWindow): void {
+    if (window.isDestroyed()) return;
+    const record = this.windows.get(window.webContents.id);
+    if (record) record.stopped = false;
   }
   /** `owner` is carrying out an agent's command; work private to the person refuses it. */
   private isAgentDriven(owner: number): boolean {
@@ -1485,6 +1517,7 @@ export class Desktop {
   /** Sends an event to every window that takes it, except the window `except`. */
   emit(event: DesktopEvent, except?: number): void {
     if (event.type === 'job') this.activity.job(event.job);
+    if (event.type === 'service-error') this.options.serviceError?.(event.service, event.message);
     for (const [id, { window, role }] of this.windows)
       if (
         id !== except &&
@@ -1500,9 +1533,10 @@ export class Desktop {
   }
   async flushSettings(window: BrowserWindow): Promise<void> {
     if (window.isDestroyed()) return;
-    await this.flushes.request(window.webContents.id, 'flush-settings', (token) => {
-      sendEvent(window.webContents, { type: 'flush-settings', token });
-    });
+    if (!this.windows.get(window.webContents.id)?.stopped)
+      await this.flushes.request(window.webContents.id, 'flush-settings', (token) => {
+        sendEvent(window.webContents, { type: 'flush-settings', token });
+      });
     await this.settings.flush();
   }
 
@@ -1513,7 +1547,7 @@ export class Desktop {
     if (!record || record.role !== 'viewer')
       throw new Error('The workspace window is unavailable.');
     await this.chats.stopOwner(owner);
-    if (record.ready)
+    if (record.ready && !record.stopped)
       await this.flushes.request(owner, 'flush', (token) => {
         sendEvent(window.webContents, { type: 'flush', token });
       });
@@ -1923,6 +1957,7 @@ export class Desktop {
         activity: this.activity,
         previews: this.webPreviews,
         resources: this.resources,
+        files: this.files,
         openURL: (url) => shell.openExternal(url),
         copyURL: (url) => this.pasteboard.copyText([url]),
       }),
@@ -1970,6 +2005,14 @@ export class Desktop {
         operations: this.operations,
         plans: this.operationPlans,
         checkpoints: this.checkpoints,
+        isAgent,
+        confirmCheckpointRemoval: (owner) =>
+          confirmNatively(
+            windowOf(owner),
+            'Remove this checkpoint?',
+            'Its saved copy is deleted and cannot be restored.',
+            'Remove',
+          ),
       }),
       ...createActionHandlers({ actions: this.actions }),
       ...createComparisonHandlers({

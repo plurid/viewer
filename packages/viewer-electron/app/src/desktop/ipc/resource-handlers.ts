@@ -85,6 +85,12 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
       return thumbnail;
     },
     document: async ([id, request]) => {
+      if (request && 'message' in request) {
+        const { message } = request;
+        return ports.resources.documentRead(id, request.requestID, (file, signal, format) =>
+          ports.files.extract(file, signal, true, undefined, format, message),
+        );
+      }
       if (request) {
         const { requestID, ...worksheet } = request;
         return ports.resources.documentRead(id, requestID, (file, signal, format) =>

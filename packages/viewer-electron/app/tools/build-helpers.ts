@@ -11,6 +11,7 @@ import { prepareProcessors } from './processors';
 import { preparePDFProcessors } from './pdf-processors';
 import { prepareRawProcessor } from './libraw';
 import { prepareOfficeRuntime } from './office-runtime';
+import { compatibleMacOSMinimum, macOSMinimum } from './native-build/macos-target';
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inventory = await licenseInventory();
 await prepareOfficeRuntime(appRoot);
@@ -19,9 +20,10 @@ if (process.platform === 'darwin') {
   mkdirSync('assets', { recursive: true });
   const cache = path.join(os.tmpdir(), `viewer-swift-cache-${process.getuid?.() || 'build'}`);
   mkdirSync(cache, { recursive: true });
-  // Match Electron's macOS minimum rather than the build machine's SDK default.
+  // Build for Viewer's macOS minimum rather than the build machine's SDK default. Electron's
+  // own minimum must not be newer, or the app would claim a macOS it cannot run on.
   const require = createRequire(import.meta.url);
-  const minimum = execFileSync(
+  const electronMinimum = execFileSync(
     '/usr/libexec/PlistBuddy',
     [
       '-c',
@@ -33,6 +35,11 @@ if (process.platform === 'darwin') {
     ],
     { encoding: 'utf8' },
   ).trim();
+  if (!compatibleMacOSMinimum(electronMinimum, macOSMinimum))
+    throw new Error(
+      `Electron needs macOS ${electronMinimum}; raise macOSMinimum in tools/native-build/macos-target.ts.`,
+    );
+  const minimum = macOSMinimum;
   const arch = process.env.VIEWER_BUILD_ARCH ?? process.arch;
   if (arch !== 'arm64' && arch !== 'x64')
     throw new Error('Native helpers support arm64 and x64 builds.');

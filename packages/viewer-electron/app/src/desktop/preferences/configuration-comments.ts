@@ -43,6 +43,10 @@ const descriptions: Record<string, string[]> = {
     'true shows a confirmation before native Trash; false sends selected items straight to Trash.',
     'This never permanently deletes files. Guarded operation Undo remains available in both modes.',
   ],
+  'settings.updates.checkAtLaunch': [
+    'true: at most once a day at launch, Viewer reads its signed update feed and shows a newer release.',
+    'false: only Viewer > Check for Updates checks. The App Store edition is updated by the App Store.',
+  ],
   'settings.quit.warnShortcut': [
     'true: the first Cmd+Q shows "Press ⌘Q again to quit" and a second within 2.5 seconds quits.',
     'false: Cmd+Q quits at once. Quit in the menu, the Dock and logging out always quit at once.',

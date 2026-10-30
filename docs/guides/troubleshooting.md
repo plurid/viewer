@@ -37,6 +37,26 @@ operation on its own when it restarts.
 
 **Undo** can be unavailable when a file it would restore has changed since.
 
+## A window stopped working
+
+If a window freezes or goes blank, Viewer asks **This window stopped working.**
+
+- Choose **Reload** to go on from what the window saved last: its planes and folders come back.
+- Choose **Close** to close it. Closing it and quitting Viewer no longer wait for it.
+
+A web page's own window asks the same, and a browser plane shows **Reload** for a page that stopped.
+
+## A share has no Trash
+
+Many network shares have no Trash, and Viewer never deletes files instead.
+
+- **Move to Trash** fails and leaves the item where it is. Delete it from another app, or move it to
+  a disk with a Trash first.
+- Saving over a file, or choosing **Replace**, keeps the previous version beside it, such as
+  `Notes (previous).md`. **File operations** names the file it kept. Remove it yourself when you no
+  longer need it.
+- An agent cannot replace or remove items on such a share.
+
 ## A local web page stopped loading
 
 Reopen the server's controls from **⌘K** → **Local servers…**, start it if it stopped, then reload
@@ -53,17 +73,32 @@ and closes its browser planes.
   later.
 - **⌘Q** asks for a second press. Choose **Quit Viewer** in the menu to quit at once.
 
+## Check for Updates could not check
+
+- Check your internet connection, then choose **Viewer → Check for Updates…** again.
+- If it says the update information is not signed by the publisher of Viewer, Viewer ignored it.
+  Download the latest version from the Viewer website instead.
+- If it says updates are not configured for this build, this copy was built without an update feed.
+  Check the Viewer website for new versions.
+
 ## Settings stopped changing
 
 Open **Settings → Configuration** to see which line of the settings file is invalid. Viewer keeps
 using the last valid settings until you fix it. Keep API keys in the model settings, never in the
 settings file.
 
+## Viewer hit a problem
+
+When something unexpected stops Viewer's own process, Viewer says **Viewer hit a problem**, records
+it in its diagnostic log and quits after saving your windows. Choose **Show Diagnostic Log** to see
+the entry, then open Viewer again.
+
 ## Report a problem
 
 1. Choose **Help → Show Diagnostic Log** to find Viewer's local error log. It is never sent
-   anywhere.
-2. Choose **Help → Report an Issue…** and describe the Viewer version, macOS version, the steps,
-   what you expected and what happened.
+   anywhere. After a crash, **Help → Show Crash Reports** opens the crash reports Viewer kept on
+   this Mac; they are never sent either.
+2. Choose **Help → Report an Issue…** and describe the Viewer version and build from **Viewer →
+   About Viewer**, the macOS version, the steps, what you expected and what happened.
 3. Attach a small sample file if you can, and the log if it helps. Remove personal paths, keys and
    anything private from screenshots and logs first.

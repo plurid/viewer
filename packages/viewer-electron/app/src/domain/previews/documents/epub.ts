@@ -6,6 +6,8 @@ export interface EPUBChapter {
 export interface EPUBImage {
   path: string;
   size: number;
+  /** A FictionBook's picture, carried as a checked `data:` URL; an EPUB's loads from the book. */
+  data?: string;
 }
 export interface EPUBReference {
   path: string;

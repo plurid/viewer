@@ -6,6 +6,7 @@ import { Icon } from '../../ui/Icon';
 import { NativeOpenActions } from '../../ui/navigation/NativeOpenActions';
 import { usePreviewState } from '../state';
 import type { Resource } from '../../../domain/contracts';
+import { fileFamily } from '../../../domain/files/entries';
 import { Loading } from '../../ui/primitives';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import {
@@ -167,7 +168,7 @@ function MediaPlayer(
     if (ready && context.evidence?.anchor.kind === 'media' && ref.current)
       ref.current.currentTime = context.evidence.anchor.seconds;
   }, [ready, context.evidence]);
-  const audio = resource.entry.mime.startsWith('audio/') || !!context.audioOnly;
+  const audio = fileFamily(resource.entry) === 'audio' || !!context.audioOnly;
   const onFallback = context.onFallback;
   const markReady = useCallback(() => {
     const media = ref.current;

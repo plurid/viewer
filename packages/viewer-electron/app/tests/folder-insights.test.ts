@@ -17,7 +17,7 @@ import { preferencesSchema } from '../src/domain/preferences/presentation/ui-sch
 
 const now = Date.UTC(2026, 9, 29);
 const day = 24 * 60 * 60 * 1000;
-const megabytes = 1024 * 1024;
+const megabytes = 1_000_000;
 const home = '/Users/a';
 const downloads = home + '/Downloads';
 const documents = home + '/Documents';

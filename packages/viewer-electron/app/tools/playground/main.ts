@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     console.log(`Usage: pnpm playground [--directory /absolute/path] [--offline]
 
 Default folder: ${defaultPlaygroundDirectory}
-First run downloads about 215 MiB of pinned RAW/video samples. --offline skips
+First run downloads about 440 MiB of pinned RAW/video samples. --offline skips
 missing downloads. Existing files and Git scenarios are preserved; no cleanup
 or reset command is provided. Each run writes an immutable report.
 `);

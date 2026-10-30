@@ -191,7 +191,7 @@ export function OptimizeDialog({
                   label="Target size unit"
                   value={String(unit)}
                   choices={[
-                    { value: '1000', label: 'kB' },
+                    { value: '1000', label: 'KB' },
                     { value: '1000000', label: 'MB' },
                   ]}
                   disabled={working}

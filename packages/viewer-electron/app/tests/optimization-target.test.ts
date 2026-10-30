@@ -6,6 +6,7 @@ import {
 import { encodeToTarget } from '../src/desktop/transforms/target-size';
 import { optimizationPlan, formatOptimizationSize } from '../src/domain/operations/optimization';
 import { validateTransform } from '../src/domain/operations/transforms';
+import { formatBytes } from '../src/domain/files/entries';
 
 it('keeps the highest tested quality within a requested size and bounds work', async () => {
   const encode = vi.fn(async (quality: number) => Buffer.alloc(quality * 100));
@@ -87,14 +88,31 @@ it('validates target budgets centrally for images and PDFs', () => {
 });
 
 it('uses the same decimal byte units for thresholds and candidate measurements', () => {
-  expect(formatOptimizationSize(300_000)).toBe('300 kB');
+  expect(formatOptimizationSize(300_000)).toBe('300 KB');
   expect(formatOptimizationSize(300_001)).toBe(
-    (300.001).toLocaleString(undefined, { maximumFractionDigits: 3 }) + ' kB',
+    (300.001).toLocaleString(undefined, { maximumFractionDigits: 3 }) + ' KB',
   );
   expect(formatOptimizationSize(299_999)).toBe(
-    (299.999).toLocaleString(undefined, { maximumFractionDigits: 3 }) + ' kB',
+    (299.999).toLocaleString(undefined, { maximumFractionDigits: 3 }) + ' KB',
   );
   expect(formatOptimizationSize(2_000_001)).toBe(
     (2.000001).toLocaleString(undefined, { maximumFractionDigits: 6 }) + ' MB',
   );
+});
+
+it('shows every size in decimal units, as Finder does', () => {
+  const decimal = (value: number, unit: string) =>
+    value.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' ' + unit;
+  expect(formatBytes(0)).toBe('0 B');
+  expect(formatBytes(999)).toBe('999 B');
+  expect(formatBytes(1000)).toBe('1 KB');
+  expect(formatBytes(1024)).toBe(decimal(1, 'KB'));
+  expect(formatBytes(1500)).toBe(decimal(1.5, 'KB'));
+  expect(formatBytes(1_000_000)).toBe('1 MB');
+  expect(formatBytes(4_400_000_000)).toBe(decimal(4.4, 'GB'));
+  // rounding up to the next unit names that unit
+  expect(formatBytes(999_960)).toBe('1 MB');
+  expect(formatBytes(999_940)).toBe(decimal(999.9, 'KB'));
+  expect(formatBytes(2 * 1000 ** 4)).toBe('2 TB');
+  expect(formatBytes(3_000_000, 'exact')).toBe('3 MB');
 });

@@ -657,9 +657,9 @@ async function sized(file: string, bytes: number, daysOld = 1) {
   const at = new Date(Date.now() - daysOld * day);
   await utimes(file, at, at);
 }
-await sized(place('Downloads', 'Viewer 0.9.dmg'), 182 * 1024 ** 2, 21);
-await sized(place('Downloads', 'Fonts installer.pkg'), 14 * 1024 ** 2, 12);
-await sized(place('Downloads', 'Old invoice.pdf'), 220 * 1024, 140);
+await sized(place('Downloads', 'Viewer 0.9.dmg'), 182 * 1000 ** 2, 21);
+await sized(place('Downloads', 'Fonts installer.pkg'), 14 * 1000 ** 2, 12);
+await sized(place('Downloads', 'Old invoice.pdf'), 220 * 1000, 140);
 // an archive Extract here already unpacked beside itself
 await copyFile(path.join(examples, 'Field trip.zip'), place('Downloads', 'Field trip.zip'));
 await mkdir(place('Downloads', 'Field trip'));
@@ -667,8 +667,8 @@ await writeFile(
   place('Downloads', 'Field trip', 'notes.txt'),
   'A short walk, a few photographs.\n',
 );
-await sized(place('Documents', 'Field trip film.mov'), 2.4 * 1024 ** 3, 9);
-await sized(place('Documents', 'Survey scans.pdf'), 18 * 1024 ** 2, 9);
+await sized(place('Documents', 'Field trip film.mov'), 2.4 * 1000 ** 3, 9);
+await sized(place('Documents', 'Survey scans.pdf'), 18 * 1000 ** 2, 9);
 await copyFile(path.join(examples, 'Materials.xlsx'), place('Documents', 'Materials copy.xlsx'));
 await copyFile(path.join(examples, 'Field notes.pdf'), place('Documents', 'Field notes (1).pdf'));
 for (const name of ['IMG_2041.HEIC', 'IMG_2042.HEIC', 'IMG_2043.HEIC'])

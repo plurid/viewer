@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { hashFile, sourceHash, treeHash } from './qualification/source';
 import { cloneTree } from './clone';
+import { macOSMinimum } from './native-build/macos-target';
 
 export { treeHash } from './qualification/source';
 
@@ -122,7 +123,7 @@ async function main() {
       'Live configured model consent and cancellation acceptance (contract tests do not call paid providers)',
       'Complete representative corpus for every advertised preview format, including valid IGES and codec/provider edge cases',
       'Native low-disk-space, interrupted transfer and filesystem/provider failure acceptance',
-      'Native acceptance on macOS 13 and the current stable macOS release',
+      `Native acceptance on macOS ${macOSMinimum} and the current stable macOS release`,
       'Store distribution certificate/profile/installer, direct notarization, public privacy/support pages and reviewed listing',
     ],
   };
@@ -184,6 +185,8 @@ async function main() {
         path.join(bundle, 'Contents/Info.plist'),
       ])
     ).stdout.trim();
+    if (minimumOS !== macOSMinimum)
+      throw new Error(`The candidate must declare macOS ${macOSMinimum}, not ${minimumOS}.`);
     if (!localNetworkUsageDescription)
       throw new Error('The candidate must explain its configured local-model network access.');
     const candidate = {

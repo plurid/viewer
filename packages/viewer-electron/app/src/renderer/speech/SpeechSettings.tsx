@@ -12,6 +12,7 @@ import { Loading } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { defaultShortcuts } from '../../domain/preferences/shortcuts';
 import { useMicrophones } from './devices';
+import { formatBytes } from '../../domain/files/entries';
 import './speech.css';
 import { HostedSpeechSettings } from './HostedSpeechSettings';
 
@@ -94,7 +95,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
             {item.id === 'whisper-small' ? ' · Recommended' : ''}
           </strong>
           <span>
-            {Math.round(item.bytes / 1024 ** 2)} MiB ·{' '}
+            {formatBytes(item.bytes)} ·{' '}
             {item.selected ? 'Selected' : item.installed ? 'Installed' : 'Not installed'}
           </span>
         </div>
@@ -108,7 +109,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
             />
             <p className="settings-note" role="status">
               {record?.status === 'downloading'
-                ? `Downloaded ${Math.round(record.received / 1024 ** 2)} of ${Math.round(item.bytes / 1024 ** 2)} MiB. Verifying before use.`
+                ? `Downloaded ${formatBytes(record.received)} of ${formatBytes(item.bytes)}. Verifying before use.`
                 : 'Preparing model…'}
             </p>
           </>

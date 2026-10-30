@@ -1,6 +1,7 @@
 import type { FileEntry } from '../contracts';
 import { fileFamily, formatBytes } from '../files/entries';
 import { archive, copyName, oldInstaller } from './rules';
+import { extractedFolderName } from '../operations/extract';
 
 /** The insights a folder can show, by the id a dismissal keeps. */
 export type InsightID =
@@ -62,10 +63,8 @@ interface InsightRule {
 }
 
 export const insightLimit = 3;
-const megabytes = 1024 * 1024;
+const megabytes = 1_000_000;
 const screenshot = /^(?:Screenshot|Screen Shot|Screen Recording|CleanShot)/i;
-/** "Photos" for Photos.zip and backup for backup.tar.gz: the folder Extract here makes. */
-export const archiveStem = (name: string) => name.replace(/\.(?:zip|tar|tar\.gz|tgz)$/i, '');
 const extension = (entry: FileEntry) => entry.extension.toLowerCase();
 const total = (files: readonly FileEntry[]) => files.reduce((sum, file) => sum + file.size, 0);
 /** "1 PDF", "3 PDFs" */
@@ -100,7 +99,7 @@ const insightRules: readonly InsightRule[] = [
     target: 'files',
     least: 1,
     matches: archive,
-    confirm: (entry, folders) => folders.has(archiveStem(entry.name)),
+    confirm: (entry, folders) => folders.has(extractedFolderName(entry.name)),
     title: (files) => `${count(files, 'archive', 'archives')} already extracted`,
     detail: namesAndSize,
   },

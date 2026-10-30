@@ -23,6 +23,8 @@
     "test:mas": "pnpm --filter viewer-electron test:mas",
     "qualify": "pnpm --filter viewer-electron qualify",
     "direct:release": "pnpm --filter viewer-electron direct:release",
+    "updates:keys": "pnpm --filter viewer-electron updates:keys",
+    "updates:verify": "pnpm --filter viewer-electron updates:verify",
     "verify": "pnpm check && pnpm lint && pnpm test && pnpm package",
     "package": "pnpm --filter viewer-electron package",
     "make": "pnpm --filter viewer-electron make",

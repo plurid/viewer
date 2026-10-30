@@ -29,6 +29,7 @@ export class DocumentCache {
     signal?: AbortSignal,
     requested?: WorksheetWindow,
     format = path.extname(file).slice(1).toLowerCase(),
+    message?: number,
   ): Promise<DocumentData> {
     signal?.throwIfAborted();
     const worksheet = requested ? worksheetPageSchema.parse(requested) : undefined;
@@ -40,6 +41,7 @@ export class DocumentCache {
       pages ?? null,
       worksheet ?? null,
       format,
+      message ?? null,
     ]);
     const cached = this.saved.get(key);
     if (cached) {
@@ -67,6 +69,7 @@ export class DocumentCache {
             worksheet,
             signal: abort.signal,
             format,
+            message,
           });
           if (!sameSourceVersion(sourceVersion(info), sourceVersion(await this.inspect(file))))
             throw new Error('The document changed while being read. Open it again.');

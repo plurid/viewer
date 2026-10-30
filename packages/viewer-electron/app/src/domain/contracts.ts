@@ -1,6 +1,7 @@
 import type { PromptAnswer, PromptRequest, PromptHistoryEntry } from './command-line/prompt';
 import type { ModelSuggestionRequest, ModelSuggestions } from './suggestions/model';
 import type { FileGuess } from './files/file-guess';
+import type { FileIdentity } from './files/signatures';
 import type { ReviewState, GitReviewRequest, GitReviewReply } from './comparison/review';
 import type { SessionRequest, SessionReply } from './agents/sessions';
 import type { FlushResult } from './persistence/flush';
@@ -15,7 +16,7 @@ import type { AgentTaskBundle, TaskWorkflowInput, TaskWorkflowReply } from './ag
 import type { TransformPlan } from './operations/transforms';
 import type { OptimizationOutcome } from './operations/optimization-target';
 import type { OptimizationRequest, OptimizationReply } from './operations/optimization-review';
-import type { WorksheetDocumentRequest } from './previews/documents/office';
+import type { DocumentRequest } from './previews/documents/requests';
 import type { SQLiteReply, SQLiteRequest } from './previews/data/sqlite';
 import type { ImageRenditionRequest } from './previews/images/rendered';
 import type { PreviewDerivationKind } from './previews/derivations';
@@ -678,7 +679,8 @@ export interface ViewerAPI {
   journalExportPreview(query: JournalQuery): Promise<JournalExportPreview>;
   journalExport(id: string): Promise<boolean>;
   journalClear(): Promise<boolean>;
-  htmlPreview(resourceID: string): Promise<HtmlPreview>;
+  /** `message`, one message of a mailbox, whose HTML body is the page. */
+  htmlPreview(resourceID: string, message?: number): Promise<HtmlPreview>;
   htmlPreviewClose(id: string): Promise<void>;
   localServerStart(root: string, paneID: string, sourceIdentity?: string): Promise<LocalServer>;
   localServers(): Promise<LocalServer[]>;
@@ -798,7 +800,7 @@ export interface ViewerAPI {
   appIcon(path: string, size: 'small' | 'large'): Promise<string>;
   /** Records a renderer failure in the local diagnostic log; nothing is sent anywhere. */
   diagnosticReport(detail: string): Promise<void>;
-  document(id: string, request?: WorksheetDocumentRequest): Promise<DocumentData>;
+  document(id: string, request?: DocumentRequest): Promise<DocumentData>;
   cancelDocument(id: string, requestID: string): Promise<void>;
   /** Reads a previewed file as `extension` once its own first bytes say it is one: Show as, for a
    * file whose name does not say its format. */
@@ -814,6 +816,10 @@ export interface ViewerAPI {
   chooseFolder(defaultPath?: string): Promise<string | null>;
   reveal(path: string): Promise<void>;
   openExternal(path: string): Promise<void>;
+  /** Opens a web or email address in the person's browser or mail app; other schemes are refused. */
+  openAddress(address: string): Promise<void>;
+  /** What a file's first bytes are, by signature; null for text or an unknown signature. */
+  fileIdentity(path: string): Promise<FileIdentity | null>;
   /** Asks macOS to mount a network share; it shows its own sign-in. */
   connectServer(address: string): Promise<void>;
   /** Files under `roots` carrying a Finder tag, found through Spotlight. */

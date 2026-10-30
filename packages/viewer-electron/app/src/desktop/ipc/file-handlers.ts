@@ -6,6 +6,10 @@ import type { FileInformationService } from '../files/file-information';
 import type { Watchers } from '../files/watchers';
 import { entry, list } from '../files/filesystem';
 import { macFiles } from '../native/macos-files';
+import { linkAddress } from '../../domain/previews/data/shortcuts';
+import { identifyBytes } from '../../domain/files/signatures';
+import { readHead } from '../models/file-guess';
+import path from 'node:path';
 
 type FileHandlers = Pick<
   ApiHandlers,
@@ -16,6 +20,8 @@ type FileHandlers = Pick<
   | 'fileInformationUpdate'
   | 'reveal'
   | 'openExternal'
+  | 'openAddress'
+  | 'fileIdentity'
   | 'nativeFilePanel'
   | 'folderSizeStart'
   | 'folderSizeGet'
@@ -53,6 +59,15 @@ export function createFileHandlers(ports: FilePorts): FileHandlers {
       await ports.fileAccess.require([file]);
       const error = await shell.openPath(file);
       if (error) throw new Error(error);
+    },
+    // a shortcut's address, checked here: only web and email addresses reach another app
+    openAddress: async ([address]) => {
+      await shell.openExternal(linkAddress(address));
+    },
+    // what the first bytes are, by signature only; text reads as no identity
+    fileIdentity: async ([file]) => {
+      const { head } = await readHead(file, (files) => ports.fileAccess.require(files), 4096);
+      return identifyBytes(head, path.basename(file)) ?? null;
     },
     nativeFilePanel: async ([kind, files]) => {
       await ports.fileAccess.require(files);

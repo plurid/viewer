@@ -3,6 +3,7 @@ import type { FileEntry } from '../../domain/contracts';
 import type { PreviewContext, PreviewModule } from './contracts';
 import { choosePreview, previewModules } from './registry';
 import { officeFamily, readsOfficeContent } from '../../domain/previews/documents/layout';
+import { previewsAsFile } from '../../domain/previews/documents/embedded';
 
 type PreviewComponent = ComponentType<PreviewContext>;
 
@@ -36,7 +37,7 @@ export function preloadPreviewModule(module: PreviewModule): Promise<PreviewComp
 
 /** The selected file's module, so Space or a Columns preview opens without waiting for code. */
 export function preloadPreviewFor(entry: FileEntry | undefined): void {
-  if (!entry || entry.directory) return;
+  if (!entry || !previewsAsFile(entry)) return;
   const module = choosePreview(entry);
   void preloadPreviewModule(module).catch(() => {});
   // A document opens in its page layout, which waits seconds for the Office engine to load: it

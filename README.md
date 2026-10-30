@@ -5,12 +5,22 @@ those files in the same window.
 
 ![Quick Preview of a PDF over its folder in Viewer](docs/media/files.png)
 
-Developer preview for macOS on Apple Silicon. Windows and Linux are in progress; see
+For Macs with Apple Silicon and macOS 14 or later. Windows and Linux are in progress; see
 [platform status](docs/reference/platforms.md).
 
 ## Run it
 
-You need macOS with the Xcode command-line tools, Node 22.22 or later, and pnpm 11.
+1. Download the Viewer disk image from the [Viewer website](https://plurid.com/viewer).
+2. Open it and drag **Viewer** onto **Applications**.
+3. Open Viewer from Applications. macOS asks once before opening an app from the internet; choose
+   **Open**.
+
+Viewer opens your Home folder. No account or model is needed to browse, preview or use the built-in
+tools. It checks for a newer version once a day, and **Viewer → Check for Updates…** checks at once.
+[Install and update Viewer](docs/guides/install.md) covers folder access, updates and removal.
+
+To run Viewer from source, you need macOS with the Xcode command-line tools, Node 22.22 or later,
+and pnpm 11:
 
 ```sh
 git clone https://github.com/plurid/viewer.git
@@ -19,8 +29,7 @@ pnpm install
 pnpm start
 ```
 
-Viewer opens your Home folder. No account or model is needed to browse, preview or use the built-in
-tools. [Build and run Viewer](docs/development/builds.md) covers local app bundles.
+[Build and run Viewer](docs/development/builds.md) covers local app bundles.
 
 ## The first keys
 

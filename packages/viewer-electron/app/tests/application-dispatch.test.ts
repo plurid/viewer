@@ -31,6 +31,8 @@ function menuHost() {
   return {
     openSettings: vi.fn(async () => {}),
     newWindow: vi.fn(async () => {}),
+    checkForUpdates: vi.fn(async () => {}),
+    acknowledgements: vi.fn(async () => {}),
     focusedWindow: vi.fn<() => ReturnType<typeof menuWindow> | null>(() => null),
     settingsWindow: vi.fn<() => ReturnType<typeof menuWindow> | null>(() => null),
     workspaceCommand: vi.fn(),

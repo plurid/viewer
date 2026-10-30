@@ -18,6 +18,8 @@ export async function dispatchApplicationCommand<Window extends MenuWindow>(
   host: {
     openSettings(): Promise<void>;
     newWindow(): Promise<void>;
+    checkForUpdates(): Promise<void>;
+    acknowledgements(): Promise<void>;
     focusedWindow(): Window | null;
     settingsWindow(): Window | null;
     workspaceCommand(command: string): void;
@@ -26,6 +28,8 @@ export async function dispatchApplicationCommand<Window extends MenuWindow>(
   // Application actions cannot depend on a renderer or a focused native window.
   if (command === 'settings') return host.openSettings();
   if (command === 'new-native-window') return host.newWindow();
+  if (command === 'check-for-updates') return host.checkForUpdates();
+  if (command === 'acknowledgements') return host.acknowledgements();
   const focused = host.focusedWindow();
   if (focused && focused === host.settingsWindow()) {
     const action = settingsEdits[command];

@@ -28,7 +28,7 @@ export interface SuggestionRule {
   reason(input: SuggestionInput): string | undefined;
 }
 
-const megabytes = 1024 * 1024;
+const megabytes = 1_000_000;
 const day = 24 * 60 * 60 * 1000;
 const files = (input: SuggestionInput) => input.selection.filter((entry) => !entry.directory);
 /** Every selected item is a file and passes the test. */

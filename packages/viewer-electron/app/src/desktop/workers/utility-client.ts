@@ -35,7 +35,18 @@ export interface OwnedWorker<Message = Reply> {
   thread?: Worker;
   postMessage(value: unknown): void;
   message(listener: (reply: Message) => void): void;
-  exit(listener: () => void, once?: boolean): void;
+  exit(listener: (code: number) => void, once?: boolean): void;
+}
+/** What the app does with workers' stderr and their unexpected ends: the diagnostic log. */
+export interface WorkerDiagnostics {
+  output(worker: string): (chunk: Buffer) => void;
+  stopped(worker: string, detail: string): void;
+}
+let diagnostics: WorkerDiagnostics | undefined;
+/** Every worker launched from now on reports to `sink`. A stderr pipe nobody reads fills and
+ * stops the worker that writes to it, so the app always reads it. */
+export function reportWorkers(sink: WorkerDiagnostics): void {
+  diagnostics = sink;
 }
 export function launchWorker<Message = Reply>(
   worker: string,
@@ -45,6 +56,8 @@ export function launchWorker<Message = Reply>(
   if (backend === 'thread') {
     const child = new Worker(worker, { name, stdout: true, stderr: true });
     if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
+    const output = diagnostics?.output(name);
+    if (output) child.stderr?.on('data', output);
     return {
       thread: child,
       postMessage: (value) => child.postMessage(value),
@@ -57,6 +70,8 @@ export function launchWorker<Message = Reply>(
   }
   const child = utilityProcess.fork(worker, [], { serviceName: name, stdio: 'pipe' });
   if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
+  const output = diagnostics?.output(name);
+  if (output) child.stderr?.on('data', output);
   return {
     process: child,
     postMessage: (value) => child.postMessage(value),
@@ -125,16 +140,21 @@ export class UtilityClient<Methods extends WorkerMethods = WorkerMethods> {
       if (reply.error) pending.reject(Object.assign(new Error(reply.error), { code: reply.code }));
       else pending.resolve(reply.value);
     });
-    child.exit(() => {
+    let reason = 'exited';
+    child.exit((code) => {
       if (this.child !== child) return;
+      // a utility process's end is recorded by the app's child-process-gone, with its reason
+      if (child.thread && !this.closed)
+        diagnostics?.stopped(this.options.name, `${this.options.name}: ${reason} (exit ${code})`);
       this.rejectPending('Background file services stopped. Retry the operation.');
       this.child = undefined;
       this.ready = undefined;
       this.options.stopped?.();
     });
-    child.thread?.on('error', () =>
-      this.rejectPending('Background file services stopped. Retry the operation.'),
-    );
+    child.thread?.on('error', (error: unknown) => {
+      reason = error instanceof Error ? error.message.slice(0, 500) : 'failed';
+      this.rejectPending('Background file services stopped. Retry the operation.');
+    });
   }
   async call<M extends MethodName<Methods>>(
     method: M,

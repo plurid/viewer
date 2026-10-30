@@ -1,5 +1,5 @@
 import type { FileEntry } from '../contracts';
-import { archiveStem } from './insights';
+import { extractedFolderName } from '../operations/extract';
 import { archive } from './rules';
 
 /**
@@ -96,7 +96,7 @@ export const overviewQueries: readonly OverviewQuery[] = [
 /** The folder Extract here makes beside an archive; undefined for a file that is not one. */
 export function extractedFolder(entry: FileEntry): string | undefined {
   if (entry.directory || !archive(entry)) return undefined;
-  const stem = archiveStem(entry.name);
+  const stem = extractedFolderName(entry.name);
   if (!stem) return undefined;
   const separator = entry.parent.includes('\\') && !entry.parent.includes('/') ? '\\' : '/';
   return entry.parent.replace(/[\\/]+$/, '') + separator + stem;

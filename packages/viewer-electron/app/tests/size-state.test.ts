@@ -106,7 +106,7 @@ it('reuses a measured folder in a larger selection without counting descendants 
   const sizes = await import('../src/renderer/explorer/sizes');
   sizes.receiveFolderSize(completed);
   const file = { path: '/fixtures/note.txt', directory: false, size: 42 } as FileEntry;
-  expect(sizes.selectionSize([folder, file]).label).toBe('1.2 KB');
+  expect(sizes.selectionSize([folder, file]).label).toBe('1.3 KB');
   expect(sizes.selectionSize([folder, file]).task?.bytes).toBe(1276);
   expect(
     sizes.selectionSize([folder, { ...file, path: folder.path + '/note.txt' }]).task?.bytes,

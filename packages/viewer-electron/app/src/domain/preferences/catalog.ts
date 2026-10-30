@@ -235,6 +235,14 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'boolean',
   },
   {
+    path: 'settings.updates.checkAtLaunch',
+    category: 'Privacy',
+    label: 'Check for updates when Viewer opens',
+    detail:
+      'At most once a day, Viewer reads a small signed file from its update server. Nothing about your files is sent. Direct download only; the App Store updates its edition.',
+    kind: 'boolean',
+  },
+  {
     path: 'settings.browsing.suggestions',
     category: 'Browsing',
     section: 'Suggestions',

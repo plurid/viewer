@@ -11,6 +11,8 @@ import { fileCoordination } from '../files/file-coordination';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
 import { epubReference, epubImagePath, epubImageLimit } from '../../domain/previews/documents/epub';
 import { readsOfficeContent } from '../../domain/previews/documents/layout';
+import { mailFormats } from '../../domain/previews/mail/formats';
+import { inspectedKind, inspectedLimits } from '../../domain/previews/inspected';
 const run = promisify(execFile);
 const decode = (value: string) =>
   value
@@ -61,6 +63,8 @@ export async function extractDocument(
     signal?: AbortSignal;
     worksheet?: WorksheetWindow;
     format?: string;
+    /** One message of a mailbox. */
+    message?: number;
   } = {},
 ): Promise<DocumentData> {
   return fileCoordination.run(
@@ -82,6 +86,7 @@ async function extractCoordinated(
     signal?: AbortSignal;
     worksheet?: WorksheetWindow;
     format?: string;
+    message?: number;
   },
 ): Promise<DocumentData> {
   const extension = options.format ? '.' + options.format : path.extname(file).toLowerCase();
@@ -297,6 +302,20 @@ async function extractCoordinated(
     if (result.truncated)
       result.coverageReason =
         'Some chapters or chapter content exceed the supported reading limits.';
+  } else if (mailFormats.includes(extension.slice(1))) {
+    const { extractMail } = await import('./mail');
+    return extractMail(file, extension.slice(1), options.signal, options.message);
+  } else if (extension === '.fb2') {
+    const { extractFictionBook } = await import('./fiction-book');
+    return extractFictionBook(file);
+  } else if (extension === '.webarchive') {
+    const { extractWebArchive } = await import('./saved-pages');
+    return extractWebArchive(file);
+  } else if (inspectedKind(extension.slice(1), path.basename(file))) {
+    const kind = inspectedKind(extension.slice(1), path.basename(file))!;
+    const { inspectedText, readInspected } = await import('./inspected');
+    result.inspected = readInspected(kind, await documentBytes(file, inspectedLimits[kind]));
+    result.evidence.push({ source: kind, text: inspectedText(result.inspected) });
   } else {
     const data = await documentBytes(file, 4000000);
     if (data.subarray(0, 8192).includes(0)) throw new Error('This format has no text extractor.');

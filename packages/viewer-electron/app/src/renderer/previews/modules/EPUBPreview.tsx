@@ -12,8 +12,13 @@ import { EPUBBookmarks } from '../EPUBBookmarks';
 import { readEPUBBookmarks } from '../../../domain/previews/documents/epub-bookmarks';
 export { chapterNodes } from '../epub-content';
 const emptyChapters: EPUBChapter[] = [];
+/** The only pictures a book may carry inline: base64 PNG, JPEG, GIF or WebP, as the desktop
+ * reader checked them. */
+const pictureURL = /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
+/** An EPUB, or a FictionBook read into the same chapters. */
 export default function EPUBPreview(context: PreviewContext) {
+  const kind = context.resource.entry.extension.toLowerCase() === 'fb2' ? 'FictionBook' : 'EPUB';
   const { document, error, retry } = useOfficeDocument(context);
   const [chapter, setChapter] = usePreviewState(context, 'epub.chapter', 0);
   useEffect(() => {
@@ -87,13 +92,23 @@ export default function EPUBPreview(context: PreviewContext) {
     setJump({ chapter: next, fragment: target.fragment });
   };
   const images = useMemo(
-    () => new Set(document?.epub?.images.map((image) => image.path)),
+    () => new Set(document?.epub?.images.filter((image) => !image.data).map((image) => image.path)),
+    [document?.epub],
+  );
+  const pictures = useMemo(
+    () =>
+      new Map(
+        document?.epub?.images.flatMap((image) =>
+          image.data && pictureURL.test(image.data) ? [[image.path, image.data] as const] : [],
+        ),
+      ),
     [document?.epub],
   );
   const nodes = bookNodes(content, {
     chapter: chapters[position],
     chapters,
     images,
+    pictures,
     context,
     navigate,
     match: match?.chapter === position ? match : undefined,
@@ -171,11 +186,11 @@ export default function EPUBPreview(context: PreviewContext) {
   );
   if (error)
     return (
-      <Empty icon="warning" title="EPUB could not be opened" detail={error}>
+      <Empty icon="warning" title={`${kind} could not be opened`} detail={error}>
         <button onClick={context.retry ?? retry}>Try again</button>
       </Empty>
     );
-  if (!document) return <Loading label="Reading EPUB…" />;
+  if (!document) return <Loading label={`Reading ${kind}…`} />;
   return (
     <div className="epub-viewer">
       <PreviewToolbar context={context}>
@@ -309,7 +324,7 @@ export default function EPUBPreview(context: PreviewContext) {
           />
         ) : (
           contents && (
-            <nav aria-label="EPUB contents">
+            <nav aria-label={`${kind} contents`}>
               {chapters.map((item, index) => (
                 <button
                   key={index}

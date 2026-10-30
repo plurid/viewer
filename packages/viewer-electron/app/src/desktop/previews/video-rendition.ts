@@ -7,6 +7,73 @@ import type { Decoder, DerivedRendition, Source } from './derived';
 import { errorMessage } from '../../domain/errors';
 
 export const videoPreviewLimit = 64 * 1024 * 1024;
+
+interface Probed {
+  format?: { duration?: string };
+  streams?: { duration?: string }[];
+}
+/** A raw elementary stream, such as MPEG-2 video, states no duration: its frames are counted at
+ * its frame rate. Probing moved the inherited descriptor, so the same version is opened again. */
+async function countedDuration(
+  root: string,
+  execute: typeof runProcessor,
+  source: Source,
+  demuxer: string,
+  signal: AbortSignal,
+): Promise<string | undefined> {
+  const input = await open(
+    source.file,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
+  try {
+    const current = await input.stat();
+    if (
+      current.dev !== source.info.dev ||
+      current.ino !== source.info.ino ||
+      current.mtimeMs !== source.info.mtimeMs ||
+      current.size !== source.info.size
+    )
+      throw new Error('The video changed before conversion. Reopen its preview.');
+    const counted = await execute(
+      path.join(root, 'ffprobe'),
+      [
+        '-v',
+        'error',
+        '-max_alloc',
+        '268435456',
+        '-protocol_whitelist',
+        'fd,pipe',
+        '-f',
+        demuxer,
+        '-fd',
+        '3',
+        '-i',
+        'fd:',
+        '-select_streams',
+        'v:0',
+        '-count_packets',
+        '-show_entries',
+        'stream=nb_read_packets,r_frame_rate',
+        '-of',
+        'json',
+      ],
+      [input.fd],
+      signal,
+      { timeout: 30000 },
+    );
+    const stream = (
+      JSON.parse(counted.toString()) as {
+        streams?: { nb_read_packets?: string; r_frame_rate?: string }[];
+      }
+    ).streams?.[0];
+    const [numerator = 0, denominator = 0] = stream?.r_frame_rate?.split('/').map(Number) ?? [];
+    // one packet a frame
+    const seconds = (Number(stream?.nb_read_packets) * denominator) / numerator;
+    return Number.isFinite(seconds) && seconds > 0 ? String(seconds) : undefined;
+  } finally {
+    await input.close();
+  }
+}
 /** Complete local compatibility copy, never a shortened excerpt. Fixed vectors
  * and held descriptors only; no caller flags, filesystem outputs or network. */
 export function videoDecoder(root: string, execute = runProcessor): Decoder {
@@ -41,7 +108,12 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
         combined,
         { timeout: 30000 },
       );
-      const facts = mediaInfo(JSON.parse(probe.toString()), extension);
+      const probed = JSON.parse(probe.toString()) as Probed;
+      if (!probed.format?.duration && !probed.streams?.some((stream) => stream.duration))
+        probed.format = {
+          duration: await countedDuration(root, execute, source, demuxer, combined),
+        };
+      const facts = mediaInfo(probed, extension);
       if (!facts.video && facts.audio)
         return await audioCopy(root, execute, source, demuxer, facts.duration, combined);
       if (

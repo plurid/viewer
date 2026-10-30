@@ -35,6 +35,15 @@ application storage after uninstalling. Do not delete these records while Viewer
 records you want to retain first. Restoring a backup does not replace any native folder
 authorization that macOS requires.
 
+## Update checks
+
+The direct-download edition checks for a newer version once a day when it opens, and when you choose
+Viewer → Check for Updates. It downloads a small signed file describing the latest release. The
+update server receives ordinary connection information, such as your IP address; no filenames, file
+contents or settings are sent. Turn the daily check off in Settings → Privacy. Choosing Download
+opens the installer address in your browser. The Mac App Store edition makes no update checks of its
+own.
+
 ## Optional model providers
 
 Model actions are optional. They run only when you invoke an action and explicitly authorize the

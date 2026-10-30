@@ -1,6 +1,7 @@
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import type { DrawingGeometryOptions } from '../../domain/previews/drawings/geometry';
+import type { SavedPage } from '../../domain/previews/saved-page';
 import path from 'node:path';
 import { UtilityClient } from '../workers/utility-client';
 import type { IndexMethods } from '../workers/index-protocol';
@@ -256,29 +257,53 @@ export class FileServices {
     await this.options.access?.([file]);
     await this.index.call('update', [file, removed]);
   }
-  /** `format`, the extension a preview reads the file as; its name otherwise. */
+  /** `format`, the extension a preview reads the file as; its name otherwise. `message`, one
+   * message of a mailbox. */
   async extract(
     file: string,
     signal?: AbortSignal,
     chapters = false,
     worksheet?: WorksheetWindow,
     format?: string,
+    message?: number,
   ): Promise<DocumentData> {
     await this.options.access?.([file]);
     const revision = this.accessRevision;
     const result = await this.previews.call(
       'extract',
-      format
-        ? [file, undefined, chapters, worksheet, format]
-        : worksheet
-          ? [file, undefined, chapters, worksheet]
-          : [file, undefined, chapters],
+      message !== undefined
+        ? [file, undefined, chapters, worksheet, format, message]
+        : format
+          ? [file, undefined, chapters, worksheet, format]
+          : worksheet
+            ? [file, undefined, chapters, worksheet]
+            : [file, undefined, chapters],
       signal,
     );
     if (revision !== this.accessRevision)
       throw new Error('File access changed. Read the document again.');
     await this.options.access?.([file]);
     return result;
+  }
+  /** An email's HTML body or a saved web page, with the parts it shows, read in the preview
+   * worker. */
+  async page(
+    file: string,
+    format: string,
+    message?: number,
+    signal?: AbortSignal,
+  ): Promise<SavedPage> {
+    await this.options.access?.([file]);
+    const revision = this.accessRevision;
+    const page = await this.previews.call(
+      'page',
+      message === undefined ? [file, format] : [file, format, message],
+      signal,
+    );
+    if (revision !== this.accessRevision)
+      throw new Error('File access changed. Open the preview again.');
+    await this.options.access?.([file]);
+    return page;
   }
   async sqlite(file: string, request: SQLiteRequest, signal?: AbortSignal): Promise<SQLiteReply> {
     await this.options.access?.([file]);

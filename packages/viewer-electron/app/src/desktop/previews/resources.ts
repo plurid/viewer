@@ -7,6 +7,12 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { lookup } from 'mime-types';
 import { mediaDemuxer } from '../transforms/media';
+import {
+  recordingFormat,
+  transportStreamContent,
+  transportStreamExtensions,
+  transportStreamProbe,
+} from '../../domain/media/transport-stream';
 import type { Resource, ResourceRead } from '../../domain/contracts';
 import { absolute, entry } from '../files/filesystem';
 import { imageDimensions, readImageDimensions } from './image-dimensions';
@@ -14,7 +20,7 @@ import { epubImagePath, epubImageLimit } from '../../domain/previews/documents/e
 import { Archives } from './archives';
 import { PreviewWork, previewContains, type PreviewScope } from './preview-work';
 import { fileCoordination } from '../files/file-coordination';
-import { modelFormats } from '../../domain/previews/models/formats';
+import { modelFormats, selfContainedModelFormats } from '../../domain/previews/models/formats';
 import {
   cameraRawFormats,
   type ImageRenditionRequest,
@@ -38,6 +44,8 @@ import {
 } from '../../domain/files/signatures';
 import { byteRange, WebPreviewError } from './web/policy';
 import { readSQLite } from './sqlite';
+import { embeddedFormat, embeddedPackage } from '../../domain/previews/documents/embedded';
+import { embeddedListing, readEmbedded } from './embedded';
 
 interface Grant {
   dispose?(): void;
@@ -51,8 +59,15 @@ interface Grant {
   /** A format the file's own bytes confirmed, for a file whose name does not say it, and the
    * version of the file they were read from. */
   format?: { extension: string; version: string };
+  /** A document package, such as an iWork folder: only its saved pictures are read, never the
+   * folder as a file. */
+  bundle?: boolean;
 }
 const MAX_READ = 4 * 1024 * 1024;
+/** A folder granted as the document it is. */
+const documentPackage = (file: string, info: Stats) =>
+  info.isDirectory() &&
+  embeddedPackage({ directory: true, extension: path.extname(file).slice(1) });
 /** The extension a granted file is read as: the format its bytes confirmed, or its own. */
 const grantExtension = (grant: Grant) => grant.format?.extension ?? grant.resource.entry.extension;
 const fileVersion = (info: Stats) =>
@@ -169,7 +184,8 @@ export class Resources {
     scope.add(actual);
     await this.access([actual]);
     const info = await stat(actual);
-    if (!info.isFile()) throw new Error('Choose a regular file to preview.');
+    if (!info.isFile() && !documentPackage(actual, info))
+      throw new Error('Choose a regular file to preview.');
     return fileCoordination.run(
       [{ path: actual, mode: 'read' }],
       async (signal) => {
@@ -186,13 +202,21 @@ export class Resources {
     scope.check();
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
     const item = await entry(absolute(file));
-    if (item.directory || (item.kind !== 'file' && item.kind !== 'symlink'))
-      throw new Error('Choose a regular file to preview.');
     const actual = await realpath(file);
     scope.add(actual);
     const target = await stat(actual);
-    if (!target.isFile()) throw new Error('Special devices and sockets cannot be previewed.');
+    const bundle = documentPackage(actual, target);
+    if (!bundle && (item.directory || (item.kind !== 'file' && item.kind !== 'symlink')))
+      throw new Error('Choose a regular file to preview.');
+    if (!target.isFile() && !bundle)
+      throw new Error('Special devices and sockets cannot be previewed.');
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
+    const extension = item.extension || path.extname(actual).slice(1).toLowerCase();
+    // a recording with a TypeScript name is read as the stream it is, while it stays that version
+    const format =
+      target.isFile() && transportStreamExtensions.includes(extension)
+        ? await this.recording(actual).catch(() => undefined)
+        : undefined;
     const id = randomUUID();
     const resource = {
       dimensions: item.mime.startsWith('image/')
@@ -203,7 +227,7 @@ export class Resources {
       entry: {
         ...item,
         size: target.size,
-        extension: item.extension || path.extname(actual).slice(1).toLowerCase(),
+        extension: format?.extension ?? extension,
         mime: item.mime === 'application/octet-stream' ? lookup(actual) || item.mime : item.mime,
       },
     };
@@ -215,12 +239,34 @@ export class Resources {
       authority: actual,
       file: actual,
       // Only 3D models load companion files (textures, materials) beside them; any
-      // other preview may read exactly its own file.
-      root: modelFormats.includes(resource.entry.extension) ? path.dirname(actual) : undefined,
+      // other preview, and a self-contained model, may read exactly its own file.
+      root:
+        modelFormats.includes(resource.entry.extension) &&
+        !selfContainedModelFormats.includes(resource.entry.extension)
+          ? path.dirname(actual)
+          : undefined,
       archiveChildren: new Set(),
       assets: new Set(),
+      bundle,
+      format,
     });
     return resource;
+  }
+  /** The stream a `.ts` or `.mts` file holds, from its first packets; nothing for TypeScript. */
+  private async recording(file: string): Promise<Grant['format']> {
+    const handle = await open(
+      fileCoordination.path(file),
+      constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
+    );
+    try {
+      const info = await handle.stat();
+      const head = await readAt(handle, 0, Math.min(info.size, transportStreamProbe));
+      return info.isFile() && transportStreamContent(head) === 'video'
+        ? { extension: recordingFormat, version: fileVersion(info) }
+        : undefined;
+    } finally {
+      await handle.close();
+    }
   }
   /** Aborted when the resource is released, so a closed preview's extraction stops. */
   signal(id: string): AbortSignal {
@@ -318,11 +364,14 @@ export class Resources {
       throw new Error(
         'This preview shows an entry inside an archive, which is not edited in place.',
       );
+    if (grant.bundle) throw new Error('A document package is edited in its own app.');
     return grant.file;
   }
   documentSource(id: string): string {
     const grant = this.get(id);
     if (!grant.file) throw new Error('Nested document extraction is unavailable.');
+    // a package's saved picture is all Viewer reads of it
+    if (grant.bundle) throw new Error('Viewer reads only the saved picture of a document package.');
     return grant.file;
   }
   /** One cancellable read is bound to its existing preview capability. Cancelling
@@ -495,9 +544,12 @@ export class Resources {
     if (!grant.file) throw new Error('Nested archives are not supported yet.');
     await this.access([grant.file]);
     const member = gzipMember(grant.resource.entry.name);
+    const embedded = embeddedFormat(grantExtension(grant));
     const entries = member
       ? await this.archives.gzip(grant.file, member, gzipLimits)
-      : await this.archives.list(grant.file);
+      : embedded
+        ? await embeddedListing(this.archives, grant.file, embedded, !!grant.bundle)
+        : await this.archives.list(grant.file);
     this.get(id);
     return entries;
   }
@@ -542,8 +594,11 @@ export class Resources {
     }
     const member = gzipMember(grant.resource.entry.name);
     if (member && name !== member) throw new Error(`This gzip file holds only ${member}.`);
+    const embedded = embeddedFormat(grantExtension(grant));
     let data: Buffer;
     if (member) data = await this.archives.gunzip(grant.file, gzipLimits);
+    else if (embedded)
+      data = await readEmbedded(this.archives, grant.file, embedded, name, !!grant.bundle);
     else if (name === openDocumentThumbnail.name && carriesThumbnail(grantExtension(grant)))
       data = await this.archives.readPNG(grant.file, name, openDocumentThumbnail);
     else data = await this.archives.read(grant.file, name);

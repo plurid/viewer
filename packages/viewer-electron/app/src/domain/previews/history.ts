@@ -30,6 +30,8 @@ const recalledKeys = new Set([
   'epub.size',
   'epub.contents',
   'epub.bookmarks',
+  'mail.message',
+  'mail.view',
   'office.formatted',
   'office.mode',
   'office.sheet',
@@ -56,6 +58,7 @@ const recalledKeys = new Set([
   'tree.expansion',
   'tree.scroll',
   'tree.query',
+  'hex.offset',
 ]);
 /** Reading markers and private notes survive a source revision; transient coordinates reset. */
 export function preservePreviewValue(key: string): boolean {

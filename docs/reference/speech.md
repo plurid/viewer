@@ -7,10 +7,10 @@ separately owns the model used by Ask Viewer and chat. See the
 
 ## Availability
 
-The direct macOS build bundles whisper.cpp 1.9.5 and a Viewer inference helper. Local speech
-requires **macOS 13.3 or later** and a verified model. Missing or invalid runtime resources report
-recognition unavailable. Browsing and typed commands remain available. Windows, Linux and Store
-speech acceptance remain unqualified.
+The direct macOS build bundles whisper.cpp 1.9.5 and a Viewer inference helper. Local speech runs on
+every macOS version Viewer supports and requires a verified model. Missing or invalid runtime
+resources report recognition unavailable. Browsing and typed commands remain available. Windows,
+Linux and Store speech acceptance remain unqualified.
 
 | Model         | Download bytes | Intended tradeoff                                                |
 | ------------- | -------------: | ---------------------------------------------------------------- |

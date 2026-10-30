@@ -11,15 +11,22 @@ import { htmlCapability } from '../../../domain/previews/html-address';
 import { LoopbackServer } from './loopback-server';
 import { errorResponse, htmlFile, webLimits, WebPreviewError } from './policy';
 import { StaticRoot, type ReadBudget, type WebAccess } from './static-root';
+import { SavedPageReader } from './saved-page';
 import { containsPath } from '../../files/containment';
+import type { SavedPage } from '../../../domain/previews/saved-page';
+import { savedPageName } from '../../../domain/previews/saved-page';
 
 interface HtmlGrant {
   owner: number;
   resourceID: string;
   file: string;
   preview: HtmlPreview;
-  reader: StaticRoot;
+  reader: StaticRoot | SavedPageReader;
+  /** The folder a file's page reads its companions from; a saved page reads none. */
+  root?: string;
 }
+/** Memory every saved page holds together. */
+const savedPageBudget = 128 * 1024 * 1024;
 interface ServerRecord {
   owner: number;
   info: LocalServer;
@@ -152,12 +159,68 @@ export class WebPreviews {
               id,
               url: `viewer-html://${id}/${encodeURIComponent(path.basename(file))}`,
             };
-            this.previews.set(id, { owner, resourceID, file, preview, reader });
+            this.previews.set(id, {
+              owner,
+              resourceID,
+              file,
+              preview,
+              reader,
+              root: reader.root.path,
+            });
             return { ...preview };
           } catch (error) {
             await reader.close();
             throw error;
           }
+        }),
+      resourceID,
+    );
+  }
+
+  /**
+   * A page made from `file`'s own parts, an email's HTML body or a saved web page: `read` makes it
+   * in the preview worker. It is held in memory under its own capability and served without
+   * scripts or any outside resource.
+   */
+  openPage(
+    owner: number,
+    file: string,
+    resourceID: string,
+    read: (signal: AbortSignal) => Promise<SavedPage>,
+  ): Promise<HtmlPreview> {
+    if (!path.isAbsolute(file) || !resourceID || resourceID.length > 200)
+      return Promise.reject(new WebPreviewError(400, 'Choose an on-disk file.'));
+    return this.track(
+      owner,
+      [file],
+      (signal) =>
+        this.serial(`page:${owner}:${resourceID}`, async () => {
+          signal.throwIfAborted();
+          const full = () =>
+            this.previews.size >= webLimits.previews ||
+            [...this.previews.values()].filter((grant) => grant.owner === owner).length >=
+              webLimits.ownerPreviews;
+          if (full()) throw new WebPreviewError(429, 'Close a preview before opening another.');
+          const page = await read(signal);
+          signal.throwIfAborted();
+          const reader = new SavedPageReader(page);
+          const held = [...this.previews.values()].reduce(
+            (size, grant) =>
+              size + (grant.reader instanceof SavedPageReader ? grant.reader.size : 0),
+            0,
+          );
+          if (full() || held + reader.size > savedPageBudget) {
+            await reader.close();
+            throw new WebPreviewError(429, 'Close a preview before opening another.');
+          }
+          const id = randomUUID();
+          const preview = {
+            id,
+            url: `viewer-html://${id}/${savedPageName}`,
+            blocked: page.blocked,
+          };
+          this.previews.set(id, { owner, resourceID, file, preview, reader });
+          return { ...preview };
         }),
       resourceID,
     );
@@ -435,7 +498,7 @@ export class WebPreviews {
         work.push(task);
       }
     for (const [id, item] of this.previews)
-      if (await affected([item.file, item.reader.root.path]))
+      if (await affected(item.root ? [item.file, item.root] : [item.file]))
         work.push(this.closeHtml(item.owner, id));
     for (const item of this.servers.values())
       if (await affected([item.reader.root.requested, item.reader.root.path]))

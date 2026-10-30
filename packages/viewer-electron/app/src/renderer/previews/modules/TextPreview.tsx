@@ -1,5 +1,5 @@
 import { effectiveWindowSettings } from '../../state/effective-ui';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import Prism from 'prismjs';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
@@ -19,11 +19,6 @@ import { usePreviewScroll } from '../scroll';
 import { StructuredTree } from '../StructuredTree';
 import { UnknownFile } from '../UnknownFile';
 import { decodeBinaryPlist } from '../../../domain/previews/data/plist';
-import {
-  isTransportStream,
-  transportStreamExtensions,
-  transportStreamProbe,
-} from '../../../domain/media/transport-stream';
 import { isStructured, inspectStructured } from '../../../domain/previews/data/structured';
 import type { ApplicationSettings } from '../../../domain/services';
 
@@ -133,16 +128,6 @@ export interface TextPreviewProps extends PreviewContext {
   onEditingChange?(editing: boolean): void;
 }
 
-// a video recorded as .ts or .mts plays in the media module, loaded only for one
-const MediaPreview = lazy(() => import('./MediaPreview'));
-async function transportStream(url: string, signal: AbortSignal) {
-  const response = await fetch(url, {
-    signal,
-    headers: { Range: `bytes=0-${transportStreamProbe - 1}` },
-  });
-  return isTransportStream(new Uint8Array(await response.arrayBuffer()));
-}
-
 /** A binary property list's values as JSON; it must fit in 8 MB. */
 async function binaryPlist(url: string, signal: AbortSignal) {
   const bytes = new Uint8Array(await (await fetch(url, { signal })).arrayBuffer());
@@ -160,7 +145,6 @@ export default function TextPreview(context: TextPreviewProps) {
     decoded?: boolean;
   } | null>(null);
   const [error, setError] = useState('');
-  const [stream, setStream] = useState(false);
   const [raw, setRaw] = usePreviewState(context, 'text.source', false);
   const markdownRef = useRef<HTMLElement>(null);
   const preferences = useViewer((state) => effectiveWindowSettings(state));
@@ -210,8 +194,6 @@ export default function TextPreview(context: TextPreviewProps) {
       grammar ? loadPrismGrammar(grammar).catch(() => undefined) : undefined,
     ])
       .then(async ([value]) => {
-        if (value.binary && transportStreamExtensions.includes(resource.entry.extension))
-          setStream(await transportStream(resource.url, signal).catch(() => false));
         if (value.binary && resource.entry.extension === 'plist')
           value = await binaryPlist(resource.url, signal).then(
             (text) => ({ text, truncated: false, binary: false, decoded: true }),
@@ -276,12 +258,6 @@ export default function TextPreview(context: TextPreviewProps) {
     );
   if (error) return <Empty icon="warning" title="Text could not be read" detail={error} />;
   if (!data) return <Loading />;
-  if (stream)
-    return (
-      <Suspense fallback={<Loading />}>
-        <MediaPreview {...context} />
-      </Suspense>
-    );
   if (data.binary) return <UnknownFile {...context} />;
   const ext = resource.entry.extension;
   const markdown = ['md', 'markdown', 'mdx'].includes(ext);

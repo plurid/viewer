@@ -128,7 +128,7 @@ for name, codec in [("motion.mp4", "libx264"), ("motion.webm", "libvpx")]:
         "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=12", "-t", "2",
         "-c:v", codec, "-pix_fmt", "yuv420p", "-threads", "2",
     ], target))
-for name, container in [("motion.mov", "mov"), ("motion.m4v", "ipod")]:
+for name, container in [("motion.mov", "mov"), ("motion.m4v", "ipod"), ("motion.f4v", "f4v")]:
     create(name, lambda target, container=container: ffmpeg([
         "-i", str(ASSETS / "motion.mp4"), "-c", "copy", "-f", container,
     ], target))
@@ -148,6 +148,10 @@ for name, arguments in [
     ("motion.3g2", ["-c:v", "mpeg4", "-b:v", "80k", "-f", "3g2"]),
     ("motion.vob", ["-c:v", "mpeg2video", "-b:v", "80k", "-f", "vob"]),
     ("motion.mxf", ["-c:v", "mpeg2video", "-b:v", "80k", "-r", "25", "-f", "mxf"]),
+    ("motion.m2v", ["-c:v", "mpeg2video", "-b:v", "80k", "-f", "mpeg2video"]),
+    # 188-byte transport stream packets, as HDV cameras and broadcast recorders write them; named
+    # .m2t here, since a .ts file in this folder would be read as TypeScript source
+    ("motion.m2t", ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-f", "mpegts"]),
 ]:
     create(name, lambda target, arguments=arguments: ffmpeg([
         "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=12", "-t", "2", "-threads", "2",
@@ -161,6 +165,10 @@ for name, arguments in [
     ("tone.mka", ["-c:a", "flac"]),
     ("tone.ac3", ["-c:a", "ac3", "-ar", "48000"]),
     ("tone.wv", ["-c:a", "wavpack"]),
+    ("tone.oga", ["-c:a", "flac", "-f", "oga"]),
+    ("tone.au", ["-c:a", "pcm_s16be", "-f", "au"]),
+    ("tone.snd", ["-c:a", "pcm_mulaw", "-f", "au"]),
+    ("tone.mp2", ["-c:a", "mp2", "-b:a", "64k", "-f", "mp2"]),
 ]:
     create(name, lambda target, arguments=arguments: ffmpeg([
         "-i", str(ASSETS / "tone.wav"), *arguments,

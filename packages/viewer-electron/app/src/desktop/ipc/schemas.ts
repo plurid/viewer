@@ -32,7 +32,10 @@ import { browserRequestSchema } from '../../domain/previews/browser';
 import { transformPlanSchema } from '../../domain/operations/transforms';
 import { mediaRequestSchema } from '../../domain/media/documents';
 import { optimizationRequestSchema } from '../../domain/operations/optimization-review';
-import { worksheetDocumentRequestSchema } from '../../domain/previews/documents/office';
+import {
+  documentRequestSchema,
+  mailboxMessageSchema,
+} from '../../domain/previews/documents/requests';
 import { sqliteRequestSchema } from '../../domain/previews/data/sqlite';
 import { noteRequestSchema } from '../../domain/editing/notes';
 import { speechRequestSchema } from '../../domain/speech/recognition';
@@ -195,7 +198,7 @@ export const schemas = {
   journalExportPreview: z.tuple([journalQuerySchema]),
   journalExport: z.tuple([z.uuid()]),
   journalClear: z.tuple([]),
-  htmlPreview: z.tuple([id]),
+  htmlPreview: z.tuple([id, mailboxMessageSchema.optional()]),
   htmlPreviewClose: z.tuple([id]),
   localServerStart: z.tuple([
     localPath,
@@ -640,7 +643,7 @@ export const schemas = {
   thumbnail: z.tuple([localPath, z.number().int().min(128).max(512)]),
   appIcon: z.tuple([localPath, z.enum(['small', 'large'])]),
   diagnosticReport: z.tuple([z.string().max(8000)]),
-  document: z.tuple([id, worksheetDocumentRequestSchema.optional()]),
+  document: z.tuple([id, documentRequestSchema.optional()]),
   cancelDocument: z.tuple([id, id]),
   resourceFormat: z.tuple([id, z.string().regex(/^[a-z0-9]{1,8}$/)]),
   bootstrap: z.tuple([]),
@@ -651,6 +654,8 @@ export const schemas = {
   chooseFolder: z.tuple([localPath.optional()]),
   reveal: z.tuple([localPath]),
   openExternal: z.tuple([localPath]),
+  openAddress: z.tuple([z.string().min(1).max(8192)]),
+  fileIdentity: z.tuple([localPath]),
   connectServer: z.tuple([z.string().min(3).max(2048)]),
   taggedFiles: z.tuple([z.string().trim().min(1).max(255), z.array(localPath).min(1).max(100)]),
   nativeFilePanel: z.tuple([z.enum(['preview', 'share']), z.array(localPath).min(1).max(100)]),
@@ -892,6 +897,8 @@ export const methodWindows = {
   chooseFolder: 'both',
   reveal: 'viewer',
   openExternal: 'viewer',
+  openAddress: 'viewer',
+  fileIdentity: 'viewer',
   connectServer: 'viewer',
   taggedFiles: 'viewer',
   nativeFilePanel: 'viewer',

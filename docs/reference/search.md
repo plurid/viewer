@@ -27,11 +27,13 @@ parentheses for grouping.
 | Extension    | `ext:pdf`, comma-separated extensions                                                     |
 | Kind         | `file`, `folder`, `link`, `app`, `image`, `video`, `audio`, `text`, `document`, `archive` |
 | Name/path    | `name:draft`, `path:Books`                                                                |
-| Size         | `size>10mb`, `size<=500kb`, `size=0`; units b, kb, mb, gb, tb                             |
+| Size         | `size>10mb`, `size<=500kb`, `size=0`; decimal units b, kb, mb, gb, tb                     |
 | Dates        | `modified<7d`, `modified:today`, `created>=2026-01-01`; durations h, d, w, mo, y          |
 | Finder tags  | `tag:red`, `tag:"Project X"`                                                              |
 | Flags        | `is:hidden`, `is:link`, `is:file`, `is:folder`                                            |
 | Name pattern | `~^IMG_\d+` for a case-insensitive RE2 regular expression                                 |
+
+Sizes are decimal, as Viewer and Finder show them: `1kb` is 1,000 bytes.
 
 The older `size:>10mb` and `modified:>2025-01-01` forms remain accepted. Finder tags use Spotlight
 and require the direct macOS build. Invalid syntax identifies its column; a folder filter keeps its

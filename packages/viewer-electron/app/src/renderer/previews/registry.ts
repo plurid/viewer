@@ -1,11 +1,20 @@
 import type { FileEntry } from '../../domain/contracts';
 import type { PreviewModule } from './contracts';
 import { officeFormats } from '../../domain/previews/documents/layout';
+import { embeddedExtensions, embeddedFormat } from '../../domain/previews/documents/embedded';
 import { modelFormats } from '../../domain/previews/models/formats';
 import { renderedImageFormats } from '../../domain/previews/images/rendered';
 import { fontFormats } from '../../domain/previews/fonts/formats';
 import { gzipMember, zipContainers } from '../../domain/files/containers';
 import { languageExtensions, languageFor } from '../../domain/editing/languages';
+import { mailFormats } from '../../domain/previews/mail/formats';
+import {
+  certificateFormats,
+  keyFormats,
+  privateKeyNames,
+} from '../../domain/previews/keys/certificates';
+import { shortcutFormats } from '../../domain/previews/data/shortcuts';
+import { provisionFormats } from '../../domain/previews/data/provision';
 
 const extension = (formats: readonly string[]) => (entry: FileEntry) =>
   formats.includes(entry.extension) ? 100 : 0;
@@ -92,6 +101,13 @@ const convertedMedia = [
   'mka',
   'ac3',
   'wv',
+  'amr',
+  'ape',
+  'au',
+  'snd',
+  'm2v',
+  'mp2',
+  'mpa',
 ];
 const cardFormats = ['ics', 'ical', 'vcf', 'vcard'];
 const subtitleFormats = ['srt', 'vtt', 'ass', 'ssa'];
@@ -128,6 +144,15 @@ export const previewModules: PreviewModule[] = [
     formats: officeFormats,
     detect: extension(officeFormats),
     load: () => import('./modules/OfficePreview'),
+  },
+  {
+    id: 'embedded',
+    label: 'Saved preview',
+    formats: embeddedExtensions,
+    // ahead of other readers of these names: a `.key` file that is text, such as a private key,
+    // is handed on to the preview it would otherwise have
+    detect: (entry) => (embeddedFormat(entry.extension) ? 110 : 0),
+    load: () => import('./modules/EmbeddedPreview'),
   },
   {
     id: 'dxf',
@@ -221,6 +246,8 @@ export const previewModules: PreviewModule[] = [
       'm4a',
       'aac',
       'opus',
+      'oga',
+      'f4v',
       ...convertedMedia,
     ],
     detect: (entry) =>
@@ -252,6 +279,28 @@ export const previewModules: PreviewModule[] = [
     load: () => import('./modules/SubtitlesPreview'),
   },
   {
+    id: 'mail',
+    label: 'Email',
+    formats: mailFormats,
+    // a folder Mail exported, `Inbox.mbox`, is browsed: it is no mailbox file
+    detect: (entry) => (entry.directory ? 0 : documentExtension(mailFormats)(entry)),
+    load: () => import('./modules/MailPreview'),
+  },
+  {
+    id: 'fictionbook',
+    label: 'FictionBook',
+    formats: ['fb2'],
+    detect: documentExtension(['fb2']),
+    load: () => import('./modules/EPUBPreview'),
+  },
+  {
+    id: 'webarchive',
+    label: 'Web archive',
+    formats: ['webarchive'],
+    detect: (entry) => (entry.directory ? 0 : documentExtension(['webarchive'])(entry)),
+    load: () => import('./modules/WebArchivePreview'),
+  },
+  {
     id: 'sqlite',
     label: 'SQLite database',
     formats: ['sqlite', 'sqlite3', 'db3', 'db'],
@@ -263,6 +312,42 @@ export const previewModules: PreviewModule[] = [
           ? 60
           : 0,
     load: () => import('./modules/SQLitePreview'),
+  },
+  {
+    id: 'certificate',
+    label: 'Certificate or key',
+    formats: [...certificateFormats, ...keyFormats],
+    hex: 'own',
+    // ahead of Office, which reads `.pub` as Publisher: a file that is not PEM, armor or DER is
+    // handed on to the preview it would otherwise have
+    detect: (entry) =>
+      !entry.directory &&
+      ([...certificateFormats, ...keyFormats].some((format) => format === entry.extension) ||
+        privateKeyNames.some((name) => name === entry.name))
+        ? 105
+        : 0,
+    load: () => import('./modules/CertificatePreview'),
+  },
+  {
+    id: 'shortcut',
+    label: 'Internet shortcut',
+    formats: shortcutFormats,
+    detect: (entry) => (entry.directory ? 0 : documentExtension(shortcutFormats)(entry)),
+    load: () => import('./modules/ShortcutPreview'),
+  },
+  {
+    id: 'torrent',
+    label: 'Torrent',
+    formats: ['torrent'],
+    detect: documentExtension(['torrent']),
+    load: () => import('./modules/TorrentPreview'),
+  },
+  {
+    id: 'provision',
+    label: 'Provisioning profile',
+    formats: provisionFormats,
+    detect: documentExtension(provisionFormats),
+    load: () => import('./modules/ProvisionPreview'),
   },
   {
     id: 'text',

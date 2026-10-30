@@ -2,6 +2,7 @@ import type { OperationRequest } from '../../domain/contracts';
 import type { TransformPlan } from '../../domain/operations/transforms';
 import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { extractedFolderName } from '../../domain/operations/extract';
 import { combinedTransform, transformExtension } from '../../domain/operations/transforms';
 import { validName } from '../files/filesystem';
 import { sameItem } from '../files/item-identity';
@@ -36,12 +37,7 @@ function namedOutput(request: OperationRequest, source: string): string {
       ? transformedName(request, request.transform, source)
       : conversionOutput(source, request.conversion!);
   if (request.kind === 'extract')
-    return path.join(
-      request.destination!,
-      validName(
-        path.basename(source).replace(/\.(?:tar\.gz|tgz|zip|tar)$/i, '') || 'Extracted archive',
-      ),
-    );
+    return path.join(request.destination!, validName(extractedFolderName(path.basename(source))));
   if (request.kind === 'rename') return path.join(path.dirname(source), validName(request.name!));
   return path.join(request.destination!, request.name ?? path.basename(source));
 }

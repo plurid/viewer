@@ -1,6 +1,6 @@
 import type { TypedArray } from 'three';
 
-export type MeshFormat = 'obj' | 'stl' | 'ply';
+export type MeshFormat = 'obj' | 'stl' | 'ply' | 'off';
 export interface MeshMaterial {
   name: string;
   kind: 'phong' | 'standard' | 'line' | 'points';
@@ -28,6 +28,11 @@ export interface MeshResult {
   libraries: string[];
 }
 export const meshByteLimit = 128 * 1024 * 1024;
+export const meshVertexLimit = 4000000;
+export const meshTriangleLimit = 2000000;
+/** Objects a scene may build. Collada, VRML and X3D reuse nodes by reference, and each reuse
+ * is a copy, so a small file could otherwise expand without bound. */
+export const sceneObjectLimit = 100000;
 
 /** Count shared buffers once; these are decoded geometry bytes, not file sizes. */
 export function meshTransfers(result: MeshResult): ArrayBuffer[] {

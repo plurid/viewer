@@ -11,11 +11,17 @@ export function isBinaryPlist(bytes: Uint8Array): boolean {
   return bytes.length >= 40 && new TextDecoder().decode(bytes.subarray(0, 8)) === header;
 }
 
+/** How a property list's data reads: a short description of its size, or its bytes. */
+export interface PlistOptions {
+  data?: 'description' | 'bytes';
+}
+
 /**
  * The property list as plain values: dictionaries become objects, dates ISO strings, data a
- * short description of its size. Malformed offsets, cycles and oversized lists are refused.
+ * short description of its size, or with `data: 'bytes'` a view of its bytes. Malformed offsets,
+ * cycles and oversized lists are refused.
  */
-export function decodeBinaryPlist(bytes: Uint8Array): unknown {
+export function decodeBinaryPlist(bytes: Uint8Array, options: PlistOptions = {}): unknown {
   if (!isBinaryPlist(bytes)) throw new Error('This is not a binary property list.');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const trailer = bytes.length - 32;
@@ -71,8 +77,10 @@ export function decodeBinaryPlist(bytes: Uint8Array): unknown {
       case 0x3:
         return new Date((view.getFloat64(at + 1) + epoch) * 1000).toISOString();
       case 0x4: {
-        const [size] = length(at, info);
-        return `<data, ${size.toLocaleString()} bytes>`;
+        const [size, start] = length(at, info);
+        if (options.data !== 'bytes') return `<data, ${size.toLocaleString()} bytes>`;
+        if (start + size > trailer) throw new Error('A property list data value is out of range.');
+        return bytes.subarray(start, start + size);
       }
       case 0x5: {
         const [size, start] = length(at, info);
@@ -117,7 +125,7 @@ const content = (node: XMLNode) =>
   node.children.filter((child) => typeof child === 'string').join('');
 
 /** An XML property list as the same plain values the binary form gives. */
-export function xmlPlistValue(text: string): unknown {
+export function xmlPlistValue(text: string, options: PlistOptions = {}): unknown {
   // Apple's declaration only names its public DTD. One with an internal subset, where entities
   // live, is left in place, and the XML reader refuses it.
   const body = text.replace(/<!DOCTYPE plist\s[^[>]*>/, '');
@@ -149,6 +157,10 @@ export function xmlPlistValue(text: string): unknown {
       case 'date':
         return content(node).trim();
       case 'data': {
+        if (options.data === 'bytes')
+          return Uint8Array.from(atob(content(node).replace(/\s/g, '')), (character) =>
+            character.charCodeAt(0),
+          );
         const base64 = content(node).replace(/\s/g, '');
         const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
         return `<data, ${((base64.length / 4) * 3 - padding).toLocaleString()} bytes>`;

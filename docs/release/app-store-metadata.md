@@ -9,9 +9,9 @@ Resolve every release gate before using these drafts publicly.
 | Subtitle                         | Files in a spatial workspace                                                                            |
 | Bundle identifier                | `com.pluridviewer.app`                                                                                  |
 | Team                             | Propal Invest SRL, `49W9L8Z9J5`                                                                         |
-| Version                          | `0.1.0`; final Store build number must be unique                                                        |
+| Version                          | `1.0.0`; final Store build number must be unique                                                        |
 | Primary category                 | Utilities                                                                                               |
-| Initial platform                 | macOS, Apple Silicon, minimum macOS 13                                                                  |
+| Initial platform                 | macOS, Apple Silicon, minimum macOS 14                                                                  |
 | SKU                              | `viewer-macos-001` (confirm uniqueness in App Store Connect)                                            |
 | Keywords                         | `files,folders,workspace,preview,CAD,DXF,STEP,STL,terminal,AI,search`                                   |
 | Support contact                  | `source@plurid.com` (owner must confirm monitoring)                                                     |

@@ -20,6 +20,9 @@ type Package = {
   homepage?: string;
 };
 export async function licenseInventory() {
+  const { version } = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')) as {
+    version: string;
+  };
   const raw = JSON.parse(
     (
       await exec('pnpm', ['licenses', 'list', '--prod', '--json'], {
@@ -36,7 +39,8 @@ export async function licenseInventory() {
     notices: { file: string; sha256: string }[];
   }[] = [];
   const text: string[] = [
-    'Viewer third-party notices\n\nDeclared production packages, including optional packages. Bundling may eliminate unused code. Electron/Chromium and Open CASCADE notices are also supplied separately.\n\nnode-pty 1.1.0 is modified during packaging to apply macOS terminal settings to the owned PTY master for App Sandbox compatibility. Source and exact patch: https://github.com/plurid/viewer/blob/main/packages/viewer-electron/app/forge.config.ts\n',
+    'Viewer third-party notices\n\nDeclared production packages, including optional packages. Bundling may eliminate unused code. Electron/Chromium and Open CASCADE notices are also supplied separately.\n\nnode-pty 1.1.0 is modified during packaging to apply macOS terminal settings to the owned PTY master for App Sandbox compatibility. Source and exact patch, as released: ' +
+      `https://github.com/plurid/viewer/blob/v${version}/packages/viewer-electron/app/forge.config.ts\n`,
   ];
   text.push(
     '\nOffice layout includes the unmodified Noto Sans CJK 2.004 and Noto Serif CJK 2.001 collections (SIL Open Font License 1.1), providing Japanese, Korean, Simplified/Traditional Chinese and Hong Kong serif/sans/monospace faces. The original copyrights and license are in noto-cjk-2.004.txt. The exact upstream commit, URLs and SHA-256 values are recorded in src/desktop/previews/office-font-manifest.ts; the fonts are bundled inside the Office virtual filesystem and never installed into the host OS.\n',

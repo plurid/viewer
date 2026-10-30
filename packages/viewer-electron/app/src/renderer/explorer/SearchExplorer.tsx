@@ -1,4 +1,4 @@
-import { nativeOpening } from './opening';
+import { chooseOpening } from './opening';
 import { memo, useMemo, useRef, useState } from 'react';
 import type { FileEntry, SearchPane } from '../../domain/contracts';
 import {
@@ -53,22 +53,25 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       void workspace.openEvidence(evidence, id).catch(report);
       return;
     }
-    if (nativeOpening(entry, opening, linked)) {
-      void window.viewer.openExternal(entry.path).catch(report);
-      return;
-    }
     const origin = activeWorkspace().id;
-    void revealFile(id, entry.path)
-      .then((link) =>
-        workspace.openPath(entry.path, {
-          workspaceID: origin,
-          paneID: id,
-          linked: true,
-          another,
-          link,
-        }),
-      )
-      .catch(report);
+    chooseOpening(
+      entry,
+      opening,
+      linked,
+      () => void window.viewer.openExternal(entry.path).catch(report),
+      () =>
+        void revealFile(id, entry.path)
+          .then((link) =>
+            workspace.openPath(entry.path, {
+              workspaceID: origin,
+              paneID: id,
+              linked: true,
+              another,
+              link,
+            }),
+          )
+          .catch(report),
+    );
   };
   const surface = useRef<HTMLDivElement>(null);
   const search = useIndexedSearch(

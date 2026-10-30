@@ -13,9 +13,16 @@ import {
 } from '../src/desktop/speech/runtime-manifest';
 import { hashFile } from './filesystem/fingerprints';
 import { verifySpeechPackage } from '../src/desktop/speech/signed-resources';
+import { assertMacOSMinimum, macOSMinimum } from './native-build/macos-target';
 
 const execute = promisify(execFile);
 const prefix = 'build-apple/whisper.xcframework/macos-arm64_x86_64/whisper.framework/Versions/A/';
+const speechBinaries = ['viewer-speech-recognizer', 'libwhisper.dylib'];
+/** The pinned engine and the owned helper both run on Viewer's macOS minimum, as the other
+ * bundled helpers do (libwhisper.dylib declares 13.3). */
+async function checkSpeechMinimum(directory: string): Promise<void> {
+  for (const name of speechBinaries) await assertMacOSMinimum(path.join(directory, name));
+}
 export async function verifySpeechRuntime(directory: string): Promise<void> {
   const folder = await lstat(directory);
   if (!folder.isDirectory() || folder.isSymbolicLink())
@@ -31,7 +38,7 @@ export async function verifySpeechRuntime(directory: string): Promise<void> {
   if (manifest.version !== speechRuntimeVersion || manifest.archive !== speechRuntimeArchive.sha256)
     throw new Error('The bundled speech engine manifest does not match its pinned release.');
   let changedBySigning = false;
-  for (const name of ['viewer-speech-recognizer', 'libwhisper.dylib']) {
+  for (const name of speechBinaries) {
     const file = path.join(directory, name),
       info = await lstat(file);
     if (
@@ -63,6 +70,7 @@ export async function prepareSpeechRuntime(
   );
   if (exists) {
     await verifySpeechRuntime(destination);
+    await checkSpeechMinimum(destination);
     return destination;
   }
   await mkdir(path.join(appRoot, 'out'), { recursive: true });
@@ -114,7 +122,7 @@ export async function prepareSpeechRuntime(
     '-std=c++17',
     '-O2',
     '-target',
-    nativeArch + '-apple-macos13.0',
+    nativeArch + '-apple-macos' + macOSMinimum,
     '-save-temps=obj',
     '-I',
     headers,
@@ -127,10 +135,7 @@ export async function prepareSpeechRuntime(
   await copyFile(helper, path.join(output, 'viewer-speech-recognizer'), constants.COPYFILE_EXCL);
   const hashes = Object.fromEntries(
     await Promise.all(
-      ['viewer-speech-recognizer', 'libwhisper.dylib'].map(async (name) => [
-        name,
-        await hashFile(path.join(output, name)),
-      ]),
+      speechBinaries.map(async (name) => [name, await hashFile(path.join(output, name))]),
     ),
   );
   await writeFile(
@@ -147,6 +152,7 @@ export async function prepareSpeechRuntime(
     ),
     { flag: 'wx' },
   );
+  await checkSpeechMinimum(output);
   await cp(output, destination, { recursive: true, force: false, errorOnExist: true });
   await verifySpeechRuntime(destination);
   console.log('Prepared the bundled speech engine. Build intermediates were retained.');

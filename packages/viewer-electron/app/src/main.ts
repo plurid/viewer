@@ -16,6 +16,7 @@ import {
   screen,
   crashReporter,
   globalShortcut,
+  shell,
   systemPreferences,
 } from 'electron';
 import type { WebPreferences } from 'electron';
@@ -59,7 +60,19 @@ import {
   rendererRequestAllowed,
 } from './desktop/windows/web-content-policy';
 import { performanceMeter } from './desktop/diagnostics/performance';
+import {
+  DiagnosticBudget,
+  MainFailures,
+  WorkerOutput,
+  recordConsoleErrors,
+  redactSecrets,
+} from './desktop/diagnostics/failures';
+import { reportWorkers } from './desktop/workers/utility-client';
+import { answerStoppedWindows, rendererWatches } from './desktop/windows/window-health';
 import { assetPath, setAssetRoot } from './desktop/native/assets';
+import { installAboutPanel, installedRelease, openAcknowledgements } from './desktop/windows/about';
+import { applicationUpdates } from './desktop/updates/native';
+import type { Updates } from './desktop/updates/updates';
 const terminalArguments = process.argv.slice(app.isPackaged ? 1 : 2);
 const mcpMode = terminalArguments[0] === '--mcp';
 const cliMode = !mcpMode && isCLIInvocation(terminalArguments);
@@ -169,10 +182,26 @@ process.on(
       failure(error),
     ),
 );
-process.on('warning', (warning) => {
-  if (warning.name === 'UnhandledPromiseRejectionWarning')
-    void diagnostics.record('main-rejection', failure(warning));
-});
+// One budget for every source the app records on its own: a loop cannot flood the log.
+const diagnosticBudget = new DiagnosticBudget();
+if (!headless) {
+  recordConsoleErrors(
+    console,
+    (detail) => void diagnostics.record('main-error', detail),
+    diagnosticBudget,
+  );
+  reportWorkers({
+    output: (worker) => {
+      const output = new WorkerOutput(
+        worker,
+        (detail) => void diagnostics.record('worker-output', detail),
+        diagnosticBudget,
+      );
+      return (chunk) => output.write(chunk);
+    },
+    stopped: (_worker, detail) => void diagnostics.record('process-gone', detail),
+  });
+}
 app.on('render-process-gone', (_event, _contents, details) => {
   void diagnostics.record('renderer-gone', `${details.reason} (exit ${details.exitCode})`);
 });
@@ -230,15 +259,48 @@ const quit = new QuitSequence({
   failed: quitStepFailure,
   dispose: () => desktop?.dispose(),
   closeHotkey: () => hotkey?.close(),
-  quit: () => app.quit(),
+  quit: () => {
+    // a hung renderer is ended first, so its window closes at once
+    rendererWatches.releaseAll();
+    app.quit();
+  },
   report: (context, error) => console.error(context, error),
 });
+const mainFailures = new MainFailures({
+  ask: async (message) => {
+    if (backgroundTest || !app.isReady()) return 'quit';
+    const { response } = await dialog.showMessageBox({
+      type: 'error',
+      message: 'Viewer hit a problem',
+      detail: `${message}\n\nViewer recorded it in its diagnostic log and will quit. Your windows are saved first.`,
+      buttons: ['Quit', 'Show Diagnostic Log'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    return response === 1 ? 'show-log' : 'quit';
+  },
+  showLog: () => shell.showItemInFolder(diagnostics.file),
+  quit: () => app.quit(),
+  record: (detail) => void diagnostics.record('main-rejection', detail),
+});
+if (!headless) {
+  process.on('uncaughtException', (error) => mainFailures.exception(error));
+  process.on('unhandledRejection', (reason) => mainFailures.rejection(reason));
+  // Hidden verification runs answer a stopped window as their launch says.
+  const stoppedAnswer = process.env.VIEWER_TEST_STOPPED_WINDOW;
+  if (backgroundTest)
+    answerStoppedWindows(
+      stoppedAnswer === 'reload' || stoppedAnswer === 'close' ? stoppedAnswer : undefined,
+    );
+}
 const quitShortcut = new QuitShortcut({
   warns: () => !!desktop?.settings.snapshot().settings.quit.warnShortcut,
   hint: showQuitHint,
   quit: () => app.quit(),
 });
 const pendingPaths: string[] = [];
+let updates: Updates | undefined;
 
 async function saveFailure(
   error: unknown,
@@ -247,6 +309,15 @@ async function saveFailure(
 ): Promise<SaveFailureChoice> {
   console.error('Viewer could not finish saving', error);
   desktop?.emit({ type: 'service-error', service: 'persistence', message: errorMessage(error) });
+  // A window that did not answer its save is hung: it asks Reload or Close itself, and Quit goes on
+  // without it.
+  const { code, owner } = error as { code?: string; owner?: unknown };
+  if (
+    code === 'PERSISTENCE_TIMEOUT' &&
+    typeof owner === 'number' &&
+    rendererWatches.timedOut(owner)
+  )
+    return applicationQuit ? 'retry' : 'keep-open';
   // once Quit has begun, its own save asks for every window
   if (backgroundTest || (!quit.accepting() && !applicationQuit)) return 'keep-open';
   return askRetry(
@@ -331,6 +402,18 @@ function menu(): void {
       newWindow: async () => {
         await createIndependentViewerWindow();
       },
+      checkForUpdates: async () => {
+        await updates?.checkFromMenu();
+      },
+      acknowledgements: () =>
+        openAcknowledgements(
+          desktop
+            ? async (folder) => {
+                desktop?.open([folder]);
+                if (!window && quit.accepting()) await createWindow();
+              }
+            : undefined,
+        ),
       focusedWindow: () => BrowserWindow.getFocusedWindow(),
       settingsWindow: () => settingsWindow,
       workspaceCommand: (id) => desktop?.emit({ type: 'command', command: id }),
@@ -445,6 +528,7 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
     createdWindow.destroy();
     throw error;
   }
+  watchRenderer(createdWindow, services);
   services.openIn(createdWindow.webContents.id, pendingPaths.splice(0));
   createdWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   createdWindow.webContents.on('will-navigate', (event, url) => {
@@ -508,6 +592,22 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
   }
   return createdWindow;
 }
+/** Crashed, or hung past its grace, a window asks Reload or Close; closing it or Quit then goes on
+ * with what it saved last. */
+function watchRenderer(created: BrowserWindow, services: Desktop): void {
+  rendererWatches.watch(created, 'window', {
+    stopped: (stop) => {
+      services.windowStopped(created, stop);
+      if (stop === 'unresponsive')
+        void diagnostics.record(
+          'renderer-unresponsive',
+          created === settingsWindow ? 'Settings window' : 'Workspace window',
+        );
+    },
+    resumed: () => services.windowResumed(created),
+    report: (error) => void diagnostics.record('main-rejection', failure(error)),
+  });
+}
 function rememberWindow(created: BrowserWindow): void {
   if (created.isDestroyed() || created.isMinimized() || hotkey?.isDropped(created)) return;
   const frame = captureWindowFrame(created, screen.getDisplayMatching(created.getBounds()));
@@ -547,6 +647,7 @@ async function openSettingsWindow(focus?: string): Promise<void> {
   settingsWindow = created;
   desktop.attach(created, 'settings');
   const services = desktop;
+  watchRenderer(created, services);
   let closePending = false,
     allowedClose = false;
   created.on('close', (event) => {
@@ -689,6 +790,11 @@ app
     }
     // Development runs the stock Electron.app; give the Dock Viewer's icon.
     if (!app.isPackaged) app.dock?.setIcon(assetPath('icon.png'));
+    installAboutPanel(installedRelease());
+    updates = applicationUpdates(
+      app.getPath('userData'),
+      () => !!desktop?.settings.snapshot().settings.updates.checkAtLaunch,
+    );
     windowState = new WindowState(path.join(app.getPath('userData'), 'window-state-v1.json'));
     await windowState.load();
     settingsWindowState = new WindowState(
@@ -733,6 +839,10 @@ app
           hotkey?.configure(settings.enabled, accelerator(settings.shortcut) ?? settings.shortcut);
       },
       diagnose: (detail) => void diagnostics.record('renderer-error', detail),
+      serviceError: (service, message) => {
+        if (diagnosticBudget.take('service:' + service))
+          void diagnostics.record('service-error', `${service}: ${redactSecrets(message)}`);
+      },
       worker: path.join(__dirname, 'worker.cjs'),
       fileBackend:
         backgroundTest && process.env.VIEWER_TEST_FILE_THREADS === '1' ? 'thread' : undefined,
@@ -840,6 +950,9 @@ app
       for (const workspaceID of restoreWindows.slice(1)) await createWindow(workspaceID);
     }
     if (initialLaunch) await launch(initialLaunch);
+    // Quietly, once windows are open; development and hidden QA runs never check.
+    if (app.isPackaged && !renderTest)
+      setTimeout(() => void updates?.checkAtLaunch().catch(() => {}), 15000).unref();
   })
   .catch((error: unknown) => {
     // A startup failure must not leave a windowless process running silently.

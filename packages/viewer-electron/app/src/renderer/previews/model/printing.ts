@@ -1,4 +1,4 @@
-import { unzipSync } from 'fflate';
+import { unzipModelPackage } from './packages';
 
 const unitScale: Record<string, number> = {
   micron: 0.001,
@@ -11,16 +11,7 @@ const unitScale: Record<string, number> = {
 
 /** Bound archive allocation and normalize 3MF's physical units, which Three's loader ignores. */
 export function printingScale(buffer: ArrayBuffer): number {
-  let bytes = 0,
-    count = 0;
-  const files = unzipSync(new Uint8Array(buffer), {
-    filter: (file) => {
-      bytes += file.originalSize;
-      if (++count > 4096 || bytes > 128 * 1024 * 1024 || file.originalSize > 64 * 1024 * 1024)
-        throw new Error('This 3MF archive exceeds the preview limit.');
-      return /\.model$/i.test(file.name);
-    },
-  });
+  const files = unzipModelPackage(new Uint8Array(buffer), '3MF', (name) => /\.model$/i.test(name));
   const scales = new Set<number>();
   for (const file of Object.values(files)) {
     const document = new DOMParser().parseFromString(

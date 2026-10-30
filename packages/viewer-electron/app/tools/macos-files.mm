@@ -8,6 +8,7 @@
 #include <cstring>
 #include <sys/stat.h>
 #include <sys/mount.h>
+#include <sys/clonefile.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <algorithm>
@@ -131,7 +132,7 @@ static napi_value clipboardWrite(napi_env env, napi_callback_info info) {
   }
 }
 
-enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject, Alias, DatesAdded };
+enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject, Alias, DatesAdded, Clone };
 struct Work {
   napi_async_work work; napi_deferred deferred; Kind kind;
   int source = -1, target = -1;
@@ -188,6 +189,13 @@ static void execute(napi_env, void *data) {
         task->error = @"The alias staging file already exists."; task->errorNumber = EEXIST;
       } else if (errno != ENOENT || !bookmark || ![NSURL writeBookmarkData:bookmark toURL:destination options:0 error:&error])
         task->error = error.localizedDescription ?: @"Could not create the Finder alias.";
+    } else if (task->kind == Kind::Clone) {
+      // An APFS clone shares the source's blocks until either changes. It is made exclusively, from
+      // the descriptor whose identity the caller checked, with the source's attributes and ACLs.
+      if (fclonefileat(task->source, AT_FDCWD, task->targetFile.fileSystemRepresentation, CLONE_NOFOLLOW | CLONE_NOOWNERCOPY | CLONE_ACL) != 0) {
+        task->errorNumber = errno;
+        task->error = [NSString stringWithFormat:@"Could not clone the file: %s", std::strerror(errno)];
+      }
     } else if (task->kind == Kind::Metadata) {
       if (fcopyfile(task->source, task->target, nullptr, COPYFILE_METADATA) != 0)
         task->error = [NSString stringWithFormat:@"Could not preserve macOS file metadata: %s", std::strerror(errno)];
@@ -235,8 +243,11 @@ static void execute(napi_env, void *data) {
           return;
         }
         NSURL *result = nil; NSError *trashError = nil;
-        if (![NSFileManager.defaultManager trashItemAtURL:url resultingItemURL:&result error:&trashError]) task->error = trashError.localizedDescription ?: @"The item could not be moved to Trash.";
-        else {
+        if (![NSFileManager.defaultManager trashItemAtURL:url resultingItemURL:&result error:&trashError]) {
+          task->error = trashError.localizedDescription ?: @"The item could not be moved to Trash.";
+          // A volume without a Trash, as many network shares are. Only this failure is ENOTSUP.
+          if ([trashError.domain isEqualToString:NSCocoaErrorDomain] && trashError.code == NSFeatureUnsupportedError) task->errorNumber = ENOTSUP;
+        } else {
           task->result = result.path;
           NSNumber *directory; [result getResourceValue:&directory forKey:NSURLIsDirectoryKey error:nil]; task->directory = directory.boolValue;
           NSData *bookmark = [result bookmarkDataWithOptions:NSURLBookmarkCreationWithSecurityScope includingResourceValuesForKeys:nil relativeToURL:nil error:nil];
@@ -276,7 +287,7 @@ static void complete(napi_env env, napi_status status, void *data) {
   if (status != napi_ok || task->error) {
     napi_value error; napi_create_error(env, nullptr, text(env, task->error ?: @"macOS file work was cancelled."), &error);
     if (task->errorNumber) {
-      const char *code = task->errorNumber == EXDEV ? "EXDEV" : task->errorNumber == EEXIST ? "EEXIST" : task->errorNumber == ENOENT ? "ENOENT" : task->errorNumber == EBUSY ? "EBUSY" : "EIO";
+      const char *code = task->errorNumber == EXDEV ? "EXDEV" : task->errorNumber == EEXIST ? "EEXIST" : task->errorNumber == ENOENT ? "ENOENT" : task->errorNumber == EBUSY ? "EBUSY" : task->errorNumber == ENOTSUP ? "ENOTSUP" : task->errorNumber == EOPNOTSUPP ? "EOPNOTSUPP" : task->errorNumber == EINVAL ? "EINVAL" : task->errorNumber == ENOSYS ? "ENOSYS" : "EIO";
       property(env, error, "code", text(env, [NSString stringWithUTF8String:code]));
     }
     napi_reject_deferred(env, task->deferred, error);
@@ -329,6 +340,13 @@ static napi_value metadata(napi_env env, napi_callback_info info) {
   int32_t source, target;
   if (count != 2 || napi_get_value_int32(env, args[0], &source) != napi_ok || napi_get_value_int32(env, args[1], &target) != napi_ok || source < 0 || target < 0 || source == target) return invalid(env);
   Work *task = new Work{}; task->kind = Kind::Metadata; task->source = source; task->target = target; return queue(env, task);
+}
+static napi_value clone(napi_env env, napi_callback_info info) {
+  size_t count = 2; napi_value args[2]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
+  int32_t source;
+  NSString *target = count == 2 ? stringArg(env, args[1]) : nil;
+  if (count != 2 || napi_get_value_int32(env, args[0], &source) != napi_ok || source < 0 || !target.isAbsolutePath) return invalid(env);
+  Work *task = new Work{}; task->kind = Kind::Clone; task->source = source; task->targetFile = target; return queue(env, task);
 }
 static napi_value fileWork(napi_env env, napi_callback_info info, Kind kind) {
   size_t count = 3; napi_value args[3]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
@@ -400,6 +418,7 @@ static napi_value init(napi_env env, napi_value exports) {
     {"clipboardRead", nullptr, clipboardRead, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardWrite", nullptr, clipboardWrite, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"copyMetadata", nullptr, metadata, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"clone", nullptr, clone, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"copyLinkMetadata", nullptr, linkMetadata, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"renameExclusive", nullptr, renameExclusive, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"alias", nullptr, alias, nullptr, nullptr, nullptr, napi_default, nullptr},

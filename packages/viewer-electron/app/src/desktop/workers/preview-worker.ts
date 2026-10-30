@@ -2,8 +2,10 @@ import { errorMessage } from '../../domain/errors';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import type { DocumentData } from '../../domain/services';
+import type { SavedPage } from '../../domain/previews/saved-page';
 import { DocumentCache } from '../previews/document-cache';
 import { readSQLite } from '../previews/sqlite';
+import { readSavedPage } from '../previews/saved-pages';
 import type { ClientMethods, WorkerRequest } from './utility-client';
 import { workerPort } from './worker-port';
 
@@ -15,7 +17,8 @@ import { workerPort } from './worker-port';
 export type PreviewMethods = {
   /** Answers once the worker runs: `warmPreviews` starts it while the window is idle. */
   ready: { args: []; reply: true };
-  /** `format`, the extension the file is read as when its bytes confirmed it. */
+  /** `format`, the extension the file is read as when its bytes confirmed it; `message`, one
+   * message of a mailbox. */
   extract: {
     args: [
       file: string,
@@ -23,9 +26,12 @@ export type PreviewMethods = {
       chapters: boolean,
       worksheet?: WorksheetWindow,
       format?: string,
+      message?: number,
     ];
     reply: DocumentData;
   };
+  /** An email's HTML body or a saved web page, with the parts it shows. */
+  page: { args: [file: string, format: string, message?: number]; reply: SavedPage };
   /** SQLite reads synchronously, here rather than in the process that draws windows. */
   sqlite: { args: [file: string, request: SQLiteRequest]; reply: SQLiteReply };
 };
@@ -48,8 +54,22 @@ port.on('message', async (event) => {
           abort.signal,
           request.args[3],
           request.args[4],
+          request.args[5],
         );
         value = request.args[2] ? document : { ...document, chapters: undefined };
+      } finally {
+        controllers.delete(request.id);
+      }
+    } else if (request.method === 'page') {
+      const abort = new AbortController();
+      controllers.set(request.id, abort);
+      try {
+        value = await readSavedPage(
+          request.args[0],
+          request.args[1],
+          request.args[2],
+          abort.signal,
+        );
       } finally {
         controllers.delete(request.id);
       }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createWebHandlers } from '../src/desktop/ipc/web-handlers';
 import type { LocalServer } from '../src/domain/previews/web';
 import { schemas } from '../src/desktop/ipc/schemas';
+import type { SavedPage } from '../src/domain/previews/saved-page';
 
 const owner = 41;
 const id = '11111111-1111-4111-8111-111111111111';
@@ -19,6 +20,17 @@ function ports() {
   return {
     previews: {
       openHtml: vi.fn(async () => ({ id, url: `viewer-html://${id}/index.html` })),
+      openPage: vi.fn(
+        async (
+          _owner: number,
+          _file: string,
+          _resourceID: string,
+          read: (signal: AbortSignal) => Promise<SavedPage>,
+        ) => {
+          const page = await read(new AbortController().signal);
+          return { id, url: `viewer-html://${id}/page.html`, blocked: page.blocked };
+        },
+      ),
       closeHtml: vi.fn(async () => {}),
       start: vi.fn(async () => ({ ...server })),
       list: vi.fn(() => [{ ...server }]),
@@ -32,7 +44,18 @@ function ports() {
         return { ...server };
       }),
     },
-    resources: { editableFile: vi.fn(() => '/fixtures/project/index.html') },
+    resources: {
+      editableFile: vi.fn(() => '/fixtures/project/index.html'),
+      documentFormat: vi.fn(async () => 'html'),
+      signal: vi.fn(() => new AbortController().signal),
+    },
+    files: {
+      page: vi.fn(async (): Promise<SavedPage> => ({
+        html: '<p>Saved</p>',
+        parts: [],
+        blocked: 2,
+      })),
+    },
     openURL: vi.fn(async () => {}),
     copyURL: vi.fn(async () => {}),
   } satisfies Parameters<typeof createWebHandlers>[0];
@@ -49,6 +72,35 @@ describe('native web preview handlers', () => {
     const handlers = createWebHandlers(host);
     await expect(handlers.htmlPreview(['resource'], owner)).rejects.toThrow('Resource expired');
     expect(host.previews.closeHtml).toHaveBeenCalledExactlyOnceWith(owner, id);
+  });
+
+  it('serves an email or web archive as a page of its own parts, never as a folder', async () => {
+    const host = ports();
+    host.resources.editableFile.mockReturnValue('/fixtures/mail/Archive.mbox');
+    host.resources.documentFormat.mockResolvedValue('mbox');
+    const handlers = createWebHandlers(host);
+    await expect(handlers.htmlPreview(['resource', 3], owner)).resolves.toMatchObject({
+      blocked: 2,
+    });
+    expect(host.previews.openHtml).not.toHaveBeenCalled();
+    expect(host.previews.openPage).toHaveBeenCalledWith(
+      owner,
+      '/fixtures/mail/Archive.mbox',
+      'resource',
+      expect.any(Function),
+    );
+    expect(host.files.page).toHaveBeenCalledWith(
+      '/fixtures/mail/Archive.mbox',
+      'mbox',
+      3,
+      expect.any(AbortSignal),
+    );
+    host.resources.documentFormat.mockResolvedValue('html');
+    await handlers.htmlPreview(['resource'], owner);
+    expect(host.previews.openHtml).toHaveBeenCalledOnce();
+    expect(schemas.htmlPreview.safeParse(['resource', 3]).success).toBe(true);
+    for (const message of [-1, 1.5, 10_000])
+      expect(schemas.htmlPreview.safeParse(['resource', message]).success).toBe(false);
   });
 
   it('uses the caller ownership and reviewed folder identity when starting', async () => {

@@ -1,6 +1,6 @@
 import { gzipSync } from 'node:zlib';
 import { textLanguages } from '../../src/domain/editing/languages';
-import { cameraRawSamples } from './camera-raw';
+import { cameraRawSamples, moreCameraRawSamples } from './camera-raw';
 import { assetBytes } from './files';
 import { documentSamples, sample } from './samples/documents';
 import { officeSamples } from './samples/office';
@@ -9,15 +9,22 @@ import { packageSamples } from './samples/packages';
 import { projectSamples } from './samples/project';
 import { structuredTextSamples } from './samples/structured-text';
 import { compressedSamples } from './samples/compressed';
+import { embeddedSamples } from './samples/embedded';
+import { inspectionSamples } from './samples/inspection';
+import { messageSamples } from './samples/messages';
 import { textSamples } from './samples/text';
 import type { RemoteSample, Sample } from './types';
-import { officeLayoutSamples } from './office-layout';
+import { officeDrawingSamples, officeLayoutSamples } from './office-layout';
 import { fontSamples } from './fonts';
+import { audioReferenceSamples } from './audio-references';
 
 export const remoteSamples: RemoteSample[] = [
   ...cameraRawSamples,
+  ...moreCameraRawSamples,
   ...officeLayoutSamples,
+  ...officeDrawingSamples,
   ...fontSamples,
+  ...audioReferenceSamples,
   {
     path: 'previews/video/Big Buck Bunny trailer.ogv',
     formats: ['ogv'],
@@ -69,6 +76,13 @@ export async function localSamples(): Promise<Sample[]> {
     ...packageSamples(),
     ...structuredTextSamples(),
     ...compressedSamples(await assetBytes('study-small.png')),
+    ...embeddedSamples({
+      jpeg: await assetBytes('study.jpg'),
+      png: await assetBytes('study.png'),
+      thumbnail: await assetBytes('study-small.png'),
+    }),
+    ...inspectionSamples(),
+    ...messageSamples(await assetBytes('study-small.png')),
   ];
   const imageSpecs = [
     ['png', 'png'],
@@ -150,6 +164,11 @@ export async function localSamples(): Promise<Sample[]> {
       ['mka', 'mka'],
       ['ac3', 'ac3'],
       ['wv', 'wv'],
+      ['oga', 'oga'],
+      ['au', 'au'],
+      ['snd', 'snd'],
+      ['mp2', 'mp2'],
+      ['mpa', 'mp2'],
     ],
   ])
     result.push(
@@ -178,13 +197,17 @@ export async function localSamples(): Promise<Sample[]> {
     ['3g2', '3g2'],
     ['vob', 'vob'],
     ['mxf', 'mxf'],
+    ['f4v', 'f4v'],
+    ['m2v', 'm2v'],
+    ['ts', 'm2t'],
+    ['mts', 'm2ts'],
   ])
     result.push(
       sample(
         `previews/video/Motion study.${format}`,
         [format],
         'Video playback; codec dependent',
-        'Two-second synthetic motion pattern. MP4/MOV/M4V/MKV/M2TS contain H.264, WebM VP8; the others hold MPEG-4, MPEG-2, WMV or Flash video for a compatibility copy.',
+        'Two-second synthetic motion pattern. MP4/MOV/M4V/F4V/MKV/M2TS contain H.264, as do the TS and MTS transport streams named like TypeScript; WebM holds VP8; the others hold MPEG-4, MPEG-2, WMV or Flash video for a compatibility copy.',
         await assetBytes(`motion.${asset}`),
       ),
     );
@@ -237,6 +260,13 @@ size and SHA-256 is pinned in manifest.json. No user photographs are copied.
 https://github.com/tellodaniel/revelraw-sample-raw-files
 https://creativecommons.org/publicdomain/zero/1.0/
 
+Thirteen further RAW photographs, one for each other camera format, are CC0 1.0
+originals downloaded unmodified from raw.pixls.us itself, pinned the same way.
+
+The AMR recording is an AndroidX Media test file (Apache 2.0); the Monkey's
+Audio tone is a TagLib test file (LGPL 2.1 or MPL 1.1). Both are unmodified;
+manifest.json pins each source and checksum.
+
 Big Buck Bunny trailer: copyright 2008 Blender Foundation | www.bigbuckbunny.org.
 Unmodified OGV from Wikimedia Commons, CC BY 3.0. Source and checksum are pinned
 in manifest.json. License: https://creativecommons.org/licenses/by/3.0/
@@ -281,7 +311,7 @@ machine: RAW/extended images depend on macOS, and media depends on Chromium code
 ## Regenerate safely
 
 Run pnpm playground from the Viewer repository. Initial RAW/video downloads total
-about 215 MiB and are bounded and checksum-pinned. Subsequent runs reuse them.
+about 440 MiB and are bounded and checksum-pinned. Subsequent runs reuse them.
 Use pnpm playground --offline to populate only locally bundled/generated samples.
 Use --directory /absolute/path to create another playground.
 

@@ -10,10 +10,8 @@ import type {
   Look,
 } from '../../domain/contracts';
 import type { HtmlPreview } from '../../domain/previews/web';
-import type {
-  WorksheetDocumentRequest,
-  WorksheetWindow,
-} from '../../domain/previews/documents/office';
+import type { WorksheetWindow } from '../../domain/previews/documents/office';
+import type { DocumentRequest } from '../../domain/previews/documents/requests';
 import type { ImageRenditionRequest } from '../../domain/previews/images/rendered';
 import type { OfficeLayoutRequest } from '../../domain/previews/documents/layout';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
@@ -49,11 +47,14 @@ export interface PreviewContext {
   editImage?(): void;
   optimize?(): void;
   editPDF?(): void;
+  /** Shows the file's bytes in place of its preview, where the host offers it. */
+  showHex?(): void;
   services: {
-    htmlPreview(resourceID: string): Promise<HtmlPreview>;
+    /** `message`, one message of a mailbox, whose HTML body is the page. */
+    htmlPreview(resourceID: string, message?: number): Promise<HtmlPreview>;
     htmlPreviewClose(id: string): Promise<void>;
     thumbnail(file: string, size: number): Promise<string>;
-    document(id: string, request?: WorksheetDocumentRequest): Promise<DocumentData>;
+    document(id: string, request?: DocumentRequest): Promise<DocumentData>;
     /** Available only after this view acquired an authorized, versioned resource. */
     cachedDocument?(request?: WorksheetWindow): DocumentData | undefined;
     cancelDocument(id: string, requestID: string): Promise<void>;
@@ -78,6 +79,9 @@ export interface PreviewModule {
   label: string;
   /** The module can open its underlying source in Viewer's text editor. */
   editing?: 'text';
+  /** The module offers Show as hex itself, only for a file whose bytes may be shown: a private
+   * key's never are. Other modules' files can be shown as hex by the host. */
+  hex?: 'own';
   formats: readonly string[];
   detect(entry: FileEntry): number;
   load(): Promise<{ default: ComponentType<PreviewContext> }>;

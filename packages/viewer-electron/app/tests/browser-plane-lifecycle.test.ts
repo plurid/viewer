@@ -4,12 +4,17 @@ import type { BrowserWindowConstructorOptions } from 'electron';
 
 const fixture = vi.hoisted(() => ({
   guests: [] as {
-    webContents: EventEmitter & { gone: boolean };
+    webContents: EventEmitter & {
+      gone: boolean;
+      crashed: boolean;
+      forcefullyCrashRenderer: ReturnType<typeof vi.fn>;
+      reload: ReturnType<typeof vi.fn>;
+    };
     destroy(): void;
     gone: boolean;
     options: BrowserWindowConstructorOptions;
     show(): void;
-    close(): void;
+    close: ReturnType<typeof vi.fn>;
   }[],
   flush: vi.fn(async () => {}),
 }));
@@ -32,6 +37,16 @@ vi.mock('electron', () => ({
       setFrameRate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       debugger: { attach: vi.fn(), sendCommand: vi.fn(async () => {}) },
+      crashed: false,
+      isCrashed() {
+        return this.crashed;
+      },
+      forcefullyCrashRenderer: vi.fn(function (this: { crashed: boolean }) {
+        this.crashed = true;
+      }),
+      reload: vi.fn(function (this: { crashed: boolean }) {
+        this.crashed = false;
+      }),
     });
     constructor(public options: BrowserWindowConstructorOptions) {
       super();
@@ -146,4 +161,33 @@ it('detaches and destroys guests before awaiting browser storage flush on shutdo
       height: 480,
     }),
   ).rejects.toThrow('closing');
+});
+
+it('reports a hung page in its plane and ends its process before reloading it', async () => {
+  const { browsers, guest, send } = await opened();
+  guest.webContents.emit('unresponsive');
+  const errors = () =>
+    send.mock.calls
+      .map(([, event]) => (event as { browser?: { error?: string } }).browser?.error)
+      .filter((error) => error !== undefined);
+  expect(errors()).toContain('This page is not responding. Reload to try again.');
+  await browsers.request(1, { kind: 'action', id: 'page', action: 'reload' });
+  expect(guest.webContents.forcefullyCrashRenderer).toHaveBeenCalledOnce();
+  expect(guest.webContents.reload).toHaveBeenCalledOnce();
+  // a page that answers again needs no crash before its reload
+  guest.webContents.emit('unresponsive');
+  guest.webContents.emit('responsive');
+  await browsers.request(1, { kind: 'action', id: 'page', action: 'reload' });
+  expect(guest.webContents.forcefullyCrashRenderer).toHaveBeenCalledOnce();
+  await browsers.closeAll();
+});
+
+it('destroys page windows at Quit, so a page cannot hold it', async () => {
+  const { browsers } = await opened();
+  await browsers.request(1, { kind: 'action', id: 'page', action: 'native-window' });
+  const native = fixture.guests[1]!;
+  native.close.mockImplementation(() => {});
+  await browsers.closeAll();
+  expect(native.close).not.toHaveBeenCalled();
+  expect(native.gone).toBe(true);
 });

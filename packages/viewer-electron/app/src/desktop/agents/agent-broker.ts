@@ -125,6 +125,8 @@ export class AgentBroker {
       sessions?: AgentSessions;
       services?: AgentServiceTools;
       authorizeTask?(setup: AgentTaskSetup): Promise<void>;
+      /** The app version agent clients see in `serverInfo`. */
+      version?: string;
     },
   ) {
     this.access = extension?.agentAccess ?? new AgentAccess(dataPath, () => this.settings().agents);
@@ -617,7 +619,7 @@ export class AgentBroker {
           ? params.protocolVersion
           : '2025-11-25',
         capabilities: { tools: {} },
-        serverInfo: { name: 'viewer', version: '0.1.0' },
+        serverInfo: { name: 'viewer', version: this.extension?.version ?? '0.0.0' },
       };
     }
     if (message.method === 'ping') return {};

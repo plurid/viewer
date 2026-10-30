@@ -6,6 +6,8 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import { importMesh, meshObjects } from '../model/mesh';
+import { meshTriangleLimit, meshVertexLimit } from '../model/mesh-data';
+import { isSceneFormat, loadScene, sceneNotices } from '../model/scenes';
 import { assertModelMemory } from '../model/memory';
 import { cadFormats } from '../../../domain/previews/models/formats';
 import { importCad } from '../model/cad';
@@ -71,6 +73,7 @@ export default function ModelPreview(context: PreviewContext) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [notices, setNotices] = useState<string[]>([]);
   const [contextLost, setContextLost] = useState(false);
   const [info, setInfo] = useState('');
   const [dimensions, setDimensions] = useState<number[]>([]);
@@ -131,6 +134,7 @@ export default function ModelPreview(context: PreviewContext) {
     setLoading(true);
     setError('');
     setWarnings([]);
+    setNotices([]);
     setDimensions([]);
     setDistance(undefined);
     setInfo('');
@@ -157,7 +161,7 @@ export default function ModelPreview(context: PreviewContext) {
     const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 10000);
     if (
       cadFormats.includes(resource.entry.extension) ||
-      ['stl', '3mf'].includes(resource.entry.extension)
+      ['stl', '3mf', '3ds'].includes(resource.entry.extension)
     )
       camera.up.set(0, 0, 1);
     const markings = new THREE.Group();
@@ -409,6 +413,7 @@ export default function ModelPreview(context: PreviewContext) {
       if (!response.ok) throw new Error('Model file is unavailable.');
       const ext = resource.entry.extension;
       let loaded: THREE.Object3D;
+      const notes: string[] = [];
       if (ext === 'gltf' || ext === 'glb') {
         const data = ext === 'gltf' ? await response.text() : await response.arrayBuffer();
         const gltf = await new GLTFLoader(manager).parseAsync(data, base);
@@ -462,6 +467,13 @@ export default function ModelPreview(context: PreviewContext) {
       } else if (ext === 'fbx') {
         loaded = new FBXLoader(manager).parse(await response.arrayBuffer(), base);
         clips = loaded.animations;
+      } else if (ext === 'off') {
+        loaded = meshObjects(await importMesh(await response.text(), 'off', abort.signal));
+      } else if (isSceneFormat(ext)) {
+        const scene = await loadScene(ext, resource.entry.size, response, abort.signal);
+        loaded = scene.object;
+        clips = scene.clips;
+        notes.push(...sceneNotices(scene));
       } else throw new Error('This 3D format is not supported.');
       if (disposed || signal.aborted) {
         disposeObject(loaded);
@@ -481,7 +493,7 @@ export default function ModelPreview(context: PreviewContext) {
         }
       });
       if (!meshes) throw new Error('No renderable geometry was found in this model.');
-      if (vertices > 4000000 || triangles > 2000000)
+      if (vertices > meshVertexLimit || triangles > meshTriangleLimit)
         throw new Error('This model exceeds the geometry limit for previews.');
       const bounds = new THREE.Box3().setFromObject(loaded);
       if (
@@ -510,6 +522,7 @@ export default function ModelPreview(context: PreviewContext) {
       setInfo(
         `${meshes.toLocaleString()} meshes · ${Math.round(triangles).toLocaleString()} triangles · ${vertices.toLocaleString()} vertices`,
       );
+      setNotices(notes);
       setAnimations(clips.map((clip, index) => clip.name || `Animation ${index + 1}`));
       if (clips.length) mixer = new THREE.AnimationMixer(loaded);
       session.current = {
@@ -761,6 +774,11 @@ export default function ModelPreview(context: PreviewContext) {
       {warnings.length > 0 && (
         <p className="inline-warning">Missing companion assets: {warnings.join(', ')}</p>
       )}
+      {notices.map((notice) => (
+        <p key={notice} className="inline-warning">
+          {notice}
+        </p>
+      ))}
       <footer className="model-info">
         <span title={info} className="model-dimensions">
           {dimensions.length > 0 &&

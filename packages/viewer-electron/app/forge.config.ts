@@ -14,6 +14,10 @@ import { copyPDFRuntime } from './tools/pdf-runtime';
 import { officeRuntimeName } from './src/desktop/previews/office-runtime-manifest';
 import { prepareNativeRebuild } from './tools/native-build/rebuild';
 import { speechRuntimeName } from './src/desktop/speech/runtime-manifest';
+import { applicationCopyright } from './src/desktop/release';
+import { macOSMinimum } from './tools/native-build/macos-target';
+import { directBuildNumber } from './tools/build-number';
+import { nodePtyFileUsed, trimElectronTemplate } from './tools/bundle-trim';
 const require = createRequire(import.meta.url);
 const appRoot = path.dirname(fileURLToPath(import.meta.url));
 const channel = macChannel(process.env.VIEWER_MAC_CHANNEL);
@@ -75,6 +79,23 @@ const config: ForgeConfig = {
     ],
     appBundleId: channel === 'direct' ? 'com.plurid.viewer' : storeConfig.bundleID,
     extendInfo: {
+      LSMinimumSystemVersion: macOSMinimum,
+      NSDocumentsFolderUsageDescription:
+        'Viewer shows, previews and searches the files in your Documents folder.',
+      NSDesktopFolderUsageDescription:
+        'Viewer shows, previews and searches the files on your Desktop.',
+      NSDownloadsFolderUsageDescription:
+        'Viewer shows, previews and searches the files in your Downloads folder.',
+      NSRemovableVolumesUsageDescription:
+        'Viewer shows and previews the files on external drives you open.',
+      NSNetworkVolumesUsageDescription:
+        'Viewer shows and previews the files on network drives you open.',
+      // Viewer does not use Bluetooth. A web page in a browser plane can make Chromium start
+      // it, and macOS stops an app that has no purpose string for it.
+      NSBluetoothAlwaysUsageDescription:
+        'Viewer does not use Bluetooth. A web page you open in a browser plane may ask for it.',
+      NSBluetoothPeripheralUsageDescription:
+        'Viewer does not use Bluetooth. A web page you open in a browser plane may ask for it.',
       NSMicrophoneUsageDescription:
         'Viewer records audio only when you start dictation. Local transcription keeps your audio on this device.',
       // Local profiles permit configured HTTPS LAN endpoints. macOS 15+ needs
@@ -86,7 +107,9 @@ const config: ForgeConfig = {
       // folder-based access does not handle yet, so only the direct build offers Open With.
       ...(channel === 'direct' ? { CFBundleDocumentTypes: documentTypes } : {}),
     },
-    ...(inputs ? { buildVersion: inputs.build } : {}),
+    // CFBundleVersion: the Store's own build number, or the commit count (tools/build-number.ts).
+    buildVersion: inputs?.build ?? directBuildNumber(appRoot),
+    appCopyright: applicationCopyright,
     appCategoryType: 'public.app-category.utilities',
     name: 'Viewer',
     icon: 'assets/icon.icns',
@@ -116,11 +139,13 @@ const config: ForgeConfig = {
       });
       return resolved;
     },
-    packageAfterExtract: async (_config, _buildPath, _electronVersion, platform) => {
+    packageAfterExtract: async (_config, buildPath, _electronVersion, platform) => {
       if ((platform === 'mas') !== (channel !== 'direct'))
         throw new Error(
           'Use pnpm mas:dev / mas:package for the MAS runtime; normal packaging uses the direct channel.',
         );
+      // English only, without unused purpose strings; the app is signed after this.
+      await trimElectronTemplate(buildPath);
     },
     // Vite packages its bundles only. Preserve external PDF.js ESM and native
     // modules for Node resolution, Electron's rebuild and ASAR unpacking.
@@ -129,7 +154,13 @@ const config: ForgeConfig = {
       await copyPDFRuntime(buildPath, platform, arch);
       for (const dependency of ['node-pty', 'node-addon-api']) {
         const source = path.dirname(require.resolve(dependency + '/package.json'));
-        await fs.cp(source, path.join(buildPath, 'node_modules', dependency), { recursive: true });
+        await fs.cp(source, path.join(buildPath, 'node_modules', dependency), {
+          recursive: true,
+          // Other platforms' prebuilds and the Windows ConPTY files stay out of the bundle.
+          filter: (file) =>
+            dependency !== 'node-pty' ||
+            nodePtyFileUsed(path.relative(source, file), platform, arch),
+        });
       }
       // macOS App Sandbox permits termios/resize ioctls on the owned PTY
       // master, but not on its slave device. Both endpoints share termios and

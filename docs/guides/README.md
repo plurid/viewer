@@ -1,9 +1,11 @@
 # Guides
 
-Each guide is a set of steps to follow with Viewer open. Start with the first five minutes.
+Each guide is a set of steps to follow with Viewer open. Install Viewer, then start with the first
+five minutes.
 
 | Guide                                         | You will                                                      |
 | --------------------------------------------- | ------------------------------------------------------------- |
+| [Install and update Viewer](install.md)       | Install the app, allow folder access, update or remove it     |
 | [Your first five minutes](getting-started.md) | Open a folder, look inside a file, find things and actions    |
 | [Browse and organize](files.md)               | Select, copy, rename, find, measure and restore files         |
 | [Read and inspect files](previews.md)         | Use each file type's controls and pick up where you left off  |

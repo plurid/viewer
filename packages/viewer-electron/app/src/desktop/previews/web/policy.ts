@@ -79,7 +79,13 @@ export function htmlFile(file: string): boolean {
   return /\.(?:html?|xhtml)$/i.test(file);
 }
 
-export function responseHeaders(file: string, capability?: string): Record<string, string> {
+/** `scripts: false` serves a page made from a file's own parts: it runs nothing, loads nothing
+ * but its capability's parts, and its frame's sandbox has no tokens. */
+export function responseHeaders(
+  file: string,
+  capability?: string,
+  scripts = true,
+): Record<string, string> {
   const mime = lookup(file) || 'application/octet-stream';
   const headers: Record<string, string> = {
     'Content-Type': /^(text\/|application\/(javascript|json))/.test(mime)
@@ -90,7 +96,24 @@ export function responseHeaders(file: string, capability?: string): Record<strin
     'Referrer-Policy': 'no-referrer',
     'Cross-Origin-Resource-Policy': capability ? 'cross-origin' : 'same-origin',
   };
-  if (capability) {
+  if (capability && !scripts) {
+    const origin = `viewer-html://${capability}`;
+    headers['Content-Security-Policy'] = [
+      'sandbox',
+      "default-src 'none'",
+      `style-src ${origin} 'unsafe-inline'`,
+      `img-src ${origin} data:`,
+      `font-src ${origin} data:`,
+      "object-src 'none'",
+      "frame-src 'none'",
+      "form-action 'none'",
+      "base-uri 'none'",
+      'frame-ancestors viewer-app: http://127.0.0.1:* http://localhost:*',
+    ].join('; ');
+    headers['X-DNS-Prefetch-Control'] = 'off';
+    headers['Access-Control-Allow-Origin'] = 'null';
+    headers.Vary = 'Origin';
+  } else if (capability) {
     const origin = `viewer-html://${capability}`;
     headers['Content-Security-Policy'] = [
       'sandbox allow-scripts',

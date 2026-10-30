@@ -87,10 +87,15 @@ const zip: Reading = (head) => {
   const { names, first } = zipEntries(head);
   if (names[0] === 'mimetype') {
     if (first === 'application/epub+zip') return { label: 'EPUB book', extension: 'epub' };
+    if (first === 'application/x-krita') return { label: 'Krita image', extension: 'kra' };
+    if (first === 'image/openraster') return { label: 'OpenRaster image', extension: 'ora' };
     const open = /^application\/vnd\.oasis\.opendocument\.([a-z-]+)$/.exec(first);
     if (open) return openDocuments[open[1]!] ?? { label: 'OpenDocument file' };
   }
   const named = (prefix: string) => names.some((name) => name.startsWith(prefix));
+  // an XPS package often writes its content types last, after the pages
+  if (names.some((name) => /\.fdseq$/i.test(name)))
+    return { label: 'XPS document', extension: 'xps' };
   if (named('[Content_Types].xml')) {
     if (named('word/')) return { label: 'Word document', extension: 'docx' };
     if (named('xl/')) return { label: 'Excel workbook', extension: 'xlsx' };
@@ -374,6 +379,22 @@ const compound: Reading = (head, name, directory) => {
   return { label: 'Office 97-2003 or Outlook file' };
 };
 const archive = (label: string): FileIdentity => ({ label });
+/** A Safari web archive is a binary property list whose top dictionary, written first, names its
+ * main resource. */
+const propertyList: Reading = (head) =>
+  text(head, 0, head.length).includes('WebMainResource')
+    ? { label: 'Safari web archive', extension: 'webarchive' }
+    : { label: 'Binary property list', extension: 'plist' };
+/** A torrent is a bencoded dictionary whose info dictionary holds its piece length or file tree. */
+const torrent: Reading = (head) => {
+  const start = text(head, 0, Math.min(head.length, 32));
+  const body = text(head, 0, head.length);
+  return /^d\d+:[a-z]/.test(start) &&
+    body.includes('4:infod') &&
+    (body.includes('12:piece length') || body.includes('9:file tree'))
+    ? { label: 'Torrent file', extension: 'torrent' }
+    : undefined;
+};
 
 /** Checked in order; the first whose magic number matches and whose reading answers wins. */
 const signatures: readonly Signature[] = [
@@ -384,10 +405,11 @@ const signatures: readonly Signature[] = [
   { magic: '%PDF-', identity: { label: 'PDF document', extension: 'pdf' } },
   { magic: 'AT&TFORM', identity: { label: 'DjVu document', extension: 'djvu' } },
   { magic: compoundMagic, identity: compound },
-  { magic: 'bplist00', identity: { label: 'Binary property list', extension: 'plist' } },
+  { magic: 'bplist00', identity: propertyList },
   { magic: 'PAR1', identity: { label: 'Parquet data' } },
   { magic: '\x89HDF\r\n\x1a\n', identity: { label: 'HDF5 data' } },
   { magic: 'ARROW1', identity: { label: 'Apache Arrow data' } },
+  { magic: 'd', identity: torrent },
   // images
   { magic: '\x89PNG\r\n\x1a\n', identity: { label: 'PNG image', extension: 'png' } },
   { magic: '\xff\xd8\xff', identity: { label: 'JPEG image', extension: 'jpg' } },
@@ -492,12 +514,13 @@ export function identifyBytes(
 
 /**
  * The formats the desktop service reads by their extension (Office layout and content, document
- * extraction, camera RAW renditions, media compatibility copies), by the identity that confirms
- * each. A container names several: Matroska holds video or sound alone, Windows Media is a WMV,
+ * extraction, saved preview pictures, camera RAW renditions, media compatibility copies), by the
+ * identity that confirms each. A container names several: Matroska holds video or sound alone, Windows Media is a WMV,
  * WMA or ASF file, and an Office 97 to 2003 template or show is the compound file of its document.
  */
 const confirmations: Readonly<Record<string, readonly string[]>> = {
   epub: ['epub'],
+  webarchive: ['webarchive'],
   docx: ['docx'],
   xlsx: ['xlsx'],
   pptx: ['pptx'],
@@ -505,6 +528,9 @@ const confirmations: Readonly<Record<string, readonly string[]>> = {
   ods: ['ods'],
   odp: ['odp'],
   odg: ['odg'],
+  kra: ['kra'],
+  ora: ['ora'],
+  xps: ['xps', 'oxps'],
   doc: ['doc', 'dot'],
   xls: ['xls', 'xlt'],
   ppt: ['ppt', 'pps', 'pot'],
@@ -522,6 +548,7 @@ const confirmations: Readonly<Record<string, readonly string[]>> = {
   '3g2': ['3g2'],
   aiff: ['aiff', 'aif'],
   caf: ['caf'],
+  torrent: ['torrent'],
 };
 /** The extensions a misnamed file is read as once its own bytes confirm them. */
 export const confirmedFormats: ReadonlySet<string> = new Set(Object.values(confirmations).flat());

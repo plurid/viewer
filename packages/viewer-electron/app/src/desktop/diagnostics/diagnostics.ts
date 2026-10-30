@@ -3,7 +3,15 @@ import { appendFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/pr
 import path from 'node:path';
 
 export type DiagnosticKind =
-  'main-exception' | 'main-rejection' | 'renderer-error' | 'renderer-gone' | 'process-gone';
+  | 'main-exception'
+  | 'main-rejection'
+  | 'main-error'
+  | 'service-error'
+  | 'renderer-error'
+  | 'renderer-gone'
+  | 'renderer-unresponsive'
+  | 'process-gone'
+  | 'worker-output';
 
 /**
  * A local, private log of failures for support. Nothing is sent anywhere: a person can

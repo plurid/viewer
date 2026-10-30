@@ -21,6 +21,7 @@ import {
 import type { CommandContext, CommandDefinition } from './registry';
 import { choosePreview } from '../previews/registry';
 import { isOfficeFormat } from '../../domain/previews/documents/layout';
+import { previewsAsFile } from '../../domain/previews/documents/embedded';
 export { parentPath } from '../../domain/workspaces/planes';
 
 export interface FolderActions {
@@ -297,10 +298,10 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       aliases: ['qp', 'preview'],
       shortcut: 'Space',
       primary: true,
-      when: (context) => selected(context) && context.selection.some((file) => !file.directory),
+      when: (context) => selected(context) && context.selection.some(previewsAsFile),
       run: (context) =>
         quickPreview(
-          context.selection.filter((file) => !file.directory).map((file) => file.path),
+          context.selection.filter(previewsAsFile).map((file) => file.path),
           context,
         ),
     },

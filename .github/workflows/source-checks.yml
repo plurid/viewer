@@ -1,5 +1,13 @@
 name: Source checks and dependency advisories
 on:
+  push:
+    branches: [master]
+    paths:
+      - 'packages/viewer-electron/app/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/source-checks.yml'
   pull_request:
     paths:
       - 'packages/viewer-electron/app/**'

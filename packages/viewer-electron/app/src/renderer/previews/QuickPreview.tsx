@@ -8,6 +8,7 @@ import { Dialog, IconButton } from '../ui/primitives';
 import { OpenDefaultButton } from '../ui/navigation/OpenDefaultButton';
 import { HeldPreview } from './HeldPreview';
 import type { PreviewModule } from './contracts';
+import type { HexToggle } from './PreviewHost';
 import { baseName } from '../../domain/workspaces/planes';
 import { MAX_TEXT_BYTES } from '../../domain/editing/documents';
 import { CommandsContext } from '../commands/context';
@@ -121,7 +122,7 @@ export const QuickPreview = memo(function QuickPreview({
     [session, workspace],
   );
   const footer = useCallback(
-    (resource: Resource, module: PreviewModule) => {
+    (resource: Resource, module: PreviewModule, hex?: HexToggle) => {
       const editable = module.editing === 'text' && resource.entry.size <= MAX_TEXT_BYTES;
       editShown = editable ? () => open(resource.entry.path, true) : undefined;
       return (
@@ -142,6 +143,11 @@ export const QuickPreview = memo(function QuickPreview({
                 </span>
                 <IconButton icon="right" label="Next file" onClick={() => stepQuickPreview(1)} />
               </div>
+            )}
+            {hex && (
+              <button type="button" aria-pressed={hex.shown} onClick={hex.toggle}>
+                {hex.shown ? 'Show preview' : 'Show as hex'}
+              </button>
             )}
             <OpenDefaultButton path={resource.entry.path} />
             <SuggestedAction

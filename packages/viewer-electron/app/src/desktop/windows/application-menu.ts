@@ -1,12 +1,14 @@
 import { Menu, app, dialog, shell } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
+import path from 'node:path';
 import type { ApplicationSettings } from '../../domain/services';
 import { defaultShortcuts, accelerator, menuShortcuts } from '../../domain/preferences/shortcuts';
 import { planeAlignments, planeSizePresets } from '../../domain/workspaces/plane-layout';
 
-/** A page of the guides, as published with the source. */
-const guide = (page: string) => `https://github.com/plurid/viewer/blob/master/docs/${page}`;
+/** A page of the guides as released with this version: the source at its tag, such as v1.0.0. */
+const guide = (page: string) =>
+  `https://github.com/plurid/viewer/blob/v${app.getVersion()}/docs/${page}`;
 
 /**
  * Build native menus from the same command IDs and shortcuts as the renderer. `quit` learns
@@ -31,6 +33,11 @@ export function installApplicationMenu(
               role: 'appMenu' as const,
               submenu: [
                 { role: 'about' as const },
+                { label: 'Acknowledgements', click: command('acknowledgements') },
+                // the App Store updates its edition
+                ...(process.mas
+                  ? []
+                  : [{ label: 'Check for Updates…', click: command('check-for-updates') }]),
                 { type: 'separator' as const },
                 {
                   label: 'Settings…',
@@ -400,8 +407,33 @@ export function installApplicationMenu(
                 });
             },
           },
+          {
+            // Native crash reports stay on this Mac: the reporter never uploads them.
+            label: 'Show Crash Reports',
+            click: () => {
+              const folder = app.getPath('crashDumps');
+              if (crashReported(folder)) void shell.openPath(folder);
+              else
+                void dialog.showMessageBox({
+                  type: 'info',
+                  message: 'No crash reports have been recorded.',
+                  detail:
+                    'Viewer keeps reports of native crashes on this Mac. They are never sent.',
+                });
+            },
+          },
         ],
       },
     ]),
   );
+}
+/** Whether Crashpad has written a report: its completed and pending folders hold the dumps. */
+function crashReported(folder: string): boolean {
+  return ['completed', 'pending'].some((name) => {
+    try {
+      return readdirSync(path.join(folder, name)).some((file) => file.endsWith('.dmp'));
+    } catch {
+      return false;
+    }
+  });
 }

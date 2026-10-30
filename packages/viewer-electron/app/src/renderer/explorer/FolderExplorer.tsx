@@ -2,7 +2,7 @@ import { panePresentation } from '../../domain/preferences/folder-presentation';
 import { registerFolderHandle } from './folder-handles';
 import { matchesQuery } from '../../domain/search/query';
 import { useFileQuery } from './useFileQuery';
-import { nativeOpening } from './opening';
+import { chooseOpening } from './opening';
 import { SearchCoverage } from './SearchCoverage';
 import { FolderInsights } from './FolderInsights';
 import { askModelAboutFolder, sampleCommands } from '../commands/model-suggestions';
@@ -241,25 +241,29 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   const open = useCallback(
     (entry: FileEntry, linked = false, another = false, edit = false) => {
       // an application starts rather than opening as a folder (nativeOpening)
-      if (nativeOpening(entry, opening, linked)) {
-        void window.viewer.openExternal(entry.path).catch(report);
-      } else if (entry.directory && !linked) navigate(id, entry.path);
-      else {
-        const origin = activeWorkspace().id;
-        void revealFile(id, entry.path)
-          .then((link) => {
-            if (
-              activeWorkspace().id === origin &&
-              activeWorkspace().panes.some((pane) => pane.id === id && pane.path === path)
-            )
-              workspace.open(entry, id, {
-                another,
-                link,
-                ...(edit ? { activate: true, edit: true } : {}),
-              });
-          })
-          .catch(report);
-      }
+      chooseOpening(
+        entry,
+        opening,
+        linked,
+        () => void window.viewer.openExternal(entry.path).catch(report),
+        () => {
+          if (entry.directory && !linked) return navigate(id, entry.path);
+          const origin = activeWorkspace().id;
+          void revealFile(id, entry.path)
+            .then((link) => {
+              if (
+                activeWorkspace().id === origin &&
+                activeWorkspace().panes.some((pane) => pane.id === id && pane.path === path)
+              )
+                workspace.open(entry, id, {
+                  another,
+                  link,
+                  ...(edit ? { activate: true, edit: true } : {}),
+                });
+            })
+            .catch(report);
+        },
+      );
     },
     [workspace, id, path, opening],
   );

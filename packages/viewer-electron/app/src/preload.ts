@@ -44,7 +44,10 @@ const api: ViewerAPI = {
   journalExportPreview: (query) => invoke('journalExportPreview', query),
   journalExport: (id) => invoke('journalExport', id),
   journalClear: () => invoke('journalClear'),
-  htmlPreview: (resourceID) => invoke('htmlPreview', resourceID),
+  htmlPreview: (resourceID, message) =>
+    message === undefined
+      ? invoke('htmlPreview', resourceID)
+      : invoke('htmlPreview', resourceID, message),
   htmlPreviewClose: (id) => invoke('htmlPreviewClose', id),
   localServerStart: (root, paneID, sourceIdentity) =>
     invoke('localServerStart', root, paneID, sourceIdentity),
@@ -151,6 +154,8 @@ const api: ViewerAPI = {
   chooseFolder: (defaultPath) => invoke('chooseFolder', defaultPath),
   reveal: (file) => invoke('reveal', file),
   openExternal: (file) => invoke('openExternal', file),
+  openAddress: (address) => invoke('openAddress', address),
+  fileIdentity: (file) => invoke('fileIdentity', file),
   connectServer: (address) => invoke('connectServer', address),
   taggedFiles: (tag, roots) => invoke('taggedFiles', tag, roots),
   nativeFilePanel: (kind, files) => invoke('nativeFilePanel', kind, files),

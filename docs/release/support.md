@@ -1,7 +1,7 @@
 # Viewer support: publication draft
 
 Prepared October 13, 2026. Publish at a stable support URL after owner review. Contact:
-**source@plurid.com**. The initial release targets Apple Silicon Macs running macOS 13 or later;
+**source@plurid.com**. The initial release targets Apple Silicon Macs running macOS 14 or later;
 supported-version acceptance is recorded separately from this proposed support text.
 
 ## Getting started

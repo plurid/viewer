@@ -34,6 +34,7 @@ remain local to each explorer.
 | -------------------------------------- | ------------------------------------------------ |
 | Browsing defaults and starting folders | `settings.browsing`                              |
 | The second ⌘Q before quitting          | `settings.quit.warnShortcut`; Settings only      |
+| The update check at launch             | `settings.updates.checkAtLaunch`; Settings only  |
 | Per-folder view/sort/grouping/columns  | `settings.folders`                               |
 | General chrome and space presentation  | `ui`                                             |
 | Editor, terminal and preview metrics   | Their respective settings groups                 |

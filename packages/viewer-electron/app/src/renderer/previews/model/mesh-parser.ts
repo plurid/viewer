@@ -2,9 +2,12 @@ import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+import { parseOFF } from './off';
 import {
   meshByteLimit,
   meshTransfers,
+  meshTriangleLimit,
+  meshVertexLimit,
   type MeshFormat,
   type MeshMaterial,
   type MeshPacket,
@@ -48,16 +51,22 @@ export function parseMesh(source: string | ArrayBuffer, extension: MeshFormat): 
       typeof source === 'string' ? source : new TextDecoder().decode(source),
     );
   else {
-    if (!(source instanceof ArrayBuffer)) throw new Error('Binary mesh input is required.');
-    const geometry =
-      extension === 'stl' ? new STLLoader().parse(source) : new PLYLoader().parse(source);
+    let geometry: THREE.BufferGeometry;
+    if (extension === 'off')
+      geometry = parseOFF(typeof source === 'string' ? source : new TextDecoder().decode(source));
+    else if (source instanceof ArrayBuffer)
+      geometry =
+        extension === 'stl' ? new STLLoader().parse(source) : new PLYLoader().parse(source);
+    else throw new Error('Binary mesh input is required.');
     geometry.computeVertexNormals();
+    const colored = extension !== 'stl' && !!geometry.attributes.color;
     object = new THREE.Mesh(
       geometry,
       new THREE.MeshStandardMaterial({
-        color: 0xb5c4cc,
+        // An OFF file's colors show as written.
+        color: extension === 'off' && colored ? 0xffffff : 0xb5c4cc,
         ...(extension === 'stl' ? { roughness: 0.55, metalness: 0.08 } : {}),
-        vertexColors: extension === 'ply' && !!geometry.attributes.color,
+        vertexColors: colored,
         side: THREE.DoubleSide,
       }),
     );
@@ -84,8 +93,8 @@ export function parseMesh(source: string | ArrayBuffer, extension: MeshFormat): 
     if (child instanceof THREE.Mesh)
       triangles += (geometry.index?.count || geometry.attributes.position?.count || 0) / 3;
     if (
-      vertices > 4000000 ||
-      triangles > 2000000 ||
+      vertices > meshVertexLimit ||
+      triangles > meshTriangleLimit ||
       meshes.length >= 10000 ||
       geometry.groups.length > 20000
     )

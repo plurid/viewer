@@ -2,6 +2,8 @@ import type { ApiHandlers } from './schemas';
 import type { Resources } from '../previews/resources';
 import type { WebPreviews } from '../previews/web/service';
 import type { JournalActivity } from '../journal/activity';
+import type { FileServices } from '../files/file-services';
+import { savedPageFormats } from '../../domain/previews/saved-page';
 
 type WebHandlers = Pick<
   ApiHandlers,
@@ -18,6 +20,7 @@ interface WebPorts {
   previews: Pick<
     WebPreviews,
     | 'openHtml'
+    | 'openPage'
     | 'closeHtml'
     | 'start'
     | 'list'
@@ -28,7 +31,8 @@ interface WebPorts {
     | 'dispose'
     | 'get'
   >;
-  resources: Pick<Resources, 'editableFile'>;
+  resources: Pick<Resources, 'editableFile' | 'documentFormat' | 'signal'>;
+  files: Pick<FileServices, 'page'>;
   openURL(url: string): Promise<void>;
   copyURL(url: string): Promise<void>;
 }
@@ -46,9 +50,20 @@ export function createWebHandlers(ports: WebPorts): WebHandlers {
         )
       : work();
   return {
-    htmlPreview: async ([resourceID], owner) => {
+    htmlPreview: async ([resourceID, message], owner) => {
       const file = ports.resources.editableFile(resourceID);
-      const preview = await ports.previews.openHtml(owner, file, resourceID);
+      const format = await ports.resources.documentFormat(resourceID);
+      // an email or web archive is a page made of the file's own parts, read in the preview worker
+      const preview = savedPageFormats.includes(format)
+        ? await ports.previews.openPage(owner, file, resourceID, (signal) =>
+            ports.files.page(
+              file,
+              format,
+              message,
+              AbortSignal.any([signal, ports.resources.signal(resourceID)]),
+            ),
+          )
+        : await ports.previews.openHtml(owner, file, resourceID);
       try {
         if (ports.resources.editableFile(resourceID) !== file)
           throw new Error('This HTML preview resource has changed. Open it again.');

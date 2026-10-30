@@ -34,7 +34,7 @@ export class WindowFlushRequests {
         if (!this.pending.delete(token)) return;
         clearTimeout(timer);
         if (result.ok) resolve();
-        else reject(Object.assign(new Error(result.error), { code: result.code }));
+        else reject(Object.assign(new Error(result.error), { code: result.code, owner }));
       };
     });
     this.pending.set(token, { owner, kind, promise, finish });
@@ -49,6 +49,13 @@ export class WindowFlushRequests {
   acknowledge(token: string, owner: number, result: FlushResult): void {
     const request = this.pending.get(token);
     if (request?.owner === owner) request.finish(result);
+  }
+
+  /** A stopped renderer saves nothing more: what it saved last is what it has, so its pending
+   * saves end without waiting for an answer that cannot come. */
+  released(owner: number): void {
+    for (const request of [...this.pending.values()])
+      if (request.owner === owner) request.finish({ ok: true });
   }
 
   disconnected(owner: number): void {

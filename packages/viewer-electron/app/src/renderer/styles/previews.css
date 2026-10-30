@@ -72,6 +72,12 @@
   flex: 1;
   min-width: 0;
 }
+.preview-hex-toggle {
+  height: 22px;
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+}
 .preview-filename {
   min-width: 0;
   white-space: nowrap;
@@ -124,14 +130,17 @@
 .archive-viewer,
 .archive-child,
 .compressed-viewer,
+.embedded-viewer,
 .data-viewer {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
 }
-/* the expanded file's own preview, below the toolbar when that is not in the plane's header */
-.compressed-viewer > :last-child {
+/* the expanded file's own preview, or a document's saved picture, below the toolbar when that is
+   not in the plane's header */
+.compressed-viewer > :last-child,
+.embedded-viewer > :last-child {
   flex: 1;
   min-height: 0;
 }

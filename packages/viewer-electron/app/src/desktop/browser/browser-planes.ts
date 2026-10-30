@@ -5,6 +5,7 @@ import { browserAddress } from '../../domain/previews/browser';
 import { errorMessage } from '../../domain/errors';
 import { sendEvent } from '../ipc/events';
 import { isolatedContent } from '../windows/web-content-policy';
+import { rendererWatches } from '../windows/window-health';
 
 interface Page {
   owner: number;
@@ -16,6 +17,8 @@ interface Page {
   lastPaint: number;
   error?: string;
   repaint?: boolean;
+  /** Chromium reports the page hung: a reload ends its process first. */
+  unresponsive?: boolean;
 }
 interface NativePage {
   owner: number;
@@ -138,6 +141,13 @@ export class BrowserPlanes {
     const native = { owner: page.owner, address, window };
     this.nativePages.add(native);
     window.once('closed', () => this.nativePages.delete(native));
+    // A crashed or hung page asks Reload or Close; a page has nothing of Viewer's to save.
+    rendererWatches.watch(window, 'page', {
+      stopped: () => {},
+      resumed: () => {},
+      close: () => window.destroy(),
+      report: () => {},
+    });
     this.protect(window.webContents, (url) => {
       void window.loadURL(url).catch(() => {});
     });
@@ -239,7 +249,19 @@ export class BrowserPlanes {
         }
       });
       contents.on('render-process-gone', (_event, details) => {
+        page.unresponsive = false;
         page.error = `Page process stopped (${details.reason}). Reload to try again.`;
+        this.publish(page);
+      });
+      contents.on('unresponsive', () => {
+        page.unresponsive = true;
+        page.error = 'This page is not responding. Reload to try again.';
+        this.publish(page);
+      });
+      contents.on('responsive', () => {
+        if (!page.unresponsive) return;
+        page.unresponsive = false;
+        page.error = undefined;
         this.publish(page);
       });
       contents.on('paint', (event, _dirty, image) => {
@@ -358,6 +380,9 @@ export class BrowserPlanes {
           break;
         case 'reload':
           page.error = undefined;
+          // a hung page cannot answer the reload: its process is ended first
+          if (page.unresponsive && !contents.isCrashed()) contents.forcefullyCrashRenderer();
+          page.unresponsive = false;
           contents.reload();
           break;
         case 'stop':
@@ -421,7 +446,9 @@ export class BrowserPlanes {
       // Detach before destroy fires guest events, and stop loading/painting before
       // waiting for Chromium storage. webContents can die before its window.
       for (const page of [...this.pages.values()]) this.close(page.owner, page.id);
-      for (const page of this.nativePages) if (!page.window.isDestroyed()) page.window.close();
+      // a page's beforeunload, or a hung page, cannot hold Quit
+      for (const page of [...this.nativePages])
+        if (!page.window.isDestroyed()) page.window.destroy();
       if (this.configured) {
         await this.profile().cookies.flushStore();
         this.profile().flushStorageData();

@@ -38,6 +38,13 @@ export function PrivacyInformation() {
         and terminal profiles run only when invoked. An external terminal, command or connected
         agent can use data you give it under its own permissions and policies.
       </p>
+      <h3>Updates</h3>
+      <p>
+        The direct-download edition checks for a newer version once a day when it opens, and when
+        you choose Check for Updates. It downloads a small signed file; the update server receives
+        ordinary connection information, such as your IP address, and nothing about your files. Turn
+        the daily check off below. The App Store edition is updated by the App Store.
+      </p>
       <h3>Support</h3>
       <p>
         Contact source@plurid.com. If you send a report, share only the details you want support to

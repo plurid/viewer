@@ -22,7 +22,7 @@ const answerSchema = z.toJSONSchema(fileGuessAnswerSchema);
 
 /** A file's size and first bytes: a link is resolved and checked, then the file is opened
  * without following one, so a swapped link cannot point the read elsewhere. */
-async function readHead(file: string, access: Access) {
+export async function readHead(file: string, access: Access, bytes = fileGuessProbe) {
   await access([file]);
   const actual = await realpath(file);
   await access([actual]);
@@ -33,7 +33,7 @@ async function readHead(file: string, access: Access) {
   try {
     const info = await handle.stat();
     if (!info.isFile()) throw new Error('Choose a regular file to identify.');
-    const head = Buffer.alloc(Math.min(info.size, fileGuessProbe));
+    const head = Buffer.alloc(Math.min(info.size, bytes));
     const { bytesRead } = await handle.read(head, 0, head.length, 0);
     return { head: head.subarray(0, bytesRead), size: info.size };
   } finally {

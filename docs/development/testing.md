@@ -88,6 +88,11 @@ foreground window and a synthetic stream, never the live microphone; it skips ca
 permission has already been granted by the operator. It does not automate consent or qualify human
 accents/noise.
 
+`tests/native/stopped-window.ts` crashes a workspace window's renderer through the debugger. Hidden
+runs answer **This window stopped working** with `VIEWER_TEST_STOPPED_WINDOW` (`reload` or `close`).
+It checks that **Reload** restores the saved workspace, that **Close** closes the window well before
+a save could time out, and that Quit succeeds after each.
+
 `tests/speech-signing.test.ts` re-signs a generated runtime bundle, checks package verification and
 rejects altered loose resources and tampered sealed files. Every fixture remains retained.
 
@@ -134,6 +139,12 @@ content, and test cancellation and a cold restart.
 `tests/native/real-file-previews.ts` uses the stable playground by default. Set
 `VIEWER_TEST_REAL_CORPUS` to a separate retained corpus with the same relative sample paths to
 qualify files without changing the playground. Every input still requires its pinned size and hash.
+
+`tests/native/format-samples.ts` opens one playground sample for each of the later formats (saved
+previews, the extra 3D, camera RAW, Office, audio and video formats, mail, books, web archives,
+certificates, shortcuts, torrents, profiles and binaries) in Quick Preview. It checks each one shows
+its decoded content and expected text, and screenshots any that do not. It reads the same
+`VIEWER_TEST_REAL_CORPUS`.
 
 `tests/native/reader-qualification.ts` checks the published EPUBs pinned in
 `tools/playground/reader-samples.ts`: long chapter lists, supported illustrations, internal notes,

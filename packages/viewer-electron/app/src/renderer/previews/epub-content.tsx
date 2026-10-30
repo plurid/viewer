@@ -264,6 +264,8 @@ export function bookNodes(
     chapter?: EPUBChapter;
     chapters?: readonly EPUBChapter[];
     images?: ReadonlySet<string>;
+    /** Pictures the book carries as checked `data:` URLs, a FictionBook's, by path. */
+    pictures?: ReadonlyMap<string, string>;
     context?: PreviewContext;
     navigate?(target: EPUBReference): void;
     match?: BookMatch;
@@ -294,6 +296,13 @@ export function bookNodes(
         options.chapter?.path && node.source
           ? epubReference(options.chapter.path, node.source)
           : undefined;
+      const picture = target && options.pictures?.get(target.path);
+      if (picture)
+        return (
+          <span key={node.key} className="epub-image">
+            <img src={picture} alt={node.alt || 'Book illustration'} decoding="async" />
+          </span>
+        );
       return target && options.context && options.images?.has(target.path) ? (
         <BookImage
           key={node.key}

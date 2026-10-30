@@ -6,6 +6,7 @@ import { chmod, copyFile, mkdir, mkdtemp, open, readFile, stat, writeFile } from
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { x as extract } from 'tar';
+import { compatibleMacOSMinimum } from './native-build/macos-target';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ffmpeg = {
@@ -109,7 +110,7 @@ export async function prepareProcessors(minimum: string, arch = process.arch) {
     .catch(() => undefined)) as
     { version: string; minimum: string; files: Record<string, string> } | undefined;
   if (existing) {
-    if (existing.version !== ffmpeg.version || existing.minimum !== minimum)
+    if (existing.version !== ffmpeg.version || !compatibleMacOSMinimum(existing.minimum, minimum))
       throw new Error(
         `The processor build differs from this target. Preserve and relocate it before rebuilding: ${output}`,
       );

@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import type { FileEntry, Resource } from '../../domain/contracts';
 import type { FileGuess } from '../../domain/files/file-guess';
 import type { FileIdentity } from '../../domain/files/signatures';
+import type { HeaderDetail } from '../../domain/files/binary-headers';
 import type { PreviewContext, PreviewModule } from './contracts';
 import {
   confirmedFormats,
@@ -10,11 +11,13 @@ import {
   identifyBytes,
   identifyProbe,
 } from '../../domain/files/signatures';
+import { headerDetails } from '../../domain/files/binary-headers';
 import { errorMessage } from '../../domain/errors';
-import { Empty, ErrorBoundary } from '../ui/primitives';
+import { ErrorBoundary } from '../ui/primitives';
 import { getState, report, useViewer } from '../state/store';
 import { choosePreview, previewModules } from './registry';
 import { loadedPreviewModule, preloadPreviewModule } from './module-loading';
+import { HexView } from './HexView';
 
 /** The MIME type the media module reads to choose a player, for the formats Chromium plays. */
 const playable: Record<string, string> = {
@@ -111,6 +114,7 @@ type GuessState =
 export function UnknownFile(context: PreviewContext) {
   const { resource, signal } = context;
   const [identity, setIdentity] = useState<FileIdentity>();
+  const [details, setDetails] = useState<readonly HeaderDetail[]>([]);
   const [shown, setShown] = useState<{
     resource: Resource;
     Preview: ComponentType<PreviewContext>;
@@ -139,7 +143,9 @@ export function UnknownFile(context: PreviewContext) {
         // a compound file names its kind in a directory often past the head
         const probe = directoryProbe(head, resource.entry.size);
         const directory = probe && (await read(probe.at, probe.length).catch(() => undefined));
-        if (live) setIdentity(identifyBytes(head, resource.entry.name, directory));
+        if (!live) return;
+        setIdentity(identifyBytes(head, resource.entry.name, directory));
+        setDetails(headerDetails(head));
       })
       .catch(() => {});
     return () => {
@@ -195,71 +201,86 @@ export function UnknownFile(context: PreviewContext) {
   const own = showAs(resource.entry, identity?.extension);
   const proposed =
     guess.kind === 'answered' ? showAs(resource.entry, guess.guess.extension) : undefined;
+  const named =
+    identity?.extension && identity.extension !== resource.entry.extension && !own
+      ? `Viewer previews it when its name ends in .${identity.extension}.`
+      : undefined;
   return (
-    <Empty
-      icon="file"
-      title={identity ? `Looks like ${withArticle(identity.label)}` : 'Preview unavailable'}
-      detail={
-        identity?.extension && identity.extension !== resource.entry.extension && !own
-          ? `Viewer previews it when its name ends in .${identity.extension}.`
-          : undefined
-      }
-    >
-      <div className="empty-actions">
-        {identity && own && <button onClick={() => show(own)}>Show as {identity.label}</button>}
-        {getState().bootstrap.platform === 'darwin' && (
+    <div className="unknown-file">
+      <section className="unknown-file-summary" aria-label="What the file holds">
+        <strong>
+          {identity ? `Looks like ${withArticle(identity.label)}` : 'Preview unavailable'}
+        </strong>
+        {named && <p>{named}</p>}
+        {details.length > 0 && (
+          <dl className="inspection-facts">
+            {details.map((detail) => (
+              <div key={detail.label}>
+                <dt>{detail.label}</dt>
+                <dd>{detail.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        <div className="empty-actions">
+          {identity && own && <button onClick={() => show(own)}>Show as {identity.label}</button>}
+          {getState().bootstrap.platform === 'darwin' && (
+            <button
+              onClick={() => {
+                void window.viewer.nativeFilePanel('preview', [resource.entry.path]).catch(report);
+              }}
+            >
+              Quick Look in macOS
+            </button>
+          )}
           <button
             onClick={() => {
-              void window.viewer.nativeFilePanel('preview', [resource.entry.path]).catch(report);
+              void window.viewer.openExternal(resource.entry.path).catch(report);
             }}
           >
-            Quick Look in macOS
+            Open in Default App
           </button>
-        )}
-        <button
-          onClick={() => {
-            void window.viewer.openExternal(resource.entry.path).catch(report);
-          }}
-        >
-          Open in Default App
-        </button>
-        {provider && (guess.kind === 'idle' || guess.kind === 'asking') && (
-          <button disabled={guess.kind === 'asking'} onClick={ask}>
-            {guess.kind === 'asking' ? `Asking ${provider.name}…` : `Ask ${provider.name}`}
-          </button>
-        )}
-      </div>
-      {refusal && <p role="alert">{refusal}</p>}
-      {guess.kind === 'answered' && (
-        <>
-          <p role="status">
-            {guess.guess.provider} suggests: {guess.guess.kind}
-            {guess.guess.extension && ` (.${guess.guess.extension})`}.
-            {guess.guess.apps.length > 0 && ` Opens in ${guess.guess.apps.join(', ')}.`}
-            {guess.guess.note && ` ${guess.guess.note}`}
-          </p>
-          {proposed && (
-            <div className="empty-actions">
-              <button onClick={() => show(proposed)}>Show as {guess.guess.kind}</button>
-            </div>
+          {provider && (guess.kind === 'idle' || guess.kind === 'asking') && (
+            <button disabled={guess.kind === 'asking'} onClick={ask}>
+              {guess.kind === 'asking' ? `Asking ${provider.name}…` : `Ask ${provider.name}`}
+            </button>
           )}
-        </>
-      )}
-      {(guess.kind === 'refused' || guess.kind === 'failed') && (
-        <>
-          <p role="alert">{guess.message}</p>
-          <div className="empty-actions">
-            {guess.kind === 'refused' && (
-              <button
-                onClick={() => void window.viewer.openSettings('settings.providers').catch(report)}
-              >
-                Review in Settings
-              </button>
+        </div>
+        {refusal && <p role="alert">{refusal}</p>}
+        {guess.kind === 'answered' && (
+          <>
+            <p role="status">
+              {guess.guess.provider} suggests: {guess.guess.kind}
+              {guess.guess.extension && ` (.${guess.guess.extension})`}.
+              {guess.guess.apps.length > 0 && ` Opens in ${guess.guess.apps.join(', ')}.`}
+              {guess.guess.note && ` ${guess.guess.note}`}
+            </p>
+            {proposed && (
+              <div className="empty-actions">
+                <button onClick={() => show(proposed)}>Show as {guess.guess.kind}</button>
+              </div>
             )}
-            <button onClick={ask}>Ask again</button>
-          </div>
-        </>
-      )}
-    </Empty>
+          </>
+        )}
+        {(guess.kind === 'refused' || guess.kind === 'failed') && (
+          <>
+            <p role="alert">{guess.message}</p>
+            <div className="empty-actions">
+              {guess.kind === 'refused' && (
+                <button
+                  onClick={() =>
+                    void window.viewer.openSettings('settings.providers').catch(report)
+                  }
+                >
+                  Review in Settings
+                </button>
+              )}
+              <button onClick={ask}>Ask again</button>
+            </div>
+          </>
+        )}
+      </section>
+      <HexView context={context} />
+    </div>
   );
 }

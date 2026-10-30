@@ -2,6 +2,7 @@ import type { FileEntry } from '../contracts';
 import { z } from 'zod';
 import { imageTransformSchema, transformPlanSchema, type TransformPlan } from './transforms';
 import { optimizationTargetSchema } from './optimization-target';
+import { formatBytes } from '../files/entries';
 export const optimizationOptionsSchema = z
   .object({
     preset: z.enum(['lossless', 'balanced', 'small']),
@@ -24,12 +25,10 @@ export const optimizationRecipeSchema = z
   })
   .strict();
 export type OptimizationRecipe = z.infer<typeof optimizationRecipeSchema>;
-/** Optimize budgets use decimal units. Keep byte precision so rounding cannot
- * make a missed target appear smaller than the threshold the person entered. */
+/** Keeps byte precision so rounding cannot make a missed target appear smaller than the threshold
+ * the person entered. */
 export function formatOptimizationSize(bytes: number): string {
-  const units = ['B', 'kB', 'MB', 'GB'] as const;
-  const power = Math.min(units.length - 1, Math.floor(Math.log10(Math.max(1, bytes)) / 3));
-  return `${(bytes / 1000 ** power).toLocaleString(undefined, { maximumFractionDigits: power * 3 })} ${units[power]}`;
+  return formatBytes(bytes, 'exact');
 }
 export function optimizable(file: Pick<FileEntry, 'kind' | 'extension'>): boolean {
   return (

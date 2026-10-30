@@ -143,17 +143,18 @@ function tokens(text: string): Token[] {
   return list;
 }
 
+/** Decimal, as sizes are shown: `size>10mb` finds what reads as more than 10 MB. */
 const units: Readonly<Record<string, number>> = {
   '': 1,
   b: 1,
-  k: 1024,
-  kb: 1024,
-  m: 1024 ** 2,
-  mb: 1024 ** 2,
-  g: 1024 ** 3,
-  gb: 1024 ** 3,
-  t: 1024 ** 4,
-  tb: 1024 ** 4,
+  k: 1000,
+  kb: 1000,
+  m: 1000 ** 2,
+  mb: 1000 ** 2,
+  g: 1000 ** 3,
+  gb: 1000 ** 3,
+  t: 1000 ** 4,
+  tb: 1000 ** 4,
 };
 const durations: Readonly<Record<string, number>> = {
   h: 3600_000,

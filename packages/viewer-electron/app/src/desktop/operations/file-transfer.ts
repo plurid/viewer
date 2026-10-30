@@ -1,4 +1,5 @@
 import { constants, type Stats } from 'node:fs';
+import type { FileHandle } from 'node:fs/promises';
 import {
   chmod,
   link,
@@ -33,6 +34,15 @@ export interface CopyFingerprint {
   info: Stats;
   children?: string[];
 }
+/**
+ * How far a copied file is written before it counts as copied. `flushed` waits until its data is
+ * on permanent storage (FileHandle.sync, which is F_FULLFSYNC on macOS): a move across volumes
+ * removes its sources only after that. `written` leaves the bytes to the system, as Finder does: a
+ * plain copy keeps its sources, so one lost to a power failure can be made again.
+ */
+export type CopyDurability = 'flushed' | 'written';
+/** Where a volume cannot clone a file, and its bytes are streamed instead. */
+const cannotClone = ['ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'EINVAL', 'ENOSYS'];
 /** Make a published tree's directory entries durable before its sources on another
  * volume are removed. File contents were already synced as they were copied. */
 export async function syncDirectories(root: string): Promise<void> {
@@ -106,7 +116,8 @@ export async function publish(
           )
         )
           throw error;
-        await copyFile(source, destination, info, job);
+        // the original is removed next
+        await copyFile(source, destination, info, job, undefined, 'flushed');
       }
     }
     try {
@@ -139,6 +150,16 @@ export async function keepBothName(destination: string): Promise<string> {
   while (await exists(candidate)) candidate = `${stem} copy ${++suffix}${ext}`;
   return candidate;
 }
+/** Where a replaced item is kept on a volume without a Trash: "Notes (previous).md", then
+ * "Notes (previous 2).md". */
+export async function previousName(destination: string): Promise<string> {
+  const ext = path.extname(destination);
+  const stem = destination.slice(0, destination.length - ext.length);
+  let suffix = 1;
+  let candidate = `${stem} (previous)${ext}`;
+  while (await exists(candidate)) candidate = `${stem} (previous ${++suffix})${ext}`;
+  return candidate;
+}
 /** The Finder-style alias name that is free next to `source`: "Report.pdf alias", then "… alias 2". */
 export async function aliasName(source: string): Promise<string> {
   let suffix = 1;
@@ -154,6 +175,7 @@ export async function copyTree(
   target: string,
   fingerprints: CopyFingerprint[],
   access: Access,
+  durability: CopyDurability = 'flushed',
 ): Promise<void> {
   job.check();
   // Content coordination can hydrate a placeholder. Capture its fingerprint
@@ -171,7 +193,7 @@ export async function copyTree(
         const info = await lstat(source);
         if (!info.isFile()) throw new Error('Source changed while waiting for its file provider.');
         fingerprints.push({ file: source, info });
-        await copyFile(source, target, info, job, signal);
+        await copyFile(source, target, info, job, signal, durability);
       },
       job.signal,
     );
@@ -205,7 +227,14 @@ export async function copyTree(
   if (info.isDirectory()) {
     await mkdir(target, { mode: info.mode | 0o700 });
     for (const name of children!)
-      await copyTree(job, path.join(source, name), path.join(target, name), fingerprints, access);
+      await copyTree(
+        job,
+        path.join(source, name),
+        path.join(target, name),
+        fingerprints,
+        access,
+        durability,
+      );
     if (process.platform === 'darwin') {
       await fileCoordination.run(
         [
@@ -246,14 +275,28 @@ export async function copyTree(
   }
   if (process.platform !== 'darwin') await utimes(target, info.atime, info.mtime);
 }
-/** Streams one regular file into a new, exclusively created `target`, verifying
- * that the source did not change; a failed copy removes only its own output. */
+/** Clones the open file `input` to the new path `target` where its volume can: an APFS clone
+ * shares the source's blocks and attributes. False where it cannot, and the bytes are streamed. */
+async function cloned(input: FileHandle, target: string): Promise<boolean> {
+  if (process.platform !== 'darwin') return false;
+  try {
+    await macFiles().clone(input.fd, target);
+    return true;
+  } catch (error) {
+    if (cannotClone.includes((error as NodeJS.ErrnoException).code ?? '')) return false;
+    throw error;
+  }
+}
+/** Copies one regular file into a new, exclusively created `target`: a clone where the volume
+ * can make one, its bytes streamed otherwise. Either way the source must not have changed by the
+ * end, and a failed copy removes only its own output. */
 async function copyFile(
   source: string,
   target: string,
   info: Stats,
   job?: TransferJob,
   signal?: AbortSignal,
+  durability: CopyDurability = 'flushed',
 ): Promise<void> {
   source = fileCoordination.path(source);
   target = fileCoordination.path(target);
@@ -275,34 +318,19 @@ async function copyFile(
       opened.ctimeMs !== info.ctimeMs
     )
       throw new Error('Source changed before copying; it has been left untouched.');
-    output = await open(target, 'wx', info.mode);
-    owned = await output.stat();
-    const buffer = Buffer.allocUnsafe(256 * 1024);
-    let total = 0;
-    while (total < info.size) {
-      signal?.throwIfAborted();
-      job?.check();
-      const { bytesRead } = await input.read(
-        buffer,
-        0,
-        Math.min(buffer.length, info.size - total),
-        null,
-      );
-      if (!bytesRead)
-        throw new Error('Source became shorter while copying; it has been left untouched.');
-      total += bytesRead;
-      let written = 0;
-      while (written < bytesRead) {
-        signal?.throwIfAborted();
-        const result = await output.write(buffer, written, bytesRead - written, null);
-        if (!result.bytesWritten) throw new Error('The destination stopped accepting data.');
-        written += result.bytesWritten;
-      }
-      job?.copied(bytesRead);
+    if (await cloned(input, target)) {
+      // made exclusively in the private stage: the item there now is the clone
+      owned = await lstat(target);
+      job?.copied(info.size);
+      if (durability === 'flushed')
+        output = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+    } else {
+      output = await open(target, 'wx', info.mode);
+      owned = await output.stat();
+      await streamFile(input, output, info, job, signal);
     }
     signal?.throwIfAborted();
-    if (process.platform === 'darwin') await macFiles().copyMetadata(input.fd, output.fd);
-    await output.sync();
+    if (durability === 'flushed') await output?.sync();
     const after = await lstat(source);
     if (
       after.dev !== info.dev ||
@@ -323,4 +351,38 @@ async function copyFile(
     await input.close();
     await output?.close();
   }
+}
+/** Streams `info.size` bytes from `input` into the new file `output`, with the source's metadata. */
+async function streamFile(
+  input: FileHandle,
+  output: FileHandle,
+  info: Stats,
+  job?: TransferJob,
+  signal?: AbortSignal,
+): Promise<void> {
+  const buffer = Buffer.allocUnsafe(256 * 1024);
+  let total = 0;
+  while (total < info.size) {
+    signal?.throwIfAborted();
+    job?.check();
+    const { bytesRead } = await input.read(
+      buffer,
+      0,
+      Math.min(buffer.length, info.size - total),
+      null,
+    );
+    if (!bytesRead)
+      throw new Error('Source became shorter while copying; it has been left untouched.');
+    total += bytesRead;
+    let written = 0;
+    while (written < bytesRead) {
+      signal?.throwIfAborted();
+      const result = await output.write(buffer, written, bytesRead - written, null);
+      if (!result.bytesWritten) throw new Error('The destination stopped accepting data.');
+      written += result.bytesWritten;
+    }
+    job?.copied(bytesRead);
+  }
+  signal?.throwIfAborted();
+  if (process.platform === 'darwin') await macFiles().copyMetadata(input.fd, output.fd);
 }

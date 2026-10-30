@@ -12,7 +12,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { temporaryRoot } from './temporary';
 import { prepareOfficeRuntime } from './office-runtime';
 import { downloadSample } from './playground/camera-raw';
-import { officeLayoutSamples } from './playground/office-layout';
+import { officeDrawingSamples, officeLayoutSamples } from './playground/office-layout';
 import { qualificationSamples } from './playground/qualification-samples';
 import { officeFontFixture } from '../tests/fixtures/office-fonts';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
@@ -27,6 +27,7 @@ const root = await temporaryRoot('viewer-office-engine-smoke-', path.join(appRoo
 await mkdir(path.join(root, 'Profile'));
 const samples = [
   ...officeLayoutSamples,
+  ...officeDrawingSamples,
   ...qualificationSamples.filter((sample) =>
     /poi-(various-pictures.docx|conditional-formatting.xlsx)$/.test(sample.path),
   ),

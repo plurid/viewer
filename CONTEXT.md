@@ -113,6 +113,10 @@ Shared configuration is validated JSONC. A **setting profile** is a presentation
 from an application data profile and from authorization. Window-local resolution and shared folder
 presentation have separate precedence.
 
+**Update checks** belong to `desktop/updates`: one feed (`domain/updates/feed.ts`), read only after
+its Ed25519 signature matches the key in `desktop/release.ts`. A check never downloads or installs;
+Download opens the https disk image in the browser. The Store edition never checks.
+
 `CURRENT_STATE_VERSION` and migration functions in domain/persistence code are authoritative for
 saved-state versions. Durable save barriers coordinate document and window shutdown; invalid files
 and migration inputs are preserved for recovery.

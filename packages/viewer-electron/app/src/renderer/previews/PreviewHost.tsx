@@ -2,6 +2,7 @@ import {
   memo,
   lazy,
   Suspense,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -24,7 +25,7 @@ import {
 } from '../state/store';
 import { useCommands } from '../commands/context';
 import { usePreviewControlsSlot } from './controls';
-import type { PreviewContext, PreviewModule } from './contracts';
+import type { PreviewCommand, PreviewContext, PreviewModule } from './contracts';
 import { previewState } from './state';
 import { choosePreview } from './registry';
 import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
@@ -60,8 +61,21 @@ function componentFor(module: PreviewModule) {
   }
   return component;
 }
+/** Any file's bytes, which the host shows in place of its module with Show as hex. */
+const hexModule: PreviewModule = {
+  id: 'hex',
+  label: 'Hex',
+  formats: [],
+  detect: () => 0,
+  load: () => import('./modules/HexPreview'),
+};
+/** Show as hex, offered where the footer has room for it. */
+export interface HexToggle {
+  shown: boolean;
+  toggle(): void;
+}
 const services: PreviewContext['services'] = {
-  htmlPreview: (id) => window.viewer.htmlPreview(id),
+  htmlPreview: (id, message) => window.viewer.htmlPreview(id, message),
   htmlPreviewClose: (id) => window.viewer.htmlPreviewClose(id),
   thumbnail: (file, size) => window.viewer.thumbnail(file, size),
   document: (id, request) => window.viewer.document(id, request),
@@ -96,7 +110,7 @@ export const PreviewHost = memo(function PreviewHost({
   paneID?: string;
   /** A workspace preview plane, whose text may be edited where it is. */
   editable?: boolean;
-  renderFooter?(resource: Resource, module: PreviewModule): ReactNode;
+  renderFooter?(resource: Resource, module: PreviewModule, hex?: HexToggle): ReactNode;
 }) {
   const [retry, setRetry] = useState(0);
   const [activated, setActivated] = useState(active);
@@ -228,45 +242,79 @@ export const PreviewHost = memo(function PreviewHost({
       }),
     [path, supplied, resource?.id, cancel],
   );
+  // A module and the views inside it register commands here: one registry source holds them
+  // all, with the host's own Show as hex.
+  const registered = useRef(new Set<readonly PreviewCommand[]>());
+  const [hexFor, setHexFor] = useState<string>();
+  const hexShown = !!resource && hexFor === resource.id;
+  const offersHex = !!resource && (hexShown || choosePreview(resource.entry).hex !== 'own');
+  const resourceID = resource?.id;
+  const toggleHex = useCallback(
+    () => setHexFor((current) => (current === resourceID ? undefined : resourceID)),
+    [resourceID],
+  );
+  const hostCommands = useMemo<readonly PreviewCommand[]>(
+    () =>
+      offersHex
+        ? [
+            {
+              id: 'hex',
+              label: hexShown ? 'Show preview' : 'Show as hex',
+              aliases: ['hex', 'bytes'],
+              run: toggleHex,
+            },
+          ]
+        : [],
+    [offersHex, hexShown, toggleHex],
+  );
+  const commandSource = paneID ? `preview:${paneID}` : undefined;
   const commands = useMemo<PreviewContext['commands']>(
     () =>
-      !paneID || !resource
+      !commandSource || !resource
         ? undefined
         : {
             header,
-            register: (definitions) =>
-              registry.register(`preview:${paneID}`, {
-                context: () => ({
-                  scope: 'preview',
-                  workspaceID: activeWorkspace().id,
-                  paneID,
-                  path: resource.entry.path,
-                  resourceID: resource.id,
-                  selection: [],
-                  jobs: getState().jobs,
-                  clipboard: getState().clipboard,
-                }),
-                definitions: () =>
-                  definitions.map((command) => ({
-                    ...command,
-                    id: `preview.${command.id}`,
-                    group: 'Preview',
-                    icon: 'eye' as const,
-                    when: (context) =>
-                      ['window', 'preview'].includes(context.scope) &&
-                      command.available !== false &&
-                      active,
-                  })),
-                valid: (invocation) =>
-                  !signal.aborted &&
-                  invocation.resourceID === resource.id &&
-                  activeWorkspace().panes.some(
-                    (pane) => pane.id === paneID && pane.path === resource.entry.path,
-                  ),
-              }),
+            register: (definitions) => {
+              registered.current.add(definitions);
+              registry.touch(commandSource);
+              return () => {
+                registered.current.delete(definitions);
+                registry.touch(commandSource);
+              };
+            },
           },
-    [paneID, resource, header, registry, signal, active],
+    [commandSource, resource, header, registry],
   );
+  useEffect(() => {
+    if (!commandSource || !paneID || !resource) return;
+    return registry.register(commandSource, {
+      context: () => ({
+        scope: 'preview',
+        workspaceID: activeWorkspace().id,
+        paneID,
+        path: resource.entry.path,
+        resourceID: resource.id,
+        selection: [],
+        jobs: getState().jobs,
+        clipboard: getState().clipboard,
+      }),
+      definitions: () =>
+        [...[...registered.current].flat(), ...hostCommands].map((command) => ({
+          ...command,
+          id: `preview.${command.id}`,
+          group: 'Preview',
+          icon: 'eye' as const,
+          when: (context) =>
+            ['window', 'preview'].includes(context.scope) && command.available !== false && active,
+        })),
+      valid: (invocation) =>
+        !signal.aborted &&
+        invocation.resourceID === resource.id &&
+        activeWorkspace().panes.some(
+          (pane) => pane.id === paneID && pane.path === resource.entry.path,
+        ),
+    });
+  }, [commandSource, paneID, resource, registry, signal, active, hostCommands]);
   const locate =
     !supplied && (paneID || workspace)
       ? async (target: FileEntry) => {
@@ -330,7 +378,8 @@ export const PreviewHost = memo(function PreviewHost({
     quickPreview(null);
     void registry.invoke(id, invocation).catch(report);
   };
-  const Viewer = componentFor(module);
+  const Viewer = componentFor(hexShown ? hexModule : module);
+  const hex = offersHex ? { shown: hexShown, toggle: toggleHex } : undefined;
   return (
     <div className="preview-host" data-preview-module={module.id}>
       {path && sourceIssue?.path === path && (
@@ -343,7 +392,7 @@ export const PreviewHost = memo(function PreviewHost({
         />
       )}
       <div className="preview-body">
-        <ErrorBoundary key={resource.id}>
+        <ErrorBoundary key={`${resource.id}:${hexShown}`}>
           <Suspense fallback={<Loading label={`Loading ${module.label.toLowerCase()}…`} />}>
             <Viewer
               key={resource.id}
@@ -380,12 +429,13 @@ export const PreviewHost = memo(function PreviewHost({
                   : undefined
               }
               retry={!supplied ? () => setRetry((value) => value + 1) : undefined}
+              showHex={() => setHexFor(resource.id)}
             />
           </Suspense>
         </ErrorBoundary>
       </div>
       {renderFooter ? (
-        renderFooter(resource, module)
+        renderFooter(resource, hexShown ? hexModule : module, hex)
       ) : (
         <footer className="preview-info">
           <div className="preview-file-info">
@@ -393,10 +443,21 @@ export const PreviewHost = memo(function PreviewHost({
               {(current ?? resource.entry).name}
             </span>
             <span className="preview-file-details">
-              <span className="separator">·</span> {module.label}{' '}
+              <span className="separator">·</span> {hexShown ? hexModule.label : module.label}{' '}
               <span className="separator">·</span> {formatBytes((current ?? resource.entry).size)}
             </span>
           </div>
+          {hex && (
+            <button
+              type="button"
+              className="preview-hex-toggle"
+              title={hex.shown ? 'Show preview' : 'Show as hex'}
+              aria-pressed={hex.shown}
+              onClick={hex.toggle}
+            >
+              Hex
+            </button>
+          )}
           {!supplied && (
             <IconButton
               icon="external"

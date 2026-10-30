@@ -71,6 +71,8 @@ export async function askNatively(
     buttons: string[];
     defaultId: number;
     cancelId: number;
+    /** Withdraws the question: it resolves with `cancelId`. */
+    signal?: AbortSignal;
   },
 ): Promise<number> {
   const parent = window && !window.isDestroyed() ? window : undefined;

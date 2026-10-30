@@ -47,6 +47,40 @@ const references: RemoteSample[] = records.map(([name, original, size, sha256]) 
   url: poi + 'test-data/' + original,
   license: 'Apache-2.0; original notices at ' + poi + 'legal/LICENSE',
 }));
+/** A Publisher document and Windows metafiles, which the engine lays out as drawing pages. */
+const drawings = [
+  [
+    'SampleBrochure.pub',
+    'publisher/SampleBrochure.pub',
+    161792,
+    'ffed034ac87e679f0bd08ff9cf74ad11c0e0e510a42b1bc1a7502415f6c29c87',
+  ],
+  [
+    'nested_wmf.emf',
+    'slideshow/nested_wmf.emf',
+    40276,
+    '4dd0ea622b0feea6daff6b953bd0fe30cc3deb8dc561828f069f83d5bd5cef75',
+  ],
+  [
+    'santa.wmf',
+    'slideshow/santa.wmf',
+    28696,
+    'fdc312bc0dbea47df16d3e3e98e2777e4aa537d225a703e3cde0177df56a592a',
+  ],
+] as const;
+/** Kept apart from the Word, Excel and PowerPoint references, which Microsoft Office also exports. */
+export const officeDrawingSamples: RemoteSample[] = drawings.map(
+  ([name, original, size, sha256]) => ({
+    ...references[0]!,
+    path: 'previews/documents/' + name,
+    formats: [name.split('.').at(-1)!],
+    size,
+    sha256,
+    preview: 'Bundled local Office layout, as drawing pages',
+    source: poi + 'test-data/' + original,
+    url: poi + 'test-data/' + original,
+  }),
+);
 export const officeLayoutSamples: RemoteSample[] = [
   ...references,
   ...renamed.map(([name, index]) => {

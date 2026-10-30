@@ -13,6 +13,10 @@ import type { ProviderKind } from './models/providers';
 import type { ChangePlan } from './operations/change-plan';
 import type { OfficeContent } from './previews/documents/office';
 import type { EPUBChapter, EPUBImage } from './previews/documents/epub';
+import type { MailMessage } from './previews/mail/message';
+import type { Mailbox } from './previews/mail/mailbox';
+import type { WebArchiveSummary } from './previews/documents/web-archive';
+import type { InspectedFile } from './previews/inspected';
 import type { OptimizationRecipe } from './operations/optimization';
 import type { FileGrouping } from './files/entries';
 export type { ProviderKind } from './models/providers';
@@ -137,6 +141,8 @@ export interface ApplicationSettings {
   hotkey: { enabled: boolean; shortcut: string };
   /** ⌘Q needs a second press; the menu, the Dock and logging out quit at once. */
   quit: { warnShortcut: boolean };
+  /** A quiet check for a newer direct download at launch, at most once a day. */
+  updates: { checkAtLaunch: boolean };
   /** Colour themes: domain/preferences/themes.ts. */
   themes: Theme[];
   /** The theme for each appearance; empty is the built-in one. */
@@ -243,6 +249,14 @@ export interface DocumentData {
   chapters?: EPUBChapter[];
   epub?: { images: EPUBImage[] };
   office?: OfficeContent;
+  /** An email message, or one message of a mailbox. */
+  mail?: MailMessage;
+  /** A mailbox's list of messages. */
+  mailbox?: Mailbox;
+  /** A saved web page's address; its page is served on its own. */
+  webArchive?: WebArchiveSummary;
+  /** A certificate or key file, a torrent or a provisioning profile, field by field. */
+  inspected?: InspectedFile;
   coverageReason?: string;
   truncated: boolean;
 }
@@ -446,6 +460,7 @@ export function defaultSettings(home: string): ApplicationSettings {
     git: { enabled: false },
     hotkey: { enabled: false, shortcut: 'Alt+Space' },
     quit: { warnShortcut: true },
+    updates: { checkAtLaunch: true },
     theme: { dark: '', light: '' },
     tour: { dwell: 3000, duration: 900, loop: true },
     search: {
