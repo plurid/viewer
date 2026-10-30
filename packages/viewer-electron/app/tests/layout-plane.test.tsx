@@ -215,6 +215,8 @@ describe('the Layout plane', () => {
     expect(choices.closest('.layout-options-choices')).toBeTruthy();
     expect(save.closest('.layout-options-choices')).toBeNull();
     expect(save.closest('.layout-save')).toBeTruthy();
+    // and the spatial overlays keep clear of it
+    expect(save.closest('[data-viewer-overlay-protected]')).toBeTruthy();
   });
 
   it('switches modes, remembers the mode and names the output for it', async () => {
@@ -242,6 +244,20 @@ describe('the Layout plane', () => {
     );
     expect(texts).toContain('Beach.jpg');
     expect(texts).toContain('Page 1 of 1');
+  });
+
+  it('draws poster tiles from a detailed picture, and collages from the usual one', async () => {
+    const thumbnail = vi.mocked(window.viewer.thumbnail);
+    open(['/Photos/Beach.jpg'], 'poster');
+    await ready();
+    // every tile shows a part of the photo: one 2048 px picture serves them all
+    await waitFor(() => expect(thumbnail).toHaveBeenCalledWith('/Photos/Beach.jpg', 2048));
+    cleanup();
+    thumbnail.mockClear();
+    open(Object.keys(photos));
+    await ready();
+    await waitFor(() => expect(thumbnail).toHaveBeenCalledWith('/Photos/Beach.jpg', 512));
+    expect(thumbnail.mock.calls.some(([, size]) => size === 2048)).toBe(false);
   });
 
   it('applies a candidate and shows it chosen', async () => {

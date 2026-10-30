@@ -61,6 +61,14 @@
       "bytes": 160859,
       "sha256": "8099cbf75124fdc0c3dedb36412f3fa3d2f228ad69188c26648f3e65fac1b7d6"
     },
+    "layout.png": {
+      "bytes": 319087,
+      "sha256": "4c44e89e70b0be76d9e1afa82b9827d3df0d0b4068baa3aa862bc4b7da09e1dc"
+    },
+    "nesting.png": {
+      "bytes": 145311,
+      "sha256": "dac30e7e8f91de0127de290a5588175c635ff7cf1ad10edc4e060cb01648617c"
+    },
     "source.jpg": {
       "bytes": 55888,
       "sha256": "5f496dabe35a1537cb908c8b841bdde521361959a64468641b026ab51cb8f0af"

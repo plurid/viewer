@@ -354,7 +354,7 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
               )}
             </div>
             {/* outside the scrolling choices, so Save stays in view however many a mode has */}
-            <div className="layout-save">
+            <div className="layout-save" data-viewer-overlay-protected="layout-save">
               {plan && heavy && (
                 <p className="error">
                   The PDFs in this layout are over 512 MB together. Choose fewer.

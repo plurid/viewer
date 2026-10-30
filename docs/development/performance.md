@@ -136,5 +136,13 @@ A derived-resource read excludes PDF parsing and painting. Large CSV/mesh parsin
 Office conversion and folder-size scans have separate worker/queue limits; cancellation must release
 their work.
 
+## Layout export
+
+The layout PDF writer (`desktop/transforms/layout-pdf.ts`) runs in the main process, as the PDF
+tools do. qpdf does the PDF work in its own process, and the writer reads back only the pages a
+layout uses. On 2026-10-30, a 2-up of a generated 250 MB scanned-style PDF, all 25 pages, took 7.7
+s; the longest main-process pause was 169 ms, measured with `monitorEventLoopDelay`. Move the writer
+to a utility process if a source within the limits makes that pause noticeably longer.
+
 Keep raw reports in generated output and publish only the measurements whose method and limitations
 are clear. [Testing](testing.md) explains evidence classes.

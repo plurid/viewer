@@ -114,8 +114,10 @@ it('shows the largest picture a Pages document saved, said to be that, and relea
   expect((await picture(view)).getAttribute('src')).toBe(child('preview.jpg').url);
   expect(services.archiveEntry).toHaveBeenCalledTimes(1);
   expect(services.archiveEntry).toHaveBeenCalledWith('source', 'preview.jpg');
-  expect(screen.getByText('Pages document')).toBeTruthy();
-  expect(screen.getByText('The image this document saved, not a live rendering')).toBeTruthy();
+  // said in a caption above the picture, so a plane's header keeps one row of controls
+  const caption = screen.getByText('Pages document').closest('.embedded-caption');
+  expect(caption?.textContent).toContain('The image this document saved, not a live rendering');
+  expect(caption?.closest('.preview-toolbar')).toBeNull();
   // the picture is no image file to edit or optimize
   expect(screen.queryByText('Image tools…')).toBeNull();
   expect(screen.queryByText('Optimize…')).toBeNull();

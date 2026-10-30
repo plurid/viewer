@@ -160,7 +160,9 @@ function SheetPicture({
   size: PictureSize;
 }) {
   const page = item.kind === 'page' ? item.page : undefined;
-  const url = usePicture(pictures, source.path, page, size);
+  // a poster tile or a close crop shows a part of its picture, so it needs more of its pixels
+  const part = item.crop.width * item.crop.height < 0.3;
+  const url = usePicture(pictures, source.path, page, size === 'large' && part ? 'detail' : size);
   const natural = source.size(page);
   const shown = turned(natural, item.rotate);
   const { crop, frame } = item;

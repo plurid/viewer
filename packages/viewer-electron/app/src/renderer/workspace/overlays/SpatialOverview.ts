@@ -30,8 +30,10 @@ const toolbarControlsSelector =
   `${toolbarSelector} [role="dialog"], ${toolbarSelector} [role="menu"]`;
 // Only fixed, explicitly opted-in control areas participate; changing file rows do not.
 const protectedAreaAttribute = 'data-viewer-overlay-protected';
+// a plane's footer holds its actions, as its header controls do
 const obstacleSelector =
-  `.plane-controls, ${cubeSelector}, ` + `${toolbarControlsSelector}, [${protectedAreaAttribute}]`;
+  `.plane-controls, [data-plurid-plane] footer, ${cubeSelector}, ` +
+  `${toolbarControlsSelector}, [${protectedAreaAttribute}]`;
 const observedSelector = `${mapSelector}, ${toolbarSelector}, ${obstacleSelector}`;
 const ownedStyles = [
   'position',

@@ -187,6 +187,20 @@ describe('engine overlay adapter', () => {
     expect(frames.size).toBe(0);
   });
 
+  it('keeps clear of a plane footer, where a plane keeps its actions', () => {
+    const view = fixture();
+    view.map.remove();
+    const element = cube(view);
+    const plane = document.createElement('section');
+    plane.dataset.pluridPlane = 'engine-plane';
+    const footer = document.createElement('footer');
+    vi.spyOn(footer, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 560, 1000, 40));
+    plane.append(footer);
+    view.root.append(plane);
+    frame();
+    expect(element.style.visibility).toBe('hidden');
+  });
+
   it('leaves corner anchoring to the engine when an obstacle closes and the window grows', () => {
     const view = fixture();
     view.map.remove();

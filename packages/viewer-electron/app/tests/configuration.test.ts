@@ -820,6 +820,22 @@ describe('reloading config.jsonc (2026-10-20)', () => {
   });
 });
 
+describe('announcing before config.jsonc is read (2026-10-30)', () => {
+  it('announces nothing until the person’s settings are read', async () => {
+    // A theme change at launch announced the defaults, which hold no providers, and every model
+    // data approval was reconciled away.
+    const emit = vi.fn();
+    const service = create(emit);
+    service.announce();
+    expect(service.isLoaded()).toBe(false);
+    expect(emit).not.toHaveBeenCalled();
+    await service.load();
+    expect(service.isLoaded()).toBe(true);
+    service.announce();
+    expect(emit).toHaveBeenCalledOnce();
+  });
+});
+
 describe('a macro saved from the workspace (2026-10-23)', () => {
   const action = (id: string, executor: Record<string, unknown>) => ({
     id,

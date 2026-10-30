@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { Resource } from '../../../domain/contracts';
 import type { PreviewContext } from '../contracts';
-import { PreviewToolbar } from '../controls';
 import { choosePreview, previewModules } from '../registry';
 import { preloadPreviewModule } from '../module-loading';
 import { Empty, Loading } from '../../ui/primitives';
@@ -110,10 +109,11 @@ export default function EmbeddedPreview(context: PreviewContext) {
     );
   return (
     <div className="embedded-viewer">
-      <PreviewToolbar context={context}>
+      {/* a caption, so the plane's header keeps one row: the picture's own zoom controls */}
+      <p className="embedded-caption">
         <span>{summary}</span>
         <span className="muted">The image this document saved, not a live rendering</span>
-      </PreviewToolbar>
+      </p>
       <ImagePreview
         {...context}
         resource={reading.picture}

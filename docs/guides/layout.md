@@ -8,6 +8,8 @@ Across the top, the plane offers the modes that suit the selection, the suggeste
 the preview, the suggested layouts are ranked, each with the reason it fits, such as "Fills A4
 landscape, no cropping". Choose one to use it.
 
+![A Layout plane with three photographs as one across and two below, and the other layouts ranked under it](../media/layout.png)
+
 ## Make a collage
 
 1. Select two to nine photos and choose **Lay out…**. The plane opens on **Collage**, with the best
@@ -86,6 +88,8 @@ Letter.
    neighbour.
 
 ## Nest parts for cutting
+
+![Nine parts nested on one 1250 × 2500 mm sheet, a disc inside a ring, under the sheets, cut length, time and cost](../media/nesting.png)
 
 1. Select DXF parts, press **⌘K** and choose **Nest for cutting…**. The Layout plane opens on
    **Nesting** and lists each part with its picture, size and area.

@@ -14,6 +14,8 @@ generated profiles are separate from the user's files.
 | `insights.png`                | Insight cards above a folder's files                  |
 | `explore.png`                 | A model's answer to Explore this folder               |
 | `overview.png`                | File overview cards across an indexed Home folder     |
+| `layout.png`                  | A collage of three photographs in the Layout plane    |
+| `nesting.png`                 | DXF parts nested on a sheet, with the estimates       |
 | `files.mp4` / `files.gif`     | Search a folder and open Quick Preview                |
 | `create.mp4` / `create.gif`   | Export a WebP through Image tools and open the result |
 | `develop.mp4` / `develop.gif` | Create a branch task and write its project note       |
@@ -42,10 +44,10 @@ files and actual completed actions.
 
 ## Attribution
 
-`source.jpg`, the sample PDF image and the image-conversion demonstration derive from a frame at 150
-seconds of **Big Buck Bunny**, © 2008 Blender Foundation, licensed under
-[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
-[Film and source](https://peach.blender.org/). Changes: frame extraction and the shown
+`source.jpg`, the sample PDF image, the image-conversion demonstration and the three collage
+photographs derive from a frame at 150 seconds of **Big Buck Bunny**, © 2008 Blender Foundation,
+licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+[Film and source](https://peach.blender.org/). Changes: frame extraction, crops and the shown
 image/document conversions.
 
 The tutorial PDF and small website are original Viewer demonstration material. Additional

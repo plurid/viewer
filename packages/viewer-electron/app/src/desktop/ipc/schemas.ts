@@ -640,7 +640,7 @@ export const schemas = {
   actionExportSummary: z.tuple([id, localPath]),
   agentToken: z.tuple([]),
   contextPublish: z.tuple([contextSchema]),
-  thumbnail: z.tuple([localPath, z.number().int().min(128).max(512)]),
+  thumbnail: z.tuple([localPath, z.number().int().min(128).max(2048)]),
   appIcon: z.tuple([localPath, z.enum(['small', 'large'])]),
   diagnosticReport: z.tuple([z.string().max(8000)]),
   document: z.tuple([id, documentRequestSchema.optional()]),

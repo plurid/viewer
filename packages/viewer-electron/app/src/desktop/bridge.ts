@@ -486,9 +486,9 @@ export class Desktop {
         }
         this.options.settingsChanged?.();
         // On the defaults, which stand in for an unreadable config.jsonc and its last valid copy,
-        // the providers are not the person's: reconciling deleted every model-data approval
-        //. Approvals wait for a readable file.
-        if (snapshot.config?.fallback !== 'defaults')
+        // or before config.jsonc is read, the providers are not the person's: reconciling deleted
+        // every model-data approval. Approvals wait for a readable file.
+        if (this.settings.isLoaded() && snapshot.config?.fallback !== 'defaults')
           void this.modelPermissions.reconcile().catch(() =>
             emit({
               type: 'service-error',

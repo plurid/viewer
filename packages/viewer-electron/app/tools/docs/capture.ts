@@ -22,6 +22,7 @@ import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contrac
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { documentSamples } from '../playground/samples/documents';
+import { nestingSamples } from '../playground/samples/nesting';
 import { ownedApp, until } from '../../tests/owned-app';
 import { click, countOf, exists, focus, textOf } from '../../tests/native/runtime/page';
 import { pageCall } from '../../tests/native/runtime/page-function';
@@ -706,6 +707,81 @@ try {
   await current.app.close(current.connection);
 }
 
+// The Layout plane: three photographs, each a part of the same frame, laid out together; then the
+// playground's sample parts nested for cutting, with six brackets.
+const trip = path.join(root, 'Trip photos'),
+  parts = path.join(root, 'Workshop parts');
+for (const directory of [trip, parts]) await mkdir(directory);
+for (const [name, crop] of [
+  ['Meadow.jpg', 'crop=300:225:0:40'],
+  ['Trail.jpg', 'crop=300:225:170:70'],
+  ['Clearing.jpg', 'crop=300:225:340:100'],
+])
+  await execute(ffmpeg, [
+    '-n',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-i',
+    image,
+    '-vf',
+    crop!,
+    '-q:v',
+    '2',
+    path.join(trip, name!),
+  ]);
+for (const sample of nestingSamples())
+  await writeFile(path.join(parts, path.basename(sample.path)), sample.bytes, { flag: 'wx' });
+current = await open('Layout', trip);
+try {
+  const { connection } = current;
+  const row = (name: string) => '[data-file-path=' + JSON.stringify(path.join(trip, name)) + ']';
+  await connection.evaluate(pageCall(selectRow, row('Meadow.jpg')));
+  for (const name of ['Trail.jpg', 'Clearing.jpg'])
+    await connection.evaluate(pageCall(addRow, row(name)));
+  await delay(600);
+  await palette(connection, 'Lay out');
+  await until(
+    () => connection.evaluate(countOf('.layout-sheet image')),
+    (count) => count >= 3,
+    'Layout preview',
+    30000,
+  );
+  await delay(1500);
+  await screenshot(connection, path.join(output, 'layout.png'));
+} finally {
+  await current.app.close(current.connection);
+}
+current = await open('Nesting', parts);
+try {
+  const { connection } = current;
+  // a little taller than the other stills, so the estimates and the used part of the sheet show
+  await connection.command('Emulation.setDeviceMetricsOverride', {
+    width: 1280,
+    height: 920,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await delay(1000);
+  const row = (name: string) => '[data-file-path=' + JSON.stringify(path.join(parts, name)) + ']';
+  const names = (await readdir(parts)).sort();
+  await connection.evaluate(pageCall(selectRow, row(names[0]!)));
+  for (const name of names.slice(1)) await connection.evaluate(pageCall(addRow, row(name)));
+  await delay(600);
+  await palette(connection, 'Nest for cutting');
+  await field(connection, 'Quantity of Bracket with holes', '6');
+  await until(
+    () => connection.evaluate(textOf('.nesting-panel')),
+    (text) => text.includes('Checked:') && text.includes('of 9 parts'),
+    'Nested parts',
+    60000,
+  );
+  await delay(1500);
+  await screenshot(connection, path.join(output, 'nesting.png'));
+} finally {
+  await current.app.close(current.connection);
+}
+
 const assets = [
   'hero.png',
   'files.png',
@@ -718,6 +794,8 @@ const assets = [
   'insights.png',
   'explore.png',
   'overview.png',
+  'layout.png',
+  'nesting.png',
 ];
 const publicFiles: Record<string, string> = Object.fromEntries(
   assets.map((name) => [name, path.join(output, name)]),

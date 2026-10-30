@@ -137,6 +137,17 @@
   height: 100%;
   min-height: 0;
 }
+/* what a saved picture is, said above it */
+.embedded-caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 8px;
+  margin: 0;
+  padding: 8px 12px 0;
+  font-size: 12px;
+  text-align: center;
+}
 /* the expanded file's own preview, or a document's saved picture, below the toolbar when that is
    not in the plane's header */
 .compressed-viewer > :last-child,

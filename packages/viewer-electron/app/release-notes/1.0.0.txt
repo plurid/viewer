@@ -1,3 +1,15 @@
 # Release notes for Viewer 1.0.0. Lines starting with # are left out.
 # Write a few short lines below: Check for Updates shows them in its dialog.
 # pnpm direct:release refuses to ship until there is text here.
+# Draft written from the 1.0 work; edit it before the release.
+Viewer 1.0, the first release.
+
+- Browse, preview and search your files in a spatial workspace of planes.
+- Previews for more than 300 formats: documents, Office files, camera RAW, 3D models, CAD drawings, email, certificates, archives and more. Any file can be shown as hex.
+- Lay out photos and PDFs as collages, contact sheets, N-up sheets, booklets, cards, labels or posters, saved as PDF, PNG or JPEG.
+- Nest DXF parts for laser and plasma cutting, with the sheets, cut length, time and cost it takes.
+- Copies on the same disk are instant. Viewer never deletes your files permanently: removals go to the Trash.
+- Local agents and models can help explore a folder, always with your approval.
+- Check for Updates is in the Viewer menu.
+
+Requires macOS 14 or later on a Mac with Apple silicon.

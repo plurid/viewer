@@ -37,6 +37,8 @@ export class SettingsService {
   private queue: Promise<void> = Promise.resolve();
   private store: JsoncConfiguration<z.infer<typeof configSchema>>;
   private loaded?: Promise<void>;
+  /** Until config.jsonc is read, the document holds defaults, which are not the person's settings. */
+  private read = false;
   private seedPending = false;
   private profilesReady = false;
   /** The copy in effect while config.jsonc cannot be read: its last valid copy, or the defaults. */
@@ -148,11 +150,16 @@ export class SettingsService {
         });
       await this.store.schema(schema);
       this.profilesReady = true;
+      this.read = true;
       this.store.watch(() => {
         void this.reload().catch(() => {});
       });
     })();
     await this.loaded;
+  }
+  /** Whether config.jsonc has been read, so a snapshot holds the person's settings. */
+  isLoaded(): boolean {
+    return this.read;
   }
   private write(): Promise<void> {
     const { revision: _revision, ...config } = this.document;
@@ -424,8 +431,10 @@ export class SettingsService {
     if (Object.keys(folders).length)
       await this.patch([{ path: 'settings.folders', value: folders }], this.document.revision);
   }
+  /** Before config.jsonc is read there is nothing of the person's to announce: a theme change at
+   * launch announced the defaults, and model data approvals were reconciled against no providers. */
   announce(): void {
-    this.emit(this.snapshot());
+    if (this.read) this.emit(this.snapshot());
   }
   async flush(): Promise<void> {
     await this.queue;
