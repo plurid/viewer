@@ -201,6 +201,10 @@ function openDisclosure(summary: string, reveal?: string) {
   if (reveal) document.querySelector(reveal)!.scrollIntoView({ block: 'center' });
 }
 
+/** Whether a disclosure whose summary reads `summary` is shown. */
+const hasDisclosure = (summary: string) =>
+  [...document.querySelectorAll('details summary')].some((item) => item.textContent === summary);
+
 const revealSettingsRow = (text: string) =>
   [...document.querySelectorAll('label.settings-row')]
     .find((row) => row.textContent.includes(text))!
@@ -215,7 +219,7 @@ const clickReviewButton = (label: string) =>
 const output = await mkdtemp(path.resolve('out/agent-safety-acceptance-'));
 const binary =
   process.env.VIEWER_TEST_BINARY ??
-  path.resolve('out/Viewer-safety-v5-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
+  path.resolve('out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
 const viewer = await ownedApp(binary, profile, { mode: 'foreground' });
 let main: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const evidence: string[] = [];
@@ -239,9 +243,15 @@ try {
   );
   assert.ok(!Array.isArray(reply) && 'token' in reply);
   const named = reply.token;
+  // Asking Settings for the client configuration issues a new token, which revokes the shared
+  // connection's saved grants; the running token is read where the app keeps it.
   const sharedToken = JSON.parse(
-    await settings.evaluate(pageCall(() => window.viewer.agentToken())),
-  ).mcpServers.viewer.env.VIEWER_AGENT_TOKEN as string;
+    await until(
+      () => readFile(path.join(profile, 'agent-token-v1.json'), 'utf8').catch(() => ''),
+      Boolean,
+      'shared agent token',
+    ),
+  ) as string;
   const connection = JSON.parse(
     await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
   ) as { socket: string };
@@ -460,6 +470,12 @@ try {
     () => settings.evaluate(textOf('.settings-page')),
     (text) => text.includes('Agent permissions'),
     'shared connection permissions',
+  );
+  // Settings reads the grants once the connection's section opens; the list follows.
+  await until(
+    () => settings.evaluate(pageCall(hasDisclosure, 'Existing grants')),
+    Boolean,
+    'existing grants listed',
   );
   await settings.evaluate(pageCall(openDisclosure, 'Existing grants', '.settings-grant'));
   assert.ok(
