@@ -5,7 +5,7 @@ import { copyPathCommand } from './copy-path';
 import { calculateSize } from '../explorer/sizes';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath, baseName } from '../../domain/workspaces/planes';
-import { convertibleImage } from '../../domain/operations/image-conversions';
+import { convertibleImage, inConversionFormat } from '../../domain/operations/image-conversions';
 import {
   favorite,
   getState,
@@ -160,7 +160,11 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       group: 'Quick actions',
       icon: 'image' as const,
       aliases: [...aliases],
-      when: images,
+      // A selection already in the format is not offered it; in a mixed one, such an image gets a
+      // copy beside it.
+      when: (context: CommandContext) =>
+        images(context) &&
+        !context.selection.every((entry) => inConversionFormat(entry, conversion)),
       run: async (context: CommandContext) => {
         await window.viewer.operate({ kind: 'convert', conversion, sources: paths(context) });
       },

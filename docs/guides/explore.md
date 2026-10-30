@@ -25,10 +25,10 @@ insights** brings them back. Turn insights off in **Settings → Browsing → Su
 
 ## See all your files at a glance
 
-Press **⌘K** and choose **Overview**. An Overview plane searches the filename index for what may
-need a look:
+Press **⌘K** and choose **File overview**. A File overview plane searches the filename index for
+what may need a look:
 
-![Overview cards for old installers, large files, screenshots and more across a Home folder](../media/overview.png)
+![File overview cards for old installers, large files, screenshots and more across a Home folder](../media/overview.png)
 
 | Card                       | Looks for                                                          |
 | -------------------------- | ------------------------------------------------------------------ |
@@ -49,7 +49,7 @@ which no search can name, it opens a collection of exactly those archives, kept 
 and updated each time. Searches with no matches are listed in one line at the bottom. **Refresh**
 searches again.
 
-Overview reads only the index. When Downloads or the Desktop is not indexed, its card offers
+File overview reads only the index. When Downloads or the Desktop is not indexed, its card offers
 **Search it now**, which searches the folder directly, and **Add to the index**, which opens
 **Settings → Search**.
 

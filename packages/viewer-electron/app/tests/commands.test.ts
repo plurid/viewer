@@ -129,6 +129,28 @@ describe('contextual commands', () => {
     for (const id of ['tags', 'make-alias', 'native-quick-look', 'share'])
       expect(definitions.find((command) => command.id === id)!.when(context)).toBe(false);
   });
+  it('offers converting image copies only to another format', () => {
+    const definitions = folderCommands(actions);
+    const image = (name: string): FileEntry => ({
+      ...file(name),
+      extension: name.slice(name.lastIndexOf('.') + 1),
+    });
+    const offered = (...names: string[]) =>
+      ['convert-png', 'convert-jpeg', 'rotate-copy-left'].filter((id) =>
+        definitions
+          .find((command) => command.id === id)!
+          .when({ ...context, selection: names.map(image) }),
+      );
+    expect(offered('Shot.png')).toEqual(['convert-jpeg', 'rotate-copy-left']);
+    expect(offered('Photo.JPG', 'Scan.jpeg')).toEqual(['convert-png', 'rotate-copy-left']);
+    // A mixed selection converts each other image; one already in the format gets a copy.
+    expect(offered('Shot.png', 'Photo.jpg')).toEqual([
+      'convert-png',
+      'convert-jpeg',
+      'rotate-copy-left',
+    ]);
+    expect(offered('Photo.heic')).toEqual(['convert-png', 'convert-jpeg', 'rotate-copy-left']);
+  });
   const commandsIn = (sections: MenuSection[]): string[] =>
     sections.flatMap((section) =>
       section.entries.flatMap((entry) =>

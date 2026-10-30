@@ -45,10 +45,11 @@ export function OptimizationResults({
                 ? [...jobs].reverse().find((value) => value.sources.includes(row.file.path))
                 : undefined;
               const item = job?.completed.find((value) => value.source === row.file.path);
+              // A job fails when any of its files fails; one it saved still reads as saved.
               const failure =
                 row.error ||
                 job?.errors.find((value) => value.path === row.file.path)?.message ||
-                (job?.status === 'failed'
+                (job?.status === 'failed' && !item
                   ? job.errors[0]?.message || 'Export failed. Retry this file.'
                   : undefined);
               const smaller = !!candidate && candidate.outputBytes < candidate.inputBytes;

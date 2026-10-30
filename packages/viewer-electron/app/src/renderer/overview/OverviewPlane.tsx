@@ -132,7 +132,7 @@ export default function OverviewPlane({ pane }: { pane: Pane }) {
     return card?.kind === 'ready' && card.summary.count === 0;
   });
   return (
-    <section className="overview-plane" aria-label="Overview">
+    <section className="overview-plane" aria-label="File overview">
       <header className="overview-toolbar">
         <span className="muted" role="status">
           {status

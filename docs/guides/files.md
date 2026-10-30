@@ -37,8 +37,9 @@ or hides hidden files.
 | See size, dates and tags | **⌘I**                                           |
 
 When a name already exists at the destination, Viewer asks whether to skip, keep both or replace.
-The **File operations** button in the title bar shows progress and failures. Completed operations
-offer **Undo**, which first checks that the files are still as the operation left them.
+The **File operations** button in the title bar shows progress and failures. An operation offers
+**Undo** for the items it finished, even when another item failed. Undo first checks that the files
+are still as the operation left them.
 
 ## Let Viewer suggest
 

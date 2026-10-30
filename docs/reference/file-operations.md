@@ -12,7 +12,11 @@ views offer explicit transfers to their other panel.
 
 Existing names require a collision decision. Keep both uses the actual published destination name.
 Replace/merge behavior is limited by the operation and current filesystem identities. Changed
-targets or unsafe links fail; a stale plan is never applied.
+targets or unsafe links fail; a stale plan is never applied. Skip leaves the existing item and no
+recovery paths.
+
+An operation in which any item fails ends as failed, even when other items completed. Their outputs
+and Undo are kept, and its recovery paths name the last item that failed.
 
 ## Save and Undo
 

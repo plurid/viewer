@@ -15,7 +15,8 @@ export const unavailableConverter: ImageConverter = {
 };
 export { convertibleExtensions } from '../../domain/operations/image-conversions';
 /** The file a per-image conversion creates next to its source. Collisions are resolved
- * like any other new file: the person keeps both, skips or replaces. */
+ * like any other new file: the person keeps both, skips or replaces. A name that reaches the
+ * image itself, in its own format, keeps both without asking. */
 export function conversionOutput(source: string, conversion: ImageConversion): string {
   const extension = path.extname(source);
   const stem = path.basename(source, extension);

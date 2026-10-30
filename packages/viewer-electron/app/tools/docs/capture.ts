@@ -23,6 +23,8 @@ import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { documentSamples } from '../playground/samples/documents';
 import { ownedApp, until } from '../../tests/owned-app';
+import { click, countOf, exists, focus, textOf } from '../../tests/native/runtime/page';
+import { pageCall } from '../../tests/native/runtime/page-function';
 import { record, screenshot, type Connection } from './record';
 import { temporaryRoot } from '../temporary';
 import { fieldNotesPDF } from './sample';
@@ -241,42 +243,91 @@ async function profile(name: string, folder: string, mode?: 'columns', model?: M
   });
   return directory;
 }
+function selectField(selector: string): void {
+  const input = document.querySelector<HTMLInputElement>(selector)!;
+  input.focus();
+  input.select();
+}
+
+/** The first button in `scope` whose text or accessible name is `label`: whether it is enabled,
+ * pressing it when asked. */
+function labelledButton(label: string, scope: string | null, press: boolean): boolean {
+  const root = scope === null ? document : document.querySelector(scope);
+  const button = [...(root?.querySelectorAll('button') ?? [])].find(
+    (button) => button.textContent.trim() === label || button.getAttribute('aria-label') === label,
+  );
+  if (press) button!.click();
+  return !!button && !button.disabled;
+}
+
+function selectRow(selector: string): void {
+  const row = document.querySelector<HTMLElement>(selector)!;
+  row.click();
+  row.focus();
+}
+
+/** Adds the row to the selection, as ⌘-click does. */
+function addRow(selector: string): void {
+  document
+    .querySelector(selector)!
+    .dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }));
+}
+
+function openContextMenu(selector: string): void {
+  const row = document.querySelector<HTMLElement>(selector)!;
+  row.click();
+  const box = row.getBoundingClientRect();
+  row.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: box.left + 60,
+      clientY: box.top + box.height / 2,
+    }),
+  );
+}
+
+/** Closes what `selector` names, when it is open. */
+function dismiss(selector: string): void {
+  document.querySelector<HTMLElement>(selector)?.click();
+}
+
+/** The index has read every root. */
+const indexReady = () =>
+  window.viewer
+    .indexStatus()
+    .then(
+      (status) =>
+        !status.running &&
+        status.roots.length > 0 &&
+        status.roots.every((root) => root.status === 'ready'),
+    );
+
 async function field(connection: Connection, label: string, text: string) {
   const selector = `[aria-label=${JSON.stringify(label)}]`;
-  await until(
-    () => connection.evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
-    Boolean,
-    label,
-  );
-  await connection.evaluate(
-    `(() => { const input = document.querySelector(${JSON.stringify(selector)}); input.focus(); input.select(); })()`,
-  );
+  await until(() => connection.evaluate(exists(selector)), Boolean, label);
+  await connection.evaluate(pageCall(selectField, selector));
   await connection.command('Input.insertText', { text });
 }
-async function button(connection: Connection, label: string, scope = 'document') {
-  const expression = `Array.from(${scope}.querySelectorAll('button')).find(button => button.textContent.trim() === ${JSON.stringify(label)} || button.getAttribute('aria-label') === ${JSON.stringify(label)})`;
+/** `scope`: a selector for the part of the window that holds the button. */
+async function button(connection: Connection, label: string, scope?: string) {
   await until(
-    () => connection.evaluate<boolean>(`!!(${expression}) && !(${expression}).disabled`),
+    () => connection.evaluate(pageCall(labelledButton, label, scope ?? null, false)),
     Boolean,
     label,
   );
-  await connection.evaluate(`(${expression}).click()`);
+  await connection.evaluate(pageCall(labelledButton, label, scope ?? null, true));
 }
 async function palette(connection: Connection, label: string) {
-  await connection.evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+  await connection.evaluate(click('[aria-label="Commands (⌘K)"]'));
   await field(connection, 'Search commands', label);
   await until(
-    () =>
-      connection.evaluate<string>(
-        'document.querySelector(".command-result[aria-selected=true]")?.textContent || ""',
-      ),
+    () => connection.evaluate(textOf('.command-result[aria-selected=true]')),
     (text) => text.toLowerCase().includes(label.toLowerCase()),
     label,
   );
   await delay(650);
-  await connection.evaluate(
-    'document.querySelector(".command-result[aria-selected=true]").click()',
-  );
+  await connection.evaluate(click('.command-result[aria-selected=true]'));
 }
 async function open(
   name: string,
@@ -295,7 +346,7 @@ async function open(
     mobile: false,
   });
   await until(
-    () => connection.evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+    () => connection.evaluate(countOf('[data-file-path]')),
     (count) => count > 0,
     'Demo folder',
   );
@@ -308,16 +359,12 @@ try {
   results.files = await record(current.connection, path.join(output, 'files'), ffmpeg, async () => {
     const { connection } = current;
     await delay(900);
-    await connection.evaluate(
-      `document.querySelector('[aria-label="Search this folder"]').click()`,
-    );
+    await connection.evaluate(click('[aria-label="Search this folder"]'));
     await field(connection, 'Find files', 'Field notes.pdf');
     await delay(1200);
     const selector =
       '[data-file-path=' + JSON.stringify(path.join(examples, 'Field notes.pdf')) + ']';
-    await connection.evaluate(
-      `(() => { const row = document.querySelector(${JSON.stringify(selector)}); row.click(); row.focus(); })()`,
-    );
+    await connection.evaluate(pageCall(selectRow, selector));
     await delay(650);
     await connection.command('Input.dispatchKeyEvent', {
       type: 'keyDown',
@@ -331,20 +378,14 @@ try {
       code: 'Space',
       windowsVirtualKeyCode: 32,
     });
-    await until(
-      () => connection.evaluate<boolean>('!!document.querySelector(".pdf-viewer canvas")'),
-      Boolean,
-      'PDF pixels',
-    );
+    await until(() => connection.evaluate(exists('.pdf-viewer canvas')), Boolean, 'PDF pixels');
     await delay(2000);
     await screenshot(connection, path.join(output, 'files.png'));
     await delay(1600);
   });
   await button(current.connection, 'Open linked plane');
   await delay(1500);
-  await current.connection.evaluate(
-    `document.querySelector('[aria-label="Close search"]')?.click()`,
-  );
+  await current.connection.evaluate(pageCall(dismiss, '[aria-label="Close search"]'));
   await palette(current.connection, 'Frame all');
   await delay(1800);
   await screenshot(current.connection, path.join(output, 'hero.png'));
@@ -361,27 +402,30 @@ try {
     async () => {
       const { connection } = current;
       await delay(900);
-      await connection.evaluate('document.querySelector("[data-file-path]").click()');
+      await connection.evaluate(click('[data-file-path]'));
       await palette(connection, 'Images for web');
       await until(
         () =>
-          connection.evaluate<boolean>(
-            '!!document.querySelector(".image-tools-canvas canvas")?.width',
+          connection.evaluate(
+            pageCall(
+              () =>
+                !!document.querySelector<HTMLCanvasElement>('.image-tools-canvas canvas')?.width,
+            ),
           ),
         Boolean,
         'Source image',
       );
       await delay(1300);
       await screenshot(connection, path.join(output, 'create.png'));
-      await button(connection, 'Export image', 'document.querySelector(".image-tools-dialog")');
+      await button(connection, 'Export image', '.image-tools-dialog');
       await until(
-        () => connection.evaluate<{ status: string }[]>('window.viewer.jobs()'),
+        () => connection.evaluate(pageCall(() => window.viewer.jobs())),
         (jobs) => jobs.some((job) => job.status === 'completed'),
         'Converted file',
         30000,
       );
       await delay(1200);
-      await button(connection, 'Open result', 'document.querySelector(".image-tools-dialog")');
+      await button(connection, 'Open result', '.image-tools-dialog');
       await delay(2000);
     },
   );
@@ -414,7 +458,7 @@ try {
       await field(connection, 'New branch name', 'feature/homepage');
       await field(connection, 'Worktree destination', path.join(root, 'Homepage'));
       await delay(1800);
-      await button(connection, 'Create task', 'document.querySelector("dialog")');
+      await button(connection, 'Create task', 'dialog');
       await until(
         async () =>
           JSON.parse(await readFile(path.join(current.directory, 'viewer-state-v1.json'), 'utf8'))
@@ -423,19 +467,15 @@ try {
         'Four task tools',
         30000,
       );
-      await until(
-        () => connection.evaluate<boolean>('!!document.querySelector(".task-plane")'),
-        Boolean,
-        'Task overview',
-      );
+      await until(() => connection.evaluate(exists('.task-plane')), Boolean, 'Task overview');
       await field(connection, 'Note title', 'Homepage plan');
       await button(connection, 'Start writing');
       await until(
-        () => connection.evaluate<boolean>('!!document.querySelector(".note-plane .cm-content")'),
+        () => connection.evaluate(exists('.note-plane .cm-content')),
         Boolean,
         'Note editor',
       );
-      await connection.evaluate('document.querySelector(".note-plane .cm-content").focus()');
+      await connection.evaluate(focus('.note-plane .cm-content'));
       await connection.command('Input.insertText', {
         text: '## Homepage refresh\n\n- Keep a clear opening.\n- Add the new photographs.\n- Review the changes together.',
       });
@@ -462,26 +502,21 @@ try {
   const { connection } = current;
   const row = (name: string) =>
     '[data-file-path=' + JSON.stringify(path.join(examples, name)) + ']';
-  await connection.evaluate(
-    `document.querySelector(${JSON.stringify(row('Field notes.pdf'))}).click()`,
-  );
+  await connection.evaluate(click(row('Field notes.pdf')));
   await until(
-    () =>
-      connection.evaluate<boolean>(
-        '!!document.querySelector(".column-preview canvas, .column-preview img")',
-      ),
+    () => connection.evaluate(exists('.column-preview canvas, .column-preview img')),
     Boolean,
     'Column preview',
   );
   await delay(2000);
   await screenshot(connection, path.join(output, 'columns.png'));
 
-  await connection.evaluate(`document.querySelector(${JSON.stringify(row('Forest.jpg'))}).click()`);
+  await connection.evaluate(click(row('Forest.jpg')));
   await delay(600);
-  await connection.evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+  await connection.evaluate(click('[aria-label="Commands (⌘K)"]'));
   await field(connection, 'Search commands', 'convert');
   await until(
-    () => connection.evaluate<number>('document.querySelectorAll(".command-result").length'),
+    () => connection.evaluate(countOf('.command-result')),
     (count) => count > 1,
     'Image commands',
   );
@@ -500,46 +535,27 @@ try {
   await delay(600);
 
   // the PDF and the photograph together
-  await connection.evaluate(
-    `document.querySelector(${JSON.stringify(row('Field notes.pdf'))}).click()`,
-  );
-  await connection.evaluate(
-    `document.querySelector(${JSON.stringify(row('Forest.jpg'))}).dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }))`,
-  );
+  await connection.evaluate(click(row('Field notes.pdf')));
+  await connection.evaluate(pageCall(addRow, row('Forest.jpg')));
   await delay(600);
   await palette(connection, 'Optimize');
-  await until(
-    () => connection.evaluate<boolean>('!!document.querySelector(".optimize-dialog")'),
-    Boolean,
-    'Optimize dialog',
-  );
-  await button(connection, 'Prepare candidates', 'document.querySelector(".optimize-dialog")');
+  await until(() => connection.evaluate(exists('.optimize-dialog')), Boolean, 'Optimize dialog');
+  await button(connection, 'Prepare candidates', '.optimize-dialog');
   await until(
     () =>
-      connection.evaluate<number>(
-        'document.querySelectorAll(".optimize-results .optimize-savings, .optimize-results .error").length',
-      ),
+      connection.evaluate(countOf('.optimize-results .optimize-savings, .optimize-results .error')),
     (count) => count >= 2,
     'Optimize results',
     60000,
   );
   await delay(1200);
   await screenshot(connection, path.join(output, 'optimize.png'));
-  await connection.evaluate(
-    `document.querySelector('.optimize-dialog [aria-label="Close"]')?.click()`,
-  );
+  await connection.evaluate(pageCall(dismiss, '.optimize-dialog [aria-label="Close"]'));
   await delay(600);
 
-  await connection.evaluate(`(() => {
-    const row = document.querySelector(${JSON.stringify(row('Field trip.zip'))});
-    row.click();
-    const box = row.getBoundingClientRect();
-    row.dispatchEvent(new MouseEvent('contextmenu', {
-      bubbles: true, cancelable: true, clientX: box.left + 60, clientY: box.top + box.height / 2,
-    }));
-  })()`);
+  await connection.evaluate(pageCall(openContextMenu, row('Field trip.zip')));
   await until(
-    () => connection.evaluate<string>('document.querySelector(".context-menu")?.textContent || ""'),
+    () => connection.evaluate(textOf('.context-menu')),
     (text) => text.includes('Suggested'),
     'Suggested actions',
   );
@@ -607,7 +623,7 @@ current = await open('Explore', inbox, undefined, {
 try {
   const { connection } = current;
   await until(
-    () => connection.evaluate<number>('document.querySelectorAll(".folder-insight").length'),
+    () => connection.evaluate(countOf('.folder-insight')),
     (count) => count >= 2,
     'Folder insights',
   );
@@ -615,7 +631,7 @@ try {
   await screenshot(connection, path.join(output, 'insights.png'));
   await palette(connection, 'Explore this folder');
   await until(
-    () => connection.evaluate<number>('document.querySelectorAll(".chat-files button").length'),
+    () => connection.evaluate(countOf('.chat-files button')),
     (count) => count >= 3,
     'Explore answer',
     60000,
@@ -672,20 +688,14 @@ try {
   const { connection } = current;
   // the index has read the sample Home
   await until(
-    () =>
-      connection.evaluate<boolean>(
-        'window.viewer.indexStatus().then((s) => !s.running && s.roots.length > 0 && s.roots.every((r) => r.status === "ready"))',
-      ),
+    () => connection.evaluate(pageCall(indexReady)),
     Boolean,
     'Indexed sample Home',
     60000,
   );
-  await palette(connection, 'Overview');
+  await palette(connection, 'File overview');
   await until(
-    () =>
-      connection.evaluate<number>(
-        'document.querySelectorAll(".overview-card:not([aria-busy=true]) .overview-files li").length',
-      ),
+    () => connection.evaluate(countOf('.overview-card:not([aria-busy=true]) .overview-files li')),
     (count) => count >= 8,
     'Overview cards',
     30000,

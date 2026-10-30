@@ -3,6 +3,12 @@ import { officeFixture } from './office-fixtures';
 export const relationNS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
 const sheetNS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 export const fidelityStyles = `<styleSheet xmlns="${sheetNS}"><numFmts count="3"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00"/><numFmt numFmtId="165" formatCode="yyyy-mm-dd"/><numFmt numFmtId="166" formatCode="[DBNum1]0"/></numFmts><cellXfs count="6"><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="10"/><xf numFmtId="165"/><xf numFmtId="166"/><xf numFmtId="46"/></cellXfs></styleSheet>`;
+// Pages hold 100 rows that exist, so the merge A3:C104 reaches a second page only when rows 4 to
+// 99 exist too.
+const fillerRows = Array.from(
+  { length: 96 },
+  (_, index) => `<row r="${index + 4}"><c r="D${index + 4}"><v>0</v></c></row>`,
+).join('');
 export function fidelityWorkbook(date1904 = false, changes: Record<string, string> = {}) {
   return officeFixture('workbook', {
     'xl/workbook.xml': `<workbook xmlns="${sheetNS}" xmlns:r="${relationNS}"><workbookPr date1904="${date1904 ? '1' : '0'}"/><sheets><sheet name="Report" sheetId="1" r:id="data"/></sheets></workbook>`,
@@ -12,6 +18,7 @@ export function fidelityWorkbook(date1904 = false, changes: Record<string, strin
   <row r="1"><c r="A1" t="inlineStr"><is><t>Quarterly materials</t></is></c></row>
   <row r="2"><c r="D2" s="1"><v>1234.5</v></c><c r="E2" s="2"><v>0.125</v></c><c r="F2" s="3"><v>60</v></c><c r="G2" s="1"><f>SUM(D2)</f><v>1234.5</v></c><c r="H2" s="4"><v>42</v></c><c r="I2" s="5"><v>1.5</v></c></row>
   <row r="3"><c r="A3" t="inlineStr"><is><t>Continued source range</t></is></c><c r="D3"><v>1</v></c></row>
+  ${fillerRows}
   <row r="100"><c r="D100"><v>7</v></c></row><row r="104"><c r="D104"><v>8</v></c></row>
   </sheetData><mergeCells count="2"><mergeCell ref="A1:C2"/><mergeCell ref="A3:C104"/></mergeCells></worksheet>`,
     ...changes,

@@ -12,7 +12,9 @@ applies the plan to each image and reports individual failures.
 Tool inputs are JPEG, PNG, TIFF, GIF, WebP and AVIF. Animated/multipage sources are refused rather
 than silently dropping frames. HEIC can have a native preview on macOS while remaining unsupported
 by this image-tool decoder. Native quick actions provide separate JPEG/PNG/PDF choices where
-available.
+available. **Convert copy to JPEG** and **Convert copy to PNG** are not offered for images already
+in that format. In a mixed selection, such an image gets a copy beside it, such as `Shot copy.png`;
+the image itself is never replaced.
 
 Exports normalize orientation. The default keeps supported ICC profiles and descriptive
 credit/title/rights metadata while dropping GPS and device identifiers. Remove metadata and Keep
@@ -45,7 +47,8 @@ pixels, with coefficient-preserving JPEG optimization. Maximum raster dimensions
 Choose **Prepare candidates** before saving anything. Each row shows the measured original and
 candidate sizes. **Review** compares images side by side, with an actual-size option and linked
 panning; PDFs share a page selector. **Save smaller copies** exports the exact bytes prepared for
-review. **Already compact** keeps the original.
+review. **Already compact** keeps the original. If the Trash cannot take the unused copy, **File
+operations** says where it was kept.
 
 Enable **Target size per file** for a budget such as 500 kB or 2 MB. These units are decimal; the
 allowed budget is 1 KiB–256 MiB. Lossy compression tries at most eight quality settings and respects

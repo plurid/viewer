@@ -599,6 +599,18 @@ describe('action admission and local planning', () => {
       error: 'Unreadable metadata.',
     });
   });
+  it('offers no rows when planning fails after naming them', async () => {
+    // The folder leaves once the names are made, so its scope cannot be resolved for review.
+    await reopen({
+      rename: async (input) => {
+        await rename(files, files + ' moved');
+        return input.names.map((item) => 'New ' + item.name);
+      },
+    });
+    const plan = await propose('batch-rename');
+    expect(plan).toMatchObject({ status: 'failed', rows: [] });
+    expect(plan.error).toMatch(/^ENOENT: /);
+  });
   it('marks an unchanged filename', async () => {
     expect((await batch('')).rows.map((row) => [row.issue, row.approved])).toEqual([
       ['The filename is unchanged.', false],
@@ -745,35 +757,27 @@ describe('model proposals', () => {
       'the same file twice',
       [modelRow('0', 'C.txt'), modelRow('0', 'D.txt')],
       'The model proposed the same file twice.',
-      ['C.txt'],
     ],
     [
       'an index outside the request',
       [modelRow('0', 'C.txt'), modelRow('2', 'D.txt')],
       'The model proposed an unknown file.',
-      ['C.txt'],
     ],
     [
       'a non-canonical index',
       [modelRow('0', 'C.txt'), modelRow('01', 'D.txt')],
       'The model proposed an unknown file.',
-      ['C.txt'],
     ],
     [
       'fewer files than requested',
       [modelRow('1', 'D.txt')],
       'The model omitted files. Retry with a smaller batch.',
-      ['D.txt'],
     ],
-  ])(
-    'fails a response that names %s, keeping the rows reviewed before it',
-    async (_case, rows, error, kept) => {
-      await modelPlanner('rename', { data: 'names' }, { generate: respond(...rows) });
-      const plan = await propose('rename');
-      expect(plan).toMatchObject({ status: 'failed', error });
-      expect(plan.rows.map((row) => path.basename(row.destination))).toEqual(kept);
-    },
-  );
+  ])('fails a response that names %s, offering none of its rows', async (_case, rows, error) => {
+    await modelPlanner('rename', { data: 'names' }, { generate: respond(...rows) });
+    const plan = await propose('rename');
+    expect(plan).toMatchObject({ status: 'failed', error, rows: [] });
+  });
   it.each([
     ['a field of the wrong type', [{ sourceID: 0 }], /^rows\.0\.sourceID: /],
     [
@@ -846,16 +850,36 @@ describe('model proposals', () => {
       [undefined, true],
     ]);
   });
-  it('fails planning on a filename over 255 bytes with the system error', async () => {
-    // checkRows records "The filename is too long." and then looks the name up, which throws.
+  it('marks a filename over 255 bytes without looking it up', async () => {
+    // Looked up, the name fails with ENAMETOOLONG, and the whole plan with it.
     await modelPlanner(
       'rename',
       { data: 'names' },
       { generate: respond(modelRow('0', 'x'.repeat(252) + '.txt'), modelRow('1', 'D.txt')) },
     );
     const plan = await propose('rename');
-    expect(plan.status).toBe('failed');
-    expect(plan.error).toMatch(/^ENAMETOOLONG: /);
+    expect(plan.status).toBe('review');
+    expect(plan.error).toBeUndefined();
+    expect(plan.rows.map((row) => [row.issue, row.approved])).toEqual([
+      ['The filename is too long.', false],
+      [undefined, true],
+    ]);
+  });
+  it('refuses to apply an approved filename over 255 bytes, and moves nothing', async () => {
+    await modelPlanner(
+      'rename',
+      { data: 'names' },
+      { generate: respond(modelRow('0', 'x'.repeat(252) + '.txt'), modelRow('1', 'D.txt')) },
+    );
+    const plan = await propose('rename');
+    const approval = approve(plan);
+    approval.rows[0]!.approved = true;
+    await refuses(planner.apply(approval), 'Resolve the selected conflicts before applying.');
+    expect((await planner.get(plan.id)).rows[0]).toMatchObject({
+      issue: 'The filename is too long.',
+      approved: false,
+    });
+    expect((await readdir(files)).sort()).toEqual(['A.txt', 'B.txt']);
   });
   describe('publication names', () => {
     const book = () => at('Book.epub');
@@ -965,11 +989,18 @@ describe('model proposals', () => {
         ),
       },
     );
-    expect(await propose('summarize')).toMatchObject({
+    const failed = await propose('summarize');
+    expect(failed).toMatchObject({
       status: 'failed',
       error: 'The model proposed the same file twice.',
-      summary: '\n\n## A.txt\n\nAbout A',
+      rows: [],
     });
+    expect(failed.summary).toBeUndefined();
+    expect(failed.summaryInputs).toBeUndefined();
+    await refuses(
+      planner.exportSummary(failed.id, at('Summary.md')),
+      'This summary is unavailable.',
+    );
   });
 });
 describe('applying a reviewed plan', () => {
@@ -1137,7 +1168,7 @@ describe('applying a reviewed plan', () => {
     expect(await readFile(at('A.txt'), 'utf8')).toBe('original A');
     expect(await stagedFiles()).toEqual([]);
   });
-  it('keeps the recorded staging path when a source changes while its provider waits', async () => {
+  it('records no staging path when a source changes while its provider waits', async () => {
     const plan = await batch();
     intercept({
       before: async (source, destination) => {
@@ -1148,12 +1179,52 @@ describe('applying a reviewed plan', () => {
     await planner.apply(approve(plan));
     const current = await planner.get(plan.id);
     expect(current).toMatchObject({
-      status: 'partial',
+      status: 'failed',
       error: 'A source changed while waiting for its file provider.',
+      undoable: false,
     });
-    expect(current.rows[0]!.stagedPath).toBeDefined();
+    expect(current.rows.map((row) => row.stagedPath)).toEqual([undefined, undefined]);
+    await refuses(planner.recovery(plan.id), 'This task does not need recovery.');
     expect(await stagedFiles()).toEqual([]);
     expect(await readFile(at('A.txt'), 'utf8')).toBe('changed A');
+  });
+  it('journals a staging that never happened, and restores the source staged before it', async () => {
+    let stepLog = '';
+    let steps: unknown[] = [];
+    await reopen({
+      emit: (plan) => {
+        if (plan.status === 'failed')
+          steps = readFileSync(stepLog, 'utf8')
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line));
+      },
+    });
+    const plan = await batch();
+    stepLog = path.join(root, `action-steps-${plan.id}.jsonl`);
+    const staged: string[] = [];
+    intercept({
+      before: async (source, destination) => {
+        if (!staging(destination)) return;
+        staged.push(destination);
+        if (path.basename(source) === 'B.txt') await writeFile(at('B.txt'), 'changed B');
+      },
+    });
+    await planner.apply(approve(plan));
+    const [a, b] = plan.rows;
+    expect(steps).toEqual([
+      { row: a!.id, stagedPath: staged[0] },
+      { row: a!.id, stagedPath: staged[0] },
+      { row: b!.id, stagedPath: staged[1] },
+      { row: b!.id },
+    ]);
+    expect(await planner.get(plan.id)).toMatchObject({
+      status: 'failed',
+      error: 'A source changed while waiting for its file provider.',
+    });
+    expect(await readFile(at('A.txt'), 'utf8')).toBe('original A');
+    expect(await readFile(at('B.txt'), 'utf8')).toBe('changed B');
+    expect(await stagedFiles()).toEqual([]);
   });
   it('preserves a staged file that changed, and restores the others', async () => {
     const plan = await batch();

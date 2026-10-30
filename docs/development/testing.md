@@ -67,7 +67,9 @@ VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm test:desktop
 Routine native tests use hidden offscreen windows, isolated profiles and generated files. They keep
 the QA app out of the Dock and check it never becomes active. Run one native scenario at a time when
 it owns native dialogs or shared platform resources. Never modify the user's running profile to make
-a test pass.
+a test pass. When a scenario's Quit takes more than five seconds, the harness records
+`quit-sample.txt`, a stack sample of the app, in the run's evidence folder before it terminates the
+app.
 
 ## Focused native scenarios
 
@@ -119,7 +121,7 @@ Scenario drivers pass page code as typed functions: `pageCall(fn, ...args)` from
 `tests/native/runtime/page.ts`. The page code is then type-checked against the DOM and formatted.
 The function may use only its own body and its arguments, which travel as JSON;
 `tests/page-function.test.ts` names any page function that uses something declared outside it. Lint
-refuses string page code under `tests/native/`.
+refuses string page code under `tests/native/` and in `tools/docs/capture.ts`.
 
 Mixed-workspace auditing supports 3–50 close/reopen cycles and optional heap snapshots. Track
 retaining paths and owned lifetimes, not just total DOM counts. The known OrbitControls and

@@ -29,15 +29,15 @@ const noEmDash = [
   'JSXText[value=/\u2014/]',
 ].map((selector) => ({ selector, message: dashMessage }));
 // Page code is a typed function (tests/native/runtime/page-function.ts): a string escapes the type
-// check and the formatter. The scenarios are written this way; the older harnesses in tests/ and
-// the docs capture join as they move.
+// check and the formatter. The scenarios and the docs capture are written this way; the older
+// harnesses in tests/ join as they move.
 const pageCode = {
   selector:
     'CallExpression:matches([callee.name="evaluate"], [callee.property.name="evaluate"])' +
     '[arguments.0.type=/^(Literal|TemplateLiteral|TaggedTemplateExpression|BinaryExpression)$/]',
   message: 'Pass page code to evaluate through pageCall or tests/native/runtime/page.ts.',
 };
-const typedPageFiles = ['tests/native/**/*.ts'];
+const typedPageFiles = ['tests/native/**/*.ts', 'tools/docs/capture.ts'];
 export default tseslint.config(
   { ignores: ['.vite/**', 'out/**', 'node_modules/**'] },
   ...tseslint.configs.recommended,

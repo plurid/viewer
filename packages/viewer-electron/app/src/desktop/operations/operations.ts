@@ -86,6 +86,11 @@ interface Task {
 /** How an item ended without failing: done, skipped at its collision prompt, or kept as it was
  * because an optimized candidate came out no smaller. */
 type ItemOutcome = 'done' | 'skipped' | 'kept';
+/** A job's failed items, by what the last one set out to change; an earlier one's intent when the
+ * last failed before it had one. */
+interface Failure {
+  intent?: OperationReceipt['intent'];
+}
 type Statistics = OptimizationStatistics & { optimized: boolean };
 /** What making an item's output did, for its Undo and its record. */
 interface Made {
@@ -1119,9 +1124,11 @@ export class Operations {
     // Creating something new never replaces what is already there.
     let replaceable = !['mkdir', 'mkfile'].includes(task.request.kind);
     if (source) {
-      // Another spelling of the source itself must never be offered for Replace.
+      // Another spelling of the source itself must never be offered for Replace. A copy, or a
+      // conversion to the source's own format, keeps both.
       if (sameItem(await lstat(source), existing)) {
-        if (task.request.kind === 'copy') return { path: await keepBothName(destination) };
+        if (['copy', 'convert'].includes(task.request.kind))
+          return { path: await keepBothName(destination) };
         throw new Error('Source and destination are the same item.');
       }
       if (await holds(existing, source)) replaceable = false;
@@ -1242,10 +1249,12 @@ export class Operations {
       await this.disposeStage(task, stage);
     }
   }
-  /** Cleanup never replaces an item's real outcome; kept partial content is reported. */
+  /** Cleanup never replaces an item's real outcome; what it keeps is reported: partial content, or
+   * the `unused` optimized copy the item did not publish because it was no smaller. */
   private async disposeStage(
     task: Task,
     stage: { file: string; dispose(): Promise<string | undefined> },
+    unused?: string,
   ): Promise<void> {
     let kept: string | undefined;
     try {
@@ -1254,12 +1263,21 @@ export class Operations {
       task.job.errors.push({ path: path.dirname(stage.file), message: errorMessage(error) });
       return;
     }
-    if (kept)
-      task.job.errors.push({
-        path: kept,
-        message:
-          'Partial temporary content could not be moved to the Trash, so it was kept here for inspection.',
-      });
+    if (!kept) return;
+    // The stage keeps its contents' names wherever cleanup moved it.
+    const copy = unused && path.join(kept, path.basename(unused));
+    task.job.errors.push(
+      copy
+        ? {
+            path: copy,
+            message: `The unused optimized copy could not be moved to the Trash, so it was kept at ${copy}.`,
+          }
+        : {
+            path: kept,
+            message:
+              'Partial temporary content could not be moved to the Trash, so it was kept here for inspection.',
+          },
+    );
   }
   /** Runs queued jobs one at a time until the queue is empty or a receipt cannot be saved. */
   private async run(): Promise<void> {
@@ -1297,6 +1315,7 @@ export class Operations {
     const { job, request } = task;
     job.status = 'running';
     this.emit(task);
+    let failure: Failure | undefined;
     for (const source of singleOutput(request) ? [''] : request.sources) {
       const priorErrors = job.errors.length;
       try {
@@ -1312,11 +1331,12 @@ export class Operations {
           message: errorMessage(error).slice(0, 4000),
         });
         job.itemsDone++;
+        failure = { intent: task.intent ?? failure?.intent };
       }
       this.progress(task);
       await this.checkpoint(task, false);
     }
-    await this.settleJob(task);
+    await this.settleJob(task, failure);
   }
   /** One source, or the one output of a single-output job. */
   private async runItem(task: Task, source: string): Promise<ItemOutcome> {
@@ -1377,6 +1397,8 @@ export class Operations {
     }
     const resolved = await this.target(task, source, named);
     if (!resolved) {
+      // Skipped, the item changed nothing, so it leaves nothing to recover.
+      task.intent = undefined;
       job.itemsDone++;
       this.progress(task);
       return 'skipped';
@@ -1581,15 +1603,16 @@ export class Operations {
     const stage = await privateStage(path.dirname(destination), staged.prefix, this.trash);
     const staging = stage.file + (staged.extension ?? '');
     task.intent = { source, destination, staging };
+    let made: Produced | undefined;
     try {
       await this.checkpoint(task);
-      const made = await make(staging);
+      made = await make(staging);
       if (made === 'kept') return made;
       this.check(task);
       await this.publishReplacing(task, staging, destination, staged.replaced, staged.guard);
       return made;
     } finally {
-      await this.disposeStage(task, stage);
+      await this.disposeStage(task, stage, made === 'kept' ? staging : undefined);
     }
   }
   /** An item's Undo: moving it back when it moved within its volume, or removing what it created
@@ -1628,19 +1651,19 @@ export class Operations {
       }
     }
   }
-  /** A job's outcome once its items have run, recorded and compacted. */
-  private async settleJob(task: Task): Promise<void> {
+  /**
+   * A job's outcome once its items have run, recorded and compacted. A job in which any item failed
+   * has failed, whatever else completed; a note beside a completed item, such as content its cleanup
+   * kept, does not fail it. Its recovery is the change a cancel interrupted, or else the last failed
+   * item's intent: a done, kept or skipped item has cleared its own.
+   */
+  private async settleJob(task: Task, failure?: Failure): Promise<void> {
     const { job } = task;
-    job.status = task.abort.signal.aborted
-      ? 'cancelled'
-      : job.errors.length && !job.completed.length
-        ? 'failed'
-        : 'completed';
+    job.status = task.abort.signal.aborted ? 'cancelled' : failure ? 'failed' : 'completed';
     job.undoable = !!task.undo.length;
     job.current = undefined;
-    // Terminal failures have a known outcome. Keep their recovery paths,
-    // but reserve an in-flight intent for an actually interrupted mutation.
-    if (task.intent) job.recovery = task.intent;
+    const recovery = task.intent ?? failure?.intent;
+    if (recovery) job.recovery = recovery;
     task.intent = undefined;
     this.emit(task);
     await this.checkpoint(task);

@@ -16,6 +16,26 @@ export function cancelWorkspaceFraming(api: PluridApplicationHandle): void {
   framed.delete(api);
 }
 
+/**
+ * Whether other planes cover most of `planeID` on screen. Linked planes can turn back in space
+ * and land behind another plane, where framing shows only the plane in front.
+ */
+function covered(element: HTMLElement, planeID: string): boolean {
+  const plane = Array.from(element.querySelectorAll<HTMLElement>('[data-plurid-plane]')).find(
+    (box) => box.dataset.pluridPlane === planeID,
+  );
+  if (!plane) return false;
+  const box = plane.getBoundingClientRect();
+  let hidden = 0;
+  for (const x of [0.25, 0.5, 0.75])
+    for (const y of [0.25, 0.5, 0.75]) {
+      const hit = document.elementFromPoint(box.left + box.width * x, box.top + box.height * y);
+      const owner = hit?.closest('[data-plurid-plane]');
+      if (owner && owner !== plane) hidden++;
+    }
+  return hidden > 4;
+}
+
 /** Fit after the live viewport and measured plane boxes settle; new input cancels the request. */
 export function frameWorkspace(
   engine: RefObject<PluridApplicationHandle | null>,
@@ -186,6 +206,11 @@ export function frameWorkspace(
         return;
       if (api.camera.motion() === 'tween') {
         requestAnimationFrame(record);
+        return;
+      }
+      // Docked, the plane is shown whole; a dock is never refit.
+      if (!options.dock && targets?.length === 1 && node && covered(element, node.planeID)) {
+        api.camera.dock(node.planeID, motion);
         return;
       }
       framed.set(api, { targets, viewpoint: api.getViewpoint({ version: 2 }) });

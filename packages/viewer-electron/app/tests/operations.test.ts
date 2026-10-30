@@ -208,7 +208,7 @@ describe('file operation queue', () => {
         sources: partial ? [source, missing] : [missing],
         destination,
       });
-      expect(job.status).toBe(partial ? 'completed' : 'failed');
+      expect(job.status).toBe('failed');
       expect(job.errorCount).toBe(1);
       expect(job.undoable).toBe(partial);
       await operations.close();
@@ -218,6 +218,7 @@ describe('file operation queue', () => {
       expect(restored.status).toBe(job.status);
       expect(restored.errors).toEqual(job.errors);
       expect(restored.errorCount).toBe(job.errorCount);
+      expect(restored.recovery).toEqual(job.recovery);
       expect(restored.undoable).toBe(partial);
       if (partial) {
         await operations.undo(job.id);
@@ -1572,6 +1573,24 @@ describe('an item from start to finish', () => {
       expect(job.completed).toEqual([{ source, destination: path.join(root, output) }]);
       expect(await readFile(path.join(root, output), 'utf8')).toBe('transformed');
     });
+    it('names a quick action to its own format as a duplicate is named', async () => {
+      const shot = path.join(root, 'Shot.png');
+      await writeFile(shot, 'pixels');
+      for (const name of ['Shot copy.png', 'Shot copy 2.png']) {
+        const job = await run({ kind: 'convert', sources: [shot], conversion: 'png' });
+        expect(job).toMatchObject({ status: 'completed', errors: [], undoable: true });
+        expect(job.completed).toEqual([{ source: shot, destination: path.join(root, name) }]);
+        expect(await readFile(path.join(root, name), 'utf8')).toBe('converted');
+      }
+      expect(await readFile(shot, 'utf8')).toBe('pixels');
+      // On a volume that ignores case, Scan.png is the image itself.
+      const scan = path.join(root, 'Scan.PNG');
+      await writeFile(scan, 'pixels');
+      const output = (await caseInsensitive(scan)) ? 'Scan copy.png' : 'Scan.png';
+      const spelled = await run({ kind: 'convert', sources: [scan], conversion: 'png' });
+      expect(spelled.completed).toEqual([{ source: scan, destination: path.join(root, output) }]);
+      expect(await readFile(scan, 'utf8')).toBe('pixels');
+    });
     it('takes a chosen transform name only for a single source', async () => {
       const one = path.join(root, 'one.png');
       const two = path.join(root, 'two.png');
@@ -1904,10 +1923,19 @@ describe('an item from start to finish', () => {
         { intent: undefined, durable: true, present: false },
         { intent: undefined, durable: true, present: false },
       ]);
-      // The stage, cleaned after the item's record, keeps the unpublished candidate.
+      // The stage, cleaned after the item's record, keeps the unpublished candidate, reported as
+      // the unused copy it is, not as partial content.
       const [item, last] = records.filter((record) => record.job.id === job.id).slice(-2);
       expect(item?.job).toMatchObject({ detail: compact, errors: [] });
-      expect(last?.job.errors).toEqual([{ path: expect.any(String), message: partialKept }]);
+      const kept = last?.job.errors[0]?.path ?? '';
+      expect(kept).toMatch(/\/(?:\.viewer-convert-|Viewer incomplete transfer )[^/]+\/item\.png$/);
+      expect(last?.job.errors).toEqual([
+        {
+          path: kept,
+          message: `The unused optimized copy could not be moved to the Trash, so it was kept at ${kept}.`,
+        },
+      ]);
+      expect(await readFile(kept, 'utf8')).toBe('larger candidate');
       expect(job.errors).toEqual(last?.job.errors);
     });
   });
@@ -2087,7 +2115,7 @@ describe('an item from start to finish', () => {
       });
       expect(existsSync(path.join(destination, 'later.txt'))).toBe(false);
     });
-    it("keeps the last failed item's intent as recovery, even beside completed items", async () => {
+    it("fails a job in which any item failed, keeping the last failed item's intent as recovery", async () => {
       const present = path.join(root, 'present.txt');
       const missing = path.join(root, 'missing.txt');
       await writeFile(present, 'present');
@@ -2095,25 +2123,38 @@ describe('an item from start to finish', () => {
       const second = path.join(destination, 'second');
       await mkdir(first);
       await mkdir(second);
-      const failedLast = await run({
-        kind: 'copy',
-        sources: [present, missing],
-        destination: first,
-      });
-      expect(failedLast).toMatchObject({ status: 'completed', errorCount: 1, undoable: true });
-      expect(failedLast.recovery).toEqual({
-        source: missing,
-        destination: path.join(first, 'missing.txt'),
-      });
-      const failedFirst = await run({
-        kind: 'copy',
-        sources: [missing, present],
-        destination: second,
-      });
-      expect(failedFirst).toMatchObject({ status: 'completed', errorCount: 1 });
-      expect(failedFirst.recovery).toBeUndefined();
+      for (const [sources, folder] of [
+        [[present, missing], first],
+        [[missing, present], second],
+      ] as const) {
+        const job = await run({ kind: 'copy', sources: [...sources], destination: folder });
+        // The completed copy keeps its Undo.
+        expect(job).toMatchObject({ status: 'failed', errorCount: 1, undoable: true });
+        expect(job.completed).toEqual([
+          { source: present, destination: path.join(folder, 'present.txt') },
+        ]);
+        expect(job.recovery).toEqual({
+          source: missing,
+          destination: path.join(folder, 'missing.txt'),
+        });
+      }
     });
-    it("keeps a skipped last item's intent as recovery", async () => {
+    it('keeps a failed item as recovery past a later skipped one', async () => {
+      const missing = path.join(root, 'missing.txt');
+      const source = path.join(root, 'one.txt');
+      await writeFile(source, 'new');
+      await writeFile(path.join(destination, 'one.txt'), 'old');
+      const id = operations.start({ kind: 'copy', sources: [missing, source], destination });
+      await waitFor(id, (job) => job.status === 'collision');
+      operations.resolve(id, 'skip', false);
+      const job = await waitFor(id);
+      expect(job).toMatchObject({ status: 'failed', itemsDone: 2, completed: [], errorCount: 1 });
+      expect(job.recovery).toEqual({
+        source: missing,
+        destination: path.join(destination, 'missing.txt'),
+      });
+    });
+    it('leaves no recovery for a skipped last item', async () => {
       const source = path.join(root, 'one.txt');
       const existing = path.join(destination, 'one.txt');
       await writeFile(source, 'new');
@@ -2124,9 +2165,10 @@ describe('an item from start to finish', () => {
       operations.resolve(id, 'skip', false);
       const job = await waitFor(id);
       expect(job).toMatchObject({ status: 'completed', itemsDone: 1, completed: [], errors: [] });
-      expect(job.recovery).toEqual({ source, destination: existing });
+      expect(job.recovery).toBeUndefined();
       // A skipped item has no record of its own; the job's last record carries it.
       expect(effects(records, id)).toEqual([{ intent: undefined, durable: true, present: true }]);
+      expect(records.at(-1)?.job.recovery).toBeUndefined();
       expect(await readFile(existing, 'utf8')).toBe('old');
     });
     it('announces moved and renamed items, not copies', async () => {

@@ -145,6 +145,12 @@ describe('an output named from its request', () => {
       photo,
       photo,
     ],
+    [
+      'a quick action at its own image, which keeps both',
+      { kind: 'convert', sources: ['/Work/Shot.png'], conversion: 'png' },
+      '/Work/Shot.png',
+      '/Work/Shot.png',
+    ],
     ...(
       [
         ['Backup.tar.gz', 'Backup'],
@@ -196,12 +202,6 @@ describe('an output named from its request', () => {
       'a rename to the same name',
       { kind: 'rename', sources: [photo], name: 'Photo.jpg' },
       photo,
-      'Source and destination are the same.',
-    ],
-    [
-      'a quick action that would write over its image',
-      { kind: 'convert', sources: ['/Work/Shot.png'], conversion: 'png' },
-      '/Work/Shot.png',
       'Source and destination are the same.',
     ],
     [

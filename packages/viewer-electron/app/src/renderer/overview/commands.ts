@@ -5,7 +5,7 @@ export function overviewCommands({ actions, windowScope }: WindowScopes): Comman
   return [
     {
       id: 'open-overview',
-      label: 'Overview',
+      label: 'File overview',
       group: 'Files',
       icon: 'grid',
       aliases: ['dashboard', 'insights', 'tidy', 'clean up', 'what needs attention', 'space'],

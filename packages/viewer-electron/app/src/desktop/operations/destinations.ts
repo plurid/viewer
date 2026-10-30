@@ -20,12 +20,12 @@ export function singleOutput(request: OperationRequest): boolean {
 /**
  * Where an item's output goes, from the request alone; `source` is empty for a single-output
  * request. A duplicate and an alias take the first free name beside their source instead
- * (`keepBothName`, `aliasName`). An output at its own source is refused, except a transform's,
+ * (`keepBothName`, `aliasName`). An output at its own source is refused, except a conversion's,
  * which keeps both.
  */
 export function outputName(request: OperationRequest, source: string): string {
   const output = namedOutput(request, source);
-  if (output === source && !request.transform)
+  if (output === source && request.kind !== 'convert')
     throw new Error('Source and destination are the same.');
   return output;
 }

@@ -19,7 +19,7 @@ export function paneTitle(pane: Pane, collectionName?: string): string {
     case 'journal':
       return 'Journal';
     case 'overview':
-      return 'Overview';
+      return 'File overview';
     case 'chat':
       return 'Chat';
     case 'server':

@@ -318,6 +318,10 @@ export class ActionPlanner {
       .catch(() => {})
       .then(() => this.plan({ plan, recipe, request, signal: abort.signal }))
       .catch(async (error) => {
+        // A plan that stops while planning offers nothing to apply, only its error.
+        plan.rows = [];
+        plan.summary = undefined;
+        plan.summaryInputs = undefined;
         plan.status = abort.signal.aborted ? 'cancelled' : 'failed';
         plan.error = errorMessage(error);
         await this.publish(plan);
@@ -520,12 +524,15 @@ export class ActionPlanner {
     const sources = new Set(rows.flatMap((row) => row.source?.path || []));
     const targets = new Map<string, ProposedChange>();
     for (const row of rows) {
+      // An invalid name is not looked up: over 255 bytes the lookup fails, and the plan with it.
+      let named = true;
       try {
         validName(path.basename(row.destination));
         if (Buffer.byteLength(path.basename(row.destination), 'utf8') > 255)
           throw new Error('The filename is too long.');
       } catch (error) {
         row.issue = errorMessage(error);
+        named = false;
       }
       const key = row.destination.normalize('NFC').toLowerCase();
       const duplicate = targets.get(key);
@@ -535,7 +542,7 @@ export class ActionPlanner {
         duplicate.approved = false;
       }
       targets.set(key, row);
-      if (await exists(row.destination)) {
+      if (named && (await exists(row.destination))) {
         const destination = await entry(row.destination);
         if (
           !sources.has(row.destination) &&
@@ -717,7 +724,8 @@ export class ActionPlanner {
     }
   }
   /** Moves every selected source aside before any is published, allowing cycles and case-only
-   * renames. Each staging path is in the step log before and after its move. */
+   * renames. Each staging path is in the step log before and after its move; a move that failed
+   * with nothing at its staging path is logged without one. */
   private async stageSelection({ plan, selected, publish, signal }: Applying): Promise<void> {
     for (const row of selected) {
       signal.throwIfAborted();
@@ -725,18 +733,27 @@ export class ActionPlanner {
       if (!source) continue;
       if (!same(source, await entry(source.path)))
         throw new Error('A source changed immediately before its operation.');
-      row.stagedPath = path.join(source.parent, '.viewer-action-' + randomUUID());
+      const staged = path.join(source.parent, '.viewer-action-' + randomUUID());
+      row.stagedPath = staged;
       await this.recordStep(plan, row);
-      await publish(
-        source.path,
-        row.stagedPath,
-        async () => {
-          signal.throwIfAborted();
-          if (!same(source, await entry(source.path)))
-            throw new Error('A source changed while waiting for its file provider.');
-        },
-        signal,
-      );
+      try {
+        await publish(
+          source.path,
+          staged,
+          async () => {
+            signal.throwIfAborted();
+            if (!same(source, await entry(source.path)))
+              throw new Error('A source changed while waiting for its file provider.');
+          },
+          signal,
+        );
+      } catch (error) {
+        if (!(await exists(staged))) {
+          row.stagedPath = undefined;
+          await this.recordStep(plan, row);
+        }
+        throw error;
+      }
       await this.recordStep(plan, row);
     }
   }

@@ -144,9 +144,9 @@ export function modelInstructions(recipe: ActionRecipe, request: ActionRequest):
   );
 }
 /**
- * Reviews the model's rows in its order. A file named twice or outside the request stops the
- * review there, and a file it omitted is refused once every row is reviewed. Rows are yielded as
- * they are reviewed, so the rows before a refusal stay in the failed plan.
+ * Reviews the model's rows in its order, yielding each as it is reviewed. A file named twice or
+ * outside the request stops the review there, and a file it omitted is refused once every row is
+ * reviewed. A refusal fails the plan, which then offers none of the rows yielded before it.
  */
 export function* reviewModelRows(
   rows: readonly ModelRow[],

@@ -10,6 +10,8 @@ import {
 
 const frames = new Map<number, FrameRequestCallback>();
 const mounted: PluridApplicationHandle[] = [];
+/** What `document.elementFromPoint` finds; jsdom does no hit testing. */
+let hit: () => Element | null = () => null;
 let frameID = 0;
 let clock = 0;
 
@@ -23,6 +25,11 @@ beforeEach(() => {
     return frameID;
   });
   vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+  hit = () => null;
+  Object.defineProperty(document, 'elementFromPoint', {
+    configurable: true,
+    value: () => hit(),
+  });
 });
 afterEach(() => {
   for (const api of mounted.splice(0)) cancelWorkspaceFraming(api);
@@ -254,6 +261,46 @@ describe('workspace framing ownership and scheduling', () => {
     refitWorkspace(view.engine, view.surface);
     advance();
     expect(view.frame).not.toHaveBeenCalled();
+  });
+
+  it('docks a framed plane that another plane covers, and leaves the dock alone on resize', () => {
+    const view = fixture();
+    const front = view.element.querySelector('[data-plurid-plane="engine-folder"]')!;
+    hit = () => front;
+    frameWorkspace(view.engine, view.surface, ['chat']);
+    advance();
+    expect(view.frame).toHaveBeenCalledExactlyOnceWith(
+      { planeID: 'engine-chat' },
+      { animate: true },
+    );
+    expect(view.api.camera.dock).toHaveBeenCalledExactlyOnceWith('engine-chat', { animate: true });
+    view.frame.mockClear();
+    refitWorkspace(view.engine, view.surface);
+    advance();
+    expect(view.frame).not.toHaveBeenCalled();
+  });
+
+  it('keeps a framed plane in space under an overlay that is not a plane', () => {
+    const view = fixture();
+    const menu = document.createElement('div');
+    document.body.append(menu);
+    hit = () => menu;
+    frameWorkspace(view.engine, view.surface, ['chat']);
+    advance();
+    expect(view.api.camera.dock).not.toHaveBeenCalled();
+  });
+
+  it('waits for the camera to arrive before it looks for a covering plane', () => {
+    const view = fixture();
+    const front = view.element.querySelector('[data-plurid-plane="engine-folder"]')!;
+    hit = () => front;
+    view.frame.mockImplementation(() => view.setMotion('tween'));
+    frameWorkspace(view.engine, view.surface, ['chat']);
+    advance();
+    expect(view.api.camera.dock).not.toHaveBeenCalled();
+    view.setMotion('idle');
+    advance();
+    expect(view.api.camera.dock).toHaveBeenCalledExactlyOnceWith('engine-chat', { animate: true });
   });
 
   it('stops pending work when its engine or surface is detached', () => {

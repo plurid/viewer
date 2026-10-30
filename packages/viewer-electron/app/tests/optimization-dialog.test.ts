@@ -6,7 +6,7 @@ import { createElement } from 'react';
 import type { FileEntry, ViewerAPI } from '../src/domain/contracts';
 import type { OptimizationCandidate } from '../src/domain/operations/optimization-review';
 import { OptimizeDialog } from '../src/renderer/media/OptimizeDialog';
-import { flushState, getState, initialize } from '../src/renderer/state/store';
+import { flushState, getState, initialize, receiveJob } from '../src/renderer/state/store';
 
 vi.mock('../src/renderer/workspace/context', () => ({
   useWorkspace: () => ({ openPath: vi.fn() }),
@@ -109,6 +109,52 @@ it('cancels jobs admitted after an export cancellation', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Cancel optimization' }));
   await act(async () => admit({ kind: 'exported', jobs: ['late-admission'], failures: [] }));
   await waitFor(() => expect(cancelJob).toHaveBeenCalledWith('late-admission'));
+});
+
+it('reads a file as saved when another file of its export failed', async () => {
+  const optimization = vi.fn<ViewerAPI['optimization']>(async (request) => {
+    if (request.kind === 'prepare')
+      return candidate(files.find((file) => file.path === request.source)!);
+    if (request.kind === 'export') return { kind: 'exported', jobs: ['export'], failures: [] };
+  });
+  setup(optimization);
+  render(createElement(OptimizeDialog, { files, onClose: vi.fn() }));
+  fireEvent.click(screen.getByRole('button', { name: 'Prepare candidates' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Save 2 smaller copies' }));
+  await waitFor(() =>
+    expect(optimization.mock.calls.some(([request]) => request.kind === 'export')).toBe(true),
+  );
+  const [image, pdf] = files as [FileEntry, FileEntry];
+  // A job in which any item failed has failed, beside the copy it saved.
+  act(() =>
+    receiveJob({
+      id: 'export',
+      revision: 1,
+      kind: 'convert',
+      status: 'failed',
+      sources: [image.path, pdf.path],
+      bytesDone: 0,
+      bytesTotal: 0,
+      itemsDone: 2,
+      itemsTotal: 2,
+      completed: [
+        {
+          source: image.path,
+          destination: '/fixture/Optimized/source.png',
+          inputBytes: 8192,
+          outputBytes: 4096,
+          optimized: true,
+        },
+      ],
+      errors: [{ path: pdf.path, message: 'Generated encoder failure' }],
+      errorCount: 1,
+      undoable: true,
+    }),
+  );
+  const result = (file: FileEntry) =>
+    document.querySelector(`[data-optimization-file="${file.name}"] td:nth-child(5)`)?.textContent;
+  await waitFor(() => expect(result(image)).toBe('Saved'));
+  expect(result(pdf)).toBe('Generated encoder failure');
 });
 
 it('preserves digit-by-digit scan entry and validates before preparing', async () => {

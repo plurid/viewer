@@ -34,7 +34,7 @@ export function catalogCommands({
             : pane.type === 'journal'
               ? 'Journal'
               : pane.type === 'overview'
-                ? 'Overview'
+                ? 'File overview'
                 : pane.type === 'scratch' || pane.type === 'note'
                   ? (pane.title ?? 'Untitled')
                   : baseName(pane.path),

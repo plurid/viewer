@@ -249,13 +249,13 @@ describe('the Overview plane', () => {
     expect(window.viewer.openSettings).toHaveBeenCalledWith('settings.search');
   });
 
-  it('is saved with the workspace as Overview', () => {
+  it('is saved with the workspace as File overview', () => {
     const restored = stateSchema.parse(getState().saved);
     const saved = restored.workspaces
       .flatMap((space) => space.panes)
       .find((item) => item.id === pane.id);
     expect(saved).toEqual(pane);
-    expect(paneTitle(pane)).toBe('Overview');
+    expect(paneTitle(pane)).toBe('File overview');
     expect(activeWorkspace().panes.some((item) => item.id === pane.id)).toBe(true);
   });
 });

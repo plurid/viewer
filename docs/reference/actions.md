@@ -38,6 +38,12 @@ summaries. Their proposal lists source files, proposed results, evidence and con
 Include/exclude rows and inspect the preview before Apply. Naming templates and supported
 deterministic rules can be reused without a model.
 
+A row with an invalid name, a name over 255 bytes, a shared destination or an existing destination
+is marked and left unselected; edit its name to include it. A proposal that fails while it is
+prepared, for example when a model names a file twice or omits one, shows only its error, with no
+rows or summary to apply. An Apply that stops before moving anything fails. One that stops after
+moving some files is partial and offers **Review recovery**.
+
 Model-backed recipes use the provider's explicit data permission. A model response does not mutate a
 file by itself. Apply rechecks source identity/version and retains eligible guarded Undo.
 

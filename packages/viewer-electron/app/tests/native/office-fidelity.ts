@@ -303,9 +303,10 @@ try {
     );
     await evaluate(pageCall(scrollGrid, 0));
     await evaluate(click('.workbook-merged-cell'));
+    assert.equal(await evaluate(textOf('[aria-label="Selected range"]')), 'A3:C104');
     assert.match(
       await evaluate(textOf('.workbook-cell-detail')),
-      /A3Continued source range.*Merged A3:C104/,
+      /Value: Continued source range · Merged A3:C104/,
     );
     await capture(connection, 'workbook-continued-dark');
     await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));

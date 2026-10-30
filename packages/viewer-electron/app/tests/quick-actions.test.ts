@@ -101,7 +101,7 @@ describe('image quick actions', () => {
       second,
     ]);
   });
-  it('refuses non-images, a missing PDF name, and converting a file onto itself', async () => {
+  it('refuses non-images and a missing PDF name', async () => {
     const note = path.join(root, 'note.txt'),
       photo = path.join(root, 'photo.jpg');
     await writeFile(note, 'text');
@@ -112,9 +112,19 @@ describe('image quick actions', () => {
     expect(() =>
       operations.start({ kind: 'convert', conversion: 'pdf', sources: [photo], destination: root }),
     ).toThrow('PDF name');
+  });
+  it('converts an image to its own format as a copy beside it, never over it', async () => {
+    const photo = path.join(root, 'photo.jpg');
+    await writeFile(photo, 'pixels');
     const job = await run({ kind: 'convert', conversion: 'jpeg', sources: [photo] });
-    expect(job.status).toBe('failed');
-    expect(job.errors[0].message).toContain('same');
+    expect(job).toMatchObject({ status: 'completed', errors: [], undoable: true });
+    expect(job.completed).toEqual([
+      { source: photo, destination: path.join(root, 'photo copy.jpg') },
+    ]);
+    expect(JSON.parse(await readFile(path.join(root, 'photo copy.jpg'), 'utf8'))).toEqual({
+      conversion: 'jpeg',
+      sources: [photo],
+    });
     expect(await readFile(photo, 'utf8')).toBe('pixels');
   });
 });

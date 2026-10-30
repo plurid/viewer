@@ -1,5 +1,6 @@
 /** Native supplemental checks own their profile, loopback debugger and app. */
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -19,6 +20,15 @@ interface EvaluateOptions {
   contextId?: number;
   sessionId?: string;
   userGesture?: boolean;
+}
+
+/** Records where a process waits, with macOS `sample`: the file, or undefined when it failed. */
+function sampleProcess(pid: number, file: string): Promise<string | undefined> {
+  return new Promise((resolve) =>
+    execFile('/usr/bin/sample', [String(pid), '2', '-file', file], { timeout: 20000 }, (error) =>
+      resolve(error ? undefined : file),
+    ),
+  );
 }
 export async function ownedApp(
   binary: string,
@@ -165,12 +175,24 @@ export async function ownedApp(
   async function close(connection?: Awaited<ReturnType<typeof connect>>) {
     try {
       if (connection) void connection.command('Browser.close').catch(() => undefined);
-      for (let i = 0; i < 300 && child.exitCode === null && child.signalCode === null; i++)
+      const running = () => child.exitCode === null && child.signalCode === null;
+      let sample: string | undefined;
+      for (let i = 0; i < 300 && running(); i++) {
         await delay(50);
-      if (child.exitCode === null && child.signalCode === null) {
+        // A Quit still running after five seconds is sampled before termination, so a rare
+        // hang shows where it waits.
+        if (i === 100 && running() && process.platform === 'darwin' && child.pid)
+          sample = await sampleProcess(
+            child.pid,
+            path.join(owned.evidenceDirectory, 'quit-sample.txt'),
+          );
+      }
+      if (running()) {
         await launched.stop();
         throw new Error(
-          'Owned app needed termination instead of graceful Quit. Recent app output: ' +
+          'Owned app needed termination instead of graceful Quit.' +
+            (sample ? ' Where it waited: ' + sample + '.' : '') +
+            ' Recent app output: ' +
             launched.output(),
         );
       }
