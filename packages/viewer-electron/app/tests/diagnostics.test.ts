@@ -50,14 +50,15 @@ describe('what the log keeps', () => {
     const text = diagnosticText([
       'Save failed',
       new Error('Disk full'),
-      { contents: 'private file text' },
-      Buffer.from('private bytes'),
+      { contents: 'unlogged-content file text' },
+      Buffer.from('unlogged-content bytes'),
       42,
     ]);
     expect(text).toContain('Save failed');
     expect(text).toContain('Error: Disk full');
     expect(text).toContain('[Object] [Buffer] 42');
-    expect(text).not.toContain('private');
+    // a word no file path holds: a stack trace under /private/tmp has 'private' in it
+    expect(text).not.toContain('unlogged-content');
     const secrets = redactSecrets(
       'key sk-proj-abcdef1234567890 Authorization: Bearer abc.def.ghi123 apiKey="hunter22" token=xyz98765',
     );

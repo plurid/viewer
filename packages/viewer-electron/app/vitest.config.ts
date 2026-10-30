@@ -10,6 +10,8 @@ export default defineConfig({
     clearMocks: true,
     // a run's folders in one folder (tools/temporary.ts)
     globalSetup: ['tests/support/run-root.ts'],
+    // byte arrays compare by their bytes, not index by index
+    setupFiles: ['tests/support/bytes.ts'],
     // DOM tests render app components with @testing-library/react; both must share one React.
     server: { deps: { inline: ['@testing-library/react'] } },
   },

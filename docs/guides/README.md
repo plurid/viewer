@@ -18,6 +18,9 @@ five minutes.
 | [Dictate into Viewer](speech.md)              | Set up local or hosted speech and dictate requests and notes  |
 | [Get back to your work](troubleshooting.md)   | Fix common problems and report one                            |
 
-For exact commands, settings and limits, use the [reference](../reference/README.md).
+To find one feature fast, use [Features and where to find them](../reference/capabilities.md): every
+feature with its key, its **⌘K** command and its menu.
+[The words Viewer uses](../reference/terms.md) explains plane, Quick Preview, Suggested and the
+rest. For exact commands, settings and limits, use the [reference](../reference/README.md).
 
 [All documentation](../README.md)

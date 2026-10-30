@@ -37,7 +37,8 @@ Look up current behavior, exact syntax and limits. For a walkthrough, use the
 - [Keyboard shortcuts](shortcuts.md)
 - [Configuration files and settings](configuration.md)
 - [Platform qualification](platforms.md)
-- [Capability boundaries](capabilities.md)
+- [Features and where to find them](capabilities.md)
+- [Words Viewer uses](terms.md)
 
 Planned formats and features belong in [research](../research/README.md).
 

@@ -1,5 +1,12 @@
 # Keep your work together
 
+Use this guide when one task needs several things open at once: a folder, the files you read from
+it, notes and tools. It shows how to arrange [planes](../reference/terms.md#planes-and-the-space),
+save views, keep separate workspaces, share a project folder and back up your work.
+
+**Find it:** **⌘0** shows every plane, **⌘Return** docks one · the workspace's name at the top left
+of the window · **Workspace** in the menu bar · **File → Create Project…**
+
 A workspace is a set of planes and where you put them. Viewer saves it as you go, so the same
 folders, files and tools are there when you come back. Your files stay in their ordinary folders.
 
@@ -7,8 +14,9 @@ folders, files and tools are there when you come back. Your files stay in their 
 
 ## Open a second plane
 
-- In a preview, choose **Open linked plane**, or **Option**-double-click a file. The new plane is a
-  child of the folder it came from, and a line joins them.
+- In Quick Preview, choose **Open linked plane**, or **Option**-double-click a file. The new plane
+  is a child of the folder it came from, and a line joins them: a
+  [linked plane](../reference/terms.md#planes-and-the-space).
 - Choose **Open in another plane** for a separate folder plane with its own history.
 - **Related planes** in a plane's header lists its parent and children. Closing a child returns you
   to its parent.
@@ -17,15 +25,15 @@ Opening a file that already has a plane in the same branch shows that plane agai
 
 ## Move between planes
 
-| To                                   | Do                                           |
-| ------------------------------------ | -------------------------------------------- |
-| See every plane                      | **⌘0**                                       |
-| Give one plane the whole window      | **⌘Return**, or **Dock plane** in its header |
-| Lay the planes out face-on           | **⌘K** → **Tile the planes in view**         |
-| Go to the parent plane               | **⌥⌘↑**                                      |
-| Close a plane                        | **⌥⌘W**, or **×** in its header              |
-| Undo a move, resize or close         | **⌥⌘Z**; **⌥⇧⌘Z** redoes it                  |
-| Hide the window's chrome for a while | **⌘⇧F**                                      |
+| To                                   | Do                                                |
+| ------------------------------------ | ------------------------------------------------- |
+| See every plane                      | **⌘0** (**Frame all planes**)                     |
+| Give one plane the whole window      | **⌘Return**, or **Dock plane** in its header      |
+| Lay the planes out face-on           | **⌘K** → **Tile the planes in view**              |
+| Go to the parent plane               | **⌥⌘↑** (**Back to parent plane**)                |
+| Close a plane                        | **⌥⌘W**, or **×** in its header                   |
+| Undo a move, resize or close         | **⌥⌘Z**; **⌥⇧⌘Z** redoes it                       |
+| Hide the window's chrome for a while | **⌘⇧F** (**Focus mode**); press it again to leave |
 
 In the spatial view, click inside a plane to scroll it and type into it. Click the background or
 press **Escape** to move around the space again. Drag a plane by its header.
@@ -37,29 +45,30 @@ press **Escape** to move around the space again. Drag a plane by its header.
 
 1. Arrange the planes and camera the way you want.
 2. Press **⌃⌥⌘1** to save the view in slot 1, up to **⌃⌥⌘9**, or choose **Save view…** to name it.
-3. Press **⌥⌘1** to fly back to slot 1.
+3. Press **⌥⌘1** to fly back to slot 1. **⌘K** → **Views…** lists every saved view.
 
 **Save layout as template…** keeps the arrangement of plane kinds, so you can apply it to other
 folders.
 
 ## Use several workspaces
 
-Open the workspace menu at the top of the window to create, rename and switch workspaces. Give each
-kind of work its own: a writing workspace with a folder, a PDF and notes; a project workspace with
-an editor, a terminal and a browser. Choose where new folder planes open in **Settings → Browsing →
-New folder planes start in**.
+Choose the workspace's name at the top left of the window to switch workspaces, or to create, rename
+or delete one. **Workspace → New Workspace…** in the menu bar does the same. Give each kind of work
+its own: a writing workspace with a folder, a PDF and notes; a project workspace with an editor, a
+terminal and a browser. Choose where new folder planes open in **Settings → Browsing → New folder
+planes start in**.
 
 ## Share a project folder
 
 **File → Create Project…** writes `viewer.project.jsonc` into a folder. It records which files are
 open and how they are arranged, using paths relative to that folder, so the project opens the same
 way on another computer. It never copies your files, terminal history, conversations or keys. Open
-it again with **File → Open Project…**.
+it again with **File → Open Project…**; **File → Save Project** records later changes.
 
 ## Back up and restore your work
 
 1. Choose **Workspace → Backup and Restore…**, then **Create backup…**.
-2. Check the workspace and document counts, then save the file.
+2. Check the workspace and document counts, then choose **Save backup…**.
 3. On the other computer, choose **Open backup…**, relink any folder that moved, then choose
    **Restore copies**.
 

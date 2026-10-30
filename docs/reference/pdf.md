@@ -1,44 +1,78 @@
 # PDF tools
 
-Select PDFs and choose **PDF tools…**, or open the tool from a PDF preview. The page list is the
-output plan; the preview shows the selected source page.
+This page lists what **PDF tools…** and **Optimize…** do to PDFs, their controls and their limits.
+
+Select up to 16 PDFs and choose **PDF tools…** in **⌘K**, or press **PDF tools…** in a PDF preview.
+The page list is the output plan; the preview shows the selected source page.
 
 ## Assemble pages
 
-- **Extract:** enter `1-3, 8, 5`, then Apply range. Order and reverse ranges matter.
-- **Merge:** select several PDFs or use Add PDFs, then arrange their pages.
-- **Reorder/rotate:** select a page and use the move and clockwise controls.
-- **Split:** enable Save each included page separately for numbered outputs.
+| Task    | Control                                                                                                    |
+| ------- | ---------------------------------------------------------------------------------------------------------- |
+| Extract | Choose the **Source PDF**, type a range in **Pages to include**, such as `1-3, 8, 5`, then **Apply range** |
+| Merge   | Select several PDFs, or use **Add PDFs…**, then arrange their pages                                        |
+| Reorder | Select a page, then **Move page up** or **Move page down**                                                 |
+| Rotate  | Select a page, then **Rotate page clockwise** (90° each press)                                             |
+| Include | Tick each page, or use **Include all** and **Clear selection**                                             |
+| Split   | Tick **Save each included page separately**, then **Split pages**                                          |
 
-Exports create new files. Page text, vectors and page geometry remain; newly assembled documents do
-not retain document bookmarks, interactive forms or accessibility tags. Signed or encrypted inputs
-need an unsigned, unlocked copy.
+- A range keeps the order you type; `5-1` runs backwards. A page named twice is included once.
+- **Save PDF** writes one file under the name and folder you choose. **Split pages** writes
+  `Name 001.pdf`, `Name 002.pdf` and so on.
+- Page text, vectors and page geometry are kept. A new document does not keep document bookmarks,
+  interactive forms or accessibility tags.
+- Signed and encrypted PDFs are refused; use an unsigned, unlocked copy.
+- **Cancel export** stops further work; outputs already completed stay.
 
-The tool supports up to 16 inputs, 1,000 source/output pages, 256 MB per source and 512 MB combined.
-Split admits at most 100 output pages per run. Cancellation stops further work; inspect any already
-completed outputs.
+| Limit               | Value                |
+| ------------------- | -------------------- |
+| Source PDFs         | 16                   |
+| Pages per output    | 1,000                |
+| Pages in all inputs | 1,000                |
+| One source          | 256 MB               |
+| All sources         | 512 MB               |
+| Split run           | 100 output files     |
+| Time                | 3 minutes per output |
 
 ## Optimize
 
-Choose **Optimize…** for smaller copies. Lossless compresses PDF structure and streams. Balanced and
-Smaller can recompress eligible embedded images while preserving separate searchable text and
-vectors.
+Choose **Optimize…** for smaller copies. The originals stay as they were; each copy is named
+`Name optimized.pdf`. [Media](media.md#optimize) describes the shared dialog, review and target
+sizes.
 
-For scanned documents, explicitly enable **Recompress scanned images** and set the maximum edge.
-This can re-encode compatible eight-bit RGB/grayscale JPEG streams, including existing JPEG scans.
-Unusual color spaces, masks and unsupported encodings remain unchanged. Pages are not flattened to
-screenshots.
+| Preset                             | Effect on a PDF                                            |
+| ---------------------------------- | ---------------------------------------------------------- |
+| **Lossless · keep image pixels**   | Compresses the structure and streams; images are unchanged |
+| **Balanced · high quality**        | Also re-encodes eligible images as JPEG at quality 85      |
+| **Smaller · stronger compression** | Also re-encodes eligible images as JPEG at quality 65      |
 
-Lossless disables scan recompression. Signature fields are refused. A result is published only if
-smaller; there is no target-size or OCR guarantee. The scan pass supports up to 500 compatible
-images and 48 MB of replacement image data, within the PDF task's three-minute budget.
+**Recompress scanned images** (Balanced and Smaller only) re-encodes compatible 8-bit RGB and
+grayscale JPEG images, existing JPEG scans included, at the preset's quality and at most the **PDF
+maximum image edge**: 256 to 8,192 px, 2,400 by default. Unusual color spaces, masks and other
+encodings stay as they are. Text and vectors are kept; pages are never flattened to pictures.
 
-**PDF for email…** starts with Smaller, scan recompression and a 1600 px maximum edge. Review those
-choices before exporting.
+- A copy is saved only when it is smaller; otherwise the row says **Already compact · original
+  kept**.
+- Signed and encrypted PDFs are refused.
+- There is no OCR, and no target size is guaranteed.
 
-## Implementation
+| Limit                   | Value             |
+| ----------------------- | ----------------- |
+| One PDF                 | 256 MB            |
+| Scanned images replaced | 500 per PDF       |
+| Replacement image data  | 48 MB             |
+| Time                    | 3 minutes per PDF |
 
-Bundled qpdf handles page assembly and object updates; the image utility performs bounded encoding.
-Typed plans determine arguments and destinations, and source versions are rechecked before
-publishing. See [media exports](media.md) and [file operations](file-operations.md) for output
-receipts and recovery.
+**PDF for email…** starts with **Smaller**, scan recompression and a 1,600 px maximum edge. Review
+those choices before exporting.
+
+## How the output is made
+
+Bundled qpdf assembles pages and writes object updates; the bundled image processor re-encodes
+images. Each output comes from a checked plan with fixed arguments, and source versions are checked
+again before the output is published. Outputs are new files with Undo, reported in **File
+operations**.
+
+**Related:** [Make a quick change](../guides/create.md#rearrange-a-pdf) ·
+[Lay out photos and PDFs](../guides/layout.md) · [Media and Optimize](media.md) ·
+[Layout output](layout.md) · [File operations](file-operations.md)

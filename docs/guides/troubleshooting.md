@@ -1,17 +1,19 @@
 # Get back to your work
 
-## Viewer will not start from source
+Use this guide when something in Viewer is not working: a folder that shows nothing, a window that
+stopped, a failed copy, a model that asks for permission, or Viewer that will not quit. Each section
+names what you see and what to choose.
 
-- Check the versions: Node 22.22 or later and pnpm 11. Run `node --version` and `pnpm --version`.
-- Install the Xcode command-line tools with `xcode-select --install`, then run `pnpm install` again.
-- Read the first error `pnpm start` prints; [Build and run Viewer](../development/builds.md) lists
-  the requirements.
+**Find it:** **Help → Show Diagnostic Log** · **Help → Show Crash Reports** · **Help → Report an
+Issue…** · the **File operations** button in the title bar
 
 ## A folder shows nothing, or the Trash is empty
 
-- In a sandboxed build, choose **Allow folder access…** and pick the folder.
+- In the App Store edition, choose **Allow folder access…** and pick the folder.
+- If macOS asked about a folder and you chose **Don't Allow**, turn Viewer on for it in **System
+  Settings → Privacy & Security → Files & Folders**.
 - To browse the Trash, give Viewer Full Disk Access in **System Settings → Privacy & Security → Full
-  Disk Access**. This is a separate permission from folder access.
+  Disk Access**, then quit and reopen Viewer. This is a separate permission from folder access.
 
 ## A file or folder is unavailable
 
@@ -21,10 +23,10 @@ original file.
 
 ## A preview is slow or fails
 
-- Choose the preview's retry button.
-- For an Office file, try the **Reading** or sheet view.
+- Choose **Try again** in the preview.
+- For an Office file, try the **Reading** view, or **Sheet** for a workbook.
 - Very large, encrypted, damaged or unsupported files can be beyond a preview's limits. Choose
-  **Open With…** to use another app.
+  **Open With…** to use another app, or **Show as hex** to see its bytes.
 
 A thumbnail does not mean the full preview is supported;
 [Supported formats](../reference/formats.md) lists what is.
@@ -44,7 +46,30 @@ If a window freezes or goes blank, Viewer asks **This window stopped working.**
 - Choose **Reload** to go on from what the window saved last: its planes and folders come back.
 - Choose **Close** to close it. Closing it and quitting Viewer no longer wait for it.
 
-A web page's own window asks the same, and a browser plane shows **Reload** for a page that stopped.
+A web page's own window asks **This page stopped working.** with the same choices. In a browser
+plane, a page that stops answering says **This page is not responding.** Choose **Retry** to reload
+it.
+
+## Viewer hit a problem
+
+When something unexpected stops Viewer's own process, Viewer says **Viewer hit a problem**, records
+it in its diagnostic log and quits after saving your windows. Choose **Show Diagnostic Log** to see
+the entry, or **Quit**, then open Viewer again. Your workspace comes back as you left it.
+
+## A model asks for permission
+
+A model receives file data only at the level you approved for it, in **Settings → Models**.
+
+- If an action says **Allow this provider to receive the selected data before running the action.**,
+  open the model's **Data access**, choose the level the action names, choose **Allow selected
+  data**, and confirm with **Allow**. Then run the action again.
+- If it says **Allow agents to send this data to the provider…**, an agent started the action. Turn
+  on **Allow agent-started actions to send the same data** under the model's **Data access**.
+- If you chose **Cancel** in the system dialog, Viewer says **Model data access was not allowed.**
+  Nothing was sent.
+- Changing a model's endpoint or clearing its key revokes its access. Allow it again.
+
+[What a model may read](automate.md#what-a-model-may-read) explains the levels.
 
 ## A share has no Trash
 
@@ -67,11 +92,12 @@ the browser plane. Servers stay stopped after Viewer restarts until you start th
 Viewer quits once your work is safe. It first finishes a backup being written, saves every window
 and closes its browser planes.
 
-- With file operations still running, Viewer asks whether to wait for them, cancel them or keep
-  Viewer open.
+- With file operations still running, Viewer asks what to do: **Wait for them**, **Cancel them and
+  quit** or **Keep Viewer open**.
 - If a step fails, Viewer stays open and says which: choose **Retry**, or **Keep Open** and quit
   later.
-- **⌘Q** asks for a second press. Choose **Quit Viewer** in the menu to quit at once.
+- **⌘Q** asks for a second press. Choose **Quit Viewer** in the menu to quit at once, or turn off
+  **Settings → Browsing → Warn before quitting with ⌘Q**.
 
 ## Check for Updates could not check
 
@@ -83,21 +109,22 @@ and closes its browser planes.
 
 ## Settings stopped changing
 
-Open **Settings → Configuration** to see which line of the settings file is invalid. Viewer keeps
-using the last valid settings until you fix it. Keep API keys in the model settings, never in the
-settings file.
+Open **Settings → Configuration** to see which line of the settings file is invalid; **Validate**
+checks it again and **Open config.jsonc** opens the file. Viewer keeps using the last valid settings
+until you fix it. Keep API keys in the model settings, never in the settings file.
 
-## Viewer hit a problem
+## Viewer will not start from source
 
-When something unexpected stops Viewer's own process, Viewer says **Viewer hit a problem**, records
-it in its diagnostic log and quits after saving your windows. Choose **Show Diagnostic Log** to see
-the entry, then open Viewer again.
+- Check the versions: Node 22.22 or later and pnpm 11. Run `node --version` and `pnpm --version`.
+- Install the Xcode command-line tools with `xcode-select --install`, then run `pnpm install` again.
+- Read the first error `pnpm start` prints; [Build and run Viewer](../development/builds.md) lists
+  the requirements.
 
 ## Report a problem
 
-1. Choose **Help → Show Diagnostic Log** to find Viewer's local error log. It is never sent
-   anywhere. After a crash, **Help → Show Crash Reports** opens the crash reports Viewer kept on
-   this Mac; they are never sent either.
+1. Choose **Help → Show Diagnostic Log** to find Viewer's local error log; it says **No problems
+   have been recorded.** when there is none. After a crash, **Help → Show Crash Reports** opens the
+   crash reports Viewer kept on this Mac. Neither is ever sent anywhere.
 2. Choose **Help → Report an Issue…** and describe the Viewer version and build from **Viewer →
    About Viewer**, the macOS version, the steps, what you expected and what happened.
 3. Attach a small sample file if you can, and the log if it helps. Remove personal paths, keys and

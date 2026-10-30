@@ -1,19 +1,26 @@
 # Install and update Viewer
 
-Viewer runs on Macs with Apple Silicon and macOS 14 Sonoma or later. It is distributed as a signed
-and notarized disk image. The Mac App Store edition installs and updates through the App Store.
+Use this guide to put Viewer on your Mac, let it read your folders, keep it up to date and remove
+it. Viewer needs a Mac with Apple silicon and macOS 14 Sonoma or later.
+
+**Find it:** **Viewer → Check for Updates…** · the daily check in **Settings → Privacy** · folder
+access in **System Settings → Privacy & Security**
 
 ## Install
 
-1. Download the Viewer disk image, `Viewer-<version>-<build>-arm64.dmg`, from the Viewer website.
+1. Download the Viewer disk image, `Viewer-<version>-<build>-arm64.dmg`, from the
+   [Viewer website](https://plurid.com/viewer).
 2. Open the disk image and drag **Viewer** onto **Applications**.
 3. Eject the disk image: select it in the Finder sidebar and press **⌘E**.
 
-To check the download, compare its checksum with the `SHA256SUMS.txt` published beside it:
+The disk image is signed, and Apple has notarized it. To check the download, compare its checksum
+with the `SHA256SUMS.txt` published beside it:
 
 ```sh
 shasum -a 256 ~/Downloads/Viewer-*.dmg
 ```
+
+The Mac App Store edition installs and updates through the App Store instead.
 
 ## Open Viewer for the first time
 
@@ -27,24 +34,30 @@ download it again.
 
 ### Allow access to your folders
 
-macOS asks before Viewer reads Desktop, Documents, Downloads, an external drive or a network share
-for the first time. Search indexing reads your Home folder in the background, so these questions can
-appear soon after the first launch.
+macOS asks before Viewer reads your Desktop, Documents or Downloads folder, an external drive or a
+network share for the first time. Viewer indexes your Home folder for search in the background, so
+these questions can appear soon after the first launch.
 
 1. Choose **Allow** for each folder you want to browse, preview and search in Viewer.
-2. To change an answer later, open **System Settings → Privacy & Security → Files and Folders**,
-   find **Viewer** and turn each folder on or off.
-3. To browse the Trash or other protected locations, add Viewer to **System Settings → Privacy &
-   Security → Full Disk Access**.
+2. To change an answer later, open **System Settings → Privacy & Security → Files & Folders**, find
+   **Viewer** and turn each folder on or off.
+3. To browse the Trash, add Viewer to **System Settings → Privacy & Security → Full Disk Access**,
+   then quit and reopen Viewer.
+
+In the App Store edition, a folder Viewer may not read yet shows **Allow folder access…**. Choose it
+and pick the folder. **Settings → Permissions** lists the folders you allowed, and **Revoke** takes
+one back.
 
 Viewer asks for the microphone only when you start dictation, and for your local network only when a
-model endpoint you configured is on it.
+model endpoint you added is on it.
 
 ## Update Viewer
 
-Viewer looks for a newer version once a day when it opens. When there is one, it shows what changed.
+Viewer looks for a newer version once a day when it opens. When there is one, it says which version
+is available and what changed.
 
-1. Choose **Download**. Your browser downloads the new disk image.
+1. Choose **Download**. Your browser downloads the new disk image. If you choose **Later**, the
+   daily check does not show that version again; **Viewer → Check for Updates…** still does.
 2. Quit Viewer with **⌘Q**.
 3. Open the new disk image and drag **Viewer** onto **Applications**. Choose **Replace**.
 4. Open Viewer. Your settings, workspaces and notes stay as they were.
@@ -54,9 +67,9 @@ latest version, or when it could not reach the update server.
 
 To stop the daily check, turn off **Settings → Privacy → Check for updates when Viewer opens**. The
 check downloads a small signed file and sends nothing about your files. Viewer ignores an update
-that is not signed by its publisher.
+that is not signed by its publisher, and says so when a newer version needs a newer macOS.
 
-The Mac App Store edition has no Check for Updates item: the App Store updates it.
+The Mac App Store edition has no **Check for Updates…** item: the App Store updates it.
 
 ## Where Viewer keeps its data
 

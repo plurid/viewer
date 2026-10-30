@@ -58,12 +58,28 @@ const packages = [
 ] as const;
 export const hash = (bytes: Uint8Array, algorithm: string, encoding: 'hex' | 'base64') =>
   createHash(algorithm).update(bytes).digest(encoding);
+class DownloadRefused extends Error {}
+const downloadAttempts = 3;
+/** A dropped connection, a timeout or a server error is tried again, twice; a missing file is not.
+ * The checksum decides what is kept, so a retry cannot change the result. */
+export async function fetchBytes(url: string, attempts = downloadAttempts): Promise<Buffer> {
+  for (let attempt = 1; ; attempt++) {
+    const last = attempt === attempts;
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      if (response.ok) return Buffer.from(await response.arrayBuffer());
+      if (response.status < 500 || last)
+        throw new DownloadRefused(`Processor download failed (${response.status}): ${url}`);
+    } catch (error) {
+      if (error instanceof DownloadRefused || last) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+  }
+}
 export async function download(file: string, url: string, expected: string, algorithm = 'sha512') {
-  let bytes = await readFile(file).catch(() => undefined);
+  let bytes: Buffer | undefined = await readFile(file).catch(() => undefined);
   if (!bytes) {
-    const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
-    if (!response.ok) throw new Error(`Processor download failed (${response.status}): ${url}`);
-    bytes = Buffer.from(await response.arrayBuffer());
+    bytes = await fetchBytes(url);
     if (hash(bytes, algorithm, algorithm === 'sha256' ? 'hex' : 'base64') !== expected)
       throw new Error(`Processor checksum mismatch: ${url}`);
     await writeFile(file, bytes, { flag: 'wx' });

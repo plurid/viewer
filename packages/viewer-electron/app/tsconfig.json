@@ -3,6 +3,9 @@
     "target": "ES2023",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    // No "#" import aliases are used. With this on and no baseUrl or paths, TypeScript 6 crashes
+    // writing a module path for a type (getLocalModuleSpecifier), as typescript-eslint did on CI.
+    "resolvePackageJsonImports": false,
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,

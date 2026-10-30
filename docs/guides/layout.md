@@ -1,8 +1,13 @@
 # Lay out photos and PDFs
 
-Select photos or PDFs, press **⌘K** and choose **Lay out…**. It is also in the file menu, under
-**Suggested** for several photos. Viewer chooses a layout for what you selected and opens it in a
-Layout plane. The preview is the file it saves.
+Use this guide to put several photos or pages on one sheet: collages, contact sheets, several pages
+to a sheet, booklets, cards and labels, posters on ordinary paper, and DXF parts nested for cutting.
+
+**Find it:** **⌘K** → **Lay out…** or **Nest for cutting…** · the file menu, under **Suggested** for
+several photos or DXF drawings
+
+Select photos or PDFs, press **⌘K** and choose **Lay out…**. Viewer chooses a layout for what you
+selected and opens it in a Layout plane. The preview is the file it saves.
 
 Across the top, the plane offers the modes that suit the selection, the suggested one first. Under
 the preview, the suggested layouts are ranked, each with the reason it fits, such as "Fills A4

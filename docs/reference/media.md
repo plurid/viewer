@@ -1,89 +1,157 @@
 # Image, audio, video and Optimize
 
-All tools on this page use bundled local processors. Exports create new files and report their
-destinations through Operations.
+This page lists the image, audio and video tools, their formats, choices and limits, and how
+Optimize prepares and saves smaller copies.
 
-## Images
+Every tool uses processors bundled with Viewer and runs on your Mac. Each export is a new file, with
+Undo, reported in **File operations**; the source is never changed.
 
-**Image tools…** and **Convert images…** export JPEG, PNG, WebP and AVIF with quality, dimensions,
-aspect fit, rotation and crop controls. JPEG includes a transparency-background choice. Batch export
-applies the plan to each image and reports individual failures.
+## Quick actions
 
-Tool inputs are JPEG, PNG, TIFF, GIF, WebP and AVIF. Animated/multipage sources are refused rather
-than silently dropping frames. HEIC can have a native preview on macOS while remaining unsupported
-by this image-tool decoder. Native quick actions provide separate JPEG/PNG/PDF choices where
-available. **Convert copy to JPEG** and **Convert copy to PNG** are not offered for images already
-in that format. In a mixed selection, such an image gets a copy beside it, such as `Shot copy.png`;
-the image itself is never replaced.
+These appear in **⌘K** when every selected file is a JPEG, PNG, TIFF, HEIC, HEIF, GIF, BMP or WebP
+image.
 
-Exports normalize orientation. The default keeps supported ICC profiles and descriptive
-credit/title/rights metadata while dropping GPS and device identifiers. Remove metadata and Keep
-all, including location, are separate policies; no option promises every source tag can round-trip.
+| Command                                         | Output beside each image                                       |
+| ----------------------------------------------- | -------------------------------------------------------------- |
+| **Convert copy to JPEG**                        | `Name.jpg`                                                     |
+| **Convert copy to PNG**                         | `Name.png`                                                     |
+| **Rotated copy, left**, **Rotated copy, right** | `Name rotated.ext`; formats other than PNG and JPEG become PNG |
+| **Create PDF from images**                      | One PDF in the folder: `Name.pdf`, or `Name and others.pdf`    |
+
+A convert command is not offered when every selected image is already in that format. In a mixed
+selection, such an image gets a copy beside it, such as `Shot copy.png`; the image itself is never
+replaced.
+
+## Image tools
+
+**Convert images…** in **⌘K**, or **Image tools…** in an image preview, exports up to 1,000 JPEG,
+PNG, TIFF, GIF, WebP or AVIF images. HEIC previews on macOS but is not an image-tool input; use
+**Convert copy to JPEG**.
+
+| Choice     | Values                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
+| Format     | **WebP**, **AVIF**, **JPEG**, **PNG**                                                                   |
+| Quality    | 1 to 100; 85 by default                                                                                 |
+| Size       | Width and height, 1 to 32,768 px each, below 100 megapixels together                                    |
+| Fit        | **Fit · keep aspect ratio**, **Fill and crop**, **Stretch to size**                                     |
+| Crop       | A rectangle drawn on the source                                                                         |
+| Rotation   | **Rotate** turns the output 90° clockwise each press                                                    |
+| Metadata   | **Keep color and credit · remove GPS** (default), **Remove metadata**, **Keep all · includes location** |
+| Background | A color behind transparency in a JPEG; white by default                                                 |
+
+- Orientation is applied, so the output stands the right way up.
+- The default keeps supported ICC profiles and credit, title and rights fields, and drops GPS and
+  device identifiers. No choice promises that every source tag survives.
+- Animated and multipage images are refused, so no frame is silently dropped.
+- A source is at most 256 MB and 100 megapixels.
+- A batch applies one plan to each image and reports each failure on its own.
 
 ## Audio and video
 
-**Edit media…** opens a draft for up to 16 sources. Use the filmstrip, waveform, player and In/Out
-controls to inspect source media. Reorder segments, add sources and add one replacement/mixed audio
-track with timing and gain choices.
+**Edit media…** opens a draft for up to 16 sources: MP4, M4V, MOV, M4A, MP3, WAV, FLAC, Ogg, OGA,
+Opus, AIFF, CAF, AVI, MKV, WebM, AAC, MPEG, TS and M2TS files of at most 24 hours. Use the
+filmstrip, waveform, player and **In** and **Out** to mark up to 32 segments, reorder them, add
+sources and add one audio track.
 
-Export the sequence, each segment, audio only, muted video or a frame as PNG. Exact cuts are the
-default. **Fast · keyframe aligned** can copy suitable streams with less precise cut points. Joined
-video follows the first clip's size/rate. MP4/MOV exports use H.264/AAC; audio outputs include
-M4A/AAC, WAV/PCM and FLAC.
+| Choice  | Values                                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------ |
+| Format  | **MP4 video**, **QuickTime video** (H.264 and AAC), **AAC audio** (M4A), **WAV audio**, **FLAC audio** |
+| Quality | **Smaller file**, **Balanced**, **High quality**                                                       |
+| Cut     | **Exact · frame accurate** (default), **Fast · keyframe aligned**                                      |
+| Audio   | **Keep original**, **Remove audio**, **Replace audio**, **Mix with original**, with offset and gain    |
+| Output  | The whole sequence, **Export each segment**, or **Export current frame as PNG**                        |
 
-Drafts save editing decisions and source versions privately. Closing a draft's plane keeps it;
-culling pauses playback. Changed/revoked sources block further use, with **New draft from current
-files** preserving the old draft.
+- **Fast · keyframe aligned** copies the streams without re-encoding. It is offered for one segment
+  exported as MP4 or MOV, with original or removed audio, from H.264 video with AAC or no audio. Its
+  cut points are less precise.
+- Joined video takes the first segment's size and frame rate; other clips are scaled to fit inside
+  it. Audio is resampled to 48 kHz stereo.
+- Video is at most 8,192 px on each edge. A frame export takes one segment and no added audio.
+- **Remove audio** is offered for MP4 and MOV only; **Replace audio** and **Mix with original**
+  appear once an audio source is added.
 
-Reload first saves pending editing decisions. If saving still fails, the unsaved plan stays in
-memory for another retry; a stale reload response cannot replace a newer edit.
+Drafts keep their editing decisions and source versions privately. Closing a draft's plane keeps the
+draft. A changed or revoked source blocks further use; **New draft from current files** starts again
+and keeps the old draft. Reloading saves pending decisions first; if saving fails, the plan stays in
+memory for another try, and a stale reload never replaces a newer edit.
 
 ## Optimize
 
-Optimize supports selected PDF, JPEG, PNG, WebP and AVIF files, including mixed batches.
-**Balanced** and **Smaller** trade image quality for compression; **Lossless** retains decoded
-pixels, with coefficient-preserving JPEG optimization. Maximum raster dimensions are optional.
+**Optimize…** takes up to 1,000 PDF, JPEG, PNG, WebP and AVIF files, mixed in one batch. Each copy
+is named `Name optimized.ext`.
 
-Choose **Prepare candidates** before saving anything. Each row shows the measured original and
-candidate sizes. **Review** compares images side by side, with an actual-size option and linked
-panning; PDFs share a page selector. **Save smaller copies** exports the exact bytes prepared for
-review. **Already compact** keeps the original. If the Trash cannot take the unused copy, **File
-operations** says where it was kept.
+| Preset                             | Images                                     |
+| ---------------------------------- | ------------------------------------------ |
+| **Balanced · high quality**        | Quality 85                                 |
+| **Smaller · stronger compression** | Quality 65                                 |
+| **Lossless · keep image pixels**   | Same pixels; a JPEG keeps its coefficients |
 
-Enable **Target size per file** for a budget such as 500 kB or 2 MB. These units are decimal; the
-allowed budget is 1 kB–256 MB. Lossy compression tries at most eight quality settings and respects
-the chosen minimum quality. **Target not met** reports the measured result without selecting it for
-export. You can explicitly select a smaller candidate even when it misses the target. Lossless mode
-never lowers quality to reach a budget. A size target cannot guarantee a particular visual quality:
-inspect the comparison before exporting.
+**Limit image dimensions** caps the longest edge at 64 to 32,768 px; it does not apply to
+**Lossless**. [PDF tools](pdf.md#optimize) describes what each preset does to a PDF.
 
-Under **Saved batch recipes**, name and save the compression, target and folder-layout choices.
-Recipes remain available after restart; they contain no file locations or access grants. **Keep
-folders relative to…** preserves the displayed source hierarchy inside the chosen output folder.
-Output name collisions receive separate names, leaving existing files intact.
+1. **Prepare candidates** makes each copy privately and shows the original and candidate sizes.
+2. **Review** compares a candidate with its original side by side, with an actual-size option and
+   linked panning; PDFs share a page selector.
+3. **Save** _n_ **smaller copies** writes the exact bytes you reviewed into the folder chosen under
+   **Save smaller copies in**.
 
-**Retry** prepares only that row using its current source version. A file changed after preparation
-must be retried before export. Private prepared candidates are limited to 512 MB at a time, with a
-256 MB limit per candidate. Closing the dialog releases its previews; admitted exports finish
-through Recent file operations. See [PDF tools](pdf.md) for structural versus scanned-image
-compression and signature limits.
+- A candidate no smaller than its original says **Already compact · original kept**. If the Trash
+  cannot take the unused copy, **File operations** says where it was kept.
+- **Retry** prepares one row again from its current version. A file changed after preparation must
+  be retried before it is saved.
+- **Keep folders relative to** _folder_ keeps the source folders inside the output folder. A name in
+  use gets a new name; existing files are never replaced.
+- **Saved batch recipes** keep a named set of compression, target and folder choices across
+  restarts. A recipe holds no file locations or access.
+- Closing the dialog releases its previews; saves already started finish in **File operations**.
+
+**Target size per file** sets a budget such as 500 kB or 2 MB.
+
+| Target rule     | Value                                                               |
+| --------------- | ------------------------------------------------------------------- |
+| Budget          | 1 kB to 256 MB, decimal units                                       |
+| Minimum quality | 20 to 95; 60 by default                                             |
+| Attempts        | At most 8 quality settings per file, starting at 95                 |
+| Missed          | **Target not met**, with the measured size; not selected for saving |
+| Lossless        | Never lowers quality to meet a budget                               |
+
+You can still select a candidate that missed its target. A size target does not promise a visual
+quality; compare before saving.
+
+| Optimize limit      | Value         |
+| ------------------- | ------------- |
+| Files in a batch    | 1,000         |
+| Prepared candidates | 512 MB in all |
+| One image source    | 256 MB        |
 
 ## Quick presets
 
-| Command               | Starting choices                                          |
-| --------------------- | --------------------------------------------------------- |
-| Images for web…       | WebP, quality 80, fit within 2048 × 2048, remove GPS      |
-| Batch convert images… | WebP with editable format, quality and dimensions         |
-| PDF for email…        | Smaller, compatible JPEG scan recompression, 1600 px edge |
-| Extract audio…        | A fresh M4A/AAC draft with ranges to review               |
+| Command                   | Starting choices                                                |
+| ------------------------- | --------------------------------------------------------------- |
+| **Images for web…**       | WebP, quality 80, fit within 2048 × 2048, remove GPS            |
+| **Batch convert images…** | WebP with editable format, quality and size; two or more images |
+| **PDF for email…**        | **Smaller**, scan recompression, 1,600 px maximum edge          |
+| **Extract audio…**        | A new M4A draft with ranges to review                           |
 
 ## Playback compatibility
 
-The player first tries Chromium decoding. Unsupported video can request a bounded local
-compatibility copy; the view labels it as such and retains retry and external open actions.
-Compatibility is codec-dependent, not guaranteed by an extension.
+The player first tries Chromium's own decoders. When they cannot play a file, Viewer makes a
+complete local copy with the bundled FFmpeg (**Preparing a compatible video copy…**, with
+**Cancel**), and the view says **Compatibility copy · up to 720p**. If no copy can be made,
+**Compatibility preview unavailable** offers **Retry conversion**, opening in another app and, when
+the file has sound, **Play audio only**.
 
-Exports compile fixed arguments from validated plans and recheck source versions. They do not expose
-arbitrary processor options or a shell to agents. Image/PDF batches support up to 1,000 compatible
-inputs; each tool enforces additional byte, dimension and time budgets. Source files and already
-completed outputs remain available after a later batch item fails.
+| Copy  | Format              | Limits                                              |
+| ----- | ------------------- | --------------------------------------------------- |
+| Video | H.264 with AAC, MP4 | At most 1280 × 720 and 64 MB, made within 2 minutes |
+| Audio | AAC                 | At most 64 MB                                       |
+
+A copy is checked through its last frame before it plays. Whether a file plays depends on its
+codecs, not its extension. [Supported formats](formats.md) lists the extensions sent through a copy.
+
+Exports are built from checked plans with fixed processor arguments, and source versions are checked
+again before an output is published. No tool passes arbitrary processor options, and none gives an
+agent a shell.
+
+**Related:** [Make a quick change](../guides/create.md) · [PDF tools](pdf.md) ·
+[Layout output](layout.md) · [Supported formats](formats.md) · [File operations](file-operations.md)

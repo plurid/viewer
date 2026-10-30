@@ -1,27 +1,34 @@
 # Explore a folder
 
-Viewer points out what may need attention, suggests what to do next and, when you add a model, looks
-around a folder with you. Nothing changes until you choose an action or approve a review.
+Use this guide when you want to know what a folder holds and what to tidy. Viewer points out what
+may need attention and suggests what to do next. If you add a model, it can also look around a
+folder with you and identify files Viewer cannot show. Nothing changes until you choose an action or
+approve a review.
+
+**Find it:** the cards above a folder's files · **⌘K** → **File overview** · **⌘K** → **Explore this
+folder** · **Suggested** in the file menu
 
 ## See what needs attention
 
-Open a folder. When something stands out, a card above the files says what and offers one action:
+Open a folder. When something stands out, up to three [insight](../reference/terms.md#suggestions)
+cards above the files say what and offer one action each:
 
 ![Cards for an extracted archive and five screenshots above a folder's files](../media/insights.png)
 
 | Viewer notices                                 | Action offered             |
 | ---------------------------------------------- | -------------------------- |
-| Archives already extracted beside their folder | **Move to Trash…**         |
 | Installers in Downloads older than a week      | **Move to Trash…**         |
-| Five or more screenshots                       | **Put in a folder…**       |
+| Archives already extracted beside their folder | **Move to Trash…**         |
 | PDFs over 10 MB                                | **Optimize…**              |
+| Two or more names ending " copy" or "(1)"      | **Find duplicates…**       |
+| Five or more screenshots                       | **Put in a folder…**       |
 | Three or more HEIC photos                      | **Convert copies to JPEG** |
-| Names ending " copy" or "(1)"                  | **Find duplicates…**       |
 
 The action selects the files it covers first, so you see what it will act on, then opens the same
-command as the file menu. **Move to Trash…** asks first, unless you turned off **Confirm before
-moving to Trash**. Choose **×** on a card to hide it in that folder; **⌘K** → **Show hidden
-insights** brings them back. Turn insights off in **Settings → Browsing → Suggestions**.
+command as the file menu. **Move to Trash…** asks first, unless you turned off **Settings → Browsing
+→ Confirm before moving to Trash**. Choose **×** on a card to hide it in that folder; **⌘K** →
+**Show hidden insights** brings them back. Turn the cards off with **Settings → Browsing →
+Suggestions → Show folder insights**.
 
 ## See all your files at a glance
 
@@ -44,10 +51,10 @@ what may need a look:
 
 Each card shows how many files match, their total size and the largest few (the latest, for Changed
 this week); choose a name to open it. **Show all** opens the matches as a search, where you select
-them and use any action, such as **Move to Trash** or **Optimize…**. For archives already extracted,
-which no search can name, it opens a collection of exactly those archives, kept with the workspace
-and updated each time. Searches with no matches are listed in one line at the bottom. **Refresh**
-searches again.
+them and use any action, such as **Move to Trash…** or **Optimize…**. For archives already
+extracted, which no search can name, it opens a collection of exactly those archives, kept with the
+workspace and updated each time. Searches with no matches are listed in one line at the bottom.
+**Refresh** searches again.
 
 File overview reads only the index. When Downloads or the Desktop is not indexed, its card offers
 **Search it now**, which searches the folder directly, and **Add to the index**, which opens
@@ -55,23 +62,26 @@ File overview reads only the index. When Downloads or the Desktop is not indexed
 
 ## Let the model pick suggestions
 
-Right-click a file to see **Suggested** actions, as [Browse and organize](files.md) shows. With a
-model, Viewer can add its own picks:
+Right-click a file to see [Suggested](../reference/terms.md#suggestions) actions, as
+[Browse and organize](files.md#let-viewer-suggest) shows. With a model, Viewer can add its own
+picks:
 
-1. [Add a model](automate.md#add-a-model) and mark it **Use for Ask Viewer**.
-2. In **Settings → Models** → **Data access**, allow it file names.
-3. Turn on **Settings → Browsing → Suggestions** → **Let the model suggest actions**.
+1. [Add a model](automate.md#add-a-model). The first model you add is the **Default for Ask
+   Viewer**; for another, choose **Use for Ask Viewer** beside it.
+2. Under the model's **Data access**, choose **filenames and file metadata**, then **Allow selected
+   data**, and confirm with **Allow**.
+3. Turn on **Settings → Browsing → Suggestions → Let the model suggest actions**.
 
 When you stay in a folder, Viewer sends the model the folder's name, a few names of each kind of
 file and the actions that apply to them, once per folder. Its picks appear under **Suggested** with
 its reason and its name, for example "Smaller to send · My model". It never receives file contents
-and never picks Trash.
+and never picks **Move to Trash**.
 
 ## Ask the model what is here
 
 1. Press **⌘K** and choose **Explore this folder**, or right-click empty space in the folder and
-   choose **Files** → **Explore this folder**. With files selected it reads **Explore selected
-   items**; for a folder it also appears under **Suggested**.
+   choose **More file actions → Explore this folder**. With files selected it reads **Explore
+   selected items**; for a selected folder it also appears under **Suggested**.
 2. A Chat plane opens with the folder attached. When the model may already receive names, the
    request goes at once; otherwise choose **Allow names**, then **Send**.
 3. The model lists the folder, looks closer at a few files and answers with a summary. Files it
@@ -80,7 +90,8 @@ and never picks Trash.
 
 ![A Chat plane answering Explore this folder, with buttons for the files it names](../media/explore.png)
 
-To read inside files the model asks for excerpts first. Ask follow-up questions in the same chat.
+To read inside files the model needs the excerpts level; the chat shows **Allow excerpts** when it
+asks. Ask follow-up questions in the same chat.
 
 ## Identify a file Viewer cannot show
 
@@ -91,7 +102,7 @@ When no preview reads a file, Viewer reads its first bytes and says what it look
    Books, Office and OpenDocument files, camera raw photos and videos open this way too. Otherwise
    the message names the extension that makes it preview.
 2. To ask the model, choose **Ask** followed by its name. It receives the file's name, size and
-   first 64 bytes, so it needs the excerpts permission; **Review in Settings** opens **Settings →
+   first 64 bytes, so it needs the excerpts level; **Review in Settings** opens **Settings →
    Models** when it does not have it.
 3. The model's answer appears under the buttons with its name: what the file is, its usual extension
    and apps that open it. When Viewer reads what it names, **Show as** appears for it too.
@@ -100,10 +111,14 @@ When no preview reads a file, Viewer reads its first bytes and says what it look
 
 ## What a model receives
 
-| Feature               | The model receives                                    | Permission           |
+Each model has one data level, set under its **Data access** in **Settings → Models**.
+[What a model may read](automate.md#what-a-model-may-read) explains the three levels.
+
+| Feature               | The model receives                                    | Level needed         |
 | --------------------- | ----------------------------------------------------- | -------------------- |
 | Model suggestions     | The folder's name, file names, kinds and action names | Names                |
 | Explore               | Names in the attached folder; excerpts when it reads  | Names, then excerpts |
 | Identify with a model | One file's name, size and first 64 bytes              | Excerpts             |
 
-Folder insights, Suggested rules and identifying by bytes run on your computer and send nothing.
+Folder insights, File overview, Suggested rules and identifying by bytes run on your Mac and send
+nothing.

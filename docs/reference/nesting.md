@@ -1,10 +1,12 @@
 # Nesting for cutting
 
-Nesting places DXF parts on stock sheets for laser or plasma cutting. It reads each part's true
-shape, packs the copies you ask for onto the formats you allow, checks the result exactly and saves
-one DXF per sheet with a PDF report and a CSV parts list. The steps are in the
-[Layout guide](../guides/layout.md#nest-parts-for-cutting); this page describes the behavior
-exactly. The saved plan is `nestingTransformSchema` in `src/domain/layout/nesting/plan.ts`.
+This page describes exactly how the **Nesting** mode of the Layout plane reads DXF parts, packs them
+on stock sheets for laser or plasma cutting, checks the result and saves it.
+
+Nesting reads each part's true shape, packs the copies you ask for onto the formats you allow,
+checks the result exactly and saves one DXF per sheet with a PDF report and a CSV parts list. The
+steps are in the [Layout guide](../guides/layout.md#nest-parts-for-cutting). The saved plan is
+`nestingTransformSchema` in `src/domain/layout/nesting/plan.ts`.
 
 ## Reading parts
 
@@ -14,8 +16,8 @@ hidden or frozen layers, and entities on a tilted plane are left out. Dimensions
 solids and other types are left out and listed in the part's notes. Binary DXF is refused.
 
 **Units.** A drawing's `$INSUNITS` sets its unit, converted to millimetres. When the drawing does
-not say, the part shows **Units not given** with a choice of millimetres, centimetres, metres,
-inches or feet; millimetres until you choose.
+not say, the drawing shows **Units not given** with a choice of every physical DXF unit,
+millimetres, centimetres, metres, inches and feet first; millimetres until you choose.
 
 **Loops.** For packing, every curve is flattened to chords within 0.05 mm of the curve. Entities
 whose ends lie within 0.05 mm join into one path, in any order and direction. A path whose ends meet
@@ -40,6 +42,9 @@ are left out.
 part with that many copies; a mirrored copy is a different part. Separate parts are numbered in
 reading order, top row first.
 
+**Each part** has a **Quantity** (0 to 20,000; the copies found in the drawing at first), a
+**Turn**, **Mirror** and **Grain**.
+
 **A drawing that cannot be nested** names the reason: "Bracket has no closed outline. Its nearest
 open ends are 2.00 mm apart.", or "has nothing to cut" when every layer is marked.
 
@@ -55,13 +60,13 @@ open ends are 2.00 mm apart.", or "has nothing to cut" when every layer is marke
 
 ## Turning, mirroring and grain
 
-| Turn            | Angles              |
-| --------------- | ------------------- |
-| As drawn        | 0°                  |
-| 90° steps       | 0°, 90°, 180°, 270° |
-| 45° steps       | every 45°           |
-| 15° steps       | every 15°           |
-| Free (5° steps) | every 5°            |
+| Turn                | Angles                        |
+| ------------------- | ----------------------------- |
+| **As drawn**        | 0°                            |
+| **90° steps**       | 0°, 90°, 180°, 270°; at first |
+| **45° steps**       | every 45°                     |
+| **15° steps**       | every 15°                     |
+| **Free (5° steps)** | every 5°                      |
 
 **Mirror** also tries each angle mirrored across the part's vertical axis. **Grain** keeps the
 part's x axis along the sheet's length, so only 0° and 180° remain. Orientations that look the same,
@@ -70,12 +75,13 @@ such as a square's quarter turns, are searched once.
 ## Sheets
 
 Presets are 1000 × 2000, 1250 × 2500 (on at first), 1500 × 3000, 2000 × 4000 and 2000 × 6000 mm.
-**Add size** adds a custom format; up to 12 formats in all. Each format has an optional stock count
-(empty for any number) and a price per sheet.
+**Add size** adds a custom width and length, each 10 to 100,000 mm; up to 12 formats in all. Each
+format has an optional stock count (empty for **Any**, up to 500) and a price per sheet.
 
 A sheet lies with its longer side along x and fills from x = 0, so what is left over is one strip at
 the far end. **Edge margin** (10 mm at first) keeps every part that far inside the sheet edge.
-**Spacing** (5 mm at first) is the least distance between any two parts, holes included.
+**Spacing** (5 mm at first) is the least distance between any two parts, holes included. Each is 0
+to 1,000 mm.
 
 ## Estimate while typing
 
@@ -94,10 +100,11 @@ better one. **Search** sets the time: 5, 15 (at first), 30 or 60 seconds.
 **Raster.** Each orientation of each part is drawn on a square grid. A cell is marked when it comes
 within half the spacing, plus 0.05 mm for flattening, of the part's material; holes stay empty, so
 smaller parts can land in them. Two parts whose cells do not meet are therefore at least the spacing
-apart. The cell size is about a hundredth of a typical part's short side, between a 5,000th and a
-600th of the longest sheet, rounded up to a step from 0.25 to 10 mm. A coarse pass at twice that
-size answers first, and past half the time a finer pass at half the size can improve on it. The grid
-costs up to about 1.5 cells of extra gap between neighbours.
+apart. The cell size is a hundredth of the median part's short side, or finer, down to a 400th, when
+the smallest part's short side needs it; it stays between a 5,000th and a 600th of the longest sheet
+and is rounded up to a step from 0.25 to 10 mm. A coarse pass at twice that size answers first, and
+past half the time a finer pass at half the size can improve on it. The grid costs up to about 1.5
+cells of extra gap between neighbours.
 
 **Placement.** Copies are placed one at a time, largest first. A copy goes first into a hole of a
 part already placed, on any open sheet: the smallest hole that takes it, at its lowest-leftmost free
@@ -124,8 +131,10 @@ material fails even without nearby edges. The panel shows "Checked: parts at lea
 inside the margin." Saving is refused if the check fails, and the desktop repeats it before writing.
 
 **Limits.** At most 200 drawings, 2,000 parts, 20,000 placed copies, 500 sheets and 12 formats. A
-drawing may be 32 MB, 50,000 entities and 1,000,000 vertices. Raster nesting is not optimal: shapes
-that interlock only at angles finer than the turn step, or in gaps smaller than a cell, are missed.
+drawing may be 32 MB, 50,000 entities and 1,000,000 vertices. Block references expand to at most
+200,000 entities, 16 levels deep, and a block array holds at most 10,000 copies. Raster nesting is
+not optimal: shapes that interlock only at angles finer than the turn step, or in gaps smaller than
+a cell, are missed.
 
 ## Results and advice
 
@@ -155,7 +164,8 @@ Advice appears under the headline:
 
 Rapid moves, lead-ins, marking and setup are not included. **Material** fills speed, pierce time and
 density from a table of typical values for about 3 kW fiber, 100 W CO2 and 65 A plasma; editing any
-value makes them **Custom values**. Check them against your machine.
+value makes them **Custom values**. It starts at **Mild steel 3 mm · Fiber laser**. Check the values
+against your machine.
 
 | Material        | Process     | Thickness (mm) | Speed (mm/min)                | Pierce (s)          |
 | --------------- | ----------- | -------------- | ----------------------------- | ------------------- |
@@ -203,7 +213,13 @@ pierces; and the assumptions behind the estimate, with the closest distance the 
 Each further page draws one sheet to scale with its margin, every part numbered, and a legend. A
 sheet with more than about 5,000 outlines and holes is drawn without holes and marks, and says so.
 
-**Parts.csv.** UTF-8 with a byte order mark and CRLF lines; numbers in millimetres without thousands
-separators. Parts: No., Part, File, Requested, Placed, Width, Height, Area, Cut length, Pierces and
-cutting time each. Sheets: Sheet, Width, Height, Parts, Utilisation (%), Remnant length, Cut length,
-Pierces, Cutting time and Price.
+**Parts.csv.** UTF-8 with a byte order mark and CRLF lines; numbers without thousands separators.
+
+| Table  | Columns                                                                                                                                              |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parts  | `No.`, `Part`, `File`, `Requested`, `Placed`, `Width (mm)`, `Height (mm)`, `Area (mm²)`, `Cut length (mm)`, `Pierces`, `Cutting time each (min)`     |
+| Sheets | `Sheet`, `Width (mm)`, `Height (mm)`, `Parts`, `Utilisation (%)`, `Remnant length (mm)`, `Cut length (mm)`, `Pierces`, `Cutting time (min)`, `Price` |
+
+**Related:** [Lay out photos and PDFs](../guides/layout.md#nest-parts-for-cutting) ·
+[Layout output](layout.md) · [Models and drawings](models.md) ·
+[File operations and recovery](file-operations.md)

@@ -1,9 +1,10 @@
 # Supported preview formats
 
-Select a file and press Space, or open it in a linked plane. This inventory describes current
-preview routes; codec, source and platform limits still apply. A rendered bitmap or embedded
-thumbnail is different from full semantic inspection. See [platform status](platforms.md) and
-[preview usage](../guides/previews.md).
+This page lists every file format Viewer previews, by extension, with each reader's limits.
+
+Select a file and press **Space**, or open it in a linked plane. A rendered bitmap or a saved
+picture is not the same as reading the document's contents; each row says which one you get. Codec
+and platform limits still apply.
 
 ## Current document, image, media and model previews
 
@@ -39,14 +40,14 @@ thumbnail is different from full semantic inspection. See [platform status](plat
 | Provisioning profiles   | `.mobileprovision`, `.provisionprofile`                                                                                                                                | App ID, team, expiry, devices, entitlements and developer certificates. The signature is not checked.                                                                                                                                                                    |
 | Archives                | `.zip`, `.tar`, `.tar.gz`, `.tgz`                                                                                                                                      | Browse supported archive entries and open previewable contents.                                                                                                                                                                                                          |
 | ZIP packages            | `.jar`, `.war`, `.ear`, `.apk`, `.aab`, `.ipa`, `.whl`, `.nupkg`, `.vsix`, `.xpi`, `.kmz`, `.cbz`                                                                      | Listed and opened as the ZIP archives they are.                                                                                                                                                                                                                          |
-| Compressed files        | `.gz` that is not a tar archive                                                                                                                                        | The file inside, read-only, with its text, code, data, log, subtitle, calendar or notebook preview, expanded up to 8 MB; other kinds show the inner name and its expanded size. `.tar.gz` and `.tgz` are archives.                                                       |
+| Compressed files        | `.gz` that is not a tar archive                                                                                                                                        | The file inside, read-only, with its text, code, data, log, subtitle, calendar or notebook preview, from up to 16 MB compressed and 8 MB expanded; other kinds show the inner name and its expanded size. `.tar.gz` and `.tgz` are archives.                             |
 | 3D meshes/scenes        | `.glb`, `.gltf`, `.obj`, `.stl`, `.fbx`, `.3mf`, `.ply`, `.dae`, `.3ds`, `.usdz`, `.x3d`, `.wrl`, `.off`                                                               | Interactive 3D viewing, dimensions, appearance controls and surface-point distance measurement. Collada, 3DS, USDZ, X3D, VRML and OFF show only what the file holds; files they name are listed, never loaded.                                                           |
 | CAD exchange            | `.step`, `.stp`, `.iges`, `.igs`                                                                                                                                       | Locally converted geometry in the 3D viewer; dimensions normalized to millimeters.                                                                                                                                                                                       |
 | 2D drawings             | ASCII `.dxf`                                                                                                                                                           | Supported model-space entities, layers, inspection, snapping and measurements.                                                                                                                                                                                           |
 | Video                   | `.mp4`, `.webm`, `.mov`, `.m4v`, `.ogv`, `.f4v`                                                                                                                        | Original Chromium playback, with an automatic bounded local compatibility copy for unsupported video; see media tools. A subtitle file named like the video (`.srt`, `.vtt`, `.ass`, `.ssa`, also `Movie.en.srt`) can show as its subtitles, up to 2 MB and 20,000 cues. |
-| Converted video         | `.avi`, `.mkv`, `.mpg`, `.mpeg`, `.m2ts`, `.wmv`, `.asf`, `.flv`, `.3gp`, `.3g2`, `.vob`, `.mxf`, `.m2v`, and recorded `.ts` and `.mts`                                | A complete local H.264 copy, up to 64 MB, made by the bundled FFmpeg when Chromium cannot play the original.                                                                                                                                                             |
+| Converted video         | `.avi`, `.mkv`, `.mpg`, `.mpeg`, `.m2ts`, `.wmv`, `.asf`, `.flv`, `.3gp`, `.3g2`, `.vob`, `.mxf`, `.m2v`, and recorded `.ts` and `.mts`                                | A complete local H.264 copy, at most 1280 × 720 and 64 MB, made by the bundled FFmpeg within two minutes when Chromium cannot play the original.                                                                                                                         |
 | Audio                   | `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.aac`, `.opus`, `.oga`                                                                                                       | Playback through Chromium's media decoder, subject to codec compatibility.                                                                                                                                                                                               |
-| Converted audio         | `.aif`, `.aiff`, `.caf`, `.wma`, `.mka`, `.ac3`, `.wv`, `.amr`, `.ape`, `.au`, `.snd`, `.mp2`, `.mpa`                                                                  | A complete local AAC copy, checked through its last frame.                                                                                                                                                                                                               |
+| Converted audio         | `.aif`, `.aiff`, `.caf`, `.wma`, `.mka`, `.ac3`, `.wv`, `.amr`, `.ape`, `.au`, `.snd`, `.mp2`, `.mpa`                                                                  | A complete local AAC copy of at most 64 MB, checked through its last frame.                                                                                                                                                                                              |
 | Other files             | Any file no preview reads                                                                                                                                              | The file's bytes in a hex view, under what its first bytes say it is. **Hex** shows any file this way.                                                                                                                                                                   |
 
 Media detection also accepts other audio/video MIME types. These may reach the player without being
@@ -57,8 +58,8 @@ reads its first 1.5 KB: a stream's packets repeating there make it a video, play
 Text, a short file or anything unclear opens as code. Quick Preview, Columns and a double-clicked
 plane all show what those bytes say.
 
-Detailed coverage: [Office](office.md), [CAD/models](models.md), [DXF](models.md),
-[HTML/local servers](web.md), and [preview modules](../development/previews.md).
+Detailed coverage: [Office](office.md), [models, CAD and DXF](models.md),
+[HTML and local servers](web.md), and [preview modules](../development/previews.md).
 
 ## EPUB reading limits
 
@@ -315,6 +316,11 @@ and BOM-marked UTF-16 sources are supported. DTDs, custom entity declarations an
 resolution are rejected; source remains available. Tree inspection is bounded to 1 million decoded
 characters and 50,000 nodes. It does not render domain-specific documents such as invoices.
 
-Reading text uses separate preview font/line-height/wrap preferences, initially 16px/20px, with
-local zoom/reset controls. This does not change editor settings. CSS selectors and property names
-use theme syntax roles.
+Reading text uses its own preview settings: **Text size** (`settings.previews.textFontSize`, 8 to
+32, default 16), **Text line height** (`settings.previews.textLineHeight`, 12 to 64, default 20) and
+**Wrap preview text**, with local zoom and reset controls. They do not change editor settings. CSS
+selectors and property names use theme syntax roles.
+
+**Related:** [Read and inspect files](../guides/previews.md) · [Office documents](office.md) ·
+[PDF tools](pdf.md) · [Media](media.md) · [Models and drawings](models.md) ·
+[Platform status](platforms.md)

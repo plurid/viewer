@@ -1,28 +1,42 @@
 # Office documents and worksheets
 
-Viewer previews DOC/DOCX, XLS/XLSX and PPT/PPTX locally. Open with Space or as a linked plane. New
-opening defaults use Viewer; explicit native-app preferences are preserved.
+This page lists the Office, OpenDocument and Publisher formats Viewer lays out, the views each one
+gets, and the engine's and worksheet reader's limits.
 
-## Choose the right view
+Open a file with **Space** or as a linked plane. Everything runs on your Mac; macros never run.
 
-| Format   | Views                                    |
-| -------- | ---------------------------------------- |
-| DOC      | Paginated Layout                         |
-| DOCX     | Layout and Reading                       |
-| XLS      | Print layout with worksheet navigation   |
-| XLSX     | Stored-value Sheet view and Print layout |
-| PPT/PPTX | Slide Layout                             |
+## Formats and views
 
-Worksheet tabs support arrow keys, Home and End. In Sheet view they sit below the grid; **All
-worksheets** appears when the tabs overflow. Print layout renders only the selected sheet, retaining
+| Formats                                                                                      | Views                                |
+| -------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `.docx`, `.docm`, `.dotx`, `.dotm`                                                           | **Layout** and **Reading**           |
+| `.doc`, `.dot`, `.rtf`, `.odt`, `.ott`, `.fodt`                                              | **Layout**                           |
+| `.xlsx`, `.xlsm`, `.xltx`, `.xltm`                                                           | **Sheet** and **Print layout**       |
+| `.xls`, `.xlt`, `.ods`, `.ots`, `.fods`                                                      | **Print layout** with worksheet tabs |
+| `.ppt`, `.pptx`, `.pptm`, `.pps`, `.ppsx`, `.pot`, `.potx`, `.potm`, `.odp`, `.otp`, `.fodp` | **Layout**, one page per slide       |
+| `.odg`, `.fodg`, `.pub`, `.emf`, `.wmf`                                                      | **Layout**, as drawing pages         |
+
+- **Reading** and **Sheet** need the file's own extension; a file shown with **Show as** gets
+  **Layout** only.
+- A packaged OpenDocument file (`.odt`, `.ods`, `.odp`, `.odg`, `.ott`, `.ots`, `.otp`) shows the
+  picture of its first page it carries while the layout renders.
+- A `.pub` file that holds a public key shows as a key or as text, not as a layout.
+- New settings open `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt` and `.pptx` in a plane
+  (`settings.fileOpening.types`); set a type to `native` to open it in its own app.
+
+Worksheet tabs support arrow keys, **Home** and **End**. In **Sheet** they sit below the grid; **All
+worksheets** appears when the tabs overflow. **Print layout** renders only the selected sheet, with
 its supported page settings and breaks.
+
+**Save PDF copy** writes `Name.pdf` beside each selected file, laid out by the same engine; a
+workbook's copy holds every worksheet. A name in use asks before replacing.
 
 ## Layout fidelity
 
-The bundled ZetaOffice/LibreOffice WebAssembly engine renders supported fonts, paragraph placement,
-pages, headers, footers, images, charts and slide backgrounds to an in-memory PDF. Missing fonts use
-substitutes. Output is closer to the document's layout than the semantic reader, but Microsoft
-Office pixel parity is not guaranteed.
+The bundled engine, ZetaOffice 24.2 (LibreOffice built for WebAssembly), renders supported fonts,
+paragraph placement, pages, headers, footers, images, charts and slide backgrounds to an in-memory
+PDF. Missing fonts use substitutes. Output is closer to the document's layout than the semantic
+reader, but Microsoft Office pixel parity is not guaranteed.
 
 Font metrics and line wrapping, chart plot/label placement, and worksheet drawing styles can differ
 from Office. Some rotated floating pictures in legacy DOC files lose their rotation and change text
@@ -38,10 +52,17 @@ directory; the engine does not receive the source folder path. Requests are limi
 loopback origin. The same pinned assets are packaged for macOS, Windows and Linux; executable
 Windows/Linux qualification is still pending.
 
-One conversion runs at a time. Input is limited to 64 MB, output to 32 MB and engine time to 45
-seconds. Versioned layouts share a 128 MiB cache; active views pin their entries. Closing or
-cancelling releases the request, and warm reopening can reuse cached output. Protected files,
-macro-enabled package extensions and unsupported content may require another application.
+| Limit           | Value                                                          |
+| --------------- | -------------------------------------------------------------- |
+| Layouts at once | 1                                                              |
+| Input           | 64 MB                                                          |
+| Output PDF      | 32 MB                                                          |
+| Engine time     | 45 seconds per layout                                          |
+| Layout cache    | 128 MiB, shared; open views pin their entries                  |
+| Spare engine    | 1, started for the next document; closes after 1 minute unused |
+
+Closing or cancelling a view releases its request, and reopening can reuse cached output. Protected
+files and unsupported content may need another application.
 
 ## Reading and saved cells
 
@@ -102,6 +123,10 @@ Extraction checks archive paths, XML, CRC and source versions. Retained budgets 
 content; results report partial coverage. Automatic indexing has a smaller input limit than explicit
 preview. Layout support does not automatically add content indexing for DOC, XLS or PPT.
 
-Reading/Sheet mode, selected worksheet, PDF page, zoom and supported scroll state use
-source-version-checked preview history. Retry a failed layout or switch to Reading/Sheet when
-available. [Troubleshooting](../guides/troubleshooting.md) covers moved and unavailable files.
+Reading or Sheet mode, the selected worksheet, the layout page, zoom and supported scroll positions
+are kept in preview history, checked against the file's version. Retry a failed layout, or switch to
+**Reading** or **Sheet** when the format has it.
+
+**Related:** [Read and inspect files](../guides/previews.md#read-a-spreadsheet) ·
+[Supported formats](formats.md) · [PDF tools](pdf.md) · [Search](search.md) ·
+[Get back to your work](../guides/troubleshooting.md)
