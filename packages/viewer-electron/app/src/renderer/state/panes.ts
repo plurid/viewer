@@ -15,6 +15,7 @@ import type {
   OverviewPane,
   BrowserPane,
   MediaPane,
+  LayoutPane,
   NotePane,
   TaskPane,
   ReceiptPane,
@@ -242,6 +243,7 @@ export function addContentPane(
     | ServerPane
     | BrowserPane
     | MediaPane
+    | LayoutPane
     | NotePane,
   root = true,
 ): void {

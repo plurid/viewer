@@ -38,7 +38,7 @@ directory; the engine does not receive the source folder path. Requests are limi
 loopback origin. The same pinned assets are packaged for macOS, Windows and Linux; executable
 Windows/Linux qualification is still pending.
 
-One conversion runs at a time. Input is limited to 64 MiB, output to 32 MiB and engine time to 45
+One conversion runs at a time. Input is limited to 64 MB, output to 32 MB and engine time to 45
 seconds. Versioned layouts share a 128 MiB cache; active views pin their entries. Closing or
 cancelling releases the request, and warm reopening can reuse cached output. Protected files,
 macro-enabled package extensions and unsupported content may require another application.

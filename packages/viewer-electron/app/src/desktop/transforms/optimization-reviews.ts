@@ -39,7 +39,7 @@ interface Candidate {
   exported: boolean;
   invalidated?: boolean;
 }
-const candidateBudget = 512 * 1024 * 1024;
+const candidateBudget = 512_000_000;
 
 /** A candidate is a window-owned capability, never a renderer-supplied staging path.
  * Export copies those measured bytes through the ordinary pinned operation journal. */
@@ -386,7 +386,7 @@ export class OptimizationReviews implements TransformExecutor {
     let target: FileHandle | undefined;
     try {
       const before = await input.stat();
-      if (!before.isFile() || before.size > 256 * 1024 * 1024)
+      if (!before.isFile() || before.size > 256_000_000)
         throw new Error('The candidate is invalid or exceeds 256 MB.');
       if (output) target = await open(output, 'wx', 0o600);
       const hash = createHash('sha256');

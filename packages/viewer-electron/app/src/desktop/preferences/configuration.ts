@@ -54,7 +54,7 @@ export class JsoncConfiguration<T> {
     this.file = path.join(directory, 'config.jsonc');
   }
   private decode(text: string): T {
-    if (Buffer.byteLength(text) > 16 * 1024 * 1024) throw new Error('Configuration exceeds 16 MB.');
+    if (Buffer.byteLength(text) > 16_000_000) throw new Error('Configuration exceeds 16 MB.');
     const errors: ParseError[] = [];
     const value = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
     const [error] = errors;

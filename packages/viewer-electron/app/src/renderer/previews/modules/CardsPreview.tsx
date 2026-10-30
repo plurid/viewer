@@ -32,7 +32,7 @@ const readCardText: SourceReader = async (resource, services, signal) => {
     const response = await fetch(resource.url, { signal });
     if (!response.ok) return read;
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.length > 4 * 1024 * 1024) return read;
+    if (bytes.length > 4_000_000) return read;
     return { ...read, text: decodeFoldedText(bytes) };
   } catch {
     return read;

@@ -6,7 +6,7 @@ import { mediaDemuxer, mediaInfo } from '../transforms/media';
 import type { Decoder, DerivedRendition, Source } from './derived';
 import { errorMessage } from '../../domain/errors';
 
-export const videoPreviewLimit = 64 * 1024 * 1024;
+export const videoPreviewLimit = 64_000_000;
 
 interface Probed {
   format?: { duration?: string };

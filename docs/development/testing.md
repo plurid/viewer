@@ -146,6 +146,17 @@ certificates, shortcuts, torrents, profiles and binaries) in Quick Preview. It c
 its decoded content and expected text, and screenshots any that do not. It reads the same
 `VIEWER_TEST_REAL_CORPUS`.
 
+`tests/native/layout-acceptance.ts` checks the Layout plane, nesting, mail attachments and document
+packages. It copies playground photos, PDFs, DXF parts, mail and a Pages package into its own
+folder, and makes HEIC copies with `sips`, a card and an A1 page. It opens each from its Suggested
+row, **More file actions** or ⌘K and saves: a collage as JPEG, PDF and transparent PNG, a contact
+sheet, prints, cards, N-up, a booklet, a poster and a nesting folder. Every output is read back:
+PDFs with qpdf and pdf.js (pages, page size and source text kept as text), pictures with sharp,
+sheets with dxf-parser and the parts list row by row. Saved attachments must match their decoded
+parts and carry the `com.apple.quarantine` mark. Undo of a layout and of a nesting folder must be
+refused under `VIEWER_TEST_NO_REMOVAL=1`, with the files kept. It captures each mode in dark and
+light in the run's `Evidence` folder and reads the same `VIEWER_TEST_REAL_CORPUS`.
+
 `tests/native/reader-qualification.ts` checks the published EPUBs pinned in
 `tools/playground/reader-samples.ts`: long chapter lists, supported illustrations, internal notes,
 Unicode links/search, query replacement, warm reopening and cold restart. Obtain these references

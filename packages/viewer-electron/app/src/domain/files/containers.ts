@@ -28,5 +28,5 @@ export interface GzipLimits {
 /** A preview expands at most 8 MB; a larger compressed file cannot fit, whatever it records. */
 export const gzipLimits: GzipLimits = {
   compressed: 16 * 1024 * 1024,
-  expanded: 8 * 1024 * 1024,
+  expanded: 8_000_000,
 };

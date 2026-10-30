@@ -66,6 +66,9 @@ export interface MacFiles {
   eject(file: string): Promise<void>;
   /** PDFKit's print sheet; refuses locked documents without their password. */
   printPDF(file: string, password?: string): void;
+  /** Marks a saved email attachment as Mail does (`com.apple.quarantine`, recorded by Launch
+   * Services), so Gatekeeper checks it before it first opens. Refuses anything but a regular file. */
+  quarantineAttachment(file: string): void;
 }
 let binding: MacFiles | undefined;
 export interface TrashReceipt {

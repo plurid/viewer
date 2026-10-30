@@ -52,8 +52,9 @@ precise.
    can go into one.
 3. Check the page plan, choose the destination and export.
 
-**Create PDF from images** turns a selection of images into one PDF.
-[PDF tools](../reference/pdf.md) lists what protected and signed PDFs allow.
+**Create PDF from images** turns a selection of images into one PDF. To put several photos or pages
+on one sheet, [lay them out](layout.md). [PDF tools](../reference/pdf.md) lists what protected and
+signed PDFs allow.
 
 ## Write something down
 

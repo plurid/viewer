@@ -79,7 +79,7 @@ describe('a single gzip-compressed file', () => {
     const listed = (await resources.archive(honest.id)).entries[0];
     expect(listed).toMatchObject({ size: 9 * 1024 * 1024, previewable: false });
     await expect(resources.archiveEntry(honest.id, 'honest.log')).rejects.toThrow(
-      'expands beyond the 8.4 MB preview limit',
+      'expands beyond the 8 MB preview limit',
     );
     // a trailer that understates the size is caught by the expansion itself
     const lying = Buffer.from(bomb);
@@ -90,7 +90,7 @@ describe('a single gzip-compressed file', () => {
       previewable: true,
     });
     await expect(resources.archiveEntry(resource.id, 'lying.log')).rejects.toThrow(
-      'expands beyond the 8.4 MB preview limit',
+      'expands beyond the 8 MB preview limit',
     );
   });
 

@@ -32,6 +32,7 @@ import { OptimizationReviews } from './transforms/optimization-reviews';
 import {
   imageProcess,
   imageInspectionProcess,
+  layoutImageProcess,
   svgPreviewProcess,
 } from './transforms/image-process';
 import { MediaDocuments } from './transforms/media-documents';
@@ -630,6 +631,18 @@ export class Desktop {
           signal,
           options.fileBackend,
         ),
+      {
+        imaging: () =>
+          layoutImageProcess(
+            path.join(path.dirname(options.worker), 'image-worker.cjs'),
+            processorRoot,
+            options.fileBackend,
+          ),
+        decoders: {
+          image: assetPath('viewer-image-preview'),
+          raw: assetPath(`viewer-raw-v3-darwin-${process.arch}`, 'viewer-raw'),
+        },
+      },
     );
     this.optimizationReviews = new OptimizationReviews(
       path.join(dataPath, 'optimization-candidates'),
@@ -863,15 +876,7 @@ export class Desktop {
           if (result.kind !== 'document') throw new Error('The task note could not be created.');
           return result.document;
         },
-        flush: async (owner) => {
-          const window = this.windows.get(owner)?.window;
-          if (!window || window.isDestroyed())
-            throw new Error('The selected workspace window closed.');
-          // Save the person's existing drafts before agent dispatch blocks private-note IPC.
-          await this.flushes.request(owner, 'flush', (token) =>
-            sendEvent(window.webContents, { type: 'flush', token }),
-          );
-        },
+        flush: (owner) => this.flushForTask(owner),
         present: (bundle, owner) => this.dispatchAgentEvent(owner, { type: 'agent-task', bundle }),
         profile: () => this.settings.snapshot().settings.terminals.profileID,
       });
@@ -1547,11 +1552,24 @@ export class Desktop {
     if (!record || record.role !== 'viewer')
       throw new Error('The workspace window is unavailable.');
     await this.chats.stopOwner(owner);
-    if (record.ready && !record.stopped)
-      await this.flushes.request(owner, 'flush', (token) => {
-        sendEvent(window.webContents, { type: 'flush', token });
-      });
+    await this.saveRenderer(owner, record);
     await this.flushWindowStores();
+  }
+  /** Saves the person's existing drafts before an agent task takes their window, since agent
+   * dispatch then blocks private-note IPC. */
+  private async flushForTask(owner: number): Promise<void> {
+    const record = this.windows.get(owner);
+    if (!record || record.window.isDestroyed())
+      throw new Error('The selected workspace window closed.');
+    await this.saveRenderer(owner, record);
+  }
+  /** Asks a workspace window's renderer to save, once it has published its commands and so can
+   * answer. A stopped window is not asked: what it saved last is what it has. */
+  private async saveRenderer(owner: number, record: WindowRecord): Promise<void> {
+    if (!record.ready || record.stopped) return;
+    await this.flushes.request(owner, 'flush', (token) => {
+      sendEvent(record.window.webContents, { type: 'flush', token });
+    });
   }
   /** The stores a workspace window writes: flushed as it closes, and before a backup. */
   private async flushWindowStores(): Promise<void> {

@@ -1,12 +1,12 @@
 import { memo, useCallback, useContext, useEffect } from 'react';
 import type { FileEntry, Resource } from '../../domain/contracts';
-import { formatBytes } from '../../domain/files/entries';
 import { getState, quickPreview, report, stepQuickPreview } from '../state/store';
 import { editable } from '../commands/editing';
 import { useWorkspace } from '../workspace/context';
 import { Dialog, IconButton } from '../ui/primitives';
 import { OpenDefaultButton } from '../ui/navigation/OpenDefaultButton';
 import { HeldPreview } from './HeldPreview';
+import { PreviewSize } from './PreviewSize';
 import type { PreviewModule } from './contracts';
 import type { HexToggle } from './PreviewHost';
 import { baseName } from '../../domain/workspaces/planes';
@@ -128,7 +128,8 @@ export const QuickPreview = memo(function QuickPreview({
       return (
         <footer className="quick-preview-footer">
           <span className="quick-preview-metadata">
-            {module.label} <span className="separator">·</span> {formatBytes(resource.entry.size)}
+            {module.label} <span className="separator">·</span>{' '}
+            <PreviewSize entry={resource.entry} />
           </span>
           <div className="quick-preview-actions">
             {session.paths.length > 1 && (

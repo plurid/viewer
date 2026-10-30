@@ -109,6 +109,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
           open: (entries, linked, another) => {
             for (const entry of entries) openEntry(entry, linked, another);
           },
+          contents: (entry) => workspace.open(entry, id, { browse: true }),
           path: () => {},
           search: () => {},
           refresh: () => requestRefresh(),

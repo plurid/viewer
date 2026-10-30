@@ -53,6 +53,23 @@
   flex: none;
   font-size: 11px;
 }
+.mail-attachment-actions,
+.mail-attachments-all {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.mail-attachment-actions {
+  align-self: center;
+  margin-left: 2px;
+}
+.mail-attachments-all {
+  margin-top: 6px;
+}
+.mail-attachments button {
+  padding: 1px 6px;
+  font-size: 11px;
+}
 /* Email HTML is written for a white page, whatever the app's look. */
 .mail-frame {
   background: #ffffff;

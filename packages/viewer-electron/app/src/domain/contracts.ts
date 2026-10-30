@@ -23,6 +23,7 @@ import type { PreviewDerivationKind } from './previews/derivations';
 import type { OfficeLayoutMetadata, OfficeLayoutRequest } from './previews/documents/layout';
 import type { PreviewHistory } from './previews/history';
 import type { MediaRequest, MediaReply } from './media/documents';
+import type { LayoutMode } from './layout/modes';
 import type { BrowserRequest, BrowserSnapshot } from './previews/browser';
 import type {
   JournalFilter,
@@ -255,6 +256,14 @@ export interface MediaPane {
   path: string;
   draftID: string;
 }
+/** Photos and PDFs laid out on new pages; `path` is the folder the output is saved in. */
+export interface LayoutPane {
+  id: string;
+  type: 'layout';
+  path: string;
+  sources: string[];
+  mode?: LayoutMode;
+}
 export interface ServerPane {
   id: string;
   type: 'server';
@@ -304,6 +313,7 @@ export type Pane =
   | ServerPane
   | BrowserPane
   | MediaPane
+  | LayoutPane
   | JournalPane
   | OverviewPane;
 /** Runtime kind catalog stays exhaustive as new plane records are added. */
@@ -323,6 +333,7 @@ export const paneTypes = {
   server: 'server',
   browser: 'browser',
   media: 'media',
+  layout: 'layout',
   journal: 'journal',
   overview: 'overview',
 } as const satisfies { [Kind in Pane['type']]: Kind };

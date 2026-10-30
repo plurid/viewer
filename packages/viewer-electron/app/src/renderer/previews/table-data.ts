@@ -8,8 +8,7 @@ export interface DelimitedPreview {
   rows: string[][];
 }
 export function delimitedPreview(text: string, delimiter: string): DelimitedPreview {
-  if (text.length > 4 * 1024 * 1024)
-    throw new Error('This table exceeds the 4 MB text preview limit.');
+  if (text.length > 4_000_000) throw new Error('This table exceeds the 4 MB text preview limit.');
   if (delimiter !== ',' && delimiter !== '\t') throw new Error('Choose CSV or tab-separated data.');
   const parsed = parseDelimited(text, delimiter);
   const columns = Math.min(

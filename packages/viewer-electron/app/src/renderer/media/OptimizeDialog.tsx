@@ -7,6 +7,7 @@ import {
 import type { OptimizationOptions, OptimizationPreset } from '../../domain/operations/optimization';
 import { pdfEmailPreset, type PDFExportPreset } from '../../domain/operations/export-presets';
 import { formatOptimizationSize } from '../../domain/operations/optimization';
+import { optimizationTargetBytes } from '../../domain/operations/optimization-target';
 import { errorMessage } from '../../domain/errors';
 import { Dialog, Loading } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
@@ -173,8 +174,8 @@ export function OptimizeDialog({
               <div className="optimization-target">
                 <OptimizationNumberField
                   aria-label="Target size"
-                  min={1024 / unit}
-                  max={(256 * 1024 * 1024) / unit}
+                  min={optimizationTargetBytes.minimum / unit}
+                  max={optimizationTargetBytes.maximum / unit}
                   step="any"
                   disabled={working}
                   value={options.targetSize.bytes / unit}

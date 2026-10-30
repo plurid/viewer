@@ -268,4 +268,17 @@ describe('torrents and profiles', () => {
       expect(view.getByText('The torrent file is not valid bencode.')).toBeTruthy(),
     );
   });
+
+  it('names its read limit in the decimal units sizes are shown in', async () => {
+    const torrent = preview('Large.torrent');
+    torrent.context.resource.entry.size = 16_000_001;
+    const large = render(<TorrentPreview {...torrent.context} />);
+    expect(await large.findByText('Viewer reads files of this kind up to 16 MB.')).toBeTruthy();
+    cleanup();
+    const profile = preview('Large.mobileprovision');
+    profile.context.resource.entry.size = 4_000_001;
+    const view = render(<ProvisionPreview {...profile.context} />);
+    expect(await view.findByText('Viewer reads files of this kind up to 4 MB.')).toBeTruthy();
+    expect(profile.context.services.document).not.toHaveBeenCalled();
+  });
 });

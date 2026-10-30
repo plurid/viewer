@@ -3,6 +3,7 @@ import type { TransformPlan } from '../../domain/operations/transforms';
 import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { extractedFolderName } from '../../domain/operations/extract';
+import { savedAttachmentName } from '../../domain/previews/mail/attachments';
 import { combinedTransform, transformExtension } from '../../domain/operations/transforms';
 import { validName } from '../files/filesystem';
 import { sameItem } from '../files/item-identity';
@@ -42,8 +43,15 @@ function namedOutput(request: OperationRequest, source: string): string {
   return path.join(request.destination!, request.name ?? path.basename(source));
 }
 /** A transform's output, beside its source or in the folder chosen: the name chosen for a single
- * source, otherwise the source's name marked "optimized" or "converted", with the new extension. */
+ * source, otherwise the source's name marked "optimized" or "converted", with the new extension. A
+ * saved attachment has the name it was listed by, made safe (`savedAttachmentName`). */
 function transformedName(request: OperationRequest, plan: TransformPlan, source: string): string {
+  if (plan.kind === 'mail-attachment') {
+    const name = validName(request.name ?? '');
+    if (savedAttachmentName(name) !== name)
+      throw new Error('Save the attachment under a name without hidden or control characters.');
+    return path.join(request.destination || path.dirname(source), name);
+  }
   const optimizing = plan.kind === 'pdf' || (plan.kind === 'image' && plan.optimize);
   const name =
     request.name && request.sources.length === 1

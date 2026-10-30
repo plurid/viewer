@@ -134,7 +134,7 @@ try {
   const list = await evaluate(
     pageCall(() => window.viewer.checkpoints({ kind: 'list' }) as Promise<CheckpointList>),
   );
-  assert.equal(list.budgetBytes, 5 * 1024 ** 3);
+  assert.equal(list.budgetBytes, 5_000_000_000);
   assert.equal(list.records.length, 1);
   const restore = await evaluate(
     pageCall(

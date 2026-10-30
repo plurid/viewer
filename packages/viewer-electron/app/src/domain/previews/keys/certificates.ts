@@ -17,7 +17,7 @@ export const privateKeyNames = [
   'id_ecdsa_sk',
   'id_ed25519_sk',
 ] as const;
-export const keyLimits = { bytes: 4 * 1024 * 1024, blocks: 256 } as const;
+export const keyLimits = { bytes: 4_000_000, blocks: 256 } as const;
 
 /** A key's algorithm: RSA 2048, EC P-256, Ed25519. */
 export interface KeyDescription {

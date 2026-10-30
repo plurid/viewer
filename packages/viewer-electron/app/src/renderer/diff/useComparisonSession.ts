@@ -129,7 +129,7 @@ export function useComparisonSession(
               if (!resource) return '';
               const data = await window.viewer.read(resource.id);
               if (data.binary || data.truncated)
-                throw new Error('Text comparisons require complete text files of at most 4 MiB.');
+                throw new Error('Text comparisons require complete text files of at most 4 MB.');
               return data.text;
             }),
           );

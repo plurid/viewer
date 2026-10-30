@@ -377,7 +377,7 @@ describe('additional 3D formats', () => {
       ['x3d', 64],
     ] as const) {
       const response = new Response('unread');
-      await expect(loadScene(format, limit * 1024 * 1024 + 1, response, signal)).rejects.toThrow(
+      await expect(loadScene(format, limit * 1_000_000 + 1, response, signal)).rejects.toThrow(
         `${limit} MB preview limit`,
       );
       expect(response.bodyUsed).toBe(false);

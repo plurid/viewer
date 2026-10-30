@@ -53,7 +53,7 @@ type Sharp = (
 /** Buffer input deliberately has no base URI: librsvg cannot resolve filesystem
  * or network companions. Raster export remains a separate, raster-only route. */
 export async function previewSvg(root: string, input: Buffer, size: number): Promise<Buffer> {
-  if (!input.length || input.length > 8 * 1024 * 1024)
+  if (!input.length || input.length > 8_000_000)
     throw new Error('SVG preview input must fit within 8 MB.');
   if (!Number.isInteger(size) || size < 1 || size > 4096)
     throw new Error('Choose an SVG preview size between 1 and 4096 pixels.');
@@ -72,8 +72,7 @@ export async function previewSvg(root: string, input: Buffer, size: number): Pro
     .resize(size, size, { fit: 'inside', withoutEnlargement: true })
     .png()
     .toBuffer();
-  if (output.length > 32 * 1024 * 1024)
-    throw new Error('SVG preview exceeds the 32 MB output limit.');
+  if (output.length > 32_000_000) throw new Error('SVG preview exceeds the 32 MB output limit.');
   return output;
 }
 /** A deliberately small EXIF reader: only descriptive ASCII IFD0 tags survive
@@ -143,7 +142,7 @@ export async function transformImage(
   input: Buffer,
   plan: ImageTransform,
 ): Promise<Buffer> {
-  if (input.length > 256 * 1024 * 1024) throw new Error('Image input is larger than 256 MB.');
+  if (input.length > 256_000_000) throw new Error('Image input is larger than 256 MB.');
   const raster = input.subarray(0, 4).toString('hex');
   if (!(
     raster.startsWith('ffd8') ||
@@ -213,7 +212,7 @@ export async function transformImage(
   return image.toBuffer();
 }
 export async function inspectImage(root: string, input: Buffer): Promise<ImageInspection> {
-  if (input.length > 256 * 1024 * 1024) throw new Error('Image input is larger than 256 MB.');
+  if (input.length > 256_000_000) throw new Error('Image input is larger than 256 MB.');
   const signature = input.subarray(0, 4).toString('hex');
   if (!(
     signature.startsWith('ffd8') ||

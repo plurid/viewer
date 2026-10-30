@@ -13,7 +13,7 @@ export function unzipModelPackage(
   return unzipSync(bytes, {
     filter: (file) => {
       total += file.originalSize;
-      if (++count > 4096 || total > 128 * 1024 * 1024 || file.originalSize > 64 * 1024 * 1024)
+      if (++count > 4096 || total > 128_000_000 || file.originalSize > 64_000_000)
         throw new Error(`This ${format} archive exceeds the preview limit.`);
       return select(file.name);
     },

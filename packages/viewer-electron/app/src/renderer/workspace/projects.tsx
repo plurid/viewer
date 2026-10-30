@@ -20,6 +20,7 @@ import type {
   OverviewPane,
   BrowserPane,
   MediaPane,
+  LayoutPane,
   TaskPane,
   ReceiptPane,
 } from '../../domain/contracts';
@@ -171,6 +172,7 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
       pane.type === 'server' ||
       pane.type === 'browser' ||
       pane.type === 'media' ||
+      pane.type === 'layout' ||
       pane.type === 'task' ||
       pane.type === 'receipt' ||
       pane.type === 'journal' ||
@@ -207,6 +209,7 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
       | JournalPane
       | BrowserPane
       | MediaPane
+      | LayoutPane
       | TaskPane
       | ReceiptPane
       | OverviewPane
@@ -217,6 +220,7 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
       pane.type !== 'server' &&
       pane.type !== 'browser' &&
       pane.type !== 'media' &&
+      pane.type !== 'layout' &&
       pane.type !== 'task' &&
       pane.type !== 'receipt' &&
       pane.type !== 'journal' &&

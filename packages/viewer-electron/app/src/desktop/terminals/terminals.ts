@@ -285,7 +285,7 @@ export class Terminals {
       }
       const session = this.sessions.get(event.id);
       if (!session) return;
-      if (event.type === 'data') session.output = (session.output + event.data).slice(-128 * 1024);
+      if (event.type === 'data') session.output = (session.output + event.data).slice(-128_000);
       this.emit(session.owner, event);
       if (event.type === 'error') this.stop(event.id, session.owner);
     });

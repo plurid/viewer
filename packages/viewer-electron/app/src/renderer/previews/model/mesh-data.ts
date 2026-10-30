@@ -27,7 +27,7 @@ export interface MeshResult {
   meshes: MeshPacket[];
   libraries: string[];
 }
-export const meshByteLimit = 128 * 1024 * 1024;
+export const meshByteLimit = 128_000_000;
 export const meshVertexLimit = 4000000;
 export const meshTriangleLimit = 2000000;
 /** Objects a scene may build. Collada, VRML and X3D reuse nodes by reference, and each reuse

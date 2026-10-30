@@ -13,7 +13,7 @@ export interface EPUBReference {
   path: string;
   fragment: string;
 }
-export const epubImageLimit = 8 * 1024 * 1024;
+export const epubImageLimit = 8_000_000;
 export const epubImagePath = (path: string) => /\.(png|jpe?g|gif|webp)$/i.test(path);
 
 /** Book references resolve only inside the archive, never to a network or filesystem URL. */

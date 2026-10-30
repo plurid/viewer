@@ -159,7 +159,7 @@ export const settingsSchema = z
           .max(1024 ** 4),
       })
       .strict()
-      .default({ budgetBytes: 5 * 1024 ** 3 }),
+      .default({ budgetBytes: 5_000_000_000 }),
     appearance: appearanceSchema,
     browsing: browsingSchema,
     folders: z.record(localPath, folderOverrideSchema).default({}),

@@ -26,6 +26,16 @@ export interface PreviewCommand {
   run(): void | Promise<void>;
 }
 
+/** Where saved attachments go: beside their message, or to a folder the person chooses. */
+export type AttachmentDestination = 'beside' | 'choose';
+/** Attachments of the previewed message to save, by their place in its list and the names they are
+ * listed by. `message` is the message's place in a mailbox. */
+export interface AttachmentSave {
+  message?: number;
+  attachments: readonly { part: number; name: string }[];
+  destination: AttachmentDestination;
+}
+
 export interface PreviewContext {
   evidence?: EvidenceNavigation;
   resource: Resource;
@@ -49,6 +59,9 @@ export interface PreviewContext {
   editPDF?(): void;
   /** Shows the file's bytes in place of its preview, where the host offers it. */
   showHex?(): void;
+  /** Saves attachments of the previewed message as files. Absent where the message is not a file
+   * of its own, as inside an archive. */
+  saveAttachments?(request: AttachmentSave): Promise<void>;
   services: {
     /** `message`, one message of a mailbox, whose HTML body is the page. */
     htmlPreview(resourceID: string, message?: number): Promise<HtmlPreview>;

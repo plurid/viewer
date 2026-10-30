@@ -18,10 +18,10 @@ export interface SavedPage {
   blocked: number;
 }
 export const savedPageLimits = {
-  htmlBytes: 4 * 1024 * 1024,
-  partBytes: 8 * 1024 * 1024,
+  htmlBytes: 4_000_000,
+  partBytes: 8_000_000,
   /** Every part of one page together. */
-  pageBytes: 32 * 1024 * 1024,
+  pageBytes: 32_000_000,
   parts: 2000,
 } as const;
 export const savedPageName = 'page.html';

@@ -406,12 +406,14 @@ static napi_value volumes(napi_env env, napi_callback_info) { Work *task = new W
 #include "file-panels.h"
 #include "pdf-printing.h"
 #include "window-fullscreen.h"
+#include "quarantine.h"
 static napi_value init(napi_env env, napi_value exports) {
   registerFileCoordination(env, exports);
   registerFileInformation(env, exports);
   registerFilePanels(env, exports);
   registerPDFPrinting(env, exports);
   registerWindowFullscreen(env, exports);
+  registerQuarantine(env, exports);
   napi_property_descriptor methods[] = {
     {"trashConfirmation", nullptr, trashConfirmation, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardVersion", nullptr, clipboardVersion, nullptr, nullptr, nullptr, napi_default, nullptr},

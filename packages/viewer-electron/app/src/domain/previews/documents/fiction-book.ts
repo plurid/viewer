@@ -6,13 +6,13 @@ import { decodeBase64, decodeText } from '../mail/mime';
 import { escapeHtml } from '../saved-page';
 
 export const fictionBookLimits = {
-  bytes: 32 * 1024 * 1024,
+  bytes: 32_000_000,
   nodes: 400_000,
   chapters: 300,
   chapterCharacters: 400_000,
   imageBytes: epubImageLimit,
   /** Every picture of one book together. */
-  imagesBytes: 16 * 1024 * 1024,
+  imagesBytes: 16_000_000,
 } as const;
 
 export interface FictionBookImage {

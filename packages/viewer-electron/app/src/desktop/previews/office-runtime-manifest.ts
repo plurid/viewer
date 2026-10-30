@@ -26,5 +26,5 @@ export const officeRuntimeFiles: readonly OfficeAssetPin[] = officeEngineFiles.m
     return [pin[0], 215488, 'cb53d4f56900f4b94a9b6ec394b8f88561368b94100a3ede7bdf2019db076f41'];
   return pin;
 });
-export const officeInputLimit = 64 * 1024 * 1024;
-export const officeOutputLimit = 32 * 1024 * 1024;
+export const officeInputLimit = 64_000_000;
+export const officeOutputLimit = 32_000_000;

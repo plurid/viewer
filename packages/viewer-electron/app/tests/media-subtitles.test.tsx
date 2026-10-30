@@ -111,7 +111,7 @@ it('attaches the first subtitle file as a WebVTT track and offers the others', a
   await waitFor(() => expect(track(view.container)?.getAttribute('src')).toBe('blob:track-1'));
   expect(services.list).toHaveBeenCalledWith('/Movies');
   expect(services.resource).toHaveBeenCalledWith('/Movies/Movie.srt');
-  expect(services.read).toHaveBeenCalledWith('sidecar:Movie.srt', 2 * 1024 * 1024);
+  expect(services.read).toHaveBeenCalledWith('sidecar:Movie.srt', 2_000_000);
   expect(services.release).toHaveBeenCalledWith('sidecar:Movie.srt');
   const element = track(view.container)!;
   expect(element.getAttribute('kind')).toBe('subtitles');
@@ -167,7 +167,7 @@ it('leaves out oversized files and labels a file past the limit or without cues'
     },
   });
   const view = render(<MediaPreview {...context} />);
-  await screen.findByText('Movie.en.srt is larger than the 2.1 MB subtitle limit.');
+  await screen.findByText('Movie.en.srt is larger than the 2 MB subtitle limit.');
   expect(track(view.container)).toBeNull();
   expect(services.resource).not.toHaveBeenCalledWith('/Movies/Movie.srt');
   await choose('Movie.fr.srt');

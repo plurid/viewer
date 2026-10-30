@@ -3,7 +3,8 @@ import type { ChatDocument } from '../../domain/models/chat';
 import { modelPermissionCovers } from '../../domain/models/permissions';
 import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
 import { browserAddress } from '../../domain/previews/browser';
-import { activeWorkspace, getState } from '../state/store';
+import { activeWorkspace, getState, updatePane } from '../state/store';
+import { parentPath } from '../../domain/workspaces/planes';
 import { addContentPane } from '../state/panes';
 import { localServerSessions } from '../local-servers/runtime';
 import type { WorkspaceController } from './context';
@@ -11,6 +12,7 @@ import type { WorkspaceController } from './context';
 type ContentPlaneActions = Pick<
   WorkspaceController,
   | 'openMedia'
+  | 'openLayout'
   | 'openBrowser'
   | 'openServer'
   | 'openJournal'
@@ -76,6 +78,31 @@ export function contentPlaneActions({
         type: 'media' as const,
         path: value.sources[0]!.path,
         draftID: value.id,
+      };
+      registerContent(pane, parentID);
+      controller().focusPane(pane.id, { activate: true });
+    },
+    openLayout(paths, parentID, mode) {
+      const space = activeWorkspace();
+      const wanted = [...paths].sort().join('\n');
+      const existing = space.panes.find(
+        (pane) =>
+          pane.type === 'layout' &&
+          [...pane.sources].sort().join('\n') === wanted &&
+          (!parentID || controller().rootID(pane.id) === controller().rootID(parentID)),
+      );
+      if (existing) {
+        if (mode && existing.type === 'layout' && existing.mode !== mode)
+          updatePane(existing.id, { mode });
+        controller().focusPane(existing.id, { activate: true });
+        return;
+      }
+      const pane = {
+        id: crypto.randomUUID(),
+        type: 'layout' as const,
+        path: parentPath(paths[0]!),
+        sources: [...paths],
+        ...(mode ? { mode } : {}),
       };
       registerContent(pane, parentID);
       controller().focusPane(pane.id, { activate: true });

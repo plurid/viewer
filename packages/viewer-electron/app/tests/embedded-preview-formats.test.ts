@@ -18,6 +18,7 @@ import {
   xpsPages,
 } from '../src/domain/previews/documents/embedded';
 import { fileFamily } from '../src/domain/files/entries';
+import { itemPlaneType } from '../src/domain/workspaces/planes';
 import { confirms, identifyBytes } from '../src/domain/files/signatures';
 import { defaultSettings } from '../src/domain/services';
 import { choosePreview } from '../src/renderer/previews/registry';
@@ -60,6 +61,14 @@ describe('documents shown by the picture they saved', () => {
       expect([name, previewsAsFile(file(name, true))]).toEqual([name, false]);
   });
 
+  it('opens a document package in a document plane, and other folders in folder planes', () => {
+    for (const name of ['Report.pages', 'Budget.numbers', 'Slides.key'])
+      expect([name, itemPlaneType(file(name, true))]).toEqual([name, 'preview']);
+    expect(itemPlaneType(file('Notes.txt'))).toBe('preview');
+    for (const name of ['Projects', 'Viewer.app', 'Study.kra'])
+      expect([name, itemPlaneType(file(name, true))]).toEqual([name, 'folder']);
+  });
+
   it('opens in its own app on double-click, unless linked or set to open in a plane', () => {
     const policy = defaultSettings('/fixtures').fileOpening;
     for (const extension of embeddedExtensions)
@@ -68,6 +77,7 @@ describe('documents shown by the picture they saved', () => {
         true,
       ]);
     expect(nativeOpening(file('Report.pages', true), policy)).toBe(true);
+    expect(nativeOpening(file('Report.pages', true), policy, true)).toBe(false);
     expect(nativeOpening(file('Study.kra'), policy, true)).toBe(false);
     expect(nativeOpening(file('Study.kra'), { ...policy, types: { kra: 'plane' } })).toBe(false);
   });

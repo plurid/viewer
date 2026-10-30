@@ -10,7 +10,7 @@ const node = (id: string, children: TreePlane[] = []) =>
     children,
   }) as unknown as TreePlane;
 const tree = [
-  node('parent', [node('folder', [node('model')]), node('image')]),
+  node('parent', [node('folder', [node('model')]), node('image'), node('document')]),
   node('other', [node('other-model')]),
 ];
 const space = {
@@ -19,6 +19,7 @@ const space = {
     { id: 'model', type: 'preview', path: '/Project/Subfolder/Part.step' },
     { id: 'image', type: 'preview', path: '/Project/Picture.png' },
     { id: 'other-model', type: 'preview', path: '/Project/Subfolder/Part.step' },
+    { id: 'document', type: 'preview', path: '/Project/Report.pages' },
   ],
 } as Workspace;
 it('returns the immediate parent and never invents one for a root or closed plane', () => {
@@ -28,7 +29,7 @@ it('returns the immediate parent and never invents one for a root or closed plan
   expect(parentPaneID(tree, 'gone')).toBeUndefined();
 });
 it('matches the actual direct link and distinguishes identical paths in independent roots', () => {
-  const entry = { path: '/Project/Subfolder/Part.step', directory: false };
+  const entry = { path: '/Project/Subfolder/Part.step', directory: false, extension: 'step' };
   expect(linkedPaneID(tree, space, 'folder', entry, 'darwin')).toBe('model');
   expect(linkedPaneID(tree, space, 'other', entry, 'darwin')).toBe('other-model');
   expect(linkedPaneID(tree, space, 'parent', entry, 'darwin')).toBeUndefined();
@@ -36,6 +37,13 @@ it('matches the actual direct link and distinguishes identical paths in independ
     linkedPaneID(tree, space, 'folder', { ...entry, directory: true }, 'darwin'),
   ).toBeUndefined();
   expect(linkedPaneID([node('folder')], space, 'folder', entry, 'darwin')).toBeUndefined();
+});
+it('links a document package to its document plane, as Quick Preview shows it', () => {
+  const document = { path: '/Project/Report.pages', directory: true, extension: 'pages' };
+  expect(linkedPaneID(tree, space, 'parent', document, 'darwin')).toBe('document');
+  expect(
+    linkedPaneID(tree, space, 'parent', { ...document, extension: 'bundle' }, 'darwin'),
+  ).toBeUndefined();
 });
 it('normalizes missing parent controls in old saved UI and retains an explicit hidden choice', () => {
   const ui = normalizePreferences();

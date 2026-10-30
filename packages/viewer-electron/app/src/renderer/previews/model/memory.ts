@@ -55,7 +55,7 @@ export function modelMemory(object: THREE.Object3D) {
     textureBytes,
   };
 }
-export function assertModelMemory(object: THREE.Object3D, limit = 128 * 1024 * 1024) {
+export function assertModelMemory(object: THREE.Object3D, limit = 128_000_000) {
   const usage = modelMemory(object);
   if (usage.geometryBytes > limit)
     throw new Error('This model exceeds the 128 MB decoded geometry limit.');

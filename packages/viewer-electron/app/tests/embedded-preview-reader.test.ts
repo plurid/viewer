@@ -117,10 +117,7 @@ describe('a picture saved in a ZIP container', () => {
   });
 
   it('refuses a picture over its byte or pixel limit and facts over theirs', async () => {
-    const large = await grant(
-      'Large.kra',
-      zip({ 'mergedimage.png': Buffer.alloc(32 * 1024 * 1024 + 1) }),
-    );
+    const large = await grant('Large.kra', zip({ 'mergedimage.png': Buffer.alloc(32_000_001) }));
     await expect(resources.archiveEntry(large.id, 'mergedimage.png')).rejects.toThrow(
       'missing or exceeds',
     );
@@ -130,7 +127,7 @@ describe('a picture saved in a ZIP container', () => {
     );
     const long = await grant(
       'Long.sketch',
-      zip({ 'meta.json': '{"pagesAndArtboards":{}}' + ' '.repeat(1024 * 1024) }),
+      zip({ 'meta.json': '{"pagesAndArtboards":{}}' + ' '.repeat(1_000_000) }),
     );
     await expect(resources.archiveEntry(long.id, 'meta.json')).rejects.toThrow(
       'missing or exceeds',

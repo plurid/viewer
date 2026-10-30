@@ -5,7 +5,7 @@
  */
 
 /** The largest font file the preview reads. */
-export const fontByteLimit = 32 * 1024 * 1024;
+export const fontByteLimit = 32_000_000;
 /** A WOFF table claiming more than this once decompressed is refused rather than allocated. */
 const woffTableLimit = 8 * 1024 * 1024;
 /** Characters kept from one name record: a copyright notice runs to a few hundred. */

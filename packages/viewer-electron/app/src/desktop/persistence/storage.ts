@@ -32,6 +32,8 @@ import { diffModes, diffSourceSchema } from '../../domain/comparison/diff';
 import { journalFilterSchema } from '../../domain/journal/events';
 import { taskAreaSchema } from '../../domain/workspaces/tasks';
 import { previewHistorySchema } from '../../domain/previews/history';
+import { layoutLimits } from '../../domain/layout/plan';
+import { layoutModes } from '../../domain/layout/modes';
 
 const pane = z.discriminatedUnion('type', [
   z
@@ -97,6 +99,15 @@ const pane = z.discriminatedUnion('type', [
     })
     .strict(),
   z.object({ id, type: z.literal('media'), path: localPath, draftID: z.uuid() }).strict(),
+  z
+    .object({
+      id,
+      type: z.literal('layout'),
+      path: localPath,
+      sources: z.array(localPath).min(1).max(layoutLimits.sources),
+      mode: z.enum(layoutModes).optional(),
+    })
+    .strict(),
   z
     .object({
       id,

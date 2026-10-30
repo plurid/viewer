@@ -295,6 +295,37 @@ describe('agent removal safety', () => {
     await expect(
       allowed.call('browser', { kind: 'state', id: 'private-browser' }),
     ).rejects.toThrow();
+    // a nesting saves a folder of sheets, reviewed in the Layout plane only
+    await expect(
+      allowed.call('propose_transform', {
+        ...input,
+        name: 'Nesting.dxf',
+        plan: {
+          kind: 'nesting',
+          format: 'dxf',
+          title: 'Nesting of 1 part',
+          sources: [{ units: 4, together: true, marks: [] }],
+          parts: [
+            { source: 0, index: 0, name: 'Part', quantity: 0, width: 10, height: 10, area: 100 },
+          ],
+          formats: [{ width: 1250, height: 2500, price: 0 }],
+          sheets: [{ format: 0, placements: [] }],
+          margin: 10,
+          spacing: 5,
+          cutting: {
+            material: 'Mild steel',
+            process: 'fiber',
+            thickness: 3,
+            speed: 3000,
+            pierce: 0.5,
+            density: 7.85,
+            rate: 0,
+            currency: 'EUR',
+          },
+        },
+      }),
+    ).rejects.toThrow('Layout plane');
+    expect(allowed.exportTransform).toHaveBeenCalledOnce();
     expect(memory.remove).not.toHaveBeenCalled();
   });
   it('runs nothing on a renderer approval until the desktop confirmation is accepted', async () => {

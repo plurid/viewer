@@ -56,7 +56,7 @@ export async function createArchive(
     const children = info.isDirectory() ? (await readdir(file)).sort() : undefined;
     entries.push({ file, name, info, children });
     total += info.isFile() ? info.size : 0;
-    if (total > 2 * 1024 * 1024 * 1024) throw new Error('ZIP creation is limited to 2 GB.');
+    if (total > 2_000_000_000) throw new Error('ZIP creation is limited to 2 GB.');
     for (const child of children ?? []) await visit(path.join(file, child), `${name}/${child}`);
   };
   for (const source of sources) await visit(source, path.basename(source));
@@ -90,7 +90,7 @@ export async function createArchive(
           // Placeholder metadata is captured during traversal; hydrated length
           // and modification times are captured before the first content byte.
           total += hydrated.size - entry.info.size;
-          if (total > 2 * 1024 * 1024 * 1024) throw new Error('ZIP creation is limited to 2 GB.');
+          if (total > 2_000_000_000) throw new Error('ZIP creation is limited to 2 GB.');
           entry.info = hydrated;
         }
         const stream = entry.info.isDirectory()

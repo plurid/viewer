@@ -8,10 +8,14 @@ import { PreviewWork, type PreviewScope } from '../previews/preview-work';
 import { runProcessor } from './process';
 import { compileMedia, mediaDemuxer, mediaInfo } from './media';
 import type { ImageInspection } from './image';
+import { renderLayout } from './layout';
+import { writeNesting } from './nesting';
+import type { LayoutTools } from './layout';
 import { inspectPDF, pdfProcessor, transformPDF } from './pdf';
 import { jpegMetadata } from './jpeg-metadata';
 import { optimizerDirectory } from './processor-paths';
 import { encodeToTarget } from './target-size';
+import { saveAttachment } from './mail-attachment';
 import { optimizationAttemptLimit } from '../../domain/operations/optimization-target';
 import type {
   OptimizationOutcome,
@@ -48,7 +52,12 @@ export class Transforms implements TransformExecutor {
       signal: AbortSignal,
     ) => Promise<Buffer>,
     private inspect?: (bytes: Buffer, signal: AbortSignal) => Promise<ImageInspection>,
+    private layout: Omit<LayoutTools, 'qpdf'> = {},
   ) {}
+  /** What `renderLayout` needs from this service's processors. */
+  layoutTools(): LayoutTools {
+    return { qpdf: pdfProcessor(this.root), ...this.layout };
+  }
   private slot(signal: AbortSignal, priority: number): Promise<() => void> {
     signal.throwIfAborted();
     return new Promise((resolve, reject) => {
@@ -181,8 +190,7 @@ export class Transforms implements TransformExecutor {
     return this.work.track([file], (scope) =>
       this.sources([file], scope, async (sources) => {
         if (!this.inspect) throw new Error('Image inspection is unavailable.');
-        if (sources[0]!.size > 256 * 1024 * 1024)
-          throw new Error('This image is larger than 256 MB.');
+        if (sources[0]!.size > 256_000_000) throw new Error('This image is larger than 256 MB.');
         return this.inspect(await sources[0]!.handle.readFile(), scope.signal);
       }),
     );
@@ -215,6 +223,8 @@ export class Transforms implements TransformExecutor {
           async (sources) => {
             await this.access([output]);
             scope.check();
+            if (plan.kind === 'mail-attachment')
+              return saveAttachment(sources[0]!, plan, output, scope.signal, progress);
             if (plan.kind === 'pdf' || plan.kind === 'pdf-pages')
               return transformPDF(
                 pdfProcessor(this.root),
@@ -227,7 +237,7 @@ export class Transforms implements TransformExecutor {
               );
             if (plan.kind === 'image') {
               if (sources.length !== 1) throw new Error('Convert one raster image per output.');
-              if (sources[0]!.size > 256 * 1024 * 1024)
+              if (sources[0]!.size > 256_000_000)
                 throw new Error('This image is larger than 256 MB.');
               progress(0.1, 'Decoding image');
               const input = await sources[0]!.handle.readFile();
@@ -283,6 +293,25 @@ export class Transforms implements TransformExecutor {
                   }
                 : undefined;
             }
+            if (plan.kind === 'layout')
+              return renderLayout(
+                plan,
+                sources,
+                output,
+                this.layoutTools(),
+                scope.signal,
+                progress,
+              );
+            if (plan.kind === 'nesting')
+              return writeNesting(
+                plan,
+                sources,
+                output,
+                scope.signal,
+                progress,
+                (report, file, signal) =>
+                  renderLayout(report, [], file, this.layoutTools(), signal),
+              );
             progress(0, 'Inspecting media');
             const facts: MediaInfo[] = [];
             for (const source of sources) facts.push(await this.probeSource(source, scope.signal));

@@ -12,13 +12,14 @@ import {
   transferSize,
 } from './mime';
 import { escapeHtml, partExtension, rewritePage, savedPageLimits } from '../saved-page';
+import { mailListLimits } from './formats';
 
 export const mailLimits = {
   /** One message, a file or a mailbox's. */
-  messageBytes: 64 * 1024 * 1024,
+  messageBytes: 64_000_000,
   /** Plain text shown, in characters. */
   textCharacters: 1_000_000,
-  attachments: 500,
+  attachments: mailListLimits.attachments,
   /** A header value shown, in characters. */
   fieldCharacters: 4000,
 } as const;
@@ -181,6 +182,23 @@ export function readMessage(bytes: Uint8Array): MailMessage {
       found.attachments.length > mailLimits.attachments ||
       (text?.length ?? 0) >= mailLimits.textCharacters,
   };
+}
+
+/** One attachment's decoded bytes, with what the preview lists it by. */
+export interface MailAttachmentContent extends MailAttachment {
+  data: Uint8Array;
+}
+/** The attachment at `index` in `readMessage`'s list, found the same way and transfer-decoded:
+ * what Save writes. Undefined when the message lists no attachment there. */
+export function messageAttachment(
+  bytes: Uint8Array,
+  index: number,
+): MailAttachmentContent | undefined {
+  const { root } = parseMime(bytes);
+  const part = bodies(root).attachments.slice(0, mailLimits.attachments)[index];
+  if (!part) return undefined;
+  const data = decodeTransfer(part.body, part.encoding);
+  return { name: attachmentName(part, index), type: part.type, size: data.length, data };
 }
 
 /** Plain text as written; `format=flowed` lines are joined where their writer wrapped them. */

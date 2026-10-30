@@ -357,6 +357,11 @@ export class AgentRequests {
   ): { id: string; requiresUserReview: true } {
     if (!this.exportTransform) throw new Error('Transform proposals are unavailable.');
     plan = validateTransform(plan, target.selection.length);
+    // the person saves attachments from the message they read, with its version pinned
+    if (plan.kind === 'mail-attachment')
+      throw new Error('Attachments are saved from the message preview.');
+    // a nesting saves a folder of sheets the person reviews in the Layout plane
+    if (plan.kind === 'nesting') throw new Error('Nestings are saved from the Layout plane.');
     absolute(destination);
     validName(name);
     if (!name.toLowerCase().endsWith('.' + transformExtension(plan.format)))

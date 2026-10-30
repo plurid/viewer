@@ -1,0 +1,265 @@
+/* Layout plane, Nesting mode: parts and settings beside the sheets they land on. */
+/* The Layout plane is the size container; a narrow plane stacks the sheets under the parts. */
+.nesting-panel {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+@container (max-width: 760px) {
+  .nesting-panel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: max-content;
+    overflow: auto;
+  }
+}
+.nesting-sidebar,
+.nesting-main {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 16px;
+}
+.nesting-sidebar {
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+}
+.nesting-panel h3 {
+  margin: 12px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.nesting-panel h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.nesting-panel input[type='number'] {
+  width: 76px;
+}
+.nesting-file + .nesting-file {
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.nesting-file-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 4px 0;
+  font-size: 12px;
+}
+.nesting-file-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.nesting-layers {
+  flex-basis: 100%;
+}
+.nesting-layers label {
+  display: flex;
+  margin: 4px 0 0 12px;
+}
+.nesting-part {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 10px;
+  padding: 6px 0;
+}
+.nesting-thumbnail {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-control);
+  background: var(--field);
+}
+.nesting-part-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nesting-part-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nesting-part-title .muted,
+.nesting-notes,
+.nesting-hint {
+  font-size: 12px;
+}
+.nesting-part-controls,
+.nesting-fields,
+.nesting-custom,
+.nesting-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 6px;
+}
+.nesting-part-controls label,
+.nesting-fields label,
+.nesting-choice,
+.nesting-wide {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.nesting-wide .choice-button {
+  flex: 1;
+  min-width: 0;
+}
+.nesting-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.nesting-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.nesting-notes {
+  margin: 2px 0 4px;
+  padding-left: 18px;
+  color: var(--muted);
+}
+.nesting-problem {
+  margin: 4px 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+.nesting-formats {
+  display: grid;
+  gap: 4px;
+}
+.nesting-format {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 76px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.nesting-format-head {
+  color: var(--muted);
+}
+.nesting-format .icon-button {
+  width: 22px;
+  height: 22px;
+  padding: 2px;
+}
+.nesting-summary {
+  padding-bottom: 8px;
+}
+.nesting-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 4px;
+}
+.nesting-figures span + span::before {
+  content: '·';
+  margin-right: 14px;
+  color: var(--subtle);
+}
+.nesting-status .primary {
+  margin-left: auto;
+}
+.nesting-saved {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.nesting-advice {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.nesting-advice li {
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+}
+.nesting-advice li.nesting-advice-saving {
+  border-left-color: var(--accent);
+}
+.nesting-advice li.nesting-advice-warning {
+  border-left-color: var(--danger);
+}
+.nesting-sheets {
+  display: grid;
+  gap: 14px;
+}
+.nesting-zoom {
+  display: flex;
+  gap: 4px;
+  justify-self: end;
+}
+.nesting-zoom button[aria-pressed='true'] {
+  background: var(--selection);
+}
+.nesting-sheet {
+  margin: 0;
+}
+.nesting-sheet figcaption {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.nesting-sheet-scroll {
+  overflow: auto;
+  max-height: 70vh;
+  border-radius: var(--radius-control);
+}
+.nesting-sheet svg {
+  display: block;
+  min-width: 100%;
+}
+.nesting-panel svg path,
+.nesting-panel svg rect {
+  vector-effect: non-scaling-stroke;
+}
+.nesting-stock {
+  fill: var(--field);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.nesting-margin {
+  fill: none;
+  stroke: var(--subtle);
+  stroke-width: 0.5;
+  stroke-dasharray: 3 3;
+}
+.nesting-material {
+  fill: color-mix(in srgb, var(--accent) 24%, transparent);
+  fill-rule: evenodd;
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+.nesting-open {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+.nesting-mark {
+  fill: none;
+  stroke: var(--syntax-string);
+  stroke-width: 1;
+}
+.nesting-box {
+  fill: color-mix(in srgb, var(--subtle) 14%, transparent);
+  stroke: var(--subtle);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.nesting-number {
+  fill: var(--ink);
+  text-anchor: middle;
+  font-family: inherit;
+  pointer-events: none;
+}

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import type { DocumentData } from '../../../domain/services';
-import type { MailMessage } from '../../../domain/previews/mail/message';
+import type { MailAttachment, MailMessage } from '../../../domain/previews/mail/message';
 import type { Mailbox } from '../../../domain/previews/mail/mailbox';
-import type { PreviewContext } from '../contracts';
+import type { AttachmentDestination, PreviewContext } from '../contracts';
 import { formatBytes } from '../../../domain/files/entries';
 import { mailboxLimits } from '../../../domain/previews/mail/mailbox';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
@@ -11,6 +11,7 @@ import { usePreviewState } from '../state';
 import { useOfficeDocument } from '../useOfficeDocument';
 import { useHtmlPreview } from '../web/useHtmlPreview';
 import { Empty, Loading } from '../../ui/primitives';
+import { report } from '../../state/store';
 import './mail.css';
 
 type MailView = 'html' | 'text';
@@ -59,6 +60,77 @@ function MessageFrame({ context, message }: { context: PreviewContext; message?:
   );
 }
 
+/** A message's attachments, each saved beside the message or to a folder chosen, where the host
+ * can save them; all at once when there are several. `index` is the message's place in a mailbox. */
+function Attachments({
+  context,
+  attachments,
+  index,
+}: {
+  context: PreviewContext;
+  attachments: readonly MailAttachment[];
+  index?: number;
+}) {
+  const [saving, setSaving] = useState(false);
+  const save = context.saveAttachments;
+  const run = (parts: readonly number[], destination: AttachmentDestination) => {
+    if (!save) return;
+    setSaving(true);
+    void save({
+      message: index,
+      attachments: parts.map((part) => ({ part, name: attachments[part]!.name })),
+      destination,
+    })
+      .catch(report)
+      .finally(() => setSaving(false));
+  };
+  const all = attachments.map((_attachment, part) => part);
+  return (
+    <section className="mail-attachments" aria-label="Attachments">
+      <ul>
+        {attachments.map((attachment, part) => (
+          <li key={part} title={attachment.name}>
+            <span className="mail-attachment-name">{attachment.name}</span>
+            <span className="muted">
+              {attachment.type} · {formatBytes(attachment.size)}
+            </span>
+            {save && (
+              <span className="mail-attachment-actions">
+                <button
+                  type="button"
+                  disabled={saving}
+                  aria-label={`Save ${attachment.name}`}
+                  onClick={() => run([part], 'beside')}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  aria-label={`Save ${attachment.name} to…`}
+                  onClick={() => run([part], 'choose')}
+                >
+                  Save to…
+                </button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {save && attachments.length > 1 && (
+        <div className="mail-attachments-all">
+          <button type="button" disabled={saving} onClick={() => run(all, 'beside')}>
+            Save All
+          </button>
+          <button type="button" disabled={saving} onClick={() => run(all, 'choose')}>
+            Save All to…
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** One message: its header, attachments and body. `index` is its place in a mailbox. */
 function MessageView({
   context,
@@ -71,6 +143,7 @@ function MessageView({
 }) {
   const [view, setView] = usePreviewState<MailView>(context, 'mail.view', 'html');
   const html = mail.html && (view === 'html' || mail.text === undefined);
+  const save = context.saveAttachments;
   usePreviewCommands(
     context,
     useMemo(
@@ -81,8 +154,20 @@ function MessageView({
           available: mail.html && mail.text !== undefined,
           run: () => setView(html ? 'text' : 'html'),
         },
+        {
+          id: 'mail-save-attachments',
+          label: mail.attachments.length === 1 ? 'Save attachment' : 'Save all attachments',
+          aliases: ['attachments', 'save attachments'],
+          available: !!save && mail.attachments.length > 0,
+          run: () =>
+            save?.({
+              message: index,
+              attachments: mail.attachments.map(({ name }, part) => ({ part, name })),
+              destination: 'beside',
+            }),
+        },
       ],
-      [html, mail.html, mail.text, setView],
+      [html, mail.html, mail.text, mail.attachments, setView, save, index],
     ),
   );
   return (
@@ -96,18 +181,7 @@ function MessageView({
           {mail.date && <Field label="Date">{shownDate(mail.date, mail.time)}</Field>}
         </dl>
         {mail.attachments.length > 0 && (
-          <section className="mail-attachments" aria-label="Attachments">
-            <ul>
-              {mail.attachments.map((attachment, position) => (
-                <li key={position} title={attachment.name}>
-                  <span className="mail-attachment-name">{attachment.name}</span>
-                  <span className="muted">
-                    {attachment.type} · {formatBytes(attachment.size)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
+          <Attachments context={context} attachments={mail.attachments} index={index} />
         )}
         {mail.html && mail.text !== undefined && (
           <div className="html-preview-tabs" role="group" aria-label="Message view">

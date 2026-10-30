@@ -383,7 +383,7 @@ export const builtInRecipes: ActionRecipe[] = [
 export function defaultSettings(home: string): ApplicationSettings {
   return {
     toolbars: {},
-    checkpoints: { budgetBytes: 5 * 1024 ** 3 },
+    checkpoints: { budgetBytes: 5_000_000_000 },
     appearance: 'system',
     browsing: {
       mode: 'list',

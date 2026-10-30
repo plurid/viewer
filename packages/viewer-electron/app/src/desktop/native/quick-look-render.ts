@@ -63,7 +63,7 @@ export function imageDecoder(
           timeout: 10000,
           outputLimit: 32 * 1024 * 1024,
         });
-      const limit = 8 * 1024 * 1024;
+      const limit = 8_000_000;
       if (!source.info.size || source.info.size > limit)
         throw new Error('SVG preview input must fit within 8 MB.');
       const input = Buffer.alloc(source.info.size + 1);

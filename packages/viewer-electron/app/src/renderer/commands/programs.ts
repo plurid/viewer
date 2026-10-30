@@ -12,6 +12,7 @@ import { requestAction } from '../actions/commands';
 import type { IconName } from '../ui/Icon';
 import { captureTarget } from './target';
 import { localServerCommands } from '../local-servers/commands';
+import { layoutCommands } from '../layout/commands';
 import { mediaFormats } from '../../domain/operations/transforms';
 import { transformableImage } from '../../domain/operations/image-conversions';
 import { optimizable } from '../../domain/operations/optimization';
@@ -186,6 +187,7 @@ export function programCommands(
           context.paneID,
         ),
     },
+    ...layoutCommands(workspace),
     {
       id: 'image-tools',
       label: 'Convert images…',

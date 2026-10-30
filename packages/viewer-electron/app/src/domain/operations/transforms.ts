@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { optimizationTargetSchema } from './optimization-target';
+import { layoutLimits, layoutTransformSchema } from '../layout/plan';
+import { nestingLimits, nestingTransformSchema } from '../layout/nesting/plan';
+import { mailAttachmentSchema } from '../previews/mail/attachments';
+import type { MailAttachmentPlan } from '../previews/mail/attachments';
 const seconds = z.number().finite().min(0).max(86400);
 const source = z.number().int().min(0).max(15);
 const dimension = z.number().int().min(1).max(32768);
@@ -78,23 +82,28 @@ export const pdfPagesSchema = z
       .max(1000),
   })
   .strict();
+export const pdfTransformSchema = z
+  .object({
+    kind: z.literal('pdf'),
+    format: z.literal('pdf'),
+    preset: z.enum(['lossless', 'balanced', 'small']).default('balanced'),
+    recompressImages: z.boolean().default(false),
+    maxImageEdge: z.number().int().min(256).max(8192).default(2400),
+    quality: z.number().int().min(1).max(100).optional(),
+    targetSize: optimizationTargetSchema.optional(),
+  })
+  .strict();
 export const transformPlanSchema = z.discriminatedUnion('kind', [
   pdfPagesSchema,
+  layoutTransformSchema,
+  nestingTransformSchema,
   imageTransformSchema,
   mediaTransformSchema,
-  z
-    .object({
-      kind: z.literal('pdf'),
-      format: z.literal('pdf'),
-      preset: z.enum(['lossless', 'balanced', 'small']).default('balanced'),
-      recompressImages: z.boolean().default(false),
-      maxImageEdge: z.number().int().min(256).max(8192).default(2400),
-      quality: z.number().int().min(1).max(100).optional(),
-      targetSize: optimizationTargetSchema.optional(),
-    })
-    .strict(),
+  mailAttachmentSchema,
+  pdfTransformSchema,
 ]);
 export type ImageTransform = z.infer<typeof imageTransformSchema>;
+export type PDFTransform = z.infer<typeof pdfTransformSchema>;
 export type MediaTransform = z.infer<typeof mediaTransformSchema>;
 export type PDFPagesTransform = z.infer<typeof pdfPagesSchema>;
 export type TransformPlan = z.infer<typeof transformPlanSchema>;
@@ -123,10 +132,18 @@ export const mediaFormats = [
 ] as const;
 export function validateTransform(value: unknown, sources: number): TransformPlan {
   const plan = transformPlanSchema.parse(value);
-  if (sources < 1 || (combinedTransform(plan) ? sources > 16 : sources > 1000))
+  const most =
+    plan.kind === 'layout'
+      ? layoutLimits.sources
+      : plan.kind === 'nesting'
+        ? nestingLimits.sources
+        : combinedTransform(plan)
+          ? 16
+          : 1000;
+  if (sources < 1 || sources > most)
     throw new Error(
       combinedTransform(plan)
-        ? 'Choose between 1 and 16 source files.'
+        ? `Choose between 1 and ${most} source files.`
         : 'Choose between 1 and 1000 files.',
     );
   if (plan.kind === 'pdf-pages') {
@@ -135,6 +152,19 @@ export function validateTransform(value: unknown, sources: number): TransformPla
     if (new Set(plan.pages.map((page) => `${page.source}:${page.page}`)).size !== plan.pages.length)
       throw new Error('Include each source page at most once per PDF output.');
   }
+  if (
+    plan.kind === 'layout' &&
+    plan.pages.some((page) =>
+      page.items.some(
+        (item) => (item.kind === 'image' || item.kind === 'page') && item.source >= sources,
+      ),
+    )
+  )
+    throw new Error('An item refers to a file that is not in this layout.');
+  if (plan.kind === 'nesting' && plan.sources.length !== sources)
+    throw new Error('The nesting names a different set of drawings. Nest again.');
+  if (plan.kind === 'mail-attachment' && sources !== 1)
+    throw new Error('Save attachments from one message at a time.');
   if (plan.kind === 'pdf' && plan.preset === 'lossless' && plan.recompressImages)
     throw new Error('Choose Balanced or Smaller to recompress scanned images.');
   if (
@@ -222,6 +252,25 @@ function transformParts(plan: TransformPlan): string[] {
           ? 'remove metadata'
           : 'keep all metadata including location',
     ];
+  if (plan.kind === 'layout')
+    return [
+      plan.format.toUpperCase(),
+      plan.pages.length === 1 ? '1 page' : `${plan.pages.length} pages`,
+      ...(plan.format === 'pdf' ? [] : [`${plan.dpi} dpi`]),
+    ];
+  if (plan.kind === 'nesting')
+    return [
+      'Nesting',
+      `${plan.parts.length === 1 ? '1 part' : `${plan.parts.length} parts`} on ${plan.sheets.length === 1 ? '1 sheet' : `${plan.sheets.length} sheets`}`,
+      'a DXF per sheet, a PDF report and a CSV parts list',
+    ];
+  if (plan.kind === 'mail-attachment')
+    return [
+      'Save attachment',
+      ...(plan.message === undefined ? [] : [`message ${plan.message + 1}`]),
+      `attachment ${plan.part + 1}`,
+      'marked as downloaded',
+    ];
   const segments = plan.segments.map(
     (segment) =>
       `source ${segment.source + 1}: ${mediaTime(segment.start)}–${mediaTime(segment.end)}`,
@@ -237,10 +286,15 @@ function transformParts(plan: TransformPlan): string[] {
     `audio ${plan.audio.mode}${audioSource}`,
   ];
 }
-export const transformExtension = (format: TransformPlan['format']) =>
+/** A plan that encodes its output in a format it names; a saved attachment keeps its own. */
+export type EncodingPlan = Exclude<TransformPlan, MailAttachmentPlan>;
+export const transformExtension = (format: EncodingPlan['format']) =>
   format === 'jpeg' ? 'jpg' : format;
 export const combinedTransform = (plan?: TransformPlan): boolean =>
-  plan?.kind === 'media' || plan?.kind === 'pdf-pages';
+  plan?.kind === 'media' ||
+  plan?.kind === 'pdf-pages' ||
+  plan?.kind === 'layout' ||
+  plan?.kind === 'nesting';
 export const mediaTime = (seconds: number) => {
   const total = Math.max(0, seconds);
   return `${Math.floor(total / 60)

@@ -77,6 +77,10 @@ export class OperationPlans {
           for (const intent of request.intents) {
             if (intent.kind === 'convert') {
               const transform = validateTransform(intent.transform, intent.sources.length);
+              if (transform.kind === 'mail-attachment')
+                throw new Error('Attachments are saved from the message preview.');
+              if (transform.kind === 'nesting')
+                throw new Error('Nestings are saved from the Layout plane.');
               if (!intent.destination || (combinedTransform(transform) && !intent.name))
                 throw new Error('Choose an export folder and filename.');
               if (

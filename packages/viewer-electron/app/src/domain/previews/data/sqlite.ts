@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 export const sqliteLimits = {
   /** Larger files are not opened. */
-  fileBytes: 2 * 1024 ** 3,
+  fileBytes: 2_000_000_000,
   /** Tables and views listed. */
   objects: 500,
   /** Columns listed per table and read into a page. */

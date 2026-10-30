@@ -13,7 +13,6 @@ import {
 import { WorkspaceContext } from '../workspace/context';
 import { effectiveWindowLook, effectiveWindowSettings } from '../state/effective-ui';
 import type { FileEntry, Resource } from '../../domain/contracts';
-import { formatBytes } from '../../domain/files/entries';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
 import {
   activeWorkspace,
@@ -25,7 +24,7 @@ import {
 } from '../state/store';
 import { useCommands } from '../commands/context';
 import { usePreviewControlsSlot } from './controls';
-import type { PreviewCommand, PreviewContext, PreviewModule } from './contracts';
+import type { AttachmentSave, PreviewCommand, PreviewContext, PreviewModule } from './contracts';
 import { previewState } from './state';
 import { choosePreview } from './registry';
 import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
@@ -40,6 +39,8 @@ import { editingPlane } from '../editing/planes';
 import { useResource } from './useResource';
 import { PreviewRecovery } from './PreviewRecovery';
 import { documentServices } from './document-cache';
+import { PreviewSize } from './PreviewSize';
+import { saveAttachments } from './attachments';
 import { loadedPreviewModule, preloadPreviewModule } from './module-loading';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
@@ -315,6 +316,12 @@ export const PreviewHost = memo(function PreviewHost({
         ),
     });
   }, [commandSource, paneID, resource, registry, signal, active, hostCommands]);
+  // stable, so a message's commands are not registered again on every render
+  const message = supplied ? undefined : resource?.entry;
+  const saveMessageAttachments = useMemo(
+    () => (message ? (request: AttachmentSave) => saveAttachments(message, request) : undefined),
+    [message],
+  );
   const locate =
     !supplied && (paneID || workspace)
       ? async (target: FileEntry) => {
@@ -430,6 +437,7 @@ export const PreviewHost = memo(function PreviewHost({
               }
               retry={!supplied ? () => setRetry((value) => value + 1) : undefined}
               showHex={() => setHexFor(resource.id)}
+              saveAttachments={saveMessageAttachments}
             />
           </Suspense>
         </ErrorBoundary>
@@ -444,7 +452,7 @@ export const PreviewHost = memo(function PreviewHost({
             </span>
             <span className="preview-file-details">
               <span className="separator">·</span> {hexShown ? hexModule.label : module.label}{' '}
-              <span className="separator">·</span> {formatBytes((current ?? resource.entry).size)}
+              <span className="separator">·</span> <PreviewSize entry={current ?? resource.entry} />
             </span>
           </div>
           {hex && (

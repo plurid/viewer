@@ -29,7 +29,7 @@ export interface Drawing {
   units: number;
   warnings: string[];
 }
-export const DXF_MAX_BYTES = 32 * 1024 * 1024;
+export const DXF_MAX_BYTES = 32_000_000;
 export const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 /** The length of an open path through `points`. */
 export function pathLength(points: readonly Point[]): number {

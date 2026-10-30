@@ -63,7 +63,7 @@ interface Grant {
    * folder as a file. */
   bundle?: boolean;
 }
-const MAX_READ = 4 * 1024 * 1024;
+const MAX_READ = 4_000_000;
 /** A folder granted as the document it is. */
 const documentPackage = (file: string, info: Stats) =>
   info.isDirectory() &&

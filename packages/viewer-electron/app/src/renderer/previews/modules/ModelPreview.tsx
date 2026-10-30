@@ -139,7 +139,7 @@ export default function ModelPreview(context: PreviewContext) {
     setDistance(undefined);
     setInfo('');
     setAnimations([]);
-    if (resource.entry.size > maxModelMB * 1024 * 1024) {
+    if (resource.entry.size > maxModelMB * 1_000_000) {
       setError('This model exceeds the file limit in Settings.');
       setLoading(false);
       return;
@@ -442,7 +442,7 @@ export default function ModelPreview(context: PreviewContext) {
       } else if (ext === 'stl') {
         loaded = meshObjects(await importMesh(await response.arrayBuffer(), 'stl', abort.signal));
       } else if (cadFormats.includes(ext)) {
-        if (resource.entry.size > 64 * 1024 * 1024)
+        if (resource.entry.size > 64_000_000)
           throw new Error('This CAD file exceeds the conversion limit (64 MB).');
         loaded = new THREE.Group();
         const meshes = await importCad(await response.arrayBuffer(), ext, abort.signal);

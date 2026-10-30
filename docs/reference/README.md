@@ -10,6 +10,8 @@ Look up current behavior, exact syntax and limits. For a walkthrough, use the
 - [Search syntax and content search](search.md)
 - [Office documents and worksheets](office.md)
 - [PDF tools](pdf.md)
+- [Layout output: PDF, PNG and JPEG](layout.md)
+- [Nesting DXF parts for cutting](nesting.md)
 - [Images, audio, video and export presets](media.md)
 - [Models, CAD and drawings](models.md)
 

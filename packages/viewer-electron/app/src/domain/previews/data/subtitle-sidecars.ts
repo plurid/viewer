@@ -2,7 +2,7 @@ import type { FileEntry } from '../../contracts';
 
 /** A video's subtitles are read whole and converted in its window, so each is held small. */
 export const sidecarLimits = {
-  bytes: 2 * 1024 * 1024,
+  bytes: 2_000_000,
   cues: 20_000,
   files: 8,
 };

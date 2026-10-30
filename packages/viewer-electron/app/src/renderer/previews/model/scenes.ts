@@ -289,7 +289,7 @@ export async function loadScene(
   signal: AbortSignal,
 ): Promise<LoadedScene> {
   const name = formatNames[format];
-  if (size > fileLimits[format] * 1024 * 1024)
+  if (size > fileLimits[format] * 1_000_000)
     throw new Error(`This ${name} file exceeds the ${fileLimits[format]} MB preview limit.`);
   const assets = embeddedAssets();
   const references: string[] = [];

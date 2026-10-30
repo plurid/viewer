@@ -1,6 +1,7 @@
 import type { FileEntry } from '../contracts';
 import { z } from 'zod';
-import { imageTransformSchema, transformPlanSchema, type TransformPlan } from './transforms';
+import type { ImageTransform, PDFTransform } from './transforms';
+import { imageTransformSchema, pdfTransformSchema } from './transforms';
 import { optimizationTargetSchema } from './optimization-target';
 import { formatBytes } from '../files/entries';
 export const optimizationOptionsSchema = z
@@ -39,12 +40,12 @@ export function optimizable(file: Pick<FileEntry, 'kind' | 'extension'>): boolea
 export function optimizationPlan(
   file: Pick<FileEntry, 'kind' | 'extension'>,
   options: OptimizationOptions,
-): TransformPlan {
+): ImageTransform | PDFTransform {
   const { preset, maximum, pdfImages, targetSize } = optimizationOptionsSchema.parse(options);
   if (!optimizable(file))
     throw new Error('Optimize supports PDFs, JPEGs, PNGs, WebP and AVIF images.');
   if (file.extension.toLowerCase() === 'pdf')
-    return transformPlanSchema.parse({
+    return pdfTransformSchema.parse({
       kind: 'pdf',
       format: 'pdf',
       preset,

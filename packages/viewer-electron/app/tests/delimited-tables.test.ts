@@ -59,6 +59,6 @@ it('reports a column-limited prefix honestly and refuses inputs beyond the previ
   );
   expect(parsed.headers).toHaveLength(100);
   expect(parsed.truncated).toBe(true);
-  expect(() => delimitedPreview('x'.repeat(4 * 1024 * 1024 + 1), ',')).toThrow('4 MB');
+  expect(() => delimitedPreview('x'.repeat(4_000_001), ',')).toThrow('4 MB');
   expect(() => tableMatches([], 'x'.repeat(4097))).toThrow('4096');
 });

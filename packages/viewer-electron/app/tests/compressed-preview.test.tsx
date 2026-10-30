@@ -120,7 +120,7 @@ it('describes text past the limit, and names a file refused while expanding', as
   const large = fixture('huge.log.gz', { size: 9_000_000, previewable: false });
   render(<CompressedPreview {...large.context} />);
   await screen.findByText(
-    'Gzip-compressed, 9 MB expanded. Viewer expands up to 8.4 MB for a preview.',
+    'Gzip-compressed, 9 MB expanded. Viewer expands up to 8 MB for a preview.',
   );
   expect(large.services.archiveEntry).not.toHaveBeenCalled();
   cleanup();

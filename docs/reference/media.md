@@ -51,7 +51,7 @@ review. **Already compact** keeps the original. If the Trash cannot take the unu
 operations** says where it was kept.
 
 Enable **Target size per file** for a budget such as 500 kB or 2 MB. These units are decimal; the
-allowed budget is 1 KiB–256 MiB. Lossy compression tries at most eight quality settings and respects
+allowed budget is 1 kB–256 MB. Lossy compression tries at most eight quality settings and respects
 the chosen minimum quality. **Target not met** reports the measured result without selecting it for
 export. You can explicitly select a smaller candidate even when it misses the target. Lossless mode
 never lowers quality to reach a budget. A size target cannot guarantee a particular visual quality:
@@ -63,8 +63,8 @@ folders relative to…** preserves the displayed source hierarchy inside the cho
 Output name collisions receive separate names, leaving existing files intact.
 
 **Retry** prepares only that row using its current source version. A file changed after preparation
-must be retried before export. Private prepared candidates are limited to 512 MiB at a time, with a
-256 MiB limit per candidate. Closing the dialog releases its previews; admitted exports finish
+must be retried before export. Private prepared candidates are limited to 512 MB at a time, with a
+256 MB limit per candidate. Closing the dialog releases its previews; admitted exports finish
 through Recent file operations. See [PDF tools](pdf.md) for structural versus scanned-image
 compression and signature limits.
 

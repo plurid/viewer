@@ -1,5 +1,5 @@
 import type { CommandDefinition } from '../registry';
-import { baseName } from '../../../domain/workspaces/planes';
+import { baseName, paneTitle } from '../../../domain/workspaces/planes';
 import type { WindowScopes } from './scope';
 
 /** Dynamic entries: workspaces, open planes, places and saved searches. */
@@ -35,9 +35,11 @@ export function catalogCommands({
               ? 'Journal'
               : pane.type === 'overview'
                 ? 'File overview'
-                : pane.type === 'scratch' || pane.type === 'note'
-                  ? (pane.title ?? 'Untitled')
-                  : baseName(pane.path),
+                : pane.type === 'layout'
+                  ? paneTitle(pane)
+                  : pane.type === 'scratch' || pane.type === 'note'
+                    ? (pane.title ?? 'Untitled')
+                    : baseName(pane.path),
       group: 'Open planes',
       detail:
         pane.type === 'note' ? 'Saved note' : pane.type === 'scratch' ? 'Unsaved text' : pane.path,

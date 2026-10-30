@@ -255,7 +255,7 @@ export function rawDecoder(helper: string): Decoder {
     if (mode === 'video') throw new Error('Video compatibility previews are unavailable.');
     const bytes = await runProcessor(helper, [mode], [source.handle.fd], signal, {
       timeout: 30000,
-      outputLimit: 32 * 1024 * 1024 + 128,
+      outputLimit: 32_000_000 + 128,
     }).catch((error: Error) => {
       if (signal.aborted) throw signal.reason ?? new Error('RAW preview cancelled.');
       throw new Error(

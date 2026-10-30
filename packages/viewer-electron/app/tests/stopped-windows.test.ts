@@ -88,4 +88,26 @@ describe('a stopped window', () => {
     f.answer(f.workspace.send, 1);
     await expect(quitting).resolves.toBeUndefined();
   });
+
+  it('hands a stopped window to an agent task at once, with what it saved last', async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fixture();
+      const flushForTask = (owner: number): Promise<void> =>
+        Reflect.get(f.desktop, 'flushForTask').call(f.desktop, owner);
+      f.desktop.windowStopped(f.workspace.window, 'unresponsive');
+      // no answer can come, so no save is asked for and nothing waits for one
+      await expect(flushForTask(1)).resolves.toBeUndefined();
+      expect(sentFlushes(f.workspace.send)).toBe(0);
+      // a window that answers again is asked, and stopping during the save ends it as saved
+      f.desktop.windowResumed(f.workspace.window);
+      const handing = flushForTask(1);
+      expect(sentFlushes(f.workspace.send)).toBe(1);
+      f.desktop.windowStopped(f.workspace.window, 'gone');
+      await expect(handing).resolves.toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -16,6 +16,7 @@ New to Viewer? [Install it](guides/install.md), then read
 ## Make and edit
 
 - [Make a quick change](guides/create.md)
+- [Lay out photos and PDFs](guides/layout.md)
 - [Supported formats](reference/formats.md)
 - [Office documents and worksheets](reference/office.md)
 - [PDF tools](reference/pdf.md)

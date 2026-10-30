@@ -11,7 +11,7 @@ import {
 } from '../saved-page';
 
 export const webArchiveLimits = {
-  bytes: 64 * 1024 * 1024,
+  bytes: 64_000_000,
   /** Subresources read from the archive. */
   resources: 5000,
 } as const;

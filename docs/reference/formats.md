@@ -66,8 +66,8 @@ The reader builds a safe document tree, without source scripts, styles, embedded
 network resources. Internal links resolve inside the publication, including supported footnote
 chapters outside the main reading order. A missing target stays in the book with an explanation.
 External links remain text. Supported local PNG, JPEG, GIF and WebP illustrations load through the
-book's authorized resource, at most 8 MiB and 64 million pixels each. Unsupported images retain
-their alternative text.
+book's authorized resource, at most 8 MB and 64 million pixels each. Unsupported images retain their
+alternative text.
 
 Extraction is bounded to 32 MB of expanded text files, 300 chapters and 400,000 characters per
 chapter. Each rendered chapter is bounded to 20,000 nodes and 100 levels. Find in book searches the
@@ -105,7 +105,17 @@ message are not read.
   together. Remote images, stylesheets, fonts, frames and forms are removed and never load; **Remote
   images are blocked.** says when the message named any. A link keeps its address as a tooltip and
   goes nowhere.
-- Attachments are listed with their name, type and size. The preview does not open or save them.
+- Attachments are listed with their name, type and size. Viewer never opens or runs one.
+- **Save** writes an attachment beside its message, **Save to…** in a folder you choose, and **Save
+  All** every attachment of the message. Each save is a file operation: a name in use keeps both
+  (`Invoice copy.pdf`), and **Undo** moves the saved file to the Trash. The message is read again
+  for the save, and nothing is saved when it changed after it was shown. A message inside an archive
+  has no **Save**.
+- A saved name keeps the attachment's name, with path separators as hyphens, without control
+  characters, marks that reorder text, leading dots or trailing dots and spaces, and cut to 240
+  bytes. A name Windows reserves, such as `CON`, gains an underscore.
+- A saved attachment is marked as downloaded, as Mail marks one, so macOS checks it before it first
+  opens.
 
 **Mailboxes.** A `.mbox` file lists its messages by date, sender and subject, up to 10,000 messages
 from its first 2 GB. The list keeps only the start of each message's header; a message is read on
@@ -151,7 +161,9 @@ size or page count:
 
 - Pages, Numbers and Keynote: the largest of `preview.jpg`, `preview-web.jpg` and
   `preview-micro.jpg`, or `QuickLook/Thumbnail.jpg` in an older document. A package folder is read
-  the same way, and links inside it are not followed.
+  the same way, and links inside it are not followed. It opens in a preview plane, not a folder
+  plane, and the footer shows its total size, measured once per version of the package; **Show
+  Package Contents** opens the folder.
 - Krita: `mergedimage.png`, then `preview.png`; the canvas size from `maindoc.xml`.
 - OpenRaster: `mergedimage.png`, then `Thumbnails/thumbnail.png`; the canvas size from `stack.xml`.
 - Sketch: `previews/preview.png`; the page count from `meta.json`.
@@ -202,7 +214,7 @@ are read. The signature is not checked, and the preview says so.
 
 ## Files whose name does not say
 
-When no preview reads a file, Viewer reads its first 4 KB and names the format from a table of
+When no preview reads a file, Viewer reads its first 4 KiB and names the format from a table of
 signatures: databases, archives and compressed files, documents, images, audio and video, fonts,
 executables and libraries, and installer packages. For a Word, Excel or PowerPoint 97 to 2003 file
 it also reads the directory that names the file's streams. Text is shown as text and is never named
@@ -211,7 +223,7 @@ this way.
 Below what the bytes say, the preview shows them in a hex view: offset, hexadecimal and printable
 characters, 16 bytes to a row. A Mach-O file names its CPU type, and a universal binary each slice;
 a PE file its machine, format, subsystem and .NET runtime; an ELF file its class, byte order and
-machine. WebAssembly modules and Java class files name their version. The view reads 64 KB pages as
+machine. WebAssembly modules and Java class files name their version. The view reads 64 KiB pages as
 the rows on screen need them and keeps 16, so a file of any size opens without being read whole.
 **Hex** in a preview's footer, or **Show as hex**, shows any other file this way, except one that
 holds a private key.
@@ -240,8 +252,8 @@ preview.
 - A DNG, NEF or ARW photo is also a TIFF image and shows as one. Rename it to its own extension for
   the camera preview and **Render RAW**.
 - Ogg video is named but not shown. The message names the extension that makes it preview.
-- A torrent is named, and shows with **Show as**, when its first 4 KB hold piece hashes. One whose
-  first 4 KB are names alone shows as text.
+- A torrent is named, and shows with **Show as**, when its first 4 KiB hold piece hashes. One whose
+  first 4 KiB are names alone shows as text.
 
 **Ask** sends the prompt model the file's name, its size and its first 64 bytes, as hexadecimal and
 as printable characters, with the name of any signature Viewer matched. It needs the excerpts

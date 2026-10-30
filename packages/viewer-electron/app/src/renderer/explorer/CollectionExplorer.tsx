@@ -159,6 +159,7 @@ export function CollectionExplorer({ id }: { id: string }) {
                 ? void window.viewer.openExternal(file.path).catch(report)
                 : workspace.open(file, id, { another }),
             ),
+          contents: (file) => workspace.open(file, id, { browse: true }),
           path: () => {},
           search: () => {},
           refresh: () => setRefresh((value) => value + 1),

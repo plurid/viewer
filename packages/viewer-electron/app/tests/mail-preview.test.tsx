@@ -6,6 +6,8 @@ import type { PreviewContext } from '../src/renderer/previews/contracts';
 import type { DocumentData } from '../src/domain/services';
 import type { MailMessage } from '../src/domain/previews/mail/message';
 import type { DocumentRequest } from '../src/domain/previews/documents/requests';
+import type { FileEntry, ViewerAPI } from '../src/domain/contracts';
+import { saveAttachments } from '../src/renderer/previews/attachments';
 
 afterEach(cleanup);
 
@@ -109,6 +111,58 @@ describe('email preview', () => {
     expect(services.htmlPreview).not.toHaveBeenCalled();
   });
 
+  it('saves an attachment beside the message or to a folder chosen, and all of them at once', async () => {
+    const attachments = [
+      { name: 'Packing list.txt', type: 'text/plain', size: 2048 },
+      { name: 'Ridge.png', type: 'image/png', size: 90_000 },
+    ];
+    const { context: preview } = context('eml', () => data({ mail: mail({ attachments }) }));
+    const saveAttachments = vi.fn(async () => {});
+    render(<MailPreview {...preview} saveAttachments={saveAttachments} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Save Ridge.png' }));
+    expect(saveAttachments).toHaveBeenLastCalledWith({
+      message: undefined,
+      attachments: [{ part: 1, name: 'Ridge.png' }],
+      destination: 'beside',
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save Packing list.txt to…' })).toHaveProperty(
+        'disabled',
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save Packing list.txt to…' }));
+    expect(saveAttachments).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        attachments: [{ part: 0, name: 'Packing list.txt' }],
+        destination: 'choose',
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save All' })).toHaveProperty('disabled', false),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save All' }));
+    expect(saveAttachments).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        attachments: [
+          { part: 0, name: 'Packing list.txt' },
+          { part: 1, name: 'Ridge.png' },
+        ],
+        destination: 'beside',
+      }),
+    );
+  });
+
+  it('offers no saving where the host cannot save, and no Save All for one attachment', async () => {
+    const { context: preview } = context('eml', () => data({ mail: mail() }));
+    const { rerender } = render(<MailPreview {...preview} />);
+    expect(await screen.findByText('Packing list.txt')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Save/ })).toBeNull();
+    rerender(<MailPreview {...preview} saveAttachments={vi.fn(async () => {})} />);
+    expect(screen.getByRole('button', { name: 'Save Packing list.txt' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Save All' })).toBeNull();
+  });
+
   it('says when the message cannot be read', async () => {
     const { context: preview } = context('eml', () => {
       throw new Error('The message headers exceed the reader limit.');
@@ -165,11 +219,98 @@ describe('mailbox preview', () => {
     expect(await screen.findByRole('heading', { name: 'Second' })).toBeTruthy();
   });
 
+  it("saves an attachment of the chosen message by the message's place in the mailbox", async () => {
+    const { context: preview } = context('mbox', mailbox);
+    const saveAttachments = vi.fn(async () => {});
+    render(<MailPreview {...preview} saveAttachments={saveAttachments} />);
+    const list = await screen.findByRole('list', { name: 'Messages' });
+    fireEvent.click(within(list).getByText('Third'));
+    expect(await screen.findByRole('heading', { name: 'Third' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save Packing list.txt' }));
+    expect(saveAttachments).toHaveBeenCalledWith({
+      message: 2,
+      attachments: [{ part: 0, name: 'Packing list.txt' }],
+      destination: 'beside',
+    });
+  });
+
   it('says a file with no messages is an empty mailbox', async () => {
     const { context: preview } = context('mbox', () =>
       data({ mailbox: { messages: [], truncated: false } }),
     );
     render(<MailPreview {...preview} />);
     expect(await screen.findByText('This mailbox has no messages')).toBeTruthy();
+  });
+});
+
+describe('saving attachments from the preview host', () => {
+  const message: FileEntry = {
+    path: '/fixtures/Mail/Trip.eml',
+    name: 'Trip.eml',
+    parent: '/fixtures/Mail',
+    extension: 'eml',
+    mime: 'message/rfc822',
+    size: 4096,
+    kind: 'file',
+    directory: false,
+    identity: '1:42',
+    modified: 1700,
+    created: 1,
+    hidden: false,
+  };
+  function viewer(chosen: string | null) {
+    const api = {
+      operate: vi.fn<ViewerAPI['operate']>(async () => crypto.randomUUID()),
+      chooseFolder: vi.fn<ViewerAPI['chooseFolder']>(async () => chosen),
+    };
+    Object.assign(window, { viewer: api });
+    return api;
+  }
+
+  it('saves each beside its message, by its safe name, pinned to the version read', async () => {
+    const api = viewer(null);
+    await saveAttachments(message, {
+      attachments: [
+        { part: 0, name: '.profile' },
+        { part: 3, name: 'Q1/Q2.csv' },
+      ],
+      destination: 'beside',
+    });
+    expect(api.chooseFolder).not.toHaveBeenCalled();
+    expect(api.operate.mock.calls.map(([request]) => request)).toEqual(
+      [
+        ['profile', 0],
+        ['Q1-Q2.csv', 3],
+      ].map(([name, part]) => ({
+        kind: 'convert',
+        sources: [message.path],
+        destination: '/fixtures/Mail',
+        name,
+        transform: { kind: 'mail-attachment', part },
+        expectedSources: [
+          { path: message.path, version: { identity: '1:42', modified: 1700, size: 4096 } },
+        ],
+      })),
+    );
+  });
+
+  it('asks for a folder for Save to…, and saves nothing when the person cancels', async () => {
+    const chosen = viewer('/fixtures/Chosen');
+    const request = {
+      message: 4,
+      attachments: [{ part: 1, name: 'Route.txt' }],
+      destination: 'choose' as const,
+    };
+    await saveAttachments(message, request);
+    expect(chosen.chooseFolder).toHaveBeenCalledWith('/fixtures/Mail');
+    expect(chosen.operate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        destination: '/fixtures/Chosen',
+        transform: { kind: 'mail-attachment', message: 4, part: 1 },
+      }),
+    );
+    const cancelled = viewer(null);
+    await saveAttachments(message, request);
+    expect(cancelled.operate).not.toHaveBeenCalled();
   });
 });

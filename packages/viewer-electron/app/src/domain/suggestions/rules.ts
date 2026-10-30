@@ -124,6 +124,24 @@ export const suggestionRules: readonly SuggestionRule[] = [
         : undefined,
   },
   {
+    id: 'photos.layout',
+    commands: ['lay-out'],
+    weight: 65,
+    reason: (input) => {
+      if (input.selection.length < 2 || !everyFile(input, family('image'))) return undefined;
+      return input.selection.length >= 10
+        ? `Contact sheet of ${input.selection.length}`
+        : `Collage of ${input.selection.length} photos`;
+    },
+  },
+  {
+    id: 'drawings.nest',
+    commands: ['nest-parts'],
+    weight: 70,
+    reason: (input) =>
+      everyFile(input, extension('dxf')) ? count(files(input), 'DXF part', 'DXF parts') : undefined,
+  },
+  {
     id: 'media.edit',
     commands: ['edit-media'],
     weight: 60,

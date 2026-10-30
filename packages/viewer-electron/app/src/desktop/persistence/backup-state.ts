@@ -112,6 +112,8 @@ export function restoreBackupState(
         return { ...base, documentID: id(base.documentID) };
       case 'media':
         return { ...base, draftID: id(base.draftID) };
+      case 'layout':
+        return { ...base, sources: base.sources.map(map) };
       case 'chat':
         return { ...runtime(base), conversationID: id(base.conversationID) };
       case 'receipt':
@@ -292,6 +294,7 @@ export function backupRoots(
           'collection',
           'journal',
           'overview',
+          'layout',
         ].includes(pane.type)
           ? pane.path
           : path.dirname(pane.path),

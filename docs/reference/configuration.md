@@ -64,6 +64,8 @@ silently choose another executor.
 | `downloads.installer` | Move to Trash, for week-old dmg and pkg in Downloads |
 | `names.copy`          | Find duplicates, for names ending " copy" or "(2)"   |
 | `images.pdf`          | Create PDF from images, for several images           |
+| `photos.layout`       | Lay out, for two or more photos                      |
+| `drawings.nest`       | Nest for cutting, for DXF parts                      |
 | `media.edit`          | Edit media, for video and audio                      |
 | `text.edit`           | Edit text, for a text or code file                   |
 | `office.pdf`          | Save PDF copy, for Office and OpenDocument files     |

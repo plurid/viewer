@@ -35,15 +35,18 @@ inside it.
 
 A Pages, Numbers or Keynote document, a Krita, OpenRaster or Sketch file and an XPS document show
 the picture they saved of themselves, not a live rendering. A Pages, Numbers or Keynote package
-folder previews too: select it and press **Space**. Double-click opens the document in its own app.
+folder previews too: select it and press **Space**, or choose **Open linked plane** to show it in a
+plane. Its footer shows the package's total size. Double-click opens the document in its own app.
 
 A Collada, 3DS, USDZ, X3D, VRML or OFF model shows only what its file holds. Textures and other
 files it links to are listed below the model and not opened.
 
 An email's HTML shows without scripts or remote images, and **Remote images are blocked.** says when
-it has any. Choose **Plain text** to read its other form. Attachments are listed, not opened. In a
-mailbox, choose a message, or press the arrow keys to move through the list. A Safari web archive
-shows only what Safari saved: nothing loads from the network.
+it has any. Choose **Plain text** to read its other form. Attachments are listed, never opened. To
+keep one, choose **Save** beside it to save it next to the message, or **Save to…** to pick a
+folder. **Save All** saves every attachment, and **⌘Z** undoes a save. In a mailbox, choose a
+message, or press the arrow keys to move through the list. A Safari web archive shows only what
+Safari saved: nothing loads from the network.
 
 A shortcut, a torrent and a provisioning profile are only read: Viewer loads no address, contacts no
 tracker and checks no signature. Double-click shows the preview; open the file in its own app to

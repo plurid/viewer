@@ -6,7 +6,7 @@ import type { Digest } from '../digest';
  * views of the input.
  */
 export const torrentLimits = {
-  bytes: 16 * 1024 * 1024,
+  bytes: 16_000_000,
   depth: 32,
   values: 1_000_000,
   files: 100_000,

@@ -46,7 +46,7 @@ const pdfJSON = z.object({
   ]),
 });
 type PDFJSON = z.infer<typeof pdfJSON>;
-const limits = [
+export const limits = [
   '--global',
   '--max-stream-filters=8',
   '--parser-max-nesting=128',
@@ -70,7 +70,7 @@ export async function inspectPDF(
   source: PDFSource,
   signal: AbortSignal,
 ): Promise<PDFJSON> {
-  if (path.extname(source.file).toLowerCase() !== '.pdf' || source.size > 256 * 1024 * 1024)
+  if (path.extname(source.file).toLowerCase() !== '.pdf' || source.size > 256_000_000)
     throw new Error('Choose a PDF no larger than 256 MB.');
   const header = Buffer.alloc(1024);
   await source.handle.read(header, 0, header.length, 0);
@@ -114,7 +114,7 @@ export async function inspectPDF(
 }
 
 /** JPEG dimensions are read from its frame header, never guessed from a PDF dictionary. */
-function jpegFrame(
+export function jpegFrame(
   bytes: Buffer,
 ): { width: number; height: number; components: number } | undefined {
   if (bytes.length < 4 || bytes.readUInt16BE(0) !== 0xffd8) return;
@@ -206,7 +206,7 @@ async function scanUpdates(
     const next = encoded.length > 10 ? jpegFrame(encoded) : undefined;
     if (!next || ![1, 3].includes(next.components) || encoded.length >= bytes.length) continue;
     cost += encoded.length;
-    if (cost > 48 * 1024 * 1024)
+    if (cost > 48_000_000)
       throw new Error(
         'The PDF image update exceeds its 48 MB working limit. Try structural optimization instead.',
       );
@@ -227,7 +227,7 @@ async function scanUpdates(
     : undefined;
 }
 
-async function writeBuffer(target: FileHandle, bytes: Buffer): Promise<void> {
+export async function writeBuffer(target: FileHandle, bytes: Buffer): Promise<void> {
   await target.truncate(0);
   for (let offset = 0; offset < bytes.length;) {
     const { bytesWritten } = await target.write(bytes, offset, bytes.length - offset, offset);
@@ -246,7 +246,7 @@ export async function transformPDF(
   progress: (fraction: number, detail: string) => void,
 ): Promise<void | OptimizationStatistics> {
   signal = AbortSignal.any([signal, AbortSignal.timeout(180000)]);
-  if (sources.reduce((sum, source) => sum + source.size, 0) > 512 * 1024 * 1024)
+  if (sources.reduce((sum, source) => sum + source.size, 0) > 512_000_000)
     throw new Error('PDF sources may total at most 512 MB.');
   if (plan.kind === 'pdf' && sources.length !== 1) throw new Error('Optimize one PDF per output.');
   progress(0, 'Inspecting PDF sources');

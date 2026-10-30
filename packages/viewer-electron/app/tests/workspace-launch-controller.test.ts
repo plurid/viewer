@@ -172,4 +172,29 @@ describe('CLI launches through the workspace controller', () => {
     expect(activeWorkspace().panes.filter((pane) => pane.type === 'preview')).toHaveLength(3);
     expect(activeWorkspace().roots).toHaveLength(3);
   });
+
+  it('opens a Pages package as its document, and as a folder only for Show Package Contents', () => {
+    const folder = activeWorkspace().panes[0]!;
+    const controller = mountController();
+    const folderEntry = (name: string, extension: string): FileEntry => ({
+      ...file(`/fixtures/${name}`),
+      name,
+      extension,
+      kind: 'directory',
+      directory: true,
+      mime: 'inode/directory',
+    });
+    const types = (path: string) =>
+      activeWorkspace()
+        .panes.filter((pane) => pane.path === path)
+        .map((pane) => pane.type);
+    const document = folderEntry('Report.pages', 'pages');
+    act(() => controller.open(document, folder.id));
+    expect(types(document.path)).toEqual(['preview']);
+    act(() => controller.open(document, folder.id, { browse: true }));
+    expect(types(document.path)).toEqual(['preview', 'folder']);
+    const plain = folderEntry('Reports', '');
+    act(() => controller.open(plain, folder.id));
+    expect(types(plain.path)).toEqual(['folder']);
+  });
 });

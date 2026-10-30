@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { decodeWords, field, parseFields } from './mime';
 import { addressList } from './message';
+import { mailListLimits } from './formats';
 
 export const mailboxLimits = {
   /** Messages listed; the scan stops after them. */
-  messages: 10_000,
+  messages: mailListLimits.messages,
   /** Bytes of the file scanned for messages. */
-  scanBytes: 2 * 1024 * 1024 * 1024,
+  scanBytes: 2_000_000_000,
   /** Bytes of one message's header kept for its row. */
   headerBytes: 16 * 1024,
   /** Characters of a row's sender or subject. */

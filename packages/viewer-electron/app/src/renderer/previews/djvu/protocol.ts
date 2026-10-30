@@ -11,6 +11,6 @@ export type DjVuReply =
   | { kind: 'text'; id: number; text: string }
   | { kind: 'error'; id: number; message: string };
 /** The largest file and rendering the worker accepts. */
-export const djvuLimits = { bytes: 256 * 1024 * 1024, pixels: 40_000_000 };
+export const djvuLimits = { bytes: 256_000_000, pixels: 40_000_000 };
 /** CSS pixels are 96 per inch, so a page's size at 100% is its size at 96 dpi. */
 export const cssDPI = 96;

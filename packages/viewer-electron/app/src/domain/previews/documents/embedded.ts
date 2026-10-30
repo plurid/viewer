@@ -47,9 +47,9 @@ const factMembers: Record<EmbeddedFamily, (name: string) => boolean> = {
 };
 
 /** A picture is read whole; its signature and dimensions are checked before Chromium decodes it. */
-export const embeddedPictureLimits = { bytes: 32 * 1024 * 1024, pixels: 64_000_000 } as const;
+export const embeddedPictureLimits = { bytes: 32_000_000, pixels: 64_000_000 } as const;
 /** A member read for facts: a document's main XML or JSON. */
-export const embeddedFactLimit = 1024 * 1024;
+export const embeddedFactLimit = 1_000_000;
 /** The FixedDocuments counted in one XPS sequence. */
 const documentLimit = 16;
 

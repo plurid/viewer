@@ -11,6 +11,9 @@ import type { JournalFilter } from '../../domain/journal/events';
 import type { WorktreeSelection } from '../../domain/comparison/worktrees';
 import type { NoteKind } from '../../domain/editing/notes';
 import type { AgentTaskBundle } from '../../domain/agents/task-workflow';
+import type { LayoutMode } from '../../domain/layout/modes';
+/** What decides which plane an item opens in (`itemPlaneType`). */
+type PlaneItem = Pick<FileEntry, 'path' | 'directory' | 'extension'>;
 export interface WorkspaceController {
   installTaskArea(bundle: AgentTaskBundle): Promise<void>;
   newTaskArea(target: CapturedTarget, name: string): Promise<string>;
@@ -60,10 +63,12 @@ export interface WorkspaceController {
     fresh?: boolean,
     preset?: 'extract-audio',
   ): Promise<void>;
+  /** A Layout plane for the files, opened or brought forward; `mode` overrides its suggestion. */
+  openLayout(paths: string[], parentID?: string, mode?: LayoutMode): void;
   rootID(paneID: string): string | undefined;
   parentPaneID(paneID: string): string | undefined;
-  linkedPaneID(paneID: string, entry: Pick<FileEntry, 'path' | 'directory'>): string | undefined;
-  existingPaneID(paneID: string, entry: Pick<FileEntry, 'path' | 'directory'>): string | undefined;
+  linkedPaneID(paneID: string, entry: PlaneItem): string | undefined;
+  existingPaneID(paneID: string, entry: PlaneItem): string | undefined;
   subscribeLinks(listener: () => void): () => void;
   newSearch(
     query: string,
@@ -95,6 +100,8 @@ export interface WorkspaceController {
       activate?: boolean;
       /** A text file opens editing (Quick Preview's Edit). */
       edit?: boolean;
+      /** A document package opens as the folder it is (Show Package Contents). */
+      browse?: boolean;
     },
   ): void;
   openPath(

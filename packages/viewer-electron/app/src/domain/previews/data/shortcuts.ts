@@ -7,7 +7,7 @@ import { decodeBinaryPlist, isBinaryPlist, xmlPlistValue } from './plist';
  */
 export const shortcutFormats = ['url', 'webloc'] as const;
 /** A shortcut holds one address: more than this is not a shortcut. */
-export const shortcutLimit = 64 * 1024;
+export const shortcutLimit = 64_000;
 /** The schemes Open hands to another app. */
 export const openableSchemes: readonly string[] = ['http:', 'https:', 'mailto:'];
 

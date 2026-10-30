@@ -11,6 +11,7 @@ five minutes.
 | [Read and inspect files](previews.md)         | Use each file type's controls and pick up where you left off  |
 | [Explore a folder](explore.md)                | See what needs attention, ask a model, identify unknown files |
 | [Make a quick change](create.md)              | Convert images, shrink files, trim video, rearrange PDFs      |
+| [Lay out photos and PDFs](layout.md)          | Make collages, contact sheets, booklets, cards and posters    |
 | [Keep your work together](workspaces.md)      | Arrange planes, save views, use workspaces, back up your work |
 | [Work on a project](develop.md)               | Edit, run, review Git, start branch tasks, serve a site       |
 | [Make repeated work a command](automate.md)   | Save actions, type commands, use the CLI, add a model         |

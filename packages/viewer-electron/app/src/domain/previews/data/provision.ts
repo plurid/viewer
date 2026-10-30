@@ -10,10 +10,10 @@ import { base64Bytes } from '../keys/certificates';
 /** iOS and visionOS profiles, and macOS ones. */
 export const provisionFormats = ['mobileprovision', 'provisionprofile'] as const;
 export const provisionLimits = {
-  bytes: 4 * 1024 * 1024,
+  bytes: 4_000_000,
   /** Where the property list must start: the envelope's header comes before it. */
-  start: 64 * 1024,
-  plist: 2 * 1024 * 1024,
+  start: 64_000,
+  plist: 2_000_000,
   certificates: 100,
 } as const;
 

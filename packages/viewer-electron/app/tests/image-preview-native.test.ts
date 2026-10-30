@@ -35,9 +35,7 @@ it.skipIf(!ready)(
       'size',
     );
     await expect(previewSvg(processors, Buffer.from('<svg'), 64)).rejects.toThrow();
-    await expect(previewSvg(processors, Buffer.alloc(8 * 1024 * 1024 + 1), 64)).rejects.toThrow(
-      '8 MB',
-    );
+    await expect(previewSvg(processors, Buffer.alloc(8_000_001), 64)).rejects.toThrow('8 MB');
   },
 );
 

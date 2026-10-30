@@ -1,6 +1,6 @@
 import type { TreePlane } from '@plurid/plurid-data';
 import type { FileEntry, Pane, Workspace } from '../../domain/contracts';
-import { normalizedPanePath } from '../../domain/workspaces/planes';
+import { itemPlaneType, normalizedPanePath } from '../../domain/workspaces/planes';
 export function flattenTree(tree: TreePlane[]): TreePlane[] {
   return tree.flatMap((node) => [node, ...flattenTree(node.children ?? [])]);
 }
@@ -24,6 +24,7 @@ const routeKinds: Record<Pane['type'], string> = {
   server: 'servers',
   browser: 'browsers',
   media: 'media',
+  layout: 'layouts',
   journal: 'journals',
   overview: 'overviews',
 };
@@ -72,12 +73,9 @@ export function linkedPaneID(
   tree: TreePlane[],
   space: Workspace,
   parentID: string,
-  entry: Pick<FileEntry, 'path' | 'directory'>,
+  entry: Pick<FileEntry, 'path' | 'directory' | 'extension'>,
   platform: string,
 ): string | undefined {
-  const key = linkKey(
-    entry.directory ? 'folder' : 'preview',
-    normalizedPanePath(entry.path, platform),
-  );
+  const key = linkKey(itemPlaneType(entry), normalizedPanePath(entry.path, platform));
   return linkIndex(tree, space, platform).get(parentID)?.get(key);
 }

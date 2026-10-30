@@ -1,6 +1,7 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
+import type { Stats } from 'node:fs';
 import type { DocumentData } from '../../domain/services';
 import type { MailboxRow, MailboxSpan } from '../../domain/previews/mail/mailbox';
 import type { SavedPage } from '../../domain/previews/saved-page';
@@ -39,9 +40,12 @@ async function openMailbox(file: string) {
     await handle.close();
     throw new Error('This mailbox is not a regular file.');
   }
-  const version = JSON.stringify([file, info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs]);
-  return { handle, size: info.size, version };
+  return { handle, size: info.size, version: mailboxVersion(file, info) };
 }
+/** The key of a mailbox's scanned messages. */
+const mailboxVersion = (file: string, info: Stats) =>
+  JSON.stringify([file, info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs]);
+const messageTooLarge = 'This message is larger than 64 MB.';
 
 /** Reads the mailbox from its start, a chunk at a time, until `until` is located or a limit
  * reached; only each message's first header bytes are kept. */
@@ -84,6 +88,25 @@ async function scan(
   };
 }
 
+/** One message of an open mailbox, from where a scan found it. */
+async function mailboxMessageAt(
+  handle: FileHandle,
+  size: number,
+  version: string,
+  message: number,
+  signal: AbortSignal | undefined,
+): Promise<Uint8Array> {
+  const spans = scanned.get(version) ?? (await scan(handle, size, signal, message)).spans;
+  const span = spans[message];
+  if (!span || span.end < 0) throw new Error('This message is no longer in the mailbox.');
+  const length = span.end - span.start;
+  if (length > mailLimits.messageBytes) throw new Error(messageTooLarge);
+  const bytes = Buffer.alloc(length);
+  const { bytesRead } = await handle.read(bytes, 0, length, span.start);
+  if (bytesRead !== length || !bytes.subarray(0, 5).equals(Buffer.from('From ')))
+    throw new Error('The mailbox changed while it was read. Open it again.');
+  return mailboxMessage(bytes);
+}
 /** One message of a mailbox, from where a scan found it. */
 async function mailboxBytes(
   file: string,
@@ -92,16 +115,7 @@ async function mailboxBytes(
 ): Promise<Uint8Array> {
   const { handle, size, version } = await openMailbox(file);
   try {
-    const spans = scanned.get(version) ?? (await scan(handle, size, signal, message)).spans;
-    const span = spans[message];
-    if (!span || span.end < 0) throw new Error('This message is no longer in the mailbox.');
-    const length = span.end - span.start;
-    if (length > mailLimits.messageBytes) throw new Error('This message is larger than 64 MB.');
-    const bytes = Buffer.alloc(length);
-    const { bytesRead } = await handle.read(bytes, 0, length, span.start);
-    if (bytesRead !== length || !bytes.subarray(0, 5).equals(Buffer.from('From ')))
-      throw new Error('The mailbox changed while it was read. Open it again.');
-    return mailboxMessage(bytes);
+    return await mailboxMessageAt(handle, size, version, message, signal);
   } finally {
     await handle.close();
   }
@@ -120,6 +134,36 @@ async function messageBytes(
     return mailboxBytes(file, message, signal);
   }
   const bytes = await documentBytes(file, mailLimits.messageBytes);
+  return format === 'emlx' ? emlxMessage(bytes) : bytes;
+}
+
+/**
+ * The RFC 822 bytes of an open message file, or of one message of an open mailbox: what a saved
+ * attachment is read from. The caller holds a read coordination claim for `file`, owns the handle,
+ * and checks the file's version once it has what it needs.
+ */
+export async function openedMessageBytes(
+  file: string,
+  handle: FileHandle,
+  format: string,
+  message: number | undefined,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
+  const info = await handle.stat();
+  if (!info.isFile()) throw new Error('This message is not a regular file.');
+  if (format === 'mbox') {
+    if (message === undefined) throw new Error('Choose a message of this mailbox.');
+    return mailboxMessageAt(handle, info.size, mailboxVersion(file, info), message, signal);
+  }
+  if (message !== undefined) throw new Error('This file holds one message, not a mailbox.');
+  if (info.size > mailLimits.messageBytes) throw new Error(messageTooLarge);
+  const bytes = new Uint8Array(info.size);
+  for (let offset = 0; offset < bytes.length;) {
+    signal.throwIfAborted();
+    const { bytesRead } = await handle.read(bytes, offset, bytes.length - offset, offset);
+    if (!bytesRead) throw new Error('The message changed while it was read. Open it again.');
+    offset += bytesRead;
+  }
   return format === 'emlx' ? emlxMessage(bytes) : bytes;
 }
 

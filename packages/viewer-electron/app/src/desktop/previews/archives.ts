@@ -9,7 +9,7 @@ import { formatBytes } from '../../domain/files/entries';
 import { fileCoordination } from '../files/file-coordination';
 import { imageDimensions } from './image-dimensions';
 
-const ENTRY_LIMIT = 32 * 1024 * 1024;
+const ENTRY_LIMIT = 32_000_000;
 const INDEX_LIMIT = 20000;
 const unzip = promisify(inflateRaw),
   ungzip = promisify(gunzip);
@@ -359,7 +359,7 @@ export class Archives {
       throw new Error(
         'Extraction supports unencrypted ZIP and regular TAR files up to 32 MB per entry. Nothing was extracted.',
       );
-    if (index.entries.reduce((bytes, entry) => bytes + entry.size, 0) > 256 * 1024 * 1024)
+    if (index.entries.reduce((bytes, entry) => bytes + entry.size, 0) > 256_000_000)
       throw new Error('Extraction is limited to 256 MB of expanded data. Nothing was extracted.');
     return index.entries;
   }
@@ -483,8 +483,7 @@ export class Archives {
       }
       let data: Buffer | undefined;
       if (signature[0] === 0x1f && signature[1] === 0x8b) {
-        if (info.size > 64 * 1024 * 1024)
-          throw new Error('Compressed TAR preview is limited to 64 MB.');
+        if (info.size > 64_000_000) throw new Error('Compressed TAR preview is limited to 64 MB.');
         // Native zlib runs in the worker pool; one decompression at a time bounds memory.
         data = await this.background(async () => {
           const compressed = Buffer.alloc(info.size);

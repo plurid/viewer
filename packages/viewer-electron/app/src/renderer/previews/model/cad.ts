@@ -6,7 +6,7 @@ export function importCad(
   signal: AbortSignal,
 ): Promise<CadMesh[]> {
   return new Promise((resolve, reject) => {
-    if (buffer.byteLength > 64 * 1024 * 1024) {
+    if (buffer.byteLength > 64_000_000) {
       reject(new Error('This CAD file exceeds the conversion limit (64 MB).'));
       return;
     }

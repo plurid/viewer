@@ -6,7 +6,12 @@ import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid
 import { PLURID_PUBSUB_TOPIC, type TreePlane, type TreePlaneLocation } from '@plurid/plurid-data';
 import type { FileEntry } from '../../domain/contracts';
 import type { EvidenceNavigation } from '../../domain/files/inspection';
-import { baseName, matchingPane, normalizedPanePath } from '../../domain/workspaces/planes';
+import {
+  baseName,
+  itemPlaneType,
+  matchingPane,
+  normalizedPanePath,
+} from '../../domain/workspaces/planes';
 import {
   activeWorkspace,
   addPane,
@@ -249,7 +254,7 @@ export function useWorkspaceController({
         const matches = activeWorkspace().panes.filter(
           (pane) =>
             nodes.has(pane.id) &&
-            pane.type === (entry.directory ? 'folder' : 'preview') &&
+            pane.type === itemPlaneType(entry) &&
             normalizedPanePath(pane.path, getState().bootstrap.platform) === path,
         );
         const owners = engine.current
@@ -725,6 +730,7 @@ export function useWorkspaceController({
           evidence?: EvidenceNavigation;
           activate?: boolean;
           edit?: boolean;
+          browse?: boolean;
         },
       ) {
         if (!entry.directory && entry.name === 'viewer.project.jsonc') {
@@ -751,7 +757,7 @@ export function useWorkspaceController({
           space.panes.some((pane) => pane.id === parentPaneID);
         if (parentPaneID && !parent && !pendingParent)
           throw new Error('The originating plane is no longer available.');
-        const type = entry.directory ? 'folder' : 'preview';
+        const type = options?.browse && entry.directory ? 'folder' : itemPlaneType(entry);
         const platform = getState().bootstrap.platform;
         const path = normalizedPanePath(entry.path, platform);
         const rootMatches = !parentPaneID
@@ -782,7 +788,7 @@ export function useWorkspaceController({
         if (parentPaneID && !parent)
           throw new Error('The originating plane is no longer available.');
         const linked = !!parent && !options?.another;
-        const pane = addPane(entry.path, entry.directory ? 'folder' : 'preview', !linked, {
+        const pane = addPane(entry.path, type, !linked, {
           keepSeparate: options?.another,
         });
         pending.set(pane.id, linked ? (rootID ?? pane.id) : pane.id);
@@ -793,12 +799,7 @@ export function useWorkspaceController({
           continueEditing(pane.id, crypto.randomUUID());
         setActivePane(pane.id);
         if (api && linked) {
-          spawnChildPlane(
-            api,
-            paneRoute(entry.directory ? 'folder' : 'preview', pane.id),
-            parent!.planeID,
-            options?.link,
-          );
+          spawnChildPlane(api, paneRoute(type, pane.id), parent!.planeID, options?.link);
           const liveParent = flattenTree(api.tree.get()).find(
             (node) => hostID(node) === parentPaneID,
           );

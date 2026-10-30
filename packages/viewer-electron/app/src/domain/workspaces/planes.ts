@@ -1,5 +1,14 @@
-import type { Pane, Workspace } from '../contracts';
+import type { FileEntry, Pane, Workspace } from '../contracts';
 import { gitActionLabels } from '../comparison/git-actions';
+import { previewsAsFile } from '../previews/documents/embedded';
+
+/** The planes a file system item opens in. */
+export type ItemPlaneType = Extract<Pane['type'], 'folder' | 'preview'>;
+/** A folder opens a folder plane. A file, or a document package such as a Pages document, opens a
+ * preview plane showing what Quick Preview shows. */
+export function itemPlaneType(entry: Pick<FileEntry, 'directory' | 'extension'>): ItemPlaneType {
+  return previewsAsFile(entry) ? 'preview' : 'folder';
+}
 
 /** Shared identity for plane headers, related-plane navigation and saved views. */
 export function paneTitle(pane: Pane, collectionName?: string): string {
@@ -11,6 +20,11 @@ export function paneTitle(pane: Pane, collectionName?: string): string {
       return 'Command receipt';
     case 'media':
       return 'Edit media · ' + name;
+    case 'layout':
+      return (
+        'Layout · ' +
+        (pane.sources.length === 1 ? baseName(pane.sources[0]!) : `${pane.sources.length} files`)
+      );
     case 'browser':
       return pane.title || new URL(pane.url).hostname;
     case 'scratch':

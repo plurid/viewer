@@ -21,7 +21,7 @@ const introduction = [
 const descriptions: Record<string, string[]> = {
   'settings.checkpoints': [
     'Optional recovery copies for reviewed batch changes. Disabled unless selected during review.',
-    'budgetBytes is the total retained content budget; 5368709120 bytes is 5 GiB.',
+    'budgetBytes is the total retained content budget; 5000000000 bytes is 5 GB.',
     'Checkpoint files and credentials stay in private application data, outside project definitions.',
     'Coverage is reported before applying: content copies do not promise Finder metadata or ACL recovery.',
   ],

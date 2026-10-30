@@ -7,10 +7,10 @@ const emptySubscription = () => () => {};
 export function LinkedPlaneButton({ paneID, entry }: { paneID?: string; entry: FileEntry }) {
   const workspace = useContext(WorkspaceContext);
   useViewer((state) => activeWorkspace(state).panes);
-  const { path, directory } = entry;
+  const { path, directory, extension } = entry;
   const snapshot = useCallback(
-    () => (paneID ? workspace?.linkedPaneID(paneID, { path, directory }) : undefined),
-    [workspace, paneID, path, directory],
+    () => (paneID ? workspace?.linkedPaneID(paneID, { path, directory, extension }) : undefined),
+    [workspace, paneID, path, directory, extension],
   );
   const id = useSyncExternalStore(workspace?.subscribeLinks ?? emptySubscription, snapshot);
   if (!id) return null;
