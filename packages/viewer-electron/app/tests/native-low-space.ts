@@ -151,7 +151,11 @@ try {
   }
   for (const kind of ['copy', 'move'] as const) {
     await check(
-      'Native low-space ' + kind + ' preserves source and removes private partial output',
+      'Native low-space ' +
+        kind +
+        ' preserves source and ' +
+        (process.env.VIEWER_TEST_NO_REMOVAL === '1' ? 'keeps' : 'removes') +
+        ' private partial output',
       async () => {
         const job = await operate({ kind, sources: [source], destination: root });
         assert.equal(job.status, 'failed');
@@ -159,12 +163,24 @@ try {
         assert.equal(job.undoable, false);
         assert.match(job.errors.map((e) => e.message).join('\n'), /ENOSPC|space/i);
         assert.equal(await hash(source), sourceHash);
+        const left = await readdir(root);
+        const report = JSON.stringify({ left, errors: job.errors });
         assert.ok(
-          !(await readdir(root)).some(
-            (name) => name === path.basename(source) || name.startsWith('.viewer-transfer-'),
-          ),
-          'No published or staged partial transfer survives',
+          !left.includes(path.basename(source)),
+          'No partial transfer is published ' + report,
         );
+        // Cleanup moves the private partial output to the Trash. With VIEWER_TEST_NO_REMOVAL=1 the
+        // packaged app refuses that (AGENTS.md), so the output stays, reported as kept.
+        if (process.env.VIEWER_TEST_NO_REMOVAL === '1')
+          assert.ok(
+            job.errors.some((error) => /kept/.test(error.message)),
+            'The kept partial output is reported ' + report,
+          );
+        else
+          assert.ok(
+            !left.some((name) => name.startsWith('.viewer-transfer-')),
+            'No staged partial transfer survives ' + report,
+          );
         return {
           kind,
           status: job.status,

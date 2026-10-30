@@ -219,3 +219,9 @@ session where explicitly approved Trash actions are enabled.
 `tests/native/agent-consent.ts --interactive` exercises denial, grants, scoped reads and revocation.
 Add `--deny-only` to check native cancellation without granting any access. Its receipt marks the
 remaining grant checks unverified; an operator denial check is not full consent acceptance.
+
+`tests/native-agent-navigation.ts`, `tests/native-agent-clients.ts` and
+`tests/native-agent-safety.ts` need agent access, which only the native Allow grants: neither
+configuration nor a Settings patch turns it on. Run them with `--interactive` in a supervised
+terminal and click Allow twice, once for the shared client and once for the generated folder.
+Without `--interactive` they stop before creating anything.

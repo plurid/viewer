@@ -1,7 +1,7 @@
 /** Cold-restart checks of the packaged app, using hidden windows and an owned profile. */
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -195,10 +195,18 @@ async function launch(expected?: WindowFrame['bounds']): Promise<WindowFrame> {
     }
   }
 }
+/** Sets the frame the next launch restores. A workspace's own frame (window-states/) comes before
+ * the window's (main.ts), so both are written. */
+async function saveFrame(frame: WindowFrame): Promise<void> {
+  await writeFile(stateFile, JSON.stringify(frame));
+  const folder = path.join(profile, 'window-states');
+  for (const name of await readdir(folder))
+    await writeFile(path.join(folder, name), JSON.stringify(frame));
+}
 try {
   const first = await launch();
   const rectangle = { ...first, bounds: first.display.workArea };
-  await writeFile(stateFile, JSON.stringify(rectangle));
+  await saveFrame(rectangle);
   await launch(rectangle.bounds);
   await launch(rectangle.bounds);
   const area = first.display.workArea;
@@ -212,7 +220,7 @@ try {
     },
   };
   if (ordinary.bounds.width >= 780 && ordinary.bounds.height >= 560) {
-    await writeFile(stateFile, JSON.stringify(ordinary));
+    await saveFrame(ordinary);
     await launch(ordinary.bounds);
     await launch(ordinary.bounds);
   }

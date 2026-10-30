@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { SavedState } from '../src/domain/contracts';
+import { CURRENT_STATE_VERSION, type SavedState } from '../src/domain/contracts';
 import type { ProjectDefinition, ProjectDocument } from '../src/domain/workspaces/project';
 import { ownedApp, until } from './owned-app';
 import {
@@ -248,7 +248,8 @@ try {
     await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8'),
   ) as SavedState;
   assert.equal(cold.previewStates?.['work:preview']?.['notes.text'], 'Generated durable note.');
-  assert.equal(cold.version, 4);
+  // Saved in the current format, whatever version the profile started from
+  assert.equal(cold.version, CURRENT_STATE_VERSION);
   viewer = await ownedApp(binary, profile);
   connection = await viewer.connect();
   evaluate = connection.evaluate;

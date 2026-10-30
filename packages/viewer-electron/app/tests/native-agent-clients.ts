@@ -1,16 +1,20 @@
-/** Packaged per-client MCP authority using only an owned app and generated files. */
+/** Packaged per-client MCP authority using only an owned app and generated files. Agent access
+ * needs the operator's native Allow: run with --interactive in a supervised terminal. */
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ownedApp, until } from './owned-app';
-import { countOf, exists, patchSettings } from './native/runtime/page';
+import { grantAgentAccess, operatorSession } from './native/runtime/agent-access';
+import { countOf, exists } from './native/runtime/page';
 import { pageCall } from './native/runtime/page-function';
 import type { AgentClient, AgentClientInput, AgentClientReply } from '../src/domain/agents/clients';
 import type { DrawingGeometryPage } from '../src/domain/previews/drawings/geometry';
 import { panelDrawing } from './dxf-fixtures';
 import { officeFixture } from './office-fixtures';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+
+operatorSession('native-agent-clients');
 const root = await temporaryRoot('viewer-native-clients-');
 const profile = path.join(root, 'Profile'),
   shared = path.join(root, 'Shared'),
@@ -58,6 +62,7 @@ const viewer = await ownedApp(
   process.env.VIEWER_TEST_BINARY ??
     path.resolve('out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer'),
   profile,
+  { mode: 'foreground' },
 );
 let main: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const evidence: string[] = [];
@@ -72,7 +77,6 @@ try {
   main = await viewer.connect();
   const evaluate = main.evaluate;
   await until(() => evaluate(exists('.folder-explorer')), Boolean, 'owned folder renderer');
-  await evaluate(patchSettings({ path: 'settings.agents.enabled', value: true }));
   assert.match(
     await evaluate(
       pageCall(() =>
@@ -86,6 +90,8 @@ try {
   );
   await evaluate(pageCall(() => window.viewer.openSettings()));
   const settings = await viewer.connect(true);
+  // Agent access starts only from Settings, with the operator's native Allow.
+  await grantAgentAccess(settings, [shared]);
   const input: AgentClientInput = {
     name: 'Navigator',
     roots: [shared],

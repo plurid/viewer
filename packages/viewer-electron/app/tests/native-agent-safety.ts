@@ -1,4 +1,5 @@
-/** Reject-only native MCP checks. All generated files, profiles and captures are preserved. */
+/** Reject-only native MCP checks. All generated files, profiles and captures are preserved. Agent
+ * access needs the operator's native Allow: run with --interactive in a supervised terminal. */
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import os from 'node:os';
@@ -13,10 +14,12 @@ import type { AgentProposal } from '../src/domain/agents/requests';
 import type { CustomAction } from '../src/domain/automation/actions';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
+import { grantAgentAccess, operatorSession } from './native/runtime/agent-access';
 import { buttonState, patchSettings, pressButton, textOf } from './native/runtime/page';
 import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot } from '../tools/temporary';
 
+operatorSession('native-agent-safety');
 const root = await temporaryRoot('viewer-agent-safety-');
 const profile = path.join(root, 'Profile'),
   shared = path.join(root, 'Shared');
@@ -213,7 +216,7 @@ const output = await mkdtemp(path.resolve('out/agent-safety-acceptance-'));
 const binary =
   process.env.VIEWER_TEST_BINARY ??
   path.resolve('out/Viewer-safety-v5-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
-const viewer = await ownedApp(binary, profile);
+const viewer = await ownedApp(binary, profile, { mode: 'foreground' });
 let main: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const evidence: string[] = [];
 const captures: string[] = [];
@@ -223,6 +226,8 @@ try {
   await main.evaluate(pageCall(selectFileAndFolder, file, nested));
   await main.evaluate(pageCall(() => window.viewer.openSettings()));
   const settings = await viewer.connect(true);
+  // The folder config.jsonc requests waits for the operator's native Allow, as access does.
+  await grantAgentAccess(settings, [shared]);
   const reply = await settings.evaluate(
     pageCall((client: AgentClientInput) => window.viewer.agentClients({ kind: 'create', client }), {
       name: 'Safety checks',

@@ -1,4 +1,5 @@
-/** Actual packaged stdio MCP client and rendered reviews in a hidden owned app. */
+/** Actual packaged stdio MCP client and rendered reviews in an owned app. Agent access needs the
+ * operator's native Allow: run with --interactive in a supervised terminal. */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -7,11 +8,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { AgentProposal, AgentWorkspace } from '../src/domain/agents/requests';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
-import { countOf, exists, patchSettings } from './native/runtime/page';
+import { grantAgentAccess, operatorSession } from './native/runtime/agent-access';
+import { countOf, exists } from './native/runtime/page';
 import { pageCall } from './native/runtime/page-function';
 import type { PageExpression } from './native/runtime/page-function';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
+operatorSession('native-agent-navigation');
 const binary =
   process.env.VIEWER_TEST_BINARY ||
   path.resolve('out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
@@ -73,7 +76,7 @@ const initial: SavedState = {
   ],
 };
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(initial));
-const viewer = await ownedApp(binary, profile);
+const viewer = await ownedApp(binary, profile, { mode: 'foreground' });
 let connection: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 let client: ReturnType<typeof spawn> | undefined;
 let stdout = '',
@@ -88,6 +91,11 @@ const pending = new Map<
   }
 >();
 const evidence: string[] = [];
+/** Records a check, and prints it as it passes so a failure shows how far the run got. */
+const passed = (line: string) => {
+  evidence.push(line);
+  console.log('PASS ' + line);
+};
 
 /** Presses the open review's primary button, or its Reject button. */
 function answerReview(approve: boolean) {
@@ -107,12 +115,9 @@ try {
   const readState = async () =>
     JSON.parse(await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8')) as SavedState;
   await until(() => evaluate(countOf('.folder-explorer')), Boolean, 'owned folder renderer');
-  await evaluate(
-    patchSettings(
-      { path: 'settings.agents.enabled', value: true },
-      { path: 'settings.agents.roots', value: [shared] },
-    ),
-  );
+  // Agent access starts only from Settings, with the operator's native Allow.
+  await evaluate(pageCall(() => window.viewer.openSettings()));
+  await grantAgentAccess(await viewer.connect(true), [shared]);
   await until(
     () => readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8').catch(() => ''),
     Boolean,
@@ -159,7 +164,8 @@ try {
         reject,
         timer: setTimeout(() => {
           pending.delete(id);
-          reject(new Error('Packaged MCP request timed out: ' + method));
+          const tool = (params as { name?: string } | undefined)?.name;
+          reject(new Error('Packaged MCP request timed out: ' + method + (tool ? ' ' + tool : '')));
         }, 10000),
       });
       client!.stdin!.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
@@ -219,7 +225,7 @@ try {
   assert.ok(!JSON.stringify(workspaces).includes(secret));
   assert.ok(!JSON.stringify(workspaces).match(/arrangement|history/));
   await assert.rejects(call('propose_open_path', { path: secret }), /outside/);
-  evidence.push(
+  passed(
     'Private stdio MCP transport, six advertised navigation tools, live discovery and denied-path redaction.',
   );
   const rejected = await call<{ id: string; requiresUserReview: boolean }>('propose_open_path', {
@@ -247,7 +253,7 @@ try {
     pageCall(() => document.querySelector('.folder-explorer')!.textContent),
   );
   assert.match(viewText, /2 selected/);
-  evidence.push(
+  passed(
     'Rendered Reject/Open path/Select files controls, deferred execution, ordinary folder history and actual two-file selection.',
   );
   const rootOpen = await call<{ id: string }>('propose_open_path', {
@@ -283,7 +289,7 @@ try {
     (pane) => pane.type === 'preview' && pane.path === second,
   )!;
   assert.ok(!linkedState.workspaces[0].roots.includes(child.id));
-  evidence.push(
+  passed(
     'Independent root versus linked preview planes and reviewed plane focus without manual intervention.',
   );
   const change = await call<{ id: string }>('propose_workspace_switch', { name: 'Downloads' });
@@ -311,7 +317,7 @@ try {
         .panes.some((pane) => pane.path === downloads),
     'agent-created root from empty workspace',
   );
-  evidence.push(
+  passed(
     'Workspace switch by name/ID, continuation from a file preview and root creation from an empty workspace.',
   );
   client.stdin!.end();
@@ -328,7 +334,7 @@ try {
       {
         timestamp: new Date().toISOString(),
         binary,
-        hiddenOwnedProfile: true,
+        hiddenOwnedProfile: false,
         passes: evidence,
         releaseReady: false,
         limitation:
@@ -339,8 +345,19 @@ try {
     ),
   );
   console.log(
-    'PASS packaged MCP discovery, reviewed open/select/focus/switch, root/linked placement and empty-workspace continuation. Generated files preserved; no foreground activation or clipboard changes.',
+    'PASS packaged MCP discovery, reviewed open/select/focus/switch, root/linked placement and empty-workspace continuation, after the operator allowed access. Generated files preserved; no clipboard changes.',
   );
+} catch (error) {
+  const shot = await connection
+    ?.command<{ data: string }>('Page.captureScreenshot', { format: 'png' })
+    .catch(() => undefined);
+  if (shot) {
+    await writeFile(path.join(root, 'failure.png'), Buffer.from(shot.data, 'base64'));
+    console.error('Failure screenshot: ' + path.join(root, 'failure.png'));
+  }
+  console.error('Agent client stderr:\n' + stderr.slice(-2000));
+  console.error('App output:\n' + viewer.output().slice(-3000));
+  throw error;
 } finally {
   for (const request of pending.values()) clearTimeout(request.timer);
   pending.clear();

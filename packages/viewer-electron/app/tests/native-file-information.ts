@@ -117,8 +117,18 @@ try {
     (await evaluate(pageCall(viewerJobs))).find((job) => job.id === aliasID)?.undoable,
     true,
   );
-  await evaluate(pageCall((id: string) => window.viewer.undo(id), aliasID));
-  await assert.rejects(readFile(alias), { code: 'ENOENT' });
+  // Undo moves the alias to the Trash, which the packaged app refuses with VIEWER_TEST_NO_REMOVAL=1
+  // (AGENTS.md): then the alias stays.
+  if (process.env.VIEWER_TEST_NO_REMOVAL === '1') {
+    await assert.rejects(
+      evaluate(pageCall((id: string) => window.viewer.undo(id), aliasID)),
+      /Automated native tests cannot move /,
+    );
+    assert.equal((await evaluate(pageCall(informationOf, alias))).alias, true);
+  } else {
+    await evaluate(pageCall((id: string) => window.viewer.undo(id), aliasID));
+    await assert.rejects(readFile(alias), { code: 'ENOENT' });
+  }
   assert.equal(await readFile(file, 'utf8'), 'Preserve this generated content.');
   await until(
     () =>
@@ -229,7 +239,9 @@ try {
     );
   }
   console.log(
-    'PASS packaged native metadata, stale-edit rejection, Foundation tags/alias, cold alias Undo, Get Info keyboard entry and two viewport layouts. Native Quick Look/Share UI and Store sandbox acceptance remain separate.',
+    'PASS packaged native metadata, stale-edit rejection, Foundation tags/alias, cold alias Undo ' +
+      (process.env.VIEWER_TEST_NO_REMOVAL === '1' ? 'refused in automated runs' : 'removing it') +
+      ', Get Info keyboard entry and two viewport layouts. Native Quick Look/Share UI and Store sandbox acceptance remain separate.',
   );
 } finally {
   await viewer.close(connection);
