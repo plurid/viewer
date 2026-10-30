@@ -8,6 +8,7 @@ import type { InventoryItem } from './answer';
 import type { PageText } from './check';
 import type { MeasurementSummary } from './measure';
 import { fabricationAnswerSchema } from './answer';
+import { pageLines } from './page-text';
 
 export const checkAnswerSchema = z.toJSONSchema(fabricationAnswerSchema) as Record<string, unknown>;
 
@@ -17,10 +18,12 @@ The job is the inventory: every file has a ref (S1, S2, …), a kind and its nam
 - drawing: dimensioned drawing pages, each a picture with the page's text and the box of each text run.
 - photo: photos of parts or samples, as pictures.
 - dxf: a cutting file as Viewer measured it, in millimetres: outlines (each a separate piece), holes with their entity ids, pitches between holes, and what its file name gives when it follows a convention Viewer reads, such as g6 for 6 mm and 4buc for 4 pieces. Names are a shop's habit, not a source: read values from the request and drawings first.
+Every quote is one passage copied exactly as printed: one line, one table row or one text run, the shortest that states the value. Never join text from different places into one quote.
 Find where the job disagrees with itself: a hole pitch, diameter, outline size or hole count the drawing gives and the DXF does not have; a part the request names without a DXF. Viewer compares quantities and thicknesses itself, from what you list in request.
 For each finding give:
-- drawing: the drawing or request the value is read from, its page, the value in millimetres (or pieces), the exact text quoted from that page, and a box around that text or feature as [left, top, right, bottom] fractions of the page. Use the text boxes the page lists.
+- drawing: the drawing or request the value is read from, its page, the value in millimetres (or pieces) and its quote; box: the box of the quoted text, from the text boxes the page lists; feature: a box around the hole, edge or part the value is about, or null when the page draws none, as for a title block. Boxes are [left, top, right, bottom] fractions of the page.
 - dxf: the DXF ref, the value its measurement gives, the axis, and the entity ids: exactly the two holes' entities for a pitch, the hole's for a diameter, the outline's for a size.
+- photo, when a photo shows it: its ref; box: the region of the photo that shows it; feature: a box around the part or hole itself.
 - proposal, only for a pitch the DXF draws other than the drawing gives: the drawing's value as target, and the entity ids of the holes that move (the hole whose pitch is set and any that move with it, such as its column). Never list the hole that stays.
 Take every number from the inputs and never invent one. Viewer measures every DXF value itself and grades each finding; a finding it cannot measure is marked unverified.
 Then plan a tour of at most 8 stops that shows a person each finding: the request's line, the drawing's region with its box, the DXF's holes by entity id, a photo. Each caption says in one short sentence what the stop shows, with its values.
@@ -82,10 +85,16 @@ export function checkInput(input: Omit<CheckInput, 'pictures'>, pictures: number
   };
 }
 
-/** A page's text as one string, in the order the page gives its runs, for checking quotes. */
+/** A page's text as one string, for checking quotes: its runs in the order the page gives them,
+ * a space between the runs of a printed line and a line break between lines (`pageLines`). */
 export const pageText = (items: readonly PageText[]) =>
-  items
-    .map((item) => item.text)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  pageLines(items)
+    .map((line) =>
+      line
+        .map((index) => items[index]!.text)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    )
+    .filter(Boolean)
+    .join('\n');

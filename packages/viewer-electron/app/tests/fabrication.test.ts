@@ -10,6 +10,8 @@ import {
   modelInventory,
 } from '../src/domain/fabrication/answer';
 import { correctDrawing, correctionFor } from '../src/domain/fabrication/correction';
+import { pageText } from '../src/domain/fabrication/prompt';
+import { quoteOn, quotePassages } from '../src/domain/fabrication/quotes';
 import { checkTour } from '../src/domain/fabrication/tour';
 import { boxRegion } from '../src/domain/files/regions';
 import { tourDefinitionSchema } from '../src/domain/tours/tour';
@@ -253,7 +255,14 @@ const pitchFinding = (patch: Partial<Finding> = {}): Finding => ({
   id: 'F1',
   kind: 'pitch',
   summary: 'The DXF puts the bottom holes 48 mm apart; the drawing gives 50 mm.',
-  drawing: { ref: 'S2', page: 1, value: 50, quote: '50 mm pitch', box: [0.4, 0.2, 0.6, 0.3] },
+  drawing: {
+    ref: 'S2',
+    page: 1,
+    value: 50,
+    quote: '50 mm pitch',
+    box: [0.4, 0.2, 0.6, 0.3],
+    feature: null,
+  },
   dxf: { ref: 'S4', value: 48, axis: 'x', entities: ['8', '9'] },
   photo: null,
   proposal: { target: 50, move: ['9', '11'] },
@@ -284,7 +293,7 @@ describe('grading', () => {
         'Viewer measured 48.00 mm between holes 4 and 5 along x, not the 47 mm the finding gives.',
     });
     const vertical = pitchFinding({
-      drawing: { ref: 'S2', page: 1, value: 50, quote: null, box: null },
+      drawing: { ref: 'S2', page: 1, value: 50, quote: null, box: null, feature: null },
       dxf: { ref: 'S4', value: 48, axis: null, entities: ['10', '8'] },
     });
     expect(gradeFinding(vertical, job)).toMatchObject({
@@ -296,7 +305,11 @@ describe('grading', () => {
   });
 
   it('leaves photo-only claims, unmeasurable entities and missing quotes unverified', () => {
-    const photo = pitchFinding({ dxf: null, photo: { ref: 'S3', box: null }, proposal: null });
+    const photo = pitchFinding({
+      dxf: null,
+      photo: { ref: 'S3', box: null, feature: null },
+      proposal: null,
+    });
     expect(gradeFinding(photo, job)).toMatchObject({
       status: 'unverified',
       reason: 'Only a photo shows this; Viewer measures DXF drawings.',
@@ -313,7 +326,14 @@ describe('grading', () => {
     expect(
       gradeFinding(
         pitchFinding({
-          drawing: { ref: 'S2', page: 1, value: 50, quote: '52 mm pitch', box: null },
+          drawing: {
+            ref: 'S2',
+            page: 1,
+            value: 50,
+            quote: '52 mm pitch',
+            box: null,
+            feature: null,
+          },
         }),
         job,
       ),
@@ -339,19 +359,19 @@ describe('grading', () => {
   it('checks diameters, sizes and counts, and quantities against the name', () => {
     const diameter = pitchFinding({
       kind: 'diameter',
-      drawing: { ref: 'S2', page: 1, value: 11, quote: null, box: null },
+      drawing: { ref: 'S2', page: 1, value: 11, quote: null, box: null, feature: null },
       dxf: { ref: 'S4', value: 10.5, axis: null, entities: ['8'] },
     });
     expect(gradeFinding(diameter, job)).toMatchObject({ status: 'confirmed', measured: 10.5 });
     const width = pitchFinding({
       kind: 'size',
-      drawing: { ref: 'S2', page: 1, value: 160, quote: null, box: null },
+      drawing: { ref: 'S2', page: 1, value: 160, quote: null, box: null, feature: null },
       dxf: { ref: 'S4', value: 160, axis: 'x', entities: [] },
     });
     expect(gradeFinding(width, job)).toMatchObject({ status: 'refuted', measured: 160 });
     const count = pitchFinding({
       kind: 'holes',
-      drawing: { ref: 'S2', page: 1, value: 6, quote: null, box: null },
+      drawing: { ref: 'S2', page: 1, value: 6, quote: null, box: null, feature: null },
       dxf: { ref: 'S4', value: 5, axis: null, entities: [] },
     });
     expect(gradeFinding(count, job)).toMatchObject({
@@ -361,7 +381,7 @@ describe('grading', () => {
     });
     const quantity = pitchFinding({
       kind: 'quantity',
-      drawing: { ref: 'S1', page: 1, value: 4, quote: null, box: null },
+      drawing: { ref: 'S1', page: 1, value: 4, quote: null, box: null, feature: null },
       dxf: { ref: 'S4', value: 2, axis: null, entities: [] },
     });
     expect(gradeFinding(quantity, job)).toMatchObject({
@@ -460,6 +480,7 @@ describe('answer schema', () => {
     expect(tourDefinitionSchema.parse({ version: 1, name: 'Job 1042', stops }).stops).toEqual(
       stops,
     );
+    // without the page's text runs, the quote is marked by the box the model gave
     expect(stops[0]).toEqual({
       id: 'stop-1',
       caption: 'The drawing gives 50 mm.',
@@ -473,7 +494,12 @@ describe('answer schema', () => {
         anchor: {
           kind: 'pdf',
           page: 1,
-          region: boxRegion({ x: 0.4, y: 0.2, width: 0.6 - 0.4, height: 0.3 - 0.2 }),
+          marks: [
+            {
+              kind: 'text',
+              region: boxRegion({ x: 0.4, y: 0.2, width: 0.6 - 0.4, height: 0.3 - 0.2 }),
+            },
+          ],
           search: false,
         },
         quote: '50 mm pitch',
@@ -529,6 +555,52 @@ describe('answer schema', () => {
     expect(outside.skipped[0]).toBe(
       'Stop 1 shows Job 1042 drawing.pdf, which is outside the tour’s folder.',
     );
+  });
+
+  it('marks a quote by its own runs and outlines the feature it is about', () => {
+    const sources = buildInventory([
+      { path: '/jobs/1042/Job 1042 drawing.pdf', kind: 'drawing', version, pages: 1 },
+      { path: '/jobs/1042/g6-PL60-B2-2buc.dxf', kind: 'dxf', version },
+    ]);
+    const runs = [
+      { text: 'Holes 4× Ø10.5 at 50 mm pitch', box: [0.1, 0.9, 0.5, 0.92] as const },
+      { text: '50', box: [0.42, 0.21, 0.45, 0.24] as const },
+    ].map((run) => ({ ...run, box: [...run.box] as [number, number, number, number] }));
+    const parsed = fabricationAnswerSchema.parse({
+      ...answer,
+      findings: [
+        pitchFinding({
+          drawing: {
+            ref: 'S1',
+            page: 1,
+            value: 50,
+            quote: '50',
+            box: [0.4, 0.2, 0.6, 0.3],
+            feature: [0.5, 0.5, 0.56, 0.58],
+          },
+          dxf: { ref: 'S2', value: 48, axis: 'x', entities: ['8', '9'] },
+        }),
+      ],
+      tour: [{ ...answer.tour[0], ref: 'S1' }],
+    });
+    const { stops, marks } = checkTour({
+      answer: parsed,
+      sources,
+      grades: [],
+      folder: '/jobs/1042',
+      measurement: () => undefined,
+      runs: () => runs,
+    });
+    const feature = boxRegion({ x: 0.5, y: 0.5, width: 0.56 - 0.5, height: 0.58 - 0.5 });
+    // the dimension's "50", nearest the model's box, not the note's
+    const text = boxRegion({ x: 0.42, y: 0.21, width: 0.45 - 0.42, height: 0.24 - 0.21 });
+    expect(stops[0]!.target).toMatchObject({
+      anchor: { kind: 'pdf', page: 1, region: feature, marks: [{ kind: 'text', region: text }] },
+    });
+    expect(marks.map((mark) => [mark.kind, mark.at, mark.source, mark.finding])).toEqual([
+      ['feature', 'region', 'model-box', 'F1'],
+      ['text', 0, 'page-text', 'F1'],
+    ]);
   });
 
   it('gives each file an opaque ref and keeps paths out of what the model reads', () => {
@@ -614,5 +686,82 @@ describe('DXF correction', () => {
     expect(correctionFor(finding, grade, plateMeasure)).toEqual(plan);
     expect(correctionFor(finding, { ...grade, status: 'refuted' }, plateMeasure)).toBeUndefined();
     expect(holeOf(plateMeasure, '13')?.number).toBe(3);
+  });
+});
+
+describe('quotes', () => {
+  // Job 2107's drawing as pdf.js reads it: a parts list's cells, then its title block's lines.
+  const runs = [
+    ['HP50-A3', 0.71, 0.16],
+    ['Hinge plate', 0.78, 0.16],
+    ['6 mm', 0.89, 0.16],
+    ['2', 0.95, 0.16],
+    ['SP20-B3', 0.71, 0.19],
+    ['Spacer', 0.78, 0.19],
+    ['6 mm', 0.89, 0.19],
+    ['4', 0.95, 0.19],
+    ['JOB 2107 · HINGE PLATE HP50-A3', 0.71, 0.7],
+    ['Material: S235JR steel, 6 mm', 0.71, 0.75],
+    ['Quantity: 2 pieces', 0.71, 0.78],
+  ].map(([text, left, top]) => ({
+    text: text as string,
+    box: [left, top, (left as number) + 0.05, (top as number) + 0.02] as [
+      number,
+      number,
+      number,
+      number,
+    ],
+  }));
+  const page = pageText(runs);
+  const request =
+    'Job 2103, in S355 steel:\n\n- FL30-C2 flange plate, 5 mm, 2 pieces\n- CL10-D1 clip, 3 mm, 6 pieces';
+
+  it('gives a page its printed lines: a table row’s cells on one', () => {
+    expect(page.split('\n')).toEqual([
+      'HP50-A3 Hinge plate 6 mm 2',
+      'SP20-B3 Spacer 6 mm 4',
+      'JOB 2107 · HINGE PLATE HP50-A3',
+      'Material: S235JR steel, 6 mm',
+      'Quantity: 2 pieces',
+    ]);
+  });
+
+  it('takes one passage, passages on lines of their own, or whole lines, in order', () => {
+    expect(quoteOn(page, 'hinge  plate 6mm 2')).toBe(true);
+    // a request's lines with the line between them left out
+    expect(quoteOn(request, 'Job 2103, in S355 steel:\n\n- CL10-D1 clip, 3 mm, 6 pieces')).toBe(
+      true,
+    );
+    // a parts list's row and a title block's lines, joined without line breaks
+    const joined = 'HP50-A3 Hinge plate 6 mm 2 Material: S235JR steel, 6 mm Quantity: 2 pieces';
+    expect(quoteOn(page, joined)).toBe(true);
+    expect(quotePassages(runs, joined)!.map((passage) => passage.map((run) => run.text))).toEqual([
+      ['HP50-A3', 'Hinge plate', '6 mm', '2'],
+      ['Material: S235JR steel, 6 mm', 'Quantity: 2 pieces'],
+    ]);
+  });
+
+  it('reads the multiplication sign as x, as a quote types it', () => {
+    // the live J2 answer quoted the drawing's "3× Ø8.5" as "3x Ø8.5"
+    expect(quoteOn('Holes 3× Ø8.5 at 40 mm pitch.', '3x Ø8.5')).toBe(true);
+    expect(quoteOn('Holes 3x Ø8.5 at 40 mm pitch.', '3× Ø8.5')).toBe(true);
+    expect(quoteOn('Holes 3× Ø8.5 at 40 mm pitch.', '3x Ø8')).toBe(false);
+  });
+
+  it('never takes text the page does not have, pieces cut from lines, or a cut number', () => {
+    // every segment must be there, in order
+    expect(quoteOn(request, 'Job 2103, in S355 steel:\n- CL10-D1 clip, 3 mm, 8 pieces')).toBe(
+      false,
+    );
+    expect(quoteOn(request, '- CL10-D1 clip, 3 mm, 6 pieces\nJob 2103, in S355 steel:')).toBe(
+      false,
+    );
+    // one row's code with another row's count
+    expect(quoteOn(page, 'HP50-A3 Hinge plate 6 mm 4')).toBe(false);
+    expect(quoteOn(page, 'Quantity: 2 pieces HP50-A3 Hinge plate 6 mm 2')).toBe(false);
+    expect(quoteOn('Quantity: 12 pieces', '2 pieces')).toBe(false);
+    expect(quoteOn('Ø8.55 holes', 'Ø8.5')).toBe(false);
+    expect(quoteOn('4× Ø9 at 60 mm', 'Ø9')).toBe(true);
+    expect(quoteOn(page, '')).toBe(false);
   });
 });

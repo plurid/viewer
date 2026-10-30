@@ -16,6 +16,13 @@ export const evidenceRegionSchema = z
   .min(3)
   .max(512);
 export type EvidenceRegion = z.infer<typeof evidenceRegionSchema>;
+/** What a mark outlines: the text a value is read from, or a feature such as a hole. */
+export const evidenceMarkKinds = ['text', 'feature'] as const;
+export type EvidenceMarkKind = (typeof evidenceMarkKinds)[number];
+export const evidenceMarkSchema = z
+  .object({ kind: z.enum(evidenceMarkKinds), region: evidenceRegionSchema })
+  .strict();
+export type EvidenceMark = z.infer<typeof evidenceMarkSchema>;
 const coordinate = z.number().finite().min(-1e12).max(1e12);
 /** A point in a drawing's own coordinates and units, y up. */
 const drawingPoint = z.tuple([coordinate, coordinate]);
@@ -37,6 +44,8 @@ export const evidenceAnchorSchema = z.discriminatedUnion('kind', [
       page: z.number().int().min(1).max(100000),
       /** An outline on the page, as the page shows (its rotation applied). */
       region: evidenceRegionSchema.optional(),
+      /** Further outlines drawn with the region: the text a value is read from, another feature. */
+      marks: z.array(evidenceMarkSchema).min(1).max(16).optional(),
       /** A PDF zoom: fit page, fit width, or a scale from 0.1 to 4. */
       zoom: z.union([z.enum(['page', 'width']), z.number().min(0.1).max(4)]).optional(),
       /** `false` opens the page without searching for the quote. */

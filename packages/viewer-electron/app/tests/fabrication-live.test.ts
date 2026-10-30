@@ -163,6 +163,11 @@ const runBox = (input: SentInput, drawing: string, text: string) => {
     .find((item) => item.ref === ref)!
     .shown[0]!.text.find((run) => run.text === text)!.box;
 };
+/** A feature's box, as the truth labels it: a hole the finding is about. */
+const featureBox = (job: string, label: string) =>
+  jobs
+    .find((item) => item.truth.job === job)!
+    .truth.regions.find((region) => region.label === label)!.box;
 const measured = (input: SentInput, name: string) =>
   input.dxf.find((item) => item.ref === refOf(input, name))!.measurement!;
 const stop = (
@@ -181,7 +186,7 @@ const stop = (
 });
 
 /** What the stubbed model answers each job: J1 right, J2 missing the drawing's quantity, J7
- * inventing a pitch, J8 right and with nothing to find. */
+ * inventing a pitch, J8 right and with nothing to find. J1 and J2 box the hole they are about. */
 function answerFor(input: SentInput): FabricationAnswer {
   const request = input.inventory.find((item) => item.kind === 'request')!.ref;
   const photo = input.inventory.find((item) => item.kind === 'photo')?.ref;
@@ -230,7 +235,14 @@ function answerFor(input: SentInput): FabricationAnswer {
           kind: 'pitch',
           summary:
             'The DXF puts the right holes 58 mm from the left ones; the drawing gives 60 mm.',
-          drawing: { ref: drawing, page: 1, value: 60, quote: '60', box },
+          drawing: {
+            ref: drawing,
+            page: 1,
+            value: 60,
+            quote: '60',
+            box,
+            feature: featureBox('Job 2101', 'TP40-A1, hole 2 Ø9'),
+          },
           dxf: { ref: plate, value: 58, axis: 'x', entities: pitch.entities },
           photo: null,
           proposal: {
@@ -281,7 +293,14 @@ function answerFor(input: SentInput): FabricationAnswer {
           id: 'F1',
           kind: 'diameter',
           summary: 'The middle hole is Ø10 in the DXF; the drawing gives 3× Ø8.5.',
-          drawing: { ref: drawing, page: 1, value: 8.5, quote: '3× Ø8.5', box },
+          drawing: {
+            ref: drawing,
+            page: 1,
+            value: 8.5,
+            quote: '3× Ø8.5',
+            box,
+            feature: featureBox('Job 2102', 'Bracket B2, hole 2 Ø8.5'),
+          },
           dxf: { ref: bracket, value: 10, axis: null, entities: wide.entities },
           photo: null,
           proposal: null,
@@ -324,7 +343,7 @@ function answerFor(input: SentInput): FabricationAnswer {
           id: 'F1',
           kind: 'pitch',
           summary: 'The DXF puts two holes 43 mm apart; the drawing gives 45 mm.',
-          drawing: { ref: drawing, page: 1, value: 45, quote: '45', box },
+          drawing: { ref: drawing, page: 1, value: 45, quote: '45', box, feature: null },
           dxf: { ref: plate, value: 43, axis: 'x', entities: pitch.entities },
           photo: null,
           proposal: null,
@@ -519,29 +538,34 @@ describe('live evaluation runner', () => {
         for (const picture of input.pictures) expect(typeof picture.image).toBe('number');
   });
 
-  it('scores SAM’s outlines against the truth and counts its fallback to the model’s box', () => {
-    const { outlines } = report.metrics;
-    expect(outlines).toMatchObject({ total: 6, sam: 4, fallback: 2, fallbackRate: 0.333 });
-    expect(Object.keys(outlines.reasons)).toEqual([
+  it('scores text boxes and SAM’s feature outlines apart, and counts SAM’s fallback', () => {
+    const { text, features } = report.metrics.outlines;
+    // the quotes of J1, J2 and J7, and J8's stop over one text run, each by its own runs
+    expect(text).toMatchObject({ total: 4, runs: 4, model: 0 });
+    expect(text.iou).toMatchObject({ count: 4, median: 1 });
+    // the holes J1 and J2 box, and the photos, for which SAM is down
+    expect(features).toMatchObject({ total: 4, sam: 2, fallback: 2, fallbackRate: 0.5 });
+    expect(Object.keys(features.reasons)).toEqual([
       expect.stringMatching(/^Model request failed \(500\)/),
     ]);
     const j1 = report.runs.find((run) => run.job === 'J1')!.outlines;
-    expect(j1.map((outline) => [outline.file, outline.source])).toEqual([
-      ['Job 2101 drawing.pdf', 'segmentation'],
-      ['TP40-A1 sample.png', 'model-box'],
+    expect(j1.map((outline) => [outline.file, outline.kind, outline.source])).toEqual([
+      ['Job 2101 drawing.pdf', 'feature', 'segmentation'],
+      ['Job 2101 drawing.pdf', 'text', 'page-text'],
+      ['TP40-A1 sample.png', 'feature', 'model-box'],
     ]);
-    // SAM's whole-box mask over the text run's box, and the model's box on the photo's part
-    expect(j1[0]).toMatchObject({ region: 'text “60”', confidence: 0.91 });
-    expect(j1[0]!.iou).toBeGreaterThan(0.9);
-    expect(j1[1]).toMatchObject({ region: 'photo: TP40-A1', iou: 1, boxIoU: 1 });
-    expect(outlines.iou.count).toBe(4);
-    expect(outlines.iou.median).toBeGreaterThan(0.9);
+    // SAM's whole-box mask over the hole's box is the square around the hole's circle: π/4
+    expect(j1[0]).toMatchObject({ region: 'TP40-A1, hole 2 Ø9', confidence: 0.91 });
+    expect(j1[0]!.iou).toBeCloseTo(Math.PI / 4, 1);
+    expect(j1[1]).toMatchObject({ region: 'text “60”', iou: 1, boxIoU: 1 });
+    expect(j1[2]).toMatchObject({ region: 'photo: TP40-A1', iou: 1, boxIoU: 1 });
+    expect(features.iou.count).toBe(2);
   });
 
   it('times each call and sums its tokens and cost', () => {
     const { latency, tokens } = report.metrics;
     expect(latency.model).toMatchObject({ count: 5, median: 6000, max: 6000 });
-    expect(latency.segmentation).toMatchObject({ count: 6, median: 900 });
+    expect(latency.segmentation).toMatchObject({ count: 4, median: 900 });
     expect(tokens).toEqual({ input: 60000, output: 4500, total: 64500, calls: 5, cost: 0.078 });
   });
 
@@ -555,6 +579,9 @@ describe('live evaluation runner', () => {
       '## Calls',
     ])
       expect(summary).toContain(heading);
+    expect(summary).toContain('with the API’s own reasoning effort');
+    expect(summary).toContain('| Text, as drawn | 4 | 1.00 | 1.00 |');
+    expect(summary).toContain('| Feature, SAM 3.1 | 2 |');
     for (const file of ['summary.md', 'answers.json', 'truth.json'])
       expect(await readFile(path.join(out, file), 'utf8')).not.toContain(key);
     expect(
@@ -562,6 +589,41 @@ describe('live evaluation runner', () => {
     ).toContain('AC1024');
     await expect(evaluateLive({ out, key, request: fetch })).rejects.toThrow('is not empty');
   });
+});
+
+describe('live evaluation options', () => {
+  it('sends the reasoning effort asked for, and says it in the summary', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const request = (async (url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown> & {
+        messages: { content: { text?: string }[] }[];
+      };
+      if (String(url).endsWith('/responses'))
+        return Response.json({ error: { message: 'busy' } }, { status: 500 });
+      bodies.push(body);
+      const input = JSON.parse(body.messages[1]!.content[0]!.text!) as SentInput;
+      return Response.json({
+        choices: [
+          { finish_reason: 'stop', message: { content: JSON.stringify(answerFor(input)) } },
+        ],
+      });
+    }) as typeof fetch;
+    const out = path.join(await temporaryRoot('viewer-fabrication-live-effort-'), 'run');
+    const report = await evaluateLive({
+      out,
+      key,
+      jobs: ['J8'],
+      effort: 'minimal',
+      request,
+      wait: async () => {},
+    });
+    expect(bodies.map((body) => body.reasoning_effort)).toEqual(['minimal']);
+    expect(report.summary).toContain('with reasoning effort minimal');
+    const answers = JSON.parse(await readFile(path.join(out, 'answers.json'), 'utf8')) as {
+      effort: string | null;
+    };
+    expect(answers.effort).toBe('minimal');
+  }, 30_000);
 });
 
 describe('live evaluation scoring', () => {
@@ -575,6 +637,13 @@ describe('live evaluation scoring', () => {
     expect(polygonIoU(square, [0.2, 0.2, 0.4, 0.4])).toBeCloseTo(1);
     expect(polygonIoU(square, [0.3, 0.2, 0.5, 0.4])).toBeCloseTo(1 / 3);
     expect(polygonIoU(square, [0.6, 0.6, 0.8, 0.8])).toBe(0);
+    // a hole is the circle in its box: its box overlaps it by π/4, a circle of it entirely
+    expect(polygonIoU(square, [0.2, 0.2, 0.4, 0.4], 'ellipse')).toBeCloseTo(Math.PI / 4, 2);
+    const circle = Array.from({ length: 90 }, (_, index): [number, number] => [
+      0.3 + 0.1 * Math.cos((index / 90) * 2 * Math.PI),
+      0.3 + 0.1 * Math.sin((index / 90) * 2 * Math.PI),
+    ]);
+    expect(polygonIoU(circle, [0.2, 0.2, 0.4, 0.4], 'ellipse')).toBeGreaterThan(0.99);
     // a triangle, half the box
     expect(
       polygonIoU(

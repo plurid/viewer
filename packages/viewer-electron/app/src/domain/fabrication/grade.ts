@@ -10,6 +10,7 @@ import type { FindingGrade } from '../tours/tour';
 import type { Hole, MeasureOutcome, Measurement, PitchAxis } from './measure';
 import { alignedAxis, holeOf, millimetreText, pitchBetween } from './measure';
 import { readJobName } from './names';
+import { quoteOn } from './quotes';
 
 /** Millimetres between two lengths that count as the same; counts must match exactly. */
 export const gradeTolerance = 0.05;
@@ -49,22 +50,13 @@ function amount(value: number, unit: Unit): string {
   const [one, many] = nouns[unit];
   return `${value.toLocaleString('en')} ${value === 1 ? one : many}`;
 }
+/** "50 mm", "12.5 mm": a length as the drawing gives it. */
+export const lengthText = (value: number) => amount(value, 'mm');
 const axisText: Record<PitchAxis, string> = {
   x: 'along x',
   y: 'along y',
   centre: 'centre to centre',
 };
-/** Text as it compares: one form of each character, case and spacing ignored. */
-const squashed = (text: string) =>
-  text.normalize('NFKC').toLowerCase().replace(/⌀/g, 'ø').replace(/\s+/g, '');
-/** Whether a quote is on a page's text, ignoring case and spacing. */
-export const quoteOn = (text: string, quote: string) => squashed(text).includes(squashed(quote));
-/** Whether a quote gives a value: one of its numbers is it, a decimal comma read as a point. */
-export const quoteGives = (quote: string, value: number) =>
-  (quote.match(/\d+(?:[.,]\d+)?/g) ?? []).some(
-    (number) => Math.abs(Number(number.replace(',', '.')) - value) < 1e-9,
-  );
-
 interface Reading {
   value: number;
   unit: Unit;

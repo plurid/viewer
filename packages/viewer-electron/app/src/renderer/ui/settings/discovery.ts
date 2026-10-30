@@ -20,7 +20,7 @@ export function settingsDiscovery(settings: ApplicationSettings, query: string) 
     {
       category: 'Models',
       terms:
-        'api key credentials provider endpoint local model ' +
+        'api key credentials provider endpoint local model reasoning effort ' +
         providerKinds.map((kind) => providerPresets[kind].name).join(' ') +
         ' ' +
         settings.providers.map((provider) => provider.name + ' ' + provider.model).join(' '),

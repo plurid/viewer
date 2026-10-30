@@ -1,12 +1,13 @@
 /**
  * THE FABRICATION CHECK on Job 1042, the model stubbed with a prepared answer: the inventory and
  * what is sent, the answer graded against Viewer's own measurement, the tour, the correction, the
- * request's quantities, SAM's outline, the evidence record, and the refusals.
+ * request's quantities, the quoted text's box and SAM's outline of the feature, the evidence
+ * record, the steps a window is told of, the time limit, and the refusals.
  */
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
-import type { CheckOpening, CheckResult } from '../src/domain/fabrication/check';
+import type { CheckOpening, CheckProgress, CheckResult } from '../src/domain/fabrication/check';
 import type { ModelDataLevel } from '../src/domain/models/permissions';
 import type { ModelProvider } from '../src/domain/services';
 import type { GenerateOptions } from '../src/desktop/models/providers';
@@ -14,6 +15,7 @@ import type { SamRequest } from '../src/desktop/models/segmentation';
 import { FabricationChecks } from '../src/desktop/fabrication/service';
 import { samSegmenter } from '../src/desktop/models/segmentation';
 import { checkAnswerSchema, checkInstructions } from '../src/domain/fabrication/prompt';
+import { boxRegion } from '../src/domain/files/regions';
 import { defaultSettings } from '../src/domain/services';
 import { temporaryRoot } from '../tools/temporary';
 import {
@@ -32,6 +34,8 @@ let level: ModelDataLevel;
 let generate: Mock<(...args: unknown[]) => Promise<unknown>>;
 let checks: FabricationChecks;
 let samRequest: Mock<SamRequest>;
+let providers: ModelProvider[];
+let progress: [number, CheckProgress][];
 beforeEach(async () => {
   root = await temporaryRoot('viewer-fabrication-check-');
   folder = path.join(root, 'Job 1042');
@@ -39,14 +43,17 @@ beforeEach(async () => {
   level = 'images';
   generate = vi.fn<(...args: unknown[]) => Promise<unknown>>();
   samRequest = vi.fn<SamRequest>(async () => samReply);
+  providers = [meta];
+  progress = [];
   checks = new FabricationChecks({
-    settings: () => ({ ...defaultSettings(root), providers: [meta] }),
+    settings: () => ({ ...defaultSettings(root), providers }),
     access: async () => {},
     permission: async () => allowed(level),
     generate: (...args) => generate(...args),
     // the re-encoded photo: 1600 px on its longer side, as the image processor gives it
     encodePhoto: async () => Buffer.from(jpeg(1600, 1200)),
     segmenter: () => samSegmenter((...args) => samRequest(...args), 'Muse Spark'),
+    progress: (owner, step) => progress.push([owner, step]),
   });
 });
 afterEach(() => checks.close());
@@ -172,46 +179,76 @@ describe('fabrication check', () => {
     });
   });
 
-  it('outlines the drawing’s region with SAM 3.1, and falls back to the model’s box, said', async () => {
+  it('marks the quote by its text runs, outlines the feature with SAM 3.1, and says when the box stands in', async () => {
     samRequest.mockImplementation(async (picture: { width: number }) => {
       if (picture.width === 1600) throw new Error('The provider request timed out.');
       return samReply;
     });
     const opening = await opened();
     const result = await checked(opening);
+    // only features go to SAM: the hole on the drawing and the photo's region, never the text
+    expect(samRequest).toHaveBeenCalledTimes(2);
     const [prompt] = samRequest.mock.calls[0]!.slice(1) as [string];
-    // 0.08 to 0.6 of 2048 px, 0.86 to 0.9 of 1448 px; right and bottom inclusive
-    expect(prompt).toBe('<0f>0<|box;x1=163;y1=1245;x2=1228;y2=1303;w=2048;h=1448|>');
+    // the feature, 0.55 to 0.6 of 2048 px and 0.42 to 0.5 of 1448 px; right and bottom inclusive
+    expect(prompt).toBe('<0f>0<|box;x1=1126;y1=608;x2=1228;y2=723;w=2048;h=1448|>');
+    const sam: [number, number][] = [
+      [0.25, 0.25],
+      [0.75, 0.25],
+      [0.75, 0.75],
+      [0.25, 0.75],
+    ];
+    // the fixture gives every text run of the page one box
+    const text = boxRegion({ x: 0.1, y: 0.1, width: 0.8, height: 0.12 - 0.1 });
     expect(result.tour.stops[1]!.target).toMatchObject({
       anchor: {
         kind: 'pdf',
         page: 1,
         search: false,
-        region: [
-          [0.25, 0.25],
-          [0.75, 0.25],
-          [0.75, 0.75],
-          [0.25, 0.75],
-        ],
+        region: sam,
+        marks: [{ kind: 'text', region: text }],
       },
     });
     expect(result.findings[0]!.outlines).toEqual([
       {
         stop: 'stop-2',
-        ref: 'S2',
+        kind: 'feature',
         source: 'segmentation',
         label: 'outline from SAM 3.1',
+        region: sam,
+        box: [0.55, 0.42, 0.6, 0.5],
         confidence: 0.8904109597206116,
+      },
+      {
+        stop: 'stop-2',
+        kind: 'text',
+        source: 'page-text',
+        label: 'the text on the drawing',
+        region: text,
+        box: [0.08, 0.86, 0.6, 0.9],
+        quote: 'Holes 4× Ø10.5 at 50 mm pitch',
       },
     ]);
     const photo = result.tour.stops[3]!.target;
     expect(photo.kind === 'file' && photo.anchor).toMatchObject({ kind: 'image', x: 0.2, y: 0.2 });
+    // the window is told each step: the model reading, then SAM outlining
+    expect(progress).toEqual([
+      [
+        1,
+        {
+          id: opening.id,
+          step: 'reading',
+          text: 'Muse Spark is reading the request, 1 drawing page, 1 photo and 5 DXF parts',
+        },
+      ],
+      [1, { id: opening.id, step: 'outlining', text: 'SAM 3.1 is outlining 2 features' }],
+    ]);
     const record = JSON.parse(checks.handoff(opening.id)!.record) as {
       segmentation: { label: string; note?: string }[];
     };
-    expect(record.segmentation[1]).toEqual({
+    expect(record.segmentation[2]).toMatchObject({
       stop: 'stop-4',
       ref: 'S3',
+      kind: 'feature',
       source: 'model-box',
       label: 'box from Muse Spark',
       note: 'SAM 3.1 gave no outline: The provider request timed out.',
@@ -330,6 +367,26 @@ describe('fabrication check', () => {
     await checks.request({ kind: 'cancel', id: opening.id }, 1);
     await expect(running).rejects.toThrow('The check was cancelled. Nothing was graded.');
     expect(checks.handoff(opening.id)).toBeUndefined();
+  });
+
+  it('waits 240 s for the answer, and on a timeout names the step and the faster effort', async () => {
+    const opening = await opened();
+    generate.mockRejectedValue(new DOMException('The provider request timed out.', 'TimeoutError'));
+    const run = async () =>
+      checks.request(
+        { kind: 'run', id: opening.id, providerID: meta.id, pages: [await drawingPage(opening)] },
+        1,
+      );
+    await expect(run()).rejects.toThrow(
+      'Muse Spark timed out after 240 s reading the job, so nothing was graded. Run the check again, or choose Minimal under Reasoning effort for Meta in Settings → Models to answer faster.',
+    );
+    expect((generate.mock.calls[0]![7] as GenerateOptions).timeout).toBe(240_000);
+    expect(JSON.parse(checks.handoff(opening.id)?.record ?? '{}')).toEqual({});
+    // already at the fastest effort, nothing faster is offered
+    providers = [{ ...meta, effort: 'minimal' }];
+    await expect(run()).rejects.toThrow(
+      /^Muse Spark timed out after 240 s reading the job, so nothing was graded\. Run the check again\.$/,
+    );
   });
 
   it('refuses an answer that does not fit the schema, keeping what came back in the record', async () => {

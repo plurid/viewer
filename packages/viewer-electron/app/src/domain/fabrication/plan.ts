@@ -13,6 +13,17 @@ export const millimetreText = (value: number) => `${value.toFixed(2)} mm`;
 
 const entity = z.string().regex(/^\d{1,6}$/);
 const millimetres = z.number().finite().positive().max(100_000);
+/** A further pitch the same move sets: the hole that stays, the hole that moves, and its values. */
+const pitchSchema = z
+  .object({
+    from: entity,
+    to: entity,
+    axis: z.enum(pitchAxes),
+    target: millimetres,
+    measured: millimetres,
+  })
+  .strict();
+export type CorrectionPitch = z.infer<typeof pitchSchema>;
 export const dxfCorrectionSchema = z
   .object({
     kind: z.literal('dxf-correction'),
@@ -27,6 +38,9 @@ export const dxfCorrectionSchema = z
     measured: millimetres,
     /** Entities of further holes that move with `to`. */
     move: z.array(entity).max(500).default([]),
+    /** Further pitches the move sets, as when one misplaced hole gives two wrong pitches; each is
+     * measured again in the copy. */
+    also: z.array(pitchSchema).min(1).max(8).optional(),
   })
   .strict();
 export type DXFCorrection = z.infer<typeof dxfCorrectionSchema>;
@@ -55,6 +69,22 @@ export const correctionReportSchema = z
           .strict(),
       )
       .max(500),
+    /** The further pitches the plan sets, before and after, between the holes' centres. */
+    also: z
+      .array(
+        z
+          .object({
+            axis: z.enum(pitchAxes),
+            target: z.number().finite(),
+            before: z.number().finite(),
+            after: z.number().finite(),
+            from: point,
+            to: point,
+          })
+          .strict(),
+      )
+      .max(8)
+      .optional(),
     /** The thinnest material left around a moved hole, in millimetres. */
     web: z.number().finite(),
     notes: z.array(z.string().max(500)).max(20),
@@ -65,12 +95,34 @@ export type CorrectionReport = z.infer<typeof correctionReportSchema>;
 /** `g6-MB20-A1-4buc.dxf` → `g6-MB20-A1-4buc (corrected).dxf`. */
 export const correctedName = (name: string) => `${name.replace(/\.dxf$/i, '')} (corrected).dxf`;
 
+const axisWords = (axis: PitchAxis) => (axis === 'centre' ? 'centre to centre' : `along ${axis}`);
+/** "a", "a and b", "a, b and c". */
+export const listText = (items: readonly string[]) =>
+  items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : (items[0] ?? '');
+/** "pitch along x from 48.00 mm to 50.00 mm"; with further pitches, "pitches along x from 58.00 mm
+ * to 60.00 mm and from 30.00 mm to 28.00 mm". */
+export function pitchesText(
+  pitches: readonly Pick<CorrectionPitch, 'axis' | 'measured' | 'target'>[],
+) {
+  const one = pitches.every((pitch) => pitch.axis === pitches[0]!.axis);
+  const change = (pitch: (typeof pitches)[number], index: number) =>
+    `${one && index ? '' : `${axisWords(pitch.axis)} `}from ${millimetreText(pitch.measured)} to ${millimetreText(pitch.target)}`;
+  return `${pitches.length === 1 ? 'pitch' : 'pitches'} ${listText(pitches.map(change))}`;
+}
+
+/** What a saved copy measures: "Pitch 48.00 mm → 50.00 mm", "Pitches 58.00 mm → 60.00 mm and
+ * 30.00 mm → 28.00 mm". */
+export function savedPitches(report: Pick<CorrectionReport, 'before' | 'after' | 'also'>): string {
+  const pitches = [report, ...(report.also ?? [])];
+  return `${pitches.length === 1 ? 'Pitch' : 'Pitches'} ${listText(pitches.map((pitch) => `${millimetreText(pitch.before)} → ${millimetreText(pitch.after)}`))}`;
+}
+
 /** The plan in words, for its review. */
 export function correctionDescription(plan: DXFCorrection): string[] {
   const holes = 1 + plan.move.length;
   return [
     'DXF correction',
-    `pitch ${plan.axis === 'centre' ? 'centre to centre' : `along ${plan.axis}`} from ${millimetreText(plan.measured)} to ${millimetreText(plan.target)}`,
+    pitchesText([plan, ...(plan.also ?? [])]),
     `moves ${holes === 1 ? '1 hole' : `${holes} holes`}`,
     'a new DXF beside the original, which is kept',
   ];

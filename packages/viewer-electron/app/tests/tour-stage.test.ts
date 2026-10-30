@@ -36,7 +36,10 @@ function engine(found = true) {
 describe('the stage on Plurid’s anchors', () => {
   it('is chosen only for an engine with anchors and rest', () => {
     expect(hasAnchorCamera(engine().handle)).toBe(true);
-    // Plurid 0.0.0-42 has neither
+    // the installed engine's handle is one, so a change to it fails the type check, not a tour
+    const installed: (handle: PluridApplicationHandle) => AnchorCamera = (handle) => handle;
+    expect(installed).toBeTypeOf('function');
+    // an engine without them, as 0.0.0-42 was
     expect(hasAnchorCamera({ camera: { dock: () => {} }, bookmarks: { go: () => {} } })).toBe(
       false,
     );

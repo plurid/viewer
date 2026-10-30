@@ -15,7 +15,11 @@ import { tileLayouts } from '../../domain/workspaces/tiling';
 import { shellTokens, syntaxTokens, terminalTokens } from '../../domain/preferences/themes';
 import { z } from 'zod';
 import { sameJSON } from '../../domain/json';
-import { providerKinds } from '../../domain/models/providers';
+import {
+  providerKinds,
+  providerTakesEffort,
+  reasoningEfforts,
+} from '../../domain/models/providers';
 import {
   alternateShortcuts,
   defaultShortcuts,
@@ -293,8 +297,16 @@ export const settingsSchema = z
               }),
             model: z.string().max(200),
             allowContent: z.boolean(),
+            effort: z.enum(reasoningEfforts).optional(),
           })
-          .strict(),
+          .strict()
+          .refine(
+            (provider) => !provider.effort || providerTakesEffort(provider.kind, provider.effort),
+            {
+              message: 'This provider does not take that reasoning effort.',
+              path: ['effort'],
+            },
+          ),
       )
       .max(20),
     recipes: z.array(recipe).max(100),

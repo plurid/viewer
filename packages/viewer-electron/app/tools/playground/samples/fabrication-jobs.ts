@@ -35,12 +35,19 @@ export type JobNaming = 'convention' | 'plain' | 'mixed';
 /** `[left, top, right, bottom]` as fractions of a page or photo, from its top-left corner. */
 export type FractionBox = [left: number, top: number, right: number, bottom: number];
 
-/** A feature a drawing page or photo shows, where it is. */
+/** What a region is: text, such as a dimension, a parts list's row or a title block's line, or a
+ * feature, such as a piece, a hole or a part in a photo. */
+export type TruthRegionKind = 'text' | 'feature';
+/** A region's shape in its box: the box itself, or the ellipse it holds, as a hole is. */
+export type TruthShape = 'box' | 'ellipse';
+/** A feature or text a drawing page or photo shows, where it is. */
 export interface TruthRegion {
   file: string;
   /** A drawing's page; a photo has none. */
   page?: number;
   label: string;
+  kind: TruthRegionKind;
+  shape: TruthShape;
   box: FractionBox;
 }
 export interface PlantedProblem {
@@ -713,13 +720,20 @@ function sheet(file: string) {
   const ops: string[] = [];
   const regions: TruthRegion[] = [];
   const n = (value: number) => Number(value.toFixed(2));
-  const mark = (label: string, points: readonly (readonly [number, number])[]) => {
+  const mark = (
+    label: string,
+    points: readonly (readonly [number, number])[],
+    kind: TruthRegionKind = 'text',
+    shape: TruthShape = 'box',
+  ) => {
     const xs = points.map(([x]) => x),
       ys = points.map(([, y]) => y);
     regions.push({
       file,
       page: 1,
       label,
+      kind,
+      shape,
       box: [
         fraction(Math.min(...xs) / page.width),
         fraction(1 - Math.max(...ys) / page.height),
@@ -798,7 +812,7 @@ function drawPiece(s: Sheet, piece: Piece, origin: XY, label: string) {
         : `${p(0, 0)} m ${p(w, 0)} l ${p(w, h)} l ${p(0, h)} l h S`,
     );
   }
-  s.mark(label, [at(0, 0), at(piece.width, piece.height)]);
+  s.mark(label, [at(0, 0), at(piece.width, piece.height)], 'feature');
   for (const [index, { at: centre, diameter }] of piece.holes.entries()) {
     const [x, y] = centre;
     s.circle(...at(x, y), (diameter / 2) * k);
@@ -807,10 +821,12 @@ function drawPiece(s: Sheet, piece: Piece, origin: XY, label: string) {
     mm(x - size, y, x + size, y);
     mm(x, y - size, x, y + size);
     s.stroke(1.2);
-    s.mark(`${label}, hole ${index + 1} Ø${decimals(diameter)}`, [
-      at(x - diameter / 2, y - diameter / 2),
-      at(x + diameter / 2, y + diameter / 2),
-    ]);
+    s.mark(
+      `${label}, hole ${index + 1} Ø${decimals(diameter)}`,
+      [at(x - diameter / 2, y - diameter / 2), at(x + diameter / 2, y + diameter / 2)],
+      'feature',
+      'ellipse',
+    );
   }
 
   /** A dimension between two points, its line `offset` mm off the edge at `base`. */
@@ -1092,7 +1108,7 @@ function solid(piece: Piece, x: number, y: number): boolean {
 }
 
 /** A photo of a cut piece from above: grey steel with a soft shadow on a pale bench, 1600 × 1200,
- * and where the piece lies in it. */
+ * and where the piece and each of its holes lie in it. */
 function piecePhoto(piece: Piece, file: string, label: string) {
   const width = 1600,
     height = 1200;
@@ -1124,17 +1140,30 @@ function piecePhoto(piece: Piece, file: string, label: string) {
       rgb[at + 2] = mix(metal + 8, ground - 7);
     }
   const bytes = png(width, height, rgb);
-  const region: TruthRegion = {
-    file,
-    label,
-    box: [
-      fraction(left / width),
-      fraction(top / height),
-      fraction((left + piece.width * scale) / width),
-      fraction((top + piece.height * scale) / height),
-    ],
-  };
-  return { bytes, region };
+  // Millimetres from the piece's corner, y up, as fractions of the photo.
+  const box = (x1: number, y1: number, x2: number, y2: number): FractionBox => [
+    fraction((left + x1 * scale) / width),
+    fraction((top + (piece.height - y2) * scale) / height),
+    fraction((left + x2 * scale) / width),
+    fraction((top + (piece.height - y1) * scale) / height),
+  ];
+  const regions: TruthRegion[] = [
+    {
+      file,
+      label,
+      kind: 'feature',
+      shape: 'box',
+      box: box(0, 0, piece.width, piece.height),
+    },
+    ...piece.holes.map(({ at: [x, y], diameter }, index): TruthRegion => ({
+      file,
+      label: `${label}, hole ${index + 1} Ø${decimals(diameter)}`,
+      kind: 'feature',
+      shape: 'ellipse',
+      box: box(x - diameter / 2, y - diameter / 2, x + diameter / 2, y + diameter / 2),
+    })),
+  ];
+  return { bytes, regions };
 }
 
 /** The eight jobs and their truth, the same every time. */
@@ -1185,7 +1214,7 @@ export function liveJobs(): LiveJob[] {
         })),
         regions: [
           ...drawings.flatMap(({ regions }) => regions),
-          ...photos.map(({ region }) => region),
+          ...photos.flatMap(({ regions }) => regions),
         ],
       },
     };

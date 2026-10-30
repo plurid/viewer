@@ -5,7 +5,9 @@ import {
   providerKinds,
   providerPresets,
   qwenEndpoints,
+  reasoningEffortLabels,
   type ProviderKind,
+  type ReasoningEffort,
 } from '../../../domain/models/providers';
 import type { SettingsChange } from '../settings/settings-edits';
 import { Field } from '../settings/SettingField';
@@ -52,6 +54,18 @@ export function ModelSettings({
         value: current.settings.providers.map((provider) =>
           provider.id === id ? { ...provider, ...values } : provider,
         ),
+      },
+    ]);
+  /** Sets a provider's reasoning effort, or leaves it out for the API's own. */
+  const setEffort = (id: string, effort: ReasoningEffort | undefined) =>
+    save((current) => [
+      {
+        path: 'settings.providers',
+        value: current.settings.providers.map((provider) => {
+          if (provider.id !== id) return provider;
+          const { effort: _effort, ...rest } = provider;
+          return effort ? { ...rest, effort } : rest;
+        }),
       },
     ]);
   const credential = (id: string, key: string) => {
@@ -269,6 +283,25 @@ export function ModelSettings({
                   ))}
                 </datalist>
               </label>
+              {preset.efforts && (
+                <label>
+                  Reasoning effort
+                  <ChoiceButton
+                    label="Reasoning effort"
+                    value={provider.effort ?? ''}
+                    choices={[
+                      { value: '', label: 'Provider default' },
+                      ...preset.efforts.map((effort) => ({
+                        value: effort,
+                        label: reasoningEffortLabels[effort],
+                      })),
+                    ]}
+                    onChoose={(effort) =>
+                      setEffort(provider.id, (effort || undefined) as ReasoningEffort | undefined)
+                    }
+                  />
+                </label>
+              )}
               <div className="settings-actions">
                 {!preset.suggestedModels && (
                   <button

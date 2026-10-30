@@ -12,11 +12,13 @@ import type {
 import { boxRegion } from '../../domain/files/regions';
 import { maskPolygon } from '../../domain/models/mask-polygon';
 import { pixelBox, samBoxPrompt, samRecord } from '../../domain/models/sam';
-import { modelBoxLabel, samLabel } from '../../domain/models/segmentation';
+import { modelBoxLabel, samLabel, samName } from '../../domain/models/segmentation';
 import { errorMessage } from '../../domain/errors';
 import { decodeOneBitMask } from './sam-mask';
 
 export interface Segmenter {
+  /** Who outlines, as a check's progress names it: "SAM 3.1". A box stands in at once without. */
+  readonly name?: string;
   /** The outline, or undefined when this segmenter cannot answer the prompt. */
   segment(
     picture: SegmentationPicture,
@@ -46,6 +48,7 @@ export function boxSegmenter(reader: string): Segmenter {
 export function samSegmenter(request: SamRequest, reader: string): Segmenter {
   const fallback = boxSegmenter(reader);
   return {
+    name: samName,
     async segment(picture, prompt, signal) {
       const text =
         prompt.kind === 'text'

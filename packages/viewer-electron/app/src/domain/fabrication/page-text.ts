@@ -83,3 +83,25 @@ export function pageTextRuns(
   }
   return runs;
 }
+
+/** Whether two runs, one after the other on the page, are printed on one line: their boxes share
+ * at least half the height of the shorter. */
+function oneLine(a: PageText, b: PageText): boolean {
+  const shared = Math.min(a.box[3], b.box[3]) - Math.max(a.box[1], b.box[1]);
+  const height = Math.min(a.box[3] - a.box[1], b.box[3] - b.box[1]);
+  return shared > 0 && shared >= height / 2;
+}
+/**
+ * A page's printed lines, each the indexes of its runs: runs that follow one another in the page's
+ * order and share a line, such as the cells of a table row. A dimension printed at the height of
+ * a title block's line, but drawn elsewhere in the page's order, is a line of its own.
+ */
+export function pageLines(runs: readonly PageText[]): number[][] {
+  const lines: number[][] = [];
+  runs.forEach((run, index) => {
+    const line = lines.at(-1);
+    if (line && oneLine(runs[line.at(-1)!]!, run)) line.push(index);
+    else lines.push([index]);
+  });
+  return lines;
+}

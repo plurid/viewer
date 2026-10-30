@@ -32,6 +32,8 @@ export interface CheckSession {
   opening?: CheckOpening;
   providerID?: string;
   progress?: string;
+  /** When the step `progress` names began, by this window's clock, in milliseconds. */
+  since?: number;
   error?: string;
   result?: CheckResult;
   /** Drawings that could not be drawn, a sentence each. */
@@ -113,6 +115,7 @@ export async function runCheck(): Promise<void> {
     ...current,
     phase: 'drawing',
     progress: 'Drawing the drawings’ pages',
+    since: Date.now(),
     error: undefined,
     result: undefined,
     problems: [],
@@ -121,6 +124,11 @@ export async function runCheck(): Promise<void> {
     handoffError: undefined,
   };
   change(running);
+  // The desktop says what it does while it runs: the model reading, then SAM outlining.
+  const stop = window.viewer.onEvent((event) => {
+    if (event.type === 'fabrication' && event.progress.id === opening.id)
+      update(running, { progress: event.progress.text, since: Date.now() });
+  });
   try {
     const { pages, problems } = await drawCheckPages(opening.sources, abort.signal, (progress) =>
       update(running, { progress }),
@@ -128,20 +136,23 @@ export async function runCheck(): Promise<void> {
     update(running, {
       phase: 'asking',
       problems,
-      progress: `Asking ${provider?.name ?? 'the model'}${provider?.model ? ` (${provider.model})` : ''}`,
+      progress: `Preparing the job for ${provider?.name ?? 'the model'}${provider?.model ? ` (${provider.model})` : ''}`,
+      since: Date.now(),
     });
     const reply = await ask({ kind: 'run', id: opening.id, providerID, pages });
     if (reply.kind !== 'result') throw new Error('The check did not answer.');
-    update(running, { phase: 'checked', result: reply, progress: undefined });
+    update(running, { phase: 'checked', result: reply, progress: undefined, since: undefined });
   } catch (error) {
     update(running, {
       phase: 'failed',
       progress: undefined,
+      since: undefined,
       error: abort.signal.aborted
         ? 'The check was cancelled. Nothing was graded.'
         : errorMessage(error),
     });
   } finally {
+    stop();
     if (drawing === abort) drawing = null;
   }
 }

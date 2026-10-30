@@ -131,6 +131,8 @@ export function jobAnswer(opening: CheckOpening): FabricationAnswer {
           value: 50,
           quote: 'Holes 4× Ø10.5 at 50 mm pitch',
           box: [0.08, 0.86, 0.6, 0.9],
+          // the hole that moves
+          feature: [0.55, 0.42, 0.6, 0.5],
         },
         dxf: { ref: plate, value: 48, axis: 'x', entities: ['8', '9'] },
         photo: null,

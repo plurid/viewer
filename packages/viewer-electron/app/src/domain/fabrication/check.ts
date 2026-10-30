@@ -6,7 +6,7 @@
  * replies it shows and the evidence record a handoff saves (docs/reference/fabrication.md).
  */
 import { z } from 'zod';
-import type { SourceVersion } from '../files/inspection';
+import type { EvidenceMarkKind, EvidenceRegion, SourceVersion } from '../files/inspection';
 import type { TourStop } from '../tours/tour';
 import type { DXFCorrection } from './plan';
 import type { Finding, InventoryKind, RequestPart } from './answer';
@@ -53,6 +53,8 @@ export const checkLimits = {
   requestCharacters: 20_000,
   /** A file read for the check: a request, photo or DXF. */
   fileBytes: 64_000_000,
+  /** How long the model may take to answer, in milliseconds; other requests take 120 s. */
+  answerTime: 240_000,
 } as const;
 
 const unit = z.number().min(0).max(1);
@@ -163,22 +165,47 @@ export interface CheckCorrection {
   /** The plan in words (`correctionDescription`). */
   description: string[];
 }
+/** Who drew an outline: SAM, the box the model gave, or the box of the quoted text's own runs. */
+export type CheckOutlineSource = SegmentationSource | 'page-text';
+/** "the text on the drawing": a quote outlined by the box of its runs on the page. */
+export const pageTextLabel = 'the text on the drawing';
+/** What a stop outlines: the text a value is read from, or the hole, edge or part it is about. */
 export interface CheckOutline {
   /** The tour stop the outline marks. */
   stop: string;
-  source: SegmentationSource;
-  /** "outline from SAM 3.1", or "box from Muse Spark". */
+  kind: EvidenceMarkKind;
+  source: CheckOutlineSource;
+  /** "the text on the drawing", "outline from SAM 3.1" or "box from Muse Spark". */
   label: string;
+  /** What is drawn, in fractions of the page or photo. */
+  region: EvidenceRegion;
+  /** The box the model gave for it, `[left, top, right, bottom]`, when it gave one. */
+  box?: number[];
+  /** The quote a text outline marks. */
+  quote?: string;
   confidence?: number;
   /** Why SAM's outline was not used. */
   note?: string;
 }
 /** Who raised a finding: the model reading the job, or Viewer comparing what it read. */
 export type FindingOrigin = 'model' | 'viewer';
-export interface CheckFinding {
+/** What the model's answer leaves unread in the request: a part's quantity, or a part itself. */
+export type UnreadValue = 'quantity' | 'part';
+/** One reading of a finding that shares its cause with others, with its own grade and quote. */
+export interface CheckReading {
   finding: Finding;
   grade: Grade;
+}
+export interface CheckFinding {
+  /** The finding; for a shared cause, its first reading with the cause as its summary. */
+  finding: Finding;
+  /** The grade; for a shared cause, confirmed with every reading's reason. */
+  grade: Grade;
   origin: FindingOrigin;
+  /** The readings one cause explains, each with its grade and quote, when there are several. */
+  readings?: CheckReading[];
+  /** What the model did not read from the request, which Viewer asks to be checked. */
+  unread?: UnreadValue;
   /** What the request says, when Viewer sets it against a drawing. */
   request?: { ref: string; value: number; quote: string | null };
   /** A question the job leaves open, asked in place of a number. */
@@ -212,6 +239,17 @@ export interface CheckResult {
   seconds: number;
 }
 export type FabricationReply = CheckOpening | CheckResult | { kind: 'done' };
+
+/** What a running check does now: reads the job with the model, or outlines features with SAM. */
+export type CheckStep = 'reading' | 'outlining';
+/** A running check's step, sent to the window that runs it. */
+export interface CheckProgress {
+  /** The check. */
+  id: string;
+  step: CheckStep;
+  /** "Muse Spark is reading the request, 2 drawing pages and 1 photo". */
+  text: string;
+}
 
 /** One file as it was sent, by hash; the record names files, never their folders. */
 export interface RecordInput {
@@ -253,7 +291,9 @@ export interface CheckRecord {
   output?: unknown;
   validation: { valid: boolean; error?: string; issues: string[] };
   grades: Grade[];
-  segmentation: (CheckOutline & { ref: string })[];
+  segmentation: (CheckOutline & { ref: string; page?: number })[];
+  /** Findings one cause explains: the finding shown, its readings and the cause in words. */
+  causes: { finding: string; readings: string[]; summary: string }[];
   corrections: { finding: string; plan: DXFCorrection }[];
   tour: { stops: number; skipped: string[] };
   timings: { prepare: number; model: number; check: number; total: number };

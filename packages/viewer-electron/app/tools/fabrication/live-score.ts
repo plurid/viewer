@@ -2,22 +2,32 @@
  * THE LIVE EVALUATION'S SCORE: one check's result held against its job's truth, and every run
  * summed. A finding finds a planted problem when it is of that problem's kind and names its DXF, or,
  * naming no DXF, its part; a second finding of the same problem is a duplicate, and a finding of no
- * planted problem is a false finding. Outlines are compared with the drawing's labelled regions and
- * text runs, and the photo's part, by intersection over union (docs/reference/fabrication.md).
+ * planted problem is a false finding; what Viewer says the model did not read is counted apart.
+ * Text boxes are compared with the page's text runs and labelled text, and features with the
+ * drawing's pieces and holes and the photo's part and holes, by intersection over union
+ * (docs/reference/fabrication.md).
  */
-import type { CheckFinding, CheckResult, PageText } from '../../src/domain/fabrication/check';
+import type {
+  CheckFinding,
+  CheckOutlineSource,
+  CheckResult,
+  FindingOrigin,
+  PageText,
+  UnreadValue,
+} from '../../src/domain/fabrication/check';
 import type { FindingKind, InventoryKind } from '../../src/domain/fabrication/answer';
+import type { EvidenceMarkKind } from '../../src/domain/files/inspection';
 import type { FindingGrade } from '../../src/domain/tours/tour';
-import type { FindingOrigin } from '../../src/domain/fabrication/check';
-import type { SegmentationSource } from '../../src/domain/models/segmentation';
 import type { UnitBox } from '../../src/domain/files/regions';
 import type {
   FractionBox,
   LiveJobTruth,
   PlantedKind,
   PlantedProblem,
+  TruthRegionKind,
+  TruthShape,
 } from '../playground/samples/fabrication-jobs';
-import { quoteOn } from '../../src/domain/fabrication/grade';
+import { quoteOn } from '../../src/domain/fabrication/quotes';
 import { plantedKinds, plantedLabels } from '../playground/samples/fabrication-jobs';
 
 /** Who a call went to: the reading model, or SAM. */
@@ -52,14 +62,16 @@ export interface AttemptLog {
   schemaIssues?: string[];
   calls: CallLog[];
 }
-/** One region outlined for a tour stop: the model's box, and what stood for it. */
+/** One outline a tour stop draws: a text's box or a feature's outline, and the model's box. */
 export interface OutlineLog {
   /** The drawing or photo, and a drawing's page. */
   file?: string;
   page?: number;
-  box: UnitBox;
+  kind: EvidenceMarkKind;
+  /** The box the model gave, when it gave one. */
+  box?: UnitBox;
   polygon: [number, number][];
-  source: SegmentationSource;
+  source: CheckOutlineSource;
   confidence?: number;
   note?: string;
   stop?: string;
@@ -93,6 +105,8 @@ export interface ProblemScore {
   grades: FindingGrade[];
   origins: FindingOrigin[];
   findings: string[];
+  /** What Viewer said the model did not read for it, when a finding of Viewer's said so. */
+  unread?: UnreadValue;
 }
 export interface FindingScore {
   id: string;
@@ -103,6 +117,10 @@ export interface FindingScore {
   /** The planted problem it finds; none for a false finding. */
   problem?: string;
   duplicate?: boolean;
+  /** What Viewer says the model did not read: neither a find nor a false finding. */
+  unread?: UnreadValue;
+  /** Readings one cause explains, when there are several. */
+  readings?: number;
 }
 export interface QuoteScore {
   checked: number;
@@ -127,10 +145,12 @@ export interface OutlineScore {
   file?: string;
   page?: number;
   stop?: string;
-  source: SegmentationSource;
+  kind: EvidenceMarkKind;
+  source: CheckOutlineSource;
   confidence?: number;
   note?: string;
-  /** The outline's best IoU with a truth region of its page or photo, and that region. */
+  /** The outline's best IoU with a truth region of its kind on its page or photo, and that region:
+   * a text with the page's runs and text regions, a feature with its pieces and holes. */
   iou?: number;
   region?: string;
   /** The model's box's best IoU, the same way. */
@@ -197,46 +217,66 @@ function polygonArea(points: readonly (readonly [number, number])[]): number {
   }
   return Math.abs(sum) / 2;
 }
-/** A polygon clipped to a box, edge by edge (Sutherland and Hodgman): the box is convex, so the
- * polygon may be any simple one. */
-function clipped(points: readonly (readonly [number, number])[], box: FractionBox) {
-  const [left, top, right, bottom] = box;
-  const edges: [inside: (p: readonly [number, number]) => boolean, axis: 0 | 1, at: number][] = [
-    [(p) => p[0] >= left, 0, left],
-    [(p) => p[0] <= right, 0, right],
-    [(p) => p[1] >= top, 1, top],
-    [(p) => p[1] <= bottom, 1, bottom],
-  ];
-  let out = [...points];
-  for (const [inside, axis, at] of edges) {
+type Point = readonly [number, number];
+/** A polygon clipped to a convex one, edge by edge (Sutherland and Hodgman): the polygon clipped
+ * may be any simple one. */
+function clipped(points: readonly Point[], clip: readonly Point[]): Point[] {
+  const turn = (a: Point, b: Point, p: Point) =>
+    (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+  // Inside is the side the clip polygon's area lies on.
+  const sign =
+    clip.reduce(
+      (sum, point, index) => sum + turn(clip[0]!, point, clip[(index + 1) % clip.length]!),
+      0,
+    ) < 0
+      ? -1
+      : 1;
+  let out: Point[] = [...points];
+  clip.forEach((a, index) => {
+    const b = clip[(index + 1) % clip.length]!;
+    const inside = (p: Point) => sign * turn(a, b, p) >= 0;
+    const cross = (p: Point, q: Point): Point => {
+      const t = turn(a, b, p) / (turn(a, b, p) - turn(a, b, q));
+      return [p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])];
+    };
     const input = out;
     out = [];
-    input.forEach((current, index) => {
-      const previous = input[(index + input.length - 1) % input.length]!;
-      const cross = (): [number, number] => {
-        const t = (at - previous[axis]) / (current[axis] - previous[axis]);
-        const point: [number, number] = [
-          previous[0] + t * (current[0] - previous[0]),
-          previous[1] + t * (current[1] - previous[1]),
-        ];
-        point[axis] = at;
-        return point;
-      };
+    input.forEach((current, at) => {
+      const previous = input[(at + input.length - 1) % input.length]!;
       if (inside(current)) {
-        if (!inside(previous)) out.push(cross());
+        if (!inside(previous)) out.push(cross(previous, current));
         out.push(current);
-      } else if (inside(previous)) out.push(cross());
+      } else if (inside(previous)) out.push(cross(previous, current));
     });
-    if (!out.length) return out;
-  }
+  });
   return out;
 }
-/** Intersection over union of a polygon and a box, both in fractions of the picture. */
-export function polygonIoU(polygon: readonly (readonly [number, number])[], box: FractionBox) {
-  const [left, top, right, bottom] = box;
-  const boxArea = Math.max(0, right - left) * Math.max(0, bottom - top);
-  const shared = polygonArea(clipped(polygon, box));
-  const union = polygonArea(polygon) + boxArea - shared;
+/** A region's outline: its box's corners, or the ellipse it holds, as 64 points. */
+function shapeOutline([left, top, right, bottom]: FractionBox, shape: TruthShape): Point[] {
+  if (shape === 'box')
+    return [
+      [left, top],
+      [right, top],
+      [right, bottom],
+      [left, bottom],
+    ];
+  const [cx, cy, rx, ry] = [
+    (left + right) / 2,
+    (top + bottom) / 2,
+    (right - left) / 2,
+    (bottom - top) / 2,
+  ];
+  return Array.from({ length: 64 }, (_, index): Point => {
+    const angle = (index / 64) * 2 * Math.PI;
+    return [cx + rx * Math.cos(angle), cy + ry * Math.sin(angle)];
+  });
+}
+/** Intersection over union of a polygon and a region, the box or the ellipse it holds, both in
+ * fractions of the picture. */
+export function polygonIoU(polygon: readonly Point[], box: FractionBox, shape: TruthShape = 'box') {
+  const region = shapeOutline(box, shape);
+  const shared = polygonArea(clipped(polygon, region));
+  const union = polygonArea(polygon) + polygonArea(region) - shared;
   return union > 0 ? shared / union : 0;
 }
 const corners = ({ x, y, width, height }: UnitBox): [number, number][] => [
@@ -246,25 +286,33 @@ const corners = ({ x, y, width, height }: UnitBox): [number, number][] => [
   [x, y + height],
 ];
 
-/** The labelled regions of a picture: the truth's, and a drawing page's text runs. */
-function regionsOf(input: RunInput, file: string, page: number | undefined) {
+interface ScoredRegion {
+  label: string;
+  box: FractionBox;
+  shape: TruthShape;
+}
+/** The labelled regions of a picture of a kind: the truth's, and for text a page's text runs. */
+function regionsOf(
+  input: RunInput,
+  file: string,
+  page: number | undefined,
+  kind: TruthRegionKind,
+): ScoredRegion[] {
   return [
     ...input.truth.regions
-      .filter((region) => region.file === file && region.page === page)
-      .map(({ label, box }) => ({ label, box })),
-    ...(page === undefined ? [] : input.runs(file, page)).map((run) => ({
+      .filter((region) => region.file === file && region.page === page && region.kind === kind)
+      .map(({ label, box, shape }) => ({ label, box, shape })),
+    ...(page === undefined || kind !== 'text' ? [] : input.runs(file, page)).map((run) => ({
       label: `text “${run.text}”`,
       box: run.box as FractionBox,
+      shape: 'box' as const,
     })),
   ];
 }
-function best(
-  polygon: readonly (readonly [number, number])[],
-  regions: readonly { label: string; box: FractionBox }[],
-) {
+function best(polygon: readonly Point[], regions: readonly ScoredRegion[]) {
   let top: { iou: number; label: string } | undefined;
   for (const region of regions) {
-    const iou = polygonIoU(polygon, region.box);
+    const iou = polygonIoU(polygon, region.box, region.shape);
     if (!top || iou > top.iou) top = { iou, label: region.label };
   }
   return top;
@@ -287,6 +335,20 @@ export function scoreRun(input: RunInput): RunScore {
   const scores = new Map(problems.map((score) => [score.id, score]));
   const findings: FindingScore[] = [];
   for (const item of result?.findings ?? []) {
+    if (item.unread) {
+      // What the model did not read is neither a find nor a false finding.
+      for (const problem of truth.problems.filter((planted) => findsProblem(item, planted)))
+        scores.get(problem.id)!.unread = item.unread;
+      findings.push({
+        id: item.finding.id,
+        kind: item.finding.kind,
+        origin: item.origin,
+        grade: item.grade.status,
+        summary: item.finding.summary,
+        unread: item.unread,
+      });
+      continue;
+    }
     const matching = truth.problems.filter((problem) => findsProblem(item, problem));
     const fresh = matching.find((problem) => !scores.get(problem.id)!.found);
     const problem = fresh ?? matching[0];
@@ -305,6 +367,7 @@ export function scoreRun(input: RunInput): RunScore {
       summary: item.finding.summary,
       ...(problem ? { problem: problem.id } : {}),
       ...(problem && !fresh ? { duplicate: true } : {}),
+      ...(item.readings ? { readings: item.readings.length } : {}),
     });
   }
 
@@ -331,8 +394,9 @@ export function scoreRun(input: RunInput): RunScore {
     quote(part.ref, 1, part.quote);
     if (part.drawing) quote(part.drawing.ref, part.drawing.page, part.drawing.quote);
   }
-  for (const { finding } of answer?.findings ?? [])
-    if (finding.drawing) quote(finding.drawing.ref, finding.drawing.page, finding.drawing.quote);
+  for (const item of answer?.findings ?? [])
+    for (const { finding } of item.readings ?? [item])
+      if (finding.drawing) quote(finding.drawing.ref, finding.drawing.page, finding.drawing.quote);
 
   // The request as the model read it, part by part.
   const request: RequestScore = {
@@ -353,13 +417,14 @@ export function scoreRun(input: RunInput): RunScore {
   }
 
   const outlines: OutlineScore[] = input.outlines.map((outline) => {
-    const regions = outline.file ? regionsOf(input, outline.file, outline.page) : [];
+    const regions = outline.file ? regionsOf(input, outline.file, outline.page, outline.kind) : [];
     const drawn = best(outline.polygon, regions);
-    const boxed = best(corners(outline.box), regions);
+    const boxed = outline.box && best(corners(outline.box), regions);
     return {
       ...(outline.file ? { file: outline.file } : {}),
       ...(outline.page === undefined ? {} : { page: outline.page }),
       ...(outline.stop ? { stop: outline.stop } : {}),
+      kind: outline.kind,
       source: outline.source,
       ...(outline.confidence === undefined ? {} : { confidence: outline.confidence }),
       ...(outline.note ? { note: outline.note } : {}),
@@ -439,6 +504,10 @@ export interface LiveMetrics {
     }[];
   };
   duplicates: number;
+  /** Findings that join the readings of one cause. */
+  causes: number;
+  /** What Viewer said the model did not read from the request, by what. */
+  unread: Record<UnreadValue, number>;
   grades: { all: Grades; planted: Grades; false: Grades };
   quotes: Omit<QuoteScore, 'missed'>;
   request: RequestScore;
@@ -449,13 +518,18 @@ export interface LiveMetrics {
     failures: Record<FailureKind, number>;
   };
   outlines: {
-    total: number;
-    sam: number;
-    fallback: number;
-    fallbackRate: number;
-    reasons: Record<string, number>;
-    iou: Spread;
-    boxIoU: Spread;
+    /** Quoted text, marked by its runs' box or the model's. */
+    text: { total: number; runs: number; model: number; iou: Spread; boxIoU: Spread };
+    /** Holes, edges and parts, outlined by SAM or by the model's box standing in. */
+    features: {
+      total: number;
+      sam: number;
+      fallback: number;
+      fallbackRate: number;
+      reasons: Record<string, number>;
+      iou: Spread;
+      boxIoU: Spread;
+    };
   };
   latency: Record<CallRoute, Spread>;
   tokens: { input: number; output: number; total: number; calls: number; cost?: number };
@@ -489,7 +563,9 @@ export function liveMetrics(runs: readonly RunScore[], price?: Price): LiveMetri
   };
   const reasons: Record<string, number> = {};
   const tokens: LiveMetrics['tokens'] = { input: 0, output: 0, total: 0, calls: 0 };
+  const unread: Record<UnreadValue, number> = { quantity: 0, part: 0 };
   let duplicates = 0,
+    causes = 0,
     reported = 0;
   for (const run of runs) {
     for (const problem of run.problems)
@@ -514,6 +590,11 @@ export function liveMetrics(runs: readonly RunScore[], price?: Price): LiveMetri
     }
     job.runs++;
     for (const finding of run.findings) {
+      if (finding.unread) {
+        unread[finding.unread]++;
+        continue;
+      }
+      if (finding.readings) causes++;
       grades.all[finding.grade]++;
       if (finding.duplicate) duplicates++;
       if (finding.problem) {
@@ -533,7 +614,7 @@ export function liveMetrics(runs: readonly RunScore[], price?: Price): LiveMetri
       request[key] += run.request[key];
     for (const failure of run.failures) failures[failure]++;
     for (const outline of run.outlines)
-      if (outline.source === 'model-box') {
+      if (outline.kind === 'feature' && outline.source === 'model-box') {
         const reason = (outline.note ?? 'no reason given').replace(
           /^SAM 3\.1 gave no outline: /,
           '',
@@ -556,8 +637,12 @@ export function liveMetrics(runs: readonly RunScore[], price?: Price): LiveMetri
     tokens.cost = (tokens.input * price.input + tokens.output * price.output) / 1_000_000;
   if (tokens.cost !== undefined) tokens.cost = round(tokens.cost, 4);
   falseFindings.perRun = runs.length ? round(falseFindings.total / runs.length, 2) : 0;
-  const outlines = runs.flatMap((run) => run.outlines);
+  const all = runs.flatMap((run) => run.outlines);
+  const outlines = all.filter((outline) => outline.kind === 'feature');
+  const texts = all.filter((outline) => outline.kind === 'text');
   const sam = outlines.filter((outline) => outline.source === 'segmentation');
+  const overlap = (list: readonly OutlineScore[], key: 'iou' | 'boxIoU') =>
+    spread(list.flatMap((outline) => (outline[key] === undefined ? [] : [outline[key]])));
   const calls = runs.flatMap((run) => run.calls);
   const latency = (route: CallRoute) =>
     spread(
@@ -569,6 +654,8 @@ export function liveMetrics(runs: readonly RunScore[], price?: Price): LiveMetri
     recall,
     falseFindings,
     duplicates,
+    causes,
+    unread,
     grades,
     quotes,
     request,
@@ -579,15 +666,22 @@ export function liveMetrics(runs: readonly RunScore[], price?: Price): LiveMetri
       failures,
     },
     outlines: {
-      total: outlines.length,
-      sam: sam.length,
-      fallback: outlines.length - sam.length,
-      fallbackRate: outlines.length ? round((outlines.length - sam.length) / outlines.length) : 0,
-      reasons,
-      iou: spread(sam.flatMap((outline) => (outline.iou === undefined ? [] : [outline.iou]))),
-      boxIoU: spread(
-        outlines.flatMap((outline) => (outline.boxIoU === undefined ? [] : [outline.boxIoU])),
-      ),
+      text: {
+        total: texts.length,
+        runs: texts.filter((outline) => outline.source === 'page-text').length,
+        model: texts.filter((outline) => outline.source === 'model-box').length,
+        iou: overlap(texts, 'iou'),
+        boxIoU: overlap(texts, 'boxIoU'),
+      },
+      features: {
+        total: outlines.length,
+        sam: sam.length,
+        fallback: outlines.length - sam.length,
+        fallbackRate: outlines.length ? round((outlines.length - sam.length) / outlines.length) : 0,
+        reasons,
+        iou: overlap(sam, 'iou'),
+        boxIoU: overlap(outlines, 'boxIoU'),
+      },
     },
     latency: { model: latency('model'), segmentation: latency('segmentation') },
     tokens,
@@ -603,6 +697,8 @@ const cell = (text: string) => text.replace(/\|/g, '\\|').replace(/\s+/g, ' ');
 
 export interface SummaryContext {
   model: string;
+  /** The reasoning effort asked for; the API's own unless given. */
+  effort?: string;
   endpoint: string;
   started: string;
   jobs: number;
@@ -624,7 +720,7 @@ export function liveSummary(
   add(
     '# Live fabrication evaluation',
     '',
-    `Muse Spark \`${context.model}\` and SAM 3.1 at ${context.endpoint}, started ${context.started}. ` +
+    `Muse Spark \`${context.model}\` with ${context.effort ? `reasoning effort ${context.effort}` : 'the API’s own reasoning effort'} and SAM 3.1 at ${context.endpoint}, started ${context.started}. ` +
       `${context.jobs} jobs, ${context.repeat} ${context.repeat === 1 ? 'run' : 'runs'} each, ` +
       `${context.retries} ${context.retries === 1 ? 'retry' : 'retries'} allowed. ${metrics.graded} of ${metrics.runs} runs graded.`,
     ...(context.stopped ? ['', `The evaluation stopped early: ${context.stopped}`] : []),
@@ -641,10 +737,20 @@ export function liveSummary(
       `| ${kind === 'all' ? '**All**' : `${plantedLabels[kind]} (${expectedGrades[kind]})`} | ${row.planted} | ${row.found} | ${percent(row.found, row.planted)} | ${row.confirmed} | ${row.expected} |`,
     );
   }
+  const unreadWords: Record<UnreadValue, string> = {
+    quantity: 'its quantity',
+    part: 'the part',
+  };
   const missed = runs.flatMap((run) =>
     run.problems
       .filter((problem) => !problem.found)
-      .map((problem) => `- ${run.job} run ${run.repeat}, ${problem.part}: ${problem.description}`),
+      .map(
+        (problem) =>
+          `- ${run.job} run ${run.repeat}, ${problem.part}: ${problem.description}` +
+          (problem.unread
+            ? ` Viewer said Muse Spark did not read ${unreadWords[problem.unread]} from the request.`
+            : ''),
+      ),
   );
   add(
     '',
@@ -665,11 +771,23 @@ export function liveSummary(
     '',
     `All jobs: ${metrics.falseFindings.total} false findings in ${metrics.runs} runs (${metrics.falseFindings.perRun} a run): ` +
       `${metrics.falseFindings.byOrigin.model} by the model, ${metrics.falseFindings.byOrigin.viewer} raised by Viewer from the model's reading. ` +
-      `Duplicates of a found problem: ${metrics.duplicates}.`,
+      `Duplicates of a found problem: ${metrics.duplicates}. Findings joining the readings of one cause: ${metrics.causes}.`,
   );
+  const unreadTotal = metrics.unread.quantity + metrics.unread.part;
+  add(
+    '',
+    `What Viewer said Muse Spark did not read from the request, apart from the counts above: ${unreadTotal} ` +
+      `(${metrics.unread.quantity} quantities, ${metrics.unread.part} parts).`,
+  );
+  const unreadLines = runs.flatMap((run) =>
+    run.findings
+      .filter((finding) => finding.unread)
+      .map((finding) => `- ${run.job} run ${run.repeat}, ${finding.id}: ${finding.summary}`),
+  );
+  if (unreadLines.length) add('', ...unreadLines);
   const invented = runs.flatMap((run) =>
     run.findings
-      .filter((finding) => !finding.problem)
+      .filter((finding) => !finding.problem && !finding.unread)
       .map(
         (finding) =>
           `- ${run.job} run ${run.repeat}, ${finding.id} ${finding.kind} (${finding.origin}, ${finding.grade}): ${finding.summary}`,
@@ -713,20 +831,25 @@ export function liveSummary(
     `Failures: ${failed.length ? failed.map(([kind, count]) => `${kind} ${count}`).join(', ') : 'none'}.`,
   );
 
-  const { outlines } = metrics;
+  const { text, features } = metrics.outlines;
+  const row = (label: string, value: Spread) =>
+    `| ${label} | ${value.count} | ${fixed(value.median)} | ${fixed(value.mean)} |`;
   add(
     '',
     '## Outlines',
     '',
-    `Regions outlined: ${outlines.total}; by SAM 3.1: ${outlines.sam}; the model's box stood in: ${outlines.fallback} (${percent(outlines.fallback, outlines.total)}).`,
-    ...Object.entries(outlines.reasons).map(([reason, count]) => `- ${count} × ${cell(reason)}`),
+    `Quoted text marked: ${text.total}; by the box of its runs on the page: ${text.runs}; by the model's box: ${text.model}.`,
+    `Features outlined: ${features.total}; by SAM 3.1: ${features.sam}; the model's box stood in: ${features.fallback} (${percent(features.fallback, features.total)}).`,
+    ...Object.entries(features.reasons).map(([reason, count]) => `- ${count} × ${cell(reason)}`),
     '',
-    'Intersection over union with the nearest labelled region of the page or photo:',
+    'Intersection over union with the nearest labelled region of its kind: text with the text runs and labelled text, a feature with the pieces and holes (a hole as the circle in its box) and the photo’s part and holes.',
     '',
     '| Outline | Count | Median | Mean |',
     '| --- | ---: | ---: | ---: |',
-    `| SAM 3.1 | ${outlines.iou.count} | ${fixed(outlines.iou.median)} | ${fixed(outlines.iou.mean)} |`,
-    `| The model's box | ${outlines.boxIoU.count} | ${fixed(outlines.boxIoU.median)} | ${fixed(outlines.boxIoU.mean)} |`,
+    row('Text, as drawn', text.iou),
+    row('Text, the model’s box', text.boxIoU),
+    row('Feature, SAM 3.1', features.iou),
+    row('Feature, the model’s box', features.boxIoU),
   );
 
   const { latency, tokens } = metrics;

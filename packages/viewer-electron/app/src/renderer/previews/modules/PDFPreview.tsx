@@ -19,7 +19,7 @@ import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { getState, report } from '../../state/store';
 import { PDFOutline, PDFThumbnails } from '../pdf/PDFSidebar';
 import { EvidenceOverlay } from '../EvidenceOverlay';
-import { regionBounds, regionScale } from '../../../domain/files/regions';
+import { outlinesBounds, regionScale } from '../../../domain/files/regions';
 import type { EvidenceNavigation } from '../../../domain/files/inspection';
 
 type PDFSidebar = 'none' | 'pages' | 'outline';
@@ -79,28 +79,28 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
   const [regionFitted, setRegionFitted] = useState<EvidenceNavigation>();
   useEffect(() => {
     const evidence = context.evidence;
+    const outlined =
+      evidence?.anchor.kind === 'pdf'
+        ? outlinesBounds(evidence.anchor.region, evidence.anchor.marks)
+        : undefined;
     if (
       !pdf ||
       evidence?.anchor.kind !== 'pdf' ||
-      !evidence.anchor.region ||
+      !outlined ||
       evidence.anchor.zoom !== undefined ||
       regionFitted === evidence ||
       available.width <= 0 ||
       available.height <= 0
     )
       return;
-    const { page: number, region } = evidence.anchor;
+    const { page: number } = evidence.anchor;
     let live = true;
     void pdf
       .getPage(Math.min(number, pdf.numPages))
       .then((sheet) => {
         if (!live) return;
         const size = sheet.getViewport({ scale: PixelsPerInch.PDF_TO_CSS_UNITS });
-        setZoom(
-          pdfZoom(
-            regionScale(regionBounds(region), size, available, pdfScale(size, available, 'page')),
-          ),
-        );
+        setZoom(pdfZoom(regionScale(outlined, size, available, pdfScale(size, available, 'page'))));
         setRegionFitted(evidence);
       })
       .catch(() => {});
@@ -114,11 +114,13 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
     const evidence = context.evidence;
     const element = scroll.current;
     const sheet = element?.querySelector<HTMLElement>('.pdf-sheet');
+    const box = anchor && outlinesBounds(anchor.region, anchor.marks);
     if (
       !element ||
       !sheet ||
       !evidence ||
-      !anchor?.region ||
+      !anchor ||
+      !box ||
       centred.current === evidence ||
       laidOut !== section ||
       page !== anchor.page ||
@@ -126,7 +128,6 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
     )
       return;
     centred.current = evidence;
-    const box = regionBounds(anchor.region);
     element.scrollLeft = Math.max(
       0,
       sheet.offsetLeft + (box.x + box.width / 2) * sheet.offsetWidth - element.clientWidth / 2,
@@ -526,8 +527,12 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
           <div className="pdf-sheet">
             <canvas ref={canvas} />
             <div className="textLayer" ref={text} />
-            {anchor?.region && page === anchor.page && (
-              <EvidenceOverlay region={anchor.region} label={`Outline on page ${page}`} />
+            {(anchor?.region || anchor?.marks) && page === anchor.page && (
+              <EvidenceOverlay
+                region={anchor.region}
+                marks={anchor.marks}
+                label={`Outline on page ${page}`}
+              />
             )}
           </div>
         </div>

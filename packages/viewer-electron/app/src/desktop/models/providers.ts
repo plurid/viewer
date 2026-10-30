@@ -7,6 +7,7 @@ import type { SegmentationPicture } from '../../domain/models/segmentation';
 import {
   providerModelID,
   providerPresets,
+  providerTakesEffort,
   providerTakesImages,
   validProviderEndpoint,
 } from '../../domain/models/providers';
@@ -60,10 +61,14 @@ const responseSchema = z.object({
 });
 /** A Llama-style reply that ended on its own, not cut off at its token limit. */
 const finished = new Set(['stop', 'end_of_turn', 'end_of_message']);
+/** How long a model may take to answer unless a request gives its own time, in milliseconds. */
+export const generateTimeout = 120_000;
 /** What a generation sends beside its instructions and input. */
 export interface GenerateOptions {
   /** Pictures, after the input, in the order the input names them; they need the `images` level. */
   images?: readonly ModelImage[];
+  /** How long the model may take to answer, in milliseconds; `generateTimeout` unless given. */
+  timeout?: number;
 }
 const imageURL = (image: ModelImage) =>
   `data:${image.type};base64,${Buffer.from(image.data).toString('base64')}`;
@@ -338,7 +343,15 @@ export class Providers {
       level,
       signal,
       (authorized) =>
-        this.generateAuthorized(provider, instructions, input, schema, authorized, images),
+        this.generateAuthorized(
+          provider,
+          instructions,
+          input,
+          schema,
+          authorized,
+          images,
+          options.timeout ?? generateTimeout,
+        ),
       actor,
     );
   }
@@ -410,6 +423,7 @@ export class Providers {
     schema: Record<string, unknown>,
     signal: AbortSignal,
     images: readonly ModelImage[],
+    timeout: number,
   ): Promise<unknown> {
     const model = providerModelID(provider.kind, provider.model);
     if (!model) throw new Error('Select a model in Settings.');
@@ -426,6 +440,11 @@ export class Providers {
         ? '\nReturn only a JSON object matching this JSON Schema:\n' + JSON.stringify(schema)
         : '');
     const generationSchema = provider.kind === 'gemini' ? geminiGenerationSchema(schema) : schema;
+    // Only a kind that takes an effort is sent one; without it the API reasons as it does by default.
+    const effort =
+      provider.effort && providerTakesEffort(provider.kind, provider.effort)
+        ? provider.effort
+        : undefined;
     const body =
       provider.kind === 'openai'
         ? {
@@ -466,10 +485,12 @@ export class Providers {
                     },
               ...(provider.kind === 'qwen' ? { enable_thinking: false } : {}),
               ...(provider.kind === 'openrouter' ? { provider: { require_parameters: true } } : {}),
-              // Meta's API is sent only the fields tools/meta-probe.ts checks it with.
+              ...(effort ? { reasoning_effort: effort } : {}),
+              // Meta's API is sent only the fields tools/meta-probe.ts checks it with, and
+              // `reasoning_effort`, checked live.
               ...(provider.kind === 'meta' ? {} : { max_tokens: 12000, stream: false }),
             };
-    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(120000)]);
+    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(timeout)]);
     const response = await requestProvider(this.request, url, {
       method: 'POST',
       headers: this.headers(provider, secret),

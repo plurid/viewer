@@ -19,6 +19,8 @@ import type { MeasureOutcome, Measurement } from '../../domain/fabrication/measu
 import type {
   CheckFinding,
   CheckOpening,
+  CheckOutline,
+  CheckProgress,
   CheckProvider,
   CheckRecord,
   CheckResult,
@@ -26,6 +28,7 @@ import type {
   CheckSource,
   FabricationReply,
   FabricationRequest,
+  PageText,
   RecordInput,
   RecordPicture,
   RenderedPage,
@@ -36,6 +39,8 @@ import type {
   CheckInputPhoto,
   CheckInputRequest,
 } from '../../domain/fabrication/prompt';
+import type { StopMark } from '../../domain/fabrication/tour';
+import type { EvidenceAnchor, EvidenceRegion } from '../../domain/files/inspection';
 import type { TourDefinition, TourStop } from '../../domain/tours/tour';
 import type { Providers } from '../models/providers';
 import type { Segmenter } from '../models/segmentation';
@@ -47,14 +52,14 @@ import {
   fabricationAnswerSchema,
   modelInventory,
 } from '../../domain/fabrication/answer';
-import { checkFileKind, checkLimits } from '../../domain/fabrication/check';
+import { checkFileKind, checkLimits, pageTextLabel } from '../../domain/fabrication/check';
 import {
   checkAnswerSchema,
   checkInput,
   checkInstructions,
   pageText,
 } from '../../domain/fabrication/prompt';
-import { correctedName, correctionDescription } from '../../domain/fabrication/plan';
+import { correctedName, correctionDescription, listText } from '../../domain/fabrication/plan';
 import { readJobName } from '../../domain/fabrication/names';
 import { modelImageLimits } from '../../domain/models/images';
 import {
@@ -69,7 +74,9 @@ import {
 } from '../../domain/models/providers';
 import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
 import { commonFolder, tourDefinitionSchema } from '../../domain/tours/tour';
-import { regionBounds } from '../../domain/files/regions';
+import { boxRegion } from '../../domain/files/regions';
+import { modelBoxLabel } from '../../domain/models/segmentation';
+import { countText } from '../../domain/layout/nesting/format';
 import { errorMessage } from '../../domain/errors';
 import { DXF_MAX_BYTES } from '../../domain/previews/drawings/dxf/math';
 import { absolute, entry, list } from '../files/filesystem';
@@ -93,6 +100,8 @@ export interface FabricationPorts {
   renderPhoto?: PhotoRenderer;
   /** What outlines a finding's region for the provider asked; its box unless given. */
   segmenter?(provider: ModelProvider): Segmenter | undefined;
+  /** Tells the window running a check what the check does now. */
+  progress?(owner: number, progress: CheckProgress): void;
   now?(): number;
 }
 interface Check {
@@ -116,6 +125,8 @@ interface Prepared {
   /** By `ref` or `ref:page`. */
   pictures: Map<string, SegmentationPicture>;
   texts: Map<string, string>;
+  /** A drawing page's text runs, by `ref:page`. */
+  runs: Map<string, PageText[]>;
   measured: Map<string, { name: string; outcome: MeasureOutcome }>;
   inputs: RecordInput[];
   notSent: string[];
@@ -130,6 +141,33 @@ const sendings: Record<InventorySource['kind'], CheckSending> = {
 /** Open checks, oldest closed first past this. */
 const openLimit = 16;
 const seconds = (milliseconds: number) => Math.round(milliseconds / 100) / 10;
+/** Who reads a job with a provider: "Muse Spark", else the provider's name. */
+const readerOf = (provider: ModelProvider) =>
+  providerPresets[provider.kind].family ?? provider.name;
+const timedOut = (error: unknown) =>
+  (error instanceof DOMException && error.name === 'TimeoutError') ||
+  errorMessage(error) === 'The provider request timed out.';
+/** An answer that took too long, in words: the step, and the faster effort when there is one. */
+function timeoutText(provider: ModelProvider): string {
+  const faster =
+    providerPresets[provider.kind].efforts?.includes('minimal') && provider.effort !== 'minimal'
+      ? `, or choose Minimal under Reasoning effort for ${provider.name} in Settings → Models to answer faster`
+      : '';
+  return `${readerOf(provider)} timed out after ${checkLimits.answerTime / 1000} s reading the job, so nothing was graded. Run the check again${faster}.`;
+}
+/** What the model reads: "the request, 2 drawing pages, 1 photo and 2 DXF parts". */
+function readingText(inputs: Prepared): string {
+  const pages = inputs.drawings.reduce((sum, drawing) => sum + drawing.shown.length, 0);
+  const counted = (count: number, noun: string) => (count ? [countText(count, noun)] : []);
+  return listText([
+    ...(inputs.requests.length === 1
+      ? ['the request']
+      : counted(inputs.requests.length, 'request')),
+    ...counted(pages, 'drawing page'),
+    ...counted(inputs.photos.length, 'photo'),
+    ...counted(inputs.dxf.length, 'DXF part'),
+  ]);
+}
 
 export class FabricationChecks {
   private checks = new Map<string, Check>();
@@ -321,36 +359,47 @@ export class FabricationChecks {
       validation: { valid: false, issues: [] },
       grades: [],
       segmentation: [],
+      causes: [],
       corrections: [],
       tour: { stops: 0, skipped: [] },
       timings: { prepare: 0, model: 0, check: 0, total: 0 },
     };
     check.record = record;
     let prepared: number | undefined, answered: number | undefined;
+    const reader = readerOf(provider);
     try {
       const inputs = await this.prepare(check, pages, signal);
       record.inputs = inputs.inputs;
       prepared = this.now();
-      const raw = await this.ports.generate(
-        provider,
-        checkInstructions,
-        checkInput(
-          {
-            job: check.job,
-            inventory: modelInventory(check.sources),
-            requests: inputs.requests,
-            drawings: inputs.drawings,
-            photos: inputs.photos,
-            dxf: inputs.dxf,
-          },
-          inputs.images.length,
-        ),
-        checkAnswerSchema,
-        signal,
-        'images',
-        'user',
-        { images: inputs.images },
-      );
+      this.ports.progress?.(owner, {
+        id,
+        step: 'reading',
+        text: `${reader} is reading ${readingText(inputs)}`,
+      });
+      const raw = await this.ports
+        .generate(
+          provider,
+          checkInstructions,
+          checkInput(
+            {
+              job: check.job,
+              inventory: modelInventory(check.sources),
+              requests: inputs.requests,
+              drawings: inputs.drawings,
+              photos: inputs.photos,
+              dxf: inputs.dxf,
+            },
+            inputs.images.length,
+          ),
+          checkAnswerSchema,
+          signal,
+          'images',
+          'user',
+          { images: inputs.images, timeout: checkLimits.answerTime },
+        )
+        .catch((error: unknown) => {
+          throw signal.aborted || !timedOut(error) ? error : new Error(timeoutText(provider));
+        });
       answered = this.now();
       record.output = raw;
       const parsed = fabricationAnswerSchema.safeParse(raw);
@@ -362,7 +411,7 @@ export class FabricationChecks {
           `${provider.name}’s answer does not fit the check’s form at ${where}, so nothing was graded. Run the check again.`,
         );
       }
-      const result = await this.verify(check, parsed.data, inputs, provider, signal);
+      const result = await this.verify(check, parsed.data, inputs, provider, signal, owner);
       record.validation = { valid: true, issues: result.issues };
       result.seconds = seconds(this.now() - started);
       check.result = result;
@@ -398,6 +447,7 @@ export class FabricationChecks {
       images: [],
       pictures: new Map(),
       texts: new Map(),
+      runs: new Map(),
       measured: new Map(),
       inputs: [],
       notSent: [],
@@ -461,6 +511,7 @@ export class FabricationChecks {
         for (const page of list) {
           const image = pagePicture(page, source.name);
           out.texts.set(`${source.ref}:${page.page}`, pageText(page.text));
+          out.runs.set(`${source.ref}:${page.page}`, page.text);
           if (!fits(image)) {
             left++;
             continue;
@@ -583,13 +634,15 @@ export class FabricationChecks {
     return out;
   }
 
-  /** The answer checked against the job: issues, grades, the tour, outlines and corrections. */
+  /** The answer checked against the job: issues, grades, causes, the tour, outlines and
+   * corrections. */
   private async verify(
     check: Check,
     answer: FabricationAnswer,
     inputs: Prepared,
     provider: ModelProvider,
     signal: AbortSignal,
+    owner: number,
   ): Promise<CheckResult> {
     const record = check.record!;
     const inventory = modelInventory(check.sources);
@@ -599,22 +652,47 @@ export class FabricationChecks {
       dxf: (ref) => inputs.measured.get(ref),
       text: (ref, page) => inputs.texts.get(`${ref}:${page}`) || undefined,
     };
-    const { gradeFinding } = await import('../../domain/fabrication/grade');
-    const { reconcileJob } = await import('../../domain/fabrication/reconcile');
-    const { checkTour } = await import('../../domain/fabrication/tour');
-    const { correctionFor } = await import('../../domain/fabrication/correction');
+    const [{ gradeFinding }, { reconcileJob }, { checkTour }, { correctionFor }, { sharedCauses }] =
+      await Promise.all([
+        import('../../domain/fabrication/grade'),
+        import('../../domain/fabrication/reconcile'),
+        import('../../domain/fabrication/tour'),
+        import('../../domain/fabrication/correction'),
+        import('../../domain/fabrication/causes'),
+      ]);
     const grades = answer.findings.map((finding) => gradeFinding(finding, job));
     const measurement = (ref: string): Measurement | undefined => {
       const outcome = inputs.measured.get(ref)?.outcome;
       return outcome?.status === 'measured' ? outcome.measurement : undefined;
     };
+    const reader = readerOf(provider);
     const reconciled = reconcileJob({
       answer,
       sources: check.sources,
+      reader,
       grading: job,
       pieces: (ref) => measurement(ref)?.outlines.length || undefined,
     });
     record.grades = [...grades, ...reconciled.findings.map((item) => item.grade)];
+    const plans = answer.findings.map((finding, index) => {
+      const measured = finding.dxf && measurement(finding.dxf.ref);
+      return measured ? correctionFor(finding, grades[index]!, measured) : undefined;
+    });
+    const causes = sharedCauses(
+      answer.findings.map((finding, index) => ({
+        finding,
+        grade: grades[index]!,
+        ...(plans[index] ? { plan: plans[index] } : {}),
+      })),
+      measurement,
+    );
+    const ids = (readings: readonly number[]) =>
+      readings.map((index) => answer.findings[index]!.id);
+    record.causes = causes.map((cause) => ({
+      finding: ids(cause.readings)[0]!,
+      readings: ids(cause.readings),
+      summary: cause.summary,
+    }));
     const tour = checkTour({
       answer,
       sources: check.sources,
@@ -622,35 +700,63 @@ export class FabricationChecks {
       folder: check.folder,
       measurement,
       sha256: (ref) => inputs.inputs.find((item) => item.ref === ref)?.sha256,
+      runs: (ref, page) => inputs.runs.get(`${ref}:${page}`),
+      causes: causes.map((cause) => ({ readings: ids(cause.readings), grade: cause.grade })),
     });
-    const byRef = new Map(check.sources.map((source) => [source.ref, source]));
-    const outlines = new Map<string, CheckFinding['outlines']>();
-    const reader = providerPresets[provider.kind].family ?? provider.name;
+
     const segmenter = this.ports.segmenter?.(provider) ?? boxSegmenter(reader);
-    for (const stop of tour.stops) {
-      const outlined = await this.outline(stop, answer, inputs, segmenter, signal);
+    const features = tour.marks.filter((mark) => mark.kind === 'feature').length;
+    if (features && segmenter.name)
+      this.ports.progress?.(owner, {
+        id: check.id,
+        step: 'outlining',
+        text: `${segmenter.name} is outlining ${countText(features, 'feature')}`,
+      });
+    const outlines = new Map<string, CheckOutline[]>();
+    for (const mark of tour.marks) {
+      const outlined = await this.outline(mark, tour.stops, inputs, segmenter, reader, signal);
       if (!outlined) continue;
-      record.segmentation.push(outlined);
-      if (!stop.finding) continue;
-      outlines.set(stop.finding.id, [...(outlines.get(stop.finding.id) ?? []), outlined]);
+      record.segmentation.push({
+        ...outlined,
+        ref: mark.ref,
+        ...(mark.page === undefined ? {} : { page: mark.page }),
+      });
+      if (mark.finding)
+        outlines.set(mark.finding, [...(outlines.get(mark.finding) ?? []), outlined]);
     }
-    const findings: CheckFinding[] = answer.findings.map((finding, index) => {
-      const grade = grades[index]!;
-      const name = (ref?: string) => (ref ? byRef.get(ref)?.name : undefined);
+
+    const byRef = new Map(check.sources.map((source) => [source.ref, source]));
+    const name = (ref?: string) => (ref ? byRef.get(ref)?.name : undefined);
+    const known = (names: Record<string, string | undefined>) =>
+      Object.fromEntries(
+        Object.entries(names).filter(([, value]) => value),
+      ) as CheckFinding['names'];
+    const followers = new Set(causes.flatMap((cause) => cause.readings.slice(1)));
+    const leading = new Map(causes.map((cause) => [cause.readings[0]!, cause]));
+    const findings: CheckFinding[] = [];
+    answer.findings.forEach((finding, index) => {
+      if (followers.has(index)) return;
+      const cause = leading.get(index);
+      const plan = cause?.plan ?? plans[index];
       const dxf = finding.dxf && byRef.get(finding.dxf.ref);
-      const measured = finding.dxf && measurement(finding.dxf.ref);
-      const plan = dxf && measured ? correctionFor(finding, grade, measured) : undefined;
       if (plan) record.corrections.push({ finding: finding.id, plan });
-      const names = {
-        drawing: name(finding.drawing?.ref),
-        dxf: name(finding.dxf?.ref),
-        photo: name(finding.photo?.ref),
-      };
-      return {
-        finding,
-        grade,
+      findings.push({
+        finding: cause ? { ...finding, summary: cause.summary } : finding,
+        grade: cause?.grade ?? grades[index]!,
         origin: 'model',
-        names: Object.fromEntries(Object.entries(names).filter(([, value]) => value)),
+        ...(cause
+          ? {
+              readings: cause.readings.map((reading) => ({
+                finding: answer.findings[reading]!,
+                grade: grades[reading]!,
+              })),
+            }
+          : {}),
+        names: known({
+          drawing: name(finding.drawing?.ref),
+          dxf: name(finding.dxf?.ref),
+          photo: name(finding.photo?.ref),
+        }),
         ...(plan && dxf
           ? {
               correction: {
@@ -663,7 +769,7 @@ export class FabricationChecks {
             }
           : {}),
         outlines: outlines.get(finding.id) ?? [],
-      };
+      });
     });
     for (const item of reconciled.findings)
       findings.push({
@@ -672,12 +778,8 @@ export class FabricationChecks {
         origin: 'viewer',
         ...(item.request ? { request: item.request } : {}),
         ...(item.question ? { question: item.question } : {}),
-        names: Object.fromEntries(
-          [
-            ['drawing', item.finding.drawing && byRef.get(item.finding.drawing.ref)?.name],
-            ['dxf', byRef.get(item.part)?.name],
-          ].filter(([, value]) => value),
-        ),
+        ...(item.unread ? { unread: item.unread } : {}),
+        names: known({ drawing: name(item.finding.drawing?.ref), dxf: name(item.part) }),
         outlines: [],
       });
     const definition = { version: 1 as const, name: check.job, stops: tour.stops };
@@ -704,46 +806,56 @@ export class FabricationChecks {
     };
   }
 
-  /** A stop's region outlined by the segmenter, from the picture the model read and its box. */
+  /** What a stop outlines: a text by its box, a feature by the segmenter from the picture the model
+   * read, placed on the stop's anchor. */
   private async outline(
-    stop: TourStop,
-    answer: FabricationAnswer,
+    mark: StopMark,
+    stops: readonly TourStop[],
     inputs: Prepared,
     segmenter: Segmenter,
+    reader: string,
     signal: AbortSignal,
-  ) {
-    if (stop.target.kind !== 'file') return undefined;
-    const anchor = stop.target.anchor;
-    const asked = answer.tour[Number(stop.id.replace(/^stop-/, '')) - 1];
-    if (!asked) return undefined;
-    const region =
-      anchor?.kind === 'pdf' && anchor.region
-        ? {
-            picture: inputs.pictures.get(`${asked.ref}:${anchor.page}`),
-            box: regionBounds(anchor.region),
-          }
-        : anchor?.kind === 'image'
-          ? { picture: inputs.pictures.get(asked.ref), box: anchor }
-          : undefined;
-    if (!region?.picture || !anchor) return undefined;
-    const { x, y, width, height } = region.box;
-    const outline = await segmenter.segment(
-      region.picture,
-      { kind: 'box', box: { x, y, width, height } },
-      signal,
+  ): Promise<CheckOutline | undefined> {
+    const stop = stops.find((item) => item.id === mark.stop);
+    const anchor = stop?.target.kind === 'file' ? stop.target.anchor : undefined;
+    if (!anchor) return undefined;
+    const base = {
+      stop: mark.stop,
+      kind: mark.kind,
+      ...(mark.asked ? { box: mark.asked } : {}),
+      ...(mark.quote ? { quote: mark.quote } : {}),
+    };
+    if (mark.kind === 'text')
+      return {
+        ...base,
+        source: mark.source,
+        label: mark.source === 'page-text' ? pageTextLabel : modelBoxLabel(reader),
+        region: boxRegion(mark.box),
+      };
+    const picture = inputs.pictures.get(
+      mark.page === undefined ? mark.ref : `${mark.ref}:${mark.page}`,
     );
+    if (!picture) return undefined;
+    const outline = await segmenter.segment(picture, { kind: 'box', box: mark.box }, signal);
     if (!outline) return undefined;
-    if (anchor.kind === 'pdf') anchor.region = outline.polygon;
-    else if (anchor.kind === 'image') anchor.polygon = outline.polygon;
+    place(anchor, mark.at, outline.polygon);
     return {
-      stop: stop.id,
-      ref: asked.ref,
+      ...base,
       source: outline.source,
       label: outline.label,
+      region: outline.polygon,
       ...(outline.confidence === undefined ? {} : { confidence: outline.confidence }),
       ...(outline.note ? { note: outline.note } : {}),
     };
   }
+}
+
+/** An outline put where a stop's anchor draws its mark. */
+function place(anchor: EvidenceAnchor, at: StopMark['at'], polygon: EvidenceRegion): void {
+  if (anchor.kind === 'image') anchor.polygon = polygon;
+  else if (anchor.kind !== 'pdf') return;
+  else if (at === 'region') anchor.region = polygon;
+  else if (typeof at === 'number' && anchor.marks?.[at]) anchor.marks[at].region = polygon;
 }
 
 /** The provider a check asks first: a Meta model, else the one Ask uses, else any that takes

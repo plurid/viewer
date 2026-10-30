@@ -8,7 +8,7 @@ import type { Primitive } from '../layout/nesting/drawing';
 import type { Finding } from './answer';
 import type { Grade } from './grade';
 import type { Hole, Measurement } from './measure';
-import type { CorrectionReport, DXFCorrection, PitchAxis } from './plan';
+import type { CorrectionPitch, CorrectionReport, DXFCorrection, PitchAxis } from './plan';
 import { parseDrawing } from '../previews/drawings/dxf/geometry';
 import { readCutDrawing, transformPrimitive } from '../layout/nesting/drawing';
 import { partDXF } from '../layout/nesting/dxf-writer';
@@ -64,6 +64,30 @@ export function correctionFor(
   };
 }
 
+/** The holes a plan moves, `to` first, and how far, on the drawing as it measures; undefined when
+ * the plan does not fit it. */
+export function plannedMove(
+  plan: DXFCorrection,
+  measurement: Measurement,
+): { holes: Hole[]; shift: Point } | undefined {
+  const still = holeOf(measurement, plan.from),
+    target = holeOf(measurement, plan.to);
+  if (!still || !target) return undefined;
+  const holes = [target];
+  for (const id of plan.move) {
+    const hole = holeOf(measurement, id);
+    if (!hole) return undefined;
+    if (!holes.includes(hole)) holes.push(hole);
+  }
+  if (holes.includes(still)) return undefined;
+  try {
+    const change = plan.target - pitchBetween(still, target, plan.axis);
+    return { holes, shift: shiftFor(still, target, plan.axis, change) };
+  } catch {
+    return undefined;
+  }
+}
+
 function measured(drawing: Drawing, name: string): Measurement {
   const outcome = measureDrawing(drawing);
   if (outcome.status === 'refused') throw new Error(`${name}: ${outcome.reason}`);
@@ -72,19 +96,27 @@ function measured(drawing: Drawing, name: string): Measurement {
 const near = (a: Point, b: Point, tolerance: number) =>
   Math.hypot(a.x - b.x, a.y - b.y) <= tolerance;
 
-/** The pitch a corrected copy measures between the holes now at `from` and `to`. */
+/** The pitch a corrected copy measures between the holes now at `from` and `to`, and each further
+ * pitch between the holes now at its ends. */
 export function measureCorrection(
   source: string,
-  report: Pick<CorrectionReport, 'axis' | 'moved'>,
+  report: Pick<CorrectionReport, 'axis' | 'moved' | 'also'>,
   from: Point,
-): { pitch: number; measurement: Measurement } {
+): { pitch: number; also: number[]; measurement: Measurement } {
   const measurement = measured(parseDrawing(source), 'The corrected copy');
-  const at = (centre: Point) =>
-    measurement.holes.find((hole) => near(hole.centre, centre, written));
-  const still = at(from),
-    moved = at(report.moved[0]!.to);
-  if (!still || !moved) throw new Error('The corrected copy lost a hole it should keep.');
-  return { pitch: pitchBetween(still, moved, report.axis), measurement };
+  const between = (a: Point, b: Point, axis: PitchAxis) => {
+    const at = (centre: Point) =>
+      measurement.holes.find((hole) => near(hole.centre, centre, written));
+    const still = at(a),
+      moved = at(b);
+    if (!still || !moved) throw new Error('The corrected copy lost a hole it should keep.');
+    return pitchBetween(still, moved, axis);
+  };
+  return {
+    pitch: between(from, report.moved[0]!.to, report.axis),
+    also: (report.also ?? []).map((pitch) => between(pitch.from, pitch.to, pitch.axis)),
+    measurement,
+  };
 }
 
 /**
@@ -125,6 +157,7 @@ export function correctDrawing(
       `${name} changed since it was checked: the pitch is now ${millimetreText(current)}, not ${millimetreText(plan.measured)}. Check it again.`,
     );
   const shift = shiftFor(still, target, plan.axis, plan.target - current);
+  const also = (plan.also ?? []).map((pitch) => furtherPitch(pitch, hole, moving, shift, name));
   const numbers = new Set(moving.map((item) => item.number));
   let web = Infinity;
   for (const item of moving) {
@@ -180,17 +213,50 @@ export function correctDrawing(
       from: item.centre,
       to: { x: item.centre.x + shift.x, y: item.centre.y + shift.y },
     })),
+    ...(also.length ? { also } : {}),
     web,
     notes,
   };
   const again = measureCorrection(text, report, still.centre);
   checkCopy(before, again.measurement, report);
   report.after = again.pitch;
-  if (Math.abs(report.after - plan.target) > written)
-    throw new Error(
-      `The corrected copy measures ${millimetreText(report.after)}, not ${millimetreText(plan.target)}. Nothing was saved.`,
-    );
+  again.also.forEach((after, index) => (also[index]!.after = after));
+  for (const pitch of [report, ...also])
+    if (Math.abs(pitch.after - pitch.target) > written)
+      throw new Error(
+        `The corrected copy measures ${millimetreText(pitch.after)}, not ${millimetreText(pitch.target)}. Nothing was saved.`,
+      );
   return { text, report, from: still.centre };
+}
+
+/** A further pitch the move sets, checked against the drawing as reviewed: its hole that moves
+ * moves, its hole that stays stays, and it measures what was reviewed. */
+function furtherPitch(
+  pitch: CorrectionPitch,
+  hole: (id: string) => Hole,
+  moving: readonly Hole[],
+  shift: Point,
+  name: string,
+): NonNullable<CorrectionReport['also']>[number] {
+  const still = hole(pitch.from),
+    moved = hole(pitch.to);
+  if (moving.includes(still) || !moving.includes(moved))
+    throw new Error(
+      `The move does not set the pitch between holes ${still.number} and ${moved.number}.`,
+    );
+  const before = pitchBetween(still, moved, pitch.axis);
+  if (Math.abs(before - pitch.measured) > written)
+    throw new Error(
+      `${name} changed since it was checked: a pitch is now ${millimetreText(before)}, not ${millimetreText(pitch.measured)}. Check it again.`,
+    );
+  return {
+    axis: pitch.axis,
+    target: pitch.target,
+    before,
+    after: Number.NaN,
+    from: still.centre,
+    to: { x: moved.centre.x + shift.x, y: moved.centre.y + shift.y },
+  };
 }
 
 /** How far to move so the pitch changes by `change`: along the axis, away from the hole that stays

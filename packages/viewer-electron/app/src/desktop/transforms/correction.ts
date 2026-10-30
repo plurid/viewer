@@ -6,6 +6,7 @@
 import { open, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { CorrectionReport, DXFCorrection } from '../../domain/fabrication/plan';
+import { savedPitches } from '../../domain/fabrication/plan';
 import type { NestingInput } from './nesting';
 import { decodeDXF } from '../../domain/previews/drawings/dxf/decode';
 import { readWhole } from './nesting';
@@ -37,12 +38,20 @@ export async function writeCorrection(
   progress(0.8, 'Measuring the corrected copy again');
   const saved = await readFile(output, 'utf8');
   if (saved !== corrected.text) throw new Error('The corrected copy was not saved as written.');
-  const after = measureCorrection(saved, corrected.report, corrected.from).pitch;
-  if (Math.abs(after - plan.target) > 1e-5)
-    throw new Error(
-      `The saved copy measures ${millimetreText(after)}, not ${millimetreText(plan.target)}.`,
-    );
-  const report = { ...corrected.report, after };
-  progress(1, `Pitch ${millimetreText(report.before)} → ${millimetreText(after)}, measured again`);
+  const again = measureCorrection(saved, corrected.report, corrected.from);
+  const also = (corrected.report.also ?? []).map((pitch, index) => ({
+    ...pitch,
+    after: again.also[index]!,
+  }));
+  for (const [after, target] of [
+    [again.pitch, plan.target],
+    ...also.map((pitch) => [pitch.after, pitch.target]),
+  ] as const)
+    if (Math.abs(after - target) > 1e-5)
+      throw new Error(
+        `The saved copy measures ${millimetreText(after)}, not ${millimetreText(target)}.`,
+      );
+  const report = { ...corrected.report, after: again.pitch, ...(also.length ? { also } : {}) };
+  progress(1, `${savedPitches(report)}, measured again`);
   return { correction: report };
 }

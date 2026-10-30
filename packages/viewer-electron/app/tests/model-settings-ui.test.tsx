@@ -138,3 +138,42 @@ it('keeps the agent permission checkbox labeled and sends only an explicit chang
     true,
   );
 });
+
+it('offers a reasoning effort only for a provider that takes one, and leaves it out for the default', () => {
+  const settings = defaultSettings('/fixtures');
+  const meta = { ...newModelProvider('meta', 'meta'), effort: 'minimal' as const };
+  settings.providers = [meta, { ...newModelProvider('gemini', 'gemini'), model: 'gemini-model' }];
+  const snapshot: SettingsSnapshot = {
+    revision: 1,
+    settings,
+    ui: normalizePreferences(),
+    look: 'dark',
+    credentials: [],
+  };
+  Object.assign(window, {
+    viewer: {
+      providerPermissionGet: vi.fn(async () => null),
+      onEvent: () => () => {},
+    },
+  });
+  const save = vi.fn<(change: SettingsChange) => void>();
+  render(<ModelSettings snapshot={snapshot} save={save} error={vi.fn()} />);
+  const efforts = screen.getAllByLabelText('Reasoning effort');
+  // only the Meta provider's editor offers it
+  expect(efforts).toHaveLength(1);
+  const effort = efforts[0] as HTMLSelectElement;
+  expect(effort.value).toBe('minimal');
+  expect([...effort.options].map((option) => option.textContent)).toEqual([
+    'Provider default',
+    'Minimal: fastest answers',
+    'Low',
+  ]);
+  fireEvent.change(effort, { target: { value: 'low' } });
+  expect(save.mock.calls[0]![0](snapshot)[0]!.value).toEqual([
+    { ...meta, effort: 'low' },
+    settings.providers[1],
+  ]);
+  fireEvent.change(effort, { target: { value: '' } });
+  const [cleared] = save.mock.calls[1]![0](snapshot)[0]!.value as (typeof meta)[];
+  expect(cleared).not.toHaveProperty('effort');
+});

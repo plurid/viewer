@@ -670,6 +670,12 @@ export class Desktop {
             )
           : undefined;
       },
+      // a check's step goes to the window running it, as speech's events do
+      progress: (owner, progress) => {
+        const window = this.windows.get(owner)?.window;
+        if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+          sendEvent(window.webContents, { type: 'fabrication', progress });
+      },
       encodePhoto: (bytes, signal) =>
         imageProcess(
           path.join(path.dirname(options.worker), 'image-worker.cjs'),

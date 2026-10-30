@@ -7,7 +7,8 @@
  * META_API_KEY only; it is held in memory, never printed, written or logged.
  *
  *   node --import tsx tools/fabrication/evaluate-live.ts --out <folder>
- *     [--jobs J1,J7] [--repeat <n>] [--model <id>] [--retries <n>] [--price <input>,<output>]
+ *     [--jobs J1,J7] [--repeat <n>] [--model <id>] [--effort <value>] [--retries <n>]
+ *     [--price <input>,<output>]
  */
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
@@ -15,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CheckRecord, CheckResult, RenderedPage } from '../../src/domain/fabrication/check';
 import type { ModelDataPermission } from '../../src/domain/models/permissions';
+import type { ReasoningEffort } from '../../src/domain/models/providers';
 import type { ModelProvider } from '../../src/domain/services';
 import type { ModelPermissions } from '../../src/desktop/models/model-permissions';
 import type { PhotoEncoder } from '../../src/desktop/fabrication/inputs';
@@ -31,14 +33,13 @@ import type {
   TokenUsage,
 } from './live-score';
 import { fabricationAnswerSchema } from '../../src/domain/fabrication/answer';
-import { checkFileKind } from '../../src/domain/fabrication/check';
 import { checkInstructions, pageText } from '../../src/domain/fabrication/prompt';
 import { modelEndpoint, modelPermissionCovers } from '../../src/domain/models/permissions';
 import { providerPresets } from '../../src/domain/models/providers';
 import { defaultSettings } from '../../src/domain/services';
 import { errorMessage } from '../../src/domain/errors';
 import { FabricationChecks } from '../../src/desktop/fabrication/service';
-import { photoPlan, requestInput, requestText, sha256 } from '../../src/desktop/fabrication/inputs';
+import { photoPlan, requestInput, requestText } from '../../src/desktop/fabrication/inputs';
 import { ModelPermissionRequired } from '../../src/desktop/models/model-permissions';
 import { Credentials, Providers } from '../../src/desktop/models/providers';
 import { samSegmenter } from '../../src/desktop/models/segmentation';
@@ -55,6 +56,8 @@ export interface LiveOptions {
   jobs?: readonly string[];
   repeat?: number;
   model?: string;
+  /** How long Muse Spark reasons; the API's own unless given. */
+  effort?: ReasoningEffort;
   /** Runs again after a failure a person would retry: a schema miss, a timeout, a busy server. */
   retries?: number;
   price?: Price;
@@ -273,6 +276,7 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
     endpoint: providerPresets.meta.endpoint,
     model: options.model ?? providerPresets.meta.model!,
     allowContent: false,
+    ...(options.effort ? { effort: options.effort } : {}),
   };
   // Running the evaluation is the person's consent to send these generated jobs, pictures included.
   const granted: ModelDataPermission = {
@@ -288,56 +292,24 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
     },
   };
   let calls: CallLog[] = [];
-  let outlines: OutlineLog[] = [];
   const providers = new Providers(
     new EnvironmentKey(options.key, out),
     recorded(options.request ?? fetch, (call) => calls.push(call), now),
     permissions,
   );
-  // Which file each picture sent is, by its bytes: a page as drawn, a photo as encoded.
-  const pictures = new Map<string, { file: string; page?: number }>();
-  const photos = new Map(
-    jobs.flatMap((job) =>
-      job.files
-        .filter((file) => checkFileKind(file.name) === 'photo')
-        .map((file) => [sha256(file.bytes), file.name] as const),
-    ),
-  );
-  const encode = options.encodePhoto ?? processorPhoto;
   const reader = providerPresets.meta.family ?? provider.name;
   const checks = new FabricationChecks({
     settings: () => ({ ...defaultSettings(out), providers: [provider] }),
     access: async () => {},
     permission: async () => granted,
     generate: (...args) => providers.generate(...args),
-    encodePhoto: async (bytes, signal) => {
-      const encoded = await encode(bytes, signal);
-      const file = photos.get(sha256(bytes));
-      if (file) pictures.set(sha256(encoded), { file });
-      return encoded;
-    },
+    encodePhoto: options.encodePhoto ?? processorPhoto,
     // As the app wires it: SAM on the reading model's provider, the model's box when SAM gives none.
-    segmenter: (asked) => {
-      const sam = samSegmenter(
+    segmenter: (asked) =>
+      samSegmenter(
         (picture, prompt, signal) => providers.segment(asked, picture, prompt, signal),
         reader,
-      );
-      return {
-        async segment(picture, prompt, signal) {
-          const outline = await sam.segment(picture, prompt, signal);
-          if (outline && prompt.kind === 'box')
-            outlines.push({
-              ...pictures.get(sha256(picture.image.data)),
-              box: prompt.box,
-              polygon: outline.polygon.map(([x, y]) => [x, y]),
-              source: outline.source,
-              ...(outline.confidence === undefined ? {} : { confidence: outline.confidence }),
-              ...(outline.note ? { note: outline.note } : {}),
-            });
-          return outline;
-        },
-      };
-    },
+      ),
   });
 
   const started = new Date();
@@ -364,7 +336,6 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
         const runsByPage = new Map<string, RenderedPage['text']>();
         for (const page of drawn.pages) {
           const file = opened.sources.find((source) => source.ref === page.ref)!.name;
-          pictures.set(sha256(page.image), { file, page: page.page });
           texts.set(`${page.ref}:${page.page}`, pageText(page.text));
           runsByPage.set(`${file}:${page.page}`, page.text);
         }
@@ -378,7 +349,6 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
         let result: CheckResult | undefined;
         for (let attempt = 0; attempt <= retries; attempt++) {
           calls = [];
-          outlines = [];
           try {
             const reply = await checks.request(
               { kind: 'run', id: opened.id, providerID: provider.id, pages: drawn.pages },
@@ -408,10 +378,23 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
           ? (JSON.parse(checks.handoff(opened.id)!.record) as CheckRecord)
           : undefined;
         await checks.request({ kind: 'close', id: opened.id }, owner);
-        const stops = record?.segmentation ?? [];
-        const logged = outlines.map((outline, index) =>
-          stops.length === outlines.length ? { ...outline, stop: stops[index]!.stop } : outline,
-        );
+        // Every outline the check drew, text and features, from its record.
+        const logged = (record?.segmentation ?? []).map((outline): OutlineLog => {
+          const [left, top, right, bottom] = outline.box ?? [];
+          return {
+            file: opened.sources.find((source) => source.ref === outline.ref)?.name ?? outline.ref,
+            ...(outline.page === undefined ? {} : { page: outline.page }),
+            kind: outline.kind,
+            ...(outline.box
+              ? { box: { x: left!, y: top!, width: right! - left!, height: bottom! - top! } }
+              : {}),
+            polygon: outline.region.map(([x, y]) => [x, y]),
+            source: outline.source,
+            ...(outline.confidence === undefined ? {} : { confidence: outline.confidence }),
+            ...(outline.note ? { note: outline.note } : {}),
+            stop: outline.stop,
+          };
+        });
         const score = scoreRun({
           truth,
           repeat: round,
@@ -469,6 +452,7 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
   const metrics = liveMetrics(runs, options.price);
   const summary = liveSummary(metrics, runs, {
     model: provider.model,
+    ...(options.effort ? { effort: options.effort } : {}),
     endpoint: provider.endpoint,
     started: started.toISOString(),
     jobs: jobs.length,
@@ -481,6 +465,7 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
     version: 1,
     started: started.toISOString(),
     model: provider.model,
+    effort: options.effort ?? null,
     endpoint: provider.endpoint,
     segmentation: providerPresets.meta.segmentation,
     repeat,
@@ -530,7 +515,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     .map((id) => id.trim().toUpperCase());
   const repeat = whole('repeat', 1),
     retries = whole('retries', 0),
-    model = argument('model');
+    model = argument('model'),
+    effort = argument('effort');
+  const efforts = providerPresets.meta.efforts ?? [];
+  if (effort && !efforts.includes(effort as ReasoningEffort))
+    throw new Error(`--effort takes ${efforts.join(' or ')}; leave it out for the API’s own.`);
   const report = await evaluateLive({
     out,
     key,
@@ -538,13 +527,14 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     ...(repeat ? { repeat } : {}),
     ...(retries === undefined ? {} : { retries }),
     ...(model ? { model } : {}),
+    ...(effort ? { effort: effort as ReasoningEffort } : {}),
     ...(priced ? { price: { input: priced[0]!, output: priced[1]! } } : {}),
     log: (line) => console.log(line),
   });
   const { recall, falseFindings, outlines } = report.metrics;
   console.log(
     `Found ${recall.all.found} of ${recall.all.planted} planted problems; ${falseFindings.total} findings not planted; ` +
-      `SAM outlined ${outlines.sam} of ${outlines.total} regions.`,
+      `${outlines.text.runs} of ${outlines.text.total} quoted texts marked by their runs; SAM outlined ${outlines.features.sam} of ${outlines.features.total} features.`,
   );
   console.log(`Summary: ${report.files.summary}`);
   console.log(`Every answer: ${report.files.answers}`);

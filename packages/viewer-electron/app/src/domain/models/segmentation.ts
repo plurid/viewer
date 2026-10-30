@@ -30,4 +30,6 @@ export interface Segmentation {
 }
 /** "box from Muse Spark". */
 export const modelBoxLabel = (reader: string) => `box from ${reader}`;
-export const samLabel = 'outline from SAM 3.1';
+/** SAM 3.1, as the check names it while it outlines. */
+export const samName = 'SAM 3.1';
+export const samLabel = `outline from ${samName}`;

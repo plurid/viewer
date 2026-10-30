@@ -28,6 +28,15 @@ export type ProviderProtocol = 'responses' | 'messages' | 'chat/completions';
  * schema in the instructions, or Anthropic's tool call.
  */
 export type ProviderOutput = 'schema' | 'json' | 'tool';
+/** How long a model reasons before it answers, sent as Chat Completions' `reasoning_effort`. */
+export const reasoningEfforts = ['minimal', 'low', 'medium', 'high'] as const;
+export type ReasoningEffort = (typeof reasoningEfforts)[number];
+export const reasoningEffortLabels: Record<ReasoningEffort, string> = {
+  minimal: 'Minimal: fastest answers',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+};
 interface ProviderPreset {
   name: string;
   endpoint: string;
@@ -40,6 +49,8 @@ interface ProviderPreset {
   family?: string;
   /** The model its Responses route outlines features with, from a box or words. */
   segmentation?: string;
+  /** The reasoning efforts it accepts; without one, every request uses the API's own. */
+  efforts?: readonly ReasoningEffort[];
   note?: string;
 }
 
@@ -100,6 +111,8 @@ export const providerPresets: Record<ProviderKind, ProviderPreset> = {
     model: 'muse-spark-1.3',
     family: 'Muse Spark',
     segmentation: samModel,
+    // Checked live: `minimal` cuts the reasoning, `low` is accepted; `reasoning: {effort}` is refused.
+    efforts: ['minimal', 'low'],
     note: 'Use a Meta Model API key; the key for Meta speech in Settings → Speech is kept apart. Enter a Muse Spark model ID.',
   },
   local: {
@@ -109,6 +122,10 @@ export const providerPresets: Record<ProviderKind, ProviderPreset> = {
     output: 'schema',
   },
 };
+
+/** Whether a provider's kind accepts a reasoning effort. */
+export const providerTakesEffort = (kind: ProviderKind, effort: ReasoningEffort) =>
+  providerPresets[kind].efforts?.includes(effort) ?? false;
 
 /** Pictures go as `image_url` parts of a Chat Completions message; Viewer does not send them
  * through the Responses or Messages APIs yet. */

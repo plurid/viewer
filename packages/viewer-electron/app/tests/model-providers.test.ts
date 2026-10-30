@@ -436,6 +436,90 @@ describe('Meta and pictures', () => {
     expect(Object.keys(body).sort()).toEqual(['messages', 'model', 'response_format']);
   });
 
+  it('sends the reasoning effort set for Meta, and gives up at the time a request allows', async () => {
+    const provider: ModelProvider = { ...metaProvider(), effort: 'minimal' };
+    await keyed(provider);
+    const request = reply({
+      choices: [{ finish_reason: 'stop', message: { content: '{"rows":[]}' } }],
+    });
+    const providers = await allowedAt(provider, request, 'full-text');
+    await providers.generate(provider, '', [], schema, new AbortController().signal);
+    const body = JSON.parse(String(request.mock.calls[0]![1]!.body));
+    expect(body.reasoning_effort).toBe('minimal');
+    expect(Object.keys(body).sort()).toEqual([
+      'messages',
+      'model',
+      'reasoning_effort',
+      'response_format',
+    ]);
+    // a kind that takes no effort is never sent one
+    const gemini: ModelProvider = {
+      ...newModelProvider('gemini', 'gemini'),
+      model: 'gemini-3-flash',
+      effort: 'minimal',
+    };
+    await credentials.set(gemini.id, 'test-only-key', providerBinding(gemini));
+    const other = reply({
+      choices: [{ finish_reason: 'stop', message: { content: '{"rows":[]}' } }],
+    });
+    await (
+      await allowedAt(gemini, other, 'full-text')
+    ).generate(gemini, '', [], schema, new AbortController().signal);
+    expect(JSON.parse(String(other.mock.calls[0]![1]!.body))).not.toHaveProperty(
+      'reasoning_effort',
+    );
+    // a reply slower than the request's own time limit
+    const stalled = vi.fn<typeof fetch>(
+      (_url, init) =>
+        new Promise((_resolve, reject) =>
+          init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), {
+            once: true,
+          }),
+        ),
+    );
+    await expect(
+      (await allowedAt(provider, stalled, 'full-text')).generate(
+        provider,
+        '',
+        [],
+        schema,
+        new AbortController().signal,
+        'full-text',
+        'user',
+        { timeout: 20 },
+      ),
+    ).rejects.toThrow('The provider request timed out.');
+  });
+
+  it('keeps an effort only for a kind that takes it, in config.jsonc', async () => {
+    const service = new SettingsService(
+      root,
+      root,
+      () => false,
+      () => {},
+    );
+    await service.load();
+    const meta: ModelProvider = { ...metaProvider(), effort: 'minimal' };
+    await service.patch(
+      [{ path: 'settings.providers', value: [meta] }],
+      service.snapshot().revision,
+    );
+    expect(service.snapshot().settings.providers).toEqual([meta]);
+    await expect(
+      service.patch(
+        [
+          {
+            path: 'settings.providers',
+            value: [{ ...newModelProvider('openai', 'openai'), effort: 'minimal' }],
+          },
+        ],
+        service.snapshot().revision,
+      ),
+    ).rejects.toThrow();
+    expect(providerPresets.meta.efforts).toEqual(['minimal', 'low']);
+    await service.close();
+  });
+
   it.each([
     [
       'the OpenAI envelope',

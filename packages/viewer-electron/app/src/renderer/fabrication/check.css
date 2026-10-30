@@ -130,6 +130,21 @@
   font-size: 12px;
   line-height: 1.4;
 }
+/* Each reading of a finding one cause explains: its grade, quote and reason. */
+.check-readings {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.check-readings li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+}
+.check-readings .check-reason {
+  margin: 0;
+}
 .check-correction {
   margin-top: 8px;
   padding: 8px 10px;

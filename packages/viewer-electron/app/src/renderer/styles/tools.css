@@ -694,6 +694,15 @@
 .evidence-overlay[data-drawn] .evidence-overlay-line {
   opacity: 1;
 }
+/* The text a value is read from: a thin dashed box, so the feature's outline leads. */
+.evidence-overlay [data-kind='text'] .evidence-overlay-line {
+  stroke-width: 1.5px;
+  stroke-dasharray: 4 3;
+  fill: none;
+}
+.evidence-overlay [data-kind='text'] .evidence-overlay-halo {
+  stroke-width: 6px;
+}
 .evidence-overlay[data-drawn] .evidence-overlay-halo {
   animation: evidence-halo 1400ms ease-out forwards;
 }

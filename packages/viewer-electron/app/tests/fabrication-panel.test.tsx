@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 /**
- * THE CHECK PANEL: what is sent and at which level, the permission pictures need, Run, the graded
- * findings with Viewer's reasons, a correction saved only on approval, the tour, the cut sheets
- * with the request's quantities and the corrected copy, and the handoff.
+ * THE CHECK PANEL: what is sent and at which level, the permission pictures need, Run and each
+ * step with its time, the graded findings with Viewer's reasons and a shared cause's readings, a
+ * correction saved only on approval, the tour, the cut sheets with the request's quantities and
+ * the corrected copy, and the handoff.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { DesktopEvent, OperationJob } from '../src/domain/contracts';
-import type { CheckOpening, CheckResult } from '../src/domain/fabrication/check';
+import type { CheckOpening, CheckProgress, CheckResult } from '../src/domain/fabrication/check';
 import type { ModelDataLevel } from '../src/domain/models/permissions';
 import type { ModelProvider } from '../src/domain/services';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
@@ -84,7 +85,7 @@ const result: CheckResult = {
         id: 'F1',
         kind: 'pitch',
         summary: 'The bottom holes are 48 mm apart in the DXF; the drawing gives 50 mm.',
-        drawing: { ref: 'S2', page: 1, value: 50, quote: '50 mm pitch', box: null },
+        drawing: { ref: 'S2', page: 1, value: 50, quote: '50 mm pitch', box: null, feature: null },
         dxf: { ref: 'S4', value: 48, axis: 'x', entities: ['8', '9'] },
         photo: null,
         proposal: { target: 50, move: ['9', '11'] },
@@ -111,7 +112,30 @@ const result: CheckResult = {
         ],
       },
       outlines: [
-        { stop: 'stop-2', source: 'segmentation', label: 'outline from SAM 3.1', confidence: 0.89 },
+        {
+          stop: 'stop-2',
+          kind: 'text',
+          source: 'page-text',
+          label: 'the text on the drawing',
+          quote: '50 mm pitch',
+          region: [
+            [0.4, 0.2],
+            [0.6, 0.2],
+            [0.6, 0.3],
+          ],
+        },
+        {
+          stop: 'stop-2',
+          kind: 'feature',
+          source: 'segmentation',
+          label: 'outline from SAM 3.1',
+          confidence: 0.89,
+          region: [
+            [0.3, 0.4],
+            [0.35, 0.4],
+            [0.35, 0.45],
+          ],
+        },
       ],
     },
     {
@@ -123,7 +147,14 @@ const result: CheckResult = {
         kind: 'quantity',
         summary:
           'g6-MB20-A1-4buc.dxf holds 2 separate pieces, and the request asks for 5, which is not a whole number of sets. How many sets should be cut?',
-        drawing: { ref: 'S1', page: 1, value: 5, quote: 'MB20-A1, 5 pieces', box: null },
+        drawing: {
+          ref: 'S1',
+          page: 1,
+          value: 5,
+          quote: 'MB20-A1, 5 pieces',
+          box: null,
+          feature: null,
+        },
         dxf: { ref: 'S3', value: 4, axis: null, entities: [] },
         photo: null,
         proposal: null,
@@ -293,7 +324,8 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
       /Viewer measured 48\.00 mm between holes 4 and 5 along x; the drawing gives 50 mm\./,
     ),
   ).toBeTruthy();
-  expect(screen.getByText(/Outline: outline from SAM 3\.1, confidence 89%/)).toBeTruthy();
+  expect(screen.getByText('Text “50 mm pitch”: the text on the drawing')).toBeTruthy();
+  expect(screen.getByText('Feature: outline from SAM 3.1, confidence 89%')).toBeTruthy();
   expect(screen.getByText(/pitch along x from 48\.00 mm to 50\.00 mm, moves 2 holes/)).toBeTruthy();
   expect(screen.getByText('2, from the request · 6 mm, from the request')).toBeTruthy();
   expect(operate).not.toHaveBeenCalled();
@@ -400,4 +432,117 @@ it('says why a check failed, and offers to run it again', async () => {
     'does not fit the check’s form at tour',
   );
   expect(screen.getByRole('button', { name: 'Run again' })).toBeTruthy();
+});
+
+it('shows each step of a running check with its time, a cause’s readings and what was left unread', async () => {
+  level = 'images';
+  let answer!: (value: CheckResult) => void;
+  fabrication.mockImplementation(async (request: { kind: string }) =>
+    request.kind === 'open'
+      ? opening
+      : request.kind === 'run'
+        ? new Promise((resolve) => (answer = resolve))
+        : { kind: 'done' },
+  );
+  render(
+    <WorkspaceContext.Provider value={workspace}>
+      <CheckPanel />
+    </WorkspaceContext.Provider>,
+  );
+  await act(() => openCheck([folder], activeWorkspace().id));
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Check 4 files' }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  fireEvent.click(screen.getByRole('button', { name: 'Check 4 files' }));
+  await waitFor(() =>
+    expect(fabrication).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run' })),
+  );
+  const step = (id: string, kind: CheckProgress['step'], text: string) =>
+    act(() => {
+      for (const listener of listeners)
+        listener({ type: 'fabrication', progress: { id, step: kind, text } });
+    });
+  const progress = () => document.querySelector('.check-progress')!.textContent;
+  step(opening.id, 'reading', 'Muse Spark is reading the request, 1 drawing page and 2 DXF parts');
+  expect(progress()).toContain(
+    'Muse Spark is reading the request, 1 drawing page and 2 DXF parts · 0 s',
+  );
+  clock.mockReturnValue(1_034_000);
+  await waitFor(() => expect(progress()).toContain(' · 34 s'), { timeout: 2500 });
+  // another check's step is not this one's
+  step('another-check', 'outlining', 'SAM 3.1 is outlining 9 features');
+  expect(progress()).not.toContain('9 features');
+  step(opening.id, 'outlining', 'SAM 3.1 is outlining 3 features');
+  expect(progress()).toContain('SAM 3.1 is outlining 3 features · 0 s');
+  clock.mockRestore();
+
+  const [pitch] = result.findings as [CheckResult['findings'][number]];
+  const reading = (id: string, quote: string, reason: string) => ({
+    finding: { ...pitch.finding, id, drawing: { ...pitch.finding.drawing!, quote } },
+    grade: { ...pitch.grade, finding: id, reason },
+  });
+  await act(async () =>
+    answer({
+      ...result,
+      findings: [
+        {
+          ...pitch,
+          finding: {
+            ...pitch.finding,
+            summary:
+              'Hole 5 is 2.00 mm off along x: the 50 mm pitch reads 48.00 mm and the 30 mm pitch reads 32.00 mm. Moving it fixes both.',
+          },
+          readings: [
+            reading(
+              'F1',
+              '50',
+              'Viewer measured 48.00 mm between holes 4 and 5 along x; the drawing gives 50 mm.',
+            ),
+            reading(
+              'F3',
+              '30',
+              'Viewer measured 32.00 mm between holes 5 and 6 along x; the drawing gives 30 mm.',
+            ),
+          ],
+        },
+        {
+          origin: 'viewer',
+          unread: 'part',
+          finding: {
+            id: 'F4',
+            kind: 'quantity',
+            summary:
+              'Muse Spark did not read MB20-A1 from the request. Check the request or run the check again.',
+            drawing: { ref: 'S1', page: 1, value: null, quote: null, box: null, feature: null },
+            dxf: { ref: 'S3', value: null, axis: null, entities: [] },
+            photo: null,
+            proposal: null,
+          },
+          grade: {
+            finding: 'F4',
+            status: 'unverified',
+            entities: [],
+            reason:
+              'The answer lists no part of the request for g6-MB20-A1-4buc.dxf, so nothing was compared.',
+            tolerance: 0,
+          },
+          names: { drawing: 'Job 1042 request.eml', dxf: 'g6-MB20-A1-4buc.dxf' },
+          outlines: [],
+        },
+      ],
+    }),
+  );
+  await screen.findByText(/^Hole 5 is 2\.00 mm off along x/);
+  const readings = screen.getByRole('list', { name: 'Readings of F1' });
+  expect([...readings.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
+    'Confirmed“50”: Viewer measured 48.00 mm between holes 4 and 5 along x; the drawing gives 50 mm.',
+    'Confirmed“30”: Viewer measured 32.00 mm between holes 5 and 6 along x; the drawing gives 30 mm.',
+  ]);
+  expect(
+    screen.getByText('Raised by Viewer, from what the answer leaves out of the request.'),
+  ).toBeTruthy();
+  expect(screen.getByText('Unverified')).toBeTruthy();
 });

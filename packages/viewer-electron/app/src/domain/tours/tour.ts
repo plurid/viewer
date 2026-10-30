@@ -253,7 +253,11 @@ export function describeAnchor(anchor: EvidenceAnchor): string {
     case 'text':
       return `line ${anchor.line.toLocaleString()}`;
     case 'pdf':
-      return anchor.region ? `the outline on page ${anchor.page}` : `page ${anchor.page}`;
+      return anchor.region
+        ? `the outline on page ${anchor.page}`
+        : anchor.marks
+          ? `the marked text on page ${anchor.page}`
+          : `page ${anchor.page}`;
     case 'epub':
       return `chapter ${anchor.chapter + 1}`;
     case 'document':

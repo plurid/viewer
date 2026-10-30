@@ -50,6 +50,18 @@ the version the check listed; a page drawn from another version is refused with 
 drawing.pdf changed since the check listed it. Check the job again." **Cancel** stops the check at
 any point, and nothing is graded.
 
+The model has 240 seconds to answer; other requests have 120. The provider's
+[reasoning effort](agents.md#add-a-model) goes with the request when one is set. While the check
+runs, the panel says what is being read and for how long, then what SAM outlines:
+
+| Step     | The panel says                                                                                                                                                                           |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reading  | "Muse Spark is reading the request, 2 drawing pages, 1 photo and 2 DXF parts · 34 s"                                                                                                     |
+| Outlines | "SAM 3.1 is outlining 3 features · 2 s"                                                                                                                                                  |
+| Too long | "Muse Spark timed out after 240 s reading the job, so nothing was graded. Run the check again, or choose Minimal under Reasoning effort for Meta in Settings → Models to answer faster." |
+
+The faster effort is suggested only for a provider that takes one and does not use it already.
+
 The check sends pictures, so it needs the `images` data level in **Settings → Models**, **filenames,
 metadata, document text and pictures (photos and rendered drawing pages)**, and a provider that
 takes pictures: Meta, Gemini, OpenRouter or another Chat Completions model; see
@@ -65,10 +77,12 @@ asks the first Meta model first, then the model of Ask Viewer, then the first th
 2. What the schema cannot check, refs, pages and boxes, is listed under **Notes on the answer**
    ([answer and grading](#answer-and-grading)).
 3. Every finding is graded against Viewer's own measurement.
-4. Quantities and thicknesses are [reconciled](#quantities-and-thicknesses); what disagrees becomes
-   a finding of Viewer's own, graded the same way.
-5. The answer's tour becomes a tour, and each region it marks is [outlined](#outlines).
-6. Each confirmed pitch finding with a proposal becomes a [correction](#correction) for review.
+4. Findings one cause explains become [one finding](#one-cause-one-finding).
+5. Quantities and thicknesses are [reconciled](#quantities-and-thicknesses); what disagrees, and
+   what the answer leaves unread in the request, becomes a finding of Viewer's own.
+6. The answer's tour becomes a tour: each quoted text is marked and each feature
+   [outlined](#outlines).
+7. Each confirmed pitch finding with a proposal becomes a [correction](#correction) for review.
 
 ## Quantities and thicknesses
 
@@ -92,6 +106,17 @@ them itself and never picks one silently.
   and says which: "4, from the request", "6 mm, from the file name". Parts the request lists apart
   that are one drawing, such as a left and a right, add up.
 
+**Unread.** When the job has a request, what the answer leaves unread in it is a finding of its own,
+one for each part, **Unverified** and without a number of Viewer's:
+
+| The answer                                         | The finding                                                                                                       |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Lists a part without a quantity                    | "Muse Spark did not read a quantity for Bracket B2 from the request. Check the request or run the check again."   |
+| Lists no part for a DXF part                       | "Muse Spark did not read Spacer S4 from the request. Check the request or run the check again."                   |
+| Lists a part whose name a DXF has, without its DXF | "Muse Spark did not match Bracket B2 in the request to Bracket B2.dxf. Check the request or run the check again." |
+
+A DXF part the model already found a quantity of is not raised again.
+
 A drawing holding several separate pieces, several outlines, is never assumed to count sets or
 pieces. For a drawing of 2 pieces:
 
@@ -104,28 +129,39 @@ pieces. For a drawing of 2 pieces:
 
 ## Outlines
 
-A stop that marks a region of a drawing page or photo is outlined from the box the model gave. With
-Meta, SAM 3.1 outlines what the box holds: the box goes as an object prompt in whole pixels of the
-picture the model read, and the mask it returns, laid over the box SAM found, is traced around its
-largest region. The outline is labelled **outline from SAM 3.1**, with SAM's confidence. When SAM
-gives none, the box stands in, labelled **box from Muse Spark**, with SAM's reason in the check
-record. Another provider's box is labelled for it, such as **box from Gemini**.
+A stop about a finding on a drawing page marks the text its value is read from and the hole, edge or
+part the value is about. The page opens fitted to both: the feature outlined, the text's box dashed.
+
+- **Text.** On a page with text runs, the quote is marked by the box of the runs it is read from,
+  labelled **the text on the drawing**; a quote on the page more than once is marked where it is
+  nearest the model's box. On a page without text, such as a scan, or for a quote not on it, the
+  model's `box` stands in, labelled **box from Muse Spark**. Text is never sent to SAM.
+- **Feature.** The finding's `feature` box goes to SAM 3.1 as an object prompt in whole pixels of
+  the picture the model read. The mask SAM returns, laid over the box SAM found, is traced around
+  its largest region and labelled **outline from SAM 3.1**, with SAM's confidence. When SAM gives
+  none, the model's feature box stands in, labelled **box from Muse Spark**, with SAM's reason in
+  the check record. Another provider's box is labelled for it, such as **box from Gemini**.
+- **Photo.** A finding's photo `box` is the region shown; its `feature`, the part or hole, is
+  outlined the same way.
+- **A stop about no finding** marks its own box: as text when it lies over one text run by half or
+  more, by intersection over union, otherwise as a feature SAM outlines.
 
 ## The check record
 
 A check keeps its record in memory; it is written only when its [handoff](#handoff) is exported, as
 `Check record.json`. It names files, never their folders.
 
-| Field                    | Holds                                                                                                          |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `provider`, `level`      | The provider's kind, name, endpoint and model ID, and `images`                                                 |
-| `instructions`, `schema` | Exactly what the model was asked, and the JSON Schema of its answer                                            |
-| `inputs`                 | Each file's ref, kind, name, size, date, SHA-256, how it was sent, and each picture's number, size and SHA-256 |
-| `output`                 | The model's answer as it parsed, before Viewer checked it                                                      |
-| `validation`, `grades`   | Whether the answer fit the schema, its notes, and every grade with its reason                                  |
-| `segmentation`           | Each outline: its stop, source, label, confidence and why SAM gave none                                        |
-| `corrections`, `tour`    | The corrections proposed, and the tour's stops and those left out                                              |
-| `timings`, `error`       | Milliseconds to prepare, ask, check and in all; and what stopped a check that failed                           |
+| Field                    | Holds                                                                                                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provider`, `level`      | The provider's kind, name, endpoint and model ID, and `images`                                                                                                          |
+| `instructions`, `schema` | Exactly what the model was asked, and the JSON Schema of its answer                                                                                                     |
+| `inputs`                 | Each file's ref, kind, name, size, date, SHA-256, how it was sent, and each picture's number, size and SHA-256                                                          |
+| `output`                 | The model's answer as it parsed, before Viewer checked it                                                                                                               |
+| `validation`, `grades`   | Whether the answer fit the schema, its notes, and every grade with its reason                                                                                           |
+| `segmentation`           | Each outline: its stop, ref and page, `text` or `feature`, who drew it, its label, the region drawn, the model's box, the quote, SAM's confidence and why SAM gave none |
+| `causes`                 | Findings [one cause](#one-cause-one-finding) explains: the finding shown, its readings and the cause in words                                                           |
+| `corrections`, `tour`    | The corrections proposed, and the tour's stops and those left out                                                                                                       |
+| `timings`, `error`       | Milliseconds to prepare, ask, check and in all; and what stopped a check that failed                                                                                    |
 
 ## Handoff
 
@@ -231,18 +267,20 @@ It names files only by inventory refs: `S1`, `S2` and on, numbered requests firs
 photos and DXF parts, each by name. The model sees each file's name and kind, never its folder.
 Entities are the numbers of the DXF summary. Every field is required; an absent value is `null`.
 
-| Part        | Fields                                                                                     |
-| ----------- | ------------------------------------------------------------------------------------------ |
-| Request     | `ref`, `part`, `dxf` ref, `quantity`, `thickness`, `material`, `quote`, `drawing`          |
-| Title block | The request's `drawing`: `ref`, `page`, `quantity`, `thickness`, `material`, `quote`       |
-| Finding     | `id` (`F1` …), `kind`, `summary`; `drawing`, `dxf`, `photo` and `proposal`, each or `null` |
-| Drawing     | `ref`, `page`, `value`, `quote`, `box` (left, top, right, bottom, fractions of the page)   |
-| DXF         | `ref`, `value`, `axis` (`x`, `y`, `centre`), `entities`                                    |
-| Proposal    | `target`, `move`: entities of the holes that move                                          |
-| Stop        | `ref`, `caption`, `note`, `finding`, `page`, `box`, `entities`                             |
+| Part        | Fields                                                                                       |
+| ----------- | -------------------------------------------------------------------------------------------- |
+| Request     | `ref`, `part`, `dxf` ref, `quantity`, `thickness`, `material`, `quote`, `drawing`            |
+| Title block | The request's `drawing`: `ref`, `page`, `quantity`, `thickness`, `material`, `quote`         |
+| Finding     | `id` (`F1` …), `kind`, `summary`; `drawing`, `dxf`, `photo` and `proposal`, each or `null`   |
+| Drawing     | `ref`, `page`, `value`, `quote`, `box` (the quoted text), `feature` (the hole, edge or part) |
+| DXF         | `ref`, `value`, `axis` (`x`, `y`, `centre`), `entities`                                      |
+| Photo       | `ref`, `box` (the region shown), `feature` (the part or hole)                                |
+| Proposal    | `target`, `move`: entities of the holes that move                                            |
+| Stop        | `ref`, `caption`, `note`, `finding`, `page`, `box`, `entities`                               |
 
-Refs that are not in the inventory or are of the wrong kind, pages past the last, boxes the wrong
-way round and tour stops naming a missing finding are reported as issues.
+A box is left, top, right and bottom, as fractions of the page or photo. Refs that are not in the
+inventory or are of the wrong kind, pages past the last, boxes and feature boxes the wrong way round
+and tour stops naming a missing finding are reported as issues.
 
 Each finding is graded against Viewer's own value:
 
@@ -263,43 +301,76 @@ The tolerance is 0.05 mm for lengths; counts must match exactly.
 | `thickness`, `quantity` | What the DXF's file name gives                                               |
 | `material`, `other`     | None: always unverified                                                      |
 
-When the quoted page has text, the quote must be on it, ignoring case and spacing. A scanned page
-without text is not checked. Every reason gives the values: "Viewer measured 48.00 mm between holes
-4 and 5 along x; the drawing gives 50 mm."
+When the quoted page has text, the quote must be on it, ignoring case and spacing, in one of three
+forms. The instructions ask for the first, the shortest that states the value.
+
+| Form                           | On the page                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| One passage                    | As one stretch of its text: "Holes 4× Ø9 at 60 × 50 mm"                                                                              |
+| Passages on lines of their own | Each line of the quote, in that order, with lines between left out: "Job 2103, in S355 steel:" then "- CL10-D1 clip, 3 mm, 6 pieces" |
+| Whole printed lines            | Lines as printed, in order, joined without line breaks: the row "HP50-A3 Hinge plate 6 mm 2", then "Material: S235JR steel, 6 mm"    |
+
+- **A printed line** is the runs of text that follow one another on the page and share a line, as a
+  table row's cells do.
+- **Never pieces cut from lines.** "HP50-A3 Hinge plate 6 mm 4", one row's part with another row's
+  count, is not on that page. Every non-empty line of a quote must be on it.
+- **Never a cut number.** "2 pieces" is not on a page that says "12 pieces", nor "Ø8.5" on one that
+  says "Ø8.55".
+
+A scanned page without text is not checked. Every reason gives the values: "Viewer measured 48.00 mm
+between holes 4 and 5 along x; the drawing gives 50 mm."
 
 The answer's tour becomes a tour Viewer plays (`checkTour` in `src/domain/fabrication/tour.ts`). A
-drawing's page and box open that PDF page with the box outlined, without searching for the quote. A
-photo's box marks that region. A DXF stop highlights its entities, frames them with 10 mm around,
-and for a pitch finding draws the pitch Viewer measured between its two holes. A stop about a
-finding shows its grade, with Viewer's reason as its note. Each stop's `version` carries the SHA-256
-the check read of its file, so the tour knows the file by its bytes. A stop whose file is outside
-the tour's folder is left out, and Viewer says which.
+drawing's page opens with its text and feature [outlined](#outlines), without searching for the
+quote. A photo's box marks that region. A DXF stop highlights its entities, frames them with 10 mm
+around, and for each pitch finding draws the pitch Viewer measured between its two holes. A stop
+about a finding shows its grade, with Viewer's reason as its note. Each stop's `version` carries the
+SHA-256 the check read of its file, so the tour knows the file by its bytes. A stop whose file is
+outside the tour's folder is left out, and Viewer says which.
+
+## One cause, one finding
+
+Confirmed pitch findings whose corrections move the same holes of one DXF by the same amount have
+one cause, and the check shows them as one finding: "Hole 2 is 2.00 mm off along x: the 60 mm pitch
+reads 58.00 mm and the 28 mm pitch reads 30.00 mm. Moving it, with hole 5, fixes both."
+(`sharedCauses` in `src/domain/fabrication/causes.ts`).
+
+- **Readings.** Each finding it joins is listed under it as a reading, with its own grade, reason
+  and quote. The check record keeps every reading's grade and names the cause under `causes`.
+- **One correction.** The first reading's correction, with each other reading's pitch under `also`.
+  The copy is measured again for every pitch.
+- **One stop for each file.** The readings' stops on one file and page are one stop: on the drawing,
+  each reading's text and feature; on the DXF, each pitch Viewer measured. Their captions are
+  joined, and the note gives every reading's reason.
 
 ## Correction
 
 A confirmed pitch finding with a proposal becomes a reviewed transform of kind `dxf-correction`
 (`dxfCorrectionSchema` in `src/domain/fabrication/plan.ts`):
 
-| Field      | Meaning                                                           |
-| ---------- | ----------------------------------------------------------------- |
-| `from`     | An entity of the hole that stays                                  |
-| `to`       | An entity of the hole whose pitch is set; it moves                |
-| `axis`     | `x`, `y` or `centre`                                              |
-| `target`   | The pitch to set, in millimetres: the drawing's value             |
-| `measured` | The pitch as reviewed, in millimetres                             |
-| `move`     | Entities of further holes that move with `to`, such as its column |
+| Field      | Meaning                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `from`     | An entity of the hole that stays                                                                                                |
+| `to`       | An entity of the hole whose pitch is set; it moves                                                                              |
+| `axis`     | `x`, `y` or `centre`                                                                                                            |
+| `target`   | The pitch to set, in millimetres: the drawing's value                                                                           |
+| `measured` | The pitch as reviewed, in millimetres                                                                                           |
+| `move`     | Entities of further holes that move with `to`, such as its column                                                               |
+| `also`     | Further pitches the same move sets, each `from`, `to`, `axis`, `target` and `measured`: for [one cause](#one-cause-one-finding) |
 
 - **What moves.** The moving holes go along the axis by the difference, away from the hole that
   stays when the pitch grows. Every other entity stays where it is.
 - **Refused**, with the reason and nothing written: a drawing that now measures another pitch than
-  `measured`, an entity that is not a hole, a hole asked to stay and move, a fitted hole, two holes
-  sharing their position on the axis, or a moved hole that would cut into the outline, a cut-out or
-  another hole. A web under 1 mm is named in the report's notes.
+  `measured`, a pitch under `also` the move does not set, an entity that is not a hole, a hole asked
+  to stay and move, a fitted hole, two holes sharing their position on the axis, or a moved hole
+  that would cut into the outline, a cut-out or another hole. A web under 1 mm is named in the
+  report's notes.
 - **Written** as nesting writes a sheet: an R12 DXF in the drawing's own units, on its own layers,
   lines, arcs, circles and bulged polylines exact. Dimensions, hatches, points, hidden layers and
   other entities a cutter does not follow are left out, and the notes say so.
 - **Measured twice.** The copy is measured in memory and again after it is read back from disk. Its
-  pitch must equal the target within 0.00001 mm, and every other hole must be where it was.
+  pitch, and each pitch under `also`, must equal its target within 0.00001 mm, and every other hole
+  must be where it was.
 - **Saved** beside the original as `<name> (corrected).dxf`, as a new file only; the original is
   only read. Through **File operations**, a name already taken gives `<name> (corrected) copy.dxf`,
   and Undo applies. The job's record keeps the pitch before and after, the shift, each moved hole's
@@ -348,31 +419,34 @@ problems planted; J7 and J8 are controls with none. Every part, customer and add
    `node --import tsx packages/viewer-electron/app/tools/fabrication/evaluate-live.ts --out <folder>`
    with a new or empty folder outside the repository. The evaluation never overwrites.
 3. Read `summary.md` in that folder. `answers.json` holds every raw reply, each check record and the
-   score of every run; `truth.json` holds what each job plants; `jobs/` holds the jobs as sent.
+   score of every run; `truth.json` holds what each job plants and where its text and features are;
+   `jobs/` holds the jobs as sent.
 
 | Option                     | Effect                                                                                           |
 | -------------------------- | ------------------------------------------------------------------------------------------------ |
 | `--jobs J1,J7`             | Only these jobs                                                                                  |
 | `--repeat <n>`             | Each job `n` times, for the variance between runs                                                |
 | `--model <id>`             | Another Muse Spark model; `muse-spark-1.3` unless given                                          |
+| `--effort <value>`         | Muse Spark's reasoning effort, `minimal` or `low`; the API's own unless given                    |
 | `--retries <n>`            | Runs a check again after a schema miss, invalid JSON, a timeout or a busy server; 1 unless given |
 | `--price <input>,<output>` | US dollars per million tokens, for the cost when the replies report tokens without one           |
 
-Each run makes one Muse Spark call, and one SAM 3.1 call for each tour stop that marks a region of a
+Each run makes one Muse Spark call, and one SAM 3.1 call for each feature a tour stop outlines on a
 drawing page or photo: the answer may have 12 stops, and the instructions ask for at most 8. A retry
 makes them again. Photos go through Viewer's image processor, in this process: without it built,
 leave out J1, J4 and J7.
 
-| Measure            | How                                                                                                                                                                                                |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Found              | A finding of the planted problem's kind that names its DXF or, naming none, its part. A missing DXF is found by any finding without a DXF that names the part; an open count by a quantity finding |
-| Recall             | Found over planted, for each kind and in all, with how many were confirmed and how many got the grade expected: confirmed, or unverified for a missing DXF and an open count                       |
-| False findings     | Findings of no planted problem, by job, by the model or Viewer, and by grade. A second finding of a found problem is a duplicate, not false                                                        |
-| Quotes             | Each quote of the answer against the text of the page it names, as grading checks it                                                                                                               |
-| Request            | The parts the model listed from the request, with the right quantity, thickness and DXF                                                                                                            |
-| Schema and retries | Attempts, and why each failed: schema, JSON, incomplete, HTTP, timeout or network, with where the answer missed the schema                                                                         |
-| Outlines           | SAM's outlines and the model's boxes against the drawing's labelled regions, its text runs and the photo's part, by intersection over union; and how often the box stood in, with SAM's reason     |
-| Calls              | Each call's time, and its tokens and cost when the reply reports them                                                                                                                              |
+| Measure            | How                                                                                                                                                                                                                                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Found              | A finding of the planted problem's kind that names its DXF or, naming none, its part. A missing DXF is found by any finding without a DXF that names the part; an open count by a quantity finding. A finding of one cause counts once                                                                                                         |
+| Unread             | Viewer's findings of what Muse Spark did not read from the request, counted apart: neither found nor false. A planted problem they name is marked so in the missed list                                                                                                                                                                        |
+| Recall             | Found over planted, for each kind and in all, with how many were confirmed and how many got the grade expected: confirmed, or unverified for a missing DXF and an open count                                                                                                                                                                   |
+| False findings     | Findings of no planted problem, by job, by the model or Viewer, and by grade. A second finding of a found problem is a duplicate, not false                                                                                                                                                                                                    |
+| Quotes             | Each quote of the answer against the text of the page it names, as grading checks it                                                                                                                                                                                                                                                           |
+| Request            | The parts the model listed from the request, with the right quantity, thickness and DXF                                                                                                                                                                                                                                                        |
+| Schema and retries | Attempts, and why each failed: schema, JSON, incomplete, HTTP, timeout or network, with where the answer missed the schema                                                                                                                                                                                                                     |
+| Outlines           | Text and features apart, by intersection over union: a quoted text's box against the page's text runs and labelled text, a feature's outline against the drawing's pieces and holes and the photo's part and holes, a hole as the circle in its box; the model's boxes the same way; and how often the box stood in for SAM, with SAM's reason |
+| Calls              | Each call's time, and its tokens and cost when the reply reports them                                                                                                                                                                                                                                                                          |
 
 The drawing pages are drawn in Node, not by the app's renderer. pdf.js draws them at 2048 px on the
 longer side as JPEGs at the same quality, with text runs from the same code, but:

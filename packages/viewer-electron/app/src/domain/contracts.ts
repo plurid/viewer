@@ -53,7 +53,7 @@ import type {
   ProjectReply,
 } from './workspaces/project';
 import type { TourReply, TourRequest } from './tours/tour';
-import type { FabricationReply, FabricationRequest } from './fabrication/check';
+import type { CheckProgress, FabricationReply, FabricationRequest } from './fabrication/check';
 import type { LensReply, LensRequest } from './files/lenses';
 import type { Collection, BasketItem, QuerySnapshot } from './workspaces/collections';
 import type {
@@ -677,6 +677,8 @@ export type DesktopEvent =
   | { type: 'search'; batch: SearchBatch }
   | { type: 'job'; job: OperationJob }
   | { type: 'job-progress'; progress: OperationProgress }
+  /** A running laser-job check's step, sent only to the window running it. */
+  | { type: 'fabrication'; progress: CheckProgress }
   | { type: 'open'; paths: string[] }
   | { type: 'command'; command: string }
   | { type: 'flush'; token: string }

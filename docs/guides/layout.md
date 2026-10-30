@@ -136,17 +136,26 @@ then measure every DXF part itself and say where the job disagrees with itself: 
 2. Under **Model**, choose the model in **Model to check with**: Meta's Muse Spark, Gemini,
    OpenRouter or another that takes pictures. The check sends pictures, so a model allowed only text
    asks first: choose **Allow pictures for Meta** and confirm.
-3. Choose the button that counts the files, such as **Check 7 files**. The panel shows the drawing
-   being drawn and the model asked; **Cancel** stops it.
+3. Choose the button that counts the files, such as **Check 7 files**. The panel says what is being
+   read and for how long, such as "Muse Spark is reading the request, 2 drawing pages and 1 photo ·
+   34 s", then "SAM 3.1 is outlining 3 features". **Cancel** stops it. The model has 240 seconds to
+   answer; for a faster answer, open **Settings → Models**, choose the Meta model and set
+   **Reasoning effort** to **Minimal: fastest answers**.
 4. Read the **Findings**. Each has Viewer's grade, **Confirmed**, **Refuted** or **Unverified**, and
    its reason with the values: "Viewer measured 48.00 mm between holes 4 and 5 along x; the drawing
    gives 50 mm." **Question** marks what the job leaves open, such as how many sets of a drawing of
    two pieces to cut.
+   - One misplaced hole that gives two wrong pitches is one finding: "Hole 2 is 2.00 mm off along x:
+     the 60 mm pitch reads 58.00 mm and the 28 mm pitch reads 30.00 mm. Moving it, with hole 5,
+     fixes both." Each pitch's grade and quote is listed under it.
+   - "Muse Spark did not read a quantity for Bracket B2 from the request" means the answer left it
+     out. Read the request yourself, or choose **Run again**.
 5. For a confirmed pitch, read the proposed correction and choose **Save g6-PL60-B2-2buc
    (corrected).dxf**. The copy is saved beside the original, measured again, and the panel says
    "Saved: pitch 48.00 mm → 50.00 mm, measured again." Nothing is changed until you choose it.
-6. Choose **Play the tour** to be shown each finding: the request's line, the drawing with its
-   region outlined, the DXF holes with the pitch Viewer measured. **Esc** stops it.
+6. Choose **Play the tour** to be shown each finding: the request's line, the drawing with the
+   quoted dimension boxed and the hole it is about outlined, the DXF holes with the pitch Viewer
+   measured. **Esc** stops it.
 7. Under **Cut sheets**, read each part's quantity and thickness and where it comes from, such as
    "2, from the request · 6 mm, from the request", then choose **Prepare cut sheets**. The Nesting
    plane opens on the job's parts, the corrected copy in place of its original, a tab per thickness.

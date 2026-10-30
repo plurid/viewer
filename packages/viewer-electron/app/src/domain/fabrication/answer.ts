@@ -82,6 +82,7 @@ const box = z
   .describe(
     '[left, top, right, bottom] as fractions of the page or photo from its top-left corner.',
   );
+const quote = z.string().max(200).nullable();
 
 export const findingKinds = [
   'pitch',
@@ -111,8 +112,11 @@ export const findingSchema = z
           .finite()
           .nullable()
           .describe('The value it gives: millimetres, or pieces for a quantity.'),
-        quote: z.string().max(200).nullable().describe('The exact text the value is read from.'),
-        box: box.nullable(),
+        quote: quote.describe('The text the value is read from, as printed.'),
+        box: box.nullable().describe('The box of the quoted text.'),
+        feature: box
+          .nullable()
+          .describe('A box around the hole, edge or part the value is about, on the same page.'),
       })
       .strict()
       .nullable(),
@@ -133,7 +137,11 @@ export const findingSchema = z
       .strict()
       .nullable(),
     photo: z
-      .object({ ref: inventoryRefSchema.describe('The photo.'), box: box.nullable() })
+      .object({
+        ref: inventoryRefSchema.describe('The photo.'),
+        box: box.nullable().describe('The region of the photo that shows the finding.'),
+        feature: box.nullable().describe('A box around the part or hole itself.'),
+      })
       .strict()
       .nullable(),
     proposal: z
@@ -161,7 +169,7 @@ export const requestPartSchema = z
     quantity: pieces.nullable().describe('Pieces the request asks for.'),
     thickness: millimetres.nullable().describe('Millimetres.'),
     material: z.string().max(80).nullable(),
-    quote: z.string().max(200).nullable().describe('The exact request text these are read from.'),
+    quote: quote.describe('The request text these are read from, as written.'),
     drawing: z
       .object({
         ref: inventoryRefSchema.describe('The drawing whose title block or parts list names it.'),
@@ -169,7 +177,7 @@ export const requestPartSchema = z
         quantity: pieces.nullable(),
         thickness: millimetres.nullable(),
         material: z.string().max(80).nullable(),
-        quote: z.string().max(200).nullable().describe('The exact page text these are read from.'),
+        quote: quote.describe('The page text these are read from, as printed.'),
       })
       .strict()
       .nullable()
@@ -209,6 +217,7 @@ export function answerIssues(
 ): string[] {
   const issues: string[] = [];
   const byRef = new Map(inventory.map((item) => [item.ref, item]));
+  const backwards = (box: readonly number[]) => box[0]! >= box[2]! || box[1]! >= box[3]!;
   const check = (
     where: string,
     ref: string,
@@ -221,7 +230,7 @@ export function answerIssues(
       issues.push(`${where} names ${ref}, a ${item.kind}, where it needs a ${kinds.join(' or ')}.`);
     if (at && at.page !== null && item.pages !== undefined && at.page > item.pages)
       issues.push(`${where} names page ${at.page} of ${ref}, which has ${item.pages}.`);
-    if (at?.box && (at.box[0]! >= at.box[2]! || at.box[1]! >= at.box[3]!))
+    if (at?.box && backwards(at.box))
       issues.push(`${where} has a box whose sides are the wrong way round.`);
   };
   answer.request.forEach((part, index) => {
@@ -242,6 +251,9 @@ export function answerIssues(
     if (finding.dxf) check(finding.id, finding.dxf.ref, ['dxf']);
     if (finding.photo)
       check(finding.id, finding.photo.ref, ['photo'], { page: null, ...finding.photo });
+    for (const feature of [finding.drawing?.feature, finding.photo?.feature])
+      if (feature && backwards(feature))
+        issues.push(`${finding.id} has a feature box whose sides are the wrong way round.`);
     if (finding.proposal && !finding.dxf)
       issues.push(`${finding.id} proposes a change without naming its DXF.`);
   }

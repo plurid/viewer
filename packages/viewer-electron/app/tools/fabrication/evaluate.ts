@@ -130,6 +130,7 @@ export function evaluateFabrication(
       value: truth.pitch.specified,
       quote: null,
       box: null,
+      feature: null,
     };
     const along = truth.pitch.axis;
     const moving = measurement.holes.filter(
@@ -152,7 +153,7 @@ export function evaluateFabrication(
         }),
         'refuted',
       ],
-      [finding({ drawing, photo: { ref: 'S3', box: null } }), 'unverified'],
+      [finding({ drawing, photo: { ref: 'S3', box: null, feature: null } }), 'unverified'],
       [
         finding({
           drawing,

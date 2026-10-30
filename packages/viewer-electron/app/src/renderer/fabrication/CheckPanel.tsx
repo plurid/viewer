@@ -1,10 +1,10 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { OperationJob } from '../../domain/contracts';
-import type { CheckFinding, CheckSource } from '../../domain/fabrication/check';
+import type { CheckFinding, CheckOutline, CheckSource } from '../../domain/fabrication/check';
 import type { ModelProvider } from '../../domain/services';
 import type { CheckSession } from './check';
 import { checkSendingLabels } from '../../domain/fabrication/check';
-import { millimetreText } from '../../domain/fabrication/plan';
+import { savedPitches } from '../../domain/fabrication/plan';
 import { countText } from '../../domain/layout/nesting/format';
 import {
   modelDataLabels,
@@ -73,7 +73,10 @@ function CheckPanelBody({ current }: { current: CheckSession }) {
         {opening && current.phase !== 'checked' && <Inventory current={current} />}
         {(current.phase === 'drawing' || current.phase === 'asking') && (
           <div className="check-progress" role="status">
-            <span>{current.progress}…</span>
+            <span>
+              {current.progress}
+              <Elapsed since={current.since} />
+            </span>
             <button type="button" onClick={cancelCheck}>
               Cancel
             </button>
@@ -88,6 +91,28 @@ function CheckPanelBody({ current }: { current: CheckSession }) {
       </div>
     </aside>
   );
+}
+
+/** " · 34 s": how long the current step has run, counted each second. */
+function Elapsed({ since }: { since?: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (since === undefined) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [since]);
+  if (since === undefined) return null;
+  return <span className="tabular"> · {Math.max(0, Math.floor((now - since) / 1000))} s</span>;
+}
+
+/** "Text “60”: the text on the drawing", "Feature: outline from SAM 3.1, confidence 87%". */
+function outlineText(outline: CheckOutline): string {
+  const what =
+    outline.kind === 'text' ? `Text${outline.quote ? ` “${outline.quote}”` : ''}` : 'Feature';
+  const confidence =
+    outline.confidence === undefined ? '' : `, confidence ${Math.round(outline.confidence * 100)}%`;
+  return `${what}: ${outline.label}${confidence}${outline.note ? `. ${outline.note}` : ''}`;
 }
 
 function sendingOf(source: CheckSource) {
@@ -305,18 +330,34 @@ function Finding({
         </span>
         <span className="check-finding-summary">{finding.summary}</span>
       </div>
-      <p className="check-reason">{grade.reason}</p>
+      {item.readings ? (
+        <ul className="check-readings" aria-label={`Readings of ${finding.id}`}>
+          {item.readings.map((reading) => (
+            <li key={reading.finding.id}>
+              <span className="tour-grade" data-grade={reading.grade.status}>
+                {findingGradeLabels[reading.grade.status]}
+              </span>
+              <span className="check-reason">
+                {reading.finding.drawing?.quote ? `“${reading.finding.drawing.quote}”: ` : ''}
+                {reading.grade.reason}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="check-reason">{grade.reason}</p>
+      )}
       {item.origin === 'viewer' && (
-        <p className="muted check-note">Raised by Viewer, comparing what the job itself says.</p>
+        <p className="muted check-note">
+          {item.unread
+            ? 'Raised by Viewer, from what the answer leaves out of the request.'
+            : 'Raised by Viewer, comparing what the job itself says.'}
+        </p>
       )}
       {where.length > 0 && <p className="muted check-note">{where.join(' · ')}</p>}
-      {item.outlines.map((outline) => (
-        <p key={outline.stop} className="muted check-note">
-          Outline: {outline.label}
-          {outline.confidence === undefined
-            ? ''
-            : `, confidence ${Math.round(outline.confidence * 100)}%`}
-          {outline.note ? `. ${outline.note}` : ''}
+      {item.outlines.map((outline, index) => (
+        <p key={`${outline.stop}-${index}`} className="muted check-note">
+          {outlineText(outline)}
         </p>
       ))}
       {correction && (
@@ -330,7 +371,7 @@ function Finding({
               {jobStatus(job, (done) => {
                 const report = done.completed[0]?.correction;
                 return report
-                  ? `Saved: pitch ${millimetreText(report.before)} → ${millimetreText(report.after)}, measured again.`
+                  ? `Saved: ${savedPitches(report).replace(/^P/, 'p')}, measured again.`
                   : 'Saved.';
               })}
             </p>

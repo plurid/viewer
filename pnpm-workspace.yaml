@@ -10,13 +10,13 @@ allowBuilds:
   esbuild: true
   node-pty: true
 minimumReleaseAgeExclude:
-  - '@plurid/plurid-data@0.0.0-28'
-  - '@plurid/plurid-engine@0.0.0-25'
+  - '@plurid/plurid-data@0.0.0-29'
+  - '@plurid/plurid-engine@0.0.0-26'
   - '@plurid/plurid-functions-react@0.0.0-9'
   - '@plurid/plurid-functions@0.0.0-34'
   - '@plurid/plurid-icons-react@0.0.0-14'
-  - '@plurid/plurid-pubsub@0.0.0-14'
-  - '@plurid/plurid-react@0.0.0-42'
+  - '@plurid/plurid-pubsub@0.0.0-15'
+  - '@plurid/plurid-react@0.0.0-43'
   - '@plurid/plurid-themes@0.0.0-6'
   - '@plurid/plurid-ui-components-react@0.0.0-38'
   - '@plurid/plurid-ui-state-react@0.0.0-17'

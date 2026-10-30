@@ -1,7 +1,8 @@
 /**
  * RECONCILING A JOB: the request first, a drawing's title block next, the file name last.
  * Disagreements become findings Viewer grades with the exact quotes; a drawing of several separate
- * pieces counts sets or pieces only when the job decides it, and otherwise asks.
+ * pieces counts sets or pieces only when the job decides it, and otherwise asks; what the answer
+ * leaves unread in the request is said, part by part, with no number of Viewer's own.
  */
 import { describe, expect, it } from 'vitest';
 import type {
@@ -57,7 +58,29 @@ const answer = (request: RequestPart[]): FabricationAnswer => ({
   tour: [],
 });
 const reconcile = (request: RequestPart[], pieces = 1) =>
-  reconcileJob({ answer: answer(request), sources, grading, pieces: () => pieces });
+  reconcileJob({
+    answer: answer(request),
+    sources,
+    reader: 'Muse Spark',
+    grading,
+    pieces: () => pieces,
+  });
+/** The finding that says the answer has no quantity for the base plate. */
+const unreadPlate = {
+  unread: 'quantity',
+  part: 'S3',
+  finding: {
+    kind: 'quantity',
+    summary:
+      'Muse Spark did not read a quantity for PL60-B2 base plate from the request. Check the request or run the check again.',
+    drawing: { ref: 'S1', value: null },
+    dxf: { ref: 'S3', value: null },
+  },
+  grade: {
+    status: 'unverified',
+    reason: 'The answer lists PL60-B2 base plate with no quantity, so nothing was compared.',
+  },
+};
 
 describe('values the request and the name disagree on', () => {
   it('raises the request against the name, confirmed with the request’s own words', () => {
@@ -153,7 +176,7 @@ describe('values the request and the name disagree on', () => {
             id: 'F1',
             kind: 'quantity',
             summary: 'The request asks for 4; the name gives 2.',
-            drawing: { ref: 'S1', page: 1, value: 4, quote: null, box: null },
+            drawing: { ref: 'S1', page: 1, value: 4, quote: null, box: null, feature: null },
             dxf: { ref: 'S3', value: 2, axis: null, entities: [] },
             photo: null,
             proposal: null,
@@ -169,7 +192,8 @@ describe('values the request and the name disagree on', () => {
 
   it('takes the file name only when nothing else gives a value, and says so', () => {
     const { parts, findings } = reconcile([part({ quantity: null, thickness: null, quote: null })]);
-    expect(findings).toEqual([]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject(unreadPlate);
     expect(parts[0]).toMatchObject({
       quantity: { sets: 2, pieces: 2, source: 'name', text: '2, from the file name (“2buc”)' },
       thickness: { value: 6, source: 'name', text: '6 mm, from the file name' },
@@ -180,7 +204,8 @@ describe('values the request and the name disagree on', () => {
 describe('a drawing of several separate pieces', () => {
   it('shows sets as the default only when nothing else decides', () => {
     const { parts, findings } = reconcile([part({ quantity: null, quote: null })], 2);
-    expect(findings).toEqual([]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject(unreadPlate);
     expect(parts[0]!.quantity).toEqual({
       sets: 2,
       pieces: 4,
@@ -234,5 +259,80 @@ describe('a drawing of several separate pieces', () => {
     });
     // 5 is neither 2 nor 2 × 2: the request and the name disagree as well, and that is said
     expect(findings.map((item) => item.finding.kind)).toEqual(['quantity', 'quantity']);
+  });
+});
+
+describe('what the answer leaves unread in the request', () => {
+  const spacer: InventorySource = {
+    ref: 'S4',
+    kind: 'dxf',
+    name: 'Spacer S4.dxf',
+    path: '/jobs/Spacer S4.dxf',
+    version,
+  };
+  const job = (request: RequestPart[], more: InventorySource[] = []) =>
+    reconcileJob({
+      answer: answer(request),
+      sources: [...sources, ...more],
+      reader: 'Muse Spark',
+      grading,
+      pieces: () => 1,
+    });
+
+  it('names a DXF part no listed part is, and a listed part not tied to its DXF', () => {
+    const { findings } = job([part({ quantity: 2 })], [spacer]);
+    expect(findings).toMatchObject([
+      {
+        unread: 'part',
+        part: 'S4',
+        finding: {
+          summary:
+            'Muse Spark did not read Spacer S4 from the request. Check the request or run the check again.',
+          dxf: { ref: 'S4', value: null, axis: null, entities: [] },
+        },
+        grade: {
+          status: 'unverified',
+          reason:
+            'The answer lists no part of the request for Spacer S4.dxf, so nothing was compared.',
+        },
+      },
+    ]);
+    const untied = job([part({ dxf: null, quantity: 2, quote: 'PL60-B2 base plate, 2 pieces' })]);
+    expect(untied.findings.map((item) => [item.unread, item.finding.summary])).toEqual([
+      [
+        'part',
+        'Muse Spark did not match PL60-B2 base plate in the request to g6-PL60-B2-2buc.dxf. Check the request or run the check again.',
+      ],
+    ]);
+  });
+
+  it('says nothing without a request, and nothing of a part the model found a quantity of', () => {
+    const drawingsOnly = reconcileJob({
+      answer: answer([]),
+      sources: sources.filter((source) => source.kind !== 'request'),
+      grading,
+      pieces: () => 1,
+    });
+    expect(drawingsOnly.findings).toEqual([]);
+    const found = reconcileJob({
+      answer: {
+        ...answer([part({ quantity: null })]),
+        findings: [
+          {
+            id: 'F1',
+            kind: 'quantity',
+            summary: 'The request gives no count for the base plate.',
+            drawing: null,
+            dxf: { ref: 'S3', value: 2, axis: null, entities: [] },
+            photo: null,
+            proposal: null,
+          },
+        ],
+      },
+      sources,
+      grading,
+      pieces: () => 1,
+    });
+    expect(found.findings).toEqual([]);
   });
 });

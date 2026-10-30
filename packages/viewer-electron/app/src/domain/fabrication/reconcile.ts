@@ -6,9 +6,17 @@
  * silently. A drawing of several separate pieces is never assumed to count sets or pieces: the
  * request decides, else the question is asked (docs/reference/fabrication.md).
  */
-import type { FabricationAnswer, Finding, FindingKind, InventorySource } from './answer';
+import type {
+  FabricationAnswer,
+  Finding,
+  FindingKind,
+  InventorySource,
+  RequestPart,
+} from './answer';
+import type { UnreadValue } from './check';
 import type { Grade, GradeJob } from './grade';
-import { gradeFinding, gradeTolerance, quoteGives, quoteOn } from './grade';
+import { gradeFinding, gradeTolerance } from './grade';
+import { quoteGives, quoteOn } from './quotes';
 import { readJobName, thicknessText } from './names';
 
 /** Where a value comes from, in the order Viewer takes it. */
@@ -51,15 +59,19 @@ export interface PartPlan {
 export interface ViewerFinding {
   finding: Finding;
   grade: Grade;
-  /** The DXF part it is about. */
-  part: string;
+  /** The DXF part it is about, when it is about one. */
+  part?: string;
   /** What the request says, when the finding sets it against a drawing. */
   request?: { ref: string; value: number; quote: string | null };
   question?: string;
+  /** What the answer leaves unread in the request. */
+  unread?: UnreadValue;
 }
 export interface ReconcileJob {
   answer: FabricationAnswer;
   sources: readonly InventorySource[];
+  /** Who read the job, as its findings name it: "Muse Spark". */
+  reader?: string;
   /** The inventory, DXF parts and page text, as grading reads them. */
   grading: GradeJob;
   /** The separate pieces a DXF part holds, or undefined when it was not measured. */
@@ -121,6 +133,7 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
     value: reading.value,
     quote: reading.quote,
     box: null,
+    feature: null,
   });
 
   for (const source of job.sources) {
@@ -296,5 +309,107 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
     }
     parts.push(plan);
   }
+  unread(job, said, (entry, reason) =>
+    raise({ ...entry, finding: { ...entry.finding, id: `F${next++}` } }, (finding) => ({
+      finding: finding.id,
+      status: 'unverified',
+      entities: [],
+      reason,
+      tolerance: 0,
+    })),
+  );
   return { parts, findings };
+}
+
+/** A finding about what the answer leaves unread, before Viewer numbers it. */
+type UnreadEntry = Omit<ViewerFinding, 'grade' | 'finding'> & { finding: Omit<Finding, 'id'> };
+const plain = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+/** Whether a request's part names a DXF part: its words hold the part its file name gives. */
+function names(part: RequestPart, dxf: InventorySource): boolean {
+  const named = plain(readJobName(dxf.name).part ?? dxf.name.replace(/\.dxf$/i, ''));
+  return !!named && plain(part.part).includes(named);
+}
+/**
+ * What the answer leaves unread in a request sent as text, each part apart, never with a number
+ * of Viewer's own: a part it lists without a quantity, a DXF part no listed part is, and a listed
+ * part that is a DXF part it does not name. A part the model already found a quantity of is left.
+ */
+function unread(
+  job: ReconcileJob,
+  said: (kind: Compared, ref: string) => boolean,
+  raise: (entry: UnreadEntry, reason: string) => void,
+): void {
+  const request = job.sources.find((source) => source.kind === 'request');
+  if (!request) return;
+  const reader = job.reader ?? 'The model';
+  const parts = job.answer.request;
+  const again = 'Check the request or run the check again.';
+  const finding = (summary: string, part: RequestPart | undefined, dxf?: InventorySource) => ({
+    kind: 'quantity' as const,
+    summary,
+    drawing: {
+      ref: part?.ref ?? request.ref,
+      page: 1,
+      value: null,
+      quote: part?.quote ?? null,
+      box: null,
+      feature: null,
+    },
+    dxf: dxf ? { ref: dxf.ref, value: null, axis: null, entities: [] } : null,
+    photo: null,
+    proposal: null,
+  });
+  const noQuantity = (part: RequestPart, dxf?: InventorySource) => {
+    if (dxf && said('quantity', dxf.ref)) return;
+    raise(
+      {
+        unread: 'quantity',
+        ...(dxf ? { part: dxf.ref } : {}),
+        finding: finding(
+          `${reader} did not read a quantity for ${part.part} from the request. ${again}`,
+          part,
+          dxf,
+        ),
+      },
+      `The answer lists ${part.part} with no quantity, so nothing was compared.`,
+    );
+  };
+  const placed = new Set<RequestPart>();
+  for (const dxf of job.sources.filter((source) => source.kind === 'dxf')) {
+    const linked = parts.filter((part) => part.dxf === dxf.ref);
+    const loose = parts.filter((part) => !part.dxf && names(part, dxf));
+    for (const part of [...linked, ...loose]) placed.add(part);
+    for (const part of linked) if (part.quantity === null) noQuantity(part, dxf);
+    if (linked.length || said('quantity', dxf.ref)) continue;
+    const name = readJobName(dxf.name).part ?? dxf.name;
+    const [part] = loose;
+    if (!part)
+      raise(
+        {
+          unread: 'part',
+          part: dxf.ref,
+          finding: finding(
+            `${reader} did not read ${name} from the request. ${again}`,
+            undefined,
+            dxf,
+          ),
+        },
+        `The answer lists no part of the request for ${dxf.name}, so nothing was compared.`,
+      );
+    else if (part.quantity === null) noQuantity(part, dxf);
+    else
+      raise(
+        {
+          unread: 'part',
+          part: dxf.ref,
+          finding: finding(
+            `${reader} did not match ${part.part} in the request to ${dxf.name}. ${again}`,
+            part,
+            dxf,
+          ),
+        },
+        `The answer lists ${part.part} without its DXF, so its values are not used for ${dxf.name}.`,
+      );
+  }
+  for (const part of parts) if (!placed.has(part) && part.quantity === null) noQuantity(part);
 }

@@ -9,7 +9,7 @@ import type { SearchEvidence, EvidenceAnchor } from './files/inspection';
 import type { FileEntry, UIPreferences, ViewMode, SortKey, Look } from './contracts';
 import type { FolderOverride } from './preferences/folder-presentation';
 import type { CustomAction, TerminalProfile } from './automation/actions';
-import type { ProviderKind } from './models/providers';
+import type { ProviderKind, ReasoningEffort } from './models/providers';
 import type { ChangePlan } from './operations/change-plan';
 import type { OfficeContent } from './previews/documents/office';
 import type { EPUBChapter, EPUBImage } from './previews/documents/epub';
@@ -27,6 +27,8 @@ export interface ModelProvider {
   endpoint: string;
   model: string;
   allowContent: boolean;
+  /** How long its model reasons, for a kind that accepts it; the API's own unless set. */
+  effort?: ReasoningEffort;
 }
 export type RecipeKind = 'batch-rename' | 'book-name' | 'rename' | 'organize' | 'summarize';
 export interface ActionRecipe {

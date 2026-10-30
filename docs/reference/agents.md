@@ -499,6 +499,7 @@ steps.
 | **Allow selected data**                               | Approves the chosen level                                                                                |
 | **Revoke access**                                     | Withdraws it                                                                                             |
 | **Allow agent-started actions to send the same data** | Lets `ask_in_words`, agent recipes and agent workflows use the model                                     |
+| **Reasoning effort**                                  | How long the model reasons before it answers; shown only for a provider that takes it, such as Meta      |
 
 | Level       | Label in **Data access**                                                                |
 | ----------- | --------------------------------------------------------------------------------------- |
@@ -519,6 +520,19 @@ schema with a strict `json_schema`, and either reply envelope is read: `choices[
 or `completion_message.content`. Its segmentation model, SAM 3.1, answers through the same
 provider's `/responses` route, with the same key and under the same `images` approval, since it
 receives the same pictures.
+
+**Reasoning effort** is sent as Chat Completions' `reasoning_effort`, and only to a provider that
+takes it:
+
+| Choice                       | Sent                            | Kinds  |
+| ---------------------------- | ------------------------------- | ------ |
+| **Provider default**         | Nothing: the API's own          | Any    |
+| **Minimal: fastest answers** | `"reasoning_effort": "minimal"` | `meta` |
+| **Low**                      | `"reasoning_effort": "low"`     | `meta` |
+
+It is saved as the provider's `effort` in [config.jsonc](configuration.md#models-and-recipes); a
+value its kind does not take is refused. A request waits 120 seconds for an answer; a
+[laser-job check](fabrication.md#what-is-sent) waits 240.
 
 A named cloud provider uses its own endpoint; Qwen accepts its regional and workspace endpoints.
 **Local endpoint** accepts HTTPS, or HTTP to `localhost`, `127.0.0.1` or `[::1]`. Changing the

@@ -178,6 +178,7 @@ const descriptions: Record<string, string[]> = {
     'Cloud providers use their supported HTTPS hosts; local permits HTTPS or HTTP on loopback only.',
     'model is the model ID, not its display label. Provider output must support the action format.',
     'allowContent is a display preference, not authority. Editing it never grants model data access.',
+    'Optional effort sets how long the model reasons: minimal or low for meta. Leave it out for the API default.',
     'Before filenames, metadata or text are sent, the user must approve data access in the action dialog or Settings > Models.',
     'Approvals are private, bound to provider id/kind/endpoint and level. An endpoint change or key removal revokes access.',
     'Filename-only requests may still send names. Recipe data mode further limits the requested input.',

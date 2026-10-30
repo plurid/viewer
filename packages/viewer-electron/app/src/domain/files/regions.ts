@@ -33,6 +33,14 @@ export function regionBounds(region: EvidenceRegion): UnitBox {
     y = Math.min(...ys);
   return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
 }
+/** The bounds of a region and its marks together; undefined when there are none. */
+export function outlinesBounds(
+  region: EvidenceRegion | undefined,
+  marks: readonly { region: EvidenceRegion }[] = [],
+): UnitBox | undefined {
+  const points = [...(region ?? []), ...marks.flatMap((mark) => mark.region)];
+  return points.length ? regionBounds(points) : undefined;
+}
 /** A box's corners as an outline, for a region recorded as a rectangle. */
 export function boxRegion(box: UnitBox): EvidenceRegion {
   const right = clamp(box.x + box.width),
