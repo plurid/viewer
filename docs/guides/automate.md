@@ -118,9 +118,9 @@ changes for your review.
 
 An agent can never run shell commands or type into a terminal. Every change it proposes waits for
 your review, and an item it removes goes to the Trash only after you approve it. **Permissions**
-changes a client later, **Stop tasks** stops its work and **Revoke** disconnects it. Read
-[agents and permissions](../reference/agents.md) before connecting one, and use
-[Journal](../reference/journal.md) to see what it did.
+changes a client later, **Stop tasks** stops its work and **Revoke** disconnects it; **Remove** then
+clears a revoked client from the list. Read [agents and permissions](../reference/agents.md) before
+connecting one, and use [Journal](../reference/journal.md) to see what it did.
 
 Folder access, agent access and model data access are
 [three separate approvals](../reference/terms.md#three-separate-permissions); none of them grants

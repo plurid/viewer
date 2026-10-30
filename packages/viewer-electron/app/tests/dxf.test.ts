@@ -12,6 +12,11 @@ import {
   unitInfo,
 } from '../src/domain/previews/drawings/dxf/units';
 import { dxf, entity, panelDrawing } from './dxf-fixtures';
+import {
+  primitiveLength,
+  primitivePoints,
+  readCutDrawing,
+} from '../src/domain/layout/nesting/drawing';
 import { decodeDXF } from '../src/domain/previews/drawings/dxf/decode';
 
 describe('DXF geometry and measurements', () => {
@@ -109,6 +114,69 @@ describe('DXF geometry and measurements', () => {
     expect(drawing.entities).toHaveLength(1);
     expect(drawing.warnings).toContain('Unsupported entity: HATCH');
     expect(drawing.warnings).toContain('Recursive block omitted: LOOP');
+  });
+  it('draws a spline as nesting reads it, and one given by fit points alone', () => {
+    // a cubic Bézier arch from (0, 0) to (10, 0), its top at (5, 7.5)
+    const controls = [0, 0, 0, 10, 10, 10, 10, 0];
+    const arch = entity('SPLINE', [
+      8,
+      'CURVES',
+      70,
+      8,
+      71,
+      3,
+      72,
+      8,
+      73,
+      4,
+      ...[0, 0, 0, 0, 1, 1, 1, 1].flatMap((knot) => [40, knot]),
+      ...Array.from({ length: 4 }, (_, i) => [
+        10,
+        controls[2 * i]!,
+        20,
+        controls[2 * i + 1]!,
+        30,
+        0,
+      ]).flat(),
+    ]);
+    // closed, through three fit points, with no control points
+    const loop = entity('SPLINE', [
+      8,
+      'CURVES',
+      70,
+      1,
+      71,
+      3,
+      74,
+      3,
+      ...[20, 0, 25, 5, 30, 0].flatMap((value, i) => [
+        i % 2 ? 21 : 11,
+        value,
+        ...(i % 2 ? [31, 0] : []),
+      ]),
+    ]);
+    const source = dxf(arch + loop);
+    const drawing = parseDrawing(source);
+    expect(drawing.warnings).not.toContain('Unsupported entity: SPLINE');
+    const [curve, fitted] = drawing.entities;
+    expect(curve).toMatchObject({
+      type: 'SPLINE',
+      layer: 'CURVES',
+      closed: false,
+      approximate: true,
+    });
+    expect(curve!.points[0]).toEqual({ x: 0, y: 0 });
+    expect(curve!.points.at(-1)).toEqual({ x: 10, y: 0 });
+    expect(curve!.bounds.max.y).toBeCloseTo(7.5, 3);
+    expect(curve!.snaps.map((snap) => snap.kind)).toEqual(['Endpoint', 'Endpoint']);
+    // the same chords nesting cuts along, within 1e-4 of the spline's size
+    const [spline] = readCutDrawing(source).primitives;
+    expect(spline?.kind).toBe('spline');
+    expect(curve!.points).toEqual(primitivePoints(spline!, 1e-3));
+    expect(curve!.length).toBeCloseTo(primitiveLength(spline!), 9);
+    expect(fitted).toMatchObject({ type: 'SPLINE', closed: true });
+    expect(fitted!.points.at(-1)).toEqual(fitted!.points[0]);
+    expect(fitted!.area).toBeCloseTo(25);
   });
   it('rejects binary, malformed, nonfinite coordinates and unsupported-only drawings', () => {
     expect(() => parseDrawing('AutoCAD Binary DXF\r\n')).toThrow('Binary DXF');

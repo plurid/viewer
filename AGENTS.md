@@ -21,6 +21,14 @@ Standing exception (approved 2026-10-23): `pnpm package` and `pnpm make` first r
 `packages/viewer-electron/app/out/Viewer-<platform>-<arch>`, to the Trash before rebuilding. It
 moves nothing else, refuses links and stops the build if the Trash fails.
 
+Standing exception (approved 2026-10-30): Viewer's external terminal launcher, a
+`<random ID>.command` script in its private `terminal-launches` data folder, holds the shell
+profile's environment and arguments, so it removes itself with `/bin/rm -- <its own path>` as the
+terminal app starts it: no `-r`, no `-f`, and only when it runs as that file, a regular file that is
+not a link and is the user's and writable, directly in that folder, which is the user's, not a link
+and mode 0700 (`launcherScript` in `src/desktop/terminals/terminal-launch.ts`). At its next start
+Viewer unlinks launchers that never ran, one regular file at a time, and nothing else there.
+
 Viewer must enforce agent removal approval in the desktop service. Editable JSONC, imported
 configuration, custom-action aliases and saved terminal/execution grants must not bypass it. Agent
 shell, executable and terminal-input routes must remain unavailable unless they can enforce the same

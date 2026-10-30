@@ -24,6 +24,14 @@ export interface GitSnapshot {
 export type GitResult =
   | { kind: 'ready'; snapshot: GitSnapshot; canonical?: string }
   | { kind: 'disabled' | 'outside' | 'unavailable' | 'limited'; message: string };
+/** A folder's repository as a window knows it without reading anything more. */
+export interface KnownRepository {
+  root: string;
+  /** Empty when only a `.git` in the folder's listing told. */
+  branch: string;
+  /** The repository's changes, when its status was read. */
+  changes?: number;
+}
 export const gitRelativePath = (value: string) =>
   value.length > 0 &&
   value.length <= 32768 &&

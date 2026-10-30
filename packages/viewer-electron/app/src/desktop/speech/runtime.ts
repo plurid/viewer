@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { release } from 'node:os';
 import { z } from 'zod';
 import {
   speechMaximumBytes,
@@ -65,13 +64,7 @@ export class SpeechRuntime {
     try {
       if (process.platform !== 'darwin')
         throw new Error('Local speech has not been bundled for this platform.');
-      const [major = 0, minor = 0] = release().split('.').map(Number);
-      if (major < 22 || (major === 22 && minor < 4))
-        return {
-          name: 'whisper.cpp',
-          recognitionAvailable: false,
-          reason: 'Local speech requires macOS 13.3 or later.',
-        };
+      // Viewer runs on macOS 14 or later, which the engine's 13.3 minimum covers
       await this.verify();
       return {
         name: 'whisper.cpp',

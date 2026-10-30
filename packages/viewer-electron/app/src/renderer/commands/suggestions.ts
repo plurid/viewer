@@ -7,6 +7,7 @@ import {
 import type { ModelPick } from '../../domain/suggestions/model';
 import { modelPicksFor } from './model-suggestions';
 import { choosePreview } from '../previews/registry';
+import { knownRepository } from '../git/status';
 import { getState } from '../state/core';
 import type { ResolvedCommand } from './registry';
 
@@ -106,6 +107,7 @@ function suggest(
       home: state.bootstrap.home,
       modelReady: settings.providers.length > 0,
       editable: (entry) => choosePreview(entry).editing === 'text',
+      repository: (folder) => (settings.git.enabled ? knownRepository(folder.path) : undefined),
     },
     (kind && state.saved.ui.suggestionHistory?.[kind]) || [],
     {

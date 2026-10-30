@@ -15,6 +15,8 @@ import { cameraRawSamples } from '../tools/playground/camera-raw';
 import { workbenchPDF } from './pdf-fixtures';
 import { holds, placePinned } from './support/real-corpus';
 import { layoutTransformSchema } from '../src/domain/layout/plan';
+import type { LayoutTransform } from '../src/domain/layout/plan';
+import { titledPlan } from '../src/domain/layout/names';
 import { validateTransform } from '../src/domain/operations/transforms';
 import { renderLayout } from '../src/desktop/transforms/layout';
 import type { LayoutPlan, LayoutSource, LayoutTools } from '../src/desktop/transforms/layout';
@@ -608,14 +610,17 @@ it.skipIf(!ready)('lays out through the transform service with its source checks
   try {
     const output = path.join(root, 'Sheet.pdf');
     await transforms.execute(
-      validateTransform(plan, 2),
+      validateTransform(titledPlan(plan as LayoutTransform, 'Sheet for Ana.pdf'), 2),
       [deck, photo],
       output,
       signal(),
       (_fraction, detail) => details.push(detail),
     );
     await checked(output);
-    expect((await readPDF(output)).pages[0]!.text).toContain('Two');
+    const read = await readPDF(output);
+    expect(read.pages[0]!.text).toContain('Two');
+    // titled with the name chosen, without its extension
+    expect(read.title).toBe('Sheet for Ana');
     expect(details.at(-1)).toBe('Layout ready');
     expect(() => validateTransform(plan, 1)).toThrow('not in this layout');
     const swapped = structuredClone(plan);

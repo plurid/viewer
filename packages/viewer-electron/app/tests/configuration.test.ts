@@ -27,6 +27,17 @@ afterEach(async () => {
 });
 
 describe('authoritative JSONC configuration', () => {
+  it('reads a configuration without fileOpening as the default opening policy', async () => {
+    const service = create();
+    await service.load();
+    const config = await read();
+    delete config.settings.fileOpening;
+    await fs.writeFile(file(), JSON.stringify(config));
+    await service.reload();
+    const opening = service.snapshot().settings.fileOpening;
+    expect(opening).toEqual(defaultSettings(root).fileOpening);
+    expect(opening.types.docx).toBe('plane');
+  });
   it('defaults existing configurations to Trash confirmation and persists the explicit preference', async () => {
     const service = create();
     await service.load();
@@ -170,14 +181,32 @@ describe('authoritative JSONC configuration', () => {
   });
   it('rewords earlier guidance in place instead of repeating it', () => {
     const current = documentConfiguration(
-      '{"settings":{"fileOpening":{"default":"automatic","types":{"docx":"plane"}}}}',
+      JSON.stringify({
+        settings: {
+          fileOpening: { default: 'automatic', types: { docx: 'plane' } },
+          updates: { checkAtLaunch: true },
+          quit: { warnShortcut: true },
+          recipes: [],
+          shortcuts: {},
+        },
+        ui: { space: { color: '' } },
+      }),
     );
-    const earlier = current.replace(
-      'New settings preview docx and xlsx in planes.',
-      'Office extensions default to native.',
-    );
-    expect(earlier).not.toBe(current);
-    expect(documentConfiguration(earlier)).toBe(current);
+    for (const [now, earlier] of [
+      ['Office files open in planes by default.', 'Office extensions default to native.'],
+      ['Office files open in planes by default.', 'New settings preview docx and xlsx in planes.'],
+      // menu items by their labels, where the menu has them
+      ['Viewer > Check for Updates… checks.', 'Viewer > Check for Updates checks.'],
+      ['Viewer > Quit Viewer, the Dock', 'Quit in the menu, the Dock'],
+      ['(Workspace look…, under its name in the title bar).', '(Workspace background…).'],
+      // without filler
+      ['instructions, not these', 'instructions rather than these'],
+      ['More IDs:', 'Other useful IDs:'],
+    ]) {
+      const before = current.replace(now!, earlier!);
+      expect(before, earlier).not.toBe(current);
+      expect(documentConfiguration(before), earlier).toBe(current);
+    }
   });
   it.each(['multiline', 'compact', 'crlf'])(
     'documents %s configuration without altering values or user comments',

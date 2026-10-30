@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
+// Lint as `pnpm lint` and editors do. Under CI=true typescript-eslint infers a single run, and in a
+// Vitest worker that program made TypeScript 6 crash writing a module path for a type
+// (getLocalModuleSpecifier); the rules under test do not depend on it.
+process.env.TSESTREE_SINGLE_RUN = 'false';
 const eslint = new ESLint();
 
 describe('type import policy', () => {
@@ -51,6 +55,32 @@ describe('em dashes in text', () => {
     const [result] = await eslint.lintText('// Saved \u2014 now\nexport const a = "Saved. Now.";', {
       filePath,
     });
+    expect(result?.messages).toEqual([]);
+  });
+});
+
+describe('filler words in text', () => {
+  const filePath = 'src/renderer/text-policy-fixture.tsx';
+
+  it.each([
+    ['a string', 'export const a = "Useful for short phrases.";'],
+    ['a template', 'export const b = (n: number) => `${n} files, rather than one`;'],
+    ['JSX text', 'export const C = () => <p>Simply press Save.</p>;'],
+  ])('refuses one in %s', async (_kind, code) => {
+    const [result] = await eslint.lintText(code, { filePath });
+    expect(result?.messages).toContainEqual(
+      expect.objectContaining({
+        ruleId: 'no-restricted-syntax',
+        message: 'Cut the filler word; say what it means.',
+      }),
+    );
+  });
+
+  it('allows one in a comment and a longer word', async () => {
+    const [result] = await eslint.lintText(
+      '// a useful note\nexport const a = "Usefulness is measured.";',
+      { filePath },
+    );
     expect(result?.messages).toEqual([]);
   });
 });

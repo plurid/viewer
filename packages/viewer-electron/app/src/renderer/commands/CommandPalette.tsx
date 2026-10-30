@@ -1,4 +1,5 @@
 import { matchesQuery, topWords, withoutTopWords } from '../../domain/search/query';
+import { savedSearchProblem, searchName, searchNameLength } from '../../domain/search/saved';
 import { useFileQuery } from '../explorer/useFileQuery';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { CommandResults } from './CommandResults';
@@ -510,7 +511,7 @@ function FileFinder({
   const listing = useFolder(directory);
   const search = useSearch(
     directory,
-    query.slice(0, 300),
+    query,
     subtree && !content,
     context.folder?.showHidden || false,
   );
@@ -656,10 +657,13 @@ function FileFinder({
         <NameDialog
           title="Save search"
           action="Save"
-          initial={query}
+          initial={searchName(query)}
+          maxLength={searchNameLength}
           onClose={() => setSaving(false)}
           onSubmit={async (name) => {
             const state = getState();
+            const problem = savedSearchProblem(query, state.settings.settings.savedSearches.length);
+            if (problem) throw new Error(problem);
             await window.viewer.settingsPatch(
               [
                 {

@@ -5,6 +5,8 @@ import type { TransformPlan } from '../operations/transforms';
 import type { SpeechSetup } from '../speech/models';
 import type { AgentTaskSetup, AgentTaskResult } from './task-workflow';
 
+/** What a terminal read grant shows an agent: the last characters each terminal showed. */
+export const terminalReadCharacters = 128_000;
 /** What an execution grant allows: running a program, or reading or typing into its terminal. */
 export const executionCapabilities = ['execute', 'terminal-read', 'terminal-write'] as const;
 export type ExecutionCapability = (typeof executionCapabilities)[number];
@@ -47,17 +49,31 @@ export interface CommandDescriptor {
   aliases: string[];
   shortcut?: string;
 }
+export const agentProposalKinds = [
+  'command',
+  'configuration',
+  'terminal-write',
+  'navigation',
+  'transform',
+  'speech',
+  'task-workflow',
+] as const;
+export type AgentProposalKind = (typeof agentProposalKinds)[number];
+/** Commands, configuration, speech setup and tasks can alter files or later execution, so the
+ * desktop asks again in a system dialog after the review. Navigation changes only the view, and an
+ * export only adds a new file: their review is the approval. Terminal input never runs. */
+export function needsNativeConfirmation(proposal: Pick<AgentProposal, 'kind'>): boolean {
+  return (
+    proposal.kind === 'command' ||
+    proposal.kind === 'configuration' ||
+    proposal.kind === 'speech' ||
+    proposal.kind === 'task-workflow'
+  );
+}
 export interface AgentProposal {
   id: string;
   clientID?: string;
-  kind:
-    | 'command'
-    | 'configuration'
-    | 'terminal-write'
-    | 'navigation'
-    | 'transform'
-    | 'speech'
-    | 'task-workflow';
+  kind: AgentProposalKind;
   taskSetup?: AgentTaskSetup;
   taskResult?: AgentTaskResult;
   speech?: SpeechSetup;

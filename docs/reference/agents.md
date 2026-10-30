@@ -34,7 +34,7 @@ refused. Every path argument must be inside the client's folders.
 | Tool                    | Needs                                                         | What it does                                                                                                                                                                                         |
 | ----------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `read_metadata`         | `metadata`                                                    | One file's entry: name, kind, size, dates and identity                                                                                                                                               |
-| `search_files`          | `metadata`; `content: true` needs `content`, named            | Searches an indexed granted folder (`root`) with the [search syntax](search.md); `query` up to 300 characters, `offset` for the next page. Matching passages come back only for `content: true`      |
+| `search_files`          | `metadata`; `content: true` needs `content`, named            | Searches an indexed granted folder (`root`) with the [search syntax](search.md); `query` up to 1,000 characters, `offset` for the next page. Matching passages come back only for `content: true`    |
 | `get_relationships`     | `metadata`; `content: true` needs `content`, named            | Operation provenance between granted files and, with `content: true`, local references in the file. Private notes and reported links are left out                                                    |
 | `inspect_file`          | `content`, named                                              | Source-versioned facts and original evidence; `ocr: true` runs OCR                                                                                                                                   |
 | `read_content`          | `content`, named                                              | Bounded extracted passages with the source version and reader coverage                                                                                                                               |
@@ -145,7 +145,8 @@ same connection and token.
 | Named client      | Its own token, shown once                | Its own                  | Each agent you connect. Content tools and workflows need one |
 | Shared connection | Viewer's agent token, replaced on demand | Shared by every holder   | One agent that only discovers, searches and proposes         |
 
-Viewer keeps up to 100 named clients, revoked ones included.
+Viewer keeps up to 100 named clients, revoked ones included. To make room,
+[remove a revoked client](#remove-a-client).
 
 ### Connect a named client
 
@@ -155,8 +156,8 @@ Viewer keeps up to 100 named clients, revoked ones included.
 3. Under **Agent clients**, in **New client**, enter a **Name**.
 4. Use **Choose folder…** to add each folder the agent may use.
 5. Turn on the capabilities it needs. A new client starts with **Metadata and discovery** only.
-6. Set **Maximum returned content (MiB)** and **Concurrent requests and pending recipe tasks**, then
-   choose **Create client**.
+6. Set **Maximum returned content (MiB)**, 1 to 8, and **Concurrent requests and pending recipe
+   tasks**, then choose **Create client**.
 7. Copy the **Client MCP configuration** into the agent client's MCP settings. The token is shown
    once.
 8. Restart or reload the agent client so it starts the server.
@@ -253,9 +254,25 @@ agent clients** on again.
 - **Activity** on a client shows its recent tool calls and reviews, newest first.
 - **Stop tasks** cancels the client's proposals, recipe tasks and workflows.
 - **Revoke** retires the client, its token and its grants.
+- **Remove** on a revoked client clears it from the list.
 - Saving a client's permissions stops its work.
 - Turning access off, or removing a shared folder or capability, stops every client's work.
 - Turning access back on does not resume cancelled work.
+
+### Remove a client
+
+1. In **Settings → Agents**, under **Agent clients**, choose **Revoke** on a client you no longer
+   use. Its row then reads **Revoked**.
+2. Choose **Remove** on that row.
+
+Removing forgets the client's name, folders and capabilities, and its **Activity** is no longer
+listed. Sessions it reported stay in their tasks. Only a revoked client can be removed, and only
+from Settings: no agent tool or CLI command removes a client.
+
+At 100 clients, **Create client** is unavailable and Settings says how many are active and how many
+revoked, for example **Viewer keeps up to 100 agent clients and has 100: 63 active and 37 revoked.
+Remove a revoked client, then create this one.** When all 100 are active, it asks you to revoke one
+first.
 
 ## What the person reviews
 
@@ -265,10 +282,16 @@ agent clients** on again.
 | `propose_config`                      | **Apply changes**                                        | **Change**                   |
 | `propose_task_create`                 | **Create task**                                          | **Create task**              |
 | `propose_speech_*`                    | **Download model**, **Import model** or **Choose model** | The same label               |
-| `propose_transform`                   | **Run action**                                           | None                         |
+| `propose_transform`                   | **Export**                                               | None                         |
 | `run_action`, workflow mutation steps | **Action tasks**: **Apply _n_ changes**                  | None                         |
 | Navigation, shared connection         | The proposal's title, such as **Open path**              | None                         |
 | Navigation, named client              | None, except opening `viewer.project.jsonc`              | None                         |
+
+The review ends with what approving does for that request and that target, and whether a system
+dialog follows. For example, a command on two selected items reads **After Run action, a system
+dialog asks once more. Then “Rename” runs on the 2 selected items.**, and an export reads **Export
+saves Photo.png as a new file in /work/Exports. The sources and existing files are kept. No system
+dialog follows: this review is the approval.** An export only adds a file, so no dialog follows it.
 
 **Reject** or closing the review rejects the proposal. Before anything runs, Viewer checks again
 that the folder, selection, file identities and action definition are what was reviewed. A change
@@ -338,8 +361,9 @@ key that contains dots, such as a folder path:
 | Limit                               | Value                                                                            |
 | ----------------------------------- | -------------------------------------------------------------------------------- |
 | One request                         | 65,536 bytes on one line                                                         |
-| One reply                           | 8,000,000 bytes; a larger reply closes the connection                            |
-| Result size                         | **Maximum returned content**: 1 to 64 MiB, default 4; shared: 4 MiB              |
+| Result size                         | **Maximum returned content**: 1 to 8 MiB, default 4; shared: 4 MiB               |
+| One reply                           | 17 MiB (17,825,792 bytes) on one line                                            |
+| Named clients                       | 100, revoked ones included                                                       |
 | Concurrent requests per client      | **Concurrent requests and pending recipe tasks**: 1 to 20, default 4; shared: 20 |
 | Order                               | One connection's requests are answered one at a time, in order                   |
 | Waiting replies per `--mcp` process | 100                                                                              |
@@ -350,6 +374,10 @@ key that contains dots, such as a folder path:
 | Path                                | 32,768 characters                                                                |
 | Concurrent Git reads                | 8                                                                                |
 | Activity                            | The last 1,000 calls are kept; **Activity** shows 50                             |
+
+A result reaches the agent as JSON text inside a JSON string, where each quote and backslash is
+escaped once more, so a reply can take twice the result's size: 17 MiB holds any result within 8
+MiB. A client saved with a larger **Maximum returned content** reads as 8 MiB.
 
 ### Protocol
 
@@ -371,35 +399,52 @@ an invalid request or one over 65,536 bytes, and `-32603` everything else, with 
 
 The `--mcp` process prints these on standard error and exits with status 1:
 
-| Message                                                                                                | Meaning                                 |
-| ------------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| `Set VIEWER_AGENT_TOKEN to the token shown in Viewer Settings.`                                        | The client configuration has no token   |
-| `Viewer’s agent connection is unavailable. Open Viewer and approve agent access in Settings → Agents.` | Agent access was never turned on        |
-| A connection error naming a socket                                                                     | Viewer is not running, or access is off |
+| Message                                                                                                              | Meaning                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `Set VIEWER_AGENT_TOKEN to the token shown in Viewer Settings.`                                                      | The client configuration has no token                                                        |
+| `Viewer’s agent connection is unavailable. Open Viewer and approve agent access in Settings → Agents.`               | Agent access was never turned on                                                             |
+| `Viewer is not running. Open Viewer (/Applications/Viewer.app), then start the agent again.`                         | Viewer quit or ended. The path is the Viewer that last ran, or else the one the agent starts |
+| `… This agent starts another copy, at …`                                                                             | Added when the agent's configuration names another copy of Viewer than the one that last ran |
+| `Agent access is off in Viewer. Turn on Allow local agent clients in Settings → Agents, then start the agent again.` | Viewer runs with agent access off                                                            |
+| `Viewer is running, but its agent connection has closed. Quit and reopen Viewer, then start the agent again.`        | The socket went while Viewer kept running                                                    |
+
+Viewer marks its connection record in its own data, atomically, before the socket goes: as it quits
+or when agent access is turned off. An agent started later reads why. A record left by a Viewer that
+ended without quitting reads as not running once its process is gone.
 
 Calls fail with these:
 
-| Message                                                                                                 | Meaning                                                                 |
-| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `Agent access is disabled or its token is invalid.`                                                     | Access is off, or the token was replaced or revoked                     |
-| `This file is outside the agent’s authorized folders.`                                                  | Outside the folders, missing or denied                                  |
-| `This agent client has no … capability.`                                                                | Turn the capability on under **Permissions**                            |
-| `The shared connection has no … capability. Allow it in Settings → Agents.`                             | Turn it on under **What the connection may do**                         |
-| `Use a named client with content permission.`                                                           | A content tool called through the shared connection                     |
-| `Focus a granted folder plane in Viewer first.` or `Open a workspace in Viewer first.`                  | The person's active plane is not in the folders                         |
-| `Command is unavailable in the captured context.`                                                       | The ID is not in the current `list_commands`                            |
-| `Agents cannot propose “…”. Ask the person to run it themselves.`                                       | The command is not on the agent list                                    |
-| `Selection changed. Ask the agent for a new proposal.`                                                  | A file changed identity before the proposal ran                         |
-| `The source changed. Read it again.`                                                                    | The file changed while it was read                                      |
-| `Agent permissions changed while this request was running. Try again.`                                  | Access, folders or capabilities changed during the call                 |
-| `This client has reached its concurrent request budget.`                                                | Too many calls at once                                                  |
-| `Review or stop a task before starting another.`                                                        | The client's recipe tasks fill its budget                               |
-| `The result exceeds this client’s read budget. Narrow the request or review its budget in Settings.`    | Ask for less, or raise **Maximum returned content**                     |
-| `Review pending proposals before submitting another.`                                                   | 100 proposals are waiting                                               |
-| `Proposal belongs to another actor.`                                                                    | The ID is another client's                                              |
-| `Allow agents to send this data to the provider in Settings → Models before an agent runs this action.` | The model's agent permission is off                                     |
-| `Viewer request timed out.`                                                                             | No reply within 120 seconds                                             |
-| `Viewer disconnected. Reconnect to the running app.`                                                    | Viewer quit, access was turned off, or a reply was over 8,000,000 bytes |
+| Message                                                                                                 | Meaning                                                                                     |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `Agent access is disabled or its token is invalid.`                                                     | Access is off, or the token was replaced or revoked                                         |
+| `This file is outside the agent’s authorized folders.`                                                  | Outside the folders, missing or denied                                                      |
+| `This agent client has no … capability.`                                                                | Turn the capability on under **Permissions**                                                |
+| `The shared connection has no … capability. Allow it in Settings → Agents.`                             | Turn it on under **What the connection may do**                                             |
+| `Use a named client with content permission.`                                                           | A content tool called through the shared connection                                         |
+| `Focus a granted folder plane in Viewer first.` or `Open a workspace in Viewer first.`                  | The person's active plane is not in the folders                                             |
+| `Command is unavailable in the captured context.`                                                       | The ID is not in the current `list_commands`                                                |
+| `Agents cannot propose “…”. Ask the person to run it themselves.`                                       | The command is not on the agent list                                                        |
+| `Selection changed. Ask the agent for a new proposal.`                                                  | A file changed identity before the proposal ran                                             |
+| `The source changed. Read it again.`                                                                    | The file changed while it was read                                                          |
+| `Agent permissions changed while this request was running. Try again.`                                  | Access, folders or capabilities changed during the call                                     |
+| `This client has reached its concurrent request budget.`                                                | Too many calls at once                                                                      |
+| `Review or stop a task before starting another.`                                                        | The client's recipe tasks fill its budget                                                   |
+| `The read_content result is 5.3 MiB, over this client’s read budget of 4 MiB. …`                        | Ask for less, as the message says; see below                                                |
+| `The reply is … bytes, over the 17,825,792 one reply to an agent may take. …`                           | A reply too long for the relay. A result within its budget never is                         |
+| `Review pending proposals before submitting another.`                                                   | 100 proposals are waiting                                                                   |
+| `Proposal belongs to another actor.`                                                                    | The ID is another client's                                                                  |
+| `Allow agents to send this data to the provider in Settings → Models before an agent runs this action.` | The model's agent permission is off                                                         |
+| `Viewer request timed out.`                                                                             | No reply within 120 seconds                                                                 |
+| `Viewer disconnected. Reconnect to the running app.`                                                    | Viewer quit, or access was turned off                                                       |
+| `Viewer sent a reply over 17,825,792 bytes, more than this agent connection carries. …`                 | Another version of Viewer sent a reply the relay does not accept, and the connection closed |
+
+A result over its budget names its size and the budget, then what to ask for instead: fewer rows
+(`limit`, `offset`) for `query_table`, fewer entities or no points for `read_drawing_geometry`, the
+passages through `search_files` with `content: true` for `read_content` and `inspect_file`, a
+narrower query or a later `offset` for `search_files`, and otherwise a smaller range, fewer files or
+a summary. A named client's message suggests raising **Maximum returned content** to the size that
+holds the result; the shared connection's points to a named client; past 8 MiB it says no client can
+return it. Sizes that round alike are given in bytes.
 
 ## Report a session
 

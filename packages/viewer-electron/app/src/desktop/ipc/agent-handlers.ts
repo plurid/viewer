@@ -56,7 +56,10 @@ export function createAgentHandlers(ports: AgentPorts): AgentHandlers {
     agentGrants: () => ports.requests.listGrants(),
     agentGrant: ([actionID, root, capability, allow, clientID]) =>
       ports.requests.grant(actionID, root, capability, allow, clientID),
-    agentClients: async ([request]) => {
+    agentClients: async ([request], owner) => {
+      // Settings alone sends this; a window carrying out an agent's command never removes a client
+      if (request.kind === 'remove' && ports.isAgent(owner))
+        throw new Error('Only you can remove an agent client, in Settings → Agents.');
       const reply = await ports.broker.clientRequest(request);
       if (request.kind !== 'create') return reply;
       await ports.broker.start();

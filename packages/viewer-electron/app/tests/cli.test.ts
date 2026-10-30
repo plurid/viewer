@@ -241,7 +241,17 @@ describe('headless command results', () => {
     ).toBe(2);
   });
   it('reports missing credentials and connection failures with distinct exit codes', async () => {
-    expect((await invoke(['workspace', 'list', '--json'])).code).toBe(4);
+    const missing = await invoke(['workspace', 'list', '--json']);
+    expect(missing.code).toBe(4);
+    // the documented failure shape, with the exit code as its code
+    expect(JSON.parse(missing.stdout)).toEqual({
+      ok: false,
+      error: {
+        code: 4,
+        message:
+          'Set VIEWER_AGENT_TOKEN to a named client token from Settings → Agents. Grant only the folders and capabilities needed.',
+      },
+    });
     const result = await invoke(['workspace', 'list', '--json'], {
       call: async () => {
         throw new CLIConnectionError('Open Viewer first.');

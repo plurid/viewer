@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AgentProposal } from '../../domain/agents/requests';
+import { reviewButton, reviewNote } from '../../domain/agents/review';
 import { Dialog } from '../ui/primitives';
 import { report } from '../state/store';
 import { followSnapshot } from '../state/requests';
@@ -76,11 +77,7 @@ export function AgentReview() {
             </>
           )}
           <pre className="agent-proposal-detail">{proposal.detail}</pre>
-          {proposal.kind !== 'navigation' && (
-            <p className="muted">
-              Viewer asks you once more in a system dialog before anything runs.
-            </p>
-          )}
+          <p className="muted">{reviewNote(proposal)}</p>
           {error && <p role="alert">{error}</p>}
         </div>
         <footer>
@@ -88,23 +85,7 @@ export function AgentReview() {
             Reject
           </button>
           <button className="primary" disabled={busy} type="submit">
-            {busy
-              ? 'Applying…'
-              : proposal.kind === 'task-workflow'
-                ? 'Create task'
-                : proposal.kind === 'speech'
-                  ? proposal.speech?.kind === 'use'
-                    ? 'Choose model'
-                    : proposal.speech?.kind === 'import'
-                      ? 'Import model'
-                      : 'Download model'
-                  : proposal.kind === 'configuration'
-                    ? 'Apply changes'
-                    : proposal.removal === 'trash'
-                      ? 'Move to Trash'
-                      : proposal.kind === 'navigation'
-                        ? proposal.title
-                        : 'Run action'}
+            {busy ? 'Applying…' : reviewButton(proposal)}
           </button>
         </footer>
       </form>

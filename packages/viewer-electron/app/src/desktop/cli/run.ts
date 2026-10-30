@@ -149,20 +149,14 @@ export async function runCLI(
           controller.signal,
         );
       if (!environment.token && !environment.call) {
-        await write(
-          environment.error,
-          'Set VIEWER_AGENT_TOKEN to a named client token from Settings → Agents. Grant only the folders and capabilities needed.\n',
-        );
+        const message =
+          'Set VIEWER_AGENT_TOKEN to a named client token from Settings → Agents. Grant only the folders and capabilities needed.';
+        await write(environment.error, message + '\n');
+        // the exit code, as every other failure gives it
         if (json)
           await write(
             environment.output,
-            JSON.stringify({
-              ok: false,
-              error: {
-                code: 'CREDENTIALS_REQUIRED',
-                message: 'A scoped Viewer client token is required.',
-              },
-            }) + '\n',
+            JSON.stringify({ ok: false, error: { code: cliExit.credentials, message } }) + '\n',
           );
         return cliExit.credentials;
       }

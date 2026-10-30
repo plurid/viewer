@@ -9,7 +9,9 @@ import {
   type DrawingEntity,
   type Drawing,
   pathLength,
+  polygonArea,
 } from './math';
+import { extent, splinePoints, validSpline } from '../../../layout/nesting/geometry';
 export { angleAt, distance, polygonArea } from './math';
 type Raw = IEntity & {
   vertices?: (Point & { bulge?: number })[];
@@ -38,6 +40,11 @@ type Raw = IEntity & {
   text?: string;
   height?: number;
   textHeight?: number;
+  degreeOfSplineCurve?: number;
+  knotValues?: number[];
+  controlPoints?: Point[];
+  fitPoints?: Point[];
+  closed?: boolean;
 };
 type Matrix = [number, number, number, number, number, number];
 const identity: Matrix = [1, 0, 0, 1, 0, 0];
@@ -49,6 +56,7 @@ const supported = new Set([
   'CIRCLE',
   'ARC',
   'ELLIPSE',
+  'SPLINE',
   'POINT',
   'TEXT',
   'MTEXT',
@@ -385,6 +393,30 @@ function drawingFrom(data: IDxf, source: string): Drawing {
           signed += (a.x - origin.x) * (b.y - origin.y) - (b.x - origin.x) * (a.y - origin.y);
         }
         area = Math.abs(signed / 2 + curvedArea);
+      }
+    } else if (raw.type === 'SPLINE') {
+      // as nesting reads one: in chords within 1/10,000 of its size, or else through its fit points
+      const spline = {
+        degree: raw.degreeOfSplineCurve ?? 3,
+        knots: raw.knotValues ?? [],
+        controls: (raw.controlPoints ?? []).filter(validPoint),
+      };
+      if (spline.controls.length > maxPoints)
+        throw new Error('This entity exceeds the vertex limit.');
+      points = validSpline(spline)
+        ? splinePoints(spline, 1e-4 * extent(spline.controls), maxPoints - pointCount)
+        : (raw.fitPoints ?? []).filter(validPoint).map((p) => ({ x: p.x, y: p.y }));
+      if (points.length < 2) return;
+      const first = points[0]!,
+        last = points.at(-1)!;
+      closed = !!raw.closed || distance(first, last) < 1e-9;
+      if (closed && distance(first, last) >= 1e-9) points.push(first);
+      length = pathLength(points);
+      if (closed) area = polygonArea(points);
+      approximate = true;
+      if (!closed) {
+        snap(first, 'Endpoint');
+        snap(last, 'Endpoint');
       }
     } else if (raw.type === 'POINT') {
       if (raw.position) {

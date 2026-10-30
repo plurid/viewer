@@ -6,6 +6,9 @@ import { finalProposalStatuses } from '../../domain/agents/requests';
 import { DocumentStore } from '../persistence/document-store';
 import {
   agentClientInputSchema,
+  agentClientLimit,
+  clientLimitReached,
+  maxAgentReadBytes,
   type AgentAudit,
   type AgentCapability,
   type AgentClient,
@@ -13,8 +16,20 @@ import {
   sharedClientID,
   storedClientID,
 } from '../../domain/agents/clients';
+/** A budget saved while larger ones were allowed reads as the largest allowed now. */
+const storedBudgets = z.preprocess(
+  (value) =>
+    value &&
+    typeof value === 'object' &&
+    'maxReadBytes' in value &&
+    typeof value.maxReadBytes === 'number'
+      ? { ...value, maxReadBytes: Math.min(value.maxReadBytes, maxAgentReadBytes) }
+      : value,
+  agentClientInputSchema.shape.budgets,
+);
 const storedClient = agentClientInputSchema
   .extend({
+    budgets: storedBudgets,
     id: z.uuid(),
     revision: z.number().int().nonnegative(),
     created: z.number(),
@@ -46,7 +61,7 @@ export class AgentClients {
     private shared?: () => Promise<readonly AgentCapability[]>,
   ) {
     this.clients = new DocumentStore(path.join(directory, 'agent-clients-v1.json'), (value) =>
-      z.array(storedClient).max(100).parse(value),
+      z.array(storedClient).max(agentClientLimit).parse(value),
     );
     this.auditStore = new DocumentStore(path.join(directory, 'agent-audit-v1.json'), (value) =>
       z
@@ -123,8 +138,8 @@ export class AgentClients {
     return this.mutate(async () => {
       await this.load();
       await this.access(value.roots);
-      if (this.records.length >= 100)
-        throw new Error('Remove an old agent client before creating another.');
+      const full = clientLimitReached(this.records);
+      if (full) throw new Error(full);
       const token = randomBytes(32).toString('hex');
       const client: PrivateClient = {
         ...value,
@@ -157,6 +172,21 @@ export class AgentClients {
       await this.clients.save(records);
       this.records = records;
       return publicClient(client);
+    });
+  }
+  /** Forgets a revoked client: its record leaves this store, and its saved activity and session
+   * reports stay. A client still in use is revoked first, so its work and grants have ended. */
+  remove(id: string, revision: number): Promise<AgentClient[]> {
+    return this.mutate(async () => {
+      await this.load();
+      const client = this.records.find((record) => record.id === id);
+      if (!client || client.revision !== revision)
+        throw new Error('The client changed. Reload its permissions.');
+      if (!client.revoked) throw new Error(`Revoke ${client.name} before removing it.`);
+      const records = this.records.filter((record) => record.id !== id);
+      await this.clients.save(records);
+      this.records = records;
+      return records.map(publicClient);
     });
   }
   async audit(

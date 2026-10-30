@@ -3,8 +3,9 @@
  * ESLint rejects `rm`, `rmdir` and `unlink` elsewhere. Each function names the
  * one narrow case it serves. Anything a person could want back goes to the
  * Trash instead (AGENTS.md). One exception runs outside Viewer: a terminal
- * launcher script removes itself with `/bin/rm` as Terminal runs it
- * (`terminal-launch.ts`); those never run are removed at startup.
+ * launcher script removes its own file with `/bin/rm`, guarded, as the terminal
+ * app runs it (`launcherScript`); those never run go at startup through
+ * `removePrivateFile`.
  */
 import { rm, rmdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
@@ -43,12 +44,24 @@ export async function unlinkVerified(file: string): Promise<void> {
   await unlink(file);
 }
 
-/** An entry inside the application's private data directory, such as a removed
- * checkpoint copy or workflow receipt. Paths outside that directory are refused. */
-export async function removePrivateData(privateRoot: string, entry: string): Promise<void> {
+function assertPrivateData(privateRoot: string, entry: string): void {
   const relative = path.relative(path.resolve(privateRoot), path.resolve(entry));
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative))
     throw new Error('Only private application data can be removed without the Trash.');
+}
+
+/** An entry inside the application's private data directory, such as a removed
+ * checkpoint copy or workflow receipt. Paths outside that directory are refused. */
+export async function removePrivateData(privateRoot: string, entry: string): Promise<void> {
+  assertPrivateData(privateRoot, entry);
   assertTestRemovalAllowed(entry);
   await rm(entry, { recursive: true, force: true });
+}
+
+/** One file inside the application's private data directory, such as a terminal
+ * launcher that never ran. A folder or a path outside that directory is refused. */
+export async function removePrivateFile(privateRoot: string, file: string): Promise<void> {
+  assertPrivateData(privateRoot, file);
+  assertTestRemovalAllowed(file);
+  await unlink(file);
 }

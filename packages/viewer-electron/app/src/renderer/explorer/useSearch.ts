@@ -4,6 +4,7 @@ import { useIndexedSearch } from './useIndexedSearch';
 import { report } from '../state/store';
 import type { SearchBatch } from '../../domain/contracts';
 import { pathContains } from '../../domain/files/paths';
+import { queryTooLong } from '../../domain/search/query';
 const emptyEntries: FileEntry[] = [];
 /** How often streamed results reach the view while a search runs. */
 const resultInterval = 100;
@@ -11,7 +12,9 @@ const resultInterval = 100;
 /** Search lifetime belongs to a folder plane, independently of its view mode. */
 export function useSearch(path: string, query: string, enabled: boolean, showHidden: boolean) {
   const indexed = useIndexedSearch(query, path, enabled && !!query.trim(), showHidden);
-  const fallback = enabled && (indexed.result?.indexed === false || !!indexed.error);
+  // a query too long for the index is too long for the walk: the filter says what to shorten
+  const fallback =
+    enabled && !queryTooLong(query) && (indexed.result?.indexed === false || !!indexed.error);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [running, setRunning] = useState(false);
   const [summary, setSummary] = useState('');

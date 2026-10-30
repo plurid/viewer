@@ -100,6 +100,8 @@ describe('scratch planes', () => {
     // another language keeps its own
     expect(scratchFileName('Untitled 1', 'python', 'md')).toBe('Untitled 1.py');
     expect(scratchFileName('Untitled 1', undefined, 'txt')).toBe('Untitled 1.txt');
+    // a language known by file name alone keeps that name, never `.undefined`
+    expect(scratchFileName('Untitled 1', 'nginx', 'md')).toBe('nginx.conf');
     expect(untitledFileName('md')).toBe('untitled.md');
   });
   it('becomes a file plane in place, keeping its id and place', () => {

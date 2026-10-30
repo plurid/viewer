@@ -97,8 +97,11 @@ worktree on disk. A replaced checkout cannot take over a saved task.
 
 **Git changes** opens a linked review plane for the repository. **Compare with HEAD** opens one
 selected file against its committed version. Both commands appear when **Settings → Browsing → Git →
-Show Git status** is on, which also turns on Git badges in folders. A task's Git changes plane waits
-for **Load Git changes**.
+Show Git status** is on, which also turns on Git badges in folders. **Git changes** appears only for
+a folder Viewer already knows is in a repository: the folder plane's own folder, a folder inside it,
+or a folder whose listing shows `.git`. Right-click one folder to review its repository; the
+**Suggested** row names the branch and its changes, such as `main · 3 changes`. A task's Git changes
+plane waits for **Load Git changes**.
 
 | Control                                          | Does                                                                                                          |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |

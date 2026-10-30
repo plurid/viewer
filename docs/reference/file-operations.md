@@ -134,7 +134,9 @@ Viewer never deletes an item in place of moving it to the Trash.
 - Before anything moves, Undo checks every step: each item must have the identity it had after the
   job, a file its size and modification time, and an output or trashed folder the same contents.
 - A trashed folder of more than 10,000 items has no Undo, and the job says so. An output that large
-  is kept without an Undo step.
+  is kept without an Undo step, and the job names it: "Undo leaves out “Photos”, which holds more
+  than 10,000 items. Move it to the Trash to remove it." When nothing else can be undone, it reads
+  "Undo is not offered: …" and adds that the originals are unchanged.
 - Undo refuses when the original location is taken, so a known conflict never produces a partial
   Undo.
 - **Redo** starts the job again as a new job with every usual check, only in the session that undid

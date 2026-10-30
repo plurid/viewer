@@ -1,6 +1,6 @@
 /** Names for a layout's output; the operations service makes a taken name free. */
 import { transformExtension } from '../operations/transforms';
-import type { LayoutFormat } from './plan';
+import type { LayoutFormat, LayoutTransform } from './plan';
 import type { LayoutSettings, PlannedMode } from './settings';
 import type { LayoutSource } from './sources';
 
@@ -52,5 +52,13 @@ export function layoutName(
     .trim()
     .slice(0, 120);
 }
+/** The output name without the extension a person may have typed. */
+const outputStem = (name: string) => name.trim().replace(/\.(?:pdf|png|jpe?g)$/i, '');
 export const layoutFileName = (name: string, format: LayoutFormat) =>
-  name.trim().replace(/\.(?:pdf|png|jpe?g)$/i, '') + '.' + transformExtension(format);
+  outputStem(name) + '.' + transformExtension(format);
+/** The plan as saved under `name`: a PDF is titled with the name the person chose, which a PDF
+ * reader shows in place of its file name. */
+export function titledPlan(plan: LayoutTransform, name: string): LayoutTransform {
+  const title = outputStem(name).slice(0, 200);
+  return plan.format === 'pdf' && title ? { ...plan, title } : plan;
+}

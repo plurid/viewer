@@ -380,6 +380,19 @@ export const builtInRecipes: ActionRecipe[] = [
     data: 'full-text',
   },
 ];
+/** Office files open in a plane, laid out by the bundled engine. A configuration without a
+ * `fileOpening` block reads these too. */
+export const defaultFileOpening: ApplicationSettings['fileOpening'] = {
+  default: 'automatic',
+  types: {
+    doc: 'plane',
+    docx: 'plane',
+    xls: 'plane',
+    xlsx: 'plane',
+    ppt: 'plane',
+    pptx: 'plane',
+  },
+};
 export function defaultSettings(home: string): ApplicationSettings {
   return {
     toolbars: {},
@@ -408,17 +421,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       newFileExtension: 'md',
     },
     folders: {},
-    fileOpening: {
-      default: 'automatic',
-      types: {
-        doc: 'plane',
-        docx: 'plane',
-        xls: 'plane',
-        xlsx: 'plane',
-        ppt: 'plane',
-        pptx: 'plane',
-      },
-    },
+    fileOpening: structuredClone(defaultFileOpening),
     customActions: [],
     terminals: {
       application: 'auto',

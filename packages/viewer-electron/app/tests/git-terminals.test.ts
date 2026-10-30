@@ -151,6 +151,23 @@ describe('human Git terminal ownership', () => {
     expect(fake.launch).not.toHaveBeenCalled();
   });
 
+  it('runs at most 100 terminals, counting those still starting', async () => {
+    const starts = Array.from({ length: 99 }, (_, index) =>
+      terminals.startGit(program('job-' + index), 7),
+    );
+    // the hundredth is still starting while the 101st asks
+    const hundredth = terminals.startGit(program('job-99'), 7);
+    await expect(terminals.startGit(program('job-100'), 7)).rejects.toThrow(
+      'Close a terminal before opening another.',
+    );
+    await Promise.all([...starts, hundredth]);
+    expect(launches()).toHaveLength(100);
+    await expect(terminals.startGit(program('job-100'), 7)).rejects.toThrow(
+      'Close a terminal before opening another.',
+    );
+    expect(launches()).toHaveLength(100);
+  });
+
   it('honors cancellation signals and cannot substitute another executable', async () => {
     const abort = new AbortController();
     abort.abort();

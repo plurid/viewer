@@ -2,6 +2,7 @@ import type { FileEntry } from '../contracts';
 import { searchPattern, type SearchPattern } from './pattern';
 import { errorMessage } from '../errors';
 import { officeFormats } from '../previews/documents/layout';
+import { privateKeyNames } from '../previews/keys/certificates';
 
 /**
  * The file query language: one parser for the folder filter, the search through
@@ -19,8 +20,10 @@ import { officeFormats } from '../previews/documents/layout';
 export type QueryNode =
   | { kind: 'and' | 'or'; nodes: QueryNode[] }
   | { kind: 'not'; node: QueryNode }
-  /** In the name, folded: case and accents aside. */
+  /** In the name, folded: case and accents aside. An index with document text also looks there. */
   | { kind: 'text'; text: string }
+  /** `name:`: in the name alone, folded. Document text never answers it. */
+  | { kind: 'name'; text: string }
   | { kind: 'regex'; regex: SearchPattern; source: string }
   | { kind: 'ext'; extensions: string[] }
   | { kind: 'type'; type: QueryType }
@@ -31,6 +34,14 @@ export type QueryNode =
   | { kind: 'tag'; tag: string }
   | { kind: 'is'; what: 'hidden' | 'link' | 'file' | 'folder' };
 export type Comparison = '<' | '<=' | '>' | '>=' | '=';
+/** The longest query: what the index, a search plane, a collection and a saved search hold. */
+export const maxQueryLength = 1000;
+/** What to shorten in a query longer than `maxQueryLength`; none when it fits. */
+export const queryTooLong = (text: string): string | undefined =>
+  text.length > maxQueryLength
+    ? `A query is at most ${maxQueryLength.toLocaleString('en-US')} characters; ` +
+      `shorten this one by ${(text.length - maxQueryLength).toLocaleString('en-US')}.`
+    : undefined;
 export const queryTypes = [
   'file',
   'folder',
@@ -235,7 +246,7 @@ function term(token: Extract<Token, { kind: 'term' }>, now: number): QueryNode {
       return { kind: 'type', type: type as QueryType };
     }
     case 'name':
-      return { kind: 'text', text: foldText(value) };
+      return { kind: 'name', text: foldText(value) };
     case 'path':
       return { kind: 'path', text: value };
     case 'tag':
@@ -291,7 +302,8 @@ function term(token: Extract<Token, { kind: 'term' }>, now: number): QueryNode {
  * A query read: `now` places relative dates (`modified<7d`). An empty one matches everything.
  */
 export function parseFileQuery(text: string, now = Date.now()): FileQuery {
-  if (text.length > 1000) throw new QueryError('A query is at most 1000 characters.', 1000);
+  const long = queryTooLong(text);
+  if (long) throw new QueryError(long, maxQueryLength);
   const list = tokens(text);
   let position = 0;
   const words: string[] = [];
@@ -378,25 +390,35 @@ export interface QueryFacts {
   /** Words matched elsewhere (an index's document text): not checked against names here. */
   skipWords?: boolean;
 }
+/** What Office lays out that is a picture, not a document: Windows metafiles. */
+const officePictures = new Set(['emf', 'wmf']);
 const documents = new Set<string>([
-  ...officeFormats,
+  ...officeFormats.filter((format) => !officePictures.has(format)),
   'pdf',
-  'doc',
-  'docx',
   'pages',
-  'rtf',
-  'odt',
-  'txt',
-  'md',
-  'epub',
-  'xls',
-  'xlsx',
   'numbers',
   'key',
-  'ppt',
-  'pptx',
+  'epub',
+  'txt',
+  'md',
   'csv',
 ]);
+/** Documents saved as packages: iWork's, and RTF with its attachments. */
+const documentPackages = new Set(['pages', 'numbers', 'key', 'rtfd']);
+/**
+ * Publisher and Keynote share `.pub` and `.key` with OpenSSH, PEM and OpenPGP keys. Without the
+ * bytes, a key is one named as OpenSSH names them (`id_ed25519.pub`, `ssh_host_rsa_key.pub`) or,
+ * where the size is known, one under 16 KB: no publication or presentation is that small.
+ */
+const keyExtensions = new Set(['pub', 'key']);
+function looksLikeKey(entry: QueryEntry): boolean {
+  const stem = entry.name.replace(/\.[^.]*$/, '');
+  return (
+    (privateKeyNames as readonly string[]).includes(stem) ||
+    stem.endsWith('_key') ||
+    (entry.size !== undefined && entry.size < 16 * 1024)
+  );
+}
 const archives = new Set(['zip', 'tar', 'gz', 'tgz', 'bz2', 'xz', '7z', 'rar', 'dmg', 'zst']);
 function ofType(entry: QueryEntry, type: QueryType): boolean {
   const extension = entry.extension.toLowerCase().replace(/^\./, '');
@@ -410,7 +432,9 @@ function ofType(entry: QueryEntry, type: QueryType): boolean {
     case 'app':
       return extension === 'app';
     case 'document':
-      return !entry.directory && documents.has(extension);
+      return entry.directory
+        ? documentPackages.has(extension)
+        : documents.has(extension) && !(keyExtensions.has(extension) && looksLikeKey(entry));
     case 'archive':
       return !entry.directory && archives.has(extension);
     default:
@@ -441,6 +465,8 @@ export function matchesQuery(query: FileQuery, entry: QueryEntry, facts: QueryFa
         return !test(node.node);
       case 'text':
         return facts.skipWords || name.includes(node.text);
+      case 'name':
+        return name.includes(node.text);
       case 'regex':
         return node.regex.test(entry.name);
       case 'ext':
@@ -478,7 +504,9 @@ export function matchesQuery(query: FileQuery, entry: QueryEntry, facts: QueryFa
 /** The words every match has in its name: those side by side at the top, for ranking names. */
 export function topWords(query: FileQuery): string[] {
   const top = !query.root ? [] : query.root.kind === 'and' ? query.root.nodes : [query.root];
-  return top.flatMap((node) => (node.kind === 'text' && node.text ? [node.text] : []));
+  return top.flatMap((node) =>
+    (node.kind === 'text' || node.kind === 'name') && node.text ? [node.text] : [],
+  );
 }
 /** The query without its words at the top: an index matched those in documents' text. */
 export function withoutTopWords(query: FileQuery): FileQuery {

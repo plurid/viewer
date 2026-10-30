@@ -25,6 +25,7 @@ import { normalizePreferences } from '../../domain/preferences/ui';
 import { trimSessions } from '../workspace/sessions';
 import { parentPath } from '../../domain/workspaces/planes';
 import { languageFor } from '../../domain/editing/languages';
+import { searchName } from '../../domain/search/saved';
 import { defaultSettings, newPlaneFolder } from '../../domain/services';
 import {
   panePresentation,
@@ -414,7 +415,7 @@ export function addSearchPane(
     content,
     path: root || getState().bootstrap.home,
     query,
-    name,
+    name: searchName(name),
     allLocations: !root,
   };
   changeWorkspace((space) => ({

@@ -31,10 +31,19 @@ import { DocumentStore } from '../persistence/document-store';
 import { AgentClients } from './agent-clients';
 import { AgentAccess } from './agent-access';
 import {
+  agentConnectionSchema,
+  defaultAgentReadBytes,
+  maxAgentReplyBytes,
+  readBudgetError,
   sharedClientID,
-  type AgentCapability,
-  type AgentClientRequest,
-  type AgentClientReply,
+} from '../../domain/agents/clients';
+import type {
+  AgentCapability,
+  AgentClient,
+  AgentClientRequest,
+  AgentClientReply,
+  AgentConnection,
+  AgentConnectionEnd,
 } from '../../domain/agents/clients';
 import { sourceVersion, sameSourceVersion } from '../../domain/files/inspection';
 import { parseDelimited } from '../../domain/previews/data/delimited';
@@ -79,6 +88,18 @@ export function redactedSettings(settings: ApplicationSettings): ApplicationSett
     ),
   };
 }
+/** One reply to an `--mcp` relay. A result within its client's budget always fits the relay's
+ * bound (`maxAgentReplyBytes`); anything longer comes back as an error, never a dropped line. */
+export function replyLine(id: unknown, value: unknown): string {
+  const line = JSON.stringify({ id, value });
+  const bytes = Buffer.byteLength(line);
+  if (bytes <= maxAgentReplyBytes) return line + '\n';
+  const error =
+    `The reply is ${bytes.toLocaleString('en-US')} bytes, over the ` +
+    `${maxAgentReplyBytes.toLocaleString('en-US')} one reply to an agent may take. ` +
+    'Ask for a smaller range, fewer files or a summary.';
+  return JSON.stringify({ id, error }) + '\n';
+}
 export class AgentBroker {
   private lifetime = new AbortController();
   private closed = false;
@@ -106,7 +127,7 @@ export class AgentBroker {
   private token = randomBytes(32).toString('hex');
   private owned = new Map<string, string>();
   private activeCalls = new Map<string, number>();
-  private connection: DocumentStore<{ socket: string; pid: number }>;
+  private connection: DocumentStore<AgentConnection>;
   private tokenStore: DocumentStore<string>;
   constructor(
     private dataPath: string,
@@ -137,7 +158,7 @@ export class AgentBroker {
       () => this.access.capabilities(),
     );
     this.connection = new DocumentStore(path.join(dataPath, 'agent-connection-v1.json'), (value) =>
-      z.object({ socket: z.string(), pid: z.number() }).parse(value),
+      agentConnectionSchema.parse(value),
     );
     // Local agent authentication needs a private token, not a cloud credential.
     // Keep it in mode-0600 app metadata so launching agents never opens Keychain.
@@ -218,7 +239,7 @@ export class AgentBroker {
               const input = JSON.parse(line);
               id = input.id;
               const value = await this.handle(input.token, input.request, lifetime.signal);
-              stream.write(JSON.stringify({ id, value }) + '\n');
+              stream.write(replyLine(id, value));
             } catch (error) {
               stream.write(
                 JSON.stringify({
@@ -242,7 +263,7 @@ export class AgentBroker {
         });
       });
       await chmod(socket, 0o600);
-      await this.connection.save({ socket, pid: process.pid });
+      await this.connection.save({ socket, pid: process.pid, executable: process.execPath });
     } catch (error) {
       const server = this.server;
       this.server = undefined;
@@ -262,6 +283,7 @@ export class AgentBroker {
   }
   async clientRequest(request: AgentClientRequest): Promise<AgentClientReply> {
     if (request.kind === 'list') return this.clients.list();
+    if (request.kind === 'remove') return this.clients.remove(request.id, request.revision);
     if (request.kind === 'create')
       return this.clients.create({
         ...request.client,
@@ -905,10 +927,6 @@ export class AgentBroker {
             ? result.coverage
             : 'partial',
       };
-      if (
-        Buffer.byteLength(JSON.stringify(value)) > (client?.budgets.maxReadBytes ?? 4 * 1024 ** 2)
-      )
-        throw new Error('The relationship result exceeds the client read budget.');
     } else if (call.name === 'get_context') {
       parseToolInput('get_context', args);
       const context = this.context();
@@ -947,10 +965,6 @@ export class AgentBroker {
       await this.authorize(file);
       if (!sameSourceVersion(sourceVersion(before), sourceVersion(await entry(file))))
         throw new Error('The drawing changed. Read its geometry again.');
-      if (Buffer.byteLength(JSON.stringify(value)) > client.budgets.maxReadBytes)
-        throw new Error(
-          'Geometry exceeds the client read budget. Request fewer entities or omit points.',
-        );
     } else if (isToolIn(call.name, ['inspect_file', 'read_content', 'query_table'])) {
       const input = parseToolInput(call.name, args);
       const client = await this.clients.get();
@@ -1032,10 +1046,6 @@ export class AgentBroker {
       await this.authorize(input.path);
       if (!sameSourceVersion(sourceVersion(before), sourceVersion(await entry(input.path))))
         throw new Error('The source changed. Read it again.');
-      if (Buffer.byteLength(JSON.stringify(value)) > client.budgets.maxReadBytes)
-        throw new Error(
-          'This result exceeds the client read budget. Request a smaller table window or increase its budget in Settings.',
-        );
     } else if (call.name === 'search_files') {
       const input = parseToolInput('search_files', args);
       await this.authorize(input.root);
@@ -1128,15 +1138,14 @@ export class AgentBroker {
       );
     if (capability) await this.clients.require(capability);
     else await this.clients.get();
-    const client = await this.clients.get();
-    if (
-      Buffer.byteLength(JSON.stringify(value) ?? 'null') >
-      (client?.budgets.maxReadBytes ?? 4 * 1024 ** 2)
-    )
-      throw new Error(
-        'The result exceeds this client’s read budget. Narrow the request or review its budget in Settings.',
-      );
+    this.checkBudget(call.name, value, await this.clients.get());
     return { content: [{ type: 'text', text: JSON.stringify(value) }] };
+  }
+  /** A result the agent receives is at most its client's **Maximum returned content**. */
+  private checkBudget(tool: string, value: unknown, client: AgentClient | undefined): void {
+    const bytes = Buffer.byteLength(JSON.stringify(value) ?? 'null');
+    const budget = client?.budgets.maxReadBytes ?? defaultAgentReadBytes;
+    if (bytes > budget) throw readBudgetError(tool, bytes, budget, !client);
   }
   /** Records which client may read a proposal or task; bounded like the requests it tracks. */
   private own(id: string): void {
@@ -1155,6 +1164,18 @@ export class AgentBroker {
       if (!this.extension?.requests.has(key)) this.owned.delete(key);
     }
   }
+  /** Records why the connection closed, before its socket goes, so a relay started now can tell
+   * the person what to do. Only an existing record is rewritten, atomically; without the mark a
+   * relay falls back to checking the process it names. */
+  private async markClosed(end: AgentConnectionEnd): Promise<void> {
+    try {
+      const record = await this.connection.load();
+      if (!record || (record.closed === end && record.pid === process.pid)) return;
+      await this.connection.save({ ...record, pid: process.pid, closed: end });
+    } catch {
+      // Closing still revokes access when the mark cannot be written.
+    }
+  }
   /** The private socket folder holds only the socket; it is never removed recursively. */
   private async removeSocketDirectory(): Promise<void> {
     const directory = this.socketDirectory;
@@ -1166,18 +1187,20 @@ export class AgentBroker {
     await discardOwnTemporaryFile(path.join(directory, 'v.sock'));
     await removeEmptyDirectory(directory).catch(() => {});
   }
-  close(): Promise<void> {
+  /** Stops the transport: `quit` as Viewer quits, `off` when agent access is turned off. */
+  close(end: AgentConnectionEnd = 'quit'): Promise<void> {
     if (this.closing) return this.closing;
     this.closed = true;
-    const work = this.closeNow().finally(() => {
+    const work = this.closeNow(end).finally(() => {
       if (this.closing === work) this.closing = undefined;
     });
     this.closing = work;
     return work;
   }
-  private async closeNow(): Promise<void> {
+  private async closeNow(end: AgentConnectionEnd): Promise<void> {
     const stopping = Promise.allSettled([this.stopAll()]);
     await this.starting?.catch(() => {});
+    await this.markClosed(end);
     for (const stream of this.streams) stream.destroy();
     await new Promise<void>((resolve) =>
       this.server ? this.server.close(() => resolve()) : resolve(),

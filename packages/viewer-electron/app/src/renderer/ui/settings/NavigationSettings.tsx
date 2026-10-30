@@ -47,15 +47,7 @@ export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
   };
   return (
     <>
-      <h2>Quick access</h2>
-      <label className="settings-row">
-        <span>Global shortcut</span>
-        <input
-          type="checkbox"
-          checked={snapshot.settings.hotkey.enabled}
-          onChange={(event) => patch('settings.hotkey.enabled', event.target.checked)}
-        />
-      </label>
+      {/* Quick access › Global shortcut is the catalog's row just above */}
       <label className="settings-row">
         <span>Show or hide Viewer</span>
         <KeyCapture

@@ -31,6 +31,9 @@ import {
 } from '../actions/automation-schema';
 import { localPath, id } from '../schemas';
 import { optimizationRecipeSchema } from '../../domain/operations/optimization';
+import { defaultFileOpening } from '../../domain/services';
+import { maxQueryLength } from '../../domain/search/query';
+import { savedSearchCount, searchNameLength } from '../../domain/search/saved';
 const recipe = z
   .object({
     id,
@@ -132,7 +135,7 @@ export const layoutTemplateSchema = z
           z
             .object({
               kind: z.literal('search'),
-              query: z.string().max(300),
+              query: z.string().max(maxQueryLength),
               name: z.string().min(1).max(100),
               root: templatePath.optional(),
               recursive: z.boolean().optional(),
@@ -169,17 +172,7 @@ export const settingsSchema = z
         types: z.record(z.string().max(30), z.enum(['plane', 'native'])),
       })
       .strict()
-      .default({
-        default: 'automatic',
-        types: {
-          doc: 'native',
-          docx: 'native',
-          xls: 'native',
-          xlsx: 'native',
-          ppt: 'native',
-          pptx: 'native',
-        },
-      }),
+      .default(() => structuredClone(defaultFileOpening)),
     customActions: z.array(customActionSchema).max(200).default([]),
     terminals: z
       .object({
@@ -320,15 +313,15 @@ export const settingsSchema = z
         z
           .object({
             id,
-            name: z.string().min(1).max(100),
-            query: z.string().min(1).max(300),
+            name: z.string().min(1).max(searchNameLength),
+            query: z.string().min(1).max(maxQueryLength),
             root: localPath.optional(),
             recursive: z.boolean().optional(),
             content: z.boolean().optional(),
           })
           .strict(),
       )
-      .max(100),
+      .max(savedSearchCount),
     // no longer used: the Settings window keeps its frame and category privately;
     // accepted so existing files stay valid
     settingsWindow: z

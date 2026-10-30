@@ -310,9 +310,12 @@ export class FileIndex {
     // decides each row, so OR, -, patterns, tags and created dates read as they do elsewhere
     const top = !parsed.root ? [] : parsed.root.kind === 'and' ? parsed.root.nodes : [parsed.root];
     const words: string[] = [];
+    // `name:` words: the name column alone, with document text on too
+    const named: string[] = [];
     let exact = true;
     for (const node of top) {
       if (node.kind === 'text') words.push(node.text);
+      else if (node.kind === 'name') named.push(node.text);
       else if (node.kind === 'ext') {
         where.push(`files.extension IN (${node.extensions.map(() => '?').join(',')})`);
         params.push(...node.extensions);
@@ -349,10 +352,14 @@ export class FileIndex {
     let join = '';
     const long = words.filter((word) => word.length >= 3);
     const short = words.filter((word) => word.length < 3);
-    if (long.length) {
-      const term = long
-        .map((word) => (request.content ? '' : 'name:') + '"' + word.replace(/"/g, '""') + '"')
-        .join(' ');
+    const longNamed = named.filter((word) => word.length >= 3);
+    const shortNamed = named.filter((word) => word.length < 3);
+    const phrase = (word: string) => '"' + word.replace(/"/g, '""') + '"';
+    if (long.length || longNamed.length) {
+      const term = [
+        ...long.map((word) => (request.content ? '' : 'name:') + phrase(word)),
+        ...longNamed.map((word) => 'name:' + phrase(word)),
+      ].join(' ');
       // Frequent terms should stop at a page, rather than sort hundreds of thousands of hits.
       // Sparse terms keep the FTS-driven plan. The probe is bounded and never copies file data.
       const frequent =
@@ -370,7 +377,11 @@ export class FileIndex {
         : ' JOIN names ON names.rowid=files.rowid ';
       where.push('names MATCH ?');
       params.push(term);
-    } else if (short.length) join = ' JOIN names ON names.rowid=files.rowid ';
+    } else if (short.length || shortNamed.length) join = ' JOIN names ON names.rowid=files.rowid ';
+    for (const word of shortNamed) {
+      where.push('instr(names.name,?)>0');
+      params.push(word);
+    }
     for (const word of short) {
       where.push(
         request.content

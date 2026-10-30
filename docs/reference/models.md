@@ -85,13 +85,13 @@ What the file embeds still loads, such as the images inside a USDZ package or a 
 Viewer previews ASCII DXF model space. Binary DXF is refused with "Binary DXF is not supported yet.
 Export an ASCII DXF from your CAD app." Native DWG and paper-space layouts are not read.
 
-| Entities                                                                                                                         | Treatment                                                        |
-| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `LINE`, `LWPOLYLINE`, `POLYLINE`, `CIRCLE`, `ARC`, `ELLIPSE`, `POINT`, `TEXT`, `MTEXT`, `INSERT`, `DIMENSION`, `SOLID`, `3DFACE` | Drawn                                                            |
-| Any other type, such as `SPLINE` or `HATCH`                                                                                      | Left out and listed under **Preview limitations**                |
-| Paper-space entities and entities on a tilted plane                                                                              | Left out, with a limitation note                                 |
-| Invisible entities                                                                                                               | Left out                                                         |
-| Block references                                                                                                                 | Expanded up to 16 levels; recursive and missing blocks are noted |
+| Entities                                                                                                                                   | Treatment                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `LINE`, `LWPOLYLINE`, `POLYLINE`, `CIRCLE`, `ARC`, `ELLIPSE`, `SPLINE`, `POINT`, `TEXT`, `MTEXT`, `INSERT`, `DIMENSION`, `SOLID`, `3DFACE` | Drawn                                                            |
+| Any other type, such as `HATCH`                                                                                                            | Left out and listed under **Preview limitations**                |
+| Paper-space entities and entities on a tilted plane                                                                                        | Left out, with a limitation note                                 |
+| Invisible entities                                                                                                                         | Left out                                                         |
+| Block references                                                                                                                           | Expanded up to 16 levels; recursive and missing blocks are noted |
 
 Text in a drawing from AutoCAD 2007 or later is read as UTF-8. An older drawing uses its
 `$DWGCODEPAGE`; an encoding the preview cannot read asks for a UTF-8 ASCII DXF.
@@ -118,8 +118,10 @@ drawing units: choosing a unit labels them without rescaling the drawing.
 | Block expansion  | 100,000 entities; an array of 10,000 |
 | Measurements     | 100                                  |
 
-Source files are never changed. [Nesting for cutting](nesting.md) reads DXF parts with its own
-reader, which also reads splines.
+A spline is drawn as nesting reads it: from its control points and knots, in chords within 1/10,000
+of its size, or through its fit points when it has no control points. Its length and area are
+measured along those chords. Source files are never changed. [Nesting for cutting](nesting.md) reads
+DXF parts with its own reader.
 
 ## Specialist formats
 

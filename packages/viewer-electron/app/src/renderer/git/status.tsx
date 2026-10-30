@@ -1,10 +1,13 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import { gitBadge, type GitResult, type GitStatus } from '../../domain/comparison/git';
+import type { GitSnapshot, KnownRepository } from '../../domain/comparison/git';
 import { useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { pathContains } from '../../domain/files/paths';
 import { errorMessage } from '../../domain/errors';
+import { baseName, parentPath } from '../../domain/workspaces/planes';
+import { listedEntries } from '../explorer/useFolder';
 
 interface GitView {
   result: GitResult;
@@ -102,6 +105,27 @@ async function refresh(path: string, subscription: Subscription): Promise<void> 
   } finally {
     subscription.loading = false;
   }
+}
+
+const known = (snapshot: GitSnapshot): KnownRepository => ({
+  root: snapshot.root,
+  branch: snapshot.branch,
+  changes: snapshot.changes.length,
+});
+/**
+ * A folder's repository as the window knows it already, for a menu that opens at once: the
+ * folder's own Git status, a `.git` in its listing, or the status of the folder listing it, whose
+ * working tree holds it. Nothing is read for the asking; none when it is not known to be in one.
+ */
+export function knownRepository(path: string): KnownRepository | undefined {
+  const own = folders.get(path)?.value?.result;
+  if (own?.kind === 'ready') return known(own.snapshot);
+  if (own?.kind === 'outside' || baseName(path) === '.git') return undefined;
+  // a worktree or submodule keeps a `.git` file, a repository a `.git` folder
+  if (listedEntries(path)?.some((entry) => entry.name === '.git'))
+    return { root: path, branch: '' };
+  const parent = folders.get(parentPath(path))?.value?.result;
+  return parent?.kind === 'ready' ? known(parent.snapshot) : undefined;
 }
 
 /** Rows share one subscription and one indexed snapshot for each displayed folder. */

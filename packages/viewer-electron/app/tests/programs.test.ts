@@ -210,6 +210,26 @@ describe('literal command execution', () => {
     executions.cancel(id);
     expect(executions.list().find((task) => task.id === id)!.status).toBe('cancelled');
   });
+  it('runs at most 20 commands, counting those still starting', async () => {
+    config.customActions = [
+      command({ kind: 'executable', executable: '/bin/sleep', args: ['30'], perItem: false }),
+    ];
+    const executions = new Executions(
+      () => config,
+      () => {},
+      undefined,
+      async () => {},
+    );
+    cleanup.push(() => executions.close());
+    const starts = Array.from({ length: 19 }, () => executions.start('fixture', target()));
+    // the twentieth is still starting while the 21st asks
+    const twentieth = executions.start('fixture', target());
+    const refusal = 'Wait for an action to finish or cancel one before starting another.';
+    await expect(executions.start('fixture', target())).rejects.toThrow(refusal);
+    await Promise.all([...starts, twentieth]);
+    expect(executions.list().filter((task) => task.status === 'running')).toHaveLength(20);
+    await expect(executions.start('fixture', target())).rejects.toThrow(refusal);
+  });
   it('checks conditions and captured identities before starting', async () => {
     const file = path.join(root, 'book.pdf');
     await fs.writeFile(file, 'first');
@@ -346,22 +366,24 @@ describe('external terminal adapters', () => {
 describe('terminal launchers left behind (2026-10-20)', () => {
   it('removes a launcher an earlier session wrote and Terminal never ran, and keeps this session’s', async () => {
     // A launcher removes itself when it runs; one that never ran kept the profile's environment.
+    // Only launchers go: regular files under the random name Viewer gave them (2026-10-30).
     const directory = path.join(root, 'profile', 'terminal-launches');
     await fs.mkdir(directory, { recursive: true });
-    const stale = path.join(directory, 'stale.command');
-    const current = path.join(directory, 'current.command');
+    const stale = path.join(directory, crypto.randomUUID() + '.command');
+    const current = path.join(directory, crypto.randomUUID() + '.command');
     const other = path.join(directory, 'notes.txt');
-    for (const file of [stale, current, other]) await fs.writeFile(file, 'export TOKEN=x');
+    const named = path.join(directory, 'Build.command');
+    const folder = path.join(directory, crypto.randomUUID() + '.command');
+    for (const file of [stale, current, other, named]) await fs.writeFile(file, 'export TOKEN=x');
+    await fs.mkdir(folder);
     const hourAgo = new Date(Date.now() - 3600_000);
-    await fs.utimes(stale, hourAgo, hourAgo);
-    await fs.utimes(other, hourAgo, hourAgo);
+    for (const file of [stale, other, named, folder]) await fs.utimes(file, hourAgo, hourAgo);
     const terminals = new ExternalTerminals(directory, () => config, '/Applications');
     await terminals.sweep(path.join(root, 'profile'));
     const retained = removalBlocked('expired terminal launcher cleanup', [stale]);
+    const kept = [current, other, named, folder].map((file) => path.basename(file));
     expect((await fs.readdir(directory)).sort()).toEqual(
-      retained
-        ? [path.basename(stale), 'current.command', 'notes.txt'].sort()
-        : ['current.command', 'notes.txt'],
+      (retained ? [...kept, path.basename(stale)] : kept).sort(),
     );
   });
 });

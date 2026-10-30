@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { AgentBroker } from '../src/desktop/agents/agent-broker';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 import { discardOwnTemporaryFile, removeEmptyDirectory } from '../src/desktop/operations/removal';
 import { defaultSettings } from '../src/domain/services';
 import type { FileServices } from '../src/desktop/files/file-services';
@@ -116,5 +119,40 @@ describe('agent broker transport shutdown', () => {
     expect(removeEmptyDirectory).toHaveBeenCalledExactlyOnceWith('/fixture/owned-agent-socket');
     await view.broker.close();
     expect(removeEmptyDirectory).toHaveBeenCalledOnce();
+  });
+});
+describe('the connection record as the transport closes (2026-10-30)', () => {
+  // The record outlived the socket, so an agent started later could not say why it failed.
+  it('marks why the connection closed, and writes no record where agents never listened', async () => {
+    const root = await temporaryRoot('viewer-broker-record-');
+    try {
+      const broker = new AgentBroker(
+        root,
+        () => defaultSettings(root),
+        () => undefined,
+        {} as FileServices,
+        { all: async () => [], cancel: () => {} } as unknown as ActionPlanner,
+      );
+      const file = path.join(root, 'agent-connection-v1.json');
+      await broker.close('off');
+      expect(await readdir(root)).not.toContain(path.basename(file));
+      const listening = {
+        socket: '/tmp/viewer-agent-generated/v.sock',
+        pid: 1,
+        executable: '/Applications/Viewer.app/Contents/MacOS/Viewer',
+      };
+      await writeFile(file, JSON.stringify(listening));
+      await broker.close('off');
+      expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({
+        ...listening,
+        pid: process.pid,
+        closed: 'off',
+      });
+      await broker.close();
+      expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ closed: 'quit' });
+      expect((await readdir(root)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+    } finally {
+      await trashTemporary(root);
+    }
   });
 });

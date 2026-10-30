@@ -35,7 +35,7 @@ Names and paths are compared with case and accents folded: `cafe` finds `Café`.
 | ---------- | ------------- | ----------------------------------------------------------------------------------------- |
 | `ext:`     | `extension:`  | Extensions, comma-separated, with or without the dot: `ext:pdf,epub`                      |
 | `kind:`    | `type:`       | `file`, `folder`, `link`, `app`, `image`, `video`, `audio`, `text`, `document`, `archive` |
-| `name:`    |               | Text in the name                                                                          |
+| `name:`    |               | Text in the name only, even with **Document text** on                                     |
 | `path:`    | `in:`         | Text anywhere in the full path: `path:"Research papers"`                                  |
 | `size`     |               | `size>10mb`, `size<=500kb`, `size=0`; see [sizes](#sizes)                                 |
 | `modified` | `mod`, `date` | `modified<7d`, `modified:today`, `modified>=2026-01-01`; see [dates](#dates)              |
@@ -59,8 +59,12 @@ Names and paths are compared with case and accents folded: `cafe` finds `Café`.
 `kind:document` matches `pdf`, `pages`, `numbers`, `key`, `epub`, `txt`, `md`, `csv` and `rtf`; Word
 `doc`, `docx`, `docm`, `dot`, `dotx` and `dotm`; Excel `xls`, `xlsx`, `xlsm`, `xlt`, `xltx` and
 `xltm`; PowerPoint `ppt`, `pptx`, `pptm`, `pps`, `ppsx`, `pot`, `potx` and `potm`; OpenDocument
-`odt`, `fodt`, `ott`, `ods`, `fods`, `ots`, `odp`, `fodp`, `otp`, `odg` and `fodg`; and `pub`, `emf`
-and `wmf`.
+`odt`, `fodt`, `ott`, `ods`, `fods`, `ots`, `odp`, `fodp`, `otp`, `odg` and `fodg`; and Publisher
+`pub`. Pages, Numbers, Keynote and `rtfd` packages count too.
+
+Keys share two of these extensions. A `pub` or `key` file is left out when it is named as OpenSSH
+names keys (`id_ed25519.pub`, `ssh_host_rsa_key.pub`) or, where its size is known, when it is under
+16 KB. EMF and WMF files are pictures: `kind:image` finds them.
 
 ### Sizes
 
@@ -123,7 +127,7 @@ marks the column. A folder filter keeps its last valid query while you correct i
 | `Use kind:file or kind:folder, or …`            | Unknown kind                        |
 | `Use is:hidden, is:link, is:file or is:folder.` | Unknown `is:` value                 |
 | `Use a valid RE2 name pattern. …`               | A pattern RE2 does not accept       |
-| `A query is at most 1000 characters.`           | Too long                            |
+| `A query is at most 1,000 characters; …`        | Too long; says how much to shorten  |
 
 ## Filename index
 
@@ -160,9 +164,10 @@ rule skipped.
 ## Document text
 
 With **Document text** on, the words at the top level of the query match a file's name or its
-indexed text; every other filter still applies to the file. Select a match to see its passage
-(**Page**, **Chapter**, **Line** or **Passage**) and open the document there. Changing the query or
-scope hides old results and passages until the new answer arrives.
+indexed text; `name:` still matches the name only, and every other filter still applies to the file.
+Select a match to see its passage (**Page**, **Chapter**, **Line** or **Passage**) and open the
+document there. Changing the query or scope hides old results and passages until the new answer
+arrives.
 
 | Read for document text                                                                  | Limit                                    |
 | --------------------------------------------------------------------------------------- | ---------------------------------------- |
@@ -189,8 +194,9 @@ shows 150 results a page; **Next** reads more known matches.
 | **Save as smart folder**              | A collection that follows the index                                          |
 
 **Save search…** in **Find file** stores the name, query, scope and **Document text** choice. A
-saved query is at most 300 characters, and you can keep 100. Each saved search is a command in ⌘K
-under **Saved searches**; choosing it opens a search plane.
+saved query is as long as any query, up to 1,000 characters. Its name starts as the query, cut at a
+word to 100 characters. You can keep 100 saved searches. Each saved search is a command in ⌘K under
+**Saved searches**; choosing it opens a search plane.
 
 ## Coverage
 

@@ -13,6 +13,7 @@ import { Dialog, Loading } from '../primitives';
 import { prepareOperationReview } from '../operations/OperationReview';
 import type { Collection } from '../../../domain/workspaces/collections';
 import { errorMessage } from '../../../domain/errors';
+import { maxQueryLength } from '../../../domain/search/query';
 import { useWindowEvent } from '../../app/window-events';
 /** Every basket reference stays reachable, however many there are. */
 function BasketList({ paths, busy }: { paths: string[]; busy: boolean }) {
@@ -181,7 +182,7 @@ export function CollectionControls() {
               Query
               <input
                 value={query}
-                maxLength={300}
+                maxLength={maxQueryLength}
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>

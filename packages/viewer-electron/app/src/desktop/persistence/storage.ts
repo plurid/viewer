@@ -28,6 +28,8 @@ import {
 } from '../../domain/preferences/ui';
 import { discardOwnTemporaryFile } from '../operations/removal';
 import { localPath, id } from '../schemas';
+import { maxQueryLength } from '../../domain/search/query';
+import { searchNameLength } from '../../domain/search/saved';
 import { diffModes, diffSourceSchema } from '../../domain/comparison/diff';
 import { journalFilterSchema } from '../../domain/journal/events';
 import { taskAreaSchema } from '../../domain/workspaces/tasks';
@@ -165,8 +167,8 @@ const pane = z.discriminatedUnion('type', [
     id,
     type: z.literal('search'),
     path: localPath,
-    query: z.string().max(300),
-    name: z.string().max(100),
+    query: z.string().max(maxQueryLength),
+    name: z.string().max(searchNameLength),
     allLocations: z.boolean(),
     recursive: z.boolean().optional(),
     content: z.boolean().optional(),

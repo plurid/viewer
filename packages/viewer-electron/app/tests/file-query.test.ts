@@ -51,6 +51,13 @@ describe('a query', () => {
     expect(names('"draft notes"')).toEqual(['draft notes.md']);
     expect(names('')).toHaveLength(files.length);
   });
+  it('reads name: in the name alone, where words matched in document text pass', () => {
+    expect(names('name:draft')).toEqual(['draft notes.md']);
+    // an index matched the bare words in document text; name: still asks the name
+    expect(names('draft', { skipWords: true })).toHaveLength(files.length);
+    expect(names('name:draft', { skipWords: true })).toEqual(['draft notes.md']);
+    expect(parseFileQuery('name:draft notes').words).toEqual(['notes']);
+  });
   it('reads terms: extensions, kinds, paths, hidden', () => {
     expect(names('ext:md,pdf')).toEqual(['Résumé 2026.pdf', 'notes.md', 'draft notes.md']);
     expect(names('kind:folders')).toEqual(['Projects']);
@@ -61,6 +68,35 @@ describe('a query', () => {
     expect(names('is:link')).toEqual(['latest']);
     expect(names('is:hidden')).toEqual(['.env']);
     expect(names('path:projects notes')).toEqual(['notes.md', 'draft notes.md']);
+  });
+  it('reads kind:document as documents: not pictures, keys or folders', () => {
+    const shelf = [
+      entry('Newsletter.pub', { size: 240_000, mime: 'application/x-mspublisher' }),
+      // named as OpenSSH names keys, whatever the size or none
+      entry('id_ed25519.pub', { size: undefined, mime: 'application/x-mspublisher' }),
+      entry('deploy.pub', { size: 96, mime: 'application/x-mspublisher' }),
+      entry('ssh_host_rsa_key.pub', { size: 20_000 }),
+      entry('Pitch.key', { size: 4_000_000 }),
+      entry('server.key', { size: 1704 }),
+      entry('Logo.emf', { mime: 'image/emf' }),
+      entry('Chart.wmf', { mime: 'image/wmf' }),
+      entry('Plan.odg', { size: 80_000 }),
+      entry('Letter.pages', { directory: true, extension: 'pages', size: undefined }),
+      entry('Notes.rtfd', { directory: true, extension: 'rtfd', size: undefined }),
+      entry('Photos', { directory: true, extension: '', size: undefined }),
+    ];
+    const kind = (query: string) =>
+      shelf
+        .filter((item) => matchesQuery(parseFileQuery(query, now), item))
+        .map((item) => item.name);
+    expect(kind('kind:document')).toEqual([
+      'Newsletter.pub',
+      'Pitch.key',
+      'Plan.odg',
+      'Letter.pages',
+      'Notes.rtfd',
+    ]);
+    expect(kind('kind:image')).toEqual(['Logo.emf', 'Chart.wmf']);
   });
   it('compares sizes, folders having none', () => {
     expect(names('size>1mb')).toEqual(['Résumé 2026.pdf', 'IMG_0042.png']);

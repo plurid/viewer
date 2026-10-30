@@ -15,6 +15,9 @@ import { executablePath } from '../terminals/terminal-launch';
 import { childEnvironment } from '../terminals/process-environment';
 import { errorMessage } from '../../domain/errors';
 import { containsPath } from '../files/containment';
+/** Commands running or starting at once. */
+const commandLimit = 20;
+
 /** User-authored executables are subprocesses. Only the explicit shell executor interprets code. */
 export class Executions {
   private tasks = new Map<string, ExecutionTask>();
@@ -76,6 +79,12 @@ export class Executions {
     owner = manual?.owner,
   ): Promise<string> {
     if (this.closed) return Promise.reject(new Error('Custom commands have closed.'));
+    // counted before the first wait: checked after one, a burst of 21 starts saw 21 and refused all
+    const running = [...this.tasks.values()].filter((task) => task.status === 'running').length;
+    if (this.preparing.size + running >= commandLimit)
+      return Promise.reject(
+        new Error('Wait for an action to finish or cancel one before starting another.'),
+      );
     const ticket = { target, owner, cancelled: false, promise: Promise.resolve('') };
     this.preparing.add(ticket);
     ticket.promise = this.prepare(
@@ -98,12 +107,6 @@ export class Executions {
   ): Promise<string> {
     if (this.closed) throw new Error('Custom commands have closed.');
     await this.access([target.directory, ...target.selection.map((file) => file.path)]);
-    if (
-      this.preparing.size +
-        [...this.tasks.values()].filter((task) => task.status === 'running').length >
-      20
-    )
-      throw new Error('Wait for an action to finish or cancel one before starting another.');
     const settings = this.settings();
     const profile = manual
       ? settings.terminals.profiles.find((profile) => profile.id === settings.terminals.profileID)

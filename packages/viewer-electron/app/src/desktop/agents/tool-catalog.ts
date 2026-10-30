@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { sessionReportSchema } from '../../domain/agents/sessions';
 import { transformPlanSchema } from '../../domain/operations/transforms';
 import { drawingGeometryOptionsSchema } from '../../domain/previews/drawings/geometry';
+import { maxQueryLength } from '../../domain/search/query';
 
 interface AgentTool {
   description: string;
@@ -225,7 +226,7 @@ export const agentToolCatalog = {
     capability: 'metadata',
     input: z
       .object({
-        query: z.string().max(300),
+        query: z.string().max(maxQueryLength),
         root: z.string(),
         offset: z.number().int().min(0).optional(),
         content: z.boolean().optional(),

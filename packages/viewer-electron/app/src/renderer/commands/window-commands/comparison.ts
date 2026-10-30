@@ -1,5 +1,13 @@
-import type { CommandDefinition } from '../registry';
+import type { CommandContext, CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
+import { browsable } from '../../../domain/files/entries';
+import { knownRepository } from '../../git/status';
+
+/** The folder Git changes is for: the one folder selected, or the plane's own. */
+const gitChangesFolder = (context: CommandContext) => {
+  const [only] = context.selection;
+  return context.selection.length === 1 && only && browsable(only) ? only.path : context.directory;
+};
 
 /** What Explore asks; the person sees it as their message and can follow up. */
 const exploreRequest =
@@ -85,9 +93,18 @@ export function comparisonCommands({
       group: 'Git',
       icon: 'list',
       aliases: ['git', 'repository', 'status'],
-      when: (context) =>
-        state.settings.settings.git.enabled && paneScope(context) && !!context.directory,
-      run: (context) => actions.workspace.openGitChanges(context.directory!, context.paneID),
+      // only where Git status already read a repository: a menu opens without asking Git
+      when: (context) => {
+        const folder = gitChangesFolder(context);
+        return (
+          state.settings.settings.git.enabled &&
+          paneScope(context) &&
+          !!folder &&
+          !!knownRepository(folder)
+        );
+      },
+      run: (context) =>
+        actions.workspace.openGitChanges(gitChangesFolder(context)!, context.paneID),
     },
   ];
 }

@@ -3,6 +3,7 @@ import { sourceVersionSchema, evidenceNavigationSchema } from '../files/inspecti
 import type { FileEntry } from '../contracts';
 import type { IndexedQuery } from '../services';
 import { portablePath as localPath } from '../schemas';
+import { maxQueryLength } from '../search/query';
 export const basketItemSchema = z
   .object({
     path: localPath,
@@ -18,7 +19,7 @@ export const collectionSchema = z
     /** Explicit references, an indexed query, or a Finder tag; the last two stay live. */
     kind: z.enum(['explicit', 'query', 'tag']),
     sources: z.array(localPath).min(1).max(10000),
-    query: z.string().max(300).optional(),
+    query: z.string().max(maxQueryLength).optional(),
     tag: z.string().trim().min(1).max(255).optional(),
     recursive: z.boolean().optional(),
     content: z.boolean().optional(),

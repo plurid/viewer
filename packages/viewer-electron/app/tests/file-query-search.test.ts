@@ -77,6 +77,38 @@ describe('the index', () => {
       await index.close();
     }
   });
+  it('reads name: in names alone while document text is searched', async () => {
+    const index = new FileIndex(':memory:');
+    try {
+      index.configure({ roots: [root], exclusions: [], contentRoots: [root], paused: true });
+      await index.settled();
+      const base = await entry(root);
+      const put = (name: string, text: string) =>
+        index.put(
+          { ...base, name, path: path.join(root, name), directory: false, kind: 'file' },
+          root,
+          Date.now(),
+          text,
+        );
+      put('draft plan.txt', 'Dates for the launch.');
+      put('budget.txt', 'The draft budget, in figures.');
+      put('ab notes.txt', 'Nothing.');
+      put('minutes.txt', 'Present: ab and cd.');
+      const named = (query: string) =>
+        index
+          .query({ query, root, content: true })
+          .entries.map((item) => item.name)
+          .toSorted();
+      expect(named('draft')).toEqual(['budget.txt', 'draft plan.txt']);
+      expect(named('name:draft')).toEqual(['draft plan.txt']);
+      expect(named('name:draft launch')).toEqual(['draft plan.txt']);
+      expect(named('name:draft figures')).toEqual([]);
+      // under three letters, outside the trigram index
+      expect(named('name:ab')).toEqual(['ab notes.txt']);
+    } finally {
+      await index.close();
+    }
+  });
   it('pages what the query decides, without repeating one', async () => {
     const index = new FileIndex(':memory:');
     try {

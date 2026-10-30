@@ -1,7 +1,7 @@
 import { effectiveWindowSettings } from '../state/effective-ui';
 import type { Pane } from '../../domain/contracts';
 import { textChangedCode, trimTrailingWhitespace } from '../../domain/editing/documents';
-import { languageByID } from '../../domain/editing/languages';
+import { languageByID, newFileExtension } from '../../domain/editing/languages';
 import { baseName } from '../../domain/workspaces/planes';
 import {
   activeWorkspace,
@@ -26,8 +26,12 @@ export function scratchFileName(
   language: string | undefined,
   preferred = effectiveWindowSettings(getState()).browsing.newFileExtension,
 ): string {
-  const extensions = (languageByID(language) ?? languageByID('plaintext'))?.extensions ?? ['txt'];
-  return `${title}.${extensions.includes(preferred.toLowerCase()) ? preferred : extensions[0]}`;
+  const own = languageByID(language) ?? languageByID('plaintext');
+  if (own?.extensions.includes(preferred.toLowerCase())) return `${title}.${preferred}`;
+  const extension = own && newFileExtension(own);
+  if (extension) return `${title}.${extension}`;
+  // a language known by file name alone saves under that name, so the file reopens in it
+  return own?.names?.[0] ?? `${title}.txt`;
 }
 
 async function unsaved(pane: Pane): Promise<boolean> {

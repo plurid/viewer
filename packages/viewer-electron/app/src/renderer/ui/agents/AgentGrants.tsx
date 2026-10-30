@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { latestReplies } from '../../state/requests';
 import { errorMessage } from '../../../domain/errors';
 import type { ExecutionGrant } from '../../../domain/agents/requests';
+import { terminalReadCharacters } from '../../../domain/agents/requests';
 import type { ApplicationSettings } from '../../../domain/services';
 import { sharedClientID } from '../../../domain/agents/clients';
 import { ChoiceButton } from '../ChoiceMenu';
@@ -69,9 +70,9 @@ export function AgentGrants({
             <span>
               Read terminal output
               <small>
-                Covers terminals started in this folder, including the last 128 KB of everything
-                shown there, even after changing to another folder. Separate from file and metadata
-                access.
+                Covers terminals started in this folder, including the last{' '}
+                {terminalReadCharacters.toLocaleString('en-US')} characters each one showed, even
+                after changing to another folder. Separate from file and metadata access.
               </small>
             </span>
             <input

@@ -497,6 +497,39 @@ describe('reviewed MCP workspace navigation', () => {
     });
     await expect(call('read_content', { path: first })).rejects.toThrow('no content');
   });
+  it('returns a result at the read budget and refuses one byte more with its size and what to ask for (2026-10-30)', async () => {
+    // A 64 MiB budget let a result through that the relay then dropped with the connection.
+    const file = path.join(files, 'Budget.txt');
+    await writeFile(file, 'Generated passage. '.repeat(200));
+    const reader = await broker.clients.create({
+      name: 'Budget',
+      roots: [files],
+      capabilities: ['content'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    token = reader.token;
+    const value = await call('read_content', { path: file });
+    const bytes = Buffer.byteLength(JSON.stringify(value));
+    let revision = reader.client.revision;
+    const budget = async (maxReadBytes: number) => {
+      const { name, roots, capabilities } = reader.client;
+      await broker.clientRequest({
+        kind: 'update',
+        id: reader.client.id,
+        revision: revision++,
+        client: { name, roots, capabilities, budgets: { maxReadBytes, maxTasks: 2 } },
+      });
+    };
+    await budget(bytes);
+    expect(await call('read_content', { path: file })).toEqual(value);
+    await budget(bytes - 1);
+    await expect(call('read_content', { path: file })).rejects.toThrow(
+      `The read_content result is ${bytes.toLocaleString('en-US')} bytes, over this client’s ` +
+        `read budget of ${(bytes - 1).toLocaleString('en-US')} bytes. Find the passages you need ` +
+        'with search_files and content: true. Or ask the person to raise Maximum returned ' +
+        'content in Settings → Agents to 1 MiB.',
+    );
+  });
   it('reads named worksheet windows at original sparse coordinates and honours content grants', async () => {
     const file = path.join(files, 'Measurements.xlsx');
     await writeFile(file, officeFixture('workbook'));

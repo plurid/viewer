@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { IndexedResult } from '../../domain/services';
+import { queryTooLong } from '../../domain/search/query';
 /** Generation ownership drops obsolete replies; a query never copies the full index. */
 export function useIndexedSearch(
   query: string,
@@ -31,12 +32,19 @@ export function useIndexedSearch(
       setRunning(false);
       return;
     }
+    const long = queryTooLong(query);
+    if (long) {
+      setResult(undefined);
+      setRunning(false);
+      setError(long);
+      return;
+    }
     let live = true;
     setRunning(true);
     setError('');
     const timer = setTimeout(() => {
       void window.viewer
-        .indexedQuery({ query: query.slice(0, 300), root, showHidden, offset, content, recursive })
+        .indexedQuery({ query, root, showHidden, offset, content, recursive })
         .then((value) => {
           if (live) {
             setResult({ key, value });

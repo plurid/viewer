@@ -45,11 +45,11 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.updates.checkAtLaunch': [
     'true: at most once a day at launch, Viewer reads its signed update feed and shows a newer release.',
-    'false: only Viewer > Check for Updates checks. The App Store edition is updated by the App Store.',
+    'false: only Viewer > Check for Updates… checks. The App Store edition is updated by the App Store.',
   ],
   'settings.quit.warnShortcut': [
     'true: the first Cmd+Q shows "Press ⌘Q again to quit" and a second within 2.5 seconds quits.',
-    'false: Cmd+Q quits at once. Quit in the menu, the Dock and logging out always quit at once.',
+    'false: Cmd+Q quits at once. Viewer > Quit Viewer, the Dock and logging out always quit at once.',
   ],
   'settings.browsing.modelSuggestions': [
     'true lets the Ask Viewer model add suggestions. It receives file names and kinds, once per',
@@ -105,7 +105,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.fileOpening.types': [
     'Per-extension overrides without a leading dot, in lowercase; values are plane or native.',
-    'Example: "pdf": "plane", "mkv": "native". New settings preview docx and xlsx in planes.',
+    'Example: "pdf": "plane", "mkv": "native". Office files open in planes by default.',
   ],
   'settings.customActions': [
     'User commands for the context menu, Command-K, native Actions menu and optional shortcuts.',
@@ -194,7 +194,7 @@ const descriptions: Record<string, string[]> = {
     'book-name fields: {year}, {authors}, {title}, {publisher}, {extension}.',
     'Book example: "{year}, {authors}, {title}, {publisher}{extension}".',
     'Use the publication year and actual edition, not filesystem dates. Leave unproven metadata unresolved.',
-    'Other kinds use instructions rather than these filename templates; keep template empty.',
+    'Other kinds use instructions, not these filename templates; keep template empty.',
     'data: names (filenames only) | excerpts (bounded extracts) | full-text (bounded extracted text).',
     'providerID selects settings.providers[].id. Omit for local metadata/no model where supported.',
     'Recipe data declares the requested level; private user approval must cover it. Raw binaries are not uploaded.',
@@ -222,7 +222,7 @@ const descriptions: Record<string, string[]> = {
   'settings.shortcuts': [
     'Map built-in command IDs to Cmd/Ctrl plus a key and optional Alt/Shift; empty string disables a binding.',
     'Examples: "open-selection":"Cmd+ArrowDown", "parent":"Cmd+ArrowUp".',
-    'Other useful IDs: new-root-folder, open-terminal, open-tmux, open-terminal-plane and open-config.',
+    'More IDs: new-root-folder, open-terminal, open-tmux, open-terminal-plane and open-config.',
     'Recipe/custom-action shortcuts use the same conflict checks. Each shortcut must be assigned only once.',
   ],
   'settings.tiling': [
@@ -309,7 +309,7 @@ const descriptions: Record<string, string[]> = {
     'Viewer’s title bar. visible false hides it (⌥⌘T); it comes back while the pointer is at the window’s top edge.',
   ],
   'ui.space.color': [
-    'The space’s colour as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace background…).',
+    'The space’s colour as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace look…, under its name in the title bar).',
   ],
   'ui.space': [
     'Spatial navigation and plane chrome. Child planes retain the normal 90.1-degree parent relationship.',
@@ -353,8 +353,28 @@ const revisedGuidance: [RegExp, string][] = [
     '$1The workspace + button and Cmd+N create an independent root here when planes are already open.',
   ],
   [
-    /^([\t ]*\/\/ )Example: "pdf": "plane", "mkv": "native"\. Office extensions default to native\.(?=\r?$)/m,
-    '$1Example: "pdf": "plane", "mkv": "native". New settings preview docx and xlsx in planes.',
+    /^([\t ]*\/\/ )Example: "pdf": "plane", "mkv": "native"\. (Office extensions default to native|New settings preview docx and xlsx in planes)\.(?=\r?$)/m,
+    '$1Example: "pdf": "plane", "mkv": "native". Office files open in planes by default.',
+  ],
+  [
+    /^([\t ]*\/\/ )false: only Viewer > Check for Updates checks\. The App Store edition is updated by the App Store\.(?=\r?$)/m,
+    '$1false: only Viewer > Check for Updates… checks. The App Store edition is updated by the App Store.',
+  ],
+  [
+    /^([\t ]*\/\/ )false: Cmd\+Q quits at once\. Quit in the menu, the Dock and logging out always quit at once\.(?=\r?$)/m,
+    '$1false: Cmd+Q quits at once. Viewer > Quit Viewer, the Dock and logging out always quit at once.',
+  ],
+  [
+    /^([\t ]*\/\/ )The space’s colour as #rrggbb; "" follows the appearance\. A workspace may set its own \(Workspace background…\)\.(?=\r?$)/m,
+    '$1The space’s colour as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace look…, under its name in the title bar).',
+  ],
+  [
+    /^([\t ]*\/\/ )Other kinds use instructions rather than these filename templates; keep template empty\.(?=\r?$)/m,
+    '$1Other kinds use instructions, not these filename templates; keep template empty.',
+  ],
+  [
+    /^([\t ]*\/\/ )Other useful IDs: new-root-folder, open-terminal, open-tmux, open-terminal-plane and open-config\.(?=\r?$)/m,
+    '$1More IDs: new-root-folder, open-terminal, open-tmux, open-terminal-plane and open-config.',
   ],
   [
     /^([\t ]*\/\/ )Example executor: \{"kind":"terminal","profileID":"login"\}\. References must name existing items\.(?=\r?$)/m,

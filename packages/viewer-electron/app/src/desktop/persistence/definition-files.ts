@@ -38,7 +38,7 @@ async function source(file: string, title: string, limit: number): Promise<strin
   if (!info) return null;
   if (!info.isFile() || info.isSymbolicLink())
     throw new Error(
-      'Choose a regular ' + title.toLowerCase() + ' file, rather than an alias or symbolic link.',
+      'Choose a regular ' + title.toLowerCase() + ' file, not an alias or symbolic link.',
     );
   if (info.size > limit) throw new Error(title + ' exceeds ' + limit / 1048576 + ' MiB.');
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);

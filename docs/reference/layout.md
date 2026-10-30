@@ -94,11 +94,11 @@ A label sheet replaces the page choices with "Printed on A4, where the label she
 
 ## Save
 
-| Choice         | Values                                                                                                         |
-| -------------- | -------------------------------------------------------------------------------------------------------------- |
-| **Save as**    | **PDF**, **PNG** or **JPEG**. An image holds one page without PDF pages; otherwise only **PDF** is offered     |
-| **Resolution** | PNG and JPEG on a paper size: 150, 300 (at first) or 600 dpi, lowered when the image would pass 100 megapixels |
-| **Name**       | Up to 200 characters. The file is saved in the plane's folder, beside the originals                            |
+| Choice         | Values                                                                                                                              |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Save as**    | **PDF**, **PNG** or **JPEG**. An image holds one page without PDF pages; otherwise only **PDF** is offered                          |
+| **Resolution** | PNG and JPEG on a paper size: 150, 300 (at first) or 600 dpi, lowered when the image would pass 100 megapixels                      |
+| **Name**       | Up to 200 characters. The file is saved in the plane's folder, beside the originals. A PDF is titled with it, without the extension |
 
 The button reads **Save PDF**, **Save PNG** or **Save JPEG**. It is unavailable while the layout's
 PDFs are over 512 MB together, with "The PDFs in this layout are over 512 MB together. Choose
@@ -222,8 +222,9 @@ Control characters become spaces, and text is composed to Unicode NFC.
 
 ### Document
 
-The plan's `title` becomes the document title, which readers show in place of the file name. qpdf
-writes the file with compressed streams and object streams.
+The plan's `title` becomes the document title, which readers show in place of the file name. The
+Layout plane sets it to the **Name**, without its extension. qpdf writes the file with compressed
+streams and object streams.
 
 ## PNG and JPEG output
 

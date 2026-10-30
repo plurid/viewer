@@ -82,32 +82,32 @@ A workspace window may change only its own presentation: `ui`, `settings.folders
 Shown in **Settings → Browsing** unless marked. Sort, order and grouping change from a folder's view
 controls.
 
-| Setting                                    | Default       | Values                                                                                          | Settings label                                               |
-| ------------------------------------------ | ------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `settings.appearance`                      | `system`      | `system`, `dark`, `light`                                                                       | **Appearance**                                               |
-| `settings.browsing.mode`                   | `list`        | `list`, `grid`, `columns`, `gallery`; Map is chosen per folder                                  | **Default folder view**                                      |
-| `settings.browsing.sort`                   | `name`        | `name`, `modified`, `created`, `kind`, `extension`, `size`                                      | None                                                         |
-| `settings.browsing.descending`             | `false`       | Boolean                                                                                         | None                                                         |
-| `settings.browsing.group`                  | `none`        | `none`, `kind`, `modified`; headings appear in List view                                        | None                                                         |
-| `settings.browsing.columnWidth`            | `280`         | 160 to 1600 px                                                                                  | **Default browsing column width**                            |
-| `settings.browsing.density`                | `comfortable` | `comfortable`, `compact`                                                                        | **Row spacing**                                              |
-| `settings.browsing.scrollbars`             | `system`      | `system` (**Follow system**), `always` (**Always visible**)                                     | **Scrollbars**                                               |
-| `settings.browsing.foldersFirst`           | `true`        | Boolean                                                                                         | **Sort folders first**                                       |
-| `settings.browsing.showHidden`             | `false`       | Boolean                                                                                         | **Show hidden files in new planes**                          |
-| `settings.browsing.restoreSession`         | `true`        | Boolean                                                                                         | **Restore the previous workspace**                           |
-| `settings.browsing.confirmTrash`           | `true`        | Boolean; `false` moves to the Trash without asking; nothing is deleted                          | **Confirm before moving to Trash**                           |
-| `settings.browsing.newPlaneLocation`       | `current`     | `current`, `home`, `desktop`, `documents`, `downloads`, `pictures`, `movies`, `music`, `custom` | **New folder planes start in**                               |
-| `settings.browsing.newPlanePath`           | `""`          | An absolute folder; required for `custom`                                                       | **Choose folder…**                                           |
-| `settings.browsing.emptyWorkspaceLocation` | `home`        | The same values without `current`                                                               | **First plane in an empty workspace starts in**              |
-| `settings.browsing.emptyWorkspacePath`     | `""`          | An absolute folder; required for `custom`                                                       | **Choose folder…**                                           |
-| `settings.browsing.newFileExtension`       | `md`          | 1 to 16 letters, digits, `_`, `+` or `-`, without the dot                                       | **New text files are**                                       |
-| `settings.browsing.suggestions`            | `true`        | Boolean                                                                                         | **Suggestions → Suggest actions in file menus**              |
-| `settings.browsing.suggestionRulesOff`     | `[]`          | Up to 100 rule IDs; see [Suggested actions](#suggested-actions)                                 | None                                                         |
-| `settings.browsing.modelSuggestions`       | `false`       | Boolean                                                                                         | **Suggestions → Let the model suggest actions**              |
-| `settings.browsing.insights`               | `true`        | Boolean                                                                                         | **Suggestions → Show folder insights**                       |
-| `settings.git.enabled`                     | `false`       | Boolean; direct download only                                                                   | **Git → Show Git status**                                    |
-| `settings.quit.warnShortcut`               | `true`        | Boolean; `false` makes the first **⌘Q** quit                                                    | **Warn before quitting with ⌘Q**                             |
-| `settings.updates.checkAtLaunch`           | `true`        | Boolean; at most once a day; not in the App Store edition                                       | **Settings → Privacy → Check for updates when Viewer opens** |
+| Setting                                    | Default       | Values                                                                                                                                     | Settings label                                               |
+| ------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `settings.appearance`                      | `system`      | `system`, `dark`, `light`                                                                                                                  | **Appearance**                                               |
+| `settings.browsing.mode`                   | `list`        | `list`, `grid`, `columns`, `gallery`; Map is chosen per folder                                                                             | **Default folder view**                                      |
+| `settings.browsing.sort`                   | `name`        | `name`, `modified`, `created`, `kind`, `extension`, `size`                                                                                 | None                                                         |
+| `settings.browsing.descending`             | `false`       | Boolean                                                                                                                                    | None                                                         |
+| `settings.browsing.group`                  | `none`        | `none`, `kind`, `modified`; headings appear in List view                                                                                   | None                                                         |
+| `settings.browsing.columnWidth`            | `280`         | 160 to 1600 px                                                                                                                             | **Default browsing column width**                            |
+| `settings.browsing.density`                | `comfortable` | `comfortable`, `compact`                                                                                                                   | **Row spacing**                                              |
+| `settings.browsing.scrollbars`             | `system`      | `system` (**Follow system**), `always` (**Always visible**)                                                                                | **Scrollbars**                                               |
+| `settings.browsing.foldersFirst`           | `true`        | Boolean                                                                                                                                    | **Sort folders first**                                       |
+| `settings.browsing.showHidden`             | `false`       | Boolean                                                                                                                                    | **Show hidden files in new planes**                          |
+| `settings.browsing.restoreSession`         | `true`        | Boolean                                                                                                                                    | **Restore the previous workspace**                           |
+| `settings.browsing.confirmTrash`           | `true`        | Boolean; `false` moves to the Trash without asking; nothing is deleted                                                                     | **Confirm before moving to Trash**                           |
+| `settings.browsing.newPlaneLocation`       | `current`     | `current`, `home`, `desktop`, `documents`, `downloads`, `pictures`, `movies`, `music`, `custom`                                            | **New folder planes start in**                               |
+| `settings.browsing.newPlanePath`           | `""`          | An absolute folder; required for `custom`                                                                                                  | **Choose folder…**                                           |
+| `settings.browsing.emptyWorkspaceLocation` | `home`        | The same values without `current`                                                                                                          | **First plane in an empty workspace starts in**              |
+| `settings.browsing.emptyWorkspacePath`     | `""`          | An absolute folder; required for `custom`                                                                                                  | **Choose folder…**                                           |
+| `settings.browsing.newFileExtension`       | `md`          | 1 to 16 letters, digits, `_`, `+` or `-`, without the dot; Settings offers each language's own, not Nginx, which is known by its file name | **New text files are**                                       |
+| `settings.browsing.suggestions`            | `true`        | Boolean                                                                                                                                    | **Suggestions → Suggest actions in file menus**              |
+| `settings.browsing.suggestionRulesOff`     | `[]`          | Up to 100 rule IDs; see [Suggested actions](#suggested-actions)                                                                            | None                                                         |
+| `settings.browsing.modelSuggestions`       | `false`       | Boolean                                                                                                                                    | **Suggestions → Let the model suggest actions**              |
+| `settings.browsing.insights`               | `true`        | Boolean                                                                                                                                    | **Suggestions → Show folder insights**                       |
+| `settings.git.enabled`                     | `false`       | Boolean; direct download only                                                                                                              | **Git → Show Git status**                                    |
+| `settings.quit.warnShortcut`               | `true`        | Boolean; `false` makes the first **⌘Q** quit                                                                                               | **Warn before quitting with ⌘Q**                             |
+| `settings.updates.checkAtLaunch`           | `true`        | Boolean; at most once a day; not in the App Store edition                                                                                  | **Settings → Privacy → Check for updates when Viewer opens** |
 
 `newPlaneLocation` applies to the workspace **+** button and **⌘N** when planes are open; `current`
 uses the active folder, terminal folder or preview's folder, then Home. `emptyWorkspaceLocation`
@@ -144,8 +144,8 @@ overrides, changes their view and resets them.
 
 `automatic` uses an in-app preview when there is one and the system's application otherwise; `plane`
 opens a linked plane; `native` opens the file in its application. **Open With…** and **Open linked
-plane** stay available. A file with no `fileOpening` field at all reads the Office extensions as
-`native`, which keeps an earlier choice.
+plane** stay available. A configuration with no `fileOpening` field uses these defaults, so Office
+files open in planes.
 
 ## Previews
 
@@ -239,7 +239,8 @@ name. They are not glob patterns. The default names are `.git`, `node_modules`, 
 `.next`, `.nuxt`, `.svelte-kit`, `.turbo`, `.parcel-cache`, `.pnpm-store`, `.yarn`, `.gradle`,
 `target` and `out`. An empty `contentRoots` turns document-text indexing off; removing a root
 removes its indexed text. Indexing text never allows sending it to a model. A saved search's `query`
-is up to 300 characters; omit `root` to search every indexed location.
+is up to 1,000 characters, as any query is, and its `name` up to 100; omit `root` to search every
+indexed location.
 
 ## Models and recipes
 
@@ -417,7 +418,7 @@ A workspace can set its own space colour with the **Workspace look…** command.
 | `office.pdf`          | **Save PDF copy**          | Office and OpenDocument files                                |
 | `images.rename`       | **Batch rename…**          | Three or more images                                         |
 | `books.rename`        | **Rename as book…**        | PDFs and EPUBs, with a model ready                           |
-| `folder.git`          | **Git changes**            | One folder                                                   |
+| `folder.git`          | **Git changes**            | One folder that Git status shows is in a repository          |
 | `folder.explore`      | **Explore this folder**    | One folder, with a model ready                               |
 | `video.audio`         | **Extract audio…**         | One video                                                    |
 | `folder.size`         | **Calculate Size**         | One folder                                                   |

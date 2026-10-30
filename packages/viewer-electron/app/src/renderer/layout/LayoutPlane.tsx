@@ -10,7 +10,7 @@ import { suggestLayout } from '../../domain/layout/suggest';
 import type { ModeSuggestion } from '../../domain/layout/suggest';
 import { changeMode, defaultLayoutSettings, isPlannedMode } from '../../domain/layout/settings';
 import type { LayoutSettings, PlannedMode } from '../../domain/layout/settings';
-import { layoutFileName, layoutName } from '../../domain/layout/names';
+import { layoutFileName, layoutName, titledPlan } from '../../domain/layout/names';
 import { isScreenSize } from '../../domain/layout/pages';
 import { sourceLimits } from '../../domain/layout/sources';
 import type { LayoutSource } from '../../domain/layout/sources';
@@ -210,7 +210,7 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
         sources: value.sources,
         destination: pane.path,
         name: layoutFileName(name, value.plan.format),
-        transform: value.plan,
+        transform: titledPlan(value.plan, name),
         expectedSources: value.sources.map((path) => ({
           path,
           version: sourceVersion(read.entries.get(path)!),

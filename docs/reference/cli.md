@@ -59,8 +59,10 @@ the same local connection as MCP clients. They create no window.
 
 The CLI reads no other credential. Without the variable it exits with code `4`. If the app's
 connection is missing it fails with **Viewer's agent connection is unavailable. Open Viewer and
-approve agent access in Settings → Agents.** A custom profile set with `VIEWER_DATA_DIRECTORY`
-(absolute path) must be the same for the app and the CLI.
+approve agent access in Settings → Agents.** With Viewer closed it fails with code `3` and says
+which Viewer to open, such as **Viewer is not running. Open Viewer (/Applications/Viewer.app), then
+start the agent again.**; with agent access off, it says to turn it on. A custom profile set with
+`VIEWER_DATA_DIRECTORY` (absolute path) must be the same for the app and the CLI.
 
 | Capability   | Settings label              | Allows                                                                |
 | ------------ | --------------------------- | --------------------------------------------------------------------- |
@@ -268,7 +270,7 @@ prints as indented JSON.
 | --------------- | ---------------------------------------------------------------------------------------------- |
 | Success         | `{"ok": true, "command": "workspace list", "result": …}`                                       |
 | Failure         | `{"ok": false, "error": {"code": EXIT_CODE, "message": "…"}, "operationID": "…", "result": …}` |
-| Missing token   | `{"ok": false, "error": {"code": "CREDENTIALS_REQUIRED", "message": "…"}}`                     |
+| Missing token   | `{"ok": false, "error": {"code": 4, "message": "Set VIEWER_AGENT_TOKEN to …"}}`                |
 
 `operationID` appears when an operation was submitted; `result` holds the last status of a failed
 wait.

@@ -151,6 +151,8 @@ export const operationJournal = (dataPath: string) =>
     document.parse(value),
   );
 
+/** The most items an output may hold for Undo to remove it. */
+export const outputProofLimit = 10000;
 /** Compare the entire owned output before an Undo that removes it. Large trees
  * remain valid outputs but are ineligible for automatic removal by Undo. */
 export async function outputProof(root: string): Promise<string | undefined> {
@@ -158,7 +160,7 @@ export async function outputProof(root: string): Promise<string | undefined> {
   const queue = [''];
   let count = 0;
   while (queue.length) {
-    if (++count > 10000) return undefined;
+    if (++count > outputProofLimit) return undefined;
     const relative = queue.pop()!;
     const file = path.join(root, relative);
     const info = await lstat(file);

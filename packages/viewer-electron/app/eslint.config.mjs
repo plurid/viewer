@@ -28,6 +28,14 @@ const noEmDash = [
   'TemplateElement[value.raw=/\u2014/]',
   'JSXText[value=/\u2014/]',
 ].map((selector) => ({ selector, message: dashMessage }));
+// The words CONTRIBUTING.md bans on reader pages pad interface text too.
+const fillerMessage = 'Cut the filler word; say what it means.';
+const filler = '/\\b(simply|useful|familiar|rather than)\\b/i';
+const noFiller = [
+  `Literal[value=${filler}]`,
+  `TemplateElement[value.raw=${filler}]`,
+  `JSXText[value=${filler}]`,
+].map((selector) => ({ selector, message: fillerMessage }));
 // Page code is a typed function (tests/native/runtime/page-function.ts): a string escapes the type
 // check and the formatter. Every harness and tool is written this way.
 const pageCode = {
@@ -42,7 +50,16 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
-    rules: { 'no-restricted-syntax': ['error', importType, importsFirst, ...noEmDash, ...removal] },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        importType,
+        importsFirst,
+        ...noEmDash,
+        ...noFiller,
+        ...removal,
+      ],
+    },
   },
   {
     files: ['tests/**/*.ts', 'tests/**/*.tsx', 'tools/**/*.ts', '*.ts'],

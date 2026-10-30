@@ -1,5 +1,6 @@
 import type { FileEntry } from '../contracts';
-import { fileFamily, formatBytes } from '../files/entries';
+import type { KnownRepository } from '../comparison/git';
+import { browsable, fileFamily, formatBytes } from '../files/entries';
 import { isOfficeFormat } from '../previews/documents/layout';
 import { parentPath } from '../workspaces/planes';
 
@@ -12,6 +13,8 @@ export interface SuggestionInput {
   modelReady: boolean;
   /** A file's text can be edited in a plane: its preview edits text. */
   editable(entry: FileEntry): boolean;
+  /** The repository a folder is known to be in, from Git status already read; none when unknown. */
+  repository?(folder: FileEntry): KnownRepository | undefined;
 }
 
 /**
@@ -190,8 +193,22 @@ export const suggestionRules: readonly SuggestionRule[] = [
     id: 'folder.git',
     commands: ['git-changes'],
     weight: 45,
-    reason: (input) =>
-      input.selection.length === 1 && input.selection[0]!.directory ? 'A repository' : undefined,
+    reason: (input) => {
+      const [folder] = input.selection;
+      const repository =
+        input.selection.length === 1 && browsable(folder!)
+          ? input.repository?.(folder!)
+          : undefined;
+      if (!repository) return undefined;
+      // the words of the plane header's branch button: "main · 3 changes"
+      const changes =
+        repository.changes === undefined
+          ? ''
+          : repository.changes
+            ? `${repository.changes} ${repository.changes === 1 ? 'change' : 'changes'}`
+            : 'Clean';
+      return [repository.branch, changes].filter(Boolean).join(' · ') || 'A repository';
+    },
   },
   {
     id: 'folder.explore',

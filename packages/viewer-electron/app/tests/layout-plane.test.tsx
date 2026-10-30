@@ -239,6 +239,8 @@ describe('the Layout plane', () => {
     await waitFor(() => expect(operate).toHaveBeenCalled());
     const [request] = operate.mock.calls[0]!;
     expect(request.name).toBe('Contact sheet of 3 photos.pdf');
+    // a PDF reader shows the name it was saved under
+    expect((request.transform as LayoutTransform).title).toBe('Contact sheet of 3 photos');
     const texts = (request.transform as LayoutTransform).pages[0]!.items.flatMap((item) =>
       item.kind === 'text' ? [item.text] : [],
     );
@@ -318,6 +320,18 @@ describe('the Layout plane', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save JPEG' }));
     await waitFor(() => expect(operate).toHaveBeenCalled());
     expect(operate.mock.calls[0]![0].name).toBe('Holiday.jpg');
+    // a picture has no title to carry
+    expect((operate.mock.calls[0]![0].transform as LayoutTransform).title).toBeUndefined();
+    fireEvent.click(modeButton('Contact sheet'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Output name' }), {
+      target: { value: 'Contacts for Ana.pdf' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save PDF' }));
+    await waitFor(() => expect(operate).toHaveBeenCalledTimes(2));
+    expect(operate.mock.calls[1]![0]).toMatchObject({
+      name: 'Contacts for Ana.pdf',
+      transform: { format: 'pdf', title: 'Contacts for Ana' },
+    });
   });
 
   it('says why a save failed', async () => {

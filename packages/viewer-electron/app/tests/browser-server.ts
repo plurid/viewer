@@ -451,6 +451,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       const request = args[0] as AgentClientRequest;
       if (request.kind === 'list') return agentClients.list();
       if (request.kind === 'create') throw new Error('Connect agent clients in the desktop app.');
+      if (request.kind === 'remove') return agentClients.remove(request.id, request.revision);
       return agentClients.update(
         request.id,
         request.revision,

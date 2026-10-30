@@ -160,6 +160,17 @@ export const languageByID = (id: string | undefined) =>
 /** The name New file… starts with: `untitled`, with the configured extension. */
 export const untitledFileName = (extension: string) => `untitled.${extension}`;
 
+/**
+ * The extension a new file in this language is named with: the first that reads back as the
+ * language. None for a language known by file name alone: a new `.conf` file reads as INI, so
+ * Nginx has no extension of its own.
+ */
+export function newFileExtension(language: TextLanguage): string | undefined {
+  return language.extensions.find(
+    (extension) => languageFor({ name: untitledFileName(extension), extension }) === language,
+  );
+}
+
 /** Every extension and file name the table names: the text preview's detection includes them. */
 export const languageExtensions = [...byExtension.keys()];
 export const languageNames = [...byName.keys()];

@@ -6,6 +6,7 @@ import type {
   TerminalStart,
 } from '../../domain/automation/actions';
 import type { ApplicationSettings } from '../../domain/services';
+import { terminalReadCharacters } from '../../domain/agents/requests';
 import { absolute } from '../files/filesystem';
 import { executablePath } from './terminal-launch';
 import { terminateTerminalGroup } from './terminal-groups';
@@ -149,14 +150,18 @@ export class Terminals {
     return ticket.promise;
   }
 
+  /** 100 terminals run or start at once: the one asking is already among the pending. */
+  private full(): boolean {
+    return this.sessions.size + this.pending.size > 100;
+  }
+
   private async prepareGit(program: GitTerminalLaunch, ticket: PendingTerminal): Promise<void> {
     const check = () => {
       if (this.closed || ticket.cancelled || program.signal.aborted)
         throw new Error('Git action cancelled before launch.');
     };
     check();
-    if (this.sessions.size + this.pending.size > 100)
-      throw new Error('Close a terminal before opening another.');
+    if (this.full()) throw new Error('Close a terminal before opening another.');
     const { request } = program;
     await this.access([request.cwd]);
     check();
@@ -217,8 +222,7 @@ export class Terminals {
         throw new Error('Terminal belongs to another plane.');
       return;
     }
-    if (this.sessions.size + this.pending.size > 100)
-      throw new Error('Close a terminal before opening another.');
+    if (this.full()) throw new Error('Close a terminal before opening another.');
     await this.access([request.cwd]);
     const cwd = await fs.realpath(absolute(request.cwd));
     if (!(await fs.stat(cwd)).isDirectory()) throw new Error('Terminal folder is unavailable.');
@@ -285,7 +289,8 @@ export class Terminals {
       }
       const session = this.sessions.get(event.id);
       if (!session) return;
-      if (event.type === 'data') session.output = (session.output + event.data).slice(-128_000);
+      if (event.type === 'data')
+        session.output = (session.output + event.data).slice(-terminalReadCharacters);
       this.emit(session.owner, event);
       if (event.type === 'error') this.stop(event.id, session.owner);
     });

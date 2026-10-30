@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
   agentCapabilities,
-  type AgentClient,
-  type AgentClientInput,
-  type AgentAudit,
+  clientLimitReached,
+  defaultAgentReadBytes,
+  maxAgentReadBytes,
 } from '../../../domain/agents/clients';
+import type { AgentClient, AgentClientInput, AgentAudit } from '../../../domain/agents/clients';
 import type { ApplicationSettings } from '../../../domain/services';
 import { AgentGrants } from './AgentGrants';
 import { IconButton } from '../primitives';
@@ -33,8 +34,9 @@ const defaults: AgentClientInput = {
   roots: [],
   // a new client reads; navigating the workspace for the person is a capability given to it
   capabilities: ['metadata'],
-  budgets: { maxReadBytes: 4 * 1024 * 1024, maxTasks: 4 },
+  budgets: { maxReadBytes: defaultAgentReadBytes, maxTasks: 4 },
 };
+const mebibyte = 1024 * 1024;
 
 export function AgentClientSettings({
   settings,
@@ -84,6 +86,7 @@ export function AgentClientSettings({
     setConfiguration('');
     setHistory([]);
   };
+  const full = !editing && clientLimitReached(clients);
   return (
     <>
       <h2>Agent clients</h2>
@@ -134,6 +137,27 @@ export function AgentClientSettings({
                   Revoke
                 </button>
               </>
+            )}
+            {client.revoked && (
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    setClients(
+                      (await window.viewer.agentClients({
+                        kind: 'remove',
+                        id: client.id,
+                        revision: client.revision,
+                      })) as AgentClient[],
+                    );
+                    setHistory((entries) =>
+                      entries.filter((entry) => entry.clientID !== client.id),
+                    );
+                  })
+                }
+              >
+                Remove
+              </button>
             )}
             <button
               disabled={busy}
@@ -230,12 +254,12 @@ export function AgentClientSettings({
           <input
             type="number"
             min={1}
-            max={64}
-            value={draft.budgets.maxReadBytes / 1048576}
+            max={maxAgentReadBytes / mebibyte}
+            value={draft.budgets.maxReadBytes / mebibyte}
             onChange={(e) =>
               setDraft({
                 ...draft,
-                budgets: { ...draft.budgets, maxReadBytes: Number(e.target.value) * 1048576 },
+                budgets: { ...draft.budgets, maxReadBytes: Number(e.target.value) * mebibyte },
               })
             }
           />
@@ -255,12 +279,14 @@ export function AgentClientSettings({
             }
           />
         </label>
+        {full && <p className="settings-note">{full}</p>}
         <div className="settings-actions">
           <button
             type="submit"
             disabled={
               busy ||
               !enabled ||
+              !!full ||
               !draft.name.trim() ||
               !draft.roots.length ||
               !draft.capabilities.length

@@ -18,6 +18,7 @@ import { watchRuleRequestSchema } from '../../domain/automation/watch-rules';
 import { workflowDefinitionSchema } from '../../domain/automation/workflows';
 import { projectDefinitionSchema } from '../../domain/workspaces/project';
 import { lensGroupIDSchema, lensOpSchema } from '../../domain/files/lenses';
+import { maxQueryLength } from '../../domain/search/query';
 import { rootKey, validKeymapKey } from '../../domain/preferences/keymap';
 import { lineSchema } from '../preferences/keymap-schema';
 import { gitSourceSchema, commitPattern } from '../../domain/comparison/git';
@@ -104,7 +105,7 @@ const editedText = z.string().refine((text) => Buffer.byteLength(text, 'utf8') <
 
 const indexedQuerySchema = z
   .object({
-    query: z.string().max(300),
+    query: z.string().max(maxQueryLength),
     root: localPath.optional(),
     offset: z.number().int().min(0).max(1000000).optional(),
     limit: z.number().int().min(1).max(500).optional(),
@@ -466,6 +467,9 @@ export const schemas = {
       z
         .object({ kind: z.literal('revoke'), id: z.uuid(), revision: z.number().int().positive() })
         .strict(),
+      z
+        .object({ kind: z.literal('remove'), id: z.uuid(), revision: z.number().int().positive() })
+        .strict(),
     ]),
   ]),
   agentAudit: z.tuple([id.optional()]),
@@ -670,7 +674,12 @@ export const schemas = {
   watch: z.tuple([localPath, id]),
   unwatch: z.tuple([id]),
   search: z.tuple([
-    z.object({ id, root: localPath, query: z.string().min(1).max(300), showHidden: z.boolean() }),
+    z.object({
+      id,
+      root: localPath,
+      query: z.string().min(1).max(maxQueryLength),
+      showHidden: z.boolean(),
+    }),
   ]),
   cancelSearch: z.tuple([id]),
   operate: z.tuple([

@@ -1398,7 +1398,7 @@ export class Desktop {
         const { enabled } = await this.agents.access.state();
         if (this.agentsEnabled === enabled) return;
         this.agentsEnabled = enabled;
-        await (enabled ? this.agents.start() : this.agents.close());
+        await (enabled ? this.agents.start() : this.agents.close('off'));
       });
     this.agentsConfiguration = task.catch((error) => {
       this.agentsEnabled = undefined;

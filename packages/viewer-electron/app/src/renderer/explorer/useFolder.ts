@@ -37,6 +37,11 @@ function dataset(path: string): Subscription {
   }
   return value;
 }
+/** A folder's entries as last listed, if they were: nothing is read for the asking. */
+export function listedEntries(path: string): readonly FileEntry[] | undefined {
+  const state = datasets.get(path)?.state;
+  return state && !state.loading && !state.unavailable ? state.entries : undefined;
+}
 function notify(value: Subscription) {
   value.listeners.forEach((listener) => listener());
 }

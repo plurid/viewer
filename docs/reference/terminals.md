@@ -23,14 +23,15 @@ checks the folder is the same one before launch and refuses if it changed.
 **Command progress** shows each command's status, exit code, elapsed seconds and output, with
 **Stop**, **Open receipt** and **Copy output**. Hiding the panel leaves commands running.
 
-| Rule      | Behavior                                                                                         |
-| --------- | ------------------------------------------------------------------------------------------------ |
-| Output    | The last 256 KiB is kept; **Showing the last 256 KiB of output.** marks a cut.                   |
-| Exit      | A non-zero exit or a signal is a failure: `Command exited with status N.` or `with signal NAME.` |
-| **Stop**  | Sends `SIGTERM` to the command's process group, then `SIGKILL` after 1.5 seconds.                |
-| Time      | No time limit.                                                                                   |
-| Ends with | Closing its window, quitting Viewer, or losing access to its folder stops the command.           |
-| Replay    | Never. Restarting Viewer does not run a command again.                                           |
+| Rule      | Behavior                                                                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Output    | The last 256 KiB is kept; **Showing the last 256 KiB of output.** marks a cut.                                                             |
+| Exit      | A non-zero exit or a signal is a failure: `Command exited with status N.` or `with signal NAME.`                                           |
+| **Stop**  | Sends `SIGTERM` to the command's process group, then `SIGKILL` after 1.5 seconds.                                                          |
+| Time      | No time limit.                                                                                                                             |
+| At once   | 20 commands and custom actions, running or starting. Another shows **Wait for an action to finish or cancel one before starting another.** |
+| Ends with | Closing its window, quitting Viewer, or losing access to its folder stops the command.                                                     |
+| Replay    | Never. Restarting Viewer does not run a command again.                                                                                     |
 
 For a program that needs input, use a terminal plane.
 
@@ -67,6 +68,7 @@ Each terminal plane has its own shell, started from the default shell profile.
 | Paste      | Copy, paste and bracketed paste.                                                                                              |
 | Drop       | Dropping files pastes their quoted paths.                                                                                     |
 | Scrollback | **Terminal scrollback lines**, 100 to 50,000, default 10,000.                                                                 |
+| At once    | 100 terminals, Git terminals included. Another shows **Close a terminal before opening another.**                             |
 | Size       | Resizing the plane changes rows and columns; zooming the space does not.                                                      |
 
 The shell keeps running while the plane is out of view or another workspace is shown. Closing the
@@ -102,6 +104,12 @@ from edited or imported configuration and to terminal planes restored on launch.
 **External terminal** is `auto` or an app name or path such as `iTerm2`, `Terminal` or
 `/Applications/YourApp.app`. `auto` uses a running supported terminal, then iTerm, then Terminal. An
 app chosen by path asks a native confirmation once. External terminals are macOS only.
+
+To hand off, Viewer writes a launcher script into `terminal-launches` in its data, a folder only you
+can open (mode 0700). The script holds the profile's environment and arguments, which can carry
+tokens, so it removes itself as the terminal app starts it: only its own file, only in that folder,
+never through a link. A launcher the app never ran is removed when Viewer next starts. If removal
+fails, the shell still opens.
 
 | tmux setting               | Default    | Rule                                                        |
 | -------------------------- | ---------- | ----------------------------------------------------------- |

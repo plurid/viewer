@@ -65,22 +65,22 @@ its reason:
 
 ![A file menu suggesting Extract here for a zip archive](../media/suggested.png)
 
-| Selection                             | Suggested                                                 |
-| ------------------------------------- | --------------------------------------------------------- |
-| A zip or tar archive                  | **Extract here**                                          |
-| A PDF over 10 MB                      | **Optimize…**                                             |
-| A JPEG or PNG photo over 3 MB         | **Images for web…**                                       |
-| A HEIC photo                          | **Convert copy to JPEG**                                  |
-| Several photos                        | **Lay out…**, **Create PDF from images**                  |
-| Three or more photos                  | **Batch rename…**                                         |
-| DXF drawings                          | **Nest for cutting…**                                     |
-| A video or audio file                 | **Edit media…**; **Extract audio…** for a video           |
-| An Office or OpenDocument file        | **Save PDF copy**                                         |
-| A text or code file                   | **Edit text**                                             |
-| A folder                              | **Calculate Size**; **Git changes** when Git status is on |
-| Several items                         | **Compress to ZIP**                                       |
-| A name ending in " copy" or "(2)"     | **Find duplicates…**                                      |
-| An installer in Downloads, a week old | **Move to Trash…**                                        |
+| Selection                             | Suggested                                                               |
+| ------------------------------------- | ----------------------------------------------------------------------- |
+| A zip or tar archive                  | **Extract here**                                                        |
+| A PDF over 10 MB                      | **Optimize…**                                                           |
+| A JPEG or PNG photo over 3 MB         | **Images for web…**                                                     |
+| A HEIC photo                          | **Convert copy to JPEG**                                                |
+| Several photos                        | **Lay out…**, **Create PDF from images**                                |
+| Three or more photos                  | **Batch rename…**                                                       |
+| DXF drawings                          | **Nest for cutting…**                                                   |
+| A video or audio file                 | **Edit media…**; **Extract audio…** for a video                         |
+| An Office or OpenDocument file        | **Save PDF copy**                                                       |
+| A text or code file                   | **Edit text**                                                           |
+| A folder                              | **Calculate Size**; **Git changes** in a repository, with Git status on |
+| Several items                         | **Compress to ZIP**                                                     |
+| A name ending in " copy" or "(2)"     | **Find duplicates…**                                                    |
+| An installer in Downloads, a week old | **Move to Trash…**                                                      |
 
 What you choose for a kind of file rises for that kind next time: if you always rename PDFs, PDFs
 suggest it. The same suggestions appear in **⌘K** before you type, and the best one appears as a

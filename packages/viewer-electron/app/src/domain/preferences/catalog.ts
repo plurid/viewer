@@ -1,6 +1,6 @@
 import { tileLayouts, tileLayoutLabels } from '../workspaces/tiling';
 import { listColumns } from './list-columns';
-import { textLanguages } from '../editing/languages';
+import { newFileExtension, textLanguages } from '../editing/languages';
 
 export interface SettingDefinition {
   path: string;
@@ -80,12 +80,6 @@ export const settingCatalog: SettingDefinition[] = [
       ['system', 'Follow system'],
       ['always', 'Always visible'],
     ],
-  },
-  {
-    path: 'settings.hotkey.enabled',
-    category: 'Navigation',
-    label: 'Global Viewer shortcut',
-    kind: 'boolean',
   },
   {
     path: 'settings.terminals.scrollback',
@@ -180,16 +174,17 @@ export const settingCatalog: SettingDefinition[] = [
     label: 'New text files are',
     detail: 'The extension New file… starts with, and the language a new scratch plane starts in.',
     kind: 'choice',
-    // Markdown and plain text first, then each language of the highlighting table
+    // Markdown and plain text first, then each language of the highlighting table a new file can
+    // be named for: one known by file name alone, as Nginx is, would start as another language
     choices: [
       ...['markdown', 'plaintext'].flatMap((id) =>
         textLanguages.filter((language) => language.id === id),
       ),
       ...textLanguages.filter((language) => !['markdown', 'plaintext'].includes(language.id)),
-    ].map((language): [string, string] => [
-      language.extensions[0]!,
-      `${language.label} (.${language.extensions[0]})`,
-    ]),
+    ].flatMap((language): [string, string][] => {
+      const extension = newFileExtension(language);
+      return extension ? [[extension, `${language.label} (.${extension})`]] : [];
+    }),
   },
   {
     path: 'settings.browsing.density',
@@ -231,7 +226,7 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Browsing',
     label: 'Warn before quitting with ⌘Q',
     detail:
-      'The first ⌘Q shows a reminder; press it again to quit. Quit in the menu or the Dock quits at once.',
+      'The first ⌘Q shows a reminder; press it again to quit. Viewer > Quit Viewer and the Dock quit at once.',
     kind: 'boolean',
   },
   {
@@ -312,6 +307,14 @@ export const settingCatalog: SettingDefinition[] = [
     path: 'ui.sidebar.inNewPlanes',
     category: 'Navigation',
     label: 'Show navigation in new folder planes',
+    kind: 'boolean',
+  },
+  // its key follows on the Navigation page, under the same heading
+  {
+    path: 'settings.hotkey.enabled',
+    category: 'Navigation',
+    section: 'Quick access',
+    label: 'Global shortcut',
     kind: 'boolean',
   },
   {
@@ -493,7 +496,7 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Space',
     label: 'Space colour',
     detail:
-      'The colour behind the planes; Automatic follows the appearance. A workspace can have its own: Workspace background… in the Workspace menu.',
+      'The colour behind the planes; Automatic follows the appearance. A workspace can have its own: Workspace look…, in the menu under its name in the title bar.',
     kind: 'color',
   },
   {

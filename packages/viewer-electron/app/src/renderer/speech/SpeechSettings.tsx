@@ -18,7 +18,7 @@ import { HostedSpeechSettings } from './HostedSpeechSettings';
 
 const descriptions: Record<string, string> = {
   'whisper-tiny':
-    'Fastest and smallest. Useful for short English phrases; other languages can need more corrections.',
+    'Fastest and smallest. Best for short English phrases; other languages can need more corrections.',
   'whisper-base': 'A small multilingual model for everyday dictation.',
   'whisper-small':
     'More accurate multilingual dictation. Uses more memory and takes longer to transcribe.',

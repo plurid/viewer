@@ -875,6 +875,42 @@ describe('replace safety', () => {
     expect(job.errors[0]?.message).toContain('Undo is unavailable');
     expect(job.errors[0]?.message).toContain('10,000');
   });
+  it('says which copy Undo leaves, too large to check, and what to do with it', async () => {
+    const dataPath = path.join(root, 'private');
+    const large = path.join(root, 'many items');
+    const small = path.join(root, 'small');
+    for (const folder of [large, small]) {
+      await mkdir(folder);
+      await writeFile(path.join(folder, 'one.txt'), 'one');
+    }
+    const restore = () =>
+      new Operations(
+        async (file) => rename(file, path.join(trash, crypto.randomUUID())),
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        dataPath,
+      );
+    operations = restore();
+    const both = await run({ kind: 'copy', sources: [large, small], destination });
+    expect(both).toMatchObject({ status: 'completed', undoable: true, errorCount: 0 });
+    expect(both.detail).toBe(
+      'Undo leaves out “many items”, which holds more than 10,000 items. Move it to the Trash to remove it.',
+    );
+    const alone = path.join(root, 'alone');
+    await mkdir(alone);
+    const one = await run({ kind: 'copy', sources: [large], destination: alone });
+    expect(one).toMatchObject({ status: 'completed', undoable: false, errorCount: 0 });
+    expect(one.detail).toBe(
+      'Undo is not offered: “many items” holds more than 10,000 items. Move it to the Trash to remove it; the originals are unchanged.',
+    );
+    // the receipt keeps it
+    await operations.close();
+    operations = restore();
+    await operations.load();
+    expect(operations.all().find((job) => job.id === one.id)?.detail).toBe(one.detail);
+  });
   it('sets an unreadable operation journal aside and keeps working', async () => {
     const dataPath = path.join(root, 'private');
     await mkdir(dataPath);

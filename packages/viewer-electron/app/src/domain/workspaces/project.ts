@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { gitActionKinds, gitTerminalProfileID } from '../comparison/git-actions';
 import type { FolderOverride } from '../preferences/folder-presentation';
 import { viewModes } from '../contracts';
+import { maxQueryLength } from '../search/query';
+import { searchNameLength } from '../search/saved';
 
 const id = z
   .string()
@@ -187,8 +189,8 @@ const projectPlaneSchema = z.discriminatedUnion('type', [
     .object({
       ...planeBase,
       type: z.literal('search'),
-      query: z.string().max(300),
-      name: z.string().max(100),
+      query: z.string().max(maxQueryLength),
+      name: z.string().max(searchNameLength),
       recursive: z.boolean(),
       content: z.boolean(),
     })
@@ -228,7 +230,7 @@ export const projectDefinitionSchema = z
             name: z.string().min(1).max(100),
             kind: z.enum(['explicit', 'query', 'tag']),
             sources: z.array(projectPathSchema).min(1).max(10000),
-            query: z.string().max(300).optional(),
+            query: z.string().max(maxQueryLength).optional(),
             tag: z.string().trim().min(1).max(255).optional(),
             recursive: z.boolean().optional(),
             content: z.boolean().optional(),

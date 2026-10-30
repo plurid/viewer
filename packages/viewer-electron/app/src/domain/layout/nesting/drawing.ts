@@ -11,10 +11,13 @@ import {
   arcPoints,
   bulgeArc,
   determinant,
+  extent,
   identity,
   multiply,
   similarity,
+  splinePoints,
   tau,
+  validSpline,
   type Matrix,
   type Point,
 } from './geometry';
@@ -296,11 +299,7 @@ function primitiveOf(raw: Raw, layer: string): Primitive | undefined {
       const controls = (raw.controlPoints ?? []).filter(valid).map(point);
       const knots = raw.knotValues ?? [];
       const degree = raw.degreeOfSplineCurve ?? 3;
-      if (
-        controls.length > degree &&
-        knots.length === controls.length + degree + 1 &&
-        knots.every(Number.isFinite)
-      )
+      if (validSpline({ degree, knots, controls }))
         return { kind: 'spline', layer, degree, knots: [...knots], controls };
       const fit = (raw.fitPoints ?? []).filter(valid);
       return fit.length > 1
@@ -428,20 +427,6 @@ export function transformPrimitive(primitive: Primitive, m: Matrix): Primitive {
     }
   }
 }
-/** The larger side of the box around some points, for tolerances relative to a drawing. */
-function extent(points: readonly Point[]): number {
-  let x0 = Infinity,
-    y0 = Infinity,
-    x1 = -Infinity,
-    y1 = -Infinity;
-  for (const p of points) {
-    x0 = Math.min(x0, p.x);
-    y0 = Math.min(y0, p.y);
-    x1 = Math.max(x1, p.x);
-    y1 = Math.max(y1, p.y);
-  }
-  return Math.max(x1 - x0, y1 - y0, 1e-9);
-}
 
 /** The points a cutter passes, with chords within `tolerance` of each curve. A closed path ends
  * where it starts. Text has no path. */
@@ -479,44 +464,6 @@ function ellipsePoints(e: Extract<Primitive, { kind: 'ellipse' }>, tolerance: nu
       y: e.center.y + e.u.y * Math.cos(t) + e.v.y * Math.sin(t),
     });
   }
-  return points;
-}
-/** De Boor evaluation, subdivided until each chord's midpoint is within `tolerance`. */
-function splinePoints(s: Extract<Primitive, { kind: 'spline' }>, tolerance: number): Point[] {
-  const { degree, knots, controls } = s;
-  const low = knots[degree]!,
-    high = knots[controls.length]!;
-  const at = (t: number): Point => {
-    let span = degree;
-    while (span < controls.length - 1 && t >= knots[span + 1]!) span++;
-    const d = Array.from({ length: degree + 1 }, (_, j) => ({ ...controls[span - degree + j]! }));
-    for (let r = 1; r <= degree; r++)
-      for (let j = degree; j >= r; j--) {
-        const i = span - degree + j;
-        const denominator = knots[i + degree - r + 1]! - knots[i]!;
-        const alpha = denominator ? (t - knots[i]!) / denominator : 0;
-        d[j] = {
-          x: (1 - alpha) * d[j - 1]!.x + alpha * d[j]!.x,
-          y: (1 - alpha) * d[j - 1]!.y + alpha * d[j]!.y,
-        };
-      }
-    return d[degree]!;
-  };
-  const breaks = [...new Set(knots.slice(degree, controls.length + 1))].filter(
-    (t) => t >= low && t <= high,
-  );
-  const points: Point[] = [at(low)];
-  const refine = (t0: number, p0: Point, t1: number, p1: Point, depth: number) => {
-    const tm = (t0 + t1) / 2,
-      pm = at(tm);
-    const chord = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-    if (depth < 12 && (depth < 2 || Math.hypot(pm.x - chord.x, pm.y - chord.y) > tolerance)) {
-      refine(t0, p0, tm, pm, depth + 1);
-      refine(tm, pm, t1, p1, depth + 1);
-    } else points.push(p1);
-  };
-  for (let i = 0; i + 1 < breaks.length; i++)
-    refine(breaks[i]!, at(breaks[i]!), breaks[i + 1]!, at(breaks[i + 1]!), 0);
   return points;
 }
 function polylinePoints(p: Extract<Primitive, { kind: 'polyline' }>, tolerance: number): Point[] {

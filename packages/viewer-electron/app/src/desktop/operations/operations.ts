@@ -20,7 +20,12 @@ import {
 } from '../../domain/files/inspection';
 import { macFiles, type TrashReceipt, type ReceiptAccess } from '../native/macos-files';
 import { createArchive, extractArchive } from './archive-jobs';
-import { OperationLog, outputProof, type OperationReceipt } from './operation-journal';
+import {
+  OperationLog,
+  outputProof,
+  outputProofLimit,
+  type OperationReceipt,
+} from './operation-journal';
 import {
   verifyReviewedFile,
   type ReviewedFile,
@@ -94,6 +99,8 @@ interface Task {
   redo?: OperationRequest;
   /** Runs as exclusive work rather than from the queue (a text save), counted once as pending. */
   exclusive?: boolean;
+  /** Outputs too large for Undo to prove unchanged, so Undo leaves them. */
+  unproven?: string[];
 }
 /** How an item ended without failing: done, skipped at its collision prompt, or kept as it was
  * because an optimized candidate came out no smaller. */
@@ -135,6 +142,21 @@ const creatingKinds: readonly OperationKind[] = [
   'extract',
   'convert',
 ];
+/** What a job says of the outputs Undo leaves, and what the person can do with them: each is a
+ * new copy, its originals untouched. */
+function unprovenNote(outputs: readonly string[], undoable: boolean): string {
+  const limit = outputProofLimit.toLocaleString('en-US');
+  if (outputs.length === 1) {
+    const name = `“${path.basename(outputs[0]!)}”`;
+    return undoable
+      ? `Undo leaves out ${name}, which holds more than ${limit} items. Move it to the Trash to remove it.`
+      : `Undo is not offered: ${name} holds more than ${limit} items. Move it to the Trash to remove it; the originals are unchanged.`;
+  }
+  const folders = `${outputs.length.toLocaleString('en-US')} folders`;
+  return undoable
+    ? `Undo leaves out ${folders} that hold more than ${limit} items each. Move them to the Trash to remove them.`
+    : `Undo is not offered: ${folders} hold more than ${limit} items each. Move them to the Trash to remove them; the originals are unchanged.`;
+}
 const changedOnDisk = () =>
   Object.assign(
     new Error('The file changed on disk since it was opened. Reload it, or save over it.'),
@@ -551,7 +573,7 @@ export class Operations {
             await this.access([file, folder]);
             const existing = await lstat(file);
             if (existing.isSymbolicLink())
-              throw new Error('Save to the file a symbolic link points to, rather than the link.');
+              throw new Error('This is a symbolic link: save to the file it points to.');
             if (!existing.isFile()) throw new Error('Only a regular file can be saved over.');
             if (!sameSourceVersion(expected.version, sourceVersion(await entry(file))))
               throw changedOnDisk();
@@ -1704,6 +1726,7 @@ export class Operations {
     }
     if (!move && creatingKinds.includes(task.request.kind)) {
       const proof = await outputProof(destination);
+      if (!proof) (task.unproven ??= []).push(destination);
       if (proof) {
         const info = await lstat(destination);
         task.undo.push({
@@ -1728,6 +1751,7 @@ export class Operations {
     const { job } = task;
     job.status = task.abort.signal.aborted ? 'cancelled' : failure ? 'failed' : 'completed';
     job.undoable = !!task.undo.length;
+    if (task.unproven) job.detail = unprovenNote(task.unproven, job.undoable);
     job.current = undefined;
     const recovery = task.intent ?? failure?.intent;
     if (recovery) job.recovery = recovery;
