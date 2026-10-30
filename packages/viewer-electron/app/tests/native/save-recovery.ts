@@ -18,6 +18,7 @@ import {
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { NativeInteractions } from './runtime/interactions';
+import { countOf, focus, textOf } from './runtime/page';
 
 assert.equal(process.platform, 'darwin');
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
@@ -132,9 +133,9 @@ try {
   await launch();
   const selector = '[data-file-path=' + JSON.stringify(file) + ']';
   await actions!.click('.folder-explorer ' + selector);
-  await connection!.evaluate('document.querySelector(".folder-explorer").focus()');
+  await connection!.evaluate(focus('.folder-explorer'));
   await actions!.key(' ', 'Space');
-  await actions!.button('Open linked plane', 'document.querySelector(".quick-preview-dialog")');
+  await actions!.button('Open linked plane', '.quick-preview-dialog');
   await actions!.palette('Edit text');
   await actions!.text('.text-editing .cm-content', edited);
   const pane = await until(
@@ -195,10 +196,7 @@ try {
   await launch(true);
   await actions!.palette(name);
   await until(
-    () =>
-      connection!.evaluate<string>(
-        'document.querySelector(".text-editing .cm-content")?.textContent || ""',
-      ),
+    () => connection!.evaluate(textOf('.text-editing .cm-content')),
     (text) => text.includes('Saved edit, verified'),
     'Restored generated draft',
   );
@@ -212,10 +210,7 @@ try {
     600_000,
   );
   await until(
-    () =>
-      connection!.evaluate<number>(
-        'document.querySelectorAll(".text-editing-toolbar .primary").length',
-      ),
+    () => connection!.evaluate(countOf('.text-editing-toolbar .primary')),
     (count) => count === 0,
     'Editor acknowledged the completed save',
     30_000,
@@ -247,18 +242,12 @@ try {
   await launch();
   await actions!.palette(name);
   await until(
-    () =>
-      connection!.evaluate<string>('document.querySelector(".preview-plane")?.textContent || ""'),
+    () => connection!.evaluate(textOf('.preview-plane')),
     (text) => text.includes(savedText.split('\n')[0]!),
     'Saved bytes restored after cold restart',
   );
   assert.equal(await readFile(file, 'utf8'), savedText);
-  assert.equal(
-    await connection!.evaluate<number>(
-      'document.querySelectorAll(".text-editing-toolbar .primary").length',
-    ),
-    0,
-  );
+  assert.equal(await connection!.evaluate(countOf('.text-editing-toolbar .primary')), 0);
   assert.equal(
     (await saved()).workspaces[0]!.panes.filter(
       (item) => item.type === 'preview' && item.bufferID === pane.bufferID,

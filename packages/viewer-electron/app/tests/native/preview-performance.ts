@@ -7,6 +7,8 @@ import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { animationFrames, click, countOf, exists } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -80,6 +82,83 @@ await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1,
   flag: 'wx',
 });
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
+
+interface PreviewWindow {
+  __previewLongTasks: number[];
+  __previewObserver?: PerformanceObserver;
+  __filterObserver?: MutationObserver;
+  __filterMilliseconds?: number;
+}
+
+/** Records long tasks from now on, then selects the row and focuses the folder list. */
+function selectRecordingLongTasks(row: string): void {
+  const page = window as unknown as PreviewWindow;
+  page.__previewLongTasks = [];
+  page.__previewObserver?.disconnect();
+  page.__previewObserver = new PerformanceObserver((list) =>
+    page.__previewLongTasks.push(...list.getEntries().map((entry) => entry.duration)),
+  );
+  page.__previewObserver.observe({ type: 'longtask' });
+  document.querySelector<HTMLElement>(row)!.click();
+  document.querySelector<HTMLElement>('.folder-explorer')!.focus();
+}
+
+function previewRendered(selector: string, word: string): boolean {
+  const element = document.querySelector(selector);
+  return (
+    !!element &&
+    !document.querySelector('.quick-preview .loading') &&
+    element.textContent.includes(word)
+  );
+}
+
+const longTasks = () => (window as unknown as PreviewWindow).__previewLongTasks;
+
+/** Clears the long tasks and times the table filter from its first input to one matching row. */
+function watchFilter(filterText: string): void {
+  const page = window as unknown as PreviewWindow;
+  page.__previewLongTasks = [];
+  const input = document.querySelector<HTMLInputElement>('[aria-label="Filter table rows"]')!;
+  input.focus();
+  input.select();
+  page.__filterMilliseconds = undefined;
+  let start: number | undefined;
+  input.addEventListener(
+    'input',
+    () => {
+      start = performance.now();
+    },
+    { once: true, capture: true },
+  );
+  const root = document.querySelector('.quick-preview .data-viewer')!;
+  page.__filterObserver?.disconnect();
+  const observer = new MutationObserver(() => {
+    const count = root.querySelector('.preview-toolbar .muted')?.textContent || '';
+    if (
+      start !== undefined &&
+      count.startsWith('1 rows') &&
+      input.value === filterText &&
+      root.textContent.includes(filterText)
+    ) {
+      page.__filterMilliseconds = performance.now() - start;
+      observer.disconnect();
+    }
+  });
+  observer.observe(root, { subtree: true, childList: true, characterData: true });
+  page.__filterObserver = observer;
+}
+
+function filterSettled(filterText: string): boolean {
+  const page = window as unknown as PreviewWindow;
+  return (
+    Number.isFinite(page.__filterMilliseconds) &&
+    document.querySelector<HTMLInputElement>('[aria-label="Filter table rows"]')!.value ===
+      filterText
+  );
+}
+
+const filterMilliseconds = () => (window as unknown as PreviewWindow).__filterMilliseconds;
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [];
@@ -88,20 +167,15 @@ try {
   const { evaluate, command } = connection;
   await command('Performance.enable');
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+    () => evaluate(countOf('[data-file-path]')),
     (count) => count === targets.length,
     'performance fixtures',
   );
   for (const target of targets)
     for (let trial = 0; trial < 3; trial++) {
-      await evaluate(`(() => {
-      window.__previewLongTasks = [];
-      window.__previewObserver?.disconnect();
-      window.__previewObserver = new PerformanceObserver(list => window.__previewLongTasks.push(...list.getEntries().map(entry => entry.duration)));
-      window.__previewObserver.observe({type: 'longtask'});
-      const row = document.querySelector(${JSON.stringify(`[data-file-path="${path.join(files, target.name)}"]`)});
-      row.click(); document.querySelector('.folder-explorer').focus();
-    })()`);
+      await evaluate(
+        pageCall(selectRecordingLongTasks, `[data-file-path="${path.join(files, target.name)}"]`),
+      );
       const before = await command<{ metrics: { name: string; value: number }[] }>(
         'Performance.getMetrics',
       );
@@ -115,19 +189,19 @@ try {
         });
       await until(
         () =>
-          evaluate<boolean>(`(() => {
-      const element = document.querySelector(${JSON.stringify(target.selector)});
-      return !!element && !document.querySelector('.quick-preview .loading') &&
-        ${target.name.endsWith('.obj') ? "element.textContent.includes('triangles')" : "element.textContent.includes('rows')"};
-    })()`),
+          evaluate(
+            pageCall(
+              previewRendered,
+              target.selector,
+              target.name.endsWith('.obj') ? 'triangles' : 'rows',
+            ),
+          ),
         Boolean,
         target.name + ' rendered',
         20000,
       );
-      await evaluate(
-        'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-      );
-      const tasks = await evaluate<number[]>('window.__previewLongTasks');
+      await evaluate(animationFrames(2));
+      const tasks = await evaluate(pageCall(longTasks));
       const after = await command<{ metrics: { name: string; value: number }[] }>(
         'Performance.getMetrics',
       );
@@ -152,37 +226,16 @@ try {
       console.log(JSON.stringify(result));
       if (target.name.endsWith('.csv')) {
         const filterText = 'Generated detail record ' + (54999 - trial);
-        await evaluate(`(() => {
-          window.__previewLongTasks = [];
-          const input = document.querySelector('[aria-label="Filter table rows"]');
-          input.focus(); input.select();
-          window.__filterMilliseconds = undefined;
-          let start;
-          input.addEventListener('input', () => { start = performance.now(); }, {once: true, capture: true});
-          const root = document.querySelector('.quick-preview .data-viewer');
-          window.__filterObserver?.disconnect();
-          const observer = new MutationObserver(() => {
-            const count = root.querySelector('.preview-toolbar .muted')?.textContent || '';
-            if (start !== undefined && count.startsWith('1 rows') && input.value === ${JSON.stringify(filterText)} && root.textContent.includes(${JSON.stringify(filterText)})) {
-              window.__filterMilliseconds = performance.now() - start;
-              observer.disconnect();
-            }
-          });
-          observer.observe(root, {subtree: true, childList: true, characterData: true});
-          window.__filterObserver = observer;
-        })()`);
+        await evaluate(pageCall(watchFilter, filterText));
         const filterStart = performance.now();
         await command('Input.insertText', { text: filterText });
         await until(
-          () =>
-            evaluate<boolean>(
-              `Number.isFinite(window.__filterMilliseconds) && document.querySelector('[aria-label="Filter table rows"]').value === ${JSON.stringify(filterText)}`,
-            ),
+          () => evaluate(pageCall(filterSettled, filterText)),
           Boolean,
           'filtered source row',
         );
-        const tasks = await evaluate<number[]>('window.__previewLongTasks');
-        const rendererMilliseconds = await evaluate<number>('window.__filterMilliseconds');
+        const tasks = await evaluate(pageCall(longTasks));
+        const rendererMilliseconds = await evaluate(pageCall(filterMilliseconds));
         const filtered = {
           file: target.name,
           trial,
@@ -195,12 +248,10 @@ try {
         observations.push(filtered);
         console.log(JSON.stringify(filtered));
       }
-      await evaluate(
-        'document.querySelector(\'.quick-preview-dialog [aria-label="Close"]\').click()',
-      );
+      await evaluate(click('.quick-preview-dialog [aria-label="Close"]'));
       await until(
-        () => evaluate<boolean>('!document.querySelector(".quick-preview-dialog")'),
-        Boolean,
+        () => evaluate(exists('.quick-preview-dialog')),
+        (open) => !open,
         'preview closes',
       );
       await command('HeapProfiler.collectGarbage');

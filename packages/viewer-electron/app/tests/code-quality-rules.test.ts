@@ -80,6 +80,39 @@ describe('import order', () => {
   });
 });
 
+describe('typed page code', () => {
+  const migrated = 'tests/native/runtime/interactions.ts';
+  const message = 'Pass page code to evaluate through pageCall or tests/native/runtime/page.ts.';
+
+  it.each([
+    ['a string', "await connection.evaluate('document.title');"],
+    ['a typed string', "await connection!.evaluate<string>('document.title');"],
+    ['a template', 'await evaluate(`document.title`);'],
+    ['a tagged template', 'await evaluate(String.raw`document.title`);'],
+    ['a concatenation', "await evaluate('document.' + name);"],
+  ])('refuses %s in a migrated file', async (_kind, code) => {
+    const [result] = await eslint.lintText(code, { filePath: migrated });
+    expect(result?.messages).toContainEqual(
+      expect.objectContaining({ ruleId: 'no-restricted-syntax', message }),
+    );
+  });
+
+  it('accepts a page function', async () => {
+    const [result] = await eslint.lintText(
+      'await connection.evaluate(pageCall(() => document.title));',
+      { filePath: migrated },
+    );
+    expect(result?.messages).toEqual([]);
+  });
+
+  it('leaves a file that is not yet migrated alone', async () => {
+    const [result] = await eslint.lintText("await connection.evaluate('document.title');", {
+      filePath: 'tests/native/page-policy-fixture.ts',
+    });
+    expect(result?.messages).toEqual([]);
+  });
+});
+
 describe('sandboxed preload', () => {
   const preload = readFileSync('src/preload.ts', 'utf8');
 

@@ -2,12 +2,14 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
+import { CURRENT_STATE_VERSION, type Resource, type SavedState } from '../../src/domain/contracts';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { localSamples } from '../../tools/playground/catalog';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { click, exists } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -65,34 +67,86 @@ const state: SavedState = {
 };
 await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1, settings, ui }));
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state));
+
+/** Leases a file, and an Office file's document, reporting the phase reached within 5 s. */
+async function leasePreview(file: string) {
+  const start = performance.now();
+  let phase = 'resource';
+  const work = (async () => {
+    const resource = await window.viewer.resource(file);
+    try {
+      if (/\.(docx|xlsx)$/.test(resource.entry.name)) {
+        phase = 'document';
+        await window.viewer.document(resource.id);
+      }
+      return { phase: 'ready', milliseconds: performance.now() - start };
+    } finally {
+      await window.viewer.release(resource.id);
+    }
+  })();
+  const timeout = new Promise<{ phase: string; milliseconds: number }>((resolve) =>
+    setTimeout(() => resolve({ phase, milliseconds: performance.now() - start }), 5000),
+  );
+  return Promise.race([work, timeout]);
+}
+
+function selectRow(file: string): void {
+  const row = [...document.querySelectorAll<HTMLElement>('[data-file-path]')].find(
+    (row) => row.dataset.filePath === file,
+  );
+  if (!row) throw new Error('Missing fixture row');
+  row.click();
+  row.focus();
+}
+
+function officeViewChoices(): boolean {
+  return [...document.querySelectorAll('.preview-toolbar button')].some((button) =>
+    ['Layout', 'Print layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
+  );
+}
+
+function pressToolbarButton(label: string): void {
+  [...document.querySelectorAll<HTMLElement>('.preview-toolbar button')]
+    .find((button) => button.textContent.trim() === label)!
+    .click();
+}
+
+const previewMarkup = () =>
+  document.querySelector('.quick-preview-dialog')?.outerHTML.slice(0, 5000) ??
+  document.body.innerText.slice(0, 3000);
+
+/** Opens a document while 16 paused streams of a large file hold their leases. */
+async function overlappedPreview(held: string, file: string) {
+  const resources: Resource[] = [];
+  const responses: Response[] = [];
+  try {
+    for (let n = 0; n < 16; n++) resources.push(await window.viewer.resource(held));
+    responses.push(...(await Promise.all(resources.map((resource) => fetch(resource.url)))));
+    const ready = window.viewer.resource(file).then(async (resource) => {
+      await window.viewer.document(resource.id);
+      await window.viewer.release(resource.id);
+      return { phase: 'ready' };
+    });
+    const starved = new Promise<{ phase: string }>((resolve) =>
+      setTimeout(() => resolve({ phase: 'starved' }), 5000),
+    );
+    return await Promise.race([ready, starved]);
+  } finally {
+    await Promise.all(responses.map((response) => response.body?.cancel().catch(() => {})));
+    await Promise.all(resources.map((resource) => window.viewer.release(resource.id)));
+  }
+}
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [];
 try {
   connection = await app.connect();
   const { evaluate, command } = connection;
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".file-table")'),
-    Boolean,
-    'folder ready',
-  );
+  await until(() => evaluate(exists('.file-table')), Boolean, 'folder ready');
   for (let index = 0; index < 30; index += 1) {
     const file = files[index % files.length]!;
-    const observation = await evaluate<{ phase: string; milliseconds: number }>(`(async () => {
-      const start = performance.now();
-      let phase = 'resource';
-      const work = (async () => {
-        const resource = await window.viewer.resource(${JSON.stringify(file.path)});
-        try {
-          if (/\\.(docx|xlsx)$/.test(resource.entry.name)) {
-            phase = 'document';
-            await window.viewer.document(resource.id);
-          }
-          return { phase: 'ready', milliseconds: performance.now() - start };
-        } finally { await window.viewer.release(resource.id); }
-      })();
-      return Promise.race([work, new Promise(resolve => setTimeout(() => resolve({ phase, milliseconds: performance.now() - start }), 5000))]);
-    })()`);
+    const observation = await evaluate(pageCall(leasePreview, file.path));
     observations.push({ index, file: path.basename(file.path), ...observation });
     console.log(JSON.stringify(observations.at(-1)));
     assert.equal(observation.phase, 'ready', 'Every preview request completes without starvation');
@@ -120,12 +174,7 @@ try {
     const slot = index % files.length;
     const file = files[slot]!;
     const start = performance.now();
-    await evaluate(`(() => {
-      const row = [...document.querySelectorAll('[data-file-path]')].find(row => row.dataset.filePath === ${JSON.stringify(file.path)});
-      if (!row) throw new Error('Missing fixture row');
-      row.click();
-      row.focus();
-    })()`);
+    await evaluate(pageCall(selectRow, file.path));
     await command('Input.dispatchKeyEvent', {
       type: 'keyDown',
       key: ' ',
@@ -139,35 +188,18 @@ try {
       windowsVirtualKeyCode: 32,
     });
     if (file.path.endsWith('.docx')) {
-      await until(
-        () =>
-          evaluate<boolean>(
-            `[...document.querySelectorAll('.preview-toolbar button')].some(button=>['Layout','Print layout','Reading','Sheet'].includes(button.textContent.trim()))`,
-          ),
-        Boolean,
-        'Office view choices',
-      );
-      await evaluate(
-        '[...document.querySelectorAll(".preview-toolbar button")].find(b=>b.textContent.trim()==="Reading").click()',
-      );
+      await until(() => evaluate(pageCall(officeViewChoices)), Boolean, 'Office view choices');
+      await evaluate(pageCall(pressToolbarButton, 'Reading'));
     }
     try {
       await until(
-        () =>
-          evaluate<boolean>(
-            `!!document.querySelector(${JSON.stringify('.quick-preview ' + selectors[slot])})`,
-          ),
+        () => evaluate(exists('.quick-preview ' + selectors[slot])),
         Boolean,
         `Quick Preview ${path.basename(file.path)}`,
         5000,
       );
     } catch (error) {
-      console.log(
-        'Preview DOM:',
-        await evaluate(
-          'document.querySelector(".quick-preview-dialog")?.outerHTML.slice(0,5000) ?? document.body.innerText.slice(0,3000)',
-        ),
-      );
+      console.log('Preview DOM:', await evaluate(pageCall(previewMarkup)));
       throw error;
     }
     observations.push({
@@ -192,19 +224,17 @@ try {
           windowsVirtualKeyCode: 39,
         });
         await until(
-          () => evaluate<boolean>('!!document.querySelector(".quick-preview .preview-host")'),
+          () => evaluate(exists('.quick-preview .preview-host')),
           Boolean,
           'stepped preview ready',
           5000,
         );
       }
     }
-    await evaluate(
-      'document.querySelector(\'.quick-preview-dialog [aria-label="Close"]\').click()',
-    );
+    await evaluate(click('.quick-preview-dialog [aria-label="Close"]'));
     await until(
-      () => evaluate<boolean>('!document.querySelector(".quick-preview-dialog")'),
-      Boolean,
+      () => evaluate(exists('.quick-preview-dialog')),
+      (open) => !open,
       'preview closed',
     );
     await until(
@@ -244,23 +274,9 @@ try {
     'Closed previews do not accumulate detached view trees',
   );
   observations.push({ kind: 'retained-memory', snapshots: memory });
-  const overlapped = await evaluate<{ phase: string }>(`(async () => {
-    const resources = [];
-    const responses = [];
-    try {
-      for (let n = 0; n < 16; n++) resources.push(await window.viewer.resource(${JSON.stringify(path.join(folder, 'Held payload.bin'))}));
-      responses.push(...await Promise.all(resources.map(resource => fetch(resource.url))));
-      const ready = window.viewer.resource(${JSON.stringify(files[0]!.path)}).then(async resource => {
-        await window.viewer.document(resource.id);
-        await window.viewer.release(resource.id);
-        return { phase: 'ready' };
-      });
-      return await Promise.race([ready, new Promise(resolve => setTimeout(() => resolve({ phase: 'starved' }), 5000))]);
-    } finally {
-      await Promise.all(responses.map(response => response.body?.cancel().catch(() => {})));
-      await Promise.all(resources.map(resource => window.viewer.release(resource.id)));
-    }
-  })()`);
+  const overlapped = await evaluate(
+    pageCall(overlappedPreview, path.join(folder, 'Held payload.bin'), files[0]!.path),
+  );
   observations.push({ kind: 'stream-overlap', ...overlapped });
   console.log(JSON.stringify(observations.at(-1)));
   assert.equal(

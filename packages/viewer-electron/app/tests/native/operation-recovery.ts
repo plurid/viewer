@@ -3,16 +3,13 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { chmod, lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import {
-  CURRENT_STATE_VERSION,
-  type OperationJob,
-  type SavedState,
-} from '../../src/domain/contracts';
+import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { operationJournal } from '../../src/desktop/operations/operation-journal';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -95,6 +92,9 @@ await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1,
   flag: 'wx',
 });
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
+const listJobs = () => window.viewer.jobs();
+const makeFolder = (destination: string, name: string) =>
+  window.viewer.operate({ kind: 'mkdir', sources: [], destination, name });
 const observations: unknown[] = [];
 let failedID = '';
 await chmod(blocked, 0o555);
@@ -106,7 +106,7 @@ try {
       connection = await app.connect();
       const { evaluate } = connection;
       const recovered = await until(
-        () => evaluate<OperationJob[]>('window.viewer.jobs()'),
+        () => evaluate(pageCall(listJobs)),
         (jobs) => jobs.some((job) => job.id === interrupted),
         'interrupted receipt loaded',
       );
@@ -115,11 +115,9 @@ try {
       assert.equal(prior.recovery?.staging, staging);
       assert.match(prior.errors.at(-1)!.message, /Interrupted operation/);
       if (launch === 0) {
-        failedID = await evaluate<string>(
-          `window.viewer.operate({kind: 'mkdir', sources: [], destination: ${JSON.stringify(blocked)}, name: 'Must not appear'})`,
-        );
+        failedID = await evaluate(pageCall(makeFolder, blocked, 'Must not appear'));
         const jobs = await until(
-          () => evaluate<OperationJob[]>('window.viewer.jobs()'),
+          () => evaluate(pageCall(listJobs)),
           (jobs) => jobs.some((job) => job.id === failedID && job.status === 'failed'),
           'POSIX write refusal',
         );
@@ -127,11 +125,9 @@ try {
         assert.equal(failed.completed.length, 0);
         assert.ok(failed.errors.length > 0);
         observations.push({ kind: 'permission-refusal', job: failed });
-        const nextID = await evaluate<string>(
-          `window.viewer.operate({kind: 'mkdir', sources: [], destination: ${JSON.stringify(destination)}, name: 'Queue still works'})`,
-        );
+        const nextID = await evaluate(pageCall(makeFolder, destination, 'Queue still works'));
         const next = await until(
-          () => evaluate<OperationJob[]>('window.viewer.jobs()'),
+          () => evaluate(pageCall(listJobs)),
           (jobs) => jobs.some((job) => job.id === nextID && job.status === 'completed'),
           'queue recovers after failure',
         );

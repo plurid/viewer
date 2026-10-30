@@ -28,6 +28,31 @@ const noEmDash = [
   'TemplateElement[value.raw=/\u2014/]',
   'JSXText[value=/\u2014/]',
 ].map((selector) => ({ selector, message: dashMessage }));
+// Page code is a typed function (tests/native/runtime/page-function.ts): a string escapes the type
+// check and the formatter. Each migrated file joins the list and stays migrated.
+const pageCode = {
+  selector:
+    'CallExpression:matches([callee.name="evaluate"], [callee.property.name="evaluate"])' +
+    '[arguments.0.type=/^(Literal|TemplateLiteral|TaggedTemplateExpression|BinaryExpression)$/]',
+  message: 'Pass page code to evaluate through pageCall or tests/native/runtime/page.ts.',
+};
+const typedPageFiles = [
+  'tests/native/runtime/interactions.ts',
+  'tests/native/preview-latency.ts',
+  'tests/native/responsiveness.ts',
+  'tests/native/raw-thumbnails.ts',
+  'tests/native/browser-accessibility.ts',
+  'tests/native/operation-recovery.ts',
+  'tests/native/save-recovery.ts',
+  'tests/native/image-isolation.ts',
+  'tests/native/document-navigation.ts',
+  'tests/native/scenarios/performance.ts',
+  'tests/native/spatial-surface.ts',
+  'tests/native/cli.ts',
+  'tests/native/preview-lifecycle.ts',
+  'tests/native/preview-performance.ts',
+  'tests/native/office-layout.ts',
+];
 export default tseslint.config(
   { ignores: ['.vite/**', 'out/**', 'node_modules/**'] },
   ...tseslint.configs.recommended,
@@ -38,6 +63,10 @@ export default tseslint.config(
   {
     files: ['tests/**/*.ts', 'tests/**/*.tsx', 'tools/**/*.ts', '*.ts'],
     rules: { 'no-restricted-syntax': ['error', importType, ...removal] },
+  },
+  {
+    files: typedPageFiles,
+    rules: { 'no-restricted-syntax': ['error', importType, ...removal, pageCode] },
   },
   {
     files: ['src/renderer/**/*.ts', 'src/renderer/**/*.tsx', 'src/renderer.tsx'],

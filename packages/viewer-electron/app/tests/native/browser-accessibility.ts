@@ -9,6 +9,9 @@ import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { click, focus, textOf, valueOf } from './runtime/page';
+import type { PageExpression } from './runtime/page-function';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -59,8 +62,8 @@ try {
   connection = await app.connect();
   const { command, evaluate } = connection;
   await until(
-    () => evaluate<string>('document.querySelector(".browser-status")?.textContent'),
-    (text) => !!text?.includes('Semantic page fixture'),
+    () => evaluate(textOf('.browser-status')),
+    (text) => text.includes('Semantic page fixture'),
     'spatial page ready',
   );
   const targets = async () =>
@@ -69,7 +72,7 @@ try {
       url: string;
     }[];
   const original = new Set((await targets()).map((target) => target.id));
-  await evaluate('document.querySelector(".browser-status button").click()');
+  await evaluate(click('.browser-status button'));
   const target = await until(
     async () => (await targets()).find((target) => target.url === url && !original.has(target.id)),
     Boolean,
@@ -96,11 +99,13 @@ try {
       nodes.some((node) => node.role === role && node.name === name),
       `${role}: ${name}`,
     );
-  const page = <T>(expression: string) => evaluate<T>(expression, { sessionId });
-  assert.deepEqual(await page('[typeof window.viewer, typeof window.require]'), [
-    'undefined',
-    'undefined',
-  ]);
+  const page = <R>(expression: PageExpression<R>) => evaluate(expression, { sessionId });
+  const globals = () => [
+    typeof window.viewer,
+    typeof (window as unknown as { require?: unknown }).require,
+  ];
+  const activeTag = () => document.activeElement?.tagName;
+  assert.deepEqual(await page(pageCall(globals)), ['undefined', 'undefined']);
   await command('Emulation.setFocusEmulationEnabled', { enabled: true }, sessionId);
   const key = async (key: string, code: string, windowsVirtualKeyCode: number) => {
     for (const type of ['keyDown', 'keyUp'])
@@ -118,24 +123,24 @@ try {
   };
   // Seed document focus because hidden windows have no OS/compositor hit-test focus.
   // Text entry, Tab traversal and activation below still use Chromium input events.
-  await page('document.querySelector("input").focus()');
+  await page(focus('input'));
   await until(
-    () => page<string>('document.activeElement.tagName'),
+    () => page(pageCall(activeTag)),
     (tag) => tag === 'INPUT',
     'page field focus',
   );
-  assert.equal(await page('document.activeElement.tagName'), 'INPUT');
+  assert.equal(await page(pageCall(activeTag)), 'INPUT');
   await command('Input.insertText', { text: 'Typed into the page' }, sessionId);
-  assert.equal(await page('document.querySelector("input").value'), 'Typed into the page');
+  assert.equal(await page(valueOf('input')), 'Typed into the page');
   await key('Tab', 'Tab', 9);
   await until(
-    () => page<string>('document.activeElement.tagName'),
+    () => page(pageCall(activeTag)),
     (tag) => tag === 'BUTTON',
     'Tab to page button',
   );
   await key('Enter', 'Enter', 13);
   await until(
-    () => page<string>('document.querySelector("p").textContent'),
+    () => page(textOf('p')),
     (text) => text === 'Submitted',
     'page button activation',
   );

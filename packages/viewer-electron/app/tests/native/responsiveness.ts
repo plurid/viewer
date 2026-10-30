@@ -30,6 +30,7 @@ import {
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { reactCommitProbe } from '../react-commits';
+import { animationFrames, countOf } from './runtime/page';
 import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
@@ -302,7 +303,7 @@ async function observe(
   await connection.evaluate(pageCall(beginProbe));
   const detail = (await run()) ?? {};
   await delay(settle);
-  const probe = await connection.evaluate<ReturnType<typeof finishProbe>>(pageCall(finishProbe));
+  const probe = await connection.evaluate(pageCall(finishProbe));
   const after = await reportAfter(launched, Date.now());
   const during = reportsIn(launched.output()).filter(
     (report) => report.time > before.time && report.time <= after.time,
@@ -450,7 +451,7 @@ async function coldStart(index: number) {
   try {
     const marks = await until(
       () =>
-        connection.evaluate<Record<string, number>>(
+        connection.evaluate(
           pageCall(() =>
             Object.fromEntries(
               performance
@@ -497,8 +498,7 @@ async function key(connection: Connection, key: string, code: string, modifiers 
 }
 
 async function frames(connection: Connection, count = 2) {
-  for (let frame = 0; frame < count; frame++)
-    await connection.evaluate('new Promise((resolve) => requestAnimationFrame(resolve))');
+  for (let frame = 0; frame < count; frame++) await connection.evaluate(animationFrames(1));
 }
 
 async function interactive(): Promise<Observation[]> {
@@ -520,13 +520,13 @@ async function interactive(): Promise<Observation[]> {
     await connection.command('Page.addScriptToEvaluateOnNewDocument', { source: reactCommitProbe });
     await connection.command('Page.reload');
     await until(
-      () => connection.evaluate<number>('document.querySelectorAll(".plane-controls").length'),
+      () => connection.evaluate(countOf('.plane-controls')),
       (count) => count === 3,
       'three planes after the probe reload',
       30_000,
     );
     await until(
-      () => connection.evaluate<{ running: boolean }>('window.viewer.indexStatus()'),
+      () => connection.evaluate(pageCall(() => window.viewer.indexStatus())),
       (status) => !status.running,
       'an idle index before measuring',
       120_000,
@@ -535,17 +535,13 @@ async function interactive(): Promise<Observation[]> {
 
     for (const [index, pane] of ['files', 'grid', 'docs', 'files', 'grid', 'docs'].entries())
       await run(`plane-click-${index + 1}`, async () => {
-        const point = await connection.evaluate<{ x: number; y: number } | null>(
-          pageCall(headerPoint, pane),
-        );
+        const point = await connection.evaluate(pageCall(headerPoint, pane));
         assert.ok(point, `A free spot in the ${pane} plane header`);
         await mouse(connection, point);
       });
 
     const firstRow = `[data-file-path=${JSON.stringify(documents[0])}]`;
-    const row = await connection.evaluate<{ x: number; y: number } | null>(
-      pageCall(centre, firstRow),
-    );
+    const row = await connection.evaluate(pageCall(centre, firstRow));
     assert.ok(row, 'The first document row on screen');
     await mouse(connection, row);
     await frames(connection);
@@ -556,7 +552,7 @@ async function interactive(): Promise<Observation[]> {
         await frames(connection, 1);
       }
       await delay(100);
-      const latencies = await connection.evaluate<number[]>(pageCall(changeLatencies));
+      const latencies = await connection.evaluate(pageCall(changeLatencies));
       return {
         latency: { p50: percentile(latencies, 0.5), p95: percentile(latencies, 0.95) },
         missed: latencies.filter((latency) => latency < 0).length,
@@ -567,10 +563,8 @@ async function interactive(): Promise<Observation[]> {
       await key(connection, 'k', 'KeyK', 4);
       await until(
         () =>
-          connection.evaluate<boolean>(
-            'document.activeElement?.getAttribute("aria-label") === "Search commands"',
-          ),
-        Boolean,
+          connection.evaluate(pageCall(() => document.activeElement?.getAttribute('aria-label'))),
+        (label) => label === 'Search commands',
         'the command palette',
       );
       await connection.evaluate(pageCall(watchChanges, 'results'));
@@ -579,7 +573,7 @@ async function interactive(): Promise<Observation[]> {
         await frames(connection, 1);
       }
       await delay(300);
-      const latencies = await connection.evaluate<number[]>(pageCall(changeLatencies));
+      const latencies = await connection.evaluate(pageCall(changeLatencies));
       await key(connection, 'Escape', 'Escape');
       return {
         latency: { p50: percentile(latencies, 0.5), p95: percentile(latencies, 0.95) },
@@ -590,9 +584,7 @@ async function interactive(): Promise<Observation[]> {
     await run(
       'open-300-thumbnails',
       async () => {
-        const point = await connection.evaluate<{ x: number; y: number } | null>(
-          pageCall(centre, picturesTile),
-        );
+        const point = await connection.evaluate(pageCall(centre, picturesTile));
         if (!point)
           throw new Error(
             'The Pictures tile is not on screen: ' +
@@ -621,9 +613,7 @@ async function interactive(): Promise<Observation[]> {
                 ),
               ),
           );
-        const timing = connection.evaluate<Record<string, number>>(
-          pageCall(watchFolder, folders.pictures, true),
-        );
+        const timing = connection.evaluate(pageCall(watchFolder, folders.pictures, true));
         await mouse(connection, point, 2);
         return { timing: await timing };
       },
@@ -632,19 +622,15 @@ async function interactive(): Promise<Observation[]> {
 
     const largeRow = `[data-file-path=${JSON.stringify(folders.large)}]`;
     await run('open-10k-folder', async () => {
-      const point = await connection.evaluate<{ x: number; y: number } | null>(
-        pageCall(centre, largeRow),
-      );
+      const point = await connection.evaluate(pageCall(centre, largeRow));
       assert.ok(point, 'The Large folder row on screen');
-      const timing = connection.evaluate<Record<string, number>>(
-        pageCall(watchFolder, folders.large, false),
-      );
+      const timing = connection.evaluate(pageCall(watchFolder, folders.large, false));
       await mouse(connection, point, 2);
       return { timing: await timing };
     });
 
     await run('scroll-10k-folder', async () => {
-      const point = await connection.evaluate<{ x: number; y: number } | null>(
+      const point = await connection.evaluate(
         pageCall(centre, `[data-file-path^=${JSON.stringify(folders.large + '/')}]`),
       );
       assert.ok(point, 'A Large folder row on screen');
@@ -687,7 +673,7 @@ async function interactive(): Promise<Observation[]> {
     );
 
     await until(
-      () => connection.evaluate<{ running: boolean }>('window.viewer.indexStatus()'),
+      () => connection.evaluate(pageCall(() => window.viewer.indexStatus())),
       (status) => !status.running,
       'an idle index after the copy',
       120_000,

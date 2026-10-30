@@ -227,7 +227,7 @@ async function verifyRestoredTask(
       'Restored Git tool',
     );
     await actions.click('[aria-label="Review changes"]');
-    await actions.button('Unstaged', 'document.querySelector(".choice-menu")');
+    await actions.button('Unstaged', '.choice-menu');
     await until(
       () => evaluate<number>('document.querySelectorAll(".git-review-hunk").length'),
       (count) => count === 2,
@@ -285,7 +285,7 @@ try {
   await actions.field('New branch name', 'feature/generated-task');
   await actions.field('Worktree destination', checkout);
   await capture('branch-task-form');
-  await actions.button('Create task', 'document.querySelector("dialog")');
+  await actions.button('Create task', 'dialog');
   await until(
     async () => (await saved()).workspaces[0]?.taskAreas?.[0]?.members.length,
     (count) => count === 4,
@@ -341,14 +341,14 @@ try {
     const row = [...document.querySelectorAll('.task-tool-row')].find(row => row.textContent.includes('Git changes'));
     row.querySelector('button').click();
   })()`);
-  await actions.button('Refresh', 'document.querySelector(".git-review")');
+  await actions.button('Refresh', '.git-review');
   await until(
     () => evaluate<number>('document.querySelectorAll(".git-review-hunk").length'),
     (count) => count === 2,
     'Two review hunks',
   );
   await capture('hunk-review');
-  await actions.button('Stage hunk 1', 'document.querySelector(".git-review")');
+  await actions.button('Stage hunk 1', '.git-review');
   await until(
     async () => git(checkout, 'show', ':source.txt'),
     (text) => text === original.replace('line 2\n', 'first edit\n'),
@@ -364,8 +364,8 @@ try {
     'Review ready after staging',
   );
   await evaluate(`document.querySelector('[aria-label="Review changes"]').click()`);
-  await actions.button('Staged', 'document.querySelector(".choice-menu")');
-  await actions.button('Unstage hunk 1', 'document.querySelector(".git-review")');
+  await actions.button('Staged', '.choice-menu');
+  await actions.button('Unstage hunk 1', '.git-review');
   await until(
     async () => git(checkout, 'show', ':source.txt'),
     (text) => text === original,
@@ -380,7 +380,7 @@ try {
   await actions.palette('Generated workflow');
   await actions.field('Run label', 'literal $(touch marker) {directory}');
   await capture('workflow-parameters');
-  await actions.button('Run', 'document.querySelector(".command-parameters")');
+  await actions.button('Run', '.command-parameters');
   await until(
     async () => readFile(path.join(checkout, 'order.txt'), 'utf8').catch(() => ''),
     (text) => text === 'test\nbuild\n',
@@ -419,8 +419,8 @@ try {
     realpath,
   );
   await actions.palette('Generated branch task');
-  await actions.button('Attach conversation…', 'document.querySelector(".task-plane")');
-  await actions.button('Attach', 'document.querySelector(".session-library")');
+  await actions.button('Attach conversation…', '.task-plane');
+  await actions.button('Attach', '.session-library');
   await until(
     () => evaluate<string>('document.querySelector(".session-reported-status")?.textContent'),
     (text) => text?.includes('Reported waiting'),
@@ -502,7 +502,7 @@ try {
     'Note Trash presenter',
   );
   await capture('note-trash-cancel');
-  await actions.button('Cancel', `document.querySelector('dialog[aria-label="Move to Trash?"]')`);
+  await actions.button('Cancel', 'dialog[aria-label="Move to Trash?"]');
   checks.push(
     'Agent session attaches to task, shows reported status and opens linked source; note Trash presenter cancelled',
   );

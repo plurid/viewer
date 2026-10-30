@@ -13,6 +13,9 @@ import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { defaultSettings } from '../../src/domain/services';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { animationFrames, countOf, exists, focus, textOf } from './runtime/page';
+import type { PageExpression } from './runtime/page-function';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -23,9 +26,9 @@ const profile = path.join(root, 'Profile'),
   shared = path.join(root, 'Shared'),
   outside = path.join(root, 'Outside');
 await Promise.all([profile, shared, outside].map((file) => mkdir(file, { mode: 0o700 })));
-const document = path.join(shared, 'Résumé.txt'),
+const tracked = path.join(shared, 'Résumé.txt'),
   privateFile = path.join(outside, 'Private.txt');
-await writeFile(document, 'Generated original content with a unique quartzmatch phrase.\n', {
+await writeFile(tracked, 'Generated original content with a unique quartzmatch phrase.\n', {
   flag: 'wx',
 });
 await writeFile(privateFile, 'Generated private fixture.\n', { flag: 'wx' });
@@ -49,7 +52,7 @@ const git = (...args: string[]) =>
 await git('init', '--initial-branch=main', '--template=');
 await git('add', '--', 'Résumé.txt');
 await git('commit', '--no-verify', '--no-gpg-sign', '-m', 'Generated baseline');
-await writeFile(document, 'Generated changed content with a unique quartzmatch phrase.\n');
+await writeFile(tracked, 'Generated changed content with a unique quartzmatch phrase.\n');
 const indexBefore = await readFile(path.join(shared, '.git/index'));
 const workflow = path.join(shared, 'viewer.workflow.jsonc');
 await writeFile(
@@ -220,6 +223,26 @@ const sha = async (file: string) =>
     .update(await readFile(file))
     .digest('hex');
 result.archiveSha256 = await sha(path.resolve(binary, '../../Resources/app.asar'));
+
+/** Whether the review's two footer buttons lie inside the window, and are wide when `wide` is set. */
+function reviewButtonsFit(wide: boolean): boolean {
+  const buttons = [...document.querySelectorAll('.agent-review-dialog footer button')];
+  return (
+    buttons.length === 2 &&
+    buttons.every((button) => {
+      const rect = button.getBoundingClientRect();
+      return (
+        (!wide || rect.width > 40) &&
+        rect.bottom <= innerHeight &&
+        rect.left >= 0 &&
+        rect.right <= innerWidth
+      );
+    })
+  );
+}
+
+const focusedText = () => (document.activeElement?.textContent ?? '').trim();
+
 let app: Awaited<ReturnType<typeof ownedApp>> | undefined;
 let connection: Awaited<ReturnType<NonNullable<typeof app>['connect']>> | undefined;
 try {
@@ -237,12 +260,8 @@ try {
   checks.push('Offline help, version, shell syntax, missing-token and usage exit codes');
   app = await ownedApp(binary, profile);
   connection = await app.connect();
-  const evaluate = <T>(expression: string) => connection!.evaluate<T>(expression);
-  await until(
-    () => evaluate<number>("document.querySelectorAll('.folder-explorer').length"),
-    Boolean,
-    'Generated folder',
-  );
+  const evaluate = <R>(expression: PageExpression<R>) => connection!.evaluate(expression);
+  await until(() => evaluate(countOf('.folder-explorer')), Boolean, 'Generated folder');
   await until(
     () => readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8').catch(() => ''),
     Boolean,
@@ -255,7 +274,7 @@ try {
   const denied = await cli(['read', privateFile]);
   assert.equal(denied.code, 1);
   assert.ok(!denied.stdout.includes('Generated private fixture.'));
-  assert.ok(JSON.stringify(await successful(['read', document])).includes('quartzmatch'));
+  assert.ok(JSON.stringify(await successful(['read', tracked])).includes('quartzmatch'));
   const found = await until(
     () =>
       successful<{ entries: { path: string }[]; evidence?: { quote: string }[] }>([
@@ -265,7 +284,7 @@ try {
         shared,
         '--content',
       ]),
-    (value) => value.entries.some((file) => file.path === document),
+    (value) => value.entries.some((file) => file.path === tracked),
     'Indexed original-content search',
     20000,
   );
@@ -301,7 +320,7 @@ try {
   assert.equal(task.workspaceID, 'generated-cli');
   assert.match(task.commit, /^[0-9a-f]{40}$/);
   await until(
-    () => evaluate<string>("document.querySelector('.agent-review-dialog')?.textContent || ''"),
+    () => evaluate(textOf('.agent-review-dialog')),
     (text) => text.includes('Create task from branch') && text.includes('feature/cli'),
     'Parameterized task review',
   );
@@ -324,9 +343,7 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await evaluate(
-      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-    );
+    await evaluate(animationFrames(2));
     const shot = await connection.command<{ data: string }>('Page.captureScreenshot', {
       format: 'png',
     });
@@ -336,17 +353,12 @@ try {
     );
     await writeFile(file, Buffer.from(shot.data, 'base64'), { flag: 'wx' });
     captures.push(file);
-    assert.equal(
-      await evaluate<boolean>(
-        "(()=>{const buttons=[...document.querySelectorAll('.agent-review-dialog footer button')];return buttons.length===2&&buttons.every(b=>{const r=b.getBoundingClientRect();return r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth})})()",
-      ),
-      true,
-    );
+    assert.equal(await evaluate(pageCall(reviewButtonsFit, false)), true);
   }
   await successful(['review', 'cancel', task.id]);
   await until(
-    () => evaluate<boolean>("!document.querySelector('.agent-review-dialog')"),
-    Boolean,
+    () => evaluate(exists('.agent-review-dialog')),
+    (open) => !open,
     'Task proposal cancellation',
   );
   checks.push(
@@ -372,7 +384,7 @@ try {
   assert.equal(typeof speech.runtime.recognitionAvailable, 'boolean');
   const pending = await successful<{ id: string }>(['speech', 'install', 'whisper-tiny']);
   await until(
-    () => evaluate<string>("document.querySelector('.agent-review-dialog')?.textContent || ''"),
+    () => evaluate(textOf('.agent-review-dialog')),
     (text) => text.includes('Download model'),
     'Speech setup review',
   );
@@ -386,31 +398,24 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await evaluate(
-      'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-    );
+    await evaluate(animationFrames(2));
     const screenshot = await connection.command<{ data: string }>('Page.captureScreenshot', {
       format: 'png',
     });
     const file = path.join(root, 'speech-review-' + name + '.png');
     await writeFile(file, Buffer.from(screenshot.data, 'base64'), { flag: 'wx' });
     captures.push(file);
-    const controls = await evaluate<boolean>(
-      `(() => {const buttons=[...document.querySelectorAll('.agent-review-dialog footer button')];return buttons.length===2&&buttons.every(b=>{const r=b.getBoundingClientRect();return r.width>40&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth})})()`,
-    );
+    const controls = await evaluate(pageCall(reviewButtonsFit, true));
     assert.equal(controls, true, 'Review controls remain within the window');
   }
-  await evaluate("document.querySelector('.agent-review-dialog footer button').focus()");
+  await evaluate(focus('.agent-review-dialog footer button'));
   for (const type of ['keyDown', 'keyUp'])
     await connection.command('Input.dispatchKeyEvent', { type, key: 'Tab', code: 'Tab' });
-  assert.equal(
-    await evaluate<string>('document.activeElement.textContent.trim()'),
-    'Download model',
-  );
+  assert.equal(await evaluate(pageCall(focusedText)), 'Download model');
   await successful(['review', 'cancel', pending.id]);
   await until(
-    () => evaluate<boolean>("!document.querySelector('.agent-review-dialog')"),
-    Boolean,
+    () => evaluate(exists('.agent-review-dialog')),
+    (open) => !open,
     'Cancelled proposal dismissed',
   );
   assert.equal(

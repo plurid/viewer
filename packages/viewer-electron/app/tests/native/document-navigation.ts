@@ -11,6 +11,8 @@ import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { localSamples } from '../../tools/playground/catalog';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { click, countOf, exists, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -77,6 +79,33 @@ await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1,
   flag: 'wx',
 });
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
+
+interface ReadyWindow {
+  __documentReadyMilliseconds: number | null;
+}
+
+/** Selects `row` and times, from now, the frame after `ready` shows without a spinner. */
+function armDocumentTiming(row: string, ready: string): void {
+  const element = document.querySelector<HTMLElement>(row)!;
+  element.click();
+  element.focus();
+  const page = window as unknown as ReadyWindow;
+  page.__documentReadyMilliseconds = null;
+  const started = performance.now();
+  const observer = new MutationObserver(() => {
+    if (!document.querySelector(ready) || document.querySelector('.quick-preview-dialog .loading'))
+      return;
+    observer.disconnect();
+    requestAnimationFrame(() => {
+      page.__documentReadyMilliseconds = performance.now() - started;
+    });
+  });
+  observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+}
+
+const documentReadyMilliseconds = () =>
+  (window as unknown as ReadyWindow).__documentReadyMilliseconds;
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: { file: string; trial: number; milliseconds: number }[] = [];
@@ -91,7 +120,7 @@ try {
     mobile: false,
   });
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+    () => evaluate(countOf('[data-file-path]')),
     (count) => count === 3,
     'Generated document rows',
   );
@@ -100,22 +129,16 @@ try {
       await command('Input.dispatchKeyEvent', { type, key, code, windowsVirtualKeyCode: virtual });
   };
   const open = async (name: string, selector: string) => {
-    await evaluate(`(() => {
-      const row = document.querySelector(${JSON.stringify(`[data-file-path="${path.join(files, name)}"]`)});
-      row.click(); row.focus();
-      window.__documentReadyMilliseconds = null;
-      const started = performance.now();
-      const observer = new MutationObserver(() => {
-        const ready = document.querySelector(${JSON.stringify('.quick-preview-dialog ' + selector)});
-        if (!ready || document.querySelector('.quick-preview-dialog .loading')) return;
-        observer.disconnect();
-        requestAnimationFrame(() => { window.__documentReadyMilliseconds = performance.now() - started; });
-      });
-      observer.observe(document.body, { subtree: true, childList: true, characterData: true });
-    })()`);
+    await evaluate(
+      pageCall(
+        armDocumentTiming,
+        `[data-file-path="${path.join(files, name)}"]`,
+        '.quick-preview-dialog ' + selector,
+      ),
+    );
     await key(' ', 'Space', 32);
     return until(
-      () => evaluate<number | null>('window.__documentReadyMilliseconds'),
+      () => evaluate(pageCall(documentReadyMilliseconds)),
       (value) => typeof value === 'number',
       'Document ready ' + name,
       20000,
@@ -124,8 +147,8 @@ try {
   const close = async () => {
     await key('Escape', 'Escape', 27);
     await until(
-      () => evaluate<boolean>('!document.querySelector(".quick-preview-dialog")'),
-      Boolean,
+      () => evaluate(exists('.quick-preview-dialog')),
+      (shown) => !shown,
       'Quick Preview closed',
     );
   };
@@ -147,12 +170,9 @@ try {
   ]) {
     const cold = await open(target.file, target.selector);
     observations.push({ file: target.file, trial: 0, milliseconds: cold! });
-    await evaluate(`document.querySelector(${JSON.stringify(target.select)}).click()`);
+    await evaluate(click(target.select));
     await until(
-      () =>
-        evaluate<string>(
-          `document.querySelector(${JSON.stringify(target.restored)})?.textContent || ''`,
-        ),
+      () => evaluate(textOf(target.restored)),
       (text) => text.trim() === target.expected,
       'Changed document position',
     );
@@ -161,9 +181,7 @@ try {
       await open('Other.txt', '.code-scroll');
       await close();
       const milliseconds = await open(target.file, target.selector);
-      const restored = await evaluate<string>(
-        `document.querySelector(${JSON.stringify(target.restored)})?.textContent || ''`,
-      );
+      const restored = await evaluate(textOf(target.restored));
       assert.equal(restored.trim(), target.expected, 'Retained chapter or worksheet');
       observations.push({ file: target.file, trial, milliseconds: milliseconds! });
       await close();

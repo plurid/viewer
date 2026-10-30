@@ -1,5 +1,8 @@
+import type { PageExpression } from './page-function';
+
 /** Typed CDP and bounded observation ports shared by native scenarios. */
 export interface NativeScenarioHarness {
+  evaluate<R>(expression: PageExpression<R>): Promise<Awaited<R>>;
   evaluate<T>(expression: string): Promise<T>;
   command<T = Record<string, unknown>>(
     method: string,

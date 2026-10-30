@@ -9,6 +9,8 @@ import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { temporaryRoot } from '../../tools/temporary';
 import { localSamples } from '../../tools/playground/catalog';
 import { ownedApp, until } from '../owned-app';
+import { click, countOf, exists } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -69,6 +71,63 @@ await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1,
   flag: 'wx',
 });
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
+
+/** Thumbnails and renditions of one image through the private decoder, then their release. */
+async function privateImage(file: string) {
+  const sizes: { size: number; width: number; height: number; milliseconds: number }[] = [];
+  for (const size of [128, 512, 128]) {
+    const start = performance.now();
+    const image = new Image();
+    image.src = await window.viewer.thumbnail(file, size);
+    await image.decode();
+    if (!image.naturalWidth || Math.max(image.naturalWidth, image.naturalHeight) > size)
+      throw new Error('Invalid private thumbnail');
+    sizes.push({
+      size,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      milliseconds: performance.now() - start,
+    });
+  }
+  const source = await window.viewer.resource(file);
+  const children: string[] = [];
+  try {
+    for (let index = 0; index < 3; index++) {
+      const rendered = await window.viewer.imageRendition(source.id);
+      children.push(rendered.url);
+      if (rendered.derivation?.kind !== 'image') throw new Error('Not a private rendition');
+      const image = new Image();
+      image.src = rendered.url;
+      await image.decode();
+      if (!image.naturalWidth) throw new Error('Empty rendition');
+      await window.viewer.release(rendered.id);
+    }
+  } finally {
+    await window.viewer.release(source.id);
+  }
+  const expired = await Promise.all(
+    children.map((url) =>
+      fetch(url).then(
+        (reply) => !reply.ok,
+        () => true,
+      ),
+    ),
+  );
+  if (expired.some((value) => !value)) throw new Error('Released image remains readable');
+  return { sizes, expired };
+}
+
+/** Selects a row, then focuses the folder list, where Space opens Quick Preview. */
+function selectRow(selector: string): void {
+  document.querySelector<HTMLElement>(selector)!.click();
+  document.querySelector<HTMLElement>('.folder-explorer')!.focus();
+}
+
+function previewImageShown(): boolean {
+  const image = document.querySelector<HTMLImageElement>('.quick-preview .image-stage img');
+  return !!image?.complete && image.naturalWidth > 0;
+}
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [];
@@ -76,44 +135,14 @@ try {
   connection = await app.connect();
   const { evaluate, command } = connection;
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+    () => evaluate(countOf('[data-file-path]')),
     (count) => count === inputs.length,
     'image fixture list',
   );
   for (const { file } of inputs) {
-    const outcome = await evaluate(`(async () => {
-      const file = ${JSON.stringify(file)};
-      const sizes = [];
-      for (const size of [128, 512, 128]) {
-        const start = performance.now();
-        const image = new Image();
-        image.src = await window.viewer.thumbnail(file, size);
-        await image.decode();
-        if (!image.naturalWidth || Math.max(image.naturalWidth, image.naturalHeight) > size)
-          throw new Error('Invalid private thumbnail');
-        sizes.push({size, width: image.naturalWidth, height: image.naturalHeight, milliseconds: performance.now() - start});
-      }
-      const source = await window.viewer.resource(file);
-      const children = [];
-      try {
-        for (let index = 0; index < 3; index++) {
-          const rendered = await window.viewer.imageRendition(source.id);
-          children.push(rendered.url);
-          if (rendered.derivation?.kind !== 'image') throw new Error('Not a private rendition');
-          const image = new Image(); image.src = rendered.url; await image.decode();
-          if (!image.naturalWidth) throw new Error('Empty rendition');
-          await window.viewer.release(rendered.id);
-        }
-      } finally { await window.viewer.release(source.id); }
-      const expired = await Promise.all(children.map(url => fetch(url).then(reply => !reply.ok, () => true)));
-      if (expired.some(value => !value)) throw new Error('Released image remains readable');
-      return {sizes, expired};
-    })()`);
+    const outcome = await evaluate(pageCall(privateImage, file));
     observations.push({ file: path.basename(file), outcome });
-    await evaluate(`(() => {
-      const row = document.querySelector(${JSON.stringify(`[data-file-path="${file}"]`)});
-      row.click(); document.querySelector('.folder-explorer').focus();
-    })()`);
+    await evaluate(pageCall(selectRow, `[data-file-path="${file}"]`));
     for (const type of ['keyDown', 'keyUp'])
       await command('Input.dispatchKeyEvent', {
         type,
@@ -121,15 +150,7 @@ try {
         code: 'Space',
         windowsVirtualKeyCode: 32,
       });
-    await until(
-      () =>
-        evaluate<boolean>(`(() => {
-      const image = document.querySelector('.quick-preview .image-stage img');
-      return !!image?.complete && image.naturalWidth > 0;
-    })()`),
-      Boolean,
-      'rendered image pixels',
-    );
+    await until(() => evaluate(pageCall(previewImageShown)), Boolean, 'rendered image pixels');
     if (file.endsWith('.heic') || file.endsWith('.exr')) {
       const image = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
       await writeFile(
@@ -138,12 +159,10 @@ try {
         { flag: 'wx' },
       );
     }
-    await evaluate(
-      'document.querySelector(\'.quick-preview-dialog [aria-label="Close"]\').click()',
-    );
+    await evaluate(click('.quick-preview-dialog [aria-label="Close"]'));
     await until(
-      () => evaluate<boolean>('!document.querySelector(".quick-preview-dialog")'),
-      Boolean,
+      () => evaluate(exists('.quick-preview-dialog')),
+      (open) => !open,
       'preview closed',
     );
   }

@@ -114,6 +114,12 @@ restoration/recovery, mixed workspaces, task workflows, media and other features
 same preservation variables and candidate binary. Their result identifies retained inputs, captures
 and failures.
 
+Scenario drivers pass page code as typed functions: `pageCall(fn, ...args)` from
+`tests/native/runtime/page-function.ts`, or a one-selector read or action from
+`tests/native/runtime/page.ts`. The page code is then type-checked against the DOM and formatted.
+The function may use only its own body and its arguments, which travel as JSON. `eslint.config.mjs`
+lists the drivers written this way and refuses string page code in them.
+
 Mixed-workspace auditing supports 3–50 close/reopen cycles and optional heap snapshots. Track
 retaining paths and owned lifetimes, not just total DOM counts. The known OrbitControls and
 shared-texture leaks have separate regressions.

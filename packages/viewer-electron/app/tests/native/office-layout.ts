@@ -12,6 +12,8 @@ import { officeLayoutSamples } from '../../tools/playground/office-layout';
 import { qualificationSamples } from '../../tools/playground/qualification-samples';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { officeFontFixture } from '../fixtures/office-fonts';
+import { focus, textOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -38,23 +40,60 @@ const hash = async (file: string) =>
     .update(await readFile(file))
     .digest('hex');
 type Connection = Awaited<ReturnType<Awaited<ReturnType<typeof ownedApp>>['connect']>>;
+
+/** The page canvas, how many of every fourth pixel carry ink, the page count and any error. */
+function paintedPage() {
+  const canvas = document.querySelector<HTMLCanvasElement>('.pdf-sheet canvas');
+  const input = document.querySelector<HTMLInputElement>('.page-number');
+  const error = document.querySelector('[data-office-layout] .empty-state')?.textContent;
+  if (!canvas?.width || !input) return { width: 0, height: 0, ink: 0, pages: 0, error };
+  const bytes = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+  let ink = 0;
+  for (let index = 0; index < bytes.length; index += 16)
+    if (bytes[index + 3] && Math.min(bytes[index]!, bytes[index + 1]!, bytes[index + 2]!) < 235)
+      ink++;
+  return { width: canvas.width, height: canvas.height, ink, pages: Number(input.max), error };
+}
+
+function officeViewChoices(): boolean {
+  return [...document.querySelectorAll('.preview-toolbar button')].some((button) =>
+    ['Layout', 'Print layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
+  );
+}
+
+function pressToolbarButton(label: string): void {
+  [...document.querySelectorAll<HTMLElement>('.preview-toolbar button')]
+    .find((button) => button.textContent.trim() === label)!
+    .click();
+}
+
+const worksheetNames = () =>
+  [...document.querySelectorAll('.worksheet-tabs [role=tab]')].map((tab) => tab.textContent);
+
+/** Lays the file out again, warm, and returns the PDF as base64 with its timing. */
+async function warmLayout(file: string) {
+  const parent = await window.viewer.resource(file);
+  try {
+    const start = performance.now();
+    const output = await window.viewer.officeLayout(parent.id, { requestID: crypto.randomUUID() });
+    const bytes = new Uint8Array(await (await fetch(output.url)).arrayBuffer());
+    let content = '';
+    for (let index = 0; index < bytes.length; index += 32768)
+      content += String.fromCharCode(...bytes.subarray(index, index + 32768));
+    return {
+      milliseconds: performance.now() - start,
+      bytes: bytes.byteLength,
+      kind: output.derivation?.kind,
+      pdf: btoa(content),
+    };
+  } finally {
+    await window.viewer.release(parent.id);
+  }
+}
+
 async function painted(connection: Connection) {
   return until(
-    () =>
-      connection.evaluate<{
-        width: number;
-        height: number;
-        ink: number;
-        pages: number;
-        error?: string;
-      }>(`(() => {
-    const canvas=document.querySelector('.pdf-sheet canvas'), input=document.querySelector('.page-number');
-    const error=document.querySelector('[data-office-layout] .empty-state')?.textContent;
-    if(!canvas?.width||!input) return {width:0,height:0,ink:0,pages:0,error};
-    const bytes=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
-    let ink=0;for(let i=0;i<bytes.length;i+=16) if(bytes[i+3]&&Math.min(bytes[i],bytes[i+1],bytes[i+2])<235)ink++;
-    return {width:canvas.width,height:canvas.height,ink,pages:Number(input.max),error};
-  })()`),
+    () => connection.evaluate(pageCall(paintedPage)),
     (value) => {
       if (value.error) throw Error(value.error);
       return value.ink > 30;
@@ -137,22 +176,11 @@ try {
         mobile: false,
       });
       if (name.endsWith('.xlsx')) {
-        await until(
-          () =>
-            evaluate<boolean>(
-              `[...document.querySelectorAll('.preview-toolbar button')].some(button=>['Layout','Print layout','Reading','Sheet'].includes(button.textContent.trim()))`,
-            ),
-          Boolean,
-          'Office mode controls',
-        );
-        await evaluate(
-          '[...document.querySelectorAll(".preview-toolbar button")].find(b=>b.textContent.trim()==="Print layout").click()',
-        );
+        await until(() => evaluate(pageCall(officeViewChoices)), Boolean, 'Office mode controls');
+        await evaluate(pageCall(pressToolbarButton, 'Print layout'));
       }
       const first = await painted(connection);
-      const firstText = await evaluate<string>(
-        'document.querySelector(".textLayer")?.textContent||""',
-      );
+      const firstText = await evaluate(textOf('.textLayer'));
       const loadMilliseconds = performance.now() - started;
       const screenshot = await command<{ data: string }>('Page.captureScreenshot', {
         format: 'png',
@@ -162,11 +190,9 @@ try {
       });
       let sheets: string[] = [];
       if (/\.xlsx?$/.test(name)) {
-        sheets = await evaluate<string[]>(
-          '[...document.querySelectorAll(".worksheet-tabs [role=tab]")].map(t=>t.textContent)',
-        );
+        sheets = await evaluate(pageCall(worksheetNames));
         assert.ok(sheets.length > 1, 'Public workbook has navigable worksheets');
-        await evaluate('document.querySelector(".worksheet-tabs [role=tab]").focus()');
+        await evaluate(focus('.worksheet-tabs [role=tab]'));
         for (const type of ['keyDown', 'keyUp'])
           await command('Input.dispatchKeyEvent', {
             type,
@@ -175,33 +201,19 @@ try {
             windowsVirtualKeyCode: 39,
           });
         await until(
-          () =>
-            evaluate<string>(
-              'document.querySelector(".worksheet-tabs [aria-selected=true]")?.textContent',
-            ),
+          () => evaluate(textOf('.worksheet-tabs [aria-selected=true]')),
           (text) => text === sheets[1],
           'Selected second worksheet',
         );
         await painted(connection);
-        const secondText = await evaluate<string>(
-          'document.querySelector(".textLayer")?.textContent||""',
-        );
+        const secondText = await evaluate(textOf('.textLayer'));
         assert.notEqual(secondText, firstText, 'Changing sheets changes rendered source content');
-        assert.equal(await evaluate<string>('document.activeElement?.textContent'), sheets[1]);
+        assert.equal(
+          await evaluate(pageCall(() => document.activeElement?.textContent)),
+          sheets[1],
+        );
       }
-      const warm = await evaluate<{
-        milliseconds: number;
-        bytes: number;
-        kind: string;
-        pdf: string;
-      }>(`(async()=>{
-        const parent=await window.viewer.resource(${JSON.stringify(file)});
-        try {const start=performance.now();const output=await window.viewer.officeLayout(parent.id,{requestID:crypto.randomUUID()});
-          const bytes=new Uint8Array(await (await fetch(output.url)).arrayBuffer());
-          let content='';for(let index=0;index<bytes.length;index+=32768)content+=String.fromCharCode(...bytes.subarray(index,index+32768));
-          return {milliseconds:performance.now()-start,bytes:bytes.byteLength,kind:output.derivation.kind,pdf:btoa(content)};
-        } finally {await window.viewer.release(parent.id);}
-      })()`);
+      const warm = await evaluate(pageCall(warmLayout, file));
       assert.equal(warm.kind, 'office');
       assert.ok(warm.bytes > 100);
       const { pdf, ...warmTiming } = warm;
@@ -231,20 +243,20 @@ try {
         }
       }
       if (generated) {
-        const visible = await evaluate<string>('document.querySelector(".textLayer")?.textContent');
+        const visible = await evaluate(textOf('.textLayer'));
         assert.ok(visible.includes('日本語の明朝体'));
         assert.ok(visible.includes('한국어 고딕체'));
         const bytes = Buffer.from(pdf, 'base64');
         assert.ok(bytes.includes(Buffer.from('NotoSerifCJKjp-Regular')));
         assert.ok(bytes.includes(Buffer.from('NotoSansCJKkr-Regular')));
       }
+      // Each conversion warms one spare engine for the next document (office-renderer.ts); any
+      // more would be engines left behind.
       const targets = await command<{ targetInfos: { url: string }[] }>('Target.getTargets');
-      assert.equal(
-        targets.targetInfos.filter((t) => /^http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{48}\/$/.test(t.url))
-          .length,
-        0,
-        'Engine windows terminate after conversion',
-      );
+      const engines = targets.targetInfos.filter((t) =>
+        /^http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]{48}\/$/.test(t.url),
+      ).length;
+      assert.ok(engines <= 1, `Conversion engines terminate; only the spare stays (${engines})`);
       assert.equal(await hash(file), before, 'Source bytes preserved');
       observations.push({
         name,
@@ -264,7 +276,7 @@ try {
       if (connection) {
         await writeFile(
           path.join(root, name + '-failure.txt'),
-          await connection.evaluate<string>('document.body.innerText'),
+          await connection.evaluate(pageCall(() => document.body.innerText)),
           { flag: 'wx' },
         );
         const image = await connection.command<{ data: string }>('Page.captureScreenshot', {

@@ -290,7 +290,7 @@ try {
       true,
     );
   }
-  await actions.button('Cancel', 'document.querySelector(".task-request-dialog")');
+  await actions.button('Cancel', '.task-request-dialog');
   checks.push(
     'Typed task command opens editable parameters; scrolling retains reachable actions at desktop and minimum size; cancel makes no second worktree',
   );

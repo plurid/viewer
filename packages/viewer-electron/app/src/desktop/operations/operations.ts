@@ -8,6 +8,7 @@ import path from 'node:path';
 import type {
   CollisionDecision,
   OperationJob,
+  OperationKind,
   OperationProgress,
   OperationRequest,
 } from '../../domain/contracts';
@@ -31,18 +32,9 @@ import { MAX_TEXT_BYTES, textChangedCode } from '../../domain/editing/documents'
 import { fileCoordination } from '../files/file-coordination';
 import { removeEmptyDirectory, unlinkVerified } from './removal';
 import { ProtectedPaths } from '../files/protected-paths';
-import {
-  conversionOutput,
-  convertibleExtensions,
-  unavailableConverter,
-  type ImageConverter,
-} from './image-convert';
+import { convertibleExtensions, unavailableConverter, type ImageConverter } from './image-convert';
 import { holds, sameItem, unchanged, type Replaced } from '../files/item-identity';
-import {
-  validateTransform,
-  transformExtension,
-  combinedTransform,
-} from '../../domain/operations/transforms';
+import { validateTransform, combinedTransform } from '../../domain/operations/transforms';
 import type { TransformExecutor } from '../transforms/transforms';
 import type { OptimizationStatistics } from '../../domain/operations/optimization-target';
 import {
@@ -54,6 +46,7 @@ import {
   type CopyFingerprint,
   type TransferJob,
 } from './file-transfer';
+import { guardDestination, outputName, sameItemAt, singleOutput } from './destinations';
 import { isActiveJob } from '../../domain/operations/jobs';
 import { errorMessage } from '../../domain/errors';
 
@@ -90,6 +83,41 @@ interface Task {
   /** Runs as exclusive work rather than from the queue (a text save), counted once as pending. */
   exclusive?: boolean;
 }
+/** How an item ended without failing: done, skipped at its collision prompt, or kept as it was
+ * because an optimized candidate came out no smaller. */
+type ItemOutcome = 'done' | 'skipped' | 'kept';
+type Statistics = OptimizationStatistics & { optimized: boolean };
+/** What making an item's output did, for its Undo and its record. */
+interface Made {
+  /** The item itself moved within its volume, which Undo reverses; through a hidden intermediate
+   * name when only the case of its name changed. */
+  movedInPlace?: boolean;
+  caseOnly?: boolean;
+  statistics?: Statistics;
+}
+/** What making an output resolves with: what was made, or `kept` when the original stays. */
+type Produced = Made | 'kept';
+/** An output made in a private stage beside its destination, then published there. */
+interface Staged {
+  prefix: string;
+  /** Kept by the staged file: its extension picks a conversion's encoding. */
+  extension?: string;
+  replaced?: Replaced;
+  /** Checked again inside the claim that publishes the output. */
+  guard?: () => Promise<void>;
+}
+/** Kinds whose item makes a new output, which Undo moves to the Trash once proven unchanged. */
+const creatingKinds: readonly OperationKind[] = [
+  'copy',
+  'transfer',
+  'duplicate',
+  'alias',
+  'mkdir',
+  'mkfile',
+  'compress',
+  'extract',
+  'convert',
+];
 const changedOnDisk = () =>
   Object.assign(
     new Error('The file changed on disk since it was opened. Reload it, or save over it.'),
@@ -398,11 +426,7 @@ export class Operations {
       }
     }
     // A PDF is one output from every source; other conversions create one file per image.
-    const single =
-      ['mkdir', 'mkfile', 'compress'].includes(request.kind) ||
-      (request.kind === 'convert' &&
-        (request.conversion === 'pdf' || combinedTransform(request.transform)));
-    const task = this.add({ ...request, sources: roots }, single ? 1 : roots.length);
+    const task = this.add({ ...request, sources: roots }, singleOutput(request) ? 1 : roots.length);
     task.reviewedFile = reviewedFile;
     this.queue.push(task);
     void this.run();
@@ -1237,10 +1261,11 @@ export class Operations {
           'Partial temporary content could not be moved to the Trash, so it was kept here for inspection.',
       });
   }
+  /** Runs queued jobs one at a time until the queue is empty or a receipt cannot be saved. */
   private async run(): Promise<void> {
     if (this.running) return;
     this.running = true;
-    let currentTask: Task | undefined;
+    let current: Task | undefined;
     try {
       await this.load();
       while (this.queue.length) {
@@ -1249,388 +1274,395 @@ export class Operations {
           await new Promise<void>((resolve) => this.settled.push(resolve));
         const task = this.queue.shift();
         if (!task) break;
-        currentTask = task;
+        current = task;
         this.active = task;
         this.settle();
-        const { job, request } = task;
-        job.status = 'running';
-        this.emit(task);
-        const single =
-          ['mkdir', 'mkfile', 'compress'].includes(request.kind) ||
-          (request.kind === 'convert' &&
-            (request.conversion === 'pdf' || combinedTransform(request.transform)));
-        const items = single ? [''] : request.sources;
-        for (const source of items) {
-          const priorErrors = job.errors.length;
-          try {
-            this.check(task);
-            await this.access(
-              [source, request.destination].filter((file): file is string => !!file),
-            );
-            await this.checkPins(task, source);
-            job.current = source || request.destination;
-            task.intent = { source, destination: request.destination };
-            // Each intent is made durable immediately before the first change it covers;
-            // Trash is the only change that follows directly.
-            if (request.kind === 'trash') await this.checkpoint(task);
-            this.progress(task);
-            let destination: string | undefined;
-            let statistics: (OptimizationStatistics & { optimized: boolean }) | undefined;
-            // A transfer moves only within one volume. Its destination folder is resolved, as
-            // the transfer itself resolves it, so a link to a folder on another volume copies.
-            const move =
-              request.kind === 'move' ||
-              request.kind === 'rename' ||
-              (request.kind === 'transfer' &&
-                (await lstat(source)).dev === (await stat(request.destination!)).dev);
-            let undoable = false,
-              caseOnly = false;
-            if (request.kind === 'trash') await this.protection.check(source, 'moved to the Trash');
-            else if (move) await this.protection.check(source, 'moved or renamed');
-            if (request.kind === 'trash') await this.trashItem(task, source);
-            else {
-              destination = single
-                ? path.join(request.destination!, validName(request.name!))
-                : request.kind === 'convert'
-                  ? request.transform
-                    ? path.join(
-                        request.destination || path.dirname(source),
-                        request.name && request.sources.length === 1
-                          ? validName(request.name)
-                          : path.basename(source, path.extname(source)) +
-                              (request.transform.kind === 'pdf' ||
-                              (request.transform.kind === 'image' && request.transform.optimize)
-                                ? ' optimized.'
-                                : ' converted.') +
-                              transformExtension(request.transform.format),
-                      )
-                    : conversionOutput(source, request.conversion!)
-                  : request.kind === 'extract'
-                    ? path.join(
-                        request.destination!,
-                        validName(
-                          path.basename(source).replace(/\.(?:tar\.gz|tgz|zip|tar)$/i, '') ||
-                            'Extracted archive',
-                        ),
-                      )
-                    : request.kind === 'rename'
-                      ? path.join(path.dirname(source), validName(request.name!))
-                      : request.kind === 'duplicate'
-                        ? await keepBothName(source)
-                        : request.kind === 'alias'
-                          ? await aliasName(source)
-                          : path.join(request.destination!, request.name ?? path.basename(source));
-              if (source === destination && !request.transform)
-                throw new Error('Source and destination are the same.');
-              await this.access([destination]);
-              task.intent = { source, destination };
-              if (source && destination.startsWith(source + path.sep))
-                throw new Error('A folder cannot be placed inside itself.');
-              if (
-                request.kind === 'compress' &&
-                request.sources.some(
-                  (file) => destination === file || destination!.startsWith(file + path.sep),
-                )
-              )
-                throw new Error('Save the archive outside the selected folders.');
-              // Resolve symlinks in the destination's ancestry as well.
-              if (source && (await lstat(source)).isDirectory()) {
-                const realSource = await realpath(source);
-                const realDestination = path.join(
-                  await realpath(path.dirname(destination)),
-                  path.basename(destination),
-                );
-                if (
-                  realDestination === realSource ||
-                  realDestination.startsWith(realSource + path.sep)
-                )
-                  throw new Error(
-                    'A folder cannot be placed inside itself through a symbolic link.',
-                  );
-              }
-              // Case-only renames on case-insensitive macOS volumes need an intermediate name.
-              const sourceInfo = source ? await lstat(source) : null;
-              const destInfo = await lstat(destination).catch((error: NodeJS.ErrnoException) => {
-                if (error.code === 'ENOENT') return null;
-                throw error;
-              });
-              if (
-                request.kind === 'rename' &&
-                destInfo &&
-                sourceInfo &&
-                destInfo.dev === sourceInfo.dev &&
-                destInfo.ino === sourceInfo.ino
-              ) {
-                await this.changeCase(source, destination, task);
-                undoable = true;
-                caseOnly = true;
-              } else {
-                const resolved = await this.target(task, source, destination);
-                if (!resolved) {
-                  job.itemsDone++;
-                  this.progress(task);
-                  continue;
-                }
-                destination = resolved.path;
-                const replaced = resolved.replaces;
-                this.check(task);
-                // A collision prompt can stay open indefinitely.
-                await this.checkPins(task, source);
-                await this.access([destination]);
-                task.intent = { source, destination };
-                // A copy's first change is its private staging folder, and transfer() syncs the
-                // intent naming that folder before anything is copied; this one need not wait.
-                const copying = !move && ['copy', 'duplicate', 'transfer'].includes(request.kind);
-                await this.checkpoint(task, !copying);
-                if (request.kind === 'mkdir')
-                  await fileCoordination.run(
-                    [{ path: destination, mode: 'write' }],
-                    async (signal) => {
-                      signal?.throwIfAborted();
-                      this.check(task);
-                      await this.access([fileCoordination.path(destination!)]);
-                      await mkdir(fileCoordination.path(destination!));
-                    },
-                    task.abort.signal,
-                  );
-                else if (request.kind === 'mkfile')
-                  await fileCoordination.run(
-                    [{ path: destination, mode: 'write' }],
-                    async (signal) => {
-                      signal?.throwIfAborted();
-                      this.check(task);
-                      await this.access([fileCoordination.path(destination!)]);
-                      // Exclusive creation: an item that appeared meanwhile is never touched.
-                      await (await open(fileCoordination.path(destination!), 'wx', 0o644)).close();
-                    },
-                    task.abort.signal,
-                  );
-                else if (request.kind === 'alias') {
-                  const stage = await privateStage(
-                    path.dirname(destination),
-                    '.viewer-alias-',
-                    this.trash,
-                  );
-                  task.intent = { source, destination, staging: stage.file };
-                  try {
-                    await this.checkpoint(task);
-                    await fileCoordination.run(
-                      [
-                        { path: source, mode: 'metadata' },
-                        { path: stage.file, mode: 'write' },
-                      ],
-                      async (signal) => {
-                        signal?.throwIfAborted();
-                        await this.access([
-                          fileCoordination.path(source),
-                          fileCoordination.path(stage.file),
-                        ]);
-                        signal?.throwIfAborted();
-                        await macFiles().alias(
-                          fileCoordination.path(source),
-                          fileCoordination.path(stage.file),
-                        );
-                      },
-                      task.abort.signal,
-                    );
-                    this.check(task);
-                    await this.publishReplacing(task, stage.file, destination, replaced);
-                  } finally {
-                    await this.disposeStage(task, stage);
-                  }
-                } else if (request.kind === 'compress' || request.kind === 'extract') {
-                  const stage = await privateStage(
-                    path.dirname(destination),
-                    '.viewer-archive-',
-                    this.trash,
-                  );
-                  const staging = stage.file;
-                  task.intent = { source, destination, staging };
-                  try {
-                    await this.checkpoint(task);
-                    const work = {
-                      signal: task.abort.signal,
-                      access: this.access,
-                      progress: (file: string, done: number, total: number) => {
-                        job.current = file;
-                        job.bytesDone = done;
-                        job.bytesTotal = total;
-                        this.progress(task);
-                      },
-                    };
-                    if (request.kind === 'compress')
-                      await createArchive(request.sources, staging, work);
-                    else await extractArchive(source, staging, work);
-                    this.check(task);
-                    await this.publishReplacing(task, staging, destination, replaced);
-                  } finally {
-                    await this.disposeStage(task, stage);
-                  }
-                } else if (request.kind === 'convert') {
-                  const stage = await privateStage(
-                    path.dirname(destination),
-                    '.viewer-convert-',
-                    this.trash,
-                  );
-                  // The staged file keeps the output's extension, which picks its encoding.
-                  const staging = stage.file + path.extname(destination);
-                  task.intent = { source, destination, staging };
-                  try {
-                    await this.checkpoint(task);
-                    const inputs = source ? [source] : request.sources;
-                    await this.access([...inputs, staging]);
-                    job.current = source || destination;
-                    if (request.transform) {
-                      const result = await this.transforms!.execute(
-                        request.transform,
-                        inputs,
-                        staging,
-                        task.abort.signal,
-                        (fraction, detail) => {
-                          job.progress = Math.max(
-                            job.progress || 0,
-                            (job.itemsDone + Math.max(0, Math.min(1, fraction))) /
-                              Math.max(1, job.itemsTotal),
-                          );
-                          job.detail = detail;
-                          this.progress(task);
-                        },
-                        request.preparedTransforms?.find((candidate) => candidate.path === source)
-                          ?.id,
-                      );
-                      if (result) {
-                        await this.checkPins(task, source);
-                        statistics = {
-                          ...result,
-                          optimized: result.outputBytes < result.inputBytes,
-                        };
-                        if (!statistics.optimized) {
-                          job.completed.push({ source, ...statistics });
-                          job.itemsDone++;
-                          task.intent = undefined;
-                          job.detail = 'Already compact · original kept';
-                          await this.checkpoint(task);
-                          this.progress(task);
-                          continue;
-                        }
-                      }
-                    } else
-                      await this.images.convert(
-                        request.conversion!,
-                        inputs,
-                        staging,
-                        task.abort.signal,
-                      );
-                    this.check(task);
-                    await this.publishReplacing(
-                      task,
-                      staging,
-                      destination,
-                      replaced,
-                      request.transform ? () => this.checkPins(task, source) : undefined,
-                    );
-                  } finally {
-                    await this.disposeStage(task, stage);
-                  }
-                } else undoable = await this.transfer(task, source, destination, move, replaced);
-              }
-              if (undoable && move) {
-                const info = await lstat(destination);
-                task.undo.push({
-                  from: destination,
-                  to: source,
-                  identity: `${info.dev}:${info.ino}`,
-                  modified: info.mtimeMs,
-                  size: info.size,
-                  caseOnly,
-                });
-              }
-              if (
-                !move &&
-                destination &&
-                [
-                  'copy',
-                  'transfer',
-                  'duplicate',
-                  'alias',
-                  'mkdir',
-                  'mkfile',
-                  'compress',
-                  'extract',
-                  'convert',
-                ].includes(request.kind)
-              ) {
-                const proof = await outputProof(destination);
-                if (proof) {
-                  const info = await lstat(destination);
-                  task.undo.push({
-                    from: destination,
-                    to: '',
-                    remove: true,
-                    proof,
-                    identity: `${info.dev}:${info.ino}`,
-                    modified: info.mtimeMs,
-                    size: info.size,
-                  });
-                }
-              }
-            }
-            job.completed.push({ source, destination, ...statistics });
-            if (destination && move) this.filesChanged([{ source, destination }]);
-            job.itemsDone++;
-            task.intent = undefined;
-          } catch (error) {
-            if (error instanceof ReceiptFailure) throw error;
-            if (task.abort.signal.aborted) break;
-            // Cleanup may already have reported retained partial content. Keep this item's
-            // original failure before those details, without reordering earlier items.
-            job.errors.splice(priorErrors, 0, {
-              path: source || request.destination!,
-              message: errorMessage(error).slice(0, 4000),
-            });
-            job.itemsDone++;
-          }
-          this.progress(task);
-          await this.checkpoint(task, false);
-        }
-        job.status = task.abort.signal.aborted
-          ? 'cancelled'
-          : job.errors.length && !job.completed.length
-            ? 'failed'
-            : 'completed';
-        job.undoable = !!task.undo.length;
-        job.current = undefined;
-        // Terminal failures have a known outcome. Keep their recovery paths,
-        // but reserve an in-flight intent for an actually interrupted mutation.
-        if (task.intent) job.recovery = task.intent;
-        task.intent = undefined;
-        this.emit(task);
-        await this.checkpoint(task);
-        await this.compact(task);
-        currentTask = undefined;
+        await this.runTask(task);
+        current = undefined;
         this.active = undefined;
         this.settle();
       }
     } catch (error) {
-      for (const task of this.tasks.values())
-        if (task === currentTask || isActiveJob(task.job)) {
-          task.job.status = 'failed';
-          task.job.errors.push({
-            path: task.job.current || task.job.destination || task.job.sources[0] || '',
-            message:
-              'Operation receipts could not be saved. Further file changes were stopped. ' +
-              errorMessage(error),
-          });
-          task.job.recovery = task.intent ?? task.job.recovery;
-          task.job.undoable = !!task.undo.length;
-          this.emit(task);
-        }
-      this.queue.length = 0;
+      this.stopAfterReceiptFailure(error, current);
     } finally {
       this.running = false;
       this.active = undefined;
       this.settle();
       for (const resolve of this.idle.splice(0)) resolve();
     }
+  }
+  /** One job: each item in turn, then its outcome. A failed item is reported and the next one
+   * starts; a cancelled job stops at its current item. */
+  private async runTask(task: Task): Promise<void> {
+    const { job, request } = task;
+    job.status = 'running';
+    this.emit(task);
+    for (const source of singleOutput(request) ? [''] : request.sources) {
+      const priorErrors = job.errors.length;
+      try {
+        // A skipped item waits for the job's last record; a kept one is recorded already.
+        if ((await this.runItem(task, source)) !== 'done') continue;
+      } catch (error) {
+        if (error instanceof ReceiptFailure) throw error;
+        if (task.abort.signal.aborted) break;
+        // Cleanup may already have reported retained partial content. Keep this item's
+        // original failure before those details, without reordering earlier items.
+        job.errors.splice(priorErrors, 0, {
+          path: source || request.destination!,
+          message: errorMessage(error).slice(0, 4000),
+        });
+        job.itemsDone++;
+      }
+      this.progress(task);
+      await this.checkpoint(task, false);
+    }
+    await this.settleJob(task);
+  }
+  /** One source, or the one output of a single-output job. */
+  private async runItem(task: Task, source: string): Promise<ItemOutcome> {
+    const { job, request } = task;
+    await this.admit(task, source);
+    // A transfer moves only within one volume. Its destination folder is resolved, as
+    // the transfer itself resolves it, so a link to a folder on another volume copies.
+    const move =
+      request.kind === 'move' ||
+      request.kind === 'rename' ||
+      (request.kind === 'transfer' &&
+        (await lstat(source)).dev === (await stat(request.destination!)).dev);
+    let destination: string | undefined;
+    let statistics: Statistics | undefined;
+    if (request.kind === 'trash') {
+      await this.protection.check(source, 'moved to the Trash');
+      await this.trashItem(task, source);
+    } else {
+      if (move) await this.protection.check(source, 'moved or renamed');
+      const placed = await this.place(task, source, move);
+      if (placed === 'skipped' || placed === 'kept') return placed;
+      ({ destination, statistics } = placed);
+    }
+    job.completed.push({ source, destination, ...statistics });
+    if (destination && move) this.filesChanged([{ source, destination }]);
+    job.itemsDone++;
+    task.intent = undefined;
+    return 'done';
+  }
+  /** What an item checks before it changes anything: that it is still wanted, accessible and as
+   * reviewed. Its intent names the folder chosen until its output is named. */
+  private async admit(task: Task, source: string): Promise<void> {
+    const { job, request } = task;
+    this.check(task);
+    await this.access([source, request.destination].filter((file): file is string => !!file));
+    await this.checkPins(task, source);
+    job.current = source || request.destination;
+    task.intent = { source, destination: request.destination };
+    // Each intent is made durable immediately before the first change it covers;
+    // Trash is the only change that follows directly.
+    if (request.kind === 'trash') await this.checkpoint(task);
+    this.progress(task);
+  }
+  /** An item's output: named and guarded, made once any collision is resolved, and given its
+   * Undo. Resolves with where it went, or how the item ended without one. */
+  private async place(
+    task: Task,
+    source: string,
+    move: boolean,
+  ): Promise<{ destination: string; statistics?: Statistics } | 'skipped' | 'kept'> {
+    const { job, request } = task;
+    const named = await this.nameOutput(task, source);
+    // Case-only renames on case-insensitive macOS volumes need an intermediate name.
+    if (request.kind === 'rename' && (await sameItemAt(source, named))) {
+      await this.changeCase(source, named, task);
+      await this.recordUndo(task, source, named, move, { movedInPlace: true, caseOnly: true });
+      return { destination: named };
+    }
+    const resolved = await this.target(task, source, named);
+    if (!resolved) {
+      job.itemsDone++;
+      this.progress(task);
+      return 'skipped';
+    }
+    const destination = resolved.path;
+    this.check(task);
+    // A collision prompt can stay open indefinitely.
+    await this.checkPins(task, source);
+    await this.access([destination]);
+    task.intent = { source, destination };
+    // A copy's first change is its private staging folder, and transfer() syncs the
+    // intent naming that folder before anything is copied; this one need not wait.
+    const copying = !move && ['copy', 'duplicate', 'transfer'].includes(request.kind);
+    await this.checkpoint(task, !copying);
+    const made = await this.produce(task, source, destination, move, resolved.replaces);
+    if (made === 'kept') return made;
+    await this.recordUndo(task, source, destination, move, made);
+    return { destination, statistics: made.statistics };
+  }
+  /** An item's output path, refused when it is the source or lies inside it. The path becomes the
+   * item's intent once its access is checked, so a later refusal leaves it as recovery. */
+  private async nameOutput(task: Task, source: string): Promise<string> {
+    const { request } = task;
+    const destination =
+      request.kind === 'duplicate'
+        ? await keepBothName(source)
+        : request.kind === 'alias'
+          ? await aliasName(source)
+          : outputName(request, source);
+    await this.access([destination]);
+    task.intent = { source, destination };
+    await guardDestination(request, source, destination);
+    return destination;
+  }
+  /** Makes an item's output at `destination`, by kind. */
+  private async produce(
+    task: Task,
+    source: string,
+    destination: string,
+    move: boolean,
+    replaced?: Replaced,
+  ): Promise<Produced> {
+    switch (task.request.kind) {
+      case 'mkdir':
+        await this.createNew(task, destination, (folder) => mkdir(folder));
+        return {};
+      case 'mkfile':
+        await this.createNew(task, destination, async (file) =>
+          (await open(file, 'wx', 0o644)).close(),
+        );
+        return {};
+      case 'alias':
+        return this.createAlias(task, source, destination, replaced);
+      case 'compress':
+      case 'extract':
+        return this.buildArchive(task, source, destination, replaced);
+      case 'convert':
+        return this.convertItem(task, source, destination, replaced);
+      default:
+        return { movedInPlace: await this.transfer(task, source, destination, move, replaced) };
+    }
+  }
+  /** A new folder or file, created inside its claim. Exclusive creation: an item that appeared
+   * meanwhile is never touched. */
+  private async createNew(
+    task: Task,
+    destination: string,
+    create: (file: string) => Promise<unknown>,
+  ): Promise<void> {
+    await fileCoordination.run(
+      [{ path: destination, mode: 'write' }],
+      async (signal) => {
+        signal?.throwIfAborted();
+        this.check(task);
+        const actual = fileCoordination.path(destination);
+        await this.access([actual]);
+        await create(actual);
+      },
+      task.abort.signal,
+    );
+  }
+  /** A Finder alias to `source`. */
+  private createAlias(
+    task: Task,
+    source: string,
+    destination: string,
+    replaced?: Replaced,
+  ): Promise<Produced> {
+    const staged = { prefix: '.viewer-alias-', replaced };
+    return this.withStage(task, source, destination, staged, async (staging) => {
+      await fileCoordination.run(
+        [
+          { path: source, mode: 'metadata' },
+          { path: staging, mode: 'write' },
+        ],
+        async (signal) => {
+          signal?.throwIfAborted();
+          await this.access([fileCoordination.path(source), fileCoordination.path(staging)]);
+          signal?.throwIfAborted();
+          await macFiles().alias(fileCoordination.path(source), fileCoordination.path(staging));
+        },
+        task.abort.signal,
+      );
+      return {};
+    });
+  }
+  /** An archive of the selection, or the contents of the archive `source`. */
+  private buildArchive(
+    task: Task,
+    source: string,
+    destination: string,
+    replaced?: Replaced,
+  ): Promise<Produced> {
+    const { job, request } = task;
+    const staged = { prefix: '.viewer-archive-', replaced };
+    return this.withStage(task, source, destination, staged, async (staging) => {
+      const work = {
+        signal: task.abort.signal,
+        access: this.access,
+        progress: (file: string, done: number, total: number) => {
+          job.current = file;
+          job.bytesDone = done;
+          job.bytesTotal = total;
+          this.progress(task);
+        },
+      };
+      if (request.kind === 'compress') await createArchive(request.sources, staging, work);
+      else await extractArchive(source, staging, work);
+      return {};
+    });
+  }
+  /** A converted or transformed copy. An optimized candidate no smaller than its original is
+   * not published: the original is kept. */
+  private convertItem(
+    task: Task,
+    source: string,
+    destination: string,
+    replaced?: Replaced,
+  ): Promise<Produced> {
+    const { job, request } = task;
+    const { transform } = request;
+    const staged = {
+      prefix: '.viewer-convert-',
+      extension: path.extname(destination),
+      replaced,
+      guard: transform ? () => this.checkPins(task, source) : undefined,
+    };
+    const progress = (fraction: number, detail: string) => {
+      job.progress = Math.max(
+        job.progress || 0,
+        (job.itemsDone + Math.max(0, Math.min(1, fraction))) / Math.max(1, job.itemsTotal),
+      );
+      job.detail = detail;
+      this.progress(task);
+    };
+    return this.withStage(task, source, destination, staged, async (staging) => {
+      const inputs = source ? [source] : request.sources;
+      await this.access([...inputs, staging]);
+      job.current = source || destination;
+      if (!transform) {
+        await this.images.convert(request.conversion!, inputs, staging, task.abort.signal);
+        return {};
+      }
+      const result = await this.transforms!.execute(
+        transform,
+        inputs,
+        staging,
+        task.abort.signal,
+        progress,
+        request.preparedTransforms?.find((candidate) => candidate.path === source)?.id,
+      );
+      if (!result) return {};
+      await this.checkPins(task, source);
+      const statistics = { ...result, optimized: result.outputBytes < result.inputBytes };
+      return statistics.optimized ? { statistics } : this.keepOriginal(task, source, statistics);
+    });
+  }
+  /** Records an item whose original is kept: done, its intent cleared, and synced before its
+   * stage is cleaned. */
+  private async keepOriginal(task: Task, source: string, statistics: Statistics): Promise<'kept'> {
+    const { job } = task;
+    job.completed.push({ source, ...statistics });
+    job.itemsDone++;
+    task.intent = undefined;
+    job.detail = 'Already compact · original kept';
+    await this.checkpoint(task);
+    this.progress(task);
+    return 'kept';
+  }
+  /**
+   * Makes an output in a private stage beside `destination` and publishes it there; a collision's
+   * existing item goes to the Trash only then. The intent naming the stage is synced before
+   * anything is written into it, and the stage is cleaned however the item ends.
+   */
+  private async withStage(
+    task: Task,
+    source: string,
+    destination: string,
+    staged: Staged,
+    make: (staging: string) => Promise<Produced>,
+  ): Promise<Produced> {
+    const stage = await privateStage(path.dirname(destination), staged.prefix, this.trash);
+    const staging = stage.file + (staged.extension ?? '');
+    task.intent = { source, destination, staging };
+    try {
+      await this.checkpoint(task);
+      const made = await make(staging);
+      if (made === 'kept') return made;
+      this.check(task);
+      await this.publishReplacing(task, staging, destination, staged.replaced, staged.guard);
+      return made;
+    } finally {
+      await this.disposeStage(task, stage);
+    }
+  }
+  /** An item's Undo: moving it back when it moved within its volume, or removing what it created
+   * once that is proven unchanged. A move across volumes has neither. */
+  private async recordUndo(
+    task: Task,
+    source: string,
+    destination: string,
+    move: boolean,
+    made: Made,
+  ): Promise<void> {
+    if (made.movedInPlace) {
+      const info = await lstat(destination);
+      task.undo.push({
+        from: destination,
+        to: source,
+        identity: `${info.dev}:${info.ino}`,
+        modified: info.mtimeMs,
+        size: info.size,
+        caseOnly: !!made.caseOnly,
+      });
+    }
+    if (!move && creatingKinds.includes(task.request.kind)) {
+      const proof = await outputProof(destination);
+      if (proof) {
+        const info = await lstat(destination);
+        task.undo.push({
+          from: destination,
+          to: '',
+          remove: true,
+          proof,
+          identity: `${info.dev}:${info.ino}`,
+          modified: info.mtimeMs,
+          size: info.size,
+        });
+      }
+    }
+  }
+  /** A job's outcome once its items have run, recorded and compacted. */
+  private async settleJob(task: Task): Promise<void> {
+    const { job } = task;
+    job.status = task.abort.signal.aborted
+      ? 'cancelled'
+      : job.errors.length && !job.completed.length
+        ? 'failed'
+        : 'completed';
+    job.undoable = !!task.undo.length;
+    job.current = undefined;
+    // Terminal failures have a known outcome. Keep their recovery paths,
+    // but reserve an in-flight intent for an actually interrupted mutation.
+    if (task.intent) job.recovery = task.intent;
+    task.intent = undefined;
+    this.emit(task);
+    await this.checkpoint(task);
+    await this.compact(task);
+  }
+  /** Without its receipts, no further file change is safe: the job in progress and every pending
+   * one fail, keeping their intents for recovery, and the queue empties. A journal that cannot be
+   * read stops the queue the same way. */
+  private stopAfterReceiptFailure(error: unknown, current?: Task): void {
+    for (const task of this.tasks.values())
+      if (task === current || isActiveJob(task.job)) {
+        task.job.status = 'failed';
+        task.job.errors.push({
+          path: task.job.current || task.job.destination || task.job.sources[0] || '',
+          message:
+            'Operation receipts could not be saved. Further file changes were stopped. ' +
+            errorMessage(error),
+        });
+        task.job.recovery = task.intent ?? task.job.recovery;
+        task.job.undoable = !!task.undo.length;
+        this.emit(task);
+      }
+    this.queue.length = 0;
   }
 }

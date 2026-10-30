@@ -179,10 +179,7 @@ try {
     null,
   );
   await stage('discovering-models');
-  await controls.button(
-    'Connect and load models',
-    "document.querySelector('.settings-provider[open]')",
-  );
+  await controls.button('Connect and load models', '.settings-provider[open]');
   const status = await until(
     () =>
       settingsWindow.evaluate<string>(
@@ -234,10 +231,7 @@ try {
     endpoint: provider.endpoint,
     data: 'Generated folder path, filenames and metadata only. No file contents or agent access.',
   });
-  await controls.button(
-    'Allow selected data',
-    "document.querySelector('.settings-provider[open]')",
-  );
+  await controls.button('Allow selected data', '.settings-provider[open]');
   const permission = await until(
     () =>
       evaluate<ModelDataPermission | null>(
@@ -294,7 +288,7 @@ try {
     `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.providers',value:s.settings.providers.map(p=>p.id===${JSON.stringify(provider.id)}?{...p,model:${JSON.stringify(provider.model)}}:p)}],s.revision))`,
   );
   await stage('revoking-test-permission');
-  await controls.button('Revoke access', "document.querySelector('.settings-provider[open]')");
+  await controls.button('Revoke access', '.settings-provider[open]');
   await until(
     () =>
       evaluate<ModelDataPermission | null>(

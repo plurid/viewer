@@ -8,6 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { hashFile } from '../../../tools/filesystem/fingerprints';
 import type { NativeScenarioHarness } from '../runtime/harness';
+import { pageCall } from '../runtime/page-function';
 
 export const performanceSampleCount = 5;
 export const performanceWorkloadVersion = 1;
@@ -111,57 +112,108 @@ export async function performanceCandidate(binary: string): Promise<PerformanceC
   };
 }
 
-const beginProbe = String.raw`(() => {
-  const probe = window.__qaPerf = {
+interface PerformanceProbe {
+  frames: number[];
+  tasks: number[];
+  commits: number;
+  emissions: number;
+  started: number;
+  stopped: boolean;
+  raf: number;
+  off(): void;
+  observer: PerformanceObserver;
+}
+
+/** What the native smoke leaves on the page: the React commit count and the engine's public ref. */
+interface ProbeWindow {
+  __qaCommits: number;
+  __qaEngine: {
+    store: { subscribe(listener: () => void): () => void };
+    camera: { get(): unknown };
+    inspect(): { planes: unknown[] };
+  };
+  __qaPerf?: PerformanceProbe;
+}
+
+function beginProbe(): void {
+  const page = window as unknown as ProbeWindow;
+  const probe: PerformanceProbe = {
     frames: [],
     tasks: [],
-    commits: window.__qaCommits,
+    commits: page.__qaCommits,
     emissions: 0,
     started: performance.now(),
     stopped: false,
+    raf: 0,
+    off: () => {},
+    observer: new PerformanceObserver((list) => {
+      probe.tasks.push(...list.getEntries().map((entry) => entry.duration));
+    }),
   };
+  page.__qaPerf = probe;
   let last = performance.now();
-  const frame = time => {
+  const frame = (time: number) => {
     if (probe.stopped) return;
     probe.frames.push(time - last);
     last = time;
     probe.raf = requestAnimationFrame(frame);
   };
   probe.raf = requestAnimationFrame(frame);
-  probe.off = window.__qaEngine.store.subscribe(() => probe.emissions++);
-  probe.observer = new PerformanceObserver(list => {
-    probe.tasks.push(...list.getEntries().map(entry => entry.duration));
-  });
+  probe.off = page.__qaEngine.store.subscribe(() => probe.emissions++);
   probe.observer.observe({ entryTypes: ['longtask'] });
-})()`;
+}
 
-const finishProbe = String.raw`(() => {
-  const probe = window.__qaPerf;
+function finishProbe(): RawPerformanceSample {
+  const page = window as unknown as ProbeWindow;
+  const probe = page.__qaPerf!;
   probe.stopped = true;
   cancelAnimationFrame(probe.raf);
   probe.off();
-  probe.tasks.push(...probe.observer.takeRecords().map(entry => entry.duration));
+  probe.tasks.push(...probe.observer.takeRecords().map((entry) => entry.duration));
   probe.observer.disconnect();
   const result = {
     milliseconds: performance.now() - probe.started,
-    commits: window.__qaCommits - probe.commits,
+    commits: page.__qaCommits - probe.commits,
     emissions: probe.emissions,
     frameIntervals: [...probe.frames],
     longTaskDurations: [...probe.tasks],
   };
-  delete window.__qaPerf;
+  delete page.__qaPerf;
   return result;
-})()`;
+}
 
-const cancelProbe = String.raw`(() => {
-  const probe = window.__qaPerf;
+function cancelProbe(): void {
+  const page = window as unknown as ProbeWindow;
+  const probe = page.__qaPerf;
   if (!probe) return;
   probe.stopped = true;
   cancelAnimationFrame(probe.raf);
-  probe.off?.();
-  probe.observer?.disconnect();
-  delete window.__qaPerf;
-})()`;
+  probe.off();
+  probe.observer.disconnect();
+  delete page.__qaPerf;
+}
+
+function pageEnvironment() {
+  return {
+    visibility: document.visibilityState,
+    viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio },
+    screen: { width: screen.width, height: screen.height, colorDepth: screen.colorDepth },
+    planes: (window as unknown as ProbeWindow).__qaEngine.inspect().planes.length,
+  };
+}
+
+const cameraState = () =>
+  JSON.stringify((window as unknown as ProbeWindow).__qaEngine.camera.get());
+
+function menuCentre() {
+  const rect = document.querySelector('.context-menu .command-results')!.getBoundingClientRect();
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+}
+
+function surfaceEdge() {
+  const rect = document.querySelector('.workspace-surface')!.getBoundingClientRect();
+  return { x: rect.x + 14, y: rect.y + rect.height / 2 };
+}
 
 /** Both baseline and candidate runs execute these same 24-event workloads. */
 export async function profileNativeInteractions(
@@ -184,21 +236,11 @@ export async function profileNativeInteractions(
   );
   const samples: (PerformanceSample & { workload: string; sample: number })[] = [];
   await harness.until(
-    () => evaluate<{ running: boolean }>('window.viewer.indexStatus()'),
+    () => evaluate(pageCall(() => window.viewer.indexStatus())),
     (status) => !status.running,
     'idle file index before native performance observations',
   );
-  const environment = await evaluate<{
-    visibility: string;
-    viewport: { width: number; height: number; pixelRatio: number };
-    screen: { width: number; height: number; colorDepth: number };
-    planes: number;
-  }>(`({
-    visibility: document.visibilityState,
-    viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio },
-    screen: { width: screen.width, height: screen.height, colorDepth: screen.colorDepth },
-    planes: window.__qaEngine.inspect().planes.length,
-  })`);
+  const environment = await evaluate(pageCall(pageEnvironment));
   assert.equal(environment.visibility, 'visible', 'Performance requires a visible native window');
   const capturedAt = new Date().toISOString();
   let candidateAfter: PerformanceCandidate | undefined;
@@ -207,9 +249,9 @@ export async function profileNativeInteractions(
   const measure = async (workload: string, sample: number, run: () => Promise<void>) => {
     let failed = false;
     try {
-      await evaluate(beginProbe);
+      await evaluate(pageCall(beginProbe));
       await run();
-      const result = summarizePerformanceSample(await evaluate<RawPerformanceSample>(finishProbe));
+      const result = summarizePerformanceSample(await evaluate(pageCall(finishProbe)));
       samples.push({ workload, sample, ...result });
       const { frameIntervals: _frames, longTaskDurations: _tasks, ...summary } = result;
       console.log('Native performance:', JSON.stringify({ workload, sample, ...summary }));
@@ -218,7 +260,7 @@ export async function profileNativeInteractions(
       throw error;
     } finally {
       try {
-        await evaluate(cancelProbe);
+        await evaluate(pageCall(cancelProbe));
       } catch (error) {
         if (!failed) throw error;
         console.error('Performance probe cleanup also failed:', error);
@@ -228,16 +270,11 @@ export async function profileNativeInteractions(
 
   try {
     for (let sample = 1; sample <= performanceSampleCount; sample++) {
-      const camera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+      const camera = await evaluate(pageCall(cameraState));
       await measure(`menu-wheel-${sample}`, sample, async () => {
         const file = path.join(context.files, 'README.md');
         await contextMenu(`[data-file-path=${JSON.stringify(file)}]`);
-        const point = await evaluate<{ x: number; y: number }>(
-          `(() => {
-            const rect = document.querySelector('.context-menu .command-results').getBoundingClientRect();
-            return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-          })()`,
-        );
+        const point = await evaluate(pageCall(menuCentre));
         for (let index = 0; index < 24; index++) {
           await command('Input.dispatchMouseEvent', {
             type: 'mouseMoved',
@@ -255,7 +292,7 @@ export async function profileNativeInteractions(
         }
       });
       assert.equal(
-        await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+        await evaluate(pageCall(cameraState)),
         camera,
         'Contextual wheel scrolling cannot move the spatial camera',
       );
@@ -263,13 +300,8 @@ export async function profileNativeInteractions(
     }
 
     for (let sample = 1; sample <= performanceSampleCount; sample++) {
-      const before = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
-      const point = await evaluate<{ x: number; y: number }>(
-        `(() => {
-          const rect = document.querySelector('.workspace-surface').getBoundingClientRect();
-          return { x: rect.x + 14, y: rect.y + rect.height / 2 };
-        })()`,
-      );
+      const before = await evaluate(pageCall(cameraState));
+      const point = await evaluate(pageCall(surfaceEdge));
       await measure('camera-wheel', sample, async () => {
         for (let index = 0; index < 24; index++) {
           await command('Input.dispatchMouseEvent', {
@@ -284,7 +316,7 @@ export async function profileNativeInteractions(
         await settleCamera();
       });
       assert.notEqual(
-        await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+        await evaluate(pageCall(cameraState)),
         before,
         'Camera profile must exercise actual rotation',
       );

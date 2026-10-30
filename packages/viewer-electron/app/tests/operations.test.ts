@@ -1,7 +1,14 @@
 import type * as FileSystemModule from 'node:fs/promises';
 import type * as MacFilesModule from '../src/desktop/native/macos-files';
 import type * as OperationJournalModule from '../src/desktop/operations/operation-journal';
+import type { FileChange } from '../src/domain/files/changes';
+import type { ImageConverter } from '../src/desktop/operations/image-convert';
+import type { OperationReceipt } from '../src/desktop/operations/operation-journal';
+import type { TransformExecutor } from '../src/desktop/transforms/transforms';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
+import { strToU8, zipSync } from 'fflate';
 import {
   lstat,
   mkdir,
@@ -104,6 +111,7 @@ import {
 } from '../src/desktop/operations/operation-journal';
 import { entry } from '../src/desktop/files/filesystem';
 import { sourceVersion } from '../src/domain/files/inspection';
+import { transformPlanSchema } from '../src/domain/operations/transforms';
 let root: string, destination: string, trash: string, operations: Operations;
 beforeEach(async () => {
   root = await temporaryRoot('viewer-ops-');
@@ -1394,5 +1402,747 @@ describe('saving text', () => {
     expect(() => operations.start({ kind: 'rewrite', sources: [path.join(root, 'x')] })).toThrow(
       'Save',
     );
+  });
+});
+/** A TAR holding `notes.txt`. */
+function notesTar(): Buffer {
+  const data = Buffer.from('notes');
+  const header = Buffer.alloc(512);
+  header.write('notes.txt');
+  header.write('0000644\0', 100);
+  header.write(data.length.toString(8).padStart(11, '0') + '\0', 124);
+  header.fill(32, 148, 156);
+  header.write('0', 156);
+  header.write('ustar\0', 257);
+  const sum = header.reduce((total, byte) => total + byte, 0);
+  header.write(sum.toString(8).padStart(6, '0') + '\0 ', 148);
+  return Buffer.concat([header, data, Buffer.alloc(512 - data.length), Buffer.alloc(1024)]);
+}
+const notesZip = () => Buffer.from(zipSync({ 'notes.txt': strToU8('notes') }));
+/**
+ * One item from start to finish: its output name, the guards on it, and the order of its
+ * effects. Each intent is synced before the change it covers, a failure leaves the intent it
+ * reached as the job's recovery, and Undo keeps one step per item.
+ */
+describe('an item from start to finish', () => {
+  const converter: ImageConverter = {
+    async convert(_conversion, _sources, output) {
+      await writeFile(output, 'converted', { flag: 'wx' });
+    },
+  };
+  /** Moves an item into the fixture's Trash folder, with a receipt Undo can use. */
+  const receipts = async (file: string) => {
+    const target = path.join(trash, crypto.randomUUID());
+    const directory = (await lstat(file)).isDirectory();
+    await rename(file, target);
+    return { path: target, directory };
+  };
+  /** Refuses every Trash, so a stage's unpublished content is kept and reported in every mode. */
+  const refuse = async (): Promise<void> => {
+    throw new Error('Generated Trash refusal');
+  };
+  const partialKept =
+    'Partial temporary content could not be moved to the Trash, so it was kept here for inspection.';
+  let execute: TransformExecutor['execute'];
+  const service = (
+    trashItem: ConstructorParameters<typeof Operations>[0] = receipts,
+    filesChanged?: (changes: FileChange[]) => void,
+  ) =>
+    new Operations(
+      trashItem,
+      () => {},
+      undefined,
+      filesChanged,
+      undefined,
+      path.join(root, 'private'),
+      undefined,
+      undefined,
+      undefined,
+      converter,
+      { execute: (...args) => execute(...args) },
+    );
+  beforeEach(async () => {
+    await operations.close();
+    execute = async (_plan, _sources, output) => {
+      await writeFile(output, 'transformed', { flag: 'wx' });
+    };
+    operations = service();
+  });
+  /**
+   * Each journal record as it was written: its job and intent, whether it was synced, and
+   * whether `watched` existed at that moment.
+   */
+  function journal(watched = '') {
+    const records: (Pick<OperationReceipt, 'job' | 'intent'> & {
+      durable: boolean;
+      present: boolean;
+    })[] = [];
+    const record = OperationLog.prototype.record;
+    vi.spyOn(OperationLog.prototype, 'record').mockImplementation(function (
+      this: OperationLog,
+      receipt,
+      durable = true,
+    ) {
+      records.push({
+        ...structuredClone({ job: receipt.job, intent: receipt.intent }),
+        durable,
+        present: !!watched && existsSync(watched),
+      });
+      return record.call(this, receipt, durable);
+    });
+    return records;
+  }
+  const effects = (records: ReturnType<typeof journal>, id: string) =>
+    records
+      .filter((record) => record.job.id === id)
+      .map(({ intent, durable, present }) => ({ intent, durable, present }));
+  const version = async (file: string) => {
+    const info = await lstat(file);
+    return { identity: `${info.dev}:${info.ino}`, modified: info.mtimeMs, size: info.size };
+  };
+  /** Each job's Undo steps, as a restart reads them. */
+  async function undoSteps(): Promise<Map<string, OperationReceipt['undo']>> {
+    await operations.close();
+    const journaled = await new OperationLog(path.join(root, 'private')).load();
+    return new Map(journaled.receipts.map((receipt) => [receipt.job.id, receipt.undo]));
+  }
+  const removal = async (file: string) => ({
+    from: file,
+    to: '',
+    remove: true,
+    proof: await outputProof(file),
+    ...(await version(file)),
+  });
+  const stepBack = async (from: string, to: string, caseOnly = false) => ({
+    from,
+    to,
+    caseOnly,
+    ...(await version(from)),
+  });
+  const caseInsensitive = async (file: string) =>
+    lstat(path.join(path.dirname(file), path.basename(file).toUpperCase())).then(
+      () => true,
+      () => false,
+    );
+
+  describe('naming', () => {
+    it('names duplicates beside the original, as Finder does', async () => {
+      const file = path.join(root, 'Report.pdf');
+      const folder = path.join(root, 'Folder');
+      await writeFile(file, 'report');
+      await mkdir(folder);
+      const first = await run({ kind: 'duplicate', sources: [file, folder] });
+      expect(first.completed).toEqual([
+        { source: file, destination: path.join(root, 'Report copy.pdf') },
+        { source: folder, destination: path.join(root, 'Folder copy') },
+      ]);
+      const second = await run({ kind: 'duplicate', sources: [file] });
+      expect(second.completed).toEqual([
+        { source: file, destination: path.join(root, 'Report copy 2.pdf') },
+      ]);
+      expect(await readFile(path.join(root, 'Report copy 2.pdf'), 'utf8')).toBe('report');
+    });
+    it.each([
+      ['notes.tar.gz', 'notes', () => gzipSync(notesTar())],
+      ['notes.TGZ', 'notes', () => gzipSync(notesTar())],
+      ['notes.tar', 'notes', notesTar],
+      ['notes.zip', 'notes', notesZip],
+      ['notes.gz', 'notes.gz', () => gzipSync(notesTar())],
+      ['.zip', 'Extracted archive', notesZip],
+    ])('extracts %s into a folder named %s', async (name, folder, contents) => {
+      const archive = path.join(root, name);
+      await writeFile(archive, contents());
+      const job = await run({ kind: 'extract', sources: [archive], destination });
+      expect(job.status, JSON.stringify(job.errors)).toBe('completed');
+      expect(job.completed).toEqual([
+        { source: archive, destination: path.join(destination, folder) },
+      ]);
+      expect(await readFile(path.join(destination, folder, 'notes.txt'), 'utf8')).toBe('notes');
+    });
+    it.each([
+      ['photo.png', { kind: 'image', format: 'webp' }, 'photo converted.webp'],
+      ['photo.png', { kind: 'image', format: 'jpeg' }, 'photo converted.jpg'],
+      ['photo.png', { kind: 'image', format: 'png', optimize: true }, 'photo optimized.png'],
+      ['scan.pdf', { kind: 'pdf', format: 'pdf' }, 'scan optimized.pdf'],
+    ])('names the transformed copy of %s beside it: %o', async (name, plan, output) => {
+      const source = path.join(root, name);
+      await writeFile(source, 'source');
+      const transform = transformPlanSchema.parse(plan);
+      const job = await run({ kind: 'convert', sources: [source], transform });
+      expect(job.completed).toEqual([{ source, destination: path.join(root, output) }]);
+      expect(await readFile(path.join(root, output), 'utf8')).toBe('transformed');
+    });
+    it('takes a chosen transform name only for a single source', async () => {
+      const one = path.join(root, 'one.png');
+      const two = path.join(root, 'two.png');
+      for (const file of [one, two]) await writeFile(file, 'source');
+      const transform = transformPlanSchema.parse({ kind: 'image', format: 'png' });
+      const request = { kind: 'convert', destination, name: 'chosen.png', transform } as const;
+      const named = await run({ ...request, sources: [one] });
+      expect(named.completed).toEqual([
+        { source: one, destination: path.join(destination, 'chosen.png') },
+      ]);
+      const both = await run({ ...request, sources: [one, two] });
+      expect(both.completed).toEqual([
+        { source: one, destination: path.join(destination, 'one converted.png') },
+        { source: two, destination: path.join(destination, 'two converted.png') },
+      ]);
+    });
+    it('publishes a smaller candidate with its statistics', async () => {
+      execute = async (_plan, _sources, output) => {
+        await writeFile(output, 'small', { flag: 'wx' });
+        return { inputBytes: 6, outputBytes: 5 };
+      };
+      const source = path.join(root, 'photo.png');
+      await writeFile(source, 'source');
+      const transform = transformPlanSchema.parse({ kind: 'image', format: 'png', optimize: true });
+      const job = await run({ kind: 'convert', sources: [source], transform });
+      expect(job.completed).toStrictEqual([
+        {
+          source,
+          destination: path.join(root, 'photo optimized.png'),
+          inputBytes: 6,
+          outputBytes: 5,
+          optimized: true,
+        },
+      ]);
+      expect(job).toMatchObject({ status: 'completed', undoable: true });
+      expect(job.detail).toBeUndefined();
+    });
+  });
+
+  describe('guards', () => {
+    it('refuses an output that is its own source, leaving the folder chosen as recovery', async () => {
+      const source = path.join(root, 'same.txt');
+      await writeFile(source, 'only copy');
+      const same = 'Source and destination are the same.';
+      const copied = await run({ kind: 'copy', sources: [source], destination: root });
+      expect(copied.status).toBe('failed');
+      expect(copied.errors).toEqual([{ path: source, message: same }]);
+      // Refused before the output path became the item's intent.
+      expect(copied.recovery).toEqual({ source, destination: root });
+      const renamed = await run({ kind: 'rename', sources: [source], name: 'same.txt' });
+      expect(renamed.errors).toEqual([{ path: source, message: same }]);
+      expect(renamed.recovery).toEqual({ source });
+      expect(await readFile(source, 'utf8')).toBe('only copy');
+    });
+    it.each(['copy', 'move'] as const)(
+      'refuses to place a folder inside itself (%s)',
+      async (kind) => {
+        const folder = path.join(root, 'folder');
+        const inner = path.join(folder, 'inner');
+        await mkdir(inner, { recursive: true });
+        const job = await run({ kind, sources: [folder], destination: inner });
+        expect(job.status).toBe('failed');
+        expect(job.errors).toEqual([
+          { path: folder, message: 'A folder cannot be placed inside itself.' },
+        ]);
+        expect(job.recovery).toEqual({ source: folder, destination: path.join(inner, 'folder') });
+        expect(await readdir(inner)).toEqual([]);
+      },
+    );
+    it('saves an archive only outside what it holds', async () => {
+      const outside = 'Save the archive outside the selected folders.';
+      const folder = path.join(root, 'folder');
+      await mkdir(folder);
+      await writeFile(path.join(folder, 'a.txt'), 'a');
+      const inside = await run({
+        kind: 'compress',
+        sources: [folder],
+        destination: folder,
+        name: 'folder.zip',
+      });
+      // A job with one output reports at the folder it writes into.
+      expect(inside.errors).toEqual([{ path: folder, message: outside }]);
+      expect(inside.recovery).toEqual({ source: '', destination: path.join(folder, 'folder.zip') });
+      expect(await readdir(folder)).toEqual(['a.txt']);
+      const selected = path.join(root, 'notes.zip');
+      await writeFile(selected, 'selected');
+      const over = await run({
+        kind: 'compress',
+        sources: [selected],
+        destination: root,
+        name: 'notes.zip',
+      });
+      expect(over.errors).toEqual([{ path: root, message: outside }]);
+      expect(await readFile(selected, 'utf8')).toBe('selected');
+    });
+  });
+
+  describe('the order of its effects', () => {
+    interface Prepared {
+      request: OperationRequest;
+      source: string;
+      output: string;
+    }
+    const staged: [string, RegExp, () => Promise<Prepared>][] = [
+      [
+        'compress',
+        /\/\.viewer-archive-[^/]+\/item$/,
+        async () => {
+          const notes = path.join(root, 'notes.txt');
+          await writeFile(notes, 'notes');
+          return {
+            request: { kind: 'compress', sources: [notes], destination, name: 'notes.zip' },
+            source: '',
+            output: path.join(destination, 'notes.zip'),
+          };
+        },
+      ],
+      [
+        'extract',
+        /\/\.viewer-archive-[^/]+\/item$/,
+        async () => {
+          const archive = path.join(root, 'notes.zip');
+          await writeFile(archive, notesZip());
+          return {
+            request: { kind: 'extract', sources: [archive], destination },
+            source: archive,
+            output: path.join(destination, 'notes'),
+          };
+        },
+      ],
+      [
+        'convert',
+        // The staged file keeps the output's extension, which picks its encoding.
+        /\/\.viewer-convert-[^/]+\/item\.png$/,
+        async () => {
+          const photo = path.join(root, 'photo.jpg');
+          await writeFile(photo, 'pixels');
+          return {
+            request: { kind: 'convert', sources: [photo], conversion: 'png' },
+            source: photo,
+            output: path.join(root, 'photo.png'),
+          };
+        },
+      ],
+      ...(process.platform === 'darwin'
+        ? [
+            [
+              'alias',
+              /\/\.viewer-alias-[^/]+\/item$/,
+              async () => {
+                const report = path.join(root, 'Report.pdf');
+                await writeFile(report, 'report');
+                return {
+                  request: { kind: 'alias', sources: [report] },
+                  source: report,
+                  output: report + ' alias',
+                };
+              },
+            ] satisfies [string, RegExp, () => Promise<Prepared>],
+          ]
+        : []),
+    ];
+    it.each(staged)(
+      'syncs the intent naming its stage before publishing (%s)',
+      async (_kind, staging, prepare) => {
+        const { request, source, output } = await prepare();
+        const records = journal(output);
+        const job = await run(request);
+        expect(job.status, JSON.stringify(job.errors)).toBe('completed');
+        expect(job.completed).toEqual([{ source, destination: output }]);
+        expect(effects(records, job.id)).toEqual([
+          { intent: { source, destination: output }, durable: true, present: false },
+          {
+            intent: { source, destination: output, staging: expect.stringMatching(staging) },
+            durable: true,
+            present: false,
+          },
+          { intent: undefined, durable: false, present: true },
+          { intent: undefined, durable: true, present: true },
+        ]);
+      },
+    );
+    const direct: [string, () => Promise<Prepared>][] = [
+      [
+        'mkdir',
+        async () => ({
+          request: { kind: 'mkdir', sources: [], destination, name: 'New' },
+          source: '',
+          output: path.join(destination, 'New'),
+        }),
+      ],
+      [
+        'mkfile',
+        async () => ({
+          request: { kind: 'mkfile', sources: [], destination, name: 'New.txt' },
+          source: '',
+          output: path.join(destination, 'New.txt'),
+        }),
+      ],
+      [
+        'move',
+        async () => {
+          const file = path.join(root, 'moved.txt');
+          await writeFile(file, 'moved');
+          return {
+            request: { kind: 'move', sources: [file], destination },
+            source: file,
+            output: path.join(destination, 'moved.txt'),
+          };
+        },
+      ],
+      [
+        'rename',
+        async () => {
+          const file = path.join(root, 'old name.txt');
+          await writeFile(file, 'renamed');
+          return {
+            request: { kind: 'rename', sources: [file], name: 'new name.txt' },
+            source: file,
+            output: path.join(root, 'new name.txt'),
+          };
+        },
+      ],
+      [
+        'transfer',
+        async () => {
+          const file = path.join(root, 'dropped.txt');
+          await writeFile(file, 'dropped');
+          return {
+            request: { kind: 'transfer', sources: [file], destination },
+            source: file,
+            output: path.join(destination, 'dropped.txt'),
+          };
+        },
+      ],
+    ];
+    it.each(direct)(
+      'syncs the intent before the change and records completion unsynced (%s)',
+      async (_kind, prepare) => {
+        const { request, source, output } = await prepare();
+        const records = journal(output);
+        const job = await run(request);
+        expect(job.completed).toEqual([{ source, destination: output }]);
+        expect(effects(records, job.id)).toEqual([
+          { intent: { source, destination: output }, durable: true, present: false },
+          { intent: undefined, durable: false, present: true },
+          { intent: undefined, durable: true, present: true },
+        ]);
+      },
+    );
+    it.each(['copy', 'duplicate'] as const)(
+      "writes a copy's first intent unsynced and syncs the one naming its stage (%s)",
+      async (kind) => {
+        const source = path.join(root, 'copied.txt');
+        await writeFile(source, 'copied');
+        const output =
+          kind === 'copy'
+            ? path.join(destination, 'copied.txt')
+            : path.join(root, 'copied copy.txt');
+        const records = journal(output);
+        const job = await run(
+          kind === 'copy' ? { kind, sources: [source], destination } : { kind, sources: [source] },
+        );
+        const staging = expect.stringMatching(/\/\.viewer-transfer-[^/]+\/item$/);
+        expect(effects(records, job.id)).toEqual([
+          { intent: { source, destination: output }, durable: false, present: false },
+          { intent: { source, destination: output, staging }, durable: true, present: false },
+          { intent: undefined, durable: false, present: true },
+          { intent: undefined, durable: true, present: true },
+        ]);
+      },
+    );
+    it('syncs a Trash intent before the move, then journals its receipt', async () => {
+      const file = path.join(root, 'old.txt');
+      await writeFile(file, 'old');
+      const records = journal(file);
+      const job = await run({ kind: 'trash', sources: [file] });
+      expect(job.completed).toEqual([{ source: file }]);
+      expect(effects(records, job.id)).toEqual([
+        { intent: { source: file }, durable: true, present: true },
+        { intent: { source: file }, durable: true, present: false },
+        { intent: undefined, durable: false, present: false },
+        { intent: undefined, durable: true, present: false },
+      ]);
+    });
+    it("journals a replaced item's Trash receipt before publishing its replacement", async () => {
+      const source = path.join(root, 'report.txt');
+      const existing = path.join(destination, 'report.txt');
+      await writeFile(source, 'new');
+      await writeFile(existing, 'old');
+      const records = journal(existing);
+      const id = operations.start({ kind: 'copy', sources: [source], destination });
+      await waitFor(id, (job) => job.status === 'collision');
+      operations.resolve(id, 'replace', false);
+      expect((await waitFor(id)).status).toBe('completed');
+      const staging = expect.stringMatching(/\/\.viewer-transfer-[^/]+\/item$/);
+      expect(effects(records, id)).toEqual([
+        { intent: { source, destination: existing }, durable: false, present: true },
+        { intent: { source, destination: existing, staging }, durable: true, present: true },
+        { intent: { source, destination: existing, staging }, durable: true, present: false },
+        { intent: undefined, durable: false, present: true },
+        { intent: undefined, durable: true, present: true },
+      ]);
+      expect(await readFile(existing, 'utf8')).toBe('new');
+    });
+    it('records a kept original, synced and without its intent, before cleaning its stage', async () => {
+      operations = service(refuse);
+      execute = async (_plan, _sources, output) => {
+        await writeFile(output, 'larger candidate', { flag: 'wx' });
+        return { inputBytes: 6, outputBytes: 16 };
+      };
+      const source = path.join(root, 'photo.png');
+      await writeFile(source, 'source');
+      const output = path.join(root, 'photo optimized.png');
+      const records = journal(output);
+      const transform = transformPlanSchema.parse({ kind: 'image', format: 'png', optimize: true });
+      const job = await run({ kind: 'convert', sources: [source], transform });
+      const compact = 'Already compact · original kept';
+      expect(job).toMatchObject({ status: 'completed', detail: compact, itemsDone: 1 });
+      expect(job.completed).toStrictEqual([
+        { source, inputBytes: 6, outputBytes: 16, optimized: false },
+      ]);
+      expect(job.undoable).toBe(false);
+      expect(job.recovery).toBeUndefined();
+      expect(existsSync(output)).toBe(false);
+      const staging = expect.stringMatching(/\/\.viewer-convert-[^/]+\/item\.png$/);
+      expect(effects(records, job.id)).toEqual([
+        { intent: { source, destination: output }, durable: true, present: false },
+        { intent: { source, destination: output, staging }, durable: true, present: false },
+        { intent: undefined, durable: true, present: false },
+        { intent: undefined, durable: true, present: false },
+      ]);
+      // The stage, cleaned after the item's record, keeps the unpublished candidate.
+      const [item, last] = records.filter((record) => record.job.id === job.id).slice(-2);
+      expect(item?.job).toMatchObject({ detail: compact, errors: [] });
+      expect(last?.job.errors).toEqual([{ path: expect.any(String), message: partialKept }]);
+      expect(job.errors).toEqual(last?.job.errors);
+    });
+  });
+
+  describe('Undo records', () => {
+    it('journals a step back for each moved item', async () => {
+      const moved = path.join(root, 'moved.txt');
+      const renamed = path.join(root, 'renamed.txt');
+      const transferred = path.join(root, 'transferred.txt');
+      const across = path.join(root, 'across.txt');
+      for (const file of [moved, renamed, transferred, across]) await writeFile(file, 'text');
+      const move = await run({ kind: 'move', sources: [moved], destination });
+      const rename = await run({ kind: 'rename', sources: [renamed], name: 'new name.txt' });
+      const transfer = await run({ kind: 'transfer', sources: [transferred], destination });
+      exdev.source = across;
+      // A move across volumes leaves no step back, whether its original went or was kept.
+      const crossing = await run({ kind: 'move', sources: [across], destination });
+      const upper = path.join(root, 'Case.txt');
+      await writeFile(upper, 'case');
+      const caseOnly = (await caseInsensitive(upper))
+        ? await run({ kind: 'rename', sources: [upper], name: 'case.txt' })
+        : undefined;
+      const expected = new Map([
+        [move.id, [await stepBack(path.join(destination, 'moved.txt'), moved)]],
+        [rename.id, [await stepBack(path.join(root, 'new name.txt'), renamed)]],
+        [transfer.id, [await stepBack(path.join(destination, 'transferred.txt'), transferred)]],
+        [crossing.id, []],
+      ]);
+      if (caseOnly)
+        expected.set(caseOnly.id, [await stepBack(path.join(root, 'case.txt'), upper, true)]);
+      const steps = await undoSteps();
+      for (const [id, undo] of expected) expect(steps.get(id)).toEqual(undo);
+    });
+    it('journals the removal of each created item', async () => {
+      const copied = path.join(root, 'copied.txt');
+      const duplicated = path.join(root, 'duplicated.txt');
+      const archived = path.join(root, 'archived.txt');
+      const photo = path.join(root, 'photo.jpg');
+      const picture = path.join(root, 'picture.png');
+      for (const file of [copied, duplicated, archived, photo, picture])
+        await writeFile(file, 'text');
+      const transform = transformPlanSchema.parse({ kind: 'image', format: 'webp' });
+      const created: [OperationRequest, string][] = [
+        [{ kind: 'copy', sources: [copied], destination }, path.join(destination, 'copied.txt')],
+        [{ kind: 'duplicate', sources: [duplicated] }, path.join(root, 'duplicated copy.txt')],
+        [{ kind: 'mkdir', sources: [], destination, name: 'New' }, path.join(destination, 'New')],
+        [
+          { kind: 'mkfile', sources: [], destination, name: 'New.txt' },
+          path.join(destination, 'New.txt'),
+        ],
+        [
+          { kind: 'compress', sources: [archived], destination, name: 'archived.zip' },
+          path.join(destination, 'archived.zip'),
+        ],
+        [
+          { kind: 'extract', sources: [path.join(destination, 'archived.zip')], destination },
+          path.join(destination, 'archived'),
+        ],
+        [{ kind: 'convert', sources: [photo], conversion: 'png' }, path.join(root, 'photo.png')],
+        [
+          { kind: 'convert', sources: [picture], transform },
+          path.join(root, 'picture converted.webp'),
+        ],
+      ];
+      const expected = new Map<string, Awaited<ReturnType<typeof removal>>[]>();
+      for (const [request, output] of created) {
+        const job = await run(request);
+        expect(job.status, request.kind + JSON.stringify(job.errors)).toBe('completed');
+        expected.set(job.id, [await removal(output)]);
+      }
+      const steps = await undoSteps();
+      for (const [id, undo] of expected) expect(steps.get(id)).toEqual(undo);
+    });
+    it('journals the Trash receipt of a trashed or replaced item, before its replacement', async () => {
+      const trashed = path.join(root, 'trashed.txt');
+      const source = path.join(root, 'report.txt');
+      const existing = path.join(destination, 'report.txt');
+      await writeFile(trashed, 'trashed');
+      await writeFile(source, 'new');
+      await writeFile(existing, 'old');
+      const removed = await run({ kind: 'trash', sources: [trashed] });
+      const id = operations.start({ kind: 'copy', sources: [source], destination });
+      await waitFor(id, (job) => job.status === 'collision');
+      operations.resolve(id, 'replace', false);
+      await waitFor(id);
+      const origins = await operations.trashOrigins();
+      const receipt = async (original: string) => {
+        const file = origins.find((origin) => origin.originalPath === original)!.file;
+        return {
+          from: file,
+          to: original,
+          trash: true,
+          directory: false,
+          proof: await outputProof(file),
+          ...(await version(file)),
+        };
+      };
+      const expected = new Map([
+        [removed.id, [await receipt(trashed)]],
+        [id, [await receipt(existing), await removal(existing)]],
+      ]);
+      const steps = await undoSteps();
+      for (const [job, undo] of expected) expect(steps.get(job)).toEqual(undo);
+    });
+  });
+
+  describe('failures and settlement', () => {
+    it("records an item's failure before what its cleanup kept, after earlier failures", async () => {
+      operations = service(refuse);
+      execute = async (_plan, _sources, output) => {
+        await writeFile(output, 'partial', { flag: 'wx' });
+        throw new Error('Generated encoder failure');
+      };
+      const missing = path.join(root, 'missing.png');
+      const photo = path.join(root, 'photo.png');
+      await writeFile(photo, 'pixels');
+      const transform = transformPlanSchema.parse({ kind: 'image', format: 'webp' });
+      const job = await run({ kind: 'convert', sources: [missing, photo], transform });
+      expect(job).toMatchObject({ status: 'failed', itemsDone: 2, completed: [] });
+      expect(job.errors).toEqual([
+        { path: missing, message: expect.stringContaining('ENOENT') },
+        { path: photo, message: 'Generated encoder failure' },
+        { path: expect.any(String), message: partialKept },
+      ]);
+      expect(job.recovery).toEqual({
+        source: photo,
+        destination: path.join(root, 'photo converted.webp'),
+        staging: expect.stringMatching(/\/\.viewer-convert-[^/]+\/item\.webp$/),
+      });
+    });
+    it('fails the running job and every queued one when a receipt cannot be saved', async () => {
+      const first = path.join(root, 'first.txt');
+      const second = path.join(root, 'second.txt');
+      await writeFile(first, 'first');
+      await writeFile(second, 'second');
+      vi.spyOn(OperationLog.prototype, 'record').mockRejectedValue(new Error('Disk is full'));
+      const running = operations.start({ kind: 'move', sources: [first], destination });
+      const queued = operations.start({ kind: 'move', sources: [second], destination });
+      const stopped =
+        'Operation receipts could not be saved. Further file changes were stopped. Disk is full';
+      const one = await waitFor(running);
+      expect(one.status).toBe('failed');
+      expect(one.errors).toEqual([{ path: first, message: stopped }]);
+      expect(one.recovery).toEqual({
+        source: first,
+        destination: path.join(destination, 'first.txt'),
+      });
+      const two = await waitFor(queued);
+      expect(two.status).toBe('failed');
+      expect(two.errors).toEqual([{ path: destination, message: stopped }]);
+      expect(two.recovery).toBeUndefined();
+      expect(await readdir(destination)).toEqual([]);
+      expect(await readFile(first, 'utf8')).toBe('first');
+      expect(await readFile(second, 'utf8')).toBe('second');
+    });
+    it('stops at a cancelled item without recording it as a failure or starting the next', async () => {
+      const large = path.join(root, 'large.bin');
+      const later = path.join(root, 'later.txt');
+      await writeFile(large, Buffer.alloc(16 * 1024 * 1024, 7));
+      await writeFile(later, 'later');
+      let time = 0;
+      vi.spyOn(performance, 'now').mockImplementation(() => (time += 100));
+      operations = new Operations(
+        async () => undefined,
+        () => undefined,
+        (job) => {
+          if (job.bytesDone > 0) operations.cancel(job.id);
+        },
+      );
+      const job = await run({ kind: 'copy', sources: [large, later], destination });
+      expect(job).toMatchObject({ status: 'cancelled', itemsDone: 0, completed: [] });
+      expect(job.errors.filter((error) => [large, later].includes(error.path))).toEqual([]);
+      expect(job.recovery).toEqual({
+        source: large,
+        destination: path.join(destination, 'large.bin'),
+        staging: expect.stringMatching(/\/\.viewer-transfer-[^/]+\/item$/),
+      });
+      expect(existsSync(path.join(destination, 'later.txt'))).toBe(false);
+    });
+    it("keeps the last failed item's intent as recovery, even beside completed items", async () => {
+      const present = path.join(root, 'present.txt');
+      const missing = path.join(root, 'missing.txt');
+      await writeFile(present, 'present');
+      const first = path.join(destination, 'first');
+      const second = path.join(destination, 'second');
+      await mkdir(first);
+      await mkdir(second);
+      const failedLast = await run({
+        kind: 'copy',
+        sources: [present, missing],
+        destination: first,
+      });
+      expect(failedLast).toMatchObject({ status: 'completed', errorCount: 1, undoable: true });
+      expect(failedLast.recovery).toEqual({
+        source: missing,
+        destination: path.join(first, 'missing.txt'),
+      });
+      const failedFirst = await run({
+        kind: 'copy',
+        sources: [missing, present],
+        destination: second,
+      });
+      expect(failedFirst).toMatchObject({ status: 'completed', errorCount: 1 });
+      expect(failedFirst.recovery).toBeUndefined();
+    });
+    it("keeps a skipped last item's intent as recovery", async () => {
+      const source = path.join(root, 'one.txt');
+      const existing = path.join(destination, 'one.txt');
+      await writeFile(source, 'new');
+      await writeFile(existing, 'old');
+      const records = journal(existing);
+      const id = operations.start({ kind: 'copy', sources: [source], destination });
+      await waitFor(id, (job) => job.status === 'collision');
+      operations.resolve(id, 'skip', false);
+      const job = await waitFor(id);
+      expect(job).toMatchObject({ status: 'completed', itemsDone: 1, completed: [], errors: [] });
+      expect(job.recovery).toEqual({ source, destination: existing });
+      // A skipped item has no record of its own; the job's last record carries it.
+      expect(effects(records, id)).toEqual([{ intent: undefined, durable: true, present: true }]);
+      expect(await readFile(existing, 'utf8')).toBe('old');
+    });
+    it('announces moved and renamed items, not copies', async () => {
+      const announced: FileChange[] = [];
+      operations = service(receipts, (changes) => announced.push(...changes));
+      const copied = path.join(root, 'copied.txt');
+      const moved = path.join(root, 'moved.txt');
+      const renamed = path.join(root, 'renamed.txt');
+      for (const file of [copied, moved, renamed]) await writeFile(file, 'text');
+      await run({ kind: 'copy', sources: [copied], destination });
+      await run({ kind: 'move', sources: [moved], destination });
+      await run({ kind: 'rename', sources: [renamed], name: 'new name.txt' });
+      expect(announced).toEqual([
+        { source: moved, destination: path.join(destination, 'moved.txt') },
+        { source: renamed, destination: path.join(root, 'new name.txt') },
+      ]);
+    });
   });
 });

@@ -113,7 +113,7 @@ for (let launch = 0; launch < 2; launch++) {
       await actions.palette('Files');
       await choose(name);
       await actions.key(' ', 'Space');
-      await actions.button('Open linked plane', 'document.querySelector(".quick-preview-dialog")');
+      await actions.button('Open linked plane', '.quick-preview-dialog');
     };
     const readyPDF = () =>
       until(
@@ -196,7 +196,7 @@ for (let launch = 0; launch < 2; launch++) {
       );
       await actions.field('Output width', '96');
       await actions.field('Output height', '64');
-      await actions.button('Export image', 'document.querySelector(".image-tools-dialog")');
+      await actions.button('Export image', '.image-tools-dialog');
       const jobs = await until(
         () => evaluate<OperationJob[]>('window.viewer.jobs()'),
         (jobs) => jobs.some((job) => job.status === 'completed'),
@@ -209,7 +209,7 @@ for (let launch = 0; launch < 2; launch++) {
       assert.equal(bytes.subarray(0, 4).toString(), 'RIFF');
       assert.equal(bytes.subarray(8, 12).toString(), 'WEBP');
       outputHash = await hash(output);
-      await actions.button('Open result', 'document.querySelector(".image-tools-dialog")');
+      await actions.button('Open result', '.image-tools-dialog');
       const result = await until(
         () =>
           evaluate<{ width: number; height: number }>(
@@ -220,10 +220,7 @@ for (let launch = 0; launch < 2; launch++) {
       );
       assert.deepEqual(result, { width: 96, height: 64 });
       if (await evaluate<boolean>('!!document.querySelector(".quick-preview-dialog")'))
-        await actions.button(
-          'Open linked plane',
-          'document.querySelector(".quick-preview-dialog")',
-        );
+        await actions.button('Open linked plane', '.quick-preview-dialog');
       await until(
         async () =>
           (await saved()).workspaces[0]?.panes.some(

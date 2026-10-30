@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { adoptGeneratedProfile, type NativeWindowMode } from './native/runtime/owned-application';
+import type { PageExpression } from './native/runtime/page-function';
 
 interface DebugTarget {
   id: string;
@@ -13,6 +14,11 @@ interface DebugTarget {
 interface RuntimeResult<T> {
   result: { value: T };
   exceptionDetails?: { exception?: { description?: string }; text?: string };
+}
+interface EvaluateOptions {
+  contextId?: number;
+  sessionId?: string;
+  userGesture?: boolean;
 }
 export async function ownedApp(
   binary: string,
@@ -118,11 +124,13 @@ export async function ownedApp(
         });
         socket.send(JSON.stringify({ id: current, method, params, sessionId }));
       });
-    const evaluate = async <T = unknown>(
-      expression: string,
-      options: { contextId?: number; sessionId?: string; userGesture?: boolean } = {},
-    ): Promise<T> => {
-      const reply = await command<RuntimeResult<T>>(
+    function evaluate<R>(
+      expression: PageExpression<R>,
+      options?: EvaluateOptions,
+    ): Promise<Awaited<R>>;
+    function evaluate<T = unknown>(expression: string, options?: EvaluateOptions): Promise<T>;
+    async function evaluate(expression: string, options: EvaluateOptions = {}) {
+      const reply = await command<RuntimeResult<unknown>>(
         'Runtime.evaluate',
         {
           expression,
@@ -138,7 +146,7 @@ export async function ownedApp(
           reply.exceptionDetails.exception?.description || reply.exceptionDetails.text,
         );
       return reply.result.value;
-    };
+    }
     await command('Emulation.setFocusEmulationEnabled', { enabled: true });
     // A debugger target exists before loadURL resolves. Browser.close during
     // that interval can close only the loading Mac window rather than Quit.

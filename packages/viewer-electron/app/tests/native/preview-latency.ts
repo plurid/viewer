@@ -24,6 +24,7 @@ import { textSamples } from '../../tools/playground/samples/text';
 import { fieldNotesPDF } from '../../tools/docs/sample';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { countOf, exists, textOf } from './runtime/page';
 import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
@@ -139,13 +140,18 @@ async function profileFor(name: string, crawling: boolean, mode: 'list' | 'colum
 // ---------------------------------------------------------------------------------------------
 // Page probes
 
+interface PreviewTiming {
+  start?: number;
+  shown?: number;
+}
+
 /**
  * Times a preview from the key that opens it to the first frame that shows something real: no
  * spinner, and a picture, canvas or text. The harness polls too slowly to time it from outside.
  */
 function armPreviewTiming(scope: string): void {
-  const timing: { start?: number; shown?: number } = {};
-  (window as unknown as { __preview: typeof timing }).__preview = timing;
+  const timing: PreviewTiming = {};
+  (window as unknown as { __preview: PreviewTiming }).__preview = timing;
   const shows = () => {
     const host = document.querySelector(`${scope} .preview-host`);
     if (!host || host.querySelector('.loading')) return false;
@@ -206,11 +212,27 @@ function watchColumns(): void {
   requestAnimationFrame(tick);
 }
 
+function previewTiming(): PreviewTiming {
+  return { ...(window as unknown as { __preview: PreviewTiming }).__preview };
+}
+
 type ColumnProbe = { frames: number; empty: number; emptyIn: Record<string, number> };
 function stopColumns(): ColumnProbe {
   const probe = (window as unknown as { __columns: ColumnProbe & { running: boolean } }).__columns;
   probe.running = false;
   return { frames: probe.frames, empty: probe.empty, emptyIn: probe.emptyIn };
+}
+
+/** Selects a row and gives it focus. */
+function selectRow(selector: string): void {
+  const row = document.querySelector<HTMLElement>(selector)!;
+  row.click();
+  row.focus();
+}
+
+function columnPreviewLoaded(): boolean {
+  const host = document.querySelector('.column-preview .preview-host');
+  return !!host && !host.querySelector('.loading');
 }
 
 type Connection = Awaited<ReturnType<Awaited<ReturnType<typeof ownedApp>>['connect']>>;
@@ -227,9 +249,7 @@ async function key(connection: Connection, name: string, code: string, keyCode: 
 
 async function select(connection: Connection, name: string) {
   const selector = `[data-file-path=${JSON.stringify(path.join(files, name))}]`;
-  await connection.evaluate(
-    `(() => { const row = document.querySelector(${JSON.stringify(selector)}); row.click(); row.focus(); })()`,
-  );
+  await connection.evaluate(pageCall(selectRow, selector));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -254,7 +274,7 @@ async function quickPreviews(
   const observations: Observation[] = [];
   try {
     await until(
-      () => connection.evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+      () => connection.evaluate(countOf('[data-file-path]')),
       (count) => count === fixtures.length + 1,
       'latency fixtures',
       30_000,
@@ -267,20 +287,20 @@ async function quickPreviews(
       await select(connection, fixture.name);
       await delay(pause);
       await connection.evaluate(pageCall(armPreviewTiming, '.quick-preview'));
-      const crawling = (
-        await connection.evaluate<{ running: boolean }>('window.viewer.indexStatus()')
-      ).running;
+      const crawling = (await connection.evaluate(pageCall(() => window.viewer.indexStatus())))
+        .running;
       await key(connection, ' ', 'Space', 32);
       const timing = await until(
-        () => connection.evaluate<{ start?: number; shown?: number }>('({ ...window.__preview })'),
+        () => connection.evaluate(pageCall(previewTiming)),
         (value) => value.shown !== undefined,
         fixture.name + ' shows its content',
         30_000,
       );
       // what the preview shows, so a failure message cannot pass for content
-      const shown = await connection.evaluate<string>(
-        `(document.querySelector('.quick-preview')?.textContent ?? '').replace(/\\s+/g, ' ').trim().slice(0, 80)`,
-      );
+      const shown = (await connection.evaluate(textOf('.quick-preview')))
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80);
       assert.doesNotMatch(shown, /could not|unavailable|failed/i, fixture.name + ': ' + shown);
       const observation = {
         run,
@@ -294,8 +314,8 @@ async function quickPreviews(
       console.log(JSON.stringify(observation));
       await key(connection, 'Escape', 'Escape', 27);
       await until(
-        () => connection.evaluate<boolean>('!document.querySelector(".quick-preview-dialog")'),
-        Boolean,
+        () => connection.evaluate(exists('.quick-preview-dialog')),
+        (open) => !open,
         'preview closes',
       );
     }
@@ -310,7 +330,7 @@ async function columns(): Promise<ColumnProbe & { steps: number }> {
   const connection = await launched.connect();
   try {
     await until(
-      () => connection.evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+      () => connection.evaluate(countOf('[data-file-path]')),
       (count) => count === fixtures.length + 1,
       'column fixtures',
       30_000,
@@ -322,10 +342,7 @@ async function columns(): Promise<ColumnProbe & { steps: number }> {
     for (const name of names) {
       await select(connection, name);
       await until(
-        () =>
-          connection.evaluate<boolean>(
-            `(() => { const host = document.querySelector('.column-preview .preview-host'); return !!host && !host.querySelector('.loading'); })()`,
-          ),
+        () => connection.evaluate(pageCall(columnPreviewLoaded)),
         Boolean,
         name + ' in Columns',
         30_000,
@@ -338,7 +355,7 @@ async function columns(): Promise<ColumnProbe & { steps: number }> {
       await key(connection, 'ArrowDown', 'ArrowDown', 40);
       await delay(500);
     }
-    const probe = await connection.evaluate<ColumnProbe>(pageCall(stopColumns));
+    const probe = await connection.evaluate(pageCall(stopColumns));
     return { ...probe, steps: names.length - 1 };
   } finally {
     await launched.close(connection);

@@ -10,6 +10,8 @@ import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { defaultPlaygroundDirectory } from '../../tools/playground/main';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
+import { countOf } from './runtime/page';
+import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -67,27 +69,30 @@ await writeFile(path.join(profile, 'config.jsonc'), JSON.stringify({ version: 1,
   flag: 'wx',
 });
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state), { flag: 'wx' });
+
+/** The pixel size of a private thumbnail, once the page has decoded it. */
+async function thumbnailSize(file: string, size: number) {
+  const data = await window.viewer.thumbnail(file, size);
+  if (!data.startsWith('data:image/')) throw new Error('Missing isolated RAW thumbnail');
+  const image = new Image();
+  image.src = data;
+  await image.decode();
+  return { width: image.naturalWidth, height: image.naturalHeight };
+}
+
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 try {
   connection = await app.connect();
+  const { evaluate } = connection;
   await until(
-    () => connection!.evaluate<number>('document.querySelectorAll("[data-file-path]").length'),
+    () => evaluate(countOf('[data-file-path]')),
     (count) => count === 1,
     'single camera fixture',
   );
   const sizes: { requested: number; width: number; height: number }[] = [];
   for (const size of [128, 512, 128]) {
-    const value: { width: number; height: number } = await connection.evaluate(
-      `(async () => {
-        const data = await window.viewer.thumbnail(${JSON.stringify(file)}, ${size});
-        if (!data.startsWith('data:image/')) throw new Error('Missing isolated RAW thumbnail');
-        const image = new Image();
-        image.src = data;
-        await image.decode();
-        return { width: image.naturalWidth, height: image.naturalHeight };
-      })()`,
-    );
+    const value = await evaluate(pageCall(thumbnailSize, file, size));
     assert.ok(value.width > 0 && value.height > 0);
     assert.equal(Math.max(value.width, value.height), size);
     sizes.push({ requested: size, ...value });
