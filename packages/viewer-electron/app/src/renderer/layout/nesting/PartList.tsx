@@ -29,6 +29,7 @@ export function PartList({
   choose,
   configure,
   placed,
+  origins,
 }: {
   files: readonly NestingFile[];
   choices: ReadonlyMap<string, PartChoice>;
@@ -36,6 +37,8 @@ export function PartList({
   configure(file: string, patch: Partial<FileOptions>): void;
   /** Copies placed so far, by part key. */
   placed: ReadonlyMap<string, number>;
+  /** Where an untouched quantity came from, by part key: "From “4buc”". */
+  origins?: ReadonlyMap<string, string>;
 }) {
   return (
     <section className="nesting-parts" aria-label="Parts">
@@ -55,6 +58,7 @@ export function PartList({
             const choice = choices.get(key);
             if (!choice) return null;
             const done = placed.get(key);
+            const origin = origins?.get(key);
             return (
               <div key={key} className="nesting-part">
                 <PartThumbnail part={part} />
@@ -85,6 +89,7 @@ export function PartList({
                           })
                         }
                       />
+                      {origin && <span className="muted">{origin}</span>}
                     </label>
                     <span className="nesting-choice">
                       Turn

@@ -15,6 +15,7 @@ import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
 import type { AgentTaskBundle, TaskWorkflowInput, TaskWorkflowReply } from './agents/task-workflow';
 import type { TransformPlan } from './operations/transforms';
 import type { OptimizationOutcome } from './operations/optimization-target';
+import type { CorrectionReport } from './fabrication/plan';
 import type { OptimizationRequest, OptimizationReply } from './operations/optimization-review';
 import type { DocumentRequest } from './previews/documents/requests';
 import type { SQLiteReply, SQLiteRequest } from './previews/data/sqlite';
@@ -51,6 +52,8 @@ import type {
   ProjectRequest,
   ProjectReply,
 } from './workspaces/project';
+import type { TourReply, TourRequest } from './tours/tour';
+import type { FabricationReply, FabricationRequest } from './fabrication/check';
 import type { LensReply, LensRequest } from './files/lenses';
 import type { Collection, BasketItem, QuerySnapshot } from './workspaces/collections';
 import type {
@@ -263,6 +266,10 @@ export interface LayoutPane {
   path: string;
   sources: string[];
   mode?: LayoutMode;
+  /** Pieces to nest of each source drawing, by path, given when the plane was opened. */
+  quantities?: Record<string, number>;
+  /** Millimetres of each source drawing, by path, given when the plane was opened. */
+  thicknesses?: Record<string, number>;
 }
 export interface ServerPane {
   id: string;
@@ -561,6 +568,8 @@ export interface OperationJob {
     outputBytes?: number;
     optimized?: boolean;
     targetSize?: OptimizationOutcome;
+    /** What a corrected drawing measured before and after. */
+    correction?: CorrectionReport;
   }[];
   errors: { path: string; message: string }[];
   errorCount: number;
@@ -719,6 +728,10 @@ export interface ViewerAPI {
   checkpoints(request: CheckpointRequest): Promise<CheckpointReply>;
   inspect(file: string, content?: boolean, ocr?: boolean): Promise<InspectionResult>;
   project(request: ProjectRequest): Promise<ProjectReply>;
+  /** A `.viewer-tour.jsonc` file: read to play it, or saved after recording; a stop's file. */
+  tour<R extends TourRequest>(request: R): Promise<TourReply<R>>;
+  /** A laser job's check: its inventory, the model's answer graded, and its end. */
+  fabrication(request: FabricationRequest): Promise<FabricationReply>;
   /** Folder lenses: groups and places for a folder's items, which never move them. */
   lens(request: LensRequest): Promise<LensReply>;
   commandsPublish(

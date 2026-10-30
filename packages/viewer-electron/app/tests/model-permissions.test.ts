@@ -4,6 +4,7 @@ import path from 'node:path';
 import { ModelPermissions } from '../src/desktop/models/model-permissions';
 import { DocumentStore } from '../src/desktop/persistence/document-store';
 import { newModelProvider } from '../src/domain/models/providers';
+import { modelDataLabels, modelPermissionCovers } from '../src/domain/models/permissions';
 import { Credentials, Providers } from '../src/desktop/models/providers';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
@@ -24,6 +25,26 @@ afterEach(async () => {
 });
 const signal = () => new AbortController().signal;
 describe('private model data authority', () => {
+  it('keeps pictures above text: a full-text approval never sends a photo', async () => {
+    await permissions.set(provider, 'full-text');
+    const permission = await permissions.get(provider);
+    expect(modelPermissionCovers(permission, provider, 'full-text')).toBe(true);
+    expect(modelPermissionCovers(permission, provider, 'images')).toBe(false);
+    const work = vi.fn(async () => 'sent');
+    await expect(permissions.run(provider, 'images', signal(), work)).rejects.toMatchObject({
+      code: 'MODEL_DATA_PERMISSION_REQUIRED',
+    });
+    expect(work).not.toHaveBeenCalled();
+    await permissions.set(provider, 'images');
+    // pictures include everything below them, and survive a restart
+    expect(await permissions.run(provider, 'names', signal(), work)).toBe('sent');
+    expect(await new ModelPermissions(root, () => current).get(provider)).toMatchObject({
+      level: 'images',
+    });
+    expect(modelDataLabels.images).toBe(
+      'filenames, metadata, document text and pictures (photos and rendered drawing pages)',
+    );
+  });
   it('does not infer approval from configuration, a local endpoint or a stored key', async () => {
     const credentials = new Credentials(
       root,

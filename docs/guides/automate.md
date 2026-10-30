@@ -90,11 +90,12 @@ Nothing runs yet: press **Return** to run the line as if you typed it, or **Tab*
 Each model has one [data level](../reference/terms.md#models-and-agents). Each level includes the
 one before it. Until you allow one, no file data is sent.
 
-| Level     | Label in **Data access**                            | Used by                                                                  |
-| --------- | --------------------------------------------------- | ------------------------------------------------------------------------ |
-| Names     | **filenames and file metadata**                     | Ask Viewer, model suggestions, Explore this folder                       |
-| Excerpts  | **filenames, metadata and document excerpts**       | Explore reading inside files, identifying a file, renaming from contents |
-| Full text | **filenames, metadata and extracted document text** | **Summarize…**                                                           |
+| Level     | Label in **Data access**                                                                | Used by                                                                  |
+| --------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Names     | **filenames and file metadata**                                                         | Ask Viewer, model suggestions, Explore this folder                       |
+| Excerpts  | **filenames, metadata and document excerpts**                                           | Explore reading inside files, identifying a file, renaming from contents |
+| Full text | **filenames, metadata and extracted document text**                                     | **Summarize…**                                                           |
+| Pictures  | **filenames, metadata, document text and pictures (photos and rendered drawing pages)** | **Check laser job…**                                                     |
 
 Viewer asks for a level when a feature needs one you have not allowed. **Revoke access** withdraws
 it. Changing the model's endpoint or clearing its key revokes access too, and stops its running

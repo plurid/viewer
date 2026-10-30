@@ -185,4 +185,21 @@ describe('the Layout plane record', () => {
     expect(paneTitle({ ...pane, sources: [paths[0]!] })).toBe('Layout · a.jpg');
     expect(paneRoute('layout', pane.id)).toBe('/layouts/' + pane.id);
   });
+
+  it('keeps the quantities it opens with for its own files, and replaces them on reopening', () => {
+    const { actions, registerContent } = fixture();
+    const paths = ['/Users/a/Job/g6-PL60-B2-2buc.dxf', '/Users/a/Job/g3-CV25-E1-10buc.dxf'];
+    actions.openLayout(paths, 'parent', 'nesting', {
+      quantities: { [paths[0]!]: 4, '/Users/a/Elsewhere.dxf': 9, [paths[1]!]: 1.5 },
+    });
+    const pane = activeWorkspace().panes.find(
+      (item) => item.type === 'layout' && item.sources[0] === paths[0],
+    )!;
+    expect(pane).toMatchObject({ mode: 'nesting', quantities: { [paths[0]!]: 4 } });
+    actions.openLayout(paths, 'parent', 'nesting', { quantities: { [paths[1]!]: 12 } });
+    expect(registerContent).toHaveBeenCalledTimes(1);
+    expect(activeWorkspace().panes.find((item) => item.id === pane.id)).toMatchObject({
+      quantities: { [paths[1]!]: 12 },
+    });
+  });
 });

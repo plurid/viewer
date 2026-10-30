@@ -3,8 +3,8 @@
 Use this guide to put several photos or pages on one sheet: collages, contact sheets, several pages
 to a sheet, booklets, cards and labels, posters on ordinary paper, and DXF parts nested for cutting.
 
-**Find it:** **⌘K** → **Lay out…** or **Nest for cutting…** · the file menu, under **Suggested** for
-several photos or DXF drawings
+**Find it:** **⌘K** → **Lay out…**, **Nest for cutting…** or **Check laser job…** · the file menu,
+under **Suggested** for several photos or DXF drawings
 
 Select photos or PDFs, press **⌘K** and choose **Lay out…**. Viewer chooses a layout for what you
 selected and opens it in a Layout plane. The preview is the file it saves.
@@ -122,6 +122,48 @@ Letter.
 **Stop** keeps the best layout so far; **Search longer** looks again for longer. The
 [nesting reference](../reference/nesting.md) explains the search, the estimate formulas and the
 saved files exactly.
+
+## Check a laser job
+
+Before a job is cut, Viewer can read the customer's request, the drawings and photos with a model,
+then measure every DXF part itself and say where the job disagrees with itself: a hole pitch drawn
+48 mm where the drawing gives 50 mm, a quantity the request and a file name give differently.
+
+1. Select the job's folder, or its files with at least one DXF part, press **⌘K** and choose **Check
+   laser job…**. The check panel lists **What is sent**: each file with its ref, such as `S2`, and
+   how it goes. A request goes as its text, a drawing as its pages with their text, a photo as a
+   picture without location or camera details, and a DXF only as Viewer's measurement.
+2. Under **Model**, choose the model in **Model to check with**: Meta's Muse Spark, Gemini,
+   OpenRouter or another that takes pictures. The check sends pictures, so a model allowed only text
+   asks first: choose **Allow pictures for Meta** and confirm.
+3. Choose the button that counts the files, such as **Check 7 files**. The panel shows the drawing
+   being drawn and the model asked; **Cancel** stops it.
+4. Read the **Findings**. Each has Viewer's grade, **Confirmed**, **Refuted** or **Unverified**, and
+   its reason with the values: "Viewer measured 48.00 mm between holes 4 and 5 along x; the drawing
+   gives 50 mm." **Question** marks what the job leaves open, such as how many sets of a drawing of
+   two pieces to cut.
+5. For a confirmed pitch, read the proposed correction and choose **Save g6-PL60-B2-2buc
+   (corrected).dxf**. The copy is saved beside the original, measured again, and the panel says
+   "Saved: pitch 48.00 mm → 50.00 mm, measured again." Nothing is changed until you choose it.
+6. Choose **Play the tour** to be shown each finding: the request's line, the drawing with its
+   region outlined, the DXF holes with the pitch Viewer measured. **Esc** stops it.
+7. Under **Cut sheets**, read each part's quantity and thickness and where it comes from, such as
+   "2, from the request · 6 mm, from the request", then choose **Prepare cut sheets**. The Nesting
+   plane opens on the job's parts, the corrected copy in place of its original, a tab per thickness.
+   Wait for **Checked** on each tab.
+8. Choose **Export handoff**. A folder such as "Job 1042 handoff" appears in the job's folder,
+   holding `Cut sheets/`, `Evidence/` copies of the job's files, `Job.viewer-tour.jsonc`, which
+   plays from those copies, and `Check record.json`. **File operations** offers Undo.
+
+Without a check, nesting reads each part's thickness and quantity from its name when it follows a
+convention Viewer reads, such as `g6-MB20-A1-4buc.dxf`: 6 mm, part MB20-A1, 4 pieces. Select every
+DXF part of the job and choose **Nest for cutting…**; parts of different thicknesses get a tab each,
+such as **3 mm · 2 files**, with **From “4buc”** beside a quantity read from a name. A name Viewer
+is unsure of, such as one giving two thicknesses, is left unread: Viewer never guesses.
+
+To try it, run `pnpm playground` and open `fabrication/Job 1042`: five parts in 3 and 6 mm, their
+drawing and the request. The [fabrication reference](../reference/fabrication.md) gives what a check
+sends, how it reconciles quantities and grades findings, the name rules, and the handoff.
 
 ## What is saved
 

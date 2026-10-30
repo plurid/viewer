@@ -5,6 +5,7 @@ import type { MailAttachment, MailMessage } from '../../../domain/previews/mail/
 import type { Mailbox } from '../../../domain/previews/mail/mailbox';
 import type { AttachmentDestination, PreviewContext } from '../contracts';
 import { formatBytes } from '../../../domain/files/entries';
+import { anchoredLine } from '../../../domain/files/inspection';
 import { mailboxLimits } from '../../../domain/previews/mail/mailbox';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
@@ -131,6 +132,34 @@ function Attachments({
   );
 }
 
+/** The plain body with one line marked and scrolled to the middle: a text anchor's line. */
+function MarkedText({ text, line }: { text: string; line: number }) {
+  const body = useRef<HTMLPreElement>(null),
+    marked = useRef<HTMLSpanElement>(null);
+  // Only the body scrolls: scrollIntoView would also scroll the space's own containers.
+  useEffect(() => {
+    const element = body.current,
+      target = marked.current;
+    if (element && target)
+      element.scrollTop = Math.max(
+        0,
+        target.offsetTop - element.offsetTop - element.clientHeight / 2,
+      );
+  }, [text, line]);
+  const lines = text.split('\n');
+  const before = lines.slice(0, line - 1).join('\n'),
+    after = lines.slice(line).join('\n');
+  return (
+    <pre className="mail-text" tabIndex={0} ref={body}>
+      {line > 1 && before + '\n'}
+      <span ref={marked} className="evidence-line">
+        {lines[line - 1]}
+      </span>
+      {line < lines.length && '\n' + after}
+    </pre>
+  );
+}
+
 /** One message: its header, attachments and body. `index` is its place in a mailbox. */
 function MessageView({
   context,
@@ -142,6 +171,15 @@ function MessageView({
   index?: number;
 }) {
   const [view, setView] = usePreviewState<MailView>(context, 'mail.view', 'html');
+  const evidence = context.evidence;
+  const line =
+    evidence?.anchor.kind === 'text' && mail.text !== undefined
+      ? anchoredLine(mail.text, evidence.anchor, evidence.quote)
+      : undefined;
+  // A text anchor points into the plain body: show it there, whichever view was chosen.
+  useEffect(() => {
+    if (line !== undefined) setView('text');
+  }, [line, setView]);
   const html = mail.html && (view === 'html' || mail.text === undefined);
   const save = context.saveAttachments;
   usePreviewCommands(
@@ -196,6 +234,8 @@ function MessageView({
       </header>
       {html ? (
         <MessageFrame context={context} message={index} />
+      ) : line !== undefined && mail.text !== undefined ? (
+        <MarkedText text={mail.text} line={line} />
       ) : (
         <pre className="mail-text" tabIndex={0}>
           {mail.text ?? ''}

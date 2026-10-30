@@ -1,4 +1,5 @@
 import type { CapturedTarget } from '../../domain/automation/actions';
+import { isTourFile } from '../../domain/tours/tour';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   AgentNavigation,
@@ -777,10 +778,10 @@ export class AgentBroker {
       value = extension.requests.navigation(request, target);
       this.own((value as { id: string }).id);
       // A named client's navigation runs at once, but a project file opened installs a whole
-      // workspace from it: the person reviews that.
-      const project =
-        request.kind === 'open-path' && path.basename(request.path) === 'viewer.project.jsonc';
-      if (!project && (await this.clients.get())) {
+      // workspace from it, and a tour file opens every file it stops at: the person reviews those.
+      const name = request.kind === 'open-path' ? path.basename(request.path) : '';
+      const reviewed = name === 'viewer.project.jsonc' || isTourFile(name);
+      if (!reviewed && (await this.clients.get())) {
         await extension.requests.review((value as { id: string }).id, true);
         value = { ...(value as object), requiresUserReview: false };
       }

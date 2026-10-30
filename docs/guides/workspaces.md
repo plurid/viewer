@@ -2,7 +2,8 @@
 
 Use this guide when one task needs several things open at once: a folder, the files you read from
 it, notes and tools. It shows how to arrange [planes](../reference/terms.md#planes-and-the-space),
-save views, keep separate workspaces, share a project folder and back up your work.
+save views, show someone around with a tour, keep separate workspaces, share a project folder and
+back up your work.
 
 **Find it:** **⌘0** shows every plane, **⌘Return** docks one · the workspace's name at the top left
 of the window · **Workspace** in the menu bar · **File → Create Project…**
@@ -49,6 +50,57 @@ press **Escape** to move around the space again. Drag a plane by its header.
 
 **Save layout as template…** keeps the arrangement of plane kinds, so you can apply it to other
 folders.
+
+## Show someone around: tours
+
+A tour shows files one stop at a time, each opened at the place that matters: a page, an outline on
+a drawing, the holes in a DXF, a model from one side. It is a `.viewer-tour.jsonc` file kept beside
+those files, so it travels with their folder.
+
+**Record a tour**
+
+1. Choose **⌘K** → **Record a tour**. The tour stops panel opens.
+2. Open a file and show the place to point at: turn to the page, zoom into part of a photo, frame
+   the holes in a drawing or turn the model.
+3. Choose **Add “Bracket.pdf”** (the button names the active file). The stop keeps where the preview
+   is, and its caption names the file and the place, such as `Bracket.pdf, page 2`. A photo or
+   drawing shown whole adds the file without a place.
+4. Write each caption, or choose **Dictate** beside it. The up and down buttons change the order.
+5. Choose **Play** to try the tour, then **Save tour**. It saves in the folder that holds every
+   stop's file, under the tour's name.
+
+**Play a tour**
+
+1. Open its `.viewer-tour.jsonc` file. It plays at once. It opens files and moves the camera; it
+   never runs commands.
+2. Read the tour bar: the caption, the file and the place in it, and how far along you are.
+3. Press **→** and **←** to move between stops, **Space** to pause and **Escape** to stop. On a
+   focused button, **Space** presses the button. A click or scroll in the space pauses the tour
+   while you look around; **Resume** brings the stop back into view. Paused, the tour stays at its
+   stop, even one it is skipping.
+4. At the end, only **Escape** belongs to the tour; every other key is the window's again. Switching
+   to or deleting the workspace it plays in stops it.
+
+**Profile: Present** plays the tour opened last, or your saved views when no tour is open. **Tour
+the views** (prefix **b** then **t**) always tours the saved views. **Edit tour “…”** in **⌘K**, or
+**Edit stops** at the end of a tour, reopens its stops.
+
+| When a stop's file                   | The tour                                                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Is gone                              | Names the file, then skips the stop                                                                 |
+| Changed since the stop was recorded  | Opens it as it is now, without the stop's place or the last stop's mark: **Changed since recorded** |
+| Was copied with its folder elsewhere | Opens it as recorded: its bytes, or else its size and date, match the recording                     |
+| Is reached through a link            | Skips the stop: a tour shows only files stored in its own folder                                    |
+| Is in a folder Viewer may not read   | Says so and skips the stop; allow the folder in the folder picker, then play the tour again         |
+| Is closed while its stop shows       | Says so, then goes on to the next stop                                                              |
+| Was made by a check or a model       | Shows the finding's grade: **Confirmed**, **Refuted** or **Unverified**                             |
+
+A stop never opens a tour or project file, so a tour cannot play another tour or install a project.
+When the tour moves on, the outline or highlight a stop drew in a file goes with it.
+
+Each stop shows for at least **Settings → Space → Tour → Time at each view (ms)**, longer when its
+caption needs more time to read. [Tour files](../reference/configuration.md#tour-files) gives the
+exact format.
 
 ## Use several workspaces
 

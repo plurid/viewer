@@ -35,6 +35,8 @@ import { journalFilterSchema } from '../../domain/journal/events';
 import { taskAreaSchema } from '../../domain/workspaces/tasks';
 import { previewHistorySchema } from '../../domain/previews/history';
 import { layoutLimits } from '../../domain/layout/plan';
+import { nestingLimits } from '../../domain/layout/nesting/plan';
+import { thicknessRange } from '../../domain/fabrication/names';
 import { layoutModes } from '../../domain/layout/modes';
 
 const pane = z.discriminatedUnion('type', [
@@ -108,6 +110,14 @@ const pane = z.discriminatedUnion('type', [
       path: localPath,
       sources: z.array(localPath).min(1).max(layoutLimits.sources),
       mode: z.enum(layoutModes).optional(),
+      quantities: z
+        .record(localPath, z.number().int().min(0).max(nestingLimits.pieces))
+        .refine((value) => Object.keys(value).length <= layoutLimits.sources)
+        .optional(),
+      thicknesses: z
+        .record(localPath, z.number().finite().min(thicknessRange.least).max(thicknessRange.most))
+        .refine((value) => Object.keys(value).length <= layoutLimits.sources)
+        .optional(),
     })
     .strict(),
   z

@@ -1,4 +1,5 @@
 import type { ModelProvider } from '../services';
+import { samModel } from './sam';
 
 export const providerKinds = [
   'openai',
@@ -8,6 +9,7 @@ export const providerKinds = [
   'qwen',
   'gemini',
   'openrouter',
+  'meta',
   'local',
 ] as const;
 export type ProviderKind = (typeof providerKinds)[number];
@@ -18,12 +20,26 @@ export function providerModelID(kind: ProviderKind, model: string): string {
   return kind === 'gemini' ? id.replace(/^models\//, '') : id;
 }
 
+/** How a provider is asked: OpenAI's Responses API, Anthropic's Messages API, or the Chat
+ * Completions API most other providers share. */
+export type ProviderProtocol = 'responses' | 'messages' | 'chat/completions';
+/**
+ * How a provider is held to the answer's schema: a strict `json_schema`, a `json_object` with the
+ * schema in the instructions, or Anthropic's tool call.
+ */
+export type ProviderOutput = 'schema' | 'json' | 'tool';
 interface ProviderPreset {
   name: string;
   endpoint: string;
-  protocol: 'responses' | 'messages' | 'chat/completions';
-  output: 'schema' | 'json' | 'tool';
+  protocol: ProviderProtocol;
+  output: ProviderOutput;
   suggestedModels?: readonly string[];
+  /** The model a new provider of this kind starts with. */
+  model?: string;
+  /** What people call its models: "Muse Spark". */
+  family?: string;
+  /** The model its Responses route outlines features with, from a box or words. */
+  segmentation?: string;
   note?: string;
 }
 
@@ -75,6 +91,17 @@ export const providerPresets: Record<ProviderKind, ProviderPreset> = {
     output: 'schema',
     note: 'Choose a model with structured output support. Requests use providers that honor the required parameters.',
   },
+  meta: {
+    name: 'Meta',
+    endpoint: 'https://api.meta.ai/v1',
+    protocol: 'chat/completions',
+    // tools/meta-probe.ts confirmed strict schemas; were they refused, this would be 'json'.
+    output: 'schema',
+    model: 'muse-spark-1.3',
+    family: 'Muse Spark',
+    segmentation: samModel,
+    note: 'Use a Meta Model API key; the key for Meta speech in Settings → Speech is kept apart. Enter a Muse Spark model ID.',
+  },
   local: {
     name: 'Local endpoint',
     endpoint: 'http://localhost:11434/v1',
@@ -82,6 +109,11 @@ export const providerPresets: Record<ProviderKind, ProviderPreset> = {
     output: 'schema',
   },
 };
+
+/** Pictures go as `image_url` parts of a Chat Completions message; Viewer does not send them
+ * through the Responses or Messages APIs yet. */
+export const providerTakesImages = (kind: ProviderKind) =>
+  providerPresets[kind].protocol === 'chat/completions';
 
 export const qwenEndpoints = [
   { label: 'Singapore', endpoint: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
@@ -95,7 +127,14 @@ export const qwenEndpoints = [
 
 export function newModelProvider(kind: ProviderKind, id: string): ModelProvider {
   const preset = providerPresets[kind];
-  return { id, kind, name: preset.name, endpoint: preset.endpoint, model: '', allowContent: false };
+  return {
+    id,
+    kind,
+    name: preset.name,
+    endpoint: preset.endpoint,
+    model: preset.model ?? '',
+    allowContent: false,
+  };
 }
 
 /** Named cloud providers cannot silently send their stored key to an unrelated server. */

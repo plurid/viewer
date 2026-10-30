@@ -42,3 +42,11 @@ The pinned b5454 xcframework contains the matching prebuilt macOS engine.
 Viewer supplies a separate bounded PCM inference helper. See whisper-cpp.txt.
 Whisper Tiny, Base and Small weights (MIT) are acquired separately after explicit setup:
 https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1
+
+Viewer segmentation dependencies
+
+The SAM 3.1 one_bit mask decoder in src/desktop/models/sam-mask.ts is derived from
+@meta-sam/parser 0.1.0 (mask-codec.js), Copyright (c) Meta Platforms, Inc. and
+affiliates. Only its one_bit decoding is ported; no part of the package is bundled.
+Source: https://github.com/meta-models/meta-sam/tree/main/typescript/packages/parser
+See sam-parser-0.1.0.txt for the SAM License it is used under.

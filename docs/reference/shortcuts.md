@@ -114,6 +114,18 @@ These keys are fixed. They work when the folder has the focus, not in a text fie
 
 A control that has the focus, such as a drawing or a video, answers its own keys first.
 
+## While a tour plays
+
+| Key           | Action                   |
+| ------------- | ------------------------ |
+| **→** / **←** | Next / previous stop     |
+| **Space**     | Pause or resume the tour |
+| **Escape**    | Stop the tour            |
+
+A text field, an open dialog or menu keeps its keys. While a tour is paused, a plane you clicked
+keeps its own keys; **Escape** still stops the tour. See
+[Show someone around: tours](../guides/workspaces.md#show-someone-around-tours).
+
 ## Menu keys from macOS
 
 | Key     | Menu item                     |

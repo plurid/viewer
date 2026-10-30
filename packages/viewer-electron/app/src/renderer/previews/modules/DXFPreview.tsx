@@ -8,8 +8,10 @@ import {
   createDrawingCanvas,
   type CanvasOptions,
   type DrawingCanvas,
+  type DrawingFocus,
   type DrawingView,
 } from '../dxf/canvas';
+import type { EvidenceAnchor } from '../../../domain/files/inspection';
 import type { Drawing, DrawingEntity } from '../../../domain/previews/drawings/dxf/math';
 import { DXF_MAX_BYTES } from '../../../domain/previews/drawings/dxf/math';
 import {
@@ -22,6 +24,21 @@ import {
   type Tool,
 } from '../../../domain/previews/drawings/dxf/units';
 import type { DrawingResult } from '../dxf/dxf.worker.ts';
+
+type DrawingAnchor = Extract<EvidenceAnchor, { kind: 'dxf' }>;
+const point = ([x, y]: readonly [number, number]) => ({ x, y });
+/** An anchor's entities, view and measurements, in the canvas's terms. */
+function drawingFocus(anchor: DrawingAnchor): DrawingFocus {
+  return {
+    entities: anchor.entities,
+    view: anchor.view && { min: point(anchor.view.min), max: point(anchor.view.max) },
+    measurements: anchor.measure?.map((item, index) => ({
+      id: -(index + 1),
+      tool: item.tool,
+      points: item.points.map(point),
+    })),
+  };
+}
 
 /** Extend the established preview header: the drawing leads, tools and evidence stay compact. */
 export default function DXFPreview(context: PreviewContext) {
@@ -131,6 +148,13 @@ export default function DXFPreview(context: PreviewContext) {
   useEffect(() => {
     session.current?.set(current.current);
   }, [active, interactive, look, tool, grid, snap, hidden, measurements, display, drawing]);
+  // Evidence applies whenever it changes, not only when the drawing opens: a tour's next stop
+  // in the same drawing highlights its own entities.
+  const anchor = context.evidence?.anchor.kind === 'dxf' ? context.evidence.anchor : undefined;
+  const focus = useMemo(() => anchor && drawingFocus(anchor), [anchor]);
+  useEffect(() => {
+    session.current?.focus(focus);
+  }, [drawing, focus]);
   const ready = !!drawing && !error;
   usePreviewCommands(
     context,

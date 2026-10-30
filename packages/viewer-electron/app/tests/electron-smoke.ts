@@ -2397,7 +2397,7 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   await addModel();
   assert.equal(
     (await choiceValues('New model provider', settingsEvaluate)).length,
-    8,
+    9,
     'complete provider picker',
   );
   await snapshot('desktop-native-models-empty.png');

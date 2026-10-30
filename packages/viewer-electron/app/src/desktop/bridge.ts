@@ -121,6 +121,12 @@ import { AgentAccess } from './agents/agent-access';
 import { fileCoordination } from './files/file-coordination';
 import { FileInformationService } from './files/file-information';
 import { Projects } from './workspaces/projects';
+import { Tours } from './workspaces/tours';
+import { FabricationChecks } from './fabrication/service';
+import { samSegmenter } from './models/segmentation';
+import { photoPlan } from './fabrication/inputs';
+import { checkLimits } from '../domain/fabrication/check';
+import { providerPresets } from '../domain/models/providers';
 import { Lenses } from './workspaces/lenses';
 import { Checkpoints } from './operations/checkpoints';
 import { Workflows } from './automation/workflows';
@@ -216,6 +222,8 @@ export class Desktop {
   readonly fileAccess: FileAccess;
   readonly information: FileInformationService;
   readonly projects: Projects;
+  readonly tours: Tours;
+  readonly fabrication: FabricationChecks;
   readonly lenses: Lenses;
   readonly checkpoints: Checkpoints;
   readonly comparisons: Comparisons;
@@ -420,6 +428,7 @@ export class Desktop {
       !process.mas && process.platform === 'darwin',
     );
     this.projects = new Projects(access);
+    this.tours = new Tours(access);
     this.comparisons = new Comparisons(access);
     this.duplicates = new Duplicates(access);
     this.checkpoints = new Checkpoints(
@@ -643,7 +652,43 @@ export class Desktop {
           raw: assetPath(`viewer-raw-v3-darwin-${process.arch}`, 'viewer-raw'),
         },
       },
+      (check) => this.fabrication.handoff(check),
     );
+    this.fabrication = new FabricationChecks({
+      settings: () => this.settings.snapshot().settings,
+      access,
+      permission: (provider) => this.modelPermissions.get(provider),
+      generate: (...args) => this.providers.generate(...args),
+      // SAM runs on the reading model's provider, under the same `images` approval
+      segmenter: (provider) => {
+        const preset = providerPresets[provider.kind];
+        return preset.segmentation
+          ? samSegmenter(
+              (picture, prompt, signal) =>
+                this.providers.segment(provider, picture, prompt, signal),
+              preset.family ?? provider.name,
+            )
+          : undefined;
+      },
+      encodePhoto: (bytes, signal) =>
+        imageProcess(
+          path.join(path.dirname(options.worker), 'image-worker.cjs'),
+          processorRoot,
+          bytes,
+          photoPlan,
+          signal,
+          options.fileBackend,
+        ),
+      // HEIC and other photos the image processor cannot read, through the preview helper
+      renderPhoto: async (file, signal) => {
+        const lease = await images.read(file, 'image', signal, checkLimits.photoSide);
+        try {
+          return Buffer.from(lease.value.data);
+        } finally {
+          lease.release();
+        }
+      },
+    });
     this.optimizationReviews = new OptimizationReviews(
       path.join(dataPath, 'optimization-candidates'),
       this.transforms,
@@ -1434,6 +1479,8 @@ export class Desktop {
     });
     window.webContents.on('render-process-gone', () => this.speech.stopOwner(sender));
     window.webContents.on('did-start-navigation', () => this.speech.stopOwner(sender));
+    window.webContents.on('render-process-gone', () => this.fabrication.stopOwner(sender));
+    window.webContents.on('did-start-navigation', () => this.fabrication.stopOwner(sender));
     const stopTaskOwner = () => {
       this.taskRequests.stopOwner(sender);
       this.personTaskWorkflows.stopOwner(sender);
@@ -1442,6 +1489,7 @@ export class Desktop {
     window.webContents.on('did-start-navigation', stopTaskOwner);
     window.on('closed', () => {
       this.speech.stopOwner(sender);
+      this.fabrication.stopOwner(sender);
       this.backups.stopOwner(sender);
       this.browsers.stopOwner(sender);
       this.mediaDocuments.stopOwner(sender);
@@ -1639,6 +1687,7 @@ export class Desktop {
       this.modelPermissions.close(),
       this.speechModels.close(),
       this.speech.close(),
+      Promise.resolve(this.fabrication.close()),
       this.search.close(),
       this.executions.close(),
       this.resources.close(),
@@ -1650,6 +1699,7 @@ export class Desktop {
       this.thumbnails.close(),
       this.information.close(),
       this.projects.flush(),
+      this.tours.flush(),
       this.lenses.close(),
       this.checkpoints.close(),
       this.operationPlans.close(),
@@ -2053,6 +2103,7 @@ export class Desktop {
       ...createAutomationHandlers({
         lenses: this.lenses,
         projects: this.projects,
+        tours: this.tours,
         workflows: this.workflows,
         watchRules: this.watchRules,
         relationships: this.relationships,
@@ -2082,6 +2133,7 @@ export class Desktop {
         changeAccess: (request, owner) => this.changeAgentAccess(request, owner),
       }),
       speech: ([request], owner) => this.speech.request(request, owner),
+      fabrication: ([request], owner) => this.fabrication.request(request, owner),
       createTask: ([input], owner) => this.taskRequests.create(input, owner),
       chooseFolder: (args, senderID) => this.chooseFolder(senderID, args[0]),
       // window records, the selected window and pending agent commands stay with the bridge

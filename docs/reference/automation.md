@@ -69,10 +69,11 @@ the files a step reads or writes:
 | `convert` | `sources` (1 to 100), `destination`, `transform`, `name` (optional) | Prepares a reviewed conversion                                    |
 | `recipe`  | `sources` (1 to 100), `recipeID`, `instructions` (optional, 12,000) | Prepares a recipe's review; see [recipes](actions.md#recipes)     |
 
-`transform.kind` is one of `image`, `media`, `pdf`, `pdf-pages`, `layout`, `nesting` or
-`mail-attachment`, with the fields Viewer's own tools use; see [media](media.md),
-[PDF tools](pdf.md), [layout](layout.md) and [nesting](nesting.md). There is no field for processor
-arguments.
+`transform.kind` is one of `image`, `media`, `pdf`, `pdf-pages`, `layout`, `nesting`,
+`dxf-correction` or `mail-attachment`, with the fields Viewer's own tools use; see
+[media](media.md), [PDF tools](pdf.md), [layout](layout.md), [nesting](nesting.md) and
+[fabrication](fabrication.md#correction). A workflow cannot prepare a nesting, a correction or a
+saved attachment. There is no field for processor arguments.
 
 The file is refused when it has duplicate step or binding IDs, a `needs` cycle or a missing step, an
 undeclared input or binding, or a step reference that is not in `needs`.

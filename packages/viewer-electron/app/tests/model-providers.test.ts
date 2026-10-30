@@ -247,7 +247,11 @@ describe('model provider presets and adapters', () => {
     );
     await reopened.load();
     expect(reopened.snapshot().settings.providers).toEqual(providers);
-    expect(providers.every((provider) => !provider.allowContent && !provider.model)).toBe(true);
+    expect(providers.every((provider) => !provider.allowContent)).toBe(true);
+    // Meta starts with Muse Spark; every other provider waits for a model to be chosen.
+    expect(
+      providers.filter((provider) => provider.model).map((provider) => provider.model),
+    ).toEqual(['muse-spark-1.3']);
     await reopened.close();
   });
   it('discovers remote IDs without silently dropping later models and filters unsupported OpenRouter models', async () => {
@@ -355,4 +359,226 @@ describe('model provider presets and adapters', () => {
       ).rejects.toThrow('refused or incomplete');
     },
   );
+});
+
+describe('Meta and pictures', () => {
+  const metaProvider = () => ({ ...newModelProvider('meta', 'meta'), model: 'muse-spark-1.3' });
+  const picture = {
+    type: 'image/jpeg' as const,
+    data: Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]),
+  };
+  const reply = (body: unknown) => vi.fn<typeof fetch>(async () => Response.json(body));
+  async function keyed(provider: ModelProvider) {
+    await credentials.set(provider.id, 'test-only-key', providerBinding(provider));
+  }
+  async function allowedAt(
+    provider: ModelProvider,
+    request: typeof fetch,
+    level: 'full-text' | 'images',
+  ) {
+    const permissions = new ModelPermissions(root, () => [provider]);
+    await permissions.set(provider, level);
+    return new Providers(credentials, request, permissions);
+  }
+
+  it('starts on Muse Spark at Meta’s endpoint, and sends its key nowhere else', () => {
+    expect(newModelProvider('meta', 'meta')).toMatchObject({
+      name: 'Meta',
+      endpoint: 'https://api.meta.ai/v1',
+      model: 'muse-spark-1.3',
+    });
+    expect(providerPresets.meta).toMatchObject({ protocol: 'chat/completions', output: 'schema' });
+    expect(validProviderEndpoint('meta', 'https://api.meta.ai/v1/')).toBe(true);
+    for (const endpoint of [
+      'https://api.meta.ai.collector.invalid/v1',
+      'https://api.meta.ai/v2',
+      'http://api.meta.ai/v1',
+      'https://api.meta.ai/v1?key=secret',
+    ])
+      expect(validProviderEndpoint('meta', endpoint), endpoint).toBe(false);
+  });
+
+  it('sends the input as text, then each picture as an image part, under a strict schema', async () => {
+    const provider = metaProvider();
+    await keyed(provider);
+    const request = reply({
+      choices: [{ finish_reason: 'stop', message: { content: '{"rows":[]}' } }],
+    });
+    const output = await (
+      await allowedAt(provider, request, 'images')
+    ).generate(
+      provider,
+      'Check the job.',
+      { job: 'Job 1042' },
+      schema,
+      new AbortController().signal,
+      'images',
+      'user',
+      {
+        images: [picture, { type: 'image/png', data: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]) }],
+      },
+    );
+    expect(output).toEqual({ rows: [] });
+    const [url, options] = request.mock.calls[0]!;
+    expect(url).toBe('https://api.meta.ai/v1/chat/completions');
+    expect(options!.headers).toMatchObject({ authorization: 'Bearer test-only-key' });
+    const body = JSON.parse(String(options!.body));
+    expect(body.messages[1].content).toEqual([
+      { type: 'text', text: '{"job":"Job 1042"}' },
+      { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,/9j/2Q==' } },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw==' } },
+    ]);
+    expect(body.response_format).toEqual({
+      type: 'json_schema',
+      json_schema: { name: 'file_action', strict: true, schema },
+    });
+    // only the fields tools/meta-probe.ts checked Meta's API with
+    expect(Object.keys(body).sort()).toEqual(['messages', 'model', 'response_format']);
+  });
+
+  it.each([
+    [
+      'the OpenAI envelope',
+      { choices: [{ finish_reason: 'stop', message: { content: '{"rows":[]}' } }] },
+    ],
+    [
+      'a Llama-style text part',
+      {
+        completion_message: { stop_reason: 'stop', content: { type: 'text', text: '{"rows":[]}' } },
+      },
+    ],
+    ['a Llama-style string', { completion_message: { content: '{"rows":[]}' } }],
+  ])('reads %s', async (_name, body) => {
+    const provider = metaProvider();
+    await keyed(provider);
+    await expect(
+      (await allowedAt(provider, reply(body), 'full-text')).generate(
+        provider,
+        '',
+        [],
+        schema,
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual({ rows: [] });
+  });
+
+  it('refuses a Llama-style reply cut off at its limit', async () => {
+    const provider = metaProvider();
+    await keyed(provider);
+    const request = reply({
+      completion_message: { stop_reason: 'length', content: { type: 'text', text: '{"rows":[]}' } },
+    });
+    await expect(
+      (await allowedAt(provider, request, 'full-text')).generate(
+        provider,
+        '',
+        [],
+        schema,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('refused or incomplete');
+  });
+
+  it('refuses pictures a text approval does not cover, before anything is sent', async () => {
+    const provider = metaProvider();
+    await keyed(provider);
+    const request = vi.fn<typeof fetch>();
+    const providers = await allowedAt(provider, request, 'full-text');
+    const signal = new AbortController().signal;
+    await expect(
+      providers.generate(provider, '', [], schema, signal, 'images', 'user', { images: [picture] }),
+    ).rejects.toThrow('Allow this provider to receive the selected data');
+    await expect(
+      providers.generate(provider, '', [], schema, signal, 'full-text', 'user', {
+        images: [picture],
+      }),
+    ).rejects.toThrow('Pictures are sent only at the images data level.');
+    await expect(
+      providers.segment(provider, { image: picture, width: 64, height: 64 }, 'hole', signal),
+    ).rejects.toThrow('Allow this provider to receive the selected data');
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each(['openai', 'anthropic'] as const)(
+    'refuses pictures for %s with a clear message, before anything is sent',
+    async (kind) => {
+      const provider = { ...newModelProvider(kind, kind), model: 'fixture' };
+      await keyed(provider);
+      const request = vi.fn<typeof fetch>();
+      await expect(
+        (await allowedAt(provider, request, 'images')).generate(
+          provider,
+          '',
+          [],
+          schema,
+          new AbortController().signal,
+          'images',
+          'user',
+          {
+            images: [picture],
+          },
+        ),
+      ).rejects.toThrow(`Viewer does not send pictures to ${providerPresets[kind].name} yet.`);
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
+
+  it('bounds the pictures of one request', async () => {
+    const provider = metaProvider();
+    await keyed(provider);
+    const providers = await allowedAt(provider, vi.fn<typeof fetch>(), 'images');
+    const big = { type: 'image/jpeg' as const, data: new Uint8Array(4_000_001) };
+    await expect(
+      providers.generate(provider, '', [], schema, new AbortController().signal, 'images', 'user', {
+        images: [big],
+      }),
+    ).rejects.toThrow('A picture is larger than 4 MB.');
+    await expect(
+      providers.generate(provider, '', [], schema, new AbortController().signal, 'images', 'user', {
+        images: Array.from({ length: 17 }, () => picture),
+      }),
+    ).rejects.toThrow('A request sends at most 16 pictures; this one has 17.');
+  });
+
+  it('asks SAM 3.1 through Meta’s Responses route with the same key and approval', async () => {
+    const provider = metaProvider();
+    await keyed(provider);
+    const request = reply({
+      output: [{ content: [{ type: 'output_text', text: '<0f>0<|box;…|>' }] }],
+    });
+    const text = await (
+      await allowedAt(provider, request, 'images')
+    ).segment(
+      provider,
+      { image: picture, width: 64, height: 64 },
+      '<0f>0<|box;x1=16;y1=16;x2=47;y2=47;w=64;h=64|>',
+      new AbortController().signal,
+    );
+    expect(text).toBe('<0f>0<|box;…|>');
+    const [url, options] = request.mock.calls[0]!;
+    expect(url).toBe('https://api.meta.ai/v1/responses');
+    expect(options!.headers).toMatchObject({ authorization: 'Bearer test-only-key' });
+    expect(JSON.parse(String(options!.body))).toEqual({
+      model: 'sam-3.1',
+      input: [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_text', text: '<0f>0<|box;x1=16;y1=16;x2=47;y2=47;w=64;h=64|>' },
+            { type: 'input_image', image_url: 'data:image/jpeg;base64,/9j/2Q==' },
+          ],
+        },
+      ],
+      metadata: { mask_encoding: 'one_bit', include_confidence: 'true' },
+    });
+    const gemini = { ...newModelProvider('gemini', 'gemini'), model: 'fixture' };
+    await expect(
+      new Providers(credentials, request).segment(
+        gemini,
+        { image: picture, width: 1, height: 1 },
+        'hole',
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('Gemini has no segmentation model.');
+  });
 });

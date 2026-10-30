@@ -13,13 +13,12 @@ import type {
   OptimizationReply,
   OptimizationRequest,
 } from '../../domain/operations/optimization-review';
-import type { OptimizationStatistics } from '../../domain/operations/optimization-target';
 import { transformExtension, type TransformPlan } from '../../domain/operations/transforms';
 import { absolute, entry } from '../files/filesystem';
 import { fileCoordination } from '../files/file-coordination';
 import { privateStage } from '../operations/staging';
 import type { Resources } from '../previews/resources';
-import type { TransformExecutor } from './transforms';
+import type { TransformExecutor, TransformOutcome } from './transforms';
 import { optimizationFolder, optimizationSubfolder } from './optimization-folders';
 
 type Engine = TransformExecutor & {
@@ -152,7 +151,8 @@ export class OptimizationReviews implements TransformExecutor {
       const statistics = await this.engine.execute(plan, [source], file, abort.signal, () => {});
       abort.signal.throwIfAborted();
       await this.current(info);
-      if (!statistics) throw new Error('The processor did not report an optimization result.');
+      if (!statistics || statistics.correction)
+        throw new Error('The processor did not report an optimization result.');
       if (this.bytes + statistics.outputBytes > candidateBudget)
         throw new Error('The prepared batch exceeds 512 MB. Export it or prepare fewer files.');
       const version = sourceVersion(await entry(file));
@@ -337,7 +337,7 @@ export class OptimizationReviews implements TransformExecutor {
     signal: AbortSignal,
     progress: (fraction: number, detail: string) => void,
     preparedID?: string,
-  ): Promise<void | OptimizationStatistics> {
+  ): Promise<TransformOutcome> {
     if (!preparedID) return this.engine.execute(plan, sources, output, signal, progress);
     const candidate = this.candidates.get(preparedID);
     if (

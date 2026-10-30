@@ -1,0 +1,174 @@
+/* Tours: the bar a running tour shows over the space, and the stops panel that records one. */
+.tour-bar {
+  position: absolute;
+  z-index: 150;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: max-content;
+  min-width: min(420px, calc(100% - 32px));
+  max-width: min(760px, calc(100% - 32px));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 10px 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow);
+}
+.tour-bar-count {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.tour-bar-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tour-bar-caption {
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.tour-bar-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.tour-bar-place {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.tour-bar-place > .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tour-bar[data-status='travelling'] .tour-bar-place > .muted,
+.tour-bar[data-paused] .tour-bar-count {
+  color: var(--subtle);
+}
+.tour-grade {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--radius-control);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.tour-grade[data-grade='refuted'] {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+.tour-grade[data-grade='unverified'] {
+  color: var(--muted);
+  background: var(--raised);
+}
+.tour-notice {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.tour-notice[data-state='missing'],
+.tour-notice[data-state='failed'] {
+  color: var(--danger);
+}
+.tour-bar-controls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tour-stops {
+  position: absolute;
+  z-index: 140;
+  top: 12px;
+  right: 12px;
+  width: 380px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow);
+}
+.tour-stops > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 13px;
+  border-bottom: 1px solid var(--line);
+}
+.tour-stops > header input {
+  flex: 1;
+  font-weight: 600;
+}
+.tour-stop-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+.tour-stop {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 4px 8px;
+  padding: 8px 10px 8px 13px;
+  border-bottom: 1px solid var(--line);
+}
+.tour-stop:last-child {
+  border-bottom: 0;
+}
+.tour-stop-number {
+  padding-top: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.tour-stop-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.tour-stop-body > .muted {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tour-stop-actions {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tour-stops-empty {
+  margin: 0;
+  padding: 16px 13px;
+}
+.tour-stops > footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 10px 13px;
+  border-top: 1px solid var(--line);
+}
+.tour-stops-destination {
+  flex: 1 1 100%;
+  order: -1;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

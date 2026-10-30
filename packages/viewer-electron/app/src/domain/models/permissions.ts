@@ -1,6 +1,8 @@
 import type { ModelProvider, RequestActor } from '../services';
 
-export const modelDataLevels = ['names', 'excerpts', 'full-text'] as const;
+/** What a provider may receive, each level including the ones before it. Pictures come last: an
+ * approval of text never sends a photo. */
+export const modelDataLevels = ['names', 'excerpts', 'full-text', 'images'] as const;
 export type ModelDataLevel = (typeof modelDataLevels)[number];
 export interface ModelDataPermission {
   providerID: string;
@@ -15,6 +17,7 @@ export const modelDataLabels: Record<ModelDataLevel, string> = {
   names: 'filenames and file metadata',
   excerpts: 'filenames, metadata and document excerpts',
   'full-text': 'filenames, metadata and extracted document text',
+  images: 'filenames, metadata, document text and pictures (photos and rendered drawing pages)',
 };
 export const modelEndpoint = (provider: Pick<ModelProvider, 'endpoint'>) =>
   new URL(provider.endpoint).href.replace(/\/+$/, '');

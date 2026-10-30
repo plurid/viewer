@@ -5,6 +5,8 @@ import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 import { transformableImage } from '../../../domain/operations/image-conversions';
 import { optimizable } from '../../../domain/operations/optimization';
+import { boxRegion, fitRegion } from '../../../domain/files/regions';
+import { EvidenceOverlay } from '../EvidenceOverlay';
 
 export default function ImagePreview(context: PreviewContext) {
   const { resource, active, interactive } = context;
@@ -53,6 +55,22 @@ export default function ImagePreview(context: PreviewContext) {
     resize();
     return () => observer.disconnect();
   }, [available, resource.id]);
+  // A region small in the picture is zoomed to fill most of the stage, once per evidence; the
+  // reader's own zoom and pan take over from there.
+  const zoomedFor = useRef<object | undefined>(undefined);
+  useEffect(() => {
+    const evidence = context.evidence;
+    const element = stage.current;
+    if (!region || !evidence || !element || imageSize.width <= 0 || zoomedFor.current === evidence)
+      return;
+    zoomedFor.current = evidence;
+    const view = fitRegion(region, imageSize, {
+      width: element.clientWidth,
+      height: element.clientHeight,
+    });
+    setZoom(view.zoom);
+    setPan(view.pan);
+  }, [region, context.evidence, imageSize, setZoom, setPan]);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   useEffect(() => {
     const element = stage.current;
@@ -204,20 +222,15 @@ export default function ImagePreview(context: PreviewContext) {
         {region && imageSize.width > 0 && (
           <div
             className="image-evidence-overlay"
-            aria-label="Referenced image region"
             style={{
               width: imageSize.width,
               height: imageSize.height,
               transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             }}
           >
-            <div
-              style={{
-                left: region.x * 100 + '%',
-                top: region.y * 100 + '%',
-                width: Math.min(region.width, 1 - region.x) * 100 + '%',
-                height: Math.min(region.height, 1 - region.y) * 100 + '%',
-              }}
+            <EvidenceOverlay
+              region={region.polygon ?? boxRegion(region)}
+              label={region.polygon ? 'Outlined image region' : 'Referenced image region'}
             />
           </div>
         )}

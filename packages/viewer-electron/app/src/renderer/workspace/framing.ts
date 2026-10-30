@@ -220,6 +220,40 @@ export function frameWorkspace(
   requestAnimationFrame(frame);
 }
 
+/**
+ * Resolves once the camera is at rest: no framing request still waiting for layout, and no tween,
+ * gesture or fling for a few frames. Bounded by a timer, not by frames, so a busy renderer or a
+ * hidden window (which draws no frames) cannot hold a caller; an abort ends the wait at once.
+ */
+export function whenWorkspaceAtRest(
+  engine: RefObject<PluridApplicationHandle | null>,
+  signal?: AbortSignal,
+  limit = 6000,
+): Promise<void> {
+  return new Promise((resolve) => {
+    let frames = 0;
+    let still = 0;
+    let request = 0;
+    const done = () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(request);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, limit);
+    signal?.addEventListener('abort', done, { once: true });
+    const check = () => {
+      const api = engine.current;
+      if (signal?.aborted || !api) return done();
+      still = !pending.has(api) && api.camera.motion() === 'idle' ? still + 1 : 0;
+      // A camera command's tween starts in a later frame than the request that issued it.
+      if (++frames > 2 && still >= stableLayoutFrames) done();
+      else request = requestAnimationFrame(check);
+    };
+    if (signal?.aborted) return done();
+    request = requestAnimationFrame(check);
+  });
+}
 /** A resize refits only the framing we still own; a deliberate camera move remains intact. */
 export function refitWorkspace(
   engine: RefObject<PluridApplicationHandle | null>,

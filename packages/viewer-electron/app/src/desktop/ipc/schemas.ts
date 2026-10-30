@@ -17,6 +17,8 @@ import { agentCapabilities, agentClientInputSchema } from '../../domain/agents/c
 import { watchRuleRequestSchema } from '../../domain/automation/watch-rules';
 import { workflowDefinitionSchema } from '../../domain/automation/workflows';
 import { projectDefinitionSchema } from '../../domain/workspaces/project';
+import { tourDefinitionSchema, tourPathSchema } from '../../domain/tours/tour';
+import { fabricationRequestSchema } from '../../domain/fabrication/check';
 import { lensGroupIDSchema, lensOpSchema } from '../../domain/files/lenses';
 import { maxQueryLength } from '../../domain/search/query';
 import { rootKey, validKeymapKey } from '../../domain/preferences/keymap';
@@ -429,6 +431,28 @@ export const schemas = {
         .strict(),
     ]),
   ]),
+  tour: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('read'), file: localPath }).strict(),
+      z
+        .object({
+          kind: z.literal('save'),
+          file: localPath,
+          revision: z.string().max(200),
+          definition: tourDefinitionSchema,
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('stat'),
+          root: localPath,
+          path: tourPathSchema,
+          hash: z.boolean().optional(),
+        })
+        .strict(),
+    ]),
+  ]),
+  fabrication: z.tuple([fabricationRequestSchema]),
   commandsPublish: z.tuple([
     targetSchema,
     z
@@ -832,6 +856,8 @@ export const methodWindows = {
   checkpoints: 'viewer',
   inspect: 'viewer',
   project: 'viewer',
+  tour: 'viewer',
+  fabrication: 'viewer',
   lens: 'viewer',
   commandsPublish: 'viewer',
   agentCommandResult: 'viewer',

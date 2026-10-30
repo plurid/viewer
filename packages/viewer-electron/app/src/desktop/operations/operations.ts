@@ -42,6 +42,7 @@ import { holds, sameItem, unchanged, type Replaced } from '../files/item-identit
 import { validateTransform, combinedTransform } from '../../domain/operations/transforms';
 import type { TransformExecutor } from '../transforms/transforms';
 import type { OptimizationStatistics } from '../../domain/operations/optimization-target';
+import type { CorrectionReport } from '../../domain/fabrication/plan';
 import {
   aliasName,
   copyTree,
@@ -118,6 +119,8 @@ interface Made {
   movedInPlace?: boolean;
   caseOnly?: boolean;
   statistics?: Statistics;
+  /** What a corrected drawing measured before and after. */
+  correction?: CorrectionReport;
 }
 /** What making an output resolves with: what was made, or `kept` when the original stays. */
 type Produced = Made | 'kept';
@@ -1440,6 +1443,7 @@ export class Operations {
         (await lstat(source)).dev === (await stat(request.destination!)).dev);
     let destination: string | undefined;
     let statistics: Statistics | undefined;
+    let correction: CorrectionReport | undefined;
     if (request.kind === 'trash') {
       await this.protection.check(source, 'moved to the Trash');
       await this.trashItem(task, source);
@@ -1447,9 +1451,14 @@ export class Operations {
       if (move) await this.protection.check(source, 'moved or renamed');
       const placed = await this.place(task, source, move);
       if (placed === 'skipped' || placed === 'kept') return placed;
-      ({ destination, statistics } = placed);
+      ({ destination, statistics, correction } = placed);
     }
-    job.completed.push({ source, destination, ...statistics });
+    job.completed.push({
+      source,
+      destination,
+      ...statistics,
+      ...(correction ? { correction } : {}),
+    });
     if (destination && move) this.filesChanged([{ source, destination }]);
     job.itemsDone++;
     task.intent = undefined;
@@ -1475,7 +1484,11 @@ export class Operations {
     task: Task,
     source: string,
     move: boolean,
-  ): Promise<{ destination: string; statistics?: Statistics } | 'skipped' | 'kept'> {
+  ): Promise<
+    | { destination: string; statistics?: Statistics; correction?: CorrectionReport }
+    | 'skipped'
+    | 'kept'
+  > {
     const { job, request } = task;
     const named = await this.nameOutput(task, source);
     // Case-only renames on case-insensitive macOS volumes need an intermediate name.
@@ -1505,7 +1518,7 @@ export class Operations {
     const made = await this.produce(task, source, destination, move, resolved.replaces);
     if (made === 'kept') return made;
     await this.recordUndo(task, source, destination, move, made);
-    return { destination, statistics: made.statistics };
+    return { destination, statistics: made.statistics, correction: made.correction };
   }
   /** An item's output path, refused when it is the source or lies inside it. The path becomes the
    * item's intent once its access is checked, so a later refusal leaves it as recovery. */
@@ -1660,6 +1673,7 @@ export class Operations {
         request.preparedTransforms?.find((candidate) => candidate.path === source)?.id,
       );
       if (!result) return {};
+      if ('correction' in result) return { correction: result.correction };
       await this.checkPins(task, source);
       const statistics = { ...result, optimized: result.outputBytes < result.inputBytes };
       return statistics.optimized ? { statistics } : this.keepOriginal(task, source, statistics);

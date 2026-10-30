@@ -12,6 +12,7 @@ Look up current behavior, exact syntax and limits. For a walkthrough, use the
 - [PDF tools](pdf.md)
 - [Layout output: PDF, PNG and JPEG](layout.md)
 - [Nesting DXF parts for cutting](nesting.md)
+- [Fabrication checks: part names, measurement, grading and correction](fabrication.md)
 - [Images, audio, video and export presets](media.md)
 - [Models, CAD and drawings](models.md)
 

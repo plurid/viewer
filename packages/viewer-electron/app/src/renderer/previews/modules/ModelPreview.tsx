@@ -32,6 +32,8 @@ import { errorMessage } from '../../../domain/errors';
 
 interface ModelSession {
   frame(): void;
+  /** Places the camera at `position`, looking at `target`, in the model's coordinates. */
+  view(position: readonly number[], target: readonly number[]): void;
   wireframe(value: boolean): void;
   appearance(value: ModelAppearance): void;
   animate(index: number, playing: boolean): void;
@@ -124,6 +126,11 @@ export default function ModelPreview(context: PreviewContext) {
   useEffect(() => {
     session.current?.background(look);
   }, [look]);
+  // Evidence places the camera once the model has loaded, and again whenever it changes.
+  const anchor = context.evidence?.anchor.kind === 'model' ? context.evidence.anchor : undefined;
+  useEffect(() => {
+    if (anchor && !loading) session.current?.view(anchor.position, anchor.target);
+  }, [anchor, loading]);
   const maxModelMB = context.limits?.maxModelMB ?? 256;
   const previewStore = context.state;
   // OrbitControls disconnects keyboard listeners from canvas.getRootNode().
@@ -527,6 +534,13 @@ export default function ModelPreview(context: PreviewContext) {
       if (clips.length) mixer = new THREE.AnimationMixer(loaded);
       session.current = {
         frame,
+        view: (position, target) => {
+          camera.position.fromArray(position);
+          controls.target.fromArray(target);
+          controls.update();
+          dirty = true;
+          schedule();
+        },
         clearMeasure,
         background: (look) => {
           scene.background = new THREE.Color(backgrounds[look]);

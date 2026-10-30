@@ -9,6 +9,19 @@ export const sourceVersionSchema = z
   })
   .strict();
 export type SourceVersion = z.infer<typeof sourceVersionSchema>;
+const unit = z.number().min(0).max(1);
+/** A closed outline on a page or picture: points `[x, y]` from its top-left corner, 0 to 1. */
+export const evidenceRegionSchema = z
+  .array(z.tuple([unit, unit]))
+  .min(3)
+  .max(512);
+export type EvidenceRegion = z.infer<typeof evidenceRegionSchema>;
+const coordinate = z.number().finite().min(-1e12).max(1e12);
+/** A point in a drawing's own coordinates and units, y up. */
+const drawingPoint = z.tuple([coordinate, coordinate]);
+const spacePoint = z.tuple([coordinate, coordinate, coordinate]);
+export const drawingMeasureTools = ['distance', 'angle', 'area'] as const;
+export type DrawingMeasureTool = (typeof drawingMeasureTools)[number];
 export const evidenceAnchorSchema = z.discriminatedUnion('kind', [
   z
     .object({
@@ -18,7 +31,18 @@ export const evidenceAnchorSchema = z.discriminatedUnion('kind', [
       end: z.number().int().min(0),
     })
     .strict(),
-  z.object({ kind: z.literal('pdf'), page: z.number().int().min(1).max(100000) }).strict(),
+  z
+    .object({
+      kind: z.literal('pdf'),
+      page: z.number().int().min(1).max(100000),
+      /** An outline on the page, as the page shows (its rotation applied). */
+      region: evidenceRegionSchema.optional(),
+      /** A PDF zoom: fit page, fit width, or a scale from 0.1 to 4. */
+      zoom: z.union([z.enum(['page', 'width']), z.number().min(0.1).max(4)]).optional(),
+      /** `false` opens the page without searching for the quote. */
+      search: z.literal(false).optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal('epub'), chapter: z.number().int().min(0).max(10000) }).strict(),
   z.object({ kind: z.literal('document'), block: z.number().int().min(0).max(10000) }).strict(),
   z
@@ -36,11 +60,36 @@ export const evidenceAnchorSchema = z.discriminatedUnion('kind', [
       y: z.number().min(0).max(1),
       width: z.number().min(0).max(1),
       height: z.number().min(0).max(1),
+      /** An outline inside the box, such as a traced mask; the box stays its bounds. */
+      polygon: evidenceRegionSchema.optional(),
     })
     .strict(),
   z.object({ kind: z.literal('media'), seconds: z.number().finite().min(0) }).strict(),
+  z
+    .object({
+      kind: z.literal('dxf'),
+      /** Entity IDs, which are their positions in the drawing (`parseDrawing`). */
+      entities: z.array(z.string().regex(/^\d{1,7}$/)).max(5000),
+      /** The part of the drawing to show, in its own coordinates. */
+      view: z.object({ min: drawingPoint, max: drawingPoint }).strict().optional(),
+      /** Measurements drawn with the stop, as the Distance, Angle and Area tools draw theirs. */
+      measure: z
+        .array(
+          z
+            .object({
+              tool: z.enum(drawingMeasureTools),
+              points: z.array(drawingPoint).min(2).max(200),
+            })
+            .strict(),
+        )
+        .max(20)
+        .optional(),
+    })
+    .strict(),
+  z.object({ kind: z.literal('model'), position: spacePoint, target: spacePoint }).strict(),
 ]);
 export type EvidenceAnchor = z.infer<typeof evidenceAnchorSchema>;
+export type EvidenceAnchorKind = EvidenceAnchor['kind'];
 export const evidenceNavigationSchema = z
   .object({
     path: z.string().min(1).max(32768),
@@ -137,6 +186,8 @@ export function originalMatch(
   const end = last + (text.codePointAt(last)! > 0xffff ? 2 : 1);
   return { start, end };
 }
+/** How much of the text before a match a search's quote keeps, in characters. */
+export const quoteLead = 90;
 export function searchEvidence(
   entry: FileEntry,
   document: DocumentData,
@@ -145,7 +196,7 @@ export function searchEvidence(
   for (const evidence of document.evidence) {
     const match = originalMatch(evidence.text, query);
     if (!match) continue;
-    const start = Math.max(0, match.start - 90),
+    const start = Math.max(0, match.start - quoteLead),
       end = Math.min(evidence.text.length, match.end + 130);
     let anchor = evidence.anchor;
     if (!anchor) {
@@ -174,4 +225,35 @@ export function searchEvidence(
       coverage: document.truncated || document.coverageReason ? 'partial' : 'complete',
     };
   }
+}
+/**
+ * The line a text anchor marks in `text`, from 1. A search's quote starts up to `quoteLead`
+ * characters before its match, so the match is read at that offset in the quote; a quote no longer
+ * than the match is the match itself. A recorded line number can drift when the text is shown
+ * another way (a message's plain body, for one): then the whole quote places the match, else the
+ * match alone, else the recorded line stands.
+ */
+export function anchoredLine(
+  text: string,
+  anchor: { line: number; start: number; end: number },
+  quote: string,
+): number | undefined {
+  const lines = text.split('\n');
+  const recorded = lines[anchor.line - 1];
+  const kept = recorded === undefined ? undefined : anchor.line;
+  const length = Math.max(0, anchor.end - anchor.start);
+  const lead = Math.min(anchor.start, quoteLead);
+  const offset = length && quote.length >= lead + length ? lead : 0;
+  const matched = length ? quote.slice(offset, offset + length) : quote;
+  const passage = matched.trim().split('\n')[0]?.trim().slice(0, 120) ?? '';
+  if (!passage || (recorded !== undefined && originalMatch(recorded, passage))) return kept;
+  const lineAt = (index: number) => text.slice(0, index).split('\n').length;
+  if (offset) {
+    const whole = originalMatch(text, quote);
+    const leading = quote.length - quote.trimStart().length;
+    const inner = matched.length - matched.trimStart().length;
+    if (whole) return lineAt(whole.start + Math.max(0, offset - leading) + inner);
+  }
+  const found = originalMatch(text, passage);
+  return found ? lineAt(found.start) : kept;
 }

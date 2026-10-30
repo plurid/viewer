@@ -42,8 +42,10 @@ are left out.
 part with that many copies; a mirrored copy is a different part. Separate parts are numbered in
 reading order, top row first.
 
-**Each part** has a **Quantity** (0 to 20,000; the copies found in the drawing at first), a
-**Turn**, **Mirror** and **Grain**.
+**Each part** has a **Quantity** (0 to 20,000), a **Turn**, **Mirror** and **Grain**. The quantity
+starts from the copies found in the drawing, times the quantity the plane was opened with or the
+file's name gives. Parts whose names give different thicknesses are nested one thickness at a time;
+see [nesting by thickness](fabrication.md#nesting-by-thickness).
 
 **A drawing that cannot be nested** names the reason: "Bracket has no closed outline. Its nearest
 open ends are 2.00 mm apart.", or "has nothing to cut" when every layer is marked.

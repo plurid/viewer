@@ -30,6 +30,20 @@ results keep their originating workspace. IPC dispatch lives in feature groups,
 `src/desktop/ipc/*-handlers.ts`, each given only the services it needs. The desktop bridge still
 validates the sender and window role, and owns window records and root quiescence.
 
+A **tour** is a `.viewer-tour.jsonc` definition (`domain/tours`, read and saved by
+`desktop/workspaces/tours.ts`) of **stops**: files at an evidence anchor, with captions.
+`renderer/workspace/tour.ts` plays it through a `TourStage` (`workspace/tours/stage.ts`), which only
+travels; the player only opens files, found inside the tour's folder without links by the desktop.
+The player is the only sequencer: on Plurid's anchors (0.0.0-43) the stage is `pluridStage`, which
+hands the engine the pose and the motion, never the sequence.
+
+A **fabrication check** (`domain/fabrication`, `desktop/fabrication/service.ts`,
+`renderer/fabrication`) reads a laser job as an inventory of opaque refs, asks a model once at the
+`images` data level, and grades the answer against Viewer's own DXF measurement; the renderer only
+draws PDF pages, which the desktop checks again. The check's record stays in the desktop until a
+handoff, a `fabrication-handoff` transform through operations, writes it. SAM 3.1 runs on the
+reading model's provider, under the same approval (`desktop/models/segmentation.ts`).
+
 An **explorer session** owns selection, cursor, range anchor, scroll and column trail. **Folder
 presentation** is shared by path and owns view/sort/column choices. Navigation and operation
 selection remain independent of camera input.

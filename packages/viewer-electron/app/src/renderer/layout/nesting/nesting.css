@@ -152,6 +152,44 @@
   height: 22px;
   padding: 2px;
 }
+/* One nesting per thickness: its tabs, and every thickness's sheets, time and cost. */
+.nesting-thickness {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.nesting-thickness-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.nesting-thickness-tabs button[aria-pressed='true'] {
+  background: var(--selection);
+}
+.nesting-thickness-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.nesting-thickness-table th,
+.nesting-thickness-table td {
+  padding: 2px 16px 2px 0;
+  text-align: left;
+  font-weight: normal;
+}
+.nesting-thickness-table thead th {
+  color: var(--muted);
+}
+.nesting-thickness-table tr[aria-current] th,
+.nesting-thickness-table tfoot th,
+.nesting-thickness-table tfoot td {
+  font-weight: 600;
+}
+.nesting-thickness-table tfoot tr {
+  border-top: 1px solid var(--line);
+}
 .nesting-summary {
   padding-bottom: 8px;
 }

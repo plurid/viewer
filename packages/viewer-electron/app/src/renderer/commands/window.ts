@@ -18,6 +18,7 @@ import { catalogCommands } from './window-commands/catalog';
 import { settingsCommands } from './window-commands/settings';
 import { keysCommands } from './window-commands/keys';
 import { viewsCommands } from './window-commands/views';
+import { tourCommands } from './window-commands/tours';
 import { tilingCommands } from './window-commands/tiling';
 import { templateCommands } from './window-commands/templates';
 import { explodeCommands } from './window-commands/explode';
@@ -44,6 +45,7 @@ export function windowCommands(actions: WindowActions): CommandDefinition[] {
     ...catalogCommands(scopes),
     ...keysCommands(scopes),
     ...viewsCommands(scopes),
+    ...tourCommands(scopes),
     ...tilingCommands(scopes),
     ...pairCommands(scopes),
     ...comparisonCommands(scopes),

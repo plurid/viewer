@@ -640,6 +640,22 @@ describe('reviewed MCP workspace navigation', () => {
     expect(proposal.requiresUserReview).toBe(true);
     expect(navigate).not.toHaveBeenCalled();
   });
+  it('asks the person before a named client opens a tour file, which opens every file it stops at', async () => {
+    const tour = path.join(files, 'Job.viewer-tour.jsonc');
+    await writeFile(tour, '{}');
+    const navigator = await broker.clients.create({
+      name: 'Navigator',
+      roots: [files],
+      capabilities: ['navigation'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    token = navigator.token;
+    const proposal = await call<{ id: string; requiresUserReview: boolean }>('propose_open_path', {
+      path: tour,
+    });
+    expect(proposal.requiresUserReview).toBe(true);
+    expect(navigate).not.toHaveBeenCalled();
+  });
   it('navigates with a named client grant, keeps proposals owned and rejects other clients and revoked credentials', async () => {
     const navigator = await broker.clients.create({
       name: 'Navigator',

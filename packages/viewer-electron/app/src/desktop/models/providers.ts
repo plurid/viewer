@@ -2,11 +2,15 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { ModelProvider, RequestActor } from '../../domain/services';
+import type { ModelImage } from '../../domain/models/images';
+import type { SegmentationPicture } from '../../domain/models/segmentation';
 import {
   providerModelID,
   providerPresets,
+  providerTakesImages,
   validProviderEndpoint,
 } from '../../domain/models/providers';
+import { modelImagesProblem } from '../../domain/models/images';
 import { DocumentStore } from '../persistence/document-store';
 import { ModelPermissionRequired, type ModelPermissions } from './model-permissions';
 import type { ModelDataLevel } from '../../domain/models/permissions';
@@ -44,7 +48,34 @@ const responseSchema = z.object({
       }),
     )
     .optional(),
+  // Meta's Llama-style reply: the text as a string or as a text part.
+  completion_message: z
+    .object({
+      stop_reason: z.string().nullish(),
+      content: z
+        .union([z.string(), z.object({ type: z.string().optional(), text: z.string().nullish() })])
+        .nullish(),
+    })
+    .optional(),
 });
+/** A Llama-style reply that ended on its own, not cut off at its token limit. */
+const finished = new Set(['stop', 'end_of_turn', 'end_of_message']);
+/** What a generation sends beside its instructions and input. */
+export interface GenerateOptions {
+  /** Pictures, after the input, in the order the input names them; they need the `images` level. */
+  images?: readonly ModelImage[];
+}
+const imageURL = (image: ModelImage) =>
+  `data:${image.type};base64,${Buffer.from(image.data).toString('base64')}`;
+/** The message a Chat Completions request sends: the input as text, then each picture. */
+function userContent(input: unknown, images: readonly ModelImage[]) {
+  const text = JSON.stringify(input);
+  if (!images.length) return text;
+  return [
+    { type: 'text', text },
+    ...images.map((image) => ({ type: 'image_url', image_url: { url: imageURL(image) } })),
+  ];
+}
 /** The provider type and endpoint a key was entered for. */
 export const providerBinding = (provider: Pick<ModelProvider, 'kind' | 'endpoint'>) =>
   createHash('sha256')
@@ -288,14 +319,87 @@ export class Providers {
     signal: AbortSignal,
     level: ModelDataLevel = 'full-text',
     actor: RequestActor = 'user',
+    options: GenerateOptions = {},
   ): Promise<unknown> {
     this.endpoint(provider, providerPresets[provider.kind].protocol);
+    const images = options.images ?? [];
+    if (images.length) {
+      if (level !== 'images') throw new Error('Pictures are sent only at the images data level.');
+      if (!providerTakesImages(provider.kind))
+        throw new Error(
+          `Viewer does not send pictures to ${providerPresets[provider.kind].name} yet. Choose Meta, Gemini, OpenRouter or another Chat Completions provider in Settings → Models.`,
+        );
+      const problem = modelImagesProblem(images);
+      if (problem) throw new Error(problem);
+    }
     if (!this.permissions) throw new ModelPermissionRequired();
     return this.permissions.run(
       provider,
       level,
       signal,
-      (authorized) => this.generateAuthorized(provider, instructions, input, schema, authorized),
+      (authorized) =>
+        this.generateAuthorized(provider, instructions, input, schema, authorized, images),
+      actor,
+    );
+  }
+  /**
+   * A segmentation model's reply to one prompt on one picture, through the provider's Responses
+   * route. It is the reading model's provider: the same endpoint and key, and the same `images`
+   * approval, since the picture is one that model is sent.
+   */
+  async segment(
+    provider: ModelProvider,
+    picture: SegmentationPicture,
+    prompt: string,
+    signal: AbortSignal,
+    actor: RequestActor = 'user',
+  ): Promise<string> {
+    const preset = providerPresets[provider.kind];
+    if (!preset.segmentation) throw new Error(`${preset.name} has no segmentation model.`);
+    const url = this.endpoint(provider, 'responses');
+    const problem = modelImagesProblem([picture.image]);
+    if (problem) throw new Error(problem);
+    if (!this.permissions) throw new ModelPermissionRequired();
+    const model = preset.segmentation;
+    return this.permissions.run(
+      provider,
+      'images',
+      signal,
+      async (authorized) => {
+        const secret = await this.credentials.forProvider(provider);
+        authorized.throwIfAborted();
+        if (!secret) throw new Error('Add this provider’s API key in Settings.');
+        const requestSignal = AbortSignal.any([authorized, AbortSignal.timeout(60000)]);
+        const response = await requestProvider(this.request, url, {
+          method: 'POST',
+          headers: this.headers(provider, secret),
+          body: JSON.stringify({
+            model,
+            input: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'input_text', text: prompt },
+                  { type: 'input_image', image_url: imageURL(picture.image) },
+                ],
+              },
+            ],
+            metadata: { mask_encoding: 'one_bit', include_confidence: 'true' },
+          }),
+          signal: requestSignal,
+          redirect: 'error',
+        });
+        if (!response.ok)
+          throw await providerHTTPError(response, provider.kind, requestSignal, 'model');
+        const envelope = responseSchema.safeParse(
+          await providerResponseJSON(response, requestSignal),
+        );
+        if (!envelope.success)
+          throw new Error('The provider returned an invalid response envelope.');
+        const text = envelope.data.output?.[0]?.content?.[0]?.text;
+        if (!text) throw new Error(`${model} returned no outline.`);
+        return text;
+      },
       actor,
     );
   }
@@ -305,6 +409,7 @@ export class Providers {
     input: unknown,
     schema: Record<string, unknown>,
     signal: AbortSignal,
+    images: readonly ModelImage[],
   ): Promise<unknown> {
     const model = providerModelID(provider.kind, provider.model);
     if (!model) throw new Error('Select a model in Settings.');
@@ -350,7 +455,7 @@ export class Providers {
               model,
               messages: [
                 { role: 'system', content: policy },
-                { role: 'user', content: JSON.stringify(input) },
+                { role: 'user', content: userContent(input, images) },
               ],
               response_format:
                 preset.output === 'json'
@@ -361,8 +466,8 @@ export class Providers {
                     },
               ...(provider.kind === 'qwen' ? { enable_thinking: false } : {}),
               ...(provider.kind === 'openrouter' ? { provider: { require_parameters: true } } : {}),
-              max_tokens: 12000,
-              stream: false,
+              // Meta's API is sent only the fields tools/meta-probe.ts checks it with.
+              ...(provider.kind === 'meta' ? {} : { max_tokens: 12000, stream: false }),
             };
     const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(120000)]);
     const response = await requestProvider(this.request, url, {
@@ -387,6 +492,8 @@ export class Providers {
       if (!tool) throw new Error('The model did not return a structured proposal.');
       return tool.input;
     }
+    const choice = data.choices?.[0];
+    const completion = data.completion_message;
     const text =
       provider.kind === 'openai'
         ? data.output
@@ -394,12 +501,17 @@ export class Providers {
             .filter((item) => item.type === 'output_text')
             .map((item) => item.text || '')
             .join('')
-        : data.choices?.[0]?.message.content;
+        : choice
+          ? choice.message.content
+          : typeof completion?.content === 'string'
+            ? completion.content
+            : completion?.content?.text;
     if (
       !text ||
       (data.status && data.status !== 'completed') ||
-      data.choices?.[0]?.message.refusal ||
-      (data.choices?.[0]?.finish_reason && data.choices[0].finish_reason !== 'stop')
+      choice?.message.refusal ||
+      (choice?.finish_reason && choice.finish_reason !== 'stop') ||
+      (!choice && completion?.stop_reason && !finished.has(completion.stop_reason))
     )
       throw new Error('The model response was refused or incomplete. Retry or edit the recipe.');
     if (text.length > 4000000) throw new Error('The model response exceeded its limit.');

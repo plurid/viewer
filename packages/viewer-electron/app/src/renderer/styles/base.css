@@ -461,6 +461,8 @@ select {
   gap: 3px;
 }
 .workspace-main {
+  /* the tour bar and its stops panel sit over the space, measured from here */
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;

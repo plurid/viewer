@@ -11,7 +11,8 @@ import type { JournalFilter } from '../../domain/journal/events';
 import type { WorktreeSelection } from '../../domain/comparison/worktrees';
 import type { NoteKind } from '../../domain/editing/notes';
 import type { AgentTaskBundle } from '../../domain/agents/task-workflow';
-import type { LayoutMode } from '../../domain/layout/modes';
+import type { LayoutMode, LayoutOpening } from '../../domain/layout/modes';
+import type { TourStage } from './tours/stage';
 /** What decides which plane an item opens in (`itemPlaneType`). */
 type PlaneItem = Pick<FileEntry, 'path' | 'directory' | 'extension'>;
 export interface WorkspaceController {
@@ -46,6 +47,7 @@ export interface WorkspaceController {
     selection: WorktreeSelection,
     another?: boolean,
   ): Promise<string>;
+  /** Plays the tour opened last, else the saved views. */
   present(): void;
   openCollection(id: string): void;
   openEvidence(evidence: EvidenceNavigation, parentPaneID?: string): Promise<void>;
@@ -64,7 +66,7 @@ export interface WorkspaceController {
     preset?: 'extract-audio',
   ): Promise<void>;
   /** A Layout plane for the files, opened or brought forward; `mode` overrides its suggestion. */
-  openLayout(paths: string[], parentID?: string, mode?: LayoutMode): void;
+  openLayout(paths: string[], parentID?: string, mode?: LayoutMode, opening?: LayoutOpening): void;
   rootID(paneID: string): string | undefined;
   parentPaneID(paneID: string): string | undefined;
   linkedPaneID(paneID: string, entry: PlaneItem): string | undefined;
@@ -95,9 +97,12 @@ export interface WorkspaceController {
     options?: {
       another?: boolean;
       link?: string;
+      /** Where a preview opens. Given as `undefined`, a preview already open loses its last one. */
       evidence?: EvidenceNavigation;
       /** A link followed: the plane also becomes the active one, taking the wheel and the keys. */
       activate?: boolean;
+      /** `false` leaves the camera where it is: a tour's stage moves it to the plane itself. */
+      frame?: boolean;
       /** A text file opens editing (Quick Preview's Edit). */
       edit?: boolean;
       /** A document package opens as the folder it is (Show Package Contents). */
@@ -129,7 +134,10 @@ export interface WorkspaceController {
   /** Saves the camera as a view; a name in use is replaced. */
   saveBookmark(name: string): void;
   /** Flies to a view; false when there is no view of that name. */
-  goBookmark(name: string, options?: { duration?: number; onSettle?: () => void }): boolean;
+  goBookmark(
+    name: string,
+    options?: { duration?: number; onSettle?: () => void; onInterrupt?: () => void },
+  ): boolean;
   removeBookmark(name: string): void;
   /** Opens a folder plane's subfolders, `depth` levels deep, as linked planes: one undo step. */
   explode(hostID: string, depth: number): Promise<number>;
@@ -154,6 +162,10 @@ export interface WorkspaceController {
   setTransformTool(tool: SpatialTool): void;
   /** Selects a plane before the engine handles a drag of its title. */
   selectForDrag(hostID: string): void;
+  /** Resolves once the camera is at rest: no framing waiting for layout and no motion. */
+  whenAtRest(signal?: AbortSignal): Promise<void>;
+  /** What moves the camera through a tour: the engine's anchors when it has them, else framing. */
+  tourStage(): TourStage;
   /** Engine state changes: arrangement, camera, docking and transform mode. */
   subscribeEngine(listener: () => void): () => void;
 }

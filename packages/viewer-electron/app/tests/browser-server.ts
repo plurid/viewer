@@ -30,6 +30,7 @@ import { FolderSizes } from '../src/desktop/files/folder-sizes';
 import { Search } from '../src/desktop/search/search';
 import { Storage } from '../src/desktop/persistence/storage';
 import { Projects } from '../src/desktop/workspaces/projects';
+import { Tours } from '../src/desktop/workspaces/tours';
 import { Workflows } from '../src/desktop/automation/workflows';
 import { WatchRules } from '../src/desktop/automation/watch-rules';
 import type { WatchRuleRequest } from '../src/domain/automation/watch-rules';
@@ -43,6 +44,7 @@ import { Comparisons } from '../src/desktop/comparison/comparison';
 import { OperationPlans } from '../src/desktop/operations/operation-plans';
 import type { CheckpointRequest } from '../src/domain/operations/change-plan';
 import type { ProjectRequest } from '../src/domain/workspaces/project';
+import type { TourRequest } from '../src/domain/tours/tour';
 import { entry, list } from '../src/desktop/files/filesystem';
 import { SettingsService } from '../src/desktop/preferences/settings';
 import { FileInformationService } from '../src/desktop/files/file-information';
@@ -150,6 +152,9 @@ const agentClients = new AgentClients(path.join(fixture.root, 'agents'), async (
   paths.forEach(scoped);
 });
 const projects = new Projects(async (paths) => {
+  paths.forEach(scoped);
+});
+const tours = new Tours(async (paths) => {
   paths.forEach(scoped);
 });
 const checkpoints = new Checkpoints(
@@ -415,6 +420,13 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       if (request.kind === 'choose') return path.join(fixture.files, 'viewer.project.jsonc');
       if (request.kind === 'read') return projects.read(scoped(request.file));
       return projects.save(scoped(request.file), request.revision, request.definition);
+    }
+    case 'tour': {
+      const request = args[0] as TourRequest;
+      if (request.kind === 'read') return tours.read(scoped(request.file));
+      if (request.kind === 'stat')
+        return tours.stat(scoped(request.root), request.path, request.hash);
+      return tours.save(scoped(request.file), request.revision, request.definition);
     }
     case 'bootstrap':
       return {

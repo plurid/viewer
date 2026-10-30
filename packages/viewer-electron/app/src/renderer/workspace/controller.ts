@@ -37,14 +37,16 @@ import { continueEditing } from '../editing/sessions';
 import { choosePreview } from '../previews/registry';
 import { repeatedPreviews } from './recovery';
 import { flattenTree, hostID, paneRoute, parentPaneID, linkedPaneID } from './tree';
-import { cancelWorkspaceFraming, frameWorkspace } from './framing';
+import { cancelWorkspaceFraming, frameWorkspace, whenWorkspaceAtRest } from './framing';
 import { applyTiling } from './tiling';
 import { explodePlan } from '../../domain/workspaces/explode';
 import { folderPairArea, folderPairGeometry } from './folder-pair';
 import { frontPlaneDepth, planeLayoutGeometry } from './plane-layout';
 import type { WorkspaceController } from './context';
 import { openWorkspacePath } from './open-path';
-import { startTour } from './tour';
+import { openTourFile, presentTour } from './tour';
+import { hasAnchorCamera, pluridStage, workspaceStage } from './tours/stage';
+import { isTourFile } from '../../domain/tours/tour';
 import { announce } from '../state/core';
 import { addContentPane, addServerPane } from '../state/panes';
 import { fileSelector } from '../explorer/anchors';
@@ -213,11 +215,8 @@ export function useWorkspaceController({
         return opened.id;
       },
       present() {
-        if (!controller.bookmarks().length) {
-          announce('Save a view to start a Tour.');
-          return;
-        }
-        startTour(controller, effectiveWindowSettings(getState()).tour);
+        if (!presentTour(controller, effectiveWindowSettings(getState()).tour))
+          announce('Save a view or open a tour file to present.');
       },
       // Rows ask whether a linked plane exists; only tree changes can alter that, not
       // the camera updates the engine store also publishes every frame.
@@ -731,6 +730,7 @@ export function useWorkspaceController({
           activate?: boolean;
           edit?: boolean;
           browse?: boolean;
+          frame?: boolean;
         },
       ) {
         if (!entry.directory && entry.name === 'viewer.project.jsonc') {
@@ -740,6 +740,11 @@ export function useWorkspaceController({
               if (document && typeof document === 'object') return installProject(document);
             })
             .catch(report);
+          return;
+        }
+        // A tour file plays: its stops open files and move the camera, and nothing runs.
+        if (!entry.directory && isTourFile(entry.name)) {
+          void openTourFile(controller, entry.path).catch(report);
           return;
         }
         const api = engine.current;
@@ -779,9 +784,19 @@ export function useWorkspaceController({
             owners,
           });
         if (existing) {
-          if (existing.type === 'preview' && options?.evidence)
+          // given, even as undefined, the evidence replaces the last one: a tour's stop without an
+          // anchor, or at a changed file, keeps no outline or highlight from the stop before
+          if (existing.type === 'preview' && options && 'evidence' in options)
             updatePane(existing.id, { evidence: options.evidence });
-          controller.focusPane(existing.id, { activate: options?.activate });
+          if (options?.frame === false) {
+            // a closed plane is shown again where it is; the stage then brings the camera to it
+            const node = flattenTree(tree).find((item) => hostID(item) === existing.id);
+            if (node?.show === false) api.tree.open(node.planeID);
+          }
+          controller.focusPane(existing.id, {
+            activate: options?.activate,
+            ...(options?.frame === false ? { frame: false } : {}),
+          });
           if (options?.edit) editingPlane(existing.id)?.edit?.();
           return;
         }
@@ -798,7 +813,11 @@ export function useWorkspaceController({
         if (options?.edit && pane.type === 'preview' && choosePreview(entry).editing === 'text')
           continueEditing(pane.id, crypto.randomUUID());
         setActivePane(pane.id);
-        if (api && linked) {
+        // a tour's stage takes the camera to the plane itself: a fit here would race its move
+        if (options?.frame === false) {
+          if (api && linked)
+            spawnChildPlane(api, paneRoute(type, pane.id), parent!.planeID, options.link);
+        } else if (api && linked) {
           spawnChildPlane(api, paneRoute(type, pane.id), parent!.planeID, options?.link);
           const liveParent = flattenTree(api.tree.get()).find(
             (node) => hostID(node) === parentPaneID,
@@ -1166,6 +1185,21 @@ export function useWorkspaceController({
           api.selection.set([node.planeID]);
       },
       subscribeEngine: (listener) => engine.current?.store.subscribe(listener) ?? (() => {}),
+      whenAtRest: (signal) => whenWorkspaceAtRest(engine, signal),
+      tourStage() {
+        const isOpen = (id: string) => activeWorkspace().panes.some((pane) => pane.id === id);
+        const api = engine.current;
+        if (!hasAnchorCamera(api)) return workspaceStage(controller, isOpen);
+        // the engine names a plane by its route: the one showing the pane now, while it is open
+        return pluridStage(api, (id) => {
+          const live = engine.current;
+          const node =
+            isOpen(id) && live
+              ? flattenTree(live.tree.get()).find((item) => hostID(item) === id)
+              : undefined;
+          return node?.route;
+        });
+      },
       undo: () => {
         engine.current?.history.undo();
         if (engine.current) {

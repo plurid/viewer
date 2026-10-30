@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * THE SPACE'S VIEWS AND TOUR: ⌃⌥⌘1–9 saves the camera as view 1–9 and ⌥⌘1–9 flies back;
- * views can be named; Tour flies through them in turn and any key stops it.
+ * views can be named; Tour flies through them in turn, Escape stops it and a click pauses it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from '@testing-library/react';
@@ -11,7 +11,8 @@ import type { CommandContext } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { defaultShortcuts } from '../src/domain/preferences/shortcuts';
 import { initialize } from '../src/renderer/state/store';
-import { startTour, tourActive } from '../src/renderer/workspace/tour';
+import { startTour, stopTour, tourActive, tourPlayback } from '../src/renderer/workspace/tour';
+import { workspaceStage } from '../src/renderer/workspace/tours/stage';
 
 let views: { name: string; label: string }[] = [];
 const flights: string[] = [];
@@ -31,6 +32,10 @@ const controller = {
     settle = options?.onSettle;
     return true;
   }),
+  // the camera comes to rest only when a flight settles here: an abort ends the wait
+  whenAtRest: (signal?: AbortSignal) =>
+    new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve())),
+  tourStage: () => workspaceStage(actions.workspace as WorkspaceController, () => true),
 } as Record<string, unknown>;
 const actions = {
   workspace: new Proxy(controller, { get: (target, key: string) => target[key] ?? vi.fn() }),
@@ -47,7 +52,10 @@ beforeEach(() => {
   Object.assign(window, { viewer: { save: vi.fn(async () => {}) } });
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  stopTour();
+  vi.useRealTimers();
+});
 
 describe('views', () => {
   it('saves the camera as a numbered view and flies back to it', async () => {
@@ -71,38 +79,61 @@ describe('views', () => {
   });
 });
 
-describe('Tour', () => {
+describe('Tour the views', () => {
   const workspace = actions.workspace as WorkspaceController;
-  it('flies through the views in turn, waiting at each, and starts again', () => {
+  // the player continues after a view settles in a promise: let it run
+  const settled = () => act(async () => settle?.());
+  it('flies through the views in turn, waiting at each, and starts again', async () => {
     views = ['1', '2', 'Overview'].map((name) => ({ name, label: name }));
     startTour(workspace, { dwell: 1000, duration: 500, loop: true });
     expect(flights).toEqual(['1']);
-    act(() => settle?.());
+    await settled();
     act(() => vi.advanceTimersByTime(999));
     expect(flights).toEqual(['1']);
     act(() => vi.advanceTimersByTime(1));
     expect(flights).toEqual(['1', '2']);
     for (let step = 0; step < 2; step++) {
-      act(() => settle?.());
+      await settled();
       act(() => vi.advanceTimersByTime(1000));
     }
     expect(flights).toEqual(['1', '2', 'Overview', '1']);
     expect(tourActive()).toBe(true);
-    // a key stops it
-    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' })));
+    expect(tourPlayback()).toMatchObject({ index: 0, status: 'travelling' });
+    // Escape stops it
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
     expect(tourActive()).toBe(false);
-    act(() => settle?.());
+    await settled();
     act(() => vi.advanceTimersByTime(5000));
     expect(flights).toHaveLength(4);
   });
-  it('stops after the last view unless it loops, and needs a view to start', () => {
+  it('pauses for a click in the space, and resumes at the same view', async () => {
+    views = ['1', '2'].map((name) => ({ name, label: name }));
+    const surface = document.body.appendChild(document.createElement('div'));
+    surface.className = 'workspace-surface';
+    startTour(workspace, { dwell: 1000, duration: 500, loop: false });
+    await settled();
+    act(() => vi.advanceTimersByTime(0));
+    act(() => surface.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+    expect(tourPlayback()).toMatchObject({ index: 0, paused: true, status: 'showing' });
+    act(() => vi.advanceTimersByTime(5000));
+    expect(flights).toEqual(['1']);
+    // the person moved away: resuming flies back to the view, then waits there again
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' })));
+    expect(flights).toEqual(['1', '1']);
+    await settled();
+    act(() => vi.advanceTimersByTime(1000));
+    expect(flights).toEqual(['1', '1', '2']);
+    surface.remove();
+  });
+  it('stops after the last view unless it loops, and needs a view to start', async () => {
     expect(() => startTour(workspace, { dwell: 10, duration: 10, loop: false })).toThrow(
       'Save a view',
     );
     views = [{ name: '1', label: '1' }];
     startTour(workspace, { dwell: 10, duration: 10, loop: false });
-    act(() => settle?.());
+    await settled();
     act(() => vi.advanceTimersByTime(10));
     expect(tourActive()).toBe(false);
+    expect(tourPlayback()).toMatchObject({ status: 'ended', skipped: 0 });
   });
 });

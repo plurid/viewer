@@ -6,6 +6,7 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 .impeccable
+SCRATCH.md
 
 packages/viewer-electron/app/assets/viewer-ocr
 packages/viewer-electron/app/assets/viewer-applications

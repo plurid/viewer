@@ -5,7 +5,7 @@
  * marks, so a CAM program can cut holes before outlines and skip what is only marked.
  */
 import { primitivePoints, transformPrimitive, type Primitive } from './drawing';
-import { apply, placementMatrix, tau } from './geometry';
+import { apply, placementMatrix, tau, type Point } from './geometry';
 import type { CutRole, Part } from './parts';
 import type { Placement } from './plan';
 
@@ -53,18 +53,23 @@ class Writer {
   }
 }
 
-export function sheetDXF(sheet: SheetDrawing): string {
-  const out = new Writer();
+/** The header and tables every written drawing starts with, then its ENTITIES section. */
+function begin(
+  out: Writer,
+  units: number,
+  extents: { min: Point; max: Point },
+  layers: readonly { name: string; color: number }[],
+): void {
   out.group(0, 'SECTION');
   out.group(2, 'HEADER');
   out.group(9, '$ACADVER');
   out.group(1, 'AC1009');
   out.group(9, '$INSUNITS');
-  out.group(70, 4);
+  out.group(70, units);
   out.group(9, '$EXTMIN');
-  out.point(10, 0, 0);
+  out.point(10, extents.min.x, extents.min.y);
   out.group(9, '$EXTMAX');
-  out.point(10, sheet.length, sheet.width);
+  out.point(10, extents.max.x, extents.max.y);
   out.group(0, 'ENDSEC');
   out.group(0, 'SECTION');
   out.group(2, 'TABLES');
@@ -81,7 +86,6 @@ export function sheetDXF(sheet: SheetDrawing): string {
   out.group(0, 'ENDTAB');
   out.group(0, 'TABLE');
   out.group(2, 'LAYER');
-  const layers = Object.values(sheetLayers);
   out.group(70, layers.length);
   for (const layer of layers) {
     out.group(0, 'LAYER');
@@ -94,6 +98,21 @@ export function sheetDXF(sheet: SheetDrawing): string {
   out.group(0, 'ENDSEC');
   out.group(0, 'SECTION');
   out.group(2, 'ENTITIES');
+}
+function end(out: Writer): string {
+  out.group(0, 'ENDSEC');
+  out.group(0, 'EOF');
+  return out.text();
+}
+
+export function sheetDXF(sheet: SheetDrawing): string {
+  const out = new Writer();
+  begin(
+    out,
+    4,
+    { min: { x: 0, y: 0 }, max: { x: sheet.length, y: sheet.width } },
+    Object.values(sheetLayers),
+  );
   polyline(
     out,
     sheetLayers.sheet.name,
@@ -122,9 +141,40 @@ export function sheetDXF(sheet: SheetDrawing): string {
       out.group(73, 2);
     }
   }
-  out.group(0, 'ENDSEC');
-  out.group(0, 'EOF');
-  return out.text();
+  return end(out);
+}
+
+export interface PartDrawing {
+  primitives: readonly Primitive[];
+  /** The `$INSUNITS` code its coordinates are in. */
+  units: number;
+  /** Its layers in order; each primitive stays on its own. */
+  layers: readonly string[];
+}
+/** One drawing as an R12 ASCII DXF in its own units and on its own layers, its entities written as
+ * a sheet's are: a corrected part keeps everything a cutter reads. */
+export function partDXF(part: PartDrawing): string {
+  const out = new Writer();
+  const min = { x: Infinity, y: Infinity },
+    max = { x: -Infinity, y: -Infinity };
+  for (const primitive of part.primitives)
+    for (const p of primitive.kind === 'text' ? [primitive.at] : primitivePoints(primitive, 0.01)) {
+      min.x = Math.min(min.x, p.x);
+      min.y = Math.min(min.y, p.y);
+      max.x = Math.max(max.x, p.x);
+      max.y = Math.max(max.y, p.y);
+    }
+  const extents = Number.isFinite(min.x)
+    ? { min, max }
+    : { min: { x: 0, y: 0 }, max: { x: 0, y: 0 } };
+  begin(
+    out,
+    part.units,
+    extents,
+    part.layers.map((name) => ({ name, color: 7 })),
+  );
+  for (const primitive of part.primitives) write(out, primitive, primitive.layer);
+  return end(out);
 }
 
 function write(out: Writer, primitive: Primitive, layer: string): void {

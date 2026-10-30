@@ -1,0 +1,352 @@
+/**
+ * THE FABRICATION CHECK on Job 1042, the model stubbed with a prepared answer: the inventory and
+ * what is sent, the answer graded against Viewer's own measurement, the tour, the correction, the
+ * request's quantities, SAM's outline, the evidence record, and the refusals.
+ */
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+import type { CheckOpening, CheckResult } from '../src/domain/fabrication/check';
+import type { ModelDataLevel } from '../src/domain/models/permissions';
+import type { ModelProvider } from '../src/domain/services';
+import type { GenerateOptions } from '../src/desktop/models/providers';
+import type { SamRequest } from '../src/desktop/models/segmentation';
+import { FabricationChecks } from '../src/desktop/fabrication/service';
+import { samSegmenter } from '../src/desktop/models/segmentation';
+import { checkAnswerSchema, checkInstructions } from '../src/domain/fabrication/prompt';
+import { defaultSettings } from '../src/domain/services';
+import { temporaryRoot } from '../tools/temporary';
+import {
+  allowed,
+  drawingPage,
+  jobAnswer,
+  jpeg,
+  meta,
+  samReply,
+  writeJob,
+} from './fabrication-fixtures';
+
+let root: string;
+let folder: string;
+let level: ModelDataLevel;
+let generate: Mock<(...args: unknown[]) => Promise<unknown>>;
+let checks: FabricationChecks;
+let samRequest: Mock<SamRequest>;
+beforeEach(async () => {
+  root = await temporaryRoot('viewer-fabrication-check-');
+  folder = path.join(root, 'Job 1042');
+  await writeJob(folder);
+  level = 'images';
+  generate = vi.fn<(...args: unknown[]) => Promise<unknown>>();
+  samRequest = vi.fn<SamRequest>(async () => samReply);
+  checks = new FabricationChecks({
+    settings: () => ({ ...defaultSettings(root), providers: [meta] }),
+    access: async () => {},
+    permission: async () => allowed(level),
+    generate: (...args) => generate(...args),
+    // the re-encoded photo: 1600 px on its longer side, as the image processor gives it
+    encodePhoto: async () => Buffer.from(jpeg(1600, 1200)),
+    segmenter: () => samSegmenter((...args) => samRequest(...args), 'Muse Spark'),
+  });
+});
+afterEach(() => checks.close());
+
+async function opened(): Promise<CheckOpening> {
+  const reply = await checks.request({ kind: 'open', paths: [folder] }, 1);
+  if (reply.kind !== 'opened') throw new Error('Expected an inventory.');
+  return reply;
+}
+async function checked(opening: CheckOpening, answer = jobAnswer(opening)): Promise<CheckResult> {
+  generate.mockResolvedValue(answer);
+  const reply = await checks.request(
+    { kind: 'run', id: opening.id, providerID: meta.id, pages: [await drawingPage(opening)] },
+    1,
+  );
+  if (reply.kind !== 'result') throw new Error('Expected a result.');
+  return reply;
+}
+
+describe('fabrication check', () => {
+  it('lists the job in refs, says how each file is sent, and leaves out what it cannot read', async () => {
+    const opening = await opened();
+    expect(opening.job).toBe('Job 1042');
+    expect(opening.sources.map((source) => [source.ref, source.name, source.sending])).toEqual([
+      ['S1', 'Job 1042 request.eml', 'text'],
+      ['S2', 'Job 1042 drawing.pdf', 'pages'],
+      ['S3', 'Plate.jpg', 'picture'],
+      ['S4', 'g3-CV25-E1-10buc.dxf', 'measurement'],
+      ['S5', 'g3-GS30-D1-6buc.dxf', 'measurement'],
+      ['S6', 'g6-FL80-C1-2buc.dxf', 'measurement'],
+      ['S7', 'g6-MB20-A1-4buc.dxf', 'measurement'],
+      ['S8', 'g6-PL60-B2-2buc.dxf', 'measurement'],
+    ]);
+    expect(opening.skipped).toEqual([
+      { name: 'Notes.json', reason: 'not a request, drawing, photo or DXF' },
+    ]);
+    expect(opening.providers).toEqual([
+      { id: 'meta', name: 'Meta', model: 'muse-spark-1.3', pictures: true, allowed: true },
+    ]);
+    expect(opening.providerID).toBe('meta');
+  });
+
+  it('sends refs, text, measurements and pictures at the images level, never a path', async () => {
+    const opening = await opened();
+    await checked(opening);
+    const [provider, instructions, input, schema, , sent, actor, options] = generate.mock
+      .calls[0]! as [
+      ModelProvider,
+      string,
+      unknown,
+      unknown,
+      AbortSignal,
+      string,
+      string,
+      GenerateOptions,
+    ];
+    expect(provider.id).toBe('meta');
+    expect(instructions).toBe(checkInstructions);
+    expect(schema).toBe(checkAnswerSchema);
+    expect([sent, actor]).toEqual(['images', 'user']);
+    expect(options.images!.map((image) => image.type)).toEqual(['image/jpeg', 'image/jpeg']);
+    const text = JSON.stringify(input);
+    expect(text).not.toContain(root);
+    expect(text).toContain('Please cut the parts for job 1042 in S235JR steel');
+    expect(text).toContain('Holes 4× Ø10.5 at 50 mm pitch');
+    expect(text).not.toContain('mara.pop@example.invalid');
+    expect(input).toMatchObject({
+      job: 'Job 1042',
+      drawings: [{ ref: 'S2', pages: 1, shown: [{ page: 1, image: 1, width: 2048 }] }],
+      photos: [{ ref: 'S3', image: 2, width: 1600, height: 1200 }],
+      pictures: '2 pictures follow this text, in the order of their image numbers.',
+    });
+    const plate = (
+      input as { dxf: { ref: string; measurement?: { pitches: unknown[] } }[] }
+    ).dxf.find((item) => item.ref === 'S8');
+    expect(plate?.measurement?.pitches).toContainEqual({
+      axis: 'x',
+      value: 48,
+      holes: [4, 5],
+      entities: ['8', '9'],
+    });
+  });
+
+  it('grades the pitch Confirmed, builds the tour and proposes the correction', async () => {
+    const opening = await opened();
+    const result = await checked(opening);
+    expect(result.issues).toEqual([]);
+    const [finding] = result.findings;
+    expect(finding).toMatchObject({
+      origin: 'model',
+      grade: {
+        status: 'confirmed',
+        measured: 48,
+        reason: 'Viewer measured 48.00 mm between holes 4 and 5 along x; the drawing gives 50 mm.',
+      },
+      names: { drawing: 'Job 1042 drawing.pdf', dxf: 'g6-PL60-B2-2buc.dxf' },
+      correction: {
+        source: path.join(folder, 'g6-PL60-B2-2buc.dxf'),
+        name: 'g6-PL60-B2-2buc (corrected).dxf',
+        plan: { kind: 'dxf-correction', from: '8', to: '9', axis: 'x', target: 50, measured: 48 },
+        description: [
+          'DXF correction',
+          'pitch along x from 48.00 mm to 50.00 mm',
+          'moves 2 holes',
+          'a new DXF beside the original, which is kept',
+        ],
+      },
+    });
+    expect(result.findings).toHaveLength(1);
+    expect(result.tour.root).toBe(folder);
+    expect(
+      result.tour.stops.map((stop) => stop.target.kind === 'file' && stop.target.path),
+    ).toEqual(['Job 1042 request.eml', 'Job 1042 drawing.pdf', 'g6-PL60-B2-2buc.dxf', 'Plate.jpg']);
+    expect(result.tour.stops[1]).toMatchObject({
+      finding: { id: 'F1', grade: 'confirmed' },
+      note: finding!.grade.reason,
+    });
+    // the request decides each part's quantity and thickness, and says so
+    expect(result.parts.find((part) => part.name === 'g6-PL60-B2-2buc.dxf')).toMatchObject({
+      pieces: 1,
+      quantity: { sets: 2, pieces: 2, source: 'request', text: '2, from the request' },
+      thickness: { value: 6, source: 'request', text: '6 mm, from the request' },
+    });
+  });
+
+  it('outlines the drawing’s region with SAM 3.1, and falls back to the model’s box, said', async () => {
+    samRequest.mockImplementation(async (picture: { width: number }) => {
+      if (picture.width === 1600) throw new Error('The provider request timed out.');
+      return samReply;
+    });
+    const opening = await opened();
+    const result = await checked(opening);
+    const [prompt] = samRequest.mock.calls[0]!.slice(1) as [string];
+    // 0.08 to 0.6 of 2048 px, 0.86 to 0.9 of 1448 px; right and bottom inclusive
+    expect(prompt).toBe('<0f>0<|box;x1=163;y1=1245;x2=1228;y2=1303;w=2048;h=1448|>');
+    expect(result.tour.stops[1]!.target).toMatchObject({
+      anchor: {
+        kind: 'pdf',
+        page: 1,
+        search: false,
+        region: [
+          [0.25, 0.25],
+          [0.75, 0.25],
+          [0.75, 0.75],
+          [0.25, 0.75],
+        ],
+      },
+    });
+    expect(result.findings[0]!.outlines).toEqual([
+      {
+        stop: 'stop-2',
+        ref: 'S2',
+        source: 'segmentation',
+        label: 'outline from SAM 3.1',
+        confidence: 0.8904109597206116,
+      },
+    ]);
+    const photo = result.tour.stops[3]!.target;
+    expect(photo.kind === 'file' && photo.anchor).toMatchObject({ kind: 'image', x: 0.2, y: 0.2 });
+    const record = JSON.parse(checks.handoff(opening.id)!.record) as {
+      segmentation: { label: string; note?: string }[];
+    };
+    expect(record.segmentation[1]).toEqual({
+      stop: 'stop-4',
+      ref: 'S3',
+      source: 'model-box',
+      label: 'box from Muse Spark',
+      note: 'SAM 3.1 gave no outline: The provider request timed out.',
+    });
+  });
+
+  it('raises a quantity the request’s own words do not give, and keeps it unverified', async () => {
+    const opening = await opened();
+    const answer = jobAnswer(opening);
+    const bracket = answer.request.find((part) => part.part.startsWith('MB20-A1'))!;
+    bracket.quantity = 5;
+    const result = await checked(opening, answer);
+    const raised = result.findings.find((item) => item.origin === 'viewer');
+    expect(raised).toMatchObject({
+      finding: {
+        id: 'F2',
+        kind: 'quantity',
+        summary: 'The request asks for 5 pieces of MB20-A1; its file name gives 4 pieces (“4buc”).',
+      },
+      grade: {
+        status: 'unverified',
+        reason: '“MB20-A1 mounting bracket, 6 mm, 4 pieces” does not give 5 pieces.',
+      },
+      names: { drawing: 'Job 1042 request.eml', dxf: 'g6-MB20-A1-4buc.dxf' },
+    });
+    // the request still comes first, with the finding beside it
+    expect(
+      result.parts.find((part) => part.name === 'g6-MB20-A1-4buc.dxf')!.quantity,
+    ).toMatchObject({ sets: 5, source: 'request' });
+  });
+
+  it('keeps an evidence record of what was asked, sent and answered, for the handoff only', async () => {
+    const opening = await opened();
+    expect(checks.handoff(opening.id)).toBeUndefined();
+    await checked(opening);
+    const handoff = checks.handoff(opening.id)!;
+    expect(handoff.tour!.definition).toMatchObject({ version: 1, name: 'Job 1042' });
+    const record = JSON.parse(handoff.record) as Record<string, unknown> & {
+      inputs: { name: string; sha256: string; sending: string; pictures: unknown[] }[];
+    };
+    expect(record).toMatchObject({
+      version: 1,
+      job: 'Job 1042',
+      provider: { kind: 'meta', endpoint: 'https://api.meta.ai/v1', model: 'muse-spark-1.3' },
+      level: 'images',
+      instructions: checkInstructions,
+      validation: { valid: true, issues: [] },
+      corrections: [{ finding: 'F1', plan: { target: 50 } }],
+      tour: { stops: 4, skipped: [] },
+    });
+    expect(record.output).toEqual(jobAnswer(opening));
+    expect(
+      record.inputs.map((input) => [input.name, input.sending, input.pictures.length]),
+    ).toEqual([
+      ['Job 1042 request.eml', 'text', 0],
+      ['Job 1042 drawing.pdf', 'pages', 1],
+      ['Plate.jpg', 'picture', 1],
+      ['g3-CV25-E1-10buc.dxf', 'measurement', 0],
+      ['g3-GS30-D1-6buc.dxf', 'measurement', 0],
+      ['g6-FL80-C1-2buc.dxf', 'measurement', 0],
+      ['g6-MB20-A1-4buc.dxf', 'measurement', 0],
+      ['g6-PL60-B2-2buc.dxf', 'measurement', 0],
+    ]);
+    expect(record.inputs.every((input) => /^[0-9a-f]{64}$/.test(input.sha256))).toBe(true);
+    expect(handoff.record).not.toContain(root);
+  });
+
+  it('refuses before reading anything when the provider may not receive pictures', async () => {
+    level = 'full-text';
+    const opening = await opened();
+    expect(opening.providers[0]!.allowed).toBe(false);
+    await expect(
+      checks.request({ kind: 'run', id: opening.id, providerID: meta.id, pages: [] }, 1),
+    ).rejects.toThrow(
+      'Meta may receive filenames, metadata and extracted document text. This check also sends pictures: allow filenames, metadata, document text and pictures (photos and rendered drawing pages) for Meta.',
+    );
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('refuses a page drawn from another version of the drawing, and a check of another window', async () => {
+    const opening = await opened();
+    const page = await drawingPage(opening);
+    await expect(
+      checks.request(
+        {
+          kind: 'run',
+          id: opening.id,
+          providerID: meta.id,
+          pages: [{ ...page, version: { ...page.version, size: page.version.size + 1 } }],
+        },
+        1,
+      ),
+    ).rejects.toThrow(
+      'Job 1042 drawing.pdf changed since the check listed it. Check the job again.',
+    );
+    await expect(
+      checks.request({ kind: 'run', id: opening.id, providerID: meta.id, pages: [page] }, 2),
+    ).rejects.toThrow('This check was closed.');
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('can be cancelled while the model answers, and grades nothing', async () => {
+    const opening = await opened();
+    generate.mockImplementation(
+      (...args: unknown[]) =>
+        new Promise((_, reject) => {
+          const signal = args[4] as AbortSignal;
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    );
+    const running = checks.request(
+      { kind: 'run', id: opening.id, providerID: meta.id, pages: [await drawingPage(opening)] },
+      1,
+    );
+    await vi.waitFor(() => expect(generate).toHaveBeenCalled());
+    await checks.request({ kind: 'cancel', id: opening.id }, 1);
+    await expect(running).rejects.toThrow('The check was cancelled. Nothing was graded.');
+    expect(checks.handoff(opening.id)).toBeUndefined();
+  });
+
+  it('refuses an answer that does not fit the schema, keeping what came back in the record', async () => {
+    const opening = await opened();
+    generate.mockResolvedValue({
+      summary: 'No findings.',
+      request: [],
+      findings: [],
+      tour: 'none',
+    });
+    await expect(
+      checks.request(
+        { kind: 'run', id: opening.id, providerID: meta.id, pages: [await drawingPage(opening)] },
+        1,
+      ),
+    ).rejects.toThrow(
+      'Meta’s answer does not fit the check’s form at tour, so nothing was graded.',
+    );
+  });
+});

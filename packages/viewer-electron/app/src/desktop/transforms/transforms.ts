@@ -10,6 +10,8 @@ import { compileMedia, mediaDemuxer, mediaInfo } from './media';
 import type { ImageInspection } from './image';
 import { renderLayout } from './layout';
 import { writeNesting } from './nesting';
+import { writeCorrection } from './correction';
+import { writeHandoff } from '../fabrication/handoff';
 import type { LayoutTools } from './layout';
 import { inspectPDF, pdfProcessor, transformPDF } from './pdf';
 import { jpegMetadata } from './jpeg-metadata';
@@ -21,6 +23,8 @@ import type {
   OptimizationOutcome,
   OptimizationStatistics,
 } from '../../domain/operations/optimization-target';
+import type { CorrectionReport, DXFCorrection } from '../../domain/fabrication/plan';
+import type { HandoffChecks } from '../fabrication/handoff';
 
 interface Source {
   file: string;
@@ -29,6 +33,14 @@ interface Source {
   modified: number;
   size: number;
 }
+/** Each member names the other's fields as absent, so either can be read from the union. */
+type Without<T> = { [K in keyof T]?: never };
+/** What a transform reports beside its output: an optimization's sizes, or what a corrected
+ * drawing measures. */
+export type TransformOutcome =
+  | void
+  | (OptimizationStatistics & Without<{ correction: CorrectionReport }>)
+  | ({ correction: CorrectionReport } & Without<OptimizationStatistics>);
 export interface TransformExecutor {
   execute(
     plan: TransformPlan,
@@ -37,7 +49,7 @@ export interface TransformExecutor {
     signal: AbortSignal,
     progress: (fraction: number, detail: string) => void,
     preparedID?: string,
-  ): Promise<void | OptimizationStatistics>;
+  ): Promise<TransformOutcome>;
 }
 export class Transforms implements TransformExecutor {
   private work = new PreviewWork();
@@ -53,6 +65,8 @@ export class Transforms implements TransformExecutor {
     ) => Promise<Buffer>,
     private inspect?: (bytes: Buffer, signal: AbortSignal) => Promise<ImageInspection>,
     private layout: Omit<LayoutTools, 'qpdf'> = {},
+    /** The open fabrication checks a handoff saves the tour and record of. */
+    private checks?: HandoffChecks,
   ) {}
   /** What `renderLayout` needs from this service's processors. */
   layoutTools(): LayoutTools {
@@ -207,12 +221,33 @@ export class Transforms implements TransformExecutor {
     );
   }
   execute(
+    value: DXFCorrection,
+    files: readonly string[],
+    output: string,
+    signal: AbortSignal,
+    progress: (fraction: number, detail: string) => void,
+  ): Promise<{ correction: CorrectionReport }>;
+  execute(
+    value: Exclude<TransformPlan, DXFCorrection>,
+    files: readonly string[],
+    output: string,
+    signal: AbortSignal,
+    progress: (fraction: number, detail: string) => void,
+  ): Promise<void | OptimizationStatistics>;
+  execute(
     value: TransformPlan,
     files: readonly string[],
     output: string,
     signal: AbortSignal,
     progress: (fraction: number, detail: string) => void,
-  ): Promise<void | OptimizationStatistics> {
+  ): Promise<TransformOutcome>;
+  execute(
+    value: TransformPlan,
+    files: readonly string[],
+    output: string,
+    signal: AbortSignal,
+    progress: (fraction: number, detail: string) => void,
+  ): Promise<TransformOutcome> {
     const plan = validateTransform(value, files.length);
     return this.work.track(
       files,
@@ -309,6 +344,20 @@ export class Transforms implements TransformExecutor {
                 output,
                 scope.signal,
                 progress,
+                (report, file, signal) =>
+                  renderLayout(report, [], file, this.layoutTools(), signal),
+              );
+            if (plan.kind === 'dxf-correction')
+              return writeCorrection(plan, sources[0]!, output, scope.signal, progress);
+            if (plan.kind === 'fabrication-handoff')
+              return writeHandoff(
+                plan,
+                sources,
+                files,
+                output,
+                scope.signal,
+                progress,
+                this.checks,
                 (report, file, signal) =>
                   renderLayout(report, [], file, this.layoutTools(), signal),
               );

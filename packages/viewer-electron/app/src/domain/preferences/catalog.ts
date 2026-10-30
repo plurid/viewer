@@ -556,7 +556,8 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Space',
     section: 'Tour',
     label: 'Time at each view (ms)',
-    detail: 'Tour flies through the saved views in turn; any key or click stops it.',
+    detail:
+      'Each saved view shows this long. A tour file’s stops show at least this long, longer when their captions need it. Escape stops a tour; a click in the space pauses it.',
     kind: 'number',
     min: 500,
     max: 60000,

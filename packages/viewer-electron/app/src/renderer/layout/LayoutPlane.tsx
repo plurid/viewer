@@ -259,7 +259,11 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
       )}
       {settings.mode === 'nesting' ? (
         <div className="layout-nesting">
-          <NestingPanel files={read.drawings} />
+          <NestingPanel
+            files={read.drawings}
+            quantities={pane.quantities}
+            thicknesses={pane.thicknesses}
+          />
         </div>
       ) : (
         <div className="layout-body">

@@ -82,8 +82,17 @@ export function contentPlaneActions({
       registerContent(pane, parentID);
       controller().focusPane(pane.id, { activate: true });
     },
-    openLayout(paths, parentID, mode) {
+    openLayout(paths, parentID, mode, opening) {
       const space = activeWorkspace();
+      // Pieces of the files opened only, each a whole count.
+      const given = Object.entries(opening?.quantities ?? {}).filter(
+        ([file, count]) => paths.includes(file) && Number.isInteger(count) && count >= 0,
+      );
+      const quantities = given.length ? Object.fromEntries(given) : undefined;
+      const read = Object.entries(opening?.thicknesses ?? {}).filter(
+        ([file, millimetres]) => paths.includes(file) && Number.isFinite(millimetres),
+      );
+      const thicknesses = read.length ? Object.fromEntries(read) : undefined;
       const wanted = [...paths].sort().join('\n');
       const existing = space.panes.find(
         (pane) =>
@@ -94,6 +103,8 @@ export function contentPlaneActions({
       if (existing) {
         if (mode && existing.type === 'layout' && existing.mode !== mode)
           updatePane(existing.id, { mode });
+        if (quantities) updatePane(existing.id, { quantities });
+        if (thicknesses) updatePane(existing.id, { thicknesses });
         controller().focusPane(existing.id, { activate: true });
         return;
       }
@@ -103,6 +114,8 @@ export function contentPlaneActions({
         path: parentPath(paths[0]!),
         sources: [...paths],
         ...(mode ? { mode } : {}),
+        ...(quantities ? { quantities } : {}),
+        ...(thicknesses ? { thicknesses } : {}),
       };
       registerContent(pane, parentID);
       controller().focusPane(pane.id, { activate: true });

@@ -1,0 +1,155 @@
+/* Check a laser job: the panel beside the space, as the tour stops panel is. */
+.check-panel {
+  position: absolute;
+  z-index: 140;
+  top: 12px;
+  right: 12px;
+  width: 420px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow);
+}
+.check-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.check-panel > header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.check-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 14px 12px;
+}
+.check-panel section {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.check-panel section:last-of-type {
+  border-bottom: 0;
+}
+.check-panel h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.check-files,
+.check-parts,
+.check-findings,
+.check-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.check-files li,
+.check-parts li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.check-parts li {
+  grid-template-columns: 1fr;
+}
+.check-files li > .muted {
+  grid-column: 2;
+  font-size: 12px;
+}
+.check-parts li > .muted {
+  font-size: 12px;
+}
+.check-parts li[data-question] > .muted {
+  color: var(--ink);
+}
+.check-ref {
+  color: var(--muted);
+  font-size: 12px;
+}
+.check-file {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.check-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.check-endpoint {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.check-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.check-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+  font-size: 13px;
+}
+.check-finding {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.check-finding:last-child {
+  border-bottom: 0;
+}
+.check-finding-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.check-finding-summary {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.check-reason {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.check-correction {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--raised);
+  font-size: 12px;
+}
+.check-correction p {
+  margin: 0 0 6px;
+}
+.check-notes li {
+  padding: 2px 0;
+  font-size: 12px;
+}
+.check-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 10px;
+}
+.check-panel section > button {
+  margin-top: 8px;
+}

@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { ApiHandlers } from './schemas';
 import type { Lenses } from '../workspaces/lenses';
 import type { Projects } from '../workspaces/projects';
+import type { Tours } from '../workspaces/tours';
 import type { Relationships } from '../workspaces/relationships';
 import type { Workflows } from '../automation/workflows';
 import type { WatchRules } from '../automation/watch-rules';
@@ -10,11 +11,12 @@ import { chooseRemembered, type DialogAccess } from '../native/dialogs';
 
 type AutomationHandlers = Pick<
   ApiHandlers,
-  'lens' | 'project' | 'workflow' | 'watchRules' | 'relationships'
+  'lens' | 'project' | 'tour' | 'workflow' | 'watchRules' | 'relationships'
 >;
 interface AutomationPorts {
   lenses: Pick<Lenses, 'list' | 'create' | 'apply' | 'trash' | 'share' | 'collapse'>;
   projects: Pick<Projects, 'read' | 'save'>;
+  tours: Pick<Tours, 'read' | 'save' | 'stat'>;
   workflows: Pick<Workflows, 'request'>;
   watchRules: Pick<WatchRules, 'request'>;
   relationships: Pick<Relationships, 'request'>;
@@ -54,6 +56,12 @@ export function createAutomationHandlers(ports: AutomationPorts): AutomationHand
       if (!folder) return null;
       return path.join(folder, 'viewer.project.jsonc');
     },
+    tour: ([request]) =>
+      request.kind === 'read'
+        ? ports.tours.read(request.file)
+        : request.kind === 'stat'
+          ? ports.tours.stat(request.root, request.path, request.hash)
+          : ports.tours.save(request.file, request.revision, request.definition),
     workflow: async ([request], owner) => {
       if (request.kind !== 'choose')
         return ports.workflows.request(

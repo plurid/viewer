@@ -667,10 +667,55 @@
   pointer-events: none;
   transform-origin: center;
 }
-.image-evidence-overlay > div {
+/* An evidence outline: drawn in once its stop is at rest, with a band that fades to a trace. */
+.evidence-overlay {
   position: absolute;
-  border: 2px solid var(--accent);
-  background: color-mix(in srgb, var(--selection) 25%, transparent);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.evidence-overlay polygon {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+}
+.evidence-overlay .evidence-overlay-line {
+  stroke-width: 2px;
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.evidence-overlay .evidence-overlay-halo {
+  stroke-width: 10px;
+  stroke-opacity: 0.4;
+}
+.evidence-overlay[data-drawn] .evidence-overlay-line {
+  opacity: 1;
+}
+.evidence-overlay[data-drawn] .evidence-overlay-halo {
+  animation: evidence-halo 1400ms ease-out forwards;
+}
+@keyframes evidence-halo {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .evidence-overlay polygon {
+    transition: none;
+  }
+  .evidence-overlay[data-drawn] .evidence-overlay-halo {
+    animation: none;
+    opacity: 0.3;
+  }
 }
 .workflow-run-choice span {
   color: var(--muted);

@@ -18,6 +18,9 @@ import { Empty, IconButton, Loading } from '../../ui/primitives';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { getState, report } from '../../state/store';
 import { PDFOutline, PDFThumbnails } from '../pdf/PDFSidebar';
+import { EvidenceOverlay } from '../EvidenceOverlay';
+import { regionBounds, regionScale } from '../../../domain/files/regions';
+import type { EvidenceNavigation } from '../../../domain/files/inspection';
 
 type PDFSidebar = 'none' | 'pages' | 'outline';
 
@@ -41,12 +44,19 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
   const password = useRef('');
   const [unlock, setUnlock] = useState<{ update(password: string): void; incorrect: boolean }>();
   const [entered, setEntered] = useState('');
+  const anchor = context.evidence?.anchor.kind === 'pdf' ? context.evidence.anchor : undefined;
+  // The quote searched for the evidence lists its matching pages; its first match must never
+  // move the anchored page. Only a query the reader types does.
+  const anchoredQuery = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (context.evidence?.anchor.kind === 'pdf') {
-      setPage(context.evidence.anchor.page);
-      setQuery(context.evidence.quote.slice(0, 150));
-    }
-  }, [context.evidence, setPage]);
+    const evidence = context.evidence;
+    if (evidence?.anchor.kind !== 'pdf') return;
+    setPage(evidence.anchor.page);
+    if (evidence.anchor.zoom !== undefined) setZoom(evidence.anchor.zoom);
+    const quote = evidence.anchor.search === false ? '' : evidence.quote.slice(0, 150);
+    anchoredQuery.current = quote;
+    setQuery(quote);
+  }, [context.evidence, setPage, setZoom]);
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -65,6 +75,67 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
     restore: !context.evidence,
   });
   const [available, setAvailable] = useState({ width: 0, height: 0 });
+  // A region without a zoom of its own is enlarged to fill most of the view, once per evidence.
+  const [regionFitted, setRegionFitted] = useState<EvidenceNavigation>();
+  useEffect(() => {
+    const evidence = context.evidence;
+    if (
+      !pdf ||
+      evidence?.anchor.kind !== 'pdf' ||
+      !evidence.anchor.region ||
+      evidence.anchor.zoom !== undefined ||
+      regionFitted === evidence ||
+      available.width <= 0 ||
+      available.height <= 0
+    )
+      return;
+    const { page: number, region } = evidence.anchor;
+    let live = true;
+    void pdf
+      .getPage(Math.min(number, pdf.numPages))
+      .then((sheet) => {
+        if (!live) return;
+        const size = sheet.getViewport({ scale: PixelsPerInch.PDF_TO_CSS_UNITS });
+        setZoom(
+          pdfZoom(
+            regionScale(regionBounds(region), size, available, pdfScale(size, available, 'page')),
+          ),
+        );
+        setRegionFitted(evidence);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [pdf, context.evidence, available, regionFitted, setZoom]);
+  // Then the region is scrolled to the middle of the view, once its page is laid out at that zoom.
+  const centred = useRef<EvidenceNavigation | undefined>(undefined);
+  useEffect(() => {
+    const evidence = context.evidence;
+    const element = scroll.current;
+    const sheet = element?.querySelector<HTMLElement>('.pdf-sheet');
+    if (
+      !element ||
+      !sheet ||
+      !evidence ||
+      !anchor?.region ||
+      centred.current === evidence ||
+      laidOut !== section ||
+      page !== anchor.page ||
+      (anchor.zoom === undefined && regionFitted !== evidence)
+    )
+      return;
+    centred.current = evidence;
+    const box = regionBounds(anchor.region);
+    element.scrollLeft = Math.max(
+      0,
+      sheet.offsetLeft + (box.x + box.width / 2) * sheet.offsetWidth - element.clientWidth / 2,
+    );
+    element.scrollTop = Math.max(
+      0,
+      sheet.offsetTop + (box.y + box.height / 2) * sheet.offsetHeight - element.clientHeight / 2,
+    );
+  }, [context.evidence, anchor, laidOut, section, page, regionFitted]);
   useEffect(() => {
     const local = new URL('/pdfjs/', document.baseURI).href;
     const task = getDocument({
@@ -207,7 +278,7 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
         if (!cancelled) {
           setMatches(found);
           const [first] = found;
-          if (first) setPage(first);
+          if (first && query !== anchoredQuery.current) setPage(first);
           setSearching(false);
         }
       })().catch((error) => {
@@ -455,6 +526,9 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
           <div className="pdf-sheet">
             <canvas ref={canvas} />
             <div className="textLayer" ref={text} />
+            {anchor?.region && page === anchor.page && (
+              <EvidenceOverlay region={anchor.region} label={`Outline on page ${page}`} />
+            )}
           </div>
         </div>
       </div>

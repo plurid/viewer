@@ -103,6 +103,9 @@ import { savedDefinitionsKey } from './state/saved-keys';
 import { isActiveJob } from '../domain/operations/jobs';
 import { invalidateThumbnails } from './explorer/thumbnail-cache';
 import { previewsAsFile } from '../domain/previews/documents/embedded';
+import { TourBar } from './workspace/tours/TourBar';
+import { TourStops } from './workspace/tours/TourStops';
+import { CheckPanel } from './fabrication/CheckPanel';
 
 export function App() {
   const registry = useMemo(
@@ -873,6 +876,9 @@ function AppWindow() {
                 }}
               />
             </ErrorBoundary>
+            <TourStops />
+            <CheckPanel />
+            <TourBar />
           </main>
         </div>
         <OperationsPanel />

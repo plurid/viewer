@@ -26,7 +26,8 @@ export type DrawReport = (
   signal: AbortSignal,
 ) => Promise<void>;
 
-async function readWhole(source: NestingInput): Promise<Uint8Array> {
+/** A drawing's bytes from its open handle, refused past the DXF limit. */
+export async function readWhole(source: NestingInput): Promise<Uint8Array> {
   if (source.size > DXF_MAX_BYTES)
     throw new Error(`${path.basename(source.file)} is larger than 32 MB.`);
   const bytes = Buffer.alloc(source.size);

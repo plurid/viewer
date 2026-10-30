@@ -71,9 +71,10 @@ start the agent again.**; with agent access off, it says to turn it on. A custom
 | `navigation` | **Navigate without review** | Open paths, focus planes and switch workspaces at once.               |
 | `propose`    | **Propose changes**         | Submit commands, exports, configuration and setup for your review.    |
 
-A named client's navigation applies at once, except opening a `viewer.project.jsonc`, which waits
-for review. Every other change waits for review in Viewer. Native folder access and model data
-permission stay separate. [Agents](agents.md#connect-an-agent) covers access in full.
+A named client's navigation applies at once, except opening a `viewer.project.jsonc` or a
+`.viewer-tour.jsonc` tour, which waits for review. Every other change waits for review in Viewer.
+Native folder access and model data permission stay separate. [Agents](agents.md#connect-an-agent)
+covers access in full.
 
 ## Commands
 

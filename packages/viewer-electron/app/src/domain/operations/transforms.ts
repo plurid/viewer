@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { optimizationTargetSchema } from './optimization-target';
 import { layoutLimits, layoutTransformSchema } from '../layout/plan';
 import { nestingLimits, nestingTransformSchema } from '../layout/nesting/plan';
+import { correctionDescription, dxfCorrectionSchema } from '../fabrication/plan';
+import {
+  handoffDescription,
+  handoffLimits,
+  handoffProblem,
+  handoffTransformSchema,
+} from '../fabrication/handoff';
 import { mailAttachmentSchema } from '../previews/mail/attachments';
 import type { MailAttachmentPlan } from '../previews/mail/attachments';
 const seconds = z.number().finite().min(0).max(86400);
@@ -97,6 +104,8 @@ export const transformPlanSchema = z.discriminatedUnion('kind', [
   pdfPagesSchema,
   layoutTransformSchema,
   nestingTransformSchema,
+  dxfCorrectionSchema,
+  handoffTransformSchema,
   imageTransformSchema,
   mediaTransformSchema,
   mailAttachmentSchema,
@@ -137,9 +146,11 @@ export function validateTransform(value: unknown, sources: number): TransformPla
       ? layoutLimits.sources
       : plan.kind === 'nesting'
         ? nestingLimits.sources
-        : combinedTransform(plan)
-          ? 16
-          : 1000;
+        : plan.kind === 'fabrication-handoff'
+          ? handoffLimits.sources
+          : combinedTransform(plan)
+            ? 16
+            : 1000;
   if (sources < 1 || sources > most)
     throw new Error(
       combinedTransform(plan)
@@ -163,6 +174,10 @@ export function validateTransform(value: unknown, sources: number): TransformPla
     throw new Error('An item refers to a file that is not in this layout.');
   if (plan.kind === 'nesting' && plan.sources.length !== sources)
     throw new Error('The nesting names a different set of drawings. Nest again.');
+  if (plan.kind === 'dxf-correction' && sources !== 1)
+    throw new Error('Correct one drawing at a time.');
+  const handoff = plan.kind === 'fabrication-handoff' && handoffProblem(plan, sources);
+  if (handoff) throw new Error(handoff);
   if (plan.kind === 'mail-attachment' && sources !== 1)
     throw new Error('Save attachments from one message at a time.');
   if (plan.kind === 'pdf' && plan.preset === 'lossless' && plan.recompressImages)
@@ -264,6 +279,8 @@ function transformParts(plan: TransformPlan): string[] {
       `${plan.parts.length === 1 ? '1 part' : `${plan.parts.length} parts`} on ${plan.sheets.length === 1 ? '1 sheet' : `${plan.sheets.length} sheets`}`,
       'a DXF per sheet, a PDF report and a CSV parts list',
     ];
+  if (plan.kind === 'dxf-correction') return correctionDescription(plan);
+  if (plan.kind === 'fabrication-handoff') return handoffDescription(plan);
   if (plan.kind === 'mail-attachment')
     return [
       'Save attachment',
@@ -294,7 +311,8 @@ export const combinedTransform = (plan?: TransformPlan): boolean =>
   plan?.kind === 'media' ||
   plan?.kind === 'pdf-pages' ||
   plan?.kind === 'layout' ||
-  plan?.kind === 'nesting';
+  plan?.kind === 'nesting' ||
+  plan?.kind === 'fabrication-handoff';
 export const mediaTime = (seconds: number) => {
   const total = Math.max(0, seconds);
   return `${Math.floor(total / 60)

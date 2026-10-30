@@ -19,11 +19,12 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 [Proposal and review](#models-and-agents) · [Quick Preview](#looking-at-files) ·
 [Receipt](#changes-and-recovery) · [Recipe](#commands-and-automation) ·
 [Root plane](#planes-and-the-space) · [Scratch buffer](#text-notes-and-tasks) ·
-[Sequence](#commands-and-automation) · [Space](#planes-and-the-space) · [Suggested](#suggestions) ·
-[Task area](#text-notes-and-tasks) · [Tiled](#planes-and-the-space) ·
-[Trash rule](#changes-and-recovery) · [Undo and Redo](#changes-and-recovery) ·
-[Watch rule](#commands-and-automation) · [Workflow](#commands-and-automation) ·
-[Workspace](#planes-and-the-space) · [Worktree](#text-notes-and-tasks)
+[Sequence](#commands-and-automation) · [Space](#planes-and-the-space) ·
+[Stop](#planes-and-the-space) · [Suggested](#suggestions) · [Task area](#text-notes-and-tasks) ·
+[Tiled](#planes-and-the-space) · [Tour](#planes-and-the-space) · [Trash rule](#changes-and-recovery)
+· [Undo and Redo](#changes-and-recovery) · [Watch rule](#commands-and-automation) ·
+[Workflow](#commands-and-automation) · [Workspace](#planes-and-the-space) ·
+[Worktree](#text-notes-and-tasks)
 
 ## Planes and the space
 
@@ -59,6 +60,13 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   another computer. It never copies your files, terminal history, conversations or keys. _In
   Viewer:_ **File → Create Project…**, **Open Project…**, **Save Project**. _Learn:_
   [Keep your work together](../guides/workspaces.md)
+- **Tour** and **stop**: a tour shows files one stop at a time. A stop is a file opened at a place
+  in it (a page, an outlined region, highlighted drawing entities, a camera view of a model) with a
+  caption. A tour is a `.viewer-tour.jsonc` file beside its files and plays when opened; it never
+  runs commands. A stop whose file is gone is skipped; one whose file changed opens without its
+  place. **Tour the views** tours the saved views instead. _In Viewer:_ **Record a tour**, the tour
+  bar, **Profile: Present**. _Learn:_
+  [Show someone around: tours](../guides/workspaces.md#show-someone-around-tours)
 - **Layout of planes**: where the planes sit and how large they are. **Size & Position** sets one
   plane's width, height and alignment; a layout template keeps an arrangement of plane kinds to
   apply to other folders. A **Layout** plane is something else: it lays out photos and PDFs on
@@ -192,10 +200,11 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   a proposal for you to review. _In Viewer:_ **Add model**, **Use for Ask Viewer**. _Learn:_
   [Make repeated work a command](../guides/automate.md)
 - **Model data levels**: what a model may receive from your files: **filenames and file metadata**,
-  **filenames, metadata and document excerpts**, or **filenames, metadata and extracted document
-  text**. Each level includes the one before; until you allow one, no file data is sent. _In
-  Viewer:_ **Data access**, **Allow selected data**, **Revoke access**. _Learn:_
-  [Explore a folder](../guides/explore.md)
+  **filenames, metadata and document excerpts**, **filenames, metadata and extracted document
+  text**, or **filenames, metadata, document text and pictures (photos and rendered drawing
+  pages)**. Each level includes the one before; until you allow one, no file data is sent. Pictures
+  come last, so an approval of text never sends a photo. _In Viewer:_ **Data access**, **Allow
+  selected data**, **Revoke access**. _Learn:_ [Explore a folder](../guides/explore.md)
 - **Agent**: a program on your Mac, such as a coding assistant, that connects to Viewer with a token
   from **Settings → Agents**. It looks around, reads what it may and proposes changes; it cannot run
   programs or type into a terminal, and it removes nothing without your approval. _In Viewer:_

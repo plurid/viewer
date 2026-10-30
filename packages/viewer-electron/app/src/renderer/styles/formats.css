@@ -268,6 +268,8 @@
   width: 220px;
 }
 .pdf-scroll {
+  /* the page's offsets, which centre an evidence region, are measured from here */
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;

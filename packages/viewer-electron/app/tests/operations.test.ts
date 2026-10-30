@@ -1664,6 +1664,58 @@ describe('an item from start to finish', () => {
       expect(job).toMatchObject({ status: 'completed', undoable: true });
       expect(job.detail).toBeUndefined();
     });
+    it('records what a corrected drawing measured, under the name chosen', async () => {
+      const correction = {
+        axis: 'x' as const,
+        target: 50,
+        before: 48,
+        after: 50,
+        shift: { x: 2, y: 0 },
+        moved: [
+          {
+            number: 5,
+            entities: ['9'],
+            corrected: ['9'],
+            from: { x: 103, y: 25 },
+            to: { x: 105, y: 25 },
+          },
+        ],
+        web: 49.75,
+        notes: [],
+      };
+      execute = async (_plan, _sources, output) => {
+        await writeFile(output, 'corrected', { flag: 'wx' });
+        return { correction };
+      };
+      const source = path.join(root, 'g6-PL60-B2-2buc.dxf');
+      await writeFile(source, 'drawing');
+      const transform = transformPlanSchema.parse({
+        kind: 'dxf-correction',
+        format: 'dxf',
+        from: '8',
+        to: '9',
+        axis: 'x',
+        target: 50,
+        measured: 48,
+      });
+      const name = 'g6-PL60-B2-2buc (corrected).dxf';
+      const job = await run({
+        kind: 'convert',
+        sources: [source],
+        destination: root,
+        name,
+        transform,
+      });
+      expect(job.completed).toStrictEqual([
+        { source, destination: path.join(root, name), correction },
+      ]);
+      expect(await readFile(source, 'utf8')).toBe('drawing');
+      await operations.close();
+      const journaled = await new OperationLog(path.join(root, 'private')).load();
+      expect(
+        journaled.receipts.find((receipt) => receipt.job.id === job.id)?.job.completed,
+      ).toEqual(job.completed);
+    });
   });
 
   describe('guards', () => {

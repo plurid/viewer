@@ -81,6 +81,10 @@ export class OperationPlans {
                 throw new Error('Attachments are saved from the message preview.');
               if (transform.kind === 'nesting')
                 throw new Error('Nestings are saved from the Layout plane.');
+              if (transform.kind === 'dxf-correction')
+                throw new Error('DXF corrections are saved from a reviewed fabrication check.');
+              if (transform.kind === 'fabrication-handoff')
+                throw new Error('Handoffs are exported from a fabrication check.');
               if (!intent.destination || (combinedTransform(transform) && !intent.name))
                 throw new Error('Choose an export folder and filename.');
               if (

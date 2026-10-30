@@ -21,6 +21,7 @@ async function fixture() {
     'assets/licenses/opencascade.txt',
     'assets/licenses/occt-import-js.txt',
     'assets/licenses/ssf-0.11.2.txt',
+    'assets/licenses/sam-parser-0.1.0.txt',
     'assets/vendor/ssf-0.11.2.mjs',
     'assets/vendor/ssf-0.11.2.d.mts',
     'assets/vendor/ssf-0.11.2.json',

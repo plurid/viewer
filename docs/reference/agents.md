@@ -63,7 +63,8 @@ plane in those cases.
 | `propose_workspace_switch` | `navigation` | Switches to a workspace by `workspaceID` or exact unique `name` (one of the two); every plane in it must be granted |
 
 A named client with `navigation` moves at once and gets `requiresUserReview: false`; opening a
-`viewer.project.jsonc` file still waits for review. The shared connection's navigation always waits.
+`viewer.project.jsonc` file or a `.viewer-tour.jsonc` tour still waits for review, because each
+opens many planes. The shared connection's navigation always waits.
 
 ### Propose changes
 
@@ -285,7 +286,7 @@ first.
 | `propose_transform`                   | **Export**                                               | None                         |
 | `run_action`, workflow mutation steps | **Action tasks**: **Apply _n_ changes**                  | None                         |
 | Navigation, shared connection         | The proposal's title, such as **Open path**              | None                         |
-| Navigation, named client              | None, except opening `viewer.project.jsonc`              | None                         |
+| Navigation, named client              | None, except opening `viewer.project.jsonc` or a tour    | None                         |
 
 The review ends with what approving does for that request and that target, and whether a system
 dialog follows. For example, a command on two selected items reads **After Run action, a system
@@ -312,8 +313,9 @@ fails the proposal; it never retargets a new selection.
 - **Empty or browse the Trash, or use file Undo.** Those stay in the person's interface.
 - **Run Git actions.** Staging, committing, pulling and pushing are the person's.
 - **Paste.** The clipboard is outside the captured selection; use `copy-to` or `move-to`.
-- **Save nestings or mail attachments.** `propose_transform` refuses them: nestings are saved from
-  the Layout plane, attachments from the message preview.
+- **Save nestings, DXF corrections or mail attachments.** `propose_transform` refuses them: nestings
+  are saved from the Layout plane, corrections from a reviewed fabrication check, attachments from
+  the message preview.
 - **Read Viewer's private data.** Credentials, grants, recovery files and saved transcripts are
   outside every file tool.
 - **Grant itself access.** Editing config.jsonc, imported configuration, custom-action aliases and
@@ -489,20 +491,34 @@ client blocks new reports and keeps the saved ones.
 Models are added in **Settings → Models**; [Add a model](../guides/automate.md#add-a-model) has the
 steps.
 
-| Label                                                 | What it does                                                                                       |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **Add model**, then **Set up model**                  | Adds a provider: OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter or **Local endpoint** |
-| **Default for Ask Viewer**                            | The model that answers requests in words                                                           |
-| **Data access**                                       | What the provider may receive                                                                      |
-| **Allow selected data**                               | Approves the chosen level                                                                          |
-| **Revoke access**                                     | Withdraws it                                                                                       |
-| **Allow agent-started actions to send the same data** | Lets `ask_in_words`, agent recipes and agent workflows use the model                               |
+| Label                                                 | What it does                                                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Add model**, then **Set up model**                  | Adds a provider: OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter, Meta or **Local endpoint** |
+| **Default for Ask Viewer**                            | The model that answers requests in words                                                                 |
+| **Data access**                                       | What the provider may receive                                                                            |
+| **Allow selected data**                               | Approves the chosen level                                                                                |
+| **Revoke access**                                     | Withdraws it                                                                                             |
+| **Allow agent-started actions to send the same data** | Lets `ask_in_words`, agent recipes and agent workflows use the model                                     |
 
-| Level       | Label in **Data access**                            |
-| ----------- | --------------------------------------------------- |
-| `names`     | **filenames and file metadata**                     |
-| `excerpts`  | **filenames, metadata and document excerpts**       |
-| `full-text` | **filenames, metadata and extracted document text** |
+| Level       | Label in **Data access**                                                                |
+| ----------- | --------------------------------------------------------------------------------------- |
+| `names`     | **filenames and file metadata**                                                         |
+| `excerpts`  | **filenames, metadata and document excerpts**                                           |
+| `full-text` | **filenames, metadata and extracted document text**                                     |
+| `images`    | **filenames, metadata, document text and pictures (photos and rendered drawing pages)** |
+
+Each level includes the ones above it. Pictures come last: an approval of `full-text` never sends a
+photo or a drawing page. Pictures go only to providers that use the Chat Completions API, each one
+an `image_url` part of the message after its text; OpenAI and Anthropic refuse them with "Viewer
+does not send pictures to OpenAI yet." One request sends at most 16 pictures, each up to 4 MB and 16
+MB together.
+
+**Meta** uses `https://api.meta.ai/v1` and starts with the model `muse-spark-1.3`. Its key is
+entered here, apart from the key for Meta speech in **Settings → Speech**. Answers are held to the
+schema with a strict `json_schema`, and either reply envelope is read: `choices[0].message.content`
+or `completion_message.content`. Its segmentation model, SAM 3.1, answers through the same
+provider's `/responses` route, with the same key and under the same `images` approval, since it
+receives the same pictures.
 
 A named cloud provider uses its own endpoint; Qwen accepts its regional and workspace endpoints.
 **Local endpoint** accepts HTTPS, or HTTP to `localhost`, `127.0.0.1` or `[::1]`. Changing the

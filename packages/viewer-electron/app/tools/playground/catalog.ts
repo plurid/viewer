@@ -10,6 +10,7 @@ import { projectSamples } from './samples/project';
 import { structuredTextSamples } from './samples/structured-text';
 import { compressedSamples } from './samples/compressed';
 import { nestingSamples } from './samples/nesting';
+import { fabricationSamples } from './samples/fabrication';
 import { embeddedSamples } from './samples/embedded';
 import { inspectionSamples } from './samples/inspection';
 import { messageSamples } from './samples/messages';
@@ -232,6 +233,7 @@ export async function localSamples(): Promise<Sample[]> {
     ),
   );
   result.push(...nestingSamples());
+  result.push(...fabricationSamples());
   const edges = {
     'edge-cases/malformed/Broken.json': '{"materials": [',
     'edge-cases/malformed/Broken.png': 'This intentionally is not a PNG.\n',

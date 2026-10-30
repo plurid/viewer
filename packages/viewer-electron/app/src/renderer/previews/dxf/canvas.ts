@@ -1,10 +1,12 @@
 import { measureLocalPoint } from '../../ui/projectedResize';
 import {
   distance,
+  type Bounds,
   type Drawing,
   type DrawingEntity,
   type Point,
 } from '../../../domain/previews/drawings/dxf/math';
+import { regionFill } from '../../../domain/files/regions';
 import {
   convertUnits,
   formatMeasure,
@@ -37,9 +39,18 @@ interface Callbacks {
   draft(count: number): void;
   view(value: DrawingView): void;
 }
+/** What a drawing shows for evidence: entities highlighted and framed, or a view, and
+ * measurements drawn with them but never saved as the person's own. */
+export interface DrawingFocus {
+  entities: readonly string[];
+  view?: Bounds;
+  measurements?: readonly Measurement[];
+}
 export interface DrawingCanvas {
   set(options: CanvasOptions): void;
   frame(): void;
+  /** Highlights and frames a focus; undefined clears the highlight and keeps the view. */
+  focus(target: DrawingFocus | undefined): void;
   finish(): void;
   cancel(): void;
   dispose(): void;
@@ -50,6 +61,47 @@ function segmentDistance(p: Point, a: Point, b: Point): number {
     ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / length))
     : 0;
   return distance(p, { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
+}
+/** The part of the drawing a focus shows: its view, else the bounds of its entities and
+ * measurements. Undefined when none of them is in the drawing. */
+export function focusBounds(drawing: Drawing, focus: DrawingFocus): Bounds | undefined {
+  if (focus.view) return focus.view;
+  const ids = new Set(focus.entities);
+  const points = [
+    ...drawing.entities
+      .filter((entity) => ids.has(entity.id))
+      .flatMap((entity) => [entity.bounds.min, entity.bounds.max]),
+    ...(focus.measurements ?? []).flatMap((item) => item.points),
+  ];
+  if (!points.length) return;
+  return {
+    min: { x: Math.min(...points.map((p) => p.x)), y: Math.min(...points.map((p) => p.y)) },
+    max: { x: Math.max(...points.map((p) => p.x)), y: Math.max(...points.map((p) => p.y)) },
+  };
+}
+/**
+ * How much of the canvas a focus fills. A view alone is the part of the drawing a stop recorded on
+ * screen, so it fills the canvas again; entities are evidence, shown with room around them.
+ */
+export const focusFill = (focus: DrawingFocus) =>
+  focus.view && !focus.entities.length ? 1 : regionFill;
+/**
+ * A view that centres `bounds` and fills `fill` of the canvas with it: about `regionFill` for
+ * evidence, so its surroundings show. A hole or a point has no size of its own: it is given 2% of
+ * the drawing's extent.
+ */
+export function framedView(
+  bounds: Bounds,
+  canvas: { width: number; height: number },
+  extent: number,
+  fill = regionFill,
+): DrawingView {
+  const width = Math.max(bounds.max.x - bounds.min.x, extent * 0.02, 1e-6),
+    height = Math.max(bounds.max.y - bounds.min.y, extent * 0.02, 1e-6);
+  return {
+    center: { x: (bounds.min.x + bounds.max.x) / 2, y: (bounds.min.y + bounds.max.y) / 2 },
+    scale: Math.max(1e-9, Math.min((canvas.width * fill) / width, (canvas.height * fill) / height)),
+  };
 }
 const intersects = (entity: DrawingEntity, p: Point, tolerance: number) =>
   p.x >= entity.bounds.min.x - tolerance &&
@@ -75,7 +127,11 @@ export function createDrawingCanvas(
     raf = 0,
     disposed = false;
   let view = savedView ?? { center: { x: 0, y: 0 }, scale: 1 },
-    fitted = !!savedView;
+    fitted = !!savedView,
+    sized = false;
+  let highlighted = new Set<string>(),
+    focusMeasurements: readonly Measurement[] = [],
+    pendingFocus: DrawingFocus | undefined;
   let selected: DrawingEntity | undefined,
     draft: Point[] = [],
     hover: Point | undefined,
@@ -155,6 +211,14 @@ export function createDrawingCanvas(
         ),
       ),
     };
+    fitted = true;
+    callbacks.view(view);
+    schedule();
+  }
+  function applyFocus(target: DrawingFocus) {
+    const bounds = focusBounds(drawing, target);
+    if (!bounds) return;
+    view = framedView(bounds, { width, height }, extent, focusFill(target));
     fitted = true;
     callbacks.view(view);
     schedule();
@@ -322,23 +386,7 @@ export function createDrawingCanvas(
     ctx!.translate(width / 2, height / 2);
     ctx!.scale(view.scale, -view.scale);
     ctx!.translate(-view.center.x, -view.center.y);
-    for (const entity of drawing.entities) {
-      if (
-        hidden.has(entity.layer) ||
-        entity.bounds.max.x < bounds.min.x ||
-        entity.bounds.min.x > bounds.max.x ||
-        entity.bounds.max.y < bounds.min.y ||
-        entity.bounds.min.y > bounds.max.y
-      )
-        continue;
-      const color = entity.color;
-      ctx!.strokeStyle =
-        selected === entity
-          ? palette.accent
-          : !color || ['#ffffff', '#000000'].includes(color.toLowerCase())
-            ? palette.ink
-            : color;
-      ctx!.lineWidth = (selected === entity ? 2.5 : 1.25) / view.scale;
+    const strokeEntity = (entity: DrawingEntity) => {
       if (entity.text) {
         ctx!.save();
         ctx!.translate(entity.points[0]?.x ?? 0, entity.points[0]?.y ?? 0);
@@ -360,9 +408,40 @@ export function createDrawingCanvas(
         ctx!.lineTo(p.x, p.y + size);
         ctx!.stroke();
       } else ctx!.stroke(paths.get(entity.id)!);
+    };
+    const shown = (entity: DrawingEntity) =>
+      !hidden.has(entity.layer) &&
+      entity.bounds.max.x >= bounds.min.x &&
+      entity.bounds.min.x <= bounds.max.x &&
+      entity.bounds.max.y >= bounds.min.y &&
+      entity.bounds.min.y <= bounds.max.y;
+    for (const entity of drawing.entities) {
+      if (!shown(entity)) continue;
+      const color = entity.color;
+      ctx!.strokeStyle =
+        selected === entity || highlighted.has(entity.id)
+          ? palette.accent
+          : !color || ['#ffffff', '#000000'].includes(color.toLowerCase())
+            ? palette.ink
+            : color;
+      ctx!.lineWidth = (selected === entity ? 2.5 : 1.25) / view.scale;
+      strokeEntity(entity);
     }
+    // Evidence on top: a soft band under each highlighted entity, then its line, so a hole
+    // reads at any zoom and over denser geometry.
+    if (highlighted.size)
+      for (const entity of drawing.entities) {
+        if (!highlighted.has(entity.id) || !shown(entity)) continue;
+        ctx!.strokeStyle = palette.accent;
+        ctx!.globalAlpha = 0.28;
+        ctx!.lineWidth = 8 / view.scale;
+        if (!entity.text) strokeEntity(entity);
+        ctx!.globalAlpha = 1;
+        ctx!.lineWidth = 2.5 / view.scale;
+        strokeEntity(entity);
+      }
     ctx!.restore();
-    for (const item of options.measurements) measurement(item);
+    for (const item of [...options.measurements, ...focusMeasurements]) measurement(item);
     const preview = draft.length && hover ? [...draft, hover] : draft;
     if (options.tool !== 'inspect' && preview.length >= (options.tool === 'angle' ? 3 : 2))
       measurement({ id: 0, tool: options.tool, points: preview }, true);
@@ -620,7 +699,11 @@ export function createDrawingCanvas(
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     local = measureLocalPoint(stage);
-    if (!fitted || view.fit) frame();
+    sized = true;
+    if (pendingFocus) {
+      applyFocus(pendingFocus);
+      pendingFocus = undefined;
+    } else if (!fitted || view.fit) frame();
     schedule();
   });
   resize.observe(stage);
@@ -628,6 +711,14 @@ export function createDrawingCanvas(
     frame,
     finish,
     cancel,
+    focus(target) {
+      highlighted = new Set(target?.entities ?? []);
+      focusMeasurements = target?.measurements ?? [];
+      // The canvas has its size after its first layout; frame the focus then.
+      if (target && sized) applyFocus(target);
+      else pendingFocus = target;
+      schedule();
+    },
     set(next) {
       if (options.tool !== next.tool) cancel();
       if (options.look !== next.look) paletteDirty = true;

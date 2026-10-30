@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { optimizationOutcomeSchema } from '../../domain/operations/optimization-target';
 import { transformPlanSchema } from '../../domain/operations/transforms';
+import { correctionReportSchema } from '../../domain/fabrication/plan';
 import { DocumentStore } from '../persistence/document-store';
 import { discardOwnTemporaryFile, removePrivateData } from './removal';
 import { sourceVersionSchema } from '../../domain/files/inspection';
@@ -73,6 +74,7 @@ const job = z
             outputBytes: count.optional(),
             optimized: z.boolean().optional(),
             targetSize: optimizationOutcomeSchema.optional(),
+            correction: correctionReportSchema.optional(),
           })
           .strict(),
       )

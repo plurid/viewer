@@ -360,6 +360,12 @@ export class AgentRequests {
       throw new Error('Attachments are saved from the message preview.');
     // a nesting saves a folder of sheets the person reviews in the Layout plane
     if (plan.kind === 'nesting') throw new Error('Nestings are saved from the Layout plane.');
+    // a correction moves holes the person saw measured, graded and reviewed
+    if (plan.kind === 'dxf-correction')
+      throw new Error('DXF corrections are saved from a reviewed fabrication check.');
+    // a handoff copies the job's files with the check the person ran and read
+    if (plan.kind === 'fabrication-handoff')
+      throw new Error('Handoffs are exported from a fabrication check.');
     absolute(destination);
     validName(name);
     if (!name.toLowerCase().endsWith('.' + transformExtension(plan.format)))

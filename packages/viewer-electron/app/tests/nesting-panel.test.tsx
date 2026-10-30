@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { FileEntry, ViewerAPI } from '../src/domain/contracts';
 import { validateTransform } from '../src/domain/operations/transforms';
 import { NestingPanel } from '../src/renderer/layout/nesting/NestingPanel';
 import { flushState, initialize } from '../src/renderer/state/store';
 import { nestingParts } from '../tools/playground/samples/nesting';
+import { jobParts } from '../tools/playground/samples/fabrication';
 
 vi.mock('../src/renderer/workspace/context', () => ({
   useWorkspace: () => ({ openPath: vi.fn(async () => {}) }),
@@ -16,6 +17,13 @@ vi.mock('../src/renderer/layout/nesting/workers', async () => {
   const { extractParts, suggestedMarks } = await import('../src/domain/layout/nesting/parts');
   const { nestSearch } = await import('../src/domain/layout/nesting/search');
   const { nestingParts } = await import('../tools/playground/samples/nesting');
+  const { autocadDXF, jobParts } = await import('../tools/playground/samples/fabrication');
+  const sources: Record<string, () => string> = {
+    ...nestingParts,
+    ...Object.fromEntries(
+      jobParts.map((part) => [part.file.replace('.dxf', ''), () => autocadDXF(part.entities)]),
+    ),
+  };
   type Handler = (data: never, post: (reply: unknown) => void) => Promise<void>;
   class Fake {
     onmessage: ((event: { data: unknown }) => void) | null = null;
@@ -41,8 +49,7 @@ vi.mock('../src/renderer/layout/nesting/workers', async () => {
       options: { scale: number; marks: string[]; together: boolean; name: string };
     };
     if (message.kind === 'read') {
-      const name = message.url.replace('fixture:', '') as keyof typeof nestingParts;
-      const drawing = readCutDrawing(nestingParts[name]());
+      const drawing = readCutDrawing(sources[message.url.replace('fixture:', '')]!());
       drawings.set(message.key, drawing);
       post({
         id: message.id,
@@ -174,4 +181,92 @@ it('estimates as quantities change and saves a valid nesting plan', async () => 
   ]);
   expect(plan.sources.map((source) => source.marks)).toEqual([['ENGRAVE'], [], []]);
   expect(plan.sheets.flatMap((sheet) => sheet.placements)).toHaveLength(62);
+});
+
+it('nests one thickness at a time with the quantities given or named, and sums them', async () => {
+  const job = jobParts.map(
+    (part, index) =>
+      ({
+        name: part.file,
+        path: `/fixture/job/${part.file}`,
+        parent: '/fixture/job',
+        extension: 'dxf',
+        mime: 'image/vnd.dxf',
+        kind: 'file',
+        directory: false,
+        size: 1000 + index,
+        identity: String(20 + index),
+        modified: 30 + index,
+        created: 1,
+        hidden: false,
+      }) as FileEntry,
+  );
+  const bracket = job.find((file) => file.name === 'g6-MB20-A1-4buc.dxf')!;
+  const operate = vi.fn<ViewerAPI['operate']>(async () => 'nesting-job');
+  Object.assign(window, {
+    viewer: {
+      operate,
+      resource: vi.fn(async (file: string) => {
+        const entry = job.find((item) => item.path === file)!;
+        return {
+          id: `resource-${entry.identity}`,
+          url: `fixture:${entry.name.replace('.dxf', '')}`,
+          entry,
+        };
+      }),
+      release: vi.fn(async () => {}),
+      save: vi.fn(async () => {}),
+    },
+  });
+  initialize({ home: '/fixture', platform: 'darwin', state: null, locations: [], openPaths: [] });
+  render(<NestingPanel files={job} quantities={{ [bracket.path]: 6 }} />);
+  const thin = await screen.findByRole('button', { name: '3 mm, 2 files' });
+  const thick = screen.getByRole('button', { name: '6 mm, 3 files' });
+  expect(thin.getAttribute('aria-pressed')).toBe('true');
+  const cover = (await screen.findByLabelText('Quantity of g3-CV25-E1-10buc')) as HTMLInputElement;
+  expect(cover.value).toBe('10');
+  expect(screen.getByText('From “10buc”')).toBeTruthy();
+  expect(screen.queryByLabelText('Quantity of g6-PL60-B2-2buc')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Material and thickness' }).textContent).toContain(
+    'Mild steel 3 mm · Fiber laser',
+  );
+
+  fireEvent.click(thick);
+  const plate = (await screen.findByLabelText('Quantity of g6-PL60-B2-2buc')) as HTMLInputElement;
+  expect(plate.value).toBe('2');
+  expect((screen.getByLabelText('Quantity of g6-MB20-A1-4buc') as HTMLInputElement).value).toBe(
+    '6',
+  );
+  expect(screen.getByText('As requested')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Material and thickness' }).textContent).toContain(
+    'Mild steel 6 mm · Fiber laser',
+  );
+  const table = within(screen.getByRole('region', { name: 'By thickness' })).getByRole('table');
+  await waitFor(() =>
+    expect(
+      [...table.querySelectorAll('tr')].map((row) => row.querySelector('th')!.textContent),
+    ).toEqual(['Thickness', '3 mm', '6 mm', 'All']),
+  );
+  await waitFor(() =>
+    expect(table.querySelector('tfoot td:nth-of-type(2)')!.textContent).toBe('26'),
+  );
+
+  await waitFor(() => expect(screen.getByText(/^Checked: /)).toBeTruthy(), { timeout: 5000 });
+  fireEvent.click(screen.getByRole('button', { name: 'Save nesting' }));
+  await waitFor(() => expect(operate).toHaveBeenCalledOnce());
+  const request = operate.mock.calls[0]![0];
+  expect(request.name).toBe('Nesting of 3 parts, 6 mm');
+  expect(request.sources).toEqual(
+    job.filter((file) => file.name.startsWith('g6-')).map((file) => file.path),
+  );
+  const plan = validateTransform(request.transform, 3);
+  if (plan.kind !== 'nesting') throw new Error('Expected a nesting.');
+  expect(plan.parts.map((part) => [part.name, part.quantity])).toEqual([
+    ['g6-PL60-B2-2buc', 2],
+    ['g6-MB20-A1-4buc', 6],
+    ['g6-FL80-C1-2buc', 2],
+  ]);
+  expect(plan.cutting.thickness).toBe(6);
+  // The 6 mm row now holds the checked layout, not an estimate.
+  expect(table.querySelector('tbody tr[aria-current] td')!.textContent).toMatch(/^\d sheets?$/);
 });

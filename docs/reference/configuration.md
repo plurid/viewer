@@ -221,6 +221,96 @@ up to 100. `planes` holds 1 to 30 items: `{kind: "folder" | "file", path}`,
 an empty path is the folder in view when the template opens. `layout` is a tiling layout and `main`
 is 0.2 to 0.8.
 
+## Tour files
+
+A tour is a JSONC file whose name ends in `.viewer-tour.jsonc`; the part before it names the tour.
+Opening it plays it. It opens files and moves the camera, and never runs commands, workflows or
+model requests. A named agent client that opens one waits for your review. **Save tour** writes it
+with comments; later saves keep them and refuse to replace a version someone else saved.
+
+```jsonc
+{
+  "version": 1,
+  "name": "Brackets",
+  "stops": [
+    {
+      "id": "pitch",
+      "caption": "The drawing asks for 48 mm between the holes",
+      "source": "check",
+      "finding": { "id": "pitch", "grade": "confirmed" },
+      "target": {
+        "kind": "file",
+        "path": "Drawings/Bracket.pdf",
+        "version": {
+          "identity": "16777232:90210",
+          "modified": 1761800000000,
+          "size": 48213,
+          "sha256": "9f2c5b0e7d41a3c86e1f04b2d9a7c35e8b6f10d24c7e9a5b3f8d06c1e2a4b7d9",
+        },
+        "anchor": {
+          "kind": "pdf",
+          "page": 2,
+          "region": [
+            [0.61, 0.7],
+            [0.8, 0.7],
+            [0.8, 0.79],
+          ],
+        },
+      },
+    },
+  ],
+}
+```
+
+| Field     | Values                                                                               |
+| --------- | ------------------------------------------------------------------------------------ |
+| `version` | `1`                                                                                  |
+| `name`    | 1 to 100 characters                                                                  |
+| `dwell`   | Optional: ms each stop shows, 0 to 600,000, or `null` to wait for **→**              |
+| `stops`   | 1 to 200 stops, each `{id, caption, note?, dwell?, source, finding?, view?, target}` |
+
+| Stop field | Values                                                                                                                                                                                                                                                |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`       | Letters, digits, `.`, `_` and `-`, up to 200; unique in the tour                                                                                                                                                                                      |
+| `caption`  | 1 to 500 characters; `note`, shown under it, up to 4,000                                                                                                                                                                                              |
+| `dwell`    | As the tour's. Without either, a stop shows long enough to read its caption and note, up to 30 s, and at least `settings.tour.dwell`                                                                                                                  |
+| `source`   | `recorded`, `model` or `check`                                                                                                                                                                                                                        |
+| `finding`  | `{id, grade?}`; `grade` is `confirmed`, `refuted` or `unverified`, shown on the tour bar                                                                                                                                                              |
+| `view`     | `{pose?}`: `dock`, `frame` (which also leaves a docked page) or, on Plurid 0.0.0-43, Plurid's `{yaw, pitch, roll?, scale, pivot, offset?}`. The camera goes to the plane showing the stop's file; another host's `path` or `occurrence` is never used |
+| `target`   | `{kind: "file", path, version, anchor?, quote?}` or `{kind: "view", bookmark}`, a saved view of the workspace that plays it                                                                                                                           |
+
+A file target's `path` is relative to the tour file and stays inside its folder: no `..` or `.`
+parts, no empty parts, no absolute or drive paths, no backslashes, and never a `.viewer-tour.jsonc`
+or `viewer.project.jsonc` file, which opening would play or install. When the stop plays, every part
+of the path below the tour's folder must be a folder or the file itself, never a link, and the file
+must resolve inside the folder; the tour's folder itself may be reached through a link.
+
+`version` is the file's `{identity, modified, size, sha256?}` when the stop was recorded. `sha256`,
+64 lowercase hexadecimal digits, is the hash of the file's bytes: recording reads it for a file up
+to 64 MiB, and a check records it for each file it read. When the stop has one, playing reads the
+file's hash again (up to 64 MiB), and the bytes decide, so a copy whose date a zip moved still opens
+as recorded. Without a hash on either side, a size and modification time that match (to 2 s) decide;
+the identity never does, since a copy has a new one. A changed file opens as it is now, without the
+`anchor` and without the mark an earlier stop left in its plane, and the tour bar says **Changed
+since recorded**. A stop whose file or view is missing, reached through a link, or in a folder
+Viewer may not read is skipped, and the tour bar says which.
+
+| Anchor `kind` | Fields                                                                                                                                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pdf`         | `page`; optional `region`, `zoom` (`page`, `width`, or 0.1 to 4) and `search: false`. Without it, the `quote` lists the pages that match it; the anchored page stays                                       |
+| `image`       | `x`, `y`, `width`, `height` from 0 to 1; optional `polygon` inside that box                                                                                                                                |
+| `dxf`         | `entities`: IDs by position in the drawing, up to 5,000; optional `view` `{min: [x, y], max: [x, y]}` in drawing units, and `measure`: up to 20 `{tool, points}` with `tool` `distance`, `angle` or `area` |
+| `model`       | `position` and `target`, each `[x, y, z]` in the model's units                                                                                                                                             |
+| `text`        | `line` from 1, `start` and `end`; in an email, the plain text shows with the line of the match marked: where the line moved, the `quote` places it, read from `start` less up to 90 characters             |
+| `epub`        | `chapter` from 0                                                                                                                                                                                           |
+| `document`    | `block` from 0                                                                                                                                                                                             |
+| `cells`       | `sheet?`, `row` and `column` from 1                                                                                                                                                                        |
+| `media`       | `seconds`                                                                                                                                                                                                  |
+
+A `region` or `polygon` is 3 to 512 points `[x, y]`, from 0 to 1 across and down the page or picture
+as shown. A PDF region without its own `zoom`, a small image region and a DXF focus are each
+enlarged to fill about 60% of the view. Outlines draw in once the camera is at rest at their stop.
+
 ## Search
 
 Shown in **Settings → Search**. Query syntax is in [search](search.md).
@@ -254,10 +344,11 @@ Shown in **Settings → Models** and **Settings → Actions**. Model use is desc
 | `settings.recipes`             | The five built-in recipes | Up to 100 recipes                                          |
 | `settings.optimizationRecipes` | `[]`                      | Up to 100; see [media](media.md)                           |
 
-A provider's `kind` is `openai`, `anthropic`, `zai`, `deepseek`, `qwen`, `gemini`, `openrouter` or
-`local`. `endpoint` is an HTTPS URL without a user name or password; `http` is accepted only for
-`localhost`, `127.0.0.1` and `[::1]`. `model` is the model ID. `allowContent` is a display
-preference: it never grants data access. Keys are saved in Settings, never in this file.
+A provider's `kind` is `openai`, `anthropic`, `zai`, `deepseek`, `qwen`, `gemini`, `openrouter`,
+`meta` or `local`; a new `meta` provider starts with the model `muse-spark-1.3`. `endpoint` is an
+HTTPS URL without a user name or password; `http` is accepted only for `localhost`, `127.0.0.1` and
+`[::1]`. `model` is the model ID. `allowContent` is a display preference: it never grants data
+access. Keys are saved in Settings, never in this file.
 
 A recipe is
 `{id, name, kind, formats, recursive, instructions, template, data, providerID?, shortcut?}`:
