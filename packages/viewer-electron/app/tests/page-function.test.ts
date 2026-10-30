@@ -81,13 +81,14 @@ describe('page function scope', () => {
     ]);
   });
 
-  it('finds nothing outside in the scenarios and tools', () => {
+  it('finds nothing outside in the scenarios, the packaged smoke and tools', () => {
     const files = ['tests/native', 'tools']
       .flatMap((folder) =>
         readdirSync(path.join(app, folder), { recursive: true, encoding: 'utf8' }).map((file) =>
           path.join(app, folder, file),
         ),
       )
+      .concat(path.join(app, 'tests/electron-smoke.ts'))
       .filter((file) => file.endsWith('.ts') && readFileSync(file, 'utf8').includes('pageCall('));
     expect(files.length).toBeGreaterThan(50);
     expect(pageScopeProblems(files)).toEqual([]);

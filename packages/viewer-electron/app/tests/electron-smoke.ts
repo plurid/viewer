@@ -1,6 +1,8 @@
 /** Runs the actual packaged macOS application against disposable synthetic files. */
-import type { ApplicationChoices, FolderSizeTask } from '../src/domain/files/metadata';
-import type { ActionPlan, IndexedResult } from '../src/domain/services';
+import type { FolderSizeTask } from '../src/domain/files/metadata';
+import type { SettingsPatch } from '../src/domain/services';
+import type { PluridApplicationHandle } from '@plurid/plurid-react';
+import type { PageExpression } from './native/runtime/page-function';
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -14,8 +16,7 @@ import { repeatedPreviewFixture } from './workspace-fixtures';
 import { formatBytes } from '../src/domain/files/entries';
 import { tileTree } from '../src/domain/workspaces/tiling';
 import { reactCommitProbe } from './react-commits';
-import type { OperationJob, Resource, SavedState } from '../src/domain/contracts';
-import type { AgentAccessState } from '../src/domain/agents/clients';
+import type { OperationJob, RendererOperationRequest, SavedState } from '../src/domain/contracts';
 import { trashTemporary } from '../tools/temporary';
 import { prepareOwnedApplication } from './native/runtime/owned-application';
 import { restoreClipboard } from './native/runtime/clipboard';
@@ -26,6 +27,90 @@ import {
 } from './native/fixtures/scenarios';
 import { assertPerformanceMode, profileNativeInteractions } from './native/scenarios/performance';
 import { verifyMilestones } from './native/scenarios/milestones';
+import { pageCall } from './native/runtime/page-function';
+import {
+  animationFrames,
+  click as clickElement,
+  countOf,
+  exists,
+  focus,
+  patchSettings,
+  textOf,
+  valueOf,
+} from './native/runtime/page';
+
+/**
+ * What the smoke leaves on the page: the engine ref from `captureEngine`, and the probes each step
+ * installs before it reads them.
+ */
+interface SmokeWindow {
+  __qaEngine: PluridApplicationHandle;
+  __qaReloadPending?: boolean;
+  __qaSizes: FolderSizeTask[];
+  __qaSizeOff: () => void;
+  __qaFileTableType?: unknown;
+  __qaFileTableCommits: number;
+  __qaDrawingLabels: { value: string; x: number; y: number; width: number }[];
+  __qaDrawingRestore: () => void;
+  __qaMedia: HTMLMediaElement | null;
+  /** Set only if an EPUB's own script ran. */
+  __epubUnsafe?: unknown;
+}
+
+/** The text of the first match; refuses a missing element. */
+const requiredText = (selector: string) =>
+  pageCall((selector: string) => {
+    const element = document.querySelector(selector);
+    if (!element) throw new Error('Nothing matches: ' + selector);
+    return element.textContent;
+  }, selector);
+
+/** The value of the first matching field; refuses a missing element. */
+const requiredValue = (selector: string) =>
+  pageCall((selector: string) => {
+    const field = document.querySelector<HTMLInputElement>(selector);
+    if (!field) throw new Error('Nothing matches: ' + selector);
+    return field.value;
+  }, selector);
+
+/** An attribute of the first match, null without it; refuses a missing element. */
+const requiredAttribute = (selector: string, name: string) =>
+  pageCall(
+    (selector: string, name: string) => {
+      const element = document.querySelector(selector);
+      if (!element) throw new Error('Nothing matches: ' + selector);
+      return element.getAttribute(name);
+    },
+    selector,
+    name,
+  );
+
+const bodyText = () => document.body.innerText;
+const openSettings = () => window.viewer.openSettings();
+const viewerJobs = () => window.viewer.jobs();
+const activeLabel = () => document.activeElement?.getAttribute('aria-label') ?? '';
+const searchingCommands = () =>
+  document.activeElement?.getAttribute('aria-label') === 'Search commands';
+const searchingActions = () =>
+  document.activeElement?.getAttribute('aria-label') === 'Search actions';
+/** The engine camera as JSON, to compare positions. */
+const cameraJSON = () => JSON.stringify((window as unknown as SmokeWindow).__qaEngine.camera.get());
+const firstLocationJSON = () =>
+  JSON.stringify((window as unknown as SmokeWindow).__qaEngine.tree.get()[0].location);
+const planeCount = () => (window as unknown as SmokeWindow).__qaEngine.tree.get().length;
+const dockedPlane = () => (window as unknown as SmokeWindow).__qaEngine.camera.docked();
+function dockFirstPlane() {
+  const engine = (window as unknown as SmokeWindow).__qaEngine;
+  engine.camera.dock(engine.tree.get()[0].planeID, { animate: false });
+}
+function frameFirstPlane() {
+  const engine = (window as unknown as SmokeWindow).__qaEngine;
+  engine.camera.frame({ planeID: engine.tree.get()[0].planeID }, { animate: false });
+}
+const inspectedPlaneCount = () =>
+  (window as unknown as SmokeWindow).__qaEngine.inspect().planes.length;
+const pageLook = () => document.documentElement.dataset.look;
+const saveState = (state: SavedState) => window.viewer.save(state);
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Routine functional checks never show or activate the test app. Physical
@@ -116,9 +201,10 @@ function command<T = Record<string, unknown>>(
     socket!.send(JSON.stringify({ id, method, params }));
   });
 }
-async function evaluate<T>(expression: string): Promise<T> {
+function evaluate<R>(expression: PageExpression<R>): Promise<Awaited<R>>;
+async function evaluate(expression: string): Promise<unknown> {
   const value = await command<{
-    result: { value: T };
+    result: { value: unknown };
     exceptionDetails?: { text: string; exception?: { description?: string } };
   }>('Runtime.evaluate', {
     expression,
@@ -192,8 +278,9 @@ async function settingsCommand<T>(
     settingsSocket!.send(JSON.stringify({ id, method, params }));
   });
 }
-async function settingsEvaluate<T>(expression: string): Promise<T> {
-  const result = await settingsCommand<{ result: { value: T }; exceptionDetails?: unknown }>(
+function settingsEvaluate<R>(expression: PageExpression<R>): Promise<Awaited<R>>;
+async function settingsEvaluate(expression: string): Promise<unknown> {
+  const result = await settingsCommand<{ result: { value: unknown }; exceptionDetails?: unknown }>(
     'Runtime.evaluate',
     { expression, returnByValue: true, awaitPromise: true },
   );
@@ -205,29 +292,25 @@ async function settingsEvaluate<T>(expression: string): Promise<T> {
  * Changes a setting the workspace window may not (search content, agents) where a person changes it:
  * in the Settings window. The settings service refuses those from the workspace (`workspaceMayPatch`).
  */
-async function patchInSettings(patches: string): Promise<void> {
-  await evaluate('window.viewer.openSettings()');
+async function patchInSettings(...patches: SettingsPatch[]): Promise<void> {
+  await evaluate(pageCall(openSettings));
   await until(
-    () => settingsEvaluate<boolean>('!!document.querySelector(".settings-window")'),
+    () => settingsEvaluate(exists('.settings-window')),
     Boolean,
     'native Settings for a setting changed there',
   );
-  await settingsEvaluate(
-    `(async () => { const current = await window.viewer.settingsGet(); await window.viewer.settingsPatch(${patches}, current.revision); })()`,
-  );
+  await settingsEvaluate(patchSettings(...patches));
 }
 async function openSettingsProbe() {
   settingsMode = true;
   await until(
-    () => settingsEvaluate<boolean>('!!document.querySelector(".settings-window")'),
+    () => settingsEvaluate(exists('.settings-window')),
     Boolean,
     'loaded native Settings',
   );
 }
 const text = () =>
-  settingsMode
-    ? settingsEvaluate<string>('document.body.innerText')
-    : evaluate<string>('document.body.innerText');
+  settingsMode ? settingsEvaluate(pageCall(bodyText)) : evaluate(pageCall(bodyText));
 const fileSelector = (file: string) => `[data-file-path=${JSON.stringify(file)}]`;
 async function activateTestWindow(): Promise<void> {
   if (!foreground) return;
@@ -265,24 +348,39 @@ async function verifyBackgroundApp(): Promise<void> {
   );
   assert.deepEqual(JSON.parse(stdout.trim()), { active: false, policy: 1 });
 }
-async function reloadPage(): Promise<void> {
-  await evaluate('window.__qaReloadPending = true');
-  await command('Page.reload');
-  await until(
-    () =>
-      evaluate<boolean>(
-        '!window.__qaReloadPending && document.readyState === "complete" && !!document.querySelector("[data-plurid-plane]")',
-      ),
-    Boolean,
-    'new document after reload',
+/** A new document replaced the one `reloadPage` marked, and it shows planes. */
+function reloaded() {
+  return (
+    !(window as unknown as SmokeWindow).__qaReloadPending &&
+    document.readyState === 'complete' &&
+    !!document.querySelector('[data-plurid-plane]')
   );
+}
+async function reloadPage(): Promise<void> {
+  await evaluate(
+    pageCall(() => {
+      (window as unknown as SmokeWindow).__qaReloadPending = true;
+    }),
+  );
+  await command('Page.reload');
+  await until(() => evaluate(pageCall(reloaded)), Boolean, 'new document after reload');
   await activateTestWindow();
+}
+/** The centre of the first match and whether a pointer there reaches it; refuses a missing one. */
+function hitPoint(selector: string) {
+  const element = document.querySelector(selector);
+  if (!element) throw new Error('Missing control: ' + selector);
+  const rect = element.getBoundingClientRect();
+  const x = rect.x + rect.width / 2;
+  const y = rect.y + rect.height / 2;
+  const target = document.elementFromPoint(x, y);
+  return { x, y, hit: element.contains(target), target: target?.outerHTML.slice(0, 1000) };
 }
 async function click(selector: string, count = 1, modifiers = 0): Promise<void> {
   if (settingsMode && selector === 'dialog [aria-label="Close"]') {
     // Closing destroys this CDP target before it necessarily acknowledges the
     // evaluation. Observe the actual close rather than awaiting that reply.
-    void settingsEvaluate('window.close()').catch(() => undefined);
+    void settingsEvaluate(pageCall(() => window.close())).catch(() => undefined);
     await until(
       async () =>
         (
@@ -300,19 +398,15 @@ async function click(selector: string, count = 1, modifiers = 0): Promise<void> 
   }
   if (selector.startsWith('.context-menu') || selector.startsWith('.context-submenu')) {
     await evaluate(
-      `document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({block:'nearest',inline:'nearest'})`,
+      pageCall(
+        (selector: string) =>
+          document.querySelector(selector)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+        selector,
+      ),
     );
-    await evaluate('new Promise(resolve=>requestAnimationFrame(resolve))');
+    await evaluate(animationFrames(1));
   }
-  const point = await evaluate<{ x: number; y: number; hit: boolean; target?: string }>(`(() => {
-    const element = document.querySelector(${JSON.stringify(selector)});
-    if (!element) throw new Error('Missing control: ' + ${JSON.stringify(selector)});
-    const rect = element.getBoundingClientRect();
-    const x = rect.x + rect.width / 2;
-    const y = rect.y + rect.height / 2;
-    const target = document.elementFromPoint(x, y);
-    return { x, y, hit: element.contains(target), target: target?.outerHTML.slice(0, 1000) };
-  })()`);
+  const point = await evaluate(pageCall(hitPoint, selector));
   assert.equal(
     point.hit,
     true,
@@ -340,34 +434,29 @@ async function click(selector: string, count = 1, modifiers = 0): Promise<void> 
   }
 }
 /** A choice menu's button (ui/ChoiceMenu.tsx), by the name it shares with its menu. */
-const choiceButton = (label: string) =>
-  JSON.stringify(`button[aria-label=${JSON.stringify(label)}]`);
+const choiceButton = (label: string) => `button[aria-label=${JSON.stringify(label)}]`;
+/** Page code in the workspace window (`evaluate`) or in Settings (`settingsEvaluate`). */
+type PageRunner = typeof evaluate;
 /** Chooses in a choice menu as a person does: its button, then the value's row. */
-async function choose(
-  label: string,
-  value: string,
-  run: <T>(expression: string) => Promise<T> = evaluate,
-): Promise<void> {
-  const row = JSON.stringify(`.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`);
-  await run(`document.querySelector(${choiceButton(label)}).click()`);
-  await until(() => run<boolean>(`!!document.querySelector(${row})`), Boolean, `${label} menu`);
-  await run(`document.querySelector(${row}).click()`);
+async function choose(label: string, value: string, run: PageRunner = evaluate): Promise<void> {
+  const row = `.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`;
+  await run(clickElement(choiceButton(label)));
+  await until(() => run(exists(row)), Boolean, `${label} menu`);
+  await run(clickElement(row));
 }
+const choiceMenuValues = () =>
+  Array.from(document.querySelectorAll<HTMLElement>('.choice-menu [data-menu-id]'), (row) =>
+    row.dataset.menuId!.slice('choice:'.length),
+  );
 /** The values a choice menu offers, read from it open; it is closed again. */
-async function choiceValues(
-  label: string,
-  run: <T>(expression: string) => Promise<T> = evaluate,
-): Promise<string[]> {
-  await run(`document.querySelector(${choiceButton(label)}).click()`);
+async function choiceValues(label: string, run: PageRunner = evaluate): Promise<string[]> {
+  await run(clickElement(choiceButton(label)));
   const values = await until(
-    () =>
-      run<string[]>(
-        `Array.from(document.querySelectorAll('.choice-menu [data-menu-id]'),row=>row.dataset.menuId.slice('choice:'.length))`,
-      ),
+    () => run(pageCall(choiceMenuValues)),
     (values) => values.length > 0,
     `${label} menu`,
   );
-  await run(`document.querySelector(${choiceButton(label)}).click()`);
+  await run(clickElement(choiceButton(label)));
   return values;
 }
 async function key(
@@ -408,101 +497,166 @@ async function key(
     windowsVirtualKeyCode,
   });
 }
+const settingsRevision = () => window.viewer.settingsGet().then((value) => value.revision);
+/** Clicks the input of the Settings row labelled `label`. */
+function toggleSetting(label: string) {
+  const row = Array.from(document.querySelectorAll('.settings-row')).find(
+    (row) => row.querySelector('span')?.firstChild?.textContent?.trim() === label,
+  );
+  const input = row?.querySelector('input');
+  if (!input) throw new Error('Missing setting');
+  input.click();
+}
 async function setting(label: string, wait = true): Promise<void> {
-  const revision = await settingsEvaluate<number>(
-    'window.viewer.settingsGet().then(value => value.revision)',
-  );
-  await settingsEvaluate(
-    `(() => { const row = Array.from(document.querySelectorAll('.settings-row')).find(row => row.querySelector('span')?.firstChild?.textContent.trim() === ${JSON.stringify(label)}); const input = row?.querySelector('input'); if (!input) throw new Error('Missing setting'); input.click(); })()`,
-  );
+  const revision = await settingsEvaluate(pageCall(settingsRevision));
+  await settingsEvaluate(pageCall(toggleSetting, label));
   if (wait)
     await until(
-      () => evaluate<number>('window.viewer.settingsGet().then(value => value.revision)'),
+      () => evaluate(pageCall(settingsRevision)),
       (value) => value > revision,
       `live setting ${label}`,
     );
 }
+/** Whether Settings lists the category `label`; with `press`, opens it and throws when missing. */
+function categoryButton(label: string, press: boolean) {
+  const button = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('.settings-navigation button'),
+  ).find((button) => button.textContent.trim() === label);
+  if (press) button!.click();
+  return !!button;
+}
 async function tab(label: string): Promise<void> {
-  if (!settingsMode) await evaluate('window.viewer.openSettings()');
+  if (!settingsMode) await evaluate(pageCall(openSettings));
   await openSettingsProbe();
   const category =
     ({ Appearance: 'Browsing', Sidebar: 'Navigation' } as Record<string, string>)[label] || label;
   await until(
-    () =>
-      settingsEvaluate<boolean>(
-        `Array.from(document.querySelectorAll('.settings-navigation button')).some(button => button.textContent.trim() === ${JSON.stringify(category)})`,
-      ),
+    () => settingsEvaluate(pageCall(categoryButton, category, false)),
     Boolean,
     `Settings category ${category}`,
   );
-  await settingsEvaluate(
-    `Array.from(document.querySelectorAll('.settings-navigation button')).find(button => button.textContent.trim() === ${JSON.stringify(category)}).click()`,
-  );
+  await settingsEvaluate(pageCall(categoryButton, category, true));
+}
+/** A React hook state; a ref holding the engine has `camera.frame` and `tree.get`. */
+interface Hook {
+  memoizedState: { current?: { camera?: { frame?: unknown }; tree?: { get?: unknown } } } | null;
+  next: Hook | null;
+}
+interface Fiber {
+  memoizedState: Hook | null;
+  return: Fiber | null;
+}
+/** Leaves the engine ref found through React's fiber on the page as `window.__qaEngine`. */
+function findEngine(): boolean {
+  const element = document.querySelector('[data-viewer-plane]')!;
+  const key = Object.keys(element).find((key) => key.startsWith('__reactFiber'))!;
+  for (
+    let fiber = (element as unknown as Record<string, Fiber | null>)[key] ?? null;
+    fiber;
+    fiber = fiber.return
+  ) {
+    for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+      const api = hook.memoizedState?.current;
+      if (api?.camera?.frame && api?.tree?.get) {
+        (window as unknown as SmokeWindow).__qaEngine = api as PluridApplicationHandle;
+        return true;
+      }
+    }
+  }
+  return false;
 }
 /** Read the public application ref from React's test-only fiber; never expose it in production. */
 async function captureEngine(): Promise<void> {
-  assert.equal(
-    await evaluate(`(() => {
-    const element = document.querySelector('[data-viewer-plane]');
-    const key = Object.keys(element).find(key => key.startsWith('__reactFiber'));
-    for (let fiber = element[key]; fiber; fiber = fiber.return) {
-      for (let hook = fiber.memoizedState; hook; hook = hook.next) {
-        const api = hook.memoizedState?.current;
-        if (api?.camera?.frame && api?.tree?.get) { window.__qaEngine = api; return true; }
-      }
-    }
-    return false;
-  })()`),
-    true,
-  );
+  assert.equal(await evaluate(pageCall(findEngine)), true);
+}
+/** Collects folder-size tasks in `window.__qaSizes` until `window.__qaSizeOff()`. */
+function collectFolderSizes() {
+  const page = window as unknown as SmokeWindow;
+  page.__qaSizes = [];
+  page.__qaSizeOff = window.viewer.onEvent((event) => {
+    if (event.type === 'folder-size') page.__qaSizes.push(event.task);
+  });
+}
+const columnPreviewPath = () =>
+  document.querySelector<HTMLElement>('.column-preview')?.dataset.previewPath || '';
+/** The Quick Preview image's size beside its stage's. */
+function quickPreviewImageFit() {
+  const image = document
+      .querySelector('.quick-preview-dialog .image-stage img')!
+      .getBoundingClientRect(),
+    stage = document.querySelector('.quick-preview-dialog .image-stage')!.getBoundingClientRect();
+  return {
+    imageWidth: image.width,
+    imageHeight: image.height,
+    stageWidth: stage.width,
+    stageHeight: stage.height,
+  };
+}
+function quickPreviewSize() {
+  const rect = document.querySelector('.quick-preview-dialog')!.getBoundingClientRect();
+  return {
+    width: rect.width,
+    height: rect.height,
+    viewportWidth: innerWidth,
+    viewportHeight: innerHeight,
+  };
+}
+function secondPlaneSize() {
+  const id = (window as unknown as SmokeWindow).__qaEngine.tree.get()[1].planeID;
+  const rect = document
+    .querySelector('[data-plurid-plane=' + JSON.stringify(id) + ']')!
+    .getBoundingClientRect();
+  return {
+    width: rect.width,
+    height: rect.height,
+    viewportWidth: innerWidth,
+    viewportHeight: innerHeight,
+  };
 }
 async function verifyDailyFileWork(): Promise<void> {
   const note = path.join(fixture.files, 'README.md');
   const models = path.join(fixture.files, 'Models');
   const content = await readFile(note);
-  await evaluate('document.querySelector(".folder-explorer").focus()');
+  await evaluate(focus('.folder-explorer'));
   await key('Shift', 'ShiftLeft', 12);
   await key('Meta', 'MetaLeft', 12);
   assert.equal(
-    await evaluate('!!document.querySelector("dialog[open]")'),
+    await evaluate(exists('dialog[open]')),
     false,
     'Command + Shift alone must not create a folder',
   );
   await key('N', 'KeyN', 12);
   await until(
     () =>
-      evaluate<boolean>(
-        'document.querySelector("dialog[open]")?.getAttribute("aria-label") === "New folder"',
+      evaluate(
+        pageCall(
+          () => document.querySelector('dialog[open]')?.getAttribute('aria-label') === 'New folder',
+        ),
       ),
     Boolean,
     'actual New Folder binding',
   );
   await key('Escape', 'Escape');
 
-  const trashJobs = () => evaluate<OperationJob[]>('window.viewer.jobs()');
+  const trashJobs = () => evaluate(pageCall(viewerJobs));
   const trashNote = async (confirm: boolean) => {
     const prior = new Set((await trashJobs()).map((job) => job.id));
     await click(fileSelector(note));
     await key('Backspace', 'Backspace', 4);
     if (confirm) {
-      await until(
-        () => evaluate<boolean>('!!document.querySelector(".trash-dialog[open]")'),
-        Boolean,
-        'Trash confirmation',
-      );
+      await until(() => evaluate(exists('.trash-dialog[open]')), Boolean, 'Trash confirmation');
       assert.deepEqual(
         await evaluate(
-          'Array.from(document.querySelectorAll(".trash-dialog kbd")).map(key=>key.textContent)',
+          pageCall(() =>
+            Array.from(document.querySelectorAll('.trash-dialog kbd'), (key) => key.textContent),
+          ),
         ),
         ['Esc', 'Enter'],
       );
-      assert.equal(
-        await evaluate('document.activeElement?.getAttribute("aria-label")'),
-        'Move to Trash',
-      );
+      assert.equal(await evaluate(pageCall(activeLabel)), 'Move to Trash');
       await snapshot('desktop-native-trash-keyboard.png');
       await key('Enter', 'Enter');
-    } else assert.equal(await evaluate('!!document.querySelector(".trash-dialog")'), false);
+    } else assert.equal(await evaluate(exists('.trash-dialog')), false);
     const job = await until(
       trashJobs,
       (jobs) =>
@@ -516,7 +670,7 @@ async function verifyDailyFileWork(): Promise<void> {
     ).then((jobs) => jobs.find((job) => !prior.has(job.id) && job.kind === 'trash')!);
     assert.equal(job.status, 'completed', JSON.stringify(job.errors));
     await assert.rejects(lstat(note), { code: 'ENOENT' });
-    await evaluate(`window.viewer.undo(${JSON.stringify(job.id)})`);
+    await evaluate(pageCall((id: string) => window.viewer.undo(id), job.id));
     await until(
       async () => {
         try {
@@ -528,19 +682,11 @@ async function verifyDailyFileWork(): Promise<void> {
       Boolean,
       'Trash Undo contents',
     );
-    await until(
-      () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(note))})`),
-      Boolean,
-      'restored file row',
-    );
+    await until(() => evaluate(exists(fileSelector(note))), Boolean, 'restored file row');
   };
   await click(fileSelector(note));
   await key('Backspace', 'Backspace', 4);
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".trash-dialog[open]")'),
-    Boolean,
-    'cancelable Trash dialog',
-  );
+  await until(() => evaluate(exists('.trash-dialog[open]')), Boolean, 'cancelable Trash dialog');
   await key('Escape', 'Escape');
   assert.ok((await readFile(note)).equals(content), 'Escape preserves the file');
   await trashNote(true);
@@ -553,44 +699,50 @@ async function verifyDailyFileWork(): Promise<void> {
   await click('dialog [aria-label="Close"]');
 
   await click(fileSelector(models));
-  await evaluate(
-    'window.__qaSizes = []; window.__qaSizeOff = window.viewer.onEvent(event => { if(event.type === "folder-size") window.__qaSizes.push(event.task); });',
-  );
+  await evaluate(pageCall(collectFolderSizes));
   await paletteCommand('Calculate Size');
   const measured = await until(
-    () => evaluate<FolderSizeTask[]>('window.__qaSizes'),
+    () => evaluate(pageCall(folderSizes)),
     (tasks) => tasks.some((task) => task.status === 'completed'),
     'folder size',
   ).then((tasks) => tasks.find((task) => task.status === 'completed')!);
   await until(
     () =>
-      evaluate<string>(
-        `document.querySelector(${JSON.stringify(fileSelector(models))})?.querySelector('[data-column="size"]')?.textContent || ''`,
+      evaluate(
+        pageCall(
+          (row: string) =>
+            document.querySelector(row)?.querySelector('[data-column="size"]')?.textContent || '',
+          fileSelector(models),
+        ),
       ),
     (value) => value === formatBytes(measured.bytes),
     'folder size in Size column',
   );
   await click(fileSelector(note), 1, 4);
-  const noteEntry = await evaluate<{ size: number }>(`window.viewer.stat(${JSON.stringify(note)})`);
+  const noteEntry = await evaluate(pageCall((file: string) => window.viewer.stat(file), note));
   await until(
-    () => evaluate<string>('document.querySelector(".folder-status .selection-size").textContent'),
+    () => evaluate(requiredText('.folder-status .selection-size')),
     (value) => value === formatBytes(measured.bytes + noteEntry.size),
     'mixed-selection measured total',
   );
   await snapshot('desktop-native-measured-selection.png');
-  await evaluate('window.__qaSizeOff();');
+  await evaluate(pageCall(() => (window as unknown as SmokeWindow).__qaSizeOff()));
 
   await paletteCommand('Columns view');
   await click(fileSelector(note));
   await until(
-    () => evaluate<string>('document.querySelector(".column-preview")?.dataset.previewPath || ""'),
+    () => evaluate(pageCall(columnPreviewPath)),
     (value) => value === note,
     'root-column inline preview',
   );
   await until(
     () =>
-      evaluate<string>(
-        'document.querySelector(".column-preview .preview-host")?.dataset.previewModule || ""',
+      evaluate(
+        pageCall(
+          () =>
+            document.querySelector<HTMLElement>('.column-preview .preview-host')?.dataset
+              .previewModule || '',
+        ),
       ),
     (value) => value === 'text',
     'inline Markdown renderer',
@@ -598,63 +750,48 @@ async function verifyDailyFileWork(): Promise<void> {
   await snapshot('desktop-native-column-preview.png');
   await click(fileSelector(models));
   assert.equal(
-    await evaluate('!!document.querySelector(".column-preview")'),
+    await evaluate(exists('.column-preview')),
     false,
     'Selecting a folder removes the old preview',
   );
-  const children = await evaluate<{ entries: { path: string; directory: boolean }[] }>(
-    `window.viewer.list(${JSON.stringify(models)})`,
-  );
+  const children = await evaluate(pageCall((folder: string) => window.viewer.list(folder), models));
   const child = children.entries.find((file) => !file.directory && file.path.endsWith('.obj'))!;
-  await until(
-    () =>
-      evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(child.path))})`),
-    Boolean,
-    'child column',
-  );
+  await until(() => evaluate(exists(fileSelector(child.path))), Boolean, 'child column');
   await click(fileSelector(child.path));
   await until(
-    () => evaluate<string>('document.querySelector(".column-preview")?.dataset.previewPath || ""'),
+    () => evaluate(pageCall(columnPreviewPath)),
     (value) => value === child.path,
     'nested-column inline preview',
   );
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".column-preview canvas")'),
-    Boolean,
-    'nested 3D model preview',
-  );
+  await until(() => evaluate(exists('.column-preview canvas')), Boolean, 'nested 3D model preview');
   await snapshot('desktop-native-column-model.png');
 
-  await evaluate(
-    'window.__qaEngine.camera.dock(window.__qaEngine.tree.get()[0].planeID, {animate:false})',
-  );
+  await evaluate(pageCall(dockFirstPlane));
   await settleCamera();
-  const docked = await evaluate<string>('window.__qaEngine.camera.docked()');
+  const docked = await evaluate(pageCall(dockedPlane));
   await click(
     `.location-sidebar button[title=${JSON.stringify(path.join(fixture.files, 'Documents'))}]`,
   );
   await until(
     () =>
-      evaluate<string>(
-        'document.querySelector(".folder-explorer")?.getAttribute("aria-label") || ""',
+      evaluate(
+        pageCall(
+          () => document.querySelector('.folder-explorer')?.getAttribute('aria-label') || '',
+        ),
       ),
     (value) => value === 'Folder ' + path.join(fixture.files, 'Documents'),
     'sidebar folder navigation',
   );
   await settleCamera();
   assert.equal(
-    await evaluate('window.__qaEngine.camera.docked()'),
+    await evaluate(pageCall(dockedPlane)),
     docked,
     'Sidebar navigation must retain docking',
   );
   await key('ArrowUp', 'ArrowUp', 4);
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(note))})`),
-    Boolean,
-    'return to fixture parent',
-  );
+  await until(() => evaluate(exists(fileSelector(note))), Boolean, 'return to fixture parent');
   await settleCamera();
-  assert.equal(await evaluate('window.__qaEngine.camera.docked()'), docked);
+  assert.equal(await evaluate(pageCall(dockedPlane)), docked);
 
   await command('Emulation.setDeviceMetricsOverride', {
     width: 2560,
@@ -665,7 +802,7 @@ async function verifyDailyFileWork(): Promise<void> {
   const wideImage = path.join(fixture.files, 'Images', 'Wide.png');
   await click(fileSelector(path.join(fixture.files, 'Images')));
   await until(
-    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(wideImage))})`),
+    () => evaluate(exists(fileSelector(wideImage))),
     Boolean,
     'generated large image column',
   );
@@ -673,20 +810,17 @@ async function verifyDailyFileWork(): Promise<void> {
   await key(' ', 'Space');
   await until(
     () =>
-      evaluate<boolean>(
-        'document.querySelector(".quick-preview-dialog .image-stage img")?.naturalWidth === 2048',
+      evaluate(
+        pageCall(
+          () =>
+            document.querySelector<HTMLImageElement>('.quick-preview-dialog .image-stage img')
+              ?.naturalWidth === 2048,
+        ),
       ),
     Boolean,
     'large image decode',
   );
-  const imageFit = await evaluate<{
-    imageWidth: number;
-    imageHeight: number;
-    stageWidth: number;
-    stageHeight: number;
-  }>(
-    `(()=>{const i=document.querySelector('.quick-preview-dialog .image-stage img').getBoundingClientRect(),s=document.querySelector('.quick-preview-dialog .image-stage').getBoundingClientRect();return {imageWidth:i.width,imageHeight:i.height,stageWidth:s.width,stageHeight:s.height};})()`,
-  );
+  const imageFit = await evaluate(pageCall(quickPreviewImageFit));
   assert.ok(
     imageFit.imageWidth / imageFit.stageWidth >= 0.8 ||
       imageFit.imageHeight / imageFit.stageHeight >= 0.8,
@@ -697,18 +831,11 @@ async function verifyDailyFileWork(): Promise<void> {
   await click(fileSelector(note));
   await key(' ', 'Space');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".quick-preview-dialog[open]")'),
+    () => evaluate(exists('.quick-preview-dialog[open]')),
     Boolean,
     'large-display Quick Preview',
   );
-  const bounds = await evaluate<{
-    width: number;
-    height: number;
-    viewportWidth: number;
-    viewportHeight: number;
-  }>(
-    `(()=>{const r=document.querySelector('.quick-preview-dialog').getBoundingClientRect();return {width:r.width,height:r.height,viewportWidth:innerWidth,viewportHeight:innerHeight};})()`,
-  );
+  const bounds = await evaluate(pageCall(quickPreviewSize));
   assert.ok(
     bounds.width / bounds.viewportWidth >= 0.85 && bounds.height / bounds.viewportHeight >= 0.83,
     JSON.stringify(bounds),
@@ -717,19 +844,12 @@ async function verifyDailyFileWork(): Promise<void> {
   await key('Escape', 'Escape');
   await key('n', 'KeyN', 4);
   await until(
-    () => evaluate<number>('window.__qaEngine.tree.get().length'),
+    () => evaluate(pageCall(planeCount)),
     (count) => count === 2,
     'large-display new plane',
   );
   await settleCamera();
-  const newPlane = await evaluate<{
-    width: number;
-    height: number;
-    viewportWidth: number;
-    viewportHeight: number;
-  }>(
-    `(()=>{const id=window.__qaEngine.tree.get()[1].planeID;const r=document.querySelector('[data-plurid-plane='+JSON.stringify(id)+']').getBoundingClientRect();return {width:r.width,height:r.height,viewportWidth:innerWidth,viewportHeight:innerHeight};})()`,
-  );
+  const newPlane = await evaluate(pageCall(secondPlaneSize));
   assert.ok(
     newPlane.width / newPlane.viewportWidth >= 0.75 &&
       newPlane.height / newPlane.viewportHeight >= 0.75,
@@ -738,13 +858,11 @@ async function verifyDailyFileWork(): Promise<void> {
   await snapshot('desktop-native-large-plane.png');
   await paletteCommand('Close plane');
   await until(
-    () => evaluate<number>('window.__qaEngine.tree.get().length'),
+    () => evaluate(pageCall(planeCount)),
     (count) => count === 1,
     'closed generated root',
   );
-  await evaluate(
-    'window.__qaEngine.camera.dock(window.__qaEngine.tree.get()[0].planeID, {animate:false})',
-  );
+  await evaluate(pageCall(dockFirstPlane));
   await settleCamera();
   await click(fileSelector(note));
   await command('Emulation.setDeviceMetricsOverride', {
@@ -755,13 +873,18 @@ async function verifyDailyFileWork(): Promise<void> {
   });
   await key(' ', 'Space');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".quick-preview-dialog[open]")'),
+    () => evaluate(exists('.quick-preview-dialog[open]')),
     Boolean,
     'small-display Quick Preview',
   );
   assert.equal(
     await evaluate(
-      '(()=>{const r=document.querySelector(".quick-preview-dialog").getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight;})()',
+      pageCall(() => {
+        const rect = document.querySelector('.quick-preview-dialog')!.getBoundingClientRect();
+        return (
+          rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight
+        );
+      }),
     ),
     true,
   );
@@ -773,38 +896,48 @@ async function verifyDailyFileWork(): Promise<void> {
   );
 }
 
+/** The `data-file-path` of every match. */
+const filePaths = (selector: string) =>
+  Array.from(document.querySelectorAll<HTMLElement>(selector), (row) => row.dataset.filePath!);
+const folderSizes = () => (window as unknown as SmokeWindow).__qaSizes;
+function stopFolderSizes() {
+  const page = window as unknown as Partial<SmokeWindow>;
+  page.__qaSizeOff!();
+  delete page.__qaSizeOff;
+  delete page.__qaSizes;
+}
+/** A point in the empty space below the folder rows. */
+function blankFileSpace() {
+  const rect = document.querySelector('.folder-explorer .file-scroll')!.getBoundingClientRect();
+  return { x: rect.x + rect.width / 2, y: rect.bottom - 12 };
+}
+const focusOutline = () => getComputedStyle(document.activeElement!).outlineStyle;
 async function verifySelectionReliability(): Promise<void> {
-  const rows = await evaluate<string[]>(
-    'Array.from(document.querySelectorAll(".folder-explorer [data-file-path]")).map(row=>row.dataset.filePath)',
-  );
+  const rows = await evaluate(pageCall(filePaths, '.folder-explorer [data-file-path]'));
   assert.ok(rows.length > 4);
   await click(fileSelector(rows[3]));
   await settleCamera();
-  const camera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+  const camera = await evaluate(pageCall(cameraJSON));
   await key('ArrowUp', 'ArrowUp', 8);
   await key('ArrowUp', 'ArrowUp', 8);
-  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await evaluate(animationFrames(2));
   assert.deepEqual(
-    await evaluate(
-      'Array.from(document.querySelectorAll(".folder-explorer [data-file-path][aria-selected=true]")).map(row=>row.dataset.filePath)',
-    ),
+    await evaluate(pageCall(filePaths, '.folder-explorer [data-file-path][aria-selected=true]')),
     rows.slice(1, 4),
     'Repeated Shift+Up must extend from the moving cursor, not the end of the selected range',
   );
   assert.equal(
-    await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+    await evaluate(pageCall(cameraJSON)),
     camera,
     'File selection must not rotate the spatial camera',
   );
   await key('ArrowDown', 'ArrowDown', 8);
   assert.equal(
-    await evaluate('document.querySelectorAll(".folder-explorer [aria-selected=true]").length'),
+    await evaluate(countOf('.folder-explorer [aria-selected=true]')),
     2,
     'Reversing direction shrinks the range',
   );
-  const blank = await evaluate<{ x: number; y: number }>(
-    `(() => { const r=document.querySelector('.folder-explorer .file-scroll').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.bottom-12}; })()`,
-  );
+  const blank = await evaluate(pageCall(blankFileSpace));
   await command('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
@@ -820,28 +953,28 @@ async function verifySelectionReliability(): Promise<void> {
     ...blank,
   });
   assert.equal(
-    await evaluate('document.querySelectorAll(".folder-explorer [aria-selected=true]").length'),
+    await evaluate(countOf('.folder-explorer [aria-selected=true]')),
     0,
     'Clicking empty file space clears the selection',
   );
   await click(fileSelector(path.join(fixture.files, 'Models')));
   assert.equal(
-    await evaluate('document.querySelector(".folder-status").textContent.includes("0 B")'),
+    await evaluate(
+      pageCall(() => document.querySelector('.folder-status')!.textContent.includes('0 B')),
+    ),
     false,
     'Unmeasured folders must never be reported as zero bytes',
   );
-  await evaluate(
-    `window.__qaSizes = []; window.__qaSizeOff = window.viewer.onEvent(event => { if(event.type === 'folder-size') window.__qaSizes.push(event.task); });`,
-  );
+  await evaluate(pageCall(collectFolderSizes));
   await paletteCommand('Calculate Size');
   const measured = await until(
-    () => evaluate<FolderSizeTask[]>('window.__qaSizes'),
+    () => evaluate(pageCall(folderSizes)),
     (tasks) => tasks.some((task) => task.status === 'completed'),
     'background folder measurement',
   ).then((tasks) => tasks.find((task) => task.status === 'completed')!);
   assert.ok(measured.bytes > 0 && measured.files > 0 && measured.folders === 1);
   await until(
-    () => evaluate<string>('document.querySelector(".selection-size").textContent'),
+    () => evaluate(requiredText('.selection-size')),
     (value) => value.includes(formatBytes(measured.bytes)),
     'measured folder footer',
   );
@@ -852,40 +985,38 @@ async function verifySelectionReliability(): Promise<void> {
   );
   await snapshot('desktop-native-folder-size.png');
   await click('dialog [aria-label="Close"]');
-  await evaluate('window.__qaSizeOff(); delete window.__qaSizeOff; delete window.__qaSizes;');
+  await evaluate(pageCall(stopFolderSizes));
   await contextMenu(fileSelector(path.join(fixture.files, 'README.md')));
   await command('Input.insertText', { text: 'ow' });
   await key('Enter', 'Enter');
+  await until(() => evaluate(exists('.open-with-dialog')), Boolean, 'contextual Open With');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".open-with-dialog")'),
-    Boolean,
-    'contextual Open With',
-  );
-  await until(
-    () => evaluate<number>('document.querySelectorAll(".application-option").length'),
+    () => evaluate(countOf('.application-option')),
     (value) => value > 0,
     'native compatible applications',
   );
-  assert.equal(
-    await evaluate('document.activeElement.getAttribute("aria-label")'),
-    'Search applications',
-  );
-  assert.equal(await evaluate('getComputedStyle(document.activeElement).outlineStyle'), 'none');
+  assert.equal(await evaluate(pageCall(activeLabel)), 'Search applications');
+  assert.equal(await evaluate(pageCall(focusOutline)), 'none');
   await command('Input.insertText', { text: 'no such application xyz' });
   await until(
-    () => evaluate<number>('document.querySelectorAll(".application-option").length'),
+    () => evaluate(countOf('.application-option')),
     (value) => value === 0,
     'filtered application list',
   );
   assert.equal(
-    await evaluate('document.querySelector(".open-with-dialog [type=submit]").disabled'),
+    await evaluate(
+      pageCall(
+        () =>
+          document.querySelector<HTMLButtonElement>('.open-with-dialog [type=submit]')!.disabled,
+      ),
+    ),
     true,
   );
   await snapshot('desktop-native-open-with-empty.png');
   await key('a', 'KeyA', 4, ['selectAll']);
   await key('Backspace', 'Backspace');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".application-option").length'),
+    () => evaluate(countOf('.application-option')),
     (value) => value > 0,
     'restored compatible applications',
   );
@@ -907,14 +1038,14 @@ async function verifySelectionReliability(): Promise<void> {
     clickCount: 1,
     ...blank,
   });
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".context-menu")'),
-    Boolean,
-    'background contextual actions',
-  );
+  await until(() => evaluate(exists('.context-menu')), Boolean, 'background contextual actions');
   assert.equal(
     await evaluate(
-      'Array.from(document.querySelectorAll(".context-menu .command-result")).some(row => row.textContent.includes("Rename"))',
+      pageCall(() =>
+        Array.from(document.querySelectorAll('.context-menu .command-result')).some((row) =>
+          row.textContent.includes('Rename'),
+        ),
+      ),
     ),
     false,
   );
@@ -925,13 +1056,33 @@ async function verifySelectionReliability(): Promise<void> {
   );
 }
 
+const terminalWrite = (id: string, data: string) => window.viewer.terminalWrite(id, data);
+/** The root plane of pane `folderID`, its terminal child and the angle between them. */
+function terminalBranch(folderID: string, terminalID: string) {
+  const parent = (window as unknown as SmokeWindow).__qaEngine.tree
+    .get()
+    .find((node) => node.routeDivisions.plane.parameters.id === folderID)!;
+  const child = parent.children!.find(
+    (node) => node.routeDivisions.plane.parameters.id === terminalID,
+  )!;
+  return {
+    parent: parent.planeID,
+    child: child.planeID,
+    angle: Math.abs(child.location.rotateY - parent.location.rotateY),
+  };
+}
+/** Focuses the space, clears its selection and pans every plane out of view. */
+function panAway() {
+  const engine = (window as unknown as SmokeWindow).__qaEngine;
+  engine.focus();
+  engine.selection.clear();
+  engine.camera.moveBy({ pan: { x: 100000, y: 0 } }, { animate: false });
+}
 async function verifyFoundations(): Promise<void> {
   const folderID = fixture.state.workspaces[0].panes[0].id;
-  const rootNode = () =>
-    `window.__qaEngine.tree.get().find(node=>node.routeDivisions.plane.parameters.id===${JSON.stringify(folderID)})`;
   await key('3', 'Digit3', 4);
   await until(
-    () => evaluate<number>('document.querySelectorAll(".file-column").length'),
+    () => evaluate(countOf('.file-column')),
     (count) => count > 0,
     'Finder columns shortcut',
   );
@@ -940,8 +1091,14 @@ async function verifyFoundations(): Promise<void> {
   await key('ArrowRight', 'ArrowRight', 8);
   await until(
     () =>
-      evaluate<number>(
-        `window.viewer.settingsGet().then(value=>value.settings.folders[${JSON.stringify(fixture.files)}]?.columnWidth)`,
+      evaluate(
+        pageCall(
+          (folder: string) =>
+            window.viewer
+              .settingsGet()
+              .then((value) => value.settings.folders[folder]?.columnWidth),
+          fixture.files,
+        ),
       ),
     (width) => width === 330,
     'keyboard browser column resize persisted',
@@ -949,15 +1106,13 @@ async function verifyFoundations(): Promise<void> {
   await click(fileSelector(path.join(fixture.files, 'Transfers')));
   await key('ArrowRight', 'ArrowRight');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".file-column").length'),
+    () => evaluate(countOf('.file-column')),
     (count) => count === 2,
     'Finder Right enters the selected folder',
   );
   await key('ArrowLeft', 'ArrowLeft');
   assert.deepEqual(
-    await evaluate(
-      'Array.from(document.querySelectorAll(".file-column [aria-selected=true]")).map(el=>el.dataset.filePath)',
-    ),
+    await evaluate(pageCall(filePaths, '.file-column [aria-selected=true]')),
     [path.join(fixture.files, 'Transfers')],
     'Finder Left returns selection to the parent folder',
   );
@@ -965,100 +1120,116 @@ async function verifyFoundations(): Promise<void> {
   await click(fileSelector(path.join(fixture.files, 'Transfers')));
   await key('ArrowDown', 'ArrowDown', 4);
   await until(
-    () => evaluate<string>('document.querySelector(".plane-title")?.textContent || ""'),
+    () => evaluate(textOf('.plane-title')),
     (name) => name.includes('Transfers'),
     'Cmd Down enters a list folder',
   );
   await key('3', 'Digit3', 4);
   await key('ArrowUp', 'ArrowUp', 4);
   await until(
-    () => evaluate<number>('document.querySelectorAll(".file-head").length'),
+    () => evaluate(countOf('.file-head')),
     (count) => count > 0,
     'parent restores its own List view',
   );
-  await evaluate('document.querySelector(".file-scroll").click()');
+  await evaluate(clickElement('.file-scroll'));
   await paletteCommand('Open terminal plane');
   await until(
     () =>
-      evaluate<string[]>(
-        'Array.from(document.querySelectorAll(".terminal-plane")).map(el=>el.dataset.terminalId)',
+      evaluate(
+        pageCall(() =>
+          Array.from(
+            document.querySelectorAll<HTMLElement>('.terminal-plane'),
+            (plane) => plane.dataset.terminalId!,
+          ),
+        ),
       ),
     (ids) => ids.length === 1,
     'embedded terminal lazy mount',
   );
-  const terminalID = await evaluate<string>(
-    'document.querySelector(".terminal-plane").dataset.terminalId',
+  const terminalID = await evaluate(
+    pageCall(() => document.querySelector<HTMLElement>('.terminal-plane')!.dataset.terminalId!),
   );
   await until(
-    () => evaluate<number>('document.querySelectorAll(".terminal-plane .xterm-screen").length'),
+    () => evaluate(countOf('.terminal-plane .xterm-screen')),
     (count) => count === 1,
     'packaged xterm ready',
   );
-  await evaluate(
-    `window.viewer.terminalWrite(${JSON.stringify(terminalID)},${JSON.stringify("printf 'PTY_%s\\n' READY; stty size\r")})`,
-  );
+  await evaluate(pageCall(terminalWrite, terminalID, "printf 'PTY_%s\\n' READY; stty size\r"));
   await until(
-    () =>
-      evaluate<string>('document.querySelector(".terminal-plane .xterm-rows")?.textContent || ""'),
+    () => evaluate(textOf('.terminal-plane .xterm-rows')),
     (text) => text.includes('PTY_READY'),
     'real PTY output',
   );
-  await evaluate(
-    `window.viewer.terminalWrite(${JSON.stringify(terminalID)},${JSON.stringify('sleep 30\r')})`,
-  );
+  await evaluate(pageCall(terminalWrite, terminalID, 'sleep 30\r'));
   await delay(100);
-  await evaluate(
-    `window.viewer.terminalWrite(${JSON.stringify(terminalID)},${JSON.stringify("\u0003printf 'INTERRUPT%s\\n' ED\r")})`,
-  );
+  await evaluate(pageCall(terminalWrite, terminalID, "\u0003printf 'INTERRUPT%s\\n' ED\r"));
   await until(
-    () =>
-      evaluate<string>('document.querySelector(".terminal-plane .xterm-rows")?.textContent || ""'),
+    () => evaluate(textOf('.terminal-plane .xterm-rows')),
     (text) => text.includes('INTERRUPTED'),
     'Ctrl C interrupts the foreground PTY command',
   );
-  const child = await evaluate<{ parent: string; child: string; angle: number }>(
-    `(() => { const parent=${rootNode()};const child=parent.children.find(node=>node.routeDivisions.plane.parameters.id===${JSON.stringify(terminalID)});return {parent:parent.planeID,child:child.planeID,angle:Math.abs(child.location.rotateY-parent.location.rotateY)}; })()`,
-  );
+  const child = await evaluate(pageCall(terminalBranch, folderID, terminalID));
   assert.ok(child.child, 'Terminal belongs to the originating root');
   assert.ok(Math.abs(child.angle - 90.1) < 0.001, 'Terminal opens at 90.1 degrees to its parent');
   await snapshot('desktop-native-terminal.png');
   await paletteCommand('New folder plane');
   await until(
-    () => evaluate<number>('window.__qaEngine.tree.get().length'),
+    () => evaluate(pageCall(planeCount)),
     (count) => count === 2,
     'new root from terminal context',
   );
   await paletteCommand('Open terminal plane');
   await until(
-    () => evaluate<number>('window.__qaEngine.tree.get().flatMap(node=>node.children||[]).length'),
+    () =>
+      evaluate(
+        pageCall(
+          () =>
+            (window as unknown as SmokeWindow).__qaEngine.tree
+              .get()
+              .flatMap((node) => node.children || []).length,
+        ),
+      ),
     (count) => count === 2,
     'each root owns its terminal',
   );
-  const terminals = await evaluate<string[]>(
-    'window.__qaEngine.tree.get().flatMap(root=>(root.children||[]).filter(node=>node.route.includes("terminals")).map(node=>node.routeDivisions.plane.parameters.id))',
+  const terminals = await evaluate(
+    pageCall(() =>
+      (window as unknown as SmokeWindow).__qaEngine.tree
+        .get()
+        .flatMap((root) =>
+          (root.children || [])
+            .filter((node) => node.route.includes('terminals'))
+            .map((node) => node.routeDivisions.plane.parameters.id),
+        ),
+    ),
   );
   assert.equal(new Set(terminals).size, 2);
   await settleCamera();
-  await evaluate(
-    'window.__qaEngine.focus();window.__qaEngine.selection.clear();window.__qaEngine.camera.moveBy({pan:{x:100000,y:0}},{animate:false})',
-  );
+  await evaluate(pageCall(panAway));
   await until(
     () =>
-      evaluate<boolean>(
-        `!document.querySelector('.terminal-plane[data-terminal-id="${terminalID}"]')`,
+      evaluate(
+        pageCall(
+          (id: string) => !document.querySelector(`.terminal-plane[data-terminal-id="${id}"]`),
+          terminalID,
+        ),
       ),
     Boolean,
     'inactive terminal React view detaches outside the camera',
   );
   // Exceed the flow-control high-water mark while no terminal React view is mounted.
   await evaluate(
-    `window.viewer.terminalWrite(${JSON.stringify(terminalID)},${JSON.stringify("yes CULL_OUTPUT_abcdefghijklmnopqrstuvwxyz | head -c 1200000; printf '\\nSURVIVED_%s\\n' CULL\r")})`,
+    pageCall(
+      terminalWrite,
+      terminalID,
+      "yes CULL_OUTPUT_abcdefghijklmnopqrstuvwxyz | head -c 1200000; printf '\\nSURVIVED_%s\\n' CULL\r",
+    ),
   );
   await delay(300);
   await paletteCommand('Frame all planes');
   await settleCamera();
   await until(
-    () => evaluate<string>('document.body.textContent'),
+    () => evaluate(pageCall(() => document.body.textContent)),
     (text) => text.includes('SURVIVED_CULL'),
     'terminal screen and PTY survive culling',
   );
@@ -1068,7 +1239,13 @@ async function verifyFoundations(): Promise<void> {
   }
   await tab('Actions');
   await settingsEvaluate(
-    '(() => { const summary=Array.from(document.querySelectorAll("details summary")).find(el=>el.textContent.includes("Inspect path"));summary.click();summary.scrollIntoView({block:"start"}); })()',
+    pageCall(() => {
+      const summary = Array.from(document.querySelectorAll<HTMLElement>('details summary')).find(
+        (element) => element.textContent.includes('Inspect path'),
+      )!;
+      summary.click();
+      summary.scrollIntoView({ block: 'start' });
+    }),
   );
   await snapshot('desktop-native-custom-action.png');
   await click('dialog [aria-label="Close"]');
@@ -1080,17 +1257,18 @@ async function verifyFoundations(): Promise<void> {
     '// Native external editor fixture.\n' + JSON.stringify(config, null, 2),
   );
   await until(
-    () => evaluate<number>('document.querySelectorAll(".grid-scroll").length'),
+    () => evaluate(countOf('.grid-scroll')),
     (count) => count > 0,
     'external configuration edit reaches all matching roots',
   );
   await patchInSettings(
-    `[{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(fixture.root)}]}]`,
+    { path: 'settings.agents.enabled', value: true },
+    { path: 'settings.agents.roots', value: [fixture.root] },
   );
   // Hidden smoke must exercise the pending-consent boundary. It cannot manufacture
   // a native approval; authorized protocol/review checks run in native/agent-consent.ts.
-  const pendingAgentAccess = await settingsEvaluate<AgentAccessState>(
-    'window.viewer.agentAccess({kind:"state"})',
+  const pendingAgentAccess = await settingsEvaluate(
+    pageCall(() => window.viewer.agentAccess({ kind: 'state' })),
   );
   assert.equal(pendingAgentAccess.enabled, false);
   assert.deepEqual(pendingAgentAccess.roots, []);
@@ -1100,22 +1278,19 @@ async function verifyFoundations(): Promise<void> {
     code: 'ENOENT',
   });
   await patchInSettings(
-    `[{path:'settings.agents.enabled',value:false},{path:'settings.agents.roots',value:[]}]`,
+    { path: 'settings.agents.enabled', value: false },
+    { path: 'settings.agents.roots', value: [] },
   );
   console.log(
     'Agent smoke: requested access stays unapproved; genuine consent has a separate operator scenario.',
   );
-  await evaluate(
-    'window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:"settings.folders",value:{}}],s.revision))',
-  );
+  await evaluate(patchSettings({ path: 'settings.folders', value: {} }));
   await reloadPage();
-  await until(
-    () => evaluate<boolean>('!!document.querySelector("[data-viewer-plane]")'),
-    Boolean,
-    'reloaded workspace',
-  );
+  await until(() => evaluate(exists('[data-viewer-plane]')), Boolean, 'reloaded workspace');
   assert.deepEqual(
-    await evaluate('window.viewer.settingsGet().then(value=>value.settings.folders)'),
+    await evaluate(
+      pageCall(() => window.viewer.settingsGet().then((value) => value.settings.folders)),
+    ),
     {},
     'cleared folder overrides stay cleared after reopening',
   );
@@ -1126,31 +1301,42 @@ async function verifyFoundations(): Promise<void> {
   );
 }
 
+/** Starts counting commits of the production file table (tests/react-commits.ts reads the type). */
+function watchFileTable() {
+  const table = document.querySelector('.file-table')!;
+  const key = Object.getOwnPropertyNames(table).find((key) => key.startsWith('__reactFiber$'));
+  const fibers = table as unknown as Record<string, { return?: { type?: unknown } } | undefined>;
+  const owner = key ? fibers[key]?.return : undefined;
+  if (typeof owner?.type !== 'function') throw new Error('Production file-table owner unavailable');
+  const page = window as unknown as SmokeWindow;
+  page.__qaFileTableType = owner.type;
+  page.__qaFileTableCommits = 0;
+}
+const fileTableCommits = () => (window as unknown as SmokeWindow).__qaFileTableCommits;
+/** The centre of the first match. */
+function centreOf(selector: string) {
+  const rect = document.querySelector(selector)!.getBoundingClientRect();
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+}
+const nameColumnWidth = (folder: string) =>
+  window.viewer
+    .settingsGet()
+    .then((value) => value.settings.folders[folder]?.list?.widths?.name ?? 0);
 async function verifyConfiguredChrome(): Promise<void> {
   const unchanged = await inventory();
   const view = '.plane-controls [aria-label="View mode"]';
   for (let index = 0; index < 2; index++) {
     await click(view);
-    assert.equal(await evaluate('document.querySelectorAll(".context-menu").length'), 1);
-    assert.equal(
-      await evaluate(
-        `document.querySelector(${JSON.stringify(view)}).getAttribute('aria-expanded')`,
-      ),
-      'true',
-    );
+    assert.equal(await evaluate(countOf('.context-menu')), 1);
+    assert.equal(await evaluate(requiredAttribute(view, 'aria-expanded')), 'true');
     await click(view);
-    assert.equal(await evaluate('document.querySelectorAll(".context-menu").length'), 0);
-    assert.equal(
-      await evaluate(
-        `document.querySelector(${JSON.stringify(view)}).getAttribute('aria-expanded')`,
-      ),
-      'false',
-    );
+    assert.equal(await evaluate(countOf('.context-menu')), 0);
+    assert.equal(await evaluate(requiredAttribute(view, 'aria-expanded')), 'false');
   }
   await click(view);
   await key('Escape', 'Escape');
   await click(view);
-  await evaluate('document.body.click()');
+  await evaluate(pageCall(() => document.body.click()));
   await key('Escape', 'Escape');
   await tab('Space');
   const controls = [
@@ -1166,47 +1352,47 @@ async function verifyConfiguredChrome(): Promise<void> {
   ];
   for (const control of controls) await setting(control);
   await until(
-    () => evaluate<number>('document.querySelectorAll(".plane-controls button").length'),
+    () => evaluate(countOf('.plane-controls button')),
     (count) => count === 0,
     'all toolbar controls can be hidden independently',
   );
   await settingsEvaluate(
-    `Array.from(document.querySelectorAll('.settings-page h2')).find(heading => heading.textContent === 'Plane toolbar').scrollIntoView({block:'start'})`,
+    pageCall(() =>
+      Array.from(document.querySelectorAll('.settings-page h2'))
+        .find((heading) => heading.textContent === 'Plane toolbar')!
+        .scrollIntoView({ block: 'start' }),
+    ),
   );
   await snapshot('desktop-native-toolbar-settings.png');
   for (const control of controls) await setting(control);
   await tab('Browsing');
   for (const column of ['Date modified', 'Kind', 'Size']) await setting(column);
   await until(
-    () => evaluate<number>('document.querySelectorAll(".file-head [data-column]").length'),
+    () => evaluate(countOf('.file-head [data-column]')),
     (count) => count === 1,
     'metadata columns can all be hidden while Name remains visible',
   );
   for (const column of ['Date modified', 'Kind', 'Size', 'Date created', 'Extension'])
     await setting(column);
   await until(
-    () => evaluate<number>('document.querySelectorAll(".file-head [data-column]").length'),
+    () => evaluate(countOf('.file-head [data-column]')),
     (count) => count === 6,
     'optional created and extension columns appear',
   );
   for (const column of ['Date created', 'Extension']) await setting(column);
   await click('dialog [aria-label="Close"]');
-  await evaluate(`(() => {
-    const table=document.querySelector('.file-table');
-    const key=Object.getOwnPropertyNames(table).find(key=>key.startsWith('__reactFiber$'));
-    const owner=key && table[key]?.return;
-    if(typeof owner?.type !== 'function') throw new Error('Production file-table owner unavailable');
-    window.__qaFileTableType=owner.type;
-    window.__qaFileTableCommits=0;
-  })()`);
+  await evaluate(pageCall(watchFileTable));
   const widths = () =>
-    evaluate<number[]>(
-      `Array.from(document.querySelectorAll('.file-head [data-column]')).map(cell=>cell.offsetWidth)`,
+    evaluate(
+      pageCall(() =>
+        Array.from(
+          document.querySelectorAll<HTMLElement>('.file-head [data-column]'),
+          (cell) => cell.offsetWidth,
+        ),
+      ),
     );
   const before = await widths();
-  const edge = await evaluate<{ x: number; y: number }>(
-    `(() => { const r=document.querySelector('[aria-label="Resize Name column"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`,
-  );
+  const edge = await evaluate(pageCall(centreOf, '[aria-label="Resize Name column"]'));
   await command('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     button: 'none',
@@ -1230,20 +1416,20 @@ async function verifyConfiguredChrome(): Promise<void> {
     x: edge.x + 25,
     y: edge.y,
   });
-  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await evaluate(animationFrames(2));
   await until(
     async () => {
-      const before = await evaluate<number>('window.__qaFileTableCommits');
+      const before = await evaluate(pageCall(fileTableCommits));
       await delay(100);
-      return (await evaluate<number>('window.__qaFileTableCommits')) === before;
+      return (await evaluate(pageCall(fileTableCommits))) === before;
     },
     Boolean,
     'renderer settled before measuring column resize',
   );
-  const resizeViewportHeight = await evaluate<number>(
-    'document.querySelector(".file-scroll").clientHeight',
+  const resizeViewportHeight = await evaluate(
+    pageCall(() => document.querySelector('.file-scroll')!.clientHeight),
   );
-  const commits = await evaluate<number>('window.__qaFileTableCommits');
+  const commits = await evaluate(pageCall(fileTableCommits));
   for (let index = 2; index <= 5; index++) {
     await command('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
@@ -1254,15 +1440,15 @@ async function verifyConfiguredChrome(): Promise<void> {
     });
     // Separate rendered frames prevent batching from concealing a per-move
     // state update. These moves retain the same vertical viewport.
-    await evaluate('new Promise(requestAnimationFrame)');
+    await evaluate(animationFrames(1));
   }
   assert.equal(
-    await evaluate('document.querySelector(".file-scroll").clientHeight'),
+    await evaluate(pageCall(() => document.querySelector('.file-scroll')!.clientHeight)),
     resizeViewportHeight,
     'The measured resize moves retain the virtual list viewport height',
   );
   assert.equal(
-    await evaluate('window.__qaFileTableCommits'),
+    await evaluate(pageCall(fileTableCommits)),
     commits,
     'Resizing should not rerender the file list on every pointer movement',
   );
@@ -1278,25 +1464,23 @@ async function verifyConfiguredChrome(): Promise<void> {
   assert.ok(after[0] > before[0] + 50, `Name column grew from ${before[0]} to ${after[0]}`);
   assert.deepEqual(after.slice(1), before.slice(1));
   await until(
-    () =>
-      evaluate<number>(
-        `window.viewer.settingsGet().then(value=>value.settings.folders[${JSON.stringify(fixture.files)}]?.list?.widths?.name ?? 0)`,
-      ),
+    () => evaluate(pageCall(nameColumnWidth, fixture.files)),
     (value) => value === after[0],
     'resized width persisted to settings',
   );
   await until(
-    () => evaluate<number>('window.__qaFileTableCommits'),
+    () => evaluate(pageCall(fileTableCommits)),
     (value) => value > commits,
     'the scoped React probe observes the actual width commit on release',
   );
-  await evaluate('window.__qaFileTableType=undefined');
+  await evaluate(
+    pageCall(() => {
+      (window as unknown as SmokeWindow).__qaFileTableType = undefined;
+    }),
+  );
   await click('[aria-label="Resize Name column"]', 2);
   await until(
-    () =>
-      evaluate<number>(
-        `window.viewer.settingsGet().then(value=>value.settings.folders[${JSON.stringify(fixture.files)}]?.list?.widths?.name ?? 0)`,
-      ),
+    () => evaluate(pageCall(nameColumnWidth, fixture.files)),
     (value) => value === 0,
     'double-click restores flexible Name width',
   );
@@ -1304,10 +1488,22 @@ async function verifyConfiguredChrome(): Promise<void> {
   await setting('Wrap long filenames');
   await click('dialog [aria-label="Close"]');
   await evaluate(
-    `document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, longFilename)))}).scrollIntoView({block:'nearest'})`,
+    pageCall(
+      (row: string) => document.querySelector(row)!.scrollIntoView({ block: 'nearest' }),
+      fileSelector(path.join(fixture.files, longFilename)),
+    ),
   );
-  const fullName = await evaluate<{ title: string; wraps: boolean }>(
-    `(() => { const text=document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, longFilename)))}).querySelector('.filename');return {title:text.title,wraps:text.offsetHeight>parseFloat(getComputedStyle(text).lineHeight)*1.5}; })()`,
+  const fullName = await evaluate(
+    pageCall(
+      (row: string) => {
+        const text = document.querySelector(row)!.querySelector<HTMLElement>('.filename')!;
+        return {
+          title: text.title,
+          wraps: text.offsetHeight > parseFloat(getComputedStyle(text).lineHeight) * 1.5,
+        };
+      },
+      fileSelector(path.join(fixture.files, longFilename)),
+    ),
   );
   assert.equal(fullName.title, longFilename);
   assert.equal(fullName.wraps, true);
@@ -1317,8 +1513,11 @@ async function verifyConfiguredChrome(): Promise<void> {
   await click('dialog [aria-label="Close"]');
   await until(
     () =>
-      evaluate<number>(
-        `document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, longFilename)))}).parentElement.offsetHeight`,
+      evaluate(
+        pageCall(
+          (row: string) => document.querySelector(row)!.parentElement!.offsetHeight,
+          fileSelector(path.join(fixture.files, longFilename)),
+        ),
       ),
     (height) => height === 36,
     'disabling wrapping restores the normal virtual row height',
@@ -1327,7 +1526,7 @@ async function verifyConfiguredChrome(): Promise<void> {
   await click(fileSelector(path.join(fixture.files, 'README.md')));
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Rename actions"]')`),
+    () => evaluate(exists('[aria-label="Rename actions"]')),
     Boolean,
     'rename action picker',
   );
@@ -1340,24 +1539,24 @@ async function verifyConfiguredChrome(): Promise<void> {
   await click(fileSelector(book));
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Rename actions"]')`),
+    () => evaluate(exists('[aria-label="Rename actions"]')),
     Boolean,
     'book rename action picker',
   );
   // Exercise selection changing independently after the modal captured its target.
   await evaluate(
-    `document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Documents', 'Project notes.md')))}).click()`,
+    clickElement(fileSelector(path.join(fixture.files, 'Documents', 'Project notes.md'))),
   );
   await choose('Rename actions', 'recipe.book-name');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".action-config")'),
+    () => evaluate(exists('.action-config')),
     Boolean,
     'rename modal transfers to action setup',
   );
-  assert.equal(await evaluate('document.querySelectorAll("dialog[open]").length'), 1);
+  assert.equal(await evaluate(countOf('dialog[open]')), 1);
   await click('.action-config .primary');
   const plans = await until(
-    () => evaluate<ActionPlan[]>('window.viewer.actionList()'),
+    () => evaluate(pageCall(() => window.viewer.actionList())),
     (plans) => plans.some((plan) => plan.recipeID === 'book-name' && plan.status === 'review'),
     'rename action produces a review proposal',
   );
@@ -1378,62 +1577,54 @@ async function verifyConfiguredChrome(): Promise<void> {
   );
 }
 
+const selectedFilePath = () =>
+  document.querySelector('.file-row.is-selected')?.getAttribute('data-file-path') || '';
+/** The drag payload a row's production dragstart handler writes. */
+function dragPayload(row: string) {
+  const data = new DataTransfer();
+  document
+    .querySelector(row)!
+    .dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: data }));
+  return data.getData('application/x-viewer-files');
+}
 async function verifyColumnWorkflows(): Promise<void> {
   await paletteCommand('Columns view');
   await click(fileSelector(path.join(fixture.files, 'Data')));
   await key('ArrowDown', 'ArrowDown');
-  const selected = await evaluate<string>(
-    'document.querySelector(".file-row.is-selected")?.getAttribute("data-file-path") || ""',
-  );
+  const selected = await evaluate(pageCall(selectedFilePath));
   assert.equal(path.basename(selected), 'Documents');
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".file-column:nth-child(2) .column-title")?.textContent || ""',
-      ),
+    () => evaluate(textOf('.file-column:nth-child(2) .column-title')),
     (title) => title === 'Documents',
     'arrow selection reveals the selected folder column',
     3000,
   );
   await key('ArrowRight', 'ArrowRight');
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".file-row.is-selected")?.getAttribute("data-file-path") || ""',
-      ),
+    () => evaluate(pageCall(selectedFilePath)),
     (value) => path.dirname(value) === path.join(fixture.files, 'Documents'),
     'Right selects inside the folder',
   );
-  await evaluate(
-    'window.__qaEngine.focus();window.__qaEngine.selection.clear();window.__qaEngine.camera.moveBy({pan:{x:100000,y:0}},{animate:false})',
-  );
+  await evaluate(pageCall(panAway));
   await until(
-    () => evaluate<boolean>('!document.querySelector(".folder-explorer")'),
+    () => evaluate(pageCall(() => !document.querySelector('.folder-explorer'))),
     Boolean,
     'offscreen column explorer detaches',
     5000,
   );
-  await evaluate(
-    'window.__qaEngine.camera.frame({planeID:window.__qaEngine.tree.get()[0].planeID},{animate:false})',
-  );
+  await evaluate(pageCall(frameFirstPlane));
   await settleCamera();
   await until(text, (value) => value.includes('Project brief.pdf'), 'column branch reattaches');
-  await evaluate('document.querySelector(".folder-explorer").focus()');
+  await evaluate(focus('.folder-explorer'));
   await key('ArrowDown', 'ArrowDown');
   assert.equal(
-    path.dirname(
-      await evaluate<string>(
-        'document.querySelector(".file-row.is-selected").getAttribute("data-file-path")',
-      ),
-    ),
+    path.dirname((await evaluate(requiredAttribute('.file-row.is-selected', 'data-file-path')))!),
     path.join(fixture.files, 'Documents'),
     'the child column keeps keyboard ownership after Plurid detachment',
   );
   await key('ArrowLeft', 'ArrowLeft');
   assert.equal(
-    await evaluate(
-      'document.querySelector(".file-row.is-selected").getAttribute("data-file-path")',
-    ),
+    await evaluate(requiredAttribute('.file-row.is-selected', 'data-file-path')),
     path.join(fixture.files, 'Documents'),
   );
   await click(fileSelector(path.join(fixture.files, 'Transfers')), 2);
@@ -1450,21 +1641,19 @@ async function verifyColumnWorkflows(): Promise<void> {
   const peer = path.join(fixture.files, 'Transfers', 'Peer');
   await click(fileSelector(source));
   await until(
-    () =>
-      evaluate<boolean>(`!!document.querySelector('.file-column[data-folder-path="${source}"]')`),
+    () => evaluate(exists(`.file-column[data-folder-path="${source}"]`)),
     Boolean,
     'Source is shown as a browsing column before copying',
   );
   await key('c', 'KeyC', 4);
   await until(
-    () => evaluate<{ paths: string[] } | null>('window.viewer.clipboardRead()'),
+    () => evaluate(pageCall(() => window.viewer.clipboardRead())),
     (value) => value?.paths[0] === source,
     'Command-C captures the selected folder',
   );
   await click(fileSelector(target));
   await until(
-    () =>
-      evaluate<boolean>(`!!document.querySelector('.file-column[data-folder-path="${target}"]')`),
+    () => evaluate(exists(`.file-column[data-folder-path="${target}"]`)),
     Boolean,
     'Target is shown as the paste destination column',
   );
@@ -1483,15 +1672,9 @@ async function verifyColumnWorkflows(): Promise<void> {
   await click(fileSelector(source));
   await until(text, (value) => value.includes('Note.txt'), 'source column contents');
   // Use the production dragstart payload, then deliver trusted Chromium drop events.
-  const payload = await evaluate<string>(`(() => {
-    const row=document.querySelector(${JSON.stringify(fileSelector(source))});
-    const data=new DataTransfer();row.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:data}));
-    return data.getData('application/x-viewer-files');
-  })()`);
+  const payload = await evaluate(pageCall(dragPayload, fileSelector(source)));
   assert.deepEqual(JSON.parse(payload), [source]);
-  const point = await evaluate<{ x: number; y: number }>(
-    `(() => { const r=document.querySelector(${JSON.stringify(fileSelector(peer))}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`,
-  );
+  const point = await evaluate(pageCall(centreOf, fileSelector(peer)));
   const data = {
     items: [{ mimeType: 'application/x-viewer-files', data: payload }],
     dragOperationsMask: 17,
@@ -1511,13 +1694,18 @@ async function verifyColumnWorkflows(): Promise<void> {
   );
   await until(
     () =>
-      evaluate<string[]>(
-        'Array.from(document.querySelectorAll(".file-column")).map(column=>column.dataset.folderPath)',
+      evaluate(
+        pageCall(() =>
+          Array.from(
+            document.querySelectorAll<HTMLElement>('.file-column'),
+            (column) => column.dataset.folderPath!,
+          ),
+        ),
       ),
     (paths) => !paths.includes(source),
     'removal closes the obsolete column branch',
   );
-  assert.equal(await evaluate('document.querySelectorAll(".file-row.is-selected").length'), 0);
+  assert.equal(await evaluate(countOf('.file-row.is-selected')), 0);
   assert.equal((await text()).includes('Folder unavailable'), false);
   assert.equal(
     await readFile(path.join(target, 'Source', 'Note.txt'), 'utf8'),
@@ -1529,28 +1717,55 @@ async function verifyColumnWorkflows(): Promise<void> {
   );
 }
 
+/** Each shown column heading's text edge minus its first row's: left edges, right for Size. */
+function columnOffsets() {
+  const head = document.querySelector('.file-head')!,
+    row = document.querySelector('.file-row')!;
+  const targets: Record<string, string> = {
+    name: '.filename',
+    modified: '.file-date',
+    created: '.file-created',
+    kind: '.file-kind',
+    extension: '.file-extension',
+    size: '.file-size',
+  };
+  const textRect = (element: Element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getBoundingClientRect();
+  };
+  return Array.from(head.children as HTMLCollectionOf<HTMLElement>).flatMap((cell) => {
+    if (getComputedStyle(cell).display === 'none') return [];
+    const column = cell.dataset.column!;
+    const heading = textRect(cell.querySelector('.column-label')!),
+      value = textRect(row.querySelector(targets[column]!)!);
+    return {
+      name: cell.textContent.trim(),
+      delta: column === 'size' ? heading.right - value.right : heading.left - value.left,
+    };
+  });
+}
 async function verifyListAlignment(): Promise<void> {
-  const measure = () =>
-    evaluate<{ name: string; delta: number }[]>(
-      `(() => {
-      const head=document.querySelector('.file-head'),row=document.querySelector('.file-row');
-      const targets={name:'.filename',modified:'.file-date',created:'.file-created',kind:'.file-kind',extension:'.file-extension',size:'.file-size'};
-      const textRect=element=>{const range=document.createRange();range.selectNodeContents(element);return range.getBoundingClientRect();};
-      return Array.from(head.children).flatMap((cell)=>{
-        if(getComputedStyle(cell).display==='none') return [];
-        const column=cell.dataset.column;
-        const heading=textRect(cell.querySelector('.column-label')),value=textRect(row.querySelector(targets[column]));
-        return {name:cell.textContent.trim(),delta:column==='size'?heading.right-value.right:heading.left-value.left};
-      });
-    })()`,
-    );
+  const measure = () => evaluate(pageCall(columnOffsets));
   for (const width of [960, 640, 420]) {
     await evaluate(
-      `document.querySelector('.folder-explorer').style.width='${width}px';document.querySelector('.folder-explorer').style.flex='none'`,
+      pageCall((width: number) => {
+        const explorer = document.querySelector<HTMLElement>('.folder-explorer')!;
+        explorer.style.width = width + 'px';
+        explorer.style.flex = 'none';
+      }, width),
     );
     for (const overflow of [false, true]) {
       await evaluate(
-        `(() => { const list=document.querySelector('.file-scroll'); list.style.flex='none';list.style.height='${overflow ? 72 : 460}px';list.scrollTop=0; })()`,
+        pageCall(
+          (height: number) => {
+            const list = document.querySelector<HTMLElement>('.file-scroll')!;
+            list.style.flex = 'none';
+            list.style.height = height + 'px';
+            list.scrollTop = 0;
+          },
+          overflow ? 72 : 460,
+        ),
       );
       await delay(100);
       const columns = await measure();
@@ -1561,13 +1776,19 @@ async function verifyListAlignment(): Promise<void> {
         );
       assert.equal(
         await evaluate(
-          'document.querySelector(".file-scroll").scrollWidth > document.querySelector(".file-scroll").clientWidth',
+          pageCall(() => {
+            const list = document.querySelector('.file-scroll')!;
+            return list.scrollWidth > list.clientWidth;
+          }),
         ),
         false,
       );
       assert.equal(
         await evaluate(
-          'document.querySelector(".file-scroll").scrollHeight > document.querySelector(".file-scroll").clientHeight',
+          pageCall(() => {
+            const list = document.querySelector('.file-scroll')!;
+            return list.scrollHeight > list.clientHeight;
+          }),
         ),
         overflow,
       );
@@ -1575,36 +1796,32 @@ async function verifyListAlignment(): Promise<void> {
     }
   }
   await evaluate(
-    `document.querySelector('.folder-explorer').style.removeProperty('width');document.querySelector('.folder-explorer').style.removeProperty('flex');document.querySelector('.file-scroll').style.removeProperty('height');document.querySelector('.file-scroll').style.removeProperty('flex');`,
+    pageCall(() => {
+      const explorer = document.querySelector<HTMLElement>('.folder-explorer')!.style,
+        list = document.querySelector<HTMLElement>('.file-scroll')!.style;
+      explorer.removeProperty('width');
+      explorer.removeProperty('flex');
+      list.removeProperty('height');
+      list.removeProperty('flex');
+    }),
   );
   await snapshot('desktop-native-list-alignment.png');
 }
 
 async function verifyPreviewFooter(): Promise<void> {
   const file = path.join(fixture.files, 'README.md');
-  const choices = await evaluate<ApplicationChoices>(
-    `window.viewer.applications([${JSON.stringify(file)}])`,
+  const choices = await evaluate(
+    pageCall((file: string) => window.viewer.applications([file]), file),
   );
   await preview(file, 'Synthetic files for local Viewer verification.');
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".quick-preview .open-default-button")?.textContent || ""',
-      ),
+    () => evaluate(textOf('.quick-preview .open-default-button')),
     (label) => label === (choices.defaultName ? `Open in ${choices.defaultName}` : 'Open'),
     'the Quick Preview open control names the actual default application',
   );
-  assert.equal(await evaluate('document.querySelectorAll(".wide-dialog footer").length'), 1);
-  assert.equal(
-    await evaluate('document.querySelectorAll(".quick-preview .preview-info").length'),
-    0,
-  );
-  assert.equal(
-    await evaluate(
-      `document.querySelectorAll('.wide-dialog [aria-label="Open file in default app"]').length`,
-    ),
-    0,
-  );
+  assert.equal(await evaluate(countOf('.wide-dialog footer')), 1);
+  assert.equal(await evaluate(countOf('.quick-preview .preview-info')), 0);
+  assert.equal(await evaluate(countOf('.wide-dialog [aria-label="Open file in default app"]')), 0);
   await snapshot('desktop-native-quick-preview-footer.png');
   await command('Emulation.setDeviceMetricsOverride', {
     width: 780,
@@ -1612,8 +1829,15 @@ async function verifyPreviewFooter(): Promise<void> {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  const bounds = await evaluate<{ overflow: boolean; bottom: number; height: number }>(
-    `(() => { const footer=document.querySelector('.quick-preview-footer');return {overflow:footer.scrollWidth>footer.clientWidth,bottom:footer.getBoundingClientRect().bottom,height:innerHeight}; })()`,
+  const bounds = await evaluate(
+    pageCall(() => {
+      const footer = document.querySelector('.quick-preview-footer')!;
+      return {
+        overflow: footer.scrollWidth > footer.clientWidth,
+        bottom: footer.getBoundingClientRect().bottom,
+        height: innerHeight,
+      };
+    }),
   );
   assert.equal(bounds.overflow, false);
   assert.ok(bounds.bottom <= bounds.height);
@@ -1622,20 +1846,49 @@ async function verifyPreviewFooter(): Promise<void> {
   await closePreview();
 }
 
+/** The focused control's label, keyboard focus and colours, beside the theme's accent and fill. */
+function focusedControl() {
+  const button = document.activeElement!,
+    style = getComputedStyle(button);
+  const swatch = document.createElement('span');
+  swatch.style.color = 'var(--accent)';
+  swatch.style.background = 'var(--raised)';
+  document.body.append(swatch);
+  const accent = getComputedStyle(swatch).color,
+    raised = getComputedStyle(swatch).backgroundColor;
+  swatch.remove();
+  return {
+    label: button.textContent.trim(),
+    keyboard: button.matches(':focus-visible'),
+    outline: style.outlineStyle,
+    color: style.color,
+    accent,
+    background: style.backgroundColor,
+    raised,
+  };
+}
 async function verifySettingsScroll(): Promise<void> {
-  await evaluate('window.viewer.openSettings()');
+  await evaluate(pageCall(openSettings));
   await openSettingsProbe();
   await tab('Actions');
   const rectangles = () =>
-    settingsEvaluate<number[]>(
-      `Array.from(document.querySelectorAll('.settings-recipe summary')).flatMap(element=>{const r=element.getBoundingClientRect();return [r.x,r.width];})`,
+    settingsEvaluate(
+      pageCall(() =>
+        Array.from(document.querySelectorAll('.settings-recipe summary')).flatMap((element) => {
+          const rect = element.getBoundingClientRect();
+          return [rect.x, rect.width];
+        }),
+      ),
     );
   const collapsed = await rectangles();
-  await settingsEvaluate('document.querySelector(".settings-recipe summary").click()');
+  await settingsEvaluate(clickElement('.settings-recipe summary'));
   await until(
     () =>
       settingsEvaluate(
-        'document.querySelector(".settings-page").scrollHeight > document.querySelector(".settings-page").clientHeight',
+        pageCall(() => {
+          const page = document.querySelector('.settings-page')!;
+          return page.scrollHeight > page.clientHeight;
+        }),
       ),
     Boolean,
     'expanded Actions require scrolling',
@@ -1646,24 +1899,21 @@ async function verifySettingsScroll(): Promise<void> {
     'A scrollbar must not move Settings fields sideways',
   );
   await snapshot('desktop-native-settings-actions-expanded.png');
-  await settingsEvaluate('document.querySelector(".settings-recipe summary").click()');
+  await settingsEvaluate(clickElement('.settings-recipe summary'));
   assert.deepEqual(await rectangles(), collapsed);
   await snapshot('desktop-native-settings-actions-collapsed.png');
-  const initialAppearance = await settingsEvaluate<string>(
-    'window.viewer.settingsGet().then(snapshot => snapshot.settings.appearance)',
+  const initialAppearance = await settingsEvaluate(
+    pageCall(() => window.viewer.settingsGet().then((snapshot) => snapshot.settings.appearance)),
   );
   await settingsCommand('Emulation.setFocusEmulationEnabled', { enabled: true });
   for (const appearance of ['dark', 'light']) {
-    await settingsEvaluate(`(async () => {
-      const snapshot = await window.viewer.settingsGet();
-      await window.viewer.settingsPatch([{path:'settings.appearance',value:${JSON.stringify(appearance)}}], snapshot.revision);
-    })()`);
+    await settingsEvaluate(patchSettings({ path: 'settings.appearance', value: appearance }));
     await until(
-      () => settingsEvaluate<string>('document.documentElement.dataset.look'),
+      () => settingsEvaluate(pageCall(pageLook)),
       (look) => look === appearance,
       'Settings focus appearance',
     );
-    await settingsEvaluate('document.querySelector(".settings-navigation button").focus()');
+    await settingsEvaluate(focus('.settings-navigation button'));
     await settingsCommand('Input.dispatchKeyEvent', {
       type: 'keyDown',
       key: 'Tab',
@@ -1676,35 +1926,19 @@ async function verifySettingsScroll(): Promise<void> {
       code: 'Tab',
       windowsVirtualKeyCode: 9,
     });
-    const focus = await settingsEvaluate<{
-      label: string;
-      keyboard: boolean;
-      outline: string;
-      color: string;
-      accent: string;
-      background: string;
-      raised: string;
-    }>(`(() => {
-      const button = document.activeElement, style = getComputedStyle(button);
-      const swatch = document.createElement('span');
-      swatch.style.color = 'var(--accent)'; swatch.style.background = 'var(--raised)';
-      document.body.append(swatch);
-      const accent = getComputedStyle(swatch).color, raised = getComputedStyle(swatch).backgroundColor;
-      swatch.remove();
-      return {label:button.textContent.trim(), keyboard:button.matches(':focus-visible'),
-        outline:style.outlineStyle, color:style.color, accent, background:style.backgroundColor, raised};
-    })()`);
-    assert.equal(focus.label, 'Navigation', 'Tab must move to the next Settings control');
-    assert.equal(focus.keyboard, true);
-    assert.equal(focus.outline, 'none', 'Keyboard feedback must preserve the ring-free design');
-    assert.equal(focus.background, focus.raised, 'Keyboard focus must visibly fill its control');
-    assert.equal(focus.color, focus.accent);
+    const focused = await settingsEvaluate(pageCall(focusedControl));
+    assert.equal(focused.label, 'Navigation', 'Tab must move to the next Settings control');
+    assert.equal(focused.keyboard, true);
+    assert.equal(focused.outline, 'none', 'Keyboard feedback must preserve the ring-free design');
+    assert.equal(
+      focused.background,
+      focused.raised,
+      'Keyboard focus must visibly fill its control',
+    );
+    assert.equal(focused.color, focused.accent);
     await snapshot(`desktop-native-settings-keyboard-focus-${appearance}.png`);
   }
-  await settingsEvaluate(`(async () => {
-    const snapshot = await window.viewer.settingsGet();
-    await window.viewer.settingsPatch([{path:'settings.appearance',value:${JSON.stringify(initialAppearance)}}], snapshot.revision);
-  })()`);
+  await settingsEvaluate(patchSettings({ path: 'settings.appearance', value: initialAppearance }));
   await click('dialog [aria-label="Close"]');
 }
 
@@ -1728,7 +1962,7 @@ async function verifyIndependentSizeCalculation(): Promise<void> {
     await command('Input.insertText', { text: 'cs' });
     await key('Enter', 'Enter');
     await until(
-      () => evaluate<string>('document.querySelector(".selection-size").textContent'),
+      () => evaluate(requiredText('.selection-size')),
       (label) => /KB|MB|GB/.test(label),
       'Calculate Size completes while the index worker is stalled',
       8000,
@@ -1740,6 +1974,26 @@ async function verifyIndependentSizeCalculation(): Promise<void> {
   }
 }
 
+/** The first root's location and its first child's, with the bridge between them. */
+function firstBranch() {
+  const root = (window as unknown as SmokeWindow).__qaEngine.tree.get()[0],
+    child = root.children![0];
+  return {
+    parent: root.location,
+    child: child.location,
+    link: child.linkCoordinates!,
+    offset: child.bridgeOffset!,
+    angle: child.planeAngle,
+  };
+}
+/** The vertical centre of a row in its plane's own coordinates. */
+function rowCentreInPlane(row: string) {
+  const element = document.querySelector(row)!;
+  const plane = element.closest<HTMLElement>('[data-plurid-plane]')!;
+  const r = element.getBoundingClientRect(),
+    p = plane.getBoundingClientRect();
+  return ((r.y + r.height / 2 - p.y) * plane.offsetHeight) / p.height;
+}
 async function verifyAnchoredPreviews(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
@@ -1759,83 +2013,72 @@ async function verifyAnchoredPreviews(): Promise<void> {
     arrangement: {},
     panes: [{ ...base, id: 'qa-anchor-root', path: folder, history: [folder], historyIndex: 0 }],
   };
-  await evaluate(`window.viewer.save(${JSON.stringify(seeded)})`);
+  await evaluate(pageCall(saveState, seeded));
   await reloadPage();
   await restoredEngine(1);
   await settleCamera();
-  await evaluate('document.querySelector(".folder-explorer").focus()');
+  await evaluate(focus('.folder-explorer'));
   await key('End', 'End');
   const source = path.join(folder, '319.txt');
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(source))})`),
-    Boolean,
-    'virtualized last file',
+  await until(() => evaluate(exists(fileSelector(source))), Boolean, 'virtualized last file');
+  await evaluate(
+    pageCall(() => {
+      document.querySelector('.file-scroll')!.scrollTop = 0;
+    }),
   );
-  await evaluate('document.querySelector(".file-scroll").scrollTop=0');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(source))})`),
+    () => evaluate(exists(fileSelector(source))),
     (value) => !value,
     'unmounted selected source row',
   );
   await paletteCommand('Open linked plane');
   await until(
-    () => evaluate<number>('window.__qaEngine.tree.get()[0].children.length'),
+    () =>
+      evaluate(
+        pageCall(
+          () => (window as unknown as SmokeWindow).__qaEngine.tree.get()[0].children!.length,
+        ),
+      ),
     (value) => value === 1,
     'preview beside a revealed virtual source',
   );
   await settleCamera();
-  const nodes = await evaluate<{
-    parent: { rotateX: number; rotateY: number; translateY: number };
-    child: { rotateX: number; rotateY: number; translateY: number };
-    link: { x: number; y: number };
-    offset: number;
-    angle: number;
-  }>(
-    `(() => { const root=window.__qaEngine.tree.get()[0],child=root.children[0]; return {parent:root.location,child:child.location,link:child.linkCoordinates,offset:child.bridgeOffset,angle:child.planeAngle}; })()`,
-  );
+  const nodes = await evaluate(pageCall(firstBranch));
   assert.equal(nodes.angle, 90.1);
   assert.ok(Math.abs(nodes.child.rotateY - nodes.parent.rotateY - 90.1) < 0.01);
   assert.equal(nodes.parent.rotateX, nodes.child.rotateX);
   assert.ok(
     Math.abs(nodes.child.translateY - nodes.parent.translateY - nodes.link.y - nodes.offset) < 1,
   );
-  await evaluate(
-    'window.__qaEngine.camera.frame({planeID:window.__qaEngine.tree.get()[0].planeID},{animate:false})',
-  );
+  await evaluate(pageCall(frameFirstPlane));
   await settleCamera();
-  const expected = await evaluate<number>(
-    `(() => { const row=document.querySelector(${JSON.stringify(fileSelector(source))}); const plane=row.closest('[data-plurid-plane]'); const r=row.getBoundingClientRect(),p=plane.getBoundingClientRect(); return (r.y+r.height/2-p.y)*plane.offsetHeight/p.height; })()`,
-  );
+  const expected = await evaluate(pageCall(rowCentreInPlane, fileSelector(source)));
   assert.ok(
     Math.abs(nodes.link.y - expected) < 3,
     `Preview must use the visible source row: ${JSON.stringify({ actual: nodes.link.y, expected })}`,
   );
   await snapshot('desktop-native-file-anchored-preview.png');
   for (const mode of ['Grid', 'Columns', 'Gallery', 'List']) {
-    await evaluate('document.querySelector(".folder-explorer").focus()');
+    await evaluate(focus('.folder-explorer'));
     await paletteCommand(`${mode} view`);
-    await evaluate('document.querySelector(".folder-explorer").focus()');
-    const camera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+    await evaluate(focus('.folder-explorer'));
+    const camera = await evaluate(pageCall(cameraJSON));
     await key('End', 'End');
     await key('ArrowUp', 'ArrowUp', 8);
     await key('ArrowUp', 'ArrowUp', 8);
-    await evaluate(
-      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-    );
+    await evaluate(animationFrames(2));
     assert.ok(
-      (await evaluate<number>(
-        'document.querySelectorAll(".folder-explorer [data-file-path][aria-selected=true]").length',
-      )) > 1,
+      (await evaluate(countOf('.folder-explorer [data-file-path][aria-selected=true]'))) > 1,
       `${mode} range selection`,
     );
     assert.equal(
-      await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+      await evaluate(pageCall(cameraJSON)),
       camera,
       `${mode} keys must not rotate the camera`,
     );
     await key('Escape', 'Escape');
   }
-  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await evaluate(pageCall(saveState, original));
   await reloadPage();
   await restoredEngine(1);
   await settleCamera();
@@ -1845,27 +2088,27 @@ async function verifyAnchoredPreviews(): Promise<void> {
 }
 
 async function restoredEngine(count: number): Promise<void> {
-  await until(
-    () => evaluate<boolean>('!!document.querySelector("[data-viewer-plane]")'),
-    Boolean,
-    'restored plane controls',
-  );
+  await until(() => evaluate(exists('[data-viewer-plane]')), Boolean, 'restored plane controls');
   await captureEngine();
   await until(
-    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    () => evaluate(pageCall(inspectedPlaneCount)),
     (value) => value === count,
     'restored engine topology, including culled planes',
   );
 }
 const enginePlaneIDs = () =>
-  evaluate<string>(
-    'JSON.stringify(window.__qaEngine.inspect().planes.map(plane=>plane.planeID).sort())',
+  evaluate(
+    pageCall(() =>
+      JSON.stringify(
+        (window as unknown as SmokeWindow).__qaEngine
+          .inspect()
+          .planes.map((plane) => plane.planeID)
+          .sort(),
+      ),
+    ),
   );
 async function drag(selector: string): Promise<void> {
-  const point = await evaluate<{ x: number; y: number }>(`(() => {
-    const rect = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
-    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-  })()`);
+  const point = await evaluate(pageCall(centreOf, selector));
   await command('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
@@ -1894,9 +2137,7 @@ async function drag(selector: string): Promise<void> {
   await delay(250);
 }
 async function contextMenu(selector: string): Promise<void> {
-  const point = await evaluate<{ x: number; y: number }>(
-    `(() => { const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`,
-  );
+  const point = await evaluate(pageCall(centreOf, selector));
   await command('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'right',
@@ -1912,35 +2153,47 @@ async function contextMenu(selector: string): Promise<void> {
     ...point,
   });
   await until(
-    () =>
-      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search actions"'),
+    () => evaluate(pageCall(searchingActions)),
     (value) => value,
     'autofocused contextual search',
   );
 }
+/** The edges of the open context menu and its flyouts, in order. */
+const menuBounds = () =>
+  Array.from(document.querySelectorAll('.context-menu, .context-submenu'), (menu) => {
+    const rect = menu.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+  });
+const providerKinds = () =>
+  window.viewer
+    .settingsGet()
+    .then((value) => value.settings.providers.map((provider) => provider.kind));
+const endpointReadOnly = (kind: string) =>
+  document.querySelector<HTMLInputElement>(
+    `[data-provider-kind=${kind}] [aria-label="Provider endpoint"]`,
+  )!.readOnly;
 async function verifyGroupedMenuAndModels(): Promise<void> {
   await paletteCommand('Dock plane');
   const readme = fileSelector(path.join(fixture.files, 'README.md'));
   await contextMenu(readme);
-  assert.equal(
-    await evaluate('document.querySelectorAll(".context-menu [data-menu-id^=view-]").length'),
-    0,
-  );
-  assert.equal(
-    await evaluate(`document.querySelectorAll('.context-menu [data-menu-id^="column."]').length`),
-    0,
-  );
-  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 0);
+  assert.equal(await evaluate(countOf('.context-menu [data-menu-id^=view-]')), 0);
+  assert.equal(await evaluate(countOf('.context-menu [data-menu-id^="column."]')), 0);
+  assert.equal(await evaluate(countOf('.context-submenu')), 0);
   await snapshot('desktop-native-context-grouped.png');
   await click('.context-menu [data-menu-id="menu.View"]');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".context-submenu").length'),
+    () => evaluate(countOf('.context-submenu')),
     (count) => count === 1,
     'View submenu',
   );
   assert.deepEqual(
     await evaluate(
-      'Array.from(document.querySelectorAll(".context-submenu [data-menu-id^=view-]"), element => element.dataset.menuId).sort()',
+      pageCall(() =>
+        Array.from(
+          document.querySelectorAll<HTMLElement>('.context-submenu [data-menu-id^=view-]'),
+          (element) => element.dataset.menuId!,
+        ).sort(),
+      ),
     ),
     [
       'view-columns',
@@ -1954,47 +2207,50 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   );
   assert.equal(
     await evaluate(
-      `Array.from(document.querySelectorAll('.context-menu-content [id]')).every(element=>!/[\\t\\n\\r ]/.test(element.id))`,
+      pageCall(() =>
+        Array.from(document.querySelectorAll('.context-menu-content [id]')).every(
+          (element) => !/[\t\n\r ]/.test(element.id),
+        ),
+      ),
     ),
     true,
     'submenu accessible IDs contain no whitespace',
   );
   await click('.context-submenu [data-menu-id="menu.Columns"]');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".context-submenu").length'),
+    () => evaluate(countOf('.context-submenu')),
     (count) => count === 2,
     'Columns submenu',
   );
   await snapshot('desktop-native-context-columns.png');
-  const flyoutBounds = await evaluate<{ left: number; right: number }[]>(
-    `Array.from(document.querySelectorAll('.context-menu, .context-submenu')).map(menu=>{const r=menu.getBoundingClientRect();return {left:r.left,right:r.right};})`,
-  );
+  const flyoutBounds = await evaluate(pageCall(menuBounds));
   assert.ok(flyoutBounds[1].right <= flyoutBounds[0].left + 2);
   assert.ok(flyoutBounds[2].right <= flyoutBounds[1].left + 2);
-  assert.equal(
-    await evaluate('document.activeElement.getAttribute("aria-label")'),
-    'Search actions',
-  );
+  assert.equal(await evaluate(pageCall(activeLabel)), 'Search actions');
   await key('Escape', 'Escape');
-  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 1);
+  assert.equal(await evaluate(countOf('.context-submenu')), 1);
   await key('ArrowLeft', 'ArrowLeft');
-  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 0);
+  assert.equal(await evaluate(countOf('.context-submenu')), 0);
   await key('ArrowRight', 'ArrowRight');
-  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 1);
+  assert.equal(await evaluate(countOf('.context-submenu')), 1);
   // Typing traverses the full catalog immediately, including a third-level command.
   await command('Input.insertText', { text: 'date created' });
   await until(
     () =>
-      evaluate<string>(
-        'document.querySelector(".context-menu .command-result[aria-selected=true]")?.dataset.menuId || ""',
+      evaluate(
+        pageCall(
+          () =>
+            document.querySelector<HTMLElement>('.context-menu .command-result[aria-selected=true]')
+              ?.dataset.menuId || '',
+        ),
       ),
     (id) => id === 'column.created',
     'search through hidden column commands',
   );
-  assert.equal(await evaluate('document.querySelectorAll(".context-submenu").length'), 0);
+  assert.equal(await evaluate(countOf('.context-submenu')), 0);
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".file-head [data-column=created]")'),
+    () => evaluate(exists('.file-head [data-column=created]')),
     Boolean,
     'searched column command executes',
   );
@@ -2002,33 +2258,22 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   await command('Input.insertText', { text: 'rn' });
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    () => evaluate(valueOf('dialog input')),
     (value) => value === 'README.md',
     'grouped menu retains rename target',
   );
   await click('dialog [aria-label="Close"]');
   await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".context-menu .command-result")?.textContent || ""',
-      ),
+    () => evaluate(textOf('.context-menu .command-result')),
     (label) => /^Rename/.test(label),
     'recent rename is promoted',
   );
-  assert.equal(
-    await evaluate('document.querySelectorAll(".context-menu [data-menu-id=rename]").length'),
-    1,
-  );
-  assert.equal(
-    await evaluate(
-      'document.querySelectorAll(\'.context-menu [data-menu-id="recent.rename"]\').length',
-    ),
-    1,
-  );
+  assert.equal(await evaluate(countOf('.context-menu [data-menu-id=rename]')), 1);
+  assert.equal(await evaluate(countOf('.context-menu [data-menu-id="recent.rename"]')), 1);
   await key('Escape', 'Escape');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".context-menu").length'),
+    () => evaluate(countOf('.context-menu')),
     (count) => count === 0,
     'closed recent context menu',
   );
@@ -2041,19 +2286,21 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   });
   // The list is docked: use a blank-space invocation near the lower-right viewport edge.
   await evaluate(
-    `document.querySelector('.folder-explorer .file-scroll').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:765,clientY:545}));`,
+    pageCall(() =>
+      document.querySelector('.folder-explorer .file-scroll')!.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 765,
+          clientY: 545,
+        }),
+      ),
+    ),
   );
-  await until(
-    () =>
-      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search actions"'),
-    Boolean,
-    'autofocused edge context menu',
-  );
+  await until(() => evaluate(pageCall(searchingActions)), Boolean, 'autofocused edge context menu');
   await click('.context-menu [data-menu-id="menu.View"]');
   await click('.context-submenu [data-menu-id="menu.Columns"]');
-  const bounds = await evaluate<{ left: number; top: number; right: number; bottom: number }[]>(
-    `Array.from(document.querySelectorAll('.context-menu, .context-submenu')).map(menu=>{const r=menu.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};})`,
-  );
+  const bounds = await evaluate(pageCall(menuBounds));
   assert.equal(bounds.length, 3);
   for (const rect of bounds) {
     assert.ok(
@@ -2064,10 +2311,14 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   await snapshot('desktop-native-context-minimum.png');
   // Reproduce the delayed docking focus even if the viewport's own effect has settled.
   await evaluate(
-    `document.querySelector('[data-plurid-entity="PluridPlaneContent"]').focus({preventScroll:true})`,
+    pageCall(() =>
+      document
+        .querySelector<HTMLElement>('[data-plurid-entity="PluridPlaneContent"]')!
+        .focus({ preventScroll: true }),
+    ),
   );
   assert.equal(
-    await evaluate('document.activeElement?.getAttribute("aria-label")'),
+    await evaluate(pageCall(activeLabel)),
     'Search actions',
     'flyouts retain the search input at minimum size',
   );
@@ -2075,24 +2326,23 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   for (const count of [1, 0]) {
     await key('Escape', 'Escape');
     await until(
-      () => evaluate<number>('document.querySelectorAll(".context-submenu").length'),
+      () => evaluate(countOf('.context-submenu')),
       (value) => value === count,
       `edge submenu dismissal: ${count} remaining`,
     );
   }
   await key('Escape', 'Escape');
   await until(
-    () => evaluate<number>('document.querySelectorAll(".context-menu").length'),
+    () => evaluate(countOf('.context-menu')),
     (count) => count === 0,
     'edge menu dismissal',
   );
-  assert.equal(await evaluate('document.querySelectorAll(".context-menu").length'), 0);
+  assert.equal(await evaluate(countOf('.context-menu')), 0);
   await command('Emulation.clearDeviceMetricsOverride');
 
   await tab('Models');
   await until(
-    () =>
-      settingsEvaluate<boolean>(`!!document.querySelector(${choiceButton('New model provider')})`),
+    () => settingsEvaluate(exists(choiceButton('New model provider'))),
     Boolean,
     'provider picker',
   );
@@ -2105,68 +2355,115 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   for (const kind of ['zai', 'deepseek', 'qwen', 'gemini', 'openrouter']) {
     await choose('New model provider', kind, settingsEvaluate);
     await settingsEvaluate(
-      `Array.from(document.querySelectorAll('.settings-provider-add button')).find(button=>button.textContent.trim()==='Add provider').click()`,
+      pageCall(() =>
+        Array.from(document.querySelectorAll<HTMLButtonElement>('.settings-provider-add button'))
+          .find((button) => button.textContent.trim() === 'Add provider')!
+          .click(),
+      ),
     );
   }
   await until(
-    () =>
-      settingsEvaluate<string[]>(
-        'window.viewer.settingsGet().then(value=>value.settings.providers.map(provider=>provider.kind))',
-      ),
+    () => settingsEvaluate(pageCall(providerKinds)),
     (kinds) => kinds.length === 5,
     'all five provider profiles persisted',
   );
-  assert.deepEqual(
-    await settingsEvaluate(
-      'window.viewer.settingsGet().then(value=>value.settings.providers.map(provider=>provider.kind))',
-    ),
-    ['zai', 'deepseek', 'qwen', 'gemini', 'openrouter'],
-  );
+  assert.deepEqual(await settingsEvaluate(pageCall(providerKinds)), [
+    'zai',
+    'deepseek',
+    'qwen',
+    'gemini',
+    'openrouter',
+  ]);
   assert.equal(
     await settingsEvaluate(
-      `document.querySelector('[data-provider-kind=zai] [aria-label="Provider endpoint"]').value`,
+      requiredValue('[data-provider-kind=zai] [aria-label="Provider endpoint"]'),
     ),
     'https://api.z.ai/api/paas/v4',
   );
-  assert.equal(
-    await settingsEvaluate(
-      `document.querySelector('[data-provider-kind=gemini] [aria-label="Provider endpoint"]').readOnly`,
-    ),
-    true,
-  );
-  assert.equal(
-    await settingsEvaluate(
-      `document.querySelector('[data-provider-kind=qwen] [aria-label="Provider endpoint"]').readOnly`,
-    ),
-    false,
-  );
+  assert.equal(await settingsEvaluate(pageCall(endpointReadOnly, 'gemini')), true);
+  assert.equal(await settingsEvaluate(pageCall(endpointReadOnly, 'qwen')), false);
   assert.deepEqual(
-    await settingsEvaluate('window.viewer.settingsGet().then(value=>value.credentials)'),
+    await settingsEvaluate(
+      pageCall(() => window.viewer.settingsGet().then((value) => value.credentials)),
+    ),
     [],
   );
   assert.equal(
     await settingsEvaluate(
-      'Array.from(document.querySelectorAll(".settings-provider [type=checkbox]")).every(input=>!input.checked)',
+      pageCall(() =>
+        Array.from(
+          document.querySelectorAll<HTMLInputElement>('.settings-provider [type=checkbox]'),
+        ).every((input) => !input.checked),
+      ),
     ),
     true,
   );
   await snapshot('desktop-native-models-providers.png');
   await settingsEvaluate(
-    'Array.from(document.querySelectorAll("[data-provider-kind=deepseek] button")).find(button => button.textContent.trim() === "Connect and load models").click()',
+    pageCall(() =>
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-provider-kind=deepseek] button'),
+      )
+        .find((button) => button.textContent.trim() === 'Connect and load models')!
+        .click(),
+    ),
   );
   await until(
-    () => settingsEvaluate<string>('document.querySelector(".settings-error")?.textContent || ""'),
+    () => settingsEvaluate(textOf('.settings-error')),
     (value) => value.includes('API key'),
     'missing provider key is actionable',
   );
   await settingsEvaluate(
-    'document.querySelector("[data-provider-kind=qwen]").scrollIntoView({block:"start"})',
+    pageCall(() =>
+      document.querySelector('[data-provider-kind=qwen]')!.scrollIntoView({ block: 'start' }),
+    ),
   );
   await snapshot('desktop-native-models-qwen.png');
   await click('dialog [aria-label="Close"]');
   console.log(
     'Grouped menus: flyouts, keyboard return, global search, recent actions, captured targets and minimum-window bounds. Models: all five new provider presets persisted with content off and no credentials.',
   );
+}
+function modelCanvasBounds() {
+  const rect = document.querySelector('.model-stage canvas')!.getBoundingClientRect();
+  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 };
+}
+/** Counts the pixels of a screenshot crop that differ from its first pixel, and the black ones. */
+async function geometryStats(
+  data: string,
+  bounds: { x: number; y: number; width: number; height: number },
+) {
+  const image = new Image();
+  image.src = 'data:image/png;base64,' + data;
+  await image.decode();
+  const scale = image.width / innerWidth;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bounds.width * scale);
+  canvas.height = Math.round(bounds.height * scale);
+  const context = canvas.getContext('2d')!;
+  context.drawImage(
+    image,
+    bounds.x * scale,
+    bounds.y * scale,
+    bounds.width * scale,
+    bounds.height * scale,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const background = pixels.slice(0, 3);
+  let geometry = 0,
+    black = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const rgb = pixels.slice(i, i + 3);
+    if (Math.max(...rgb.map((value, index) => Math.abs(value - background[index]))) > 18) {
+      geometry++;
+      if (Math.max(...rgb) < 24) black++;
+    }
+  }
+  return { geometry, blackFraction: geometry ? black / geometry : 1 };
 }
 async function verifyModelLighting(): Promise<void> {
   await paletteCommand('Dock plane');
@@ -2178,15 +2475,13 @@ async function verifyModelLighting(): Promise<void> {
     await appearance(look);
     await preview(path.join(fixture.files, 'Models', 'Lighting.step'), 'Wireframe');
     const dimensions = await until(
-      () => evaluate<string>('document.querySelector(".model-dimensions").textContent'),
+      () => evaluate(requiredText('.model-dimensions')),
       (value) => /mm$/.test(value),
       'STEP conversion and model framing complete',
     );
     await click('[aria-label="Frame model"]');
-    await evaluate(
-      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-    );
-    const worldCamera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+    await evaluate(animationFrames(2));
+    const worldCamera = await evaluate(pageCall(cameraJSON));
     for (let view = 0; view < 5; view++) {
       if (view === 4) {
         await command('Emulation.setDeviceMetricsOverride', {
@@ -2195,24 +2490,11 @@ async function verifyModelLighting(): Promise<void> {
           deviceScaleFactor: 1,
           mobile: false,
         });
-        await evaluate(
-          'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-        );
+        await evaluate(animationFrames(2));
         await click('[aria-label="Frame model"]');
-        await evaluate(
-          'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-        );
+        await evaluate(animationFrames(2));
       }
-      const bounds = await evaluate<{
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        scale: number;
-      }>(`(() => {
-        const r=document.querySelector('.model-stage canvas').getBoundingClientRect();
-        return {x:r.x,y:r.y,width:r.width,height:r.height,scale:1};
-      })()`);
+      const bounds = await evaluate(pageCall(modelCanvasBounds));
       if (view > 0 && view < 4) {
         const [dx, dy] = [
           [0.5, 0],
@@ -2250,32 +2532,14 @@ async function verifyModelLighting(): Promise<void> {
       // Cropped CDP captures temporarily resize offscreen WebGL surfaces. Capture
       // the settled viewport, then crop its bitmap without touching the renderer.
       const { data } = await command<{ data: string }>('Page.captureScreenshot', { format: 'png' });
-      const stats = await evaluate<{ geometry: number; blackFraction: number }>(`(async () => {
-        const image=new Image();image.src='data:image/png;base64,${data}';await image.decode();
-        const bounds=${JSON.stringify(bounds)},scale=image.width/innerWidth;
-        const canvas=document.createElement('canvas');canvas.width=Math.round(bounds.width*scale);canvas.height=Math.round(bounds.height*scale);
-        const context=canvas.getContext('2d');context.drawImage(image,bounds.x*scale,bounds.y*scale,bounds.width*scale,bounds.height*scale,0,0,canvas.width,canvas.height);
-        const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
-        const background=pixels.slice(0,3);let geometry=0,black=0;
-        for(let i=0;i<pixels.length;i+=4) {
-          const rgb=pixels.slice(i,i+3);
-          if(Math.max(...rgb.map((value,index)=>Math.abs(value-background[index])))>18) {
-            geometry++;
-            if(Math.max(...rgb)<24) black++;
-          }
-        }
-        return {geometry,blackFraction:geometry ? black/geometry : 1};
-      })()`);
+      const stats = await evaluate(pageCall(geometryStats, data, bounds));
       observations.push({ look, view, ...stats });
       console.log('Model lighting:', observations.at(-1));
       assert.ok(stats.geometry > 500, 'Lighting check contains rendered geometry');
-      assert.equal(
-        await evaluate('document.querySelector(".model-dimensions").textContent'),
-        dimensions,
-      );
+      assert.equal(await evaluate(requiredText('.model-dimensions')), dimensions);
       if (view < 4)
         assert.equal(
-          await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+          await evaluate(pageCall(cameraJSON)),
           worldCamera,
           'Model orbit does not rotate the Plurid camera',
         );
@@ -2298,6 +2562,31 @@ async function verifyModelLighting(): Promise<void> {
     await closePreview();
   }
 }
+/** The painted gap between the Name and Date modified labels, in page and plane pixels. */
+function headerLabelGap() {
+  const first = document.querySelector<HTMLElement>(
+    '.file-heading[data-column=name] .column-label',
+  )!;
+  const next = document.querySelector('.file-heading[data-column=modified] .column-label')!;
+  const bounds = first.getBoundingClientRect();
+  const scale = bounds.width / first.offsetWidth;
+  const painted = next.getBoundingClientRect().left - bounds.right;
+  return { painted, local: painted / scale, scale };
+}
+/** After two frames, whether the row lies inside the file list's scrolled view. */
+async function settledRowInView(row: string) {
+  await new Promise(requestAnimationFrame);
+  await new Promise(requestAnimationFrame);
+  const element = document.querySelector(row);
+  const scroll = document.querySelector('.file-scroll')!;
+  return (
+    !!element &&
+    element.getBoundingClientRect().top >= scroll.getBoundingClientRect().top &&
+    element.getBoundingClientRect().bottom <= scroll.getBoundingClientRect().bottom
+  );
+}
+const showToolbarPreview = () =>
+  document.querySelector('.settings-toolbar-preview')!.scrollIntoView({ block: 'start' });
 async function verifyRefinements(): Promise<void> {
   await paletteCommand('Dock plane');
   await settleCamera();
@@ -2331,7 +2620,7 @@ async function verifyRefinements(): Promise<void> {
     });
   let copiedText = '';
   try {
-    await evaluate(`window.viewer.clipboardWrite([${JSON.stringify(readme)}], true)`);
+    await evaluate(pageCall((file: string) => window.viewer.clipboardWrite([file], true), readme));
     await contextMenu(fileSelector(readme));
     await click('.context-menu [data-menu-id="copy-path"]');
     copiedText = readme;
@@ -2341,25 +2630,17 @@ async function verifyRefinements(): Promise<void> {
       'Copy path writes the selected file pathname',
     );
     await until(
-      () => evaluate('window.viewer.clipboardRead()'),
+      () => evaluate(pageCall(() => window.viewer.clipboardRead())),
       (value) => value === null,
       'Copy path clears an earlier cut operation',
     );
     await contextMenu(fileSelector(readme));
-    assert.equal(
-      await evaluate('document.querySelectorAll(\'[data-menu-id="recent.copy-path"]\').length'),
-      1,
-    );
-    assert.equal(
-      await evaluate('document.querySelectorAll(\'[data-menu-id="copy-path"]\').length'),
-      1,
-    );
+    assert.equal(await evaluate(countOf('[data-menu-id="recent.copy-path"]')), 1);
+    assert.equal(await evaluate(countOf('[data-menu-id="copy-path"]')), 1);
     await snapshot('desktop-native-additive-recents.png');
     await command('Input.insertText', { text: 'copy path' });
     assert.equal(
-      await evaluate(
-        'document.querySelectorAll(\'.context-menu [data-menu-id="copy-path"]\').length',
-      ),
+      await evaluate(countOf('.context-menu [data-menu-id="copy-path"]')),
       1,
       'Search has one result per command',
     );
@@ -2373,11 +2654,19 @@ async function verifyRefinements(): Promise<void> {
       'Copy path writes folder pathname',
     );
     await evaluate(
-      `document.querySelector('.file-scroll').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:450,clientY:420}))`,
+      pageCall(() =>
+        document.querySelector('.file-scroll')!.dispatchEvent(
+          new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 450,
+            clientY: 420,
+          }),
+        ),
+      ),
     );
     await until(
-      () =>
-        evaluate<boolean>('!!document.querySelector(\'.context-menu [data-menu-id="copy-path"]\')'),
+      () => evaluate(exists('.context-menu [data-menu-id="copy-path"]')),
       Boolean,
       'Copy path is available in the current folder menu',
     );
@@ -2392,26 +2681,19 @@ async function verifyRefinements(): Promise<void> {
     // Restore only our last write; preserve anything the user copied during this check.
     if (copiedText) await restoreClipboard(previousClipboard, copiedText);
   }
-  const headerGap = await evaluate<{ painted: number; local: number; scale: number }>(`(() => {
-    const first = document.querySelector('.file-heading[data-column=name] .column-label');
-    const next = document.querySelector('.file-heading[data-column=modified] .column-label');
-    const bounds = first.getBoundingClientRect();
-    const scale = bounds.width / first.offsetWidth;
-    const painted = next.getBoundingClientRect().left - bounds.right;
-    return {painted, local: painted / scale, scale};
-  })()`);
+  const headerGap = await evaluate(pageCall(headerLabelGap));
   // Four-pixel margins on both labels leave an eight-pixel logical paint gap.
   // Camera projection and fractional layout must not change this layout assertion.
   assert.ok(
     headerGap.local >= 8 - 0.25,
     'Sort-button horizontal insets: ' + JSON.stringify(headerGap),
   );
-  await evaluate(`document.querySelector('.file-heading[data-column=name] .column-label').focus()`);
+  await evaluate(focus('.file-heading[data-column=name] .column-label'));
   await snapshot('desktop-native-header-gutter.png');
 
   await preview(path.join(fixture.files, 'Cube.step'), 'Wireframe');
   await until(
-    () => evaluate<string>('document.querySelector(".model-dimensions")?.textContent || ""'),
+    () => evaluate(textOf('.model-dimensions')),
     (value) => value === '300 × 300 × 300 mm',
     'Packaged STEP worker renders physical dimensions',
     60000,
@@ -2419,15 +2701,18 @@ async function verifyRefinements(): Promise<void> {
   await click('.model-viewer button[aria-pressed=false]');
   await until(
     () =>
-      evaluate<boolean>(
-        'Array.from(document.querySelectorAll(".model-viewer button")).some(button => button.textContent === "Measure" && button.getAttribute("aria-pressed") === "true")',
+      evaluate(
+        pageCall(() =>
+          Array.from(document.querySelectorAll('.model-viewer button')).some(
+            (button) =>
+              button.textContent === 'Measure' && button.getAttribute('aria-pressed') === 'true',
+          ),
+        ),
       ),
     Boolean,
     'enabled surface measurement',
   );
-  const center = await evaluate<{ x: number; y: number }>(
-    `(() => { const r=document.querySelector('.model-stage canvas').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`,
-  );
+  const center = await evaluate(pageCall(centreOf, '.model-stage canvas'));
   for (const offset of [-20, 20]) {
     const point = { x: center.x + offset, y: center.y };
     await command('Input.dispatchMouseEvent', {
@@ -2446,7 +2731,7 @@ async function verifyRefinements(): Promise<void> {
     });
   }
   await until(
-    () => evaluate<string>('document.querySelector(".model-measurement")?.textContent || ""'),
+    () => evaluate(textOf('.model-measurement')),
     (value) => /^Distance: [1-9]/.test(value),
     'Surface-point distance measurement',
   );
@@ -2454,7 +2739,7 @@ async function verifyRefinements(): Promise<void> {
   await closePreview();
   await preview(path.join(fixture.files, 'Printed.3mf'), 'Wireframe');
   await until(
-    () => evaluate<string>('document.querySelector(".model-dimensions")?.textContent || ""'),
+    () => evaluate(textOf('.model-dimensions')),
     (value) => value === '25.4 × 25.4 × 25.4 mm',
     '3MF inch coordinates normalize to millimeters',
   );
@@ -2462,7 +2747,7 @@ async function verifyRefinements(): Promise<void> {
   await closePreview();
   await preview(path.join(fixture.files, 'Triangle.ply'), 'Wireframe');
   await until(
-    () => evaluate<string>('document.querySelector(".model-dimensions")?.textContent || ""'),
+    () => evaluate(textOf('.model-dimensions')),
     (value) => value === '1 × 1 × 0 units',
     'PLY geometry renders with explicit unknown units',
   );
@@ -2471,27 +2756,27 @@ async function verifyRefinements(): Promise<void> {
   await closePreview();
   if (process.env.VIEWER_TEST_STEP_FILE) {
     await evaluate(
-      `document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'User panel.step')))}).scrollIntoView({block:'center'})`,
+      pageCall(
+        (row: string) => document.querySelector(row)!.scrollIntoView({ block: 'center' }),
+        fileSelector(path.join(fixture.files, 'User panel.step')),
+      ),
     );
     await preview(path.join(fixture.files, 'User panel.step'), 'Wireframe');
     await until(
-      () => evaluate<string>('document.querySelector(".model-dimensions")?.textContent || ""'),
+      () => evaluate(textOf('.model-dimensions')),
       (value) => /mm$/.test(value),
       'Read-only copy of the user STEP model renders',
     );
     await snapshot('desktop-native-user-step.png');
     await closePreview();
   }
-  await evaluate('document.querySelector(".file-scroll").scrollTop=0');
+  await evaluate(
+    pageCall(() => {
+      document.querySelector('.file-scroll')!.scrollTop = 0;
+    }),
+  );
   await until(
-    () =>
-      evaluate<boolean>(`(async () => {
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-      const row=document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Models')))});
-      const scroll=document.querySelector('.file-scroll');
-      return !!row && row.getBoundingClientRect().top >= scroll.getBoundingClientRect().top && row.getBoundingClientRect().bottom <= scroll.getBoundingClientRect().bottom;
-    })()`),
+    () => evaluate(pageCall(settledRowInView, fileSelector(path.join(fixture.files, 'Models')))),
     Boolean,
     'Models row settles after virtual scrolling',
   );
@@ -2522,22 +2807,26 @@ async function verifyRefinements(): Promise<void> {
   await key('Enter', 'Enter');
   await restoredEngine(3);
   await until(
-    () => evaluate<number>('window.__qaEngine.tree.get().length'),
+    () => evaluate(pageCall(planeCount)),
     (count) => count === 3,
     'File opens as an independent root',
   );
   assert.equal(
-    await evaluate('window.__qaEngine.tree.get().every(node=>!node.children?.length)'),
+    await evaluate(
+      pageCall(() =>
+        (window as unknown as SmokeWindow).__qaEngine.tree
+          .get()
+          .every((node) => !node.children?.length),
+      ),
+    ),
     true,
   );
 
   await tab('Models');
   for (const look of ['dark', 'light']) {
-    await settingsEvaluate(
-      `window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([{path:'settings.appearance',value:${JSON.stringify(look)}}],snapshot.revision))`,
-    );
+    await settingsEvaluate(patchSettings({ path: 'settings.appearance', value: look }));
     await until(
-      () => settingsEvaluate<string>('document.documentElement.dataset.look'),
+      () => settingsEvaluate(pageCall(pageLook)),
       (value) => value === look,
       'settings appearance ' + look,
     );
@@ -2566,13 +2855,25 @@ async function verifyRefinements(): Promise<void> {
         await tab(category);
         assert.equal(
           await settingsEvaluate(
-            'document.querySelector(".settings-page").scrollWidth > document.querySelector(".settings-page").clientWidth',
+            pageCall(() => {
+              const page = document.querySelector('.settings-page')!;
+              return page.scrollWidth > page.clientWidth;
+            }),
           ),
           false,
           `${width}px ${category} has no horizontal overflow`,
         );
-        const gaps = await settingsEvaluate<number[]>(
-          `Array.from(document.querySelectorAll('.settings-actions')).flatMap(actions=>{const before=actions.previousElementSibling;if(before?.matches('p'))return [actions.getBoundingClientRect().top-before.getBoundingClientRect().bottom];return [];})`,
+        const gaps = await settingsEvaluate(
+          pageCall(() =>
+            Array.from(document.querySelectorAll('.settings-actions')).flatMap((actions) => {
+              const before = actions.previousElementSibling;
+              if (before?.matches('p'))
+                return [
+                  actions.getBoundingClientRect().top - before.getBoundingClientRect().bottom,
+                ];
+              return [];
+            }),
+          ),
         );
         assert.ok(
           gaps.every((gap) => gap >= 15),
@@ -2581,57 +2882,70 @@ async function verifyRefinements(): Promise<void> {
         await snapshot(`desktop-native-settings-${category.toLowerCase()}-${width}-${look}.png`);
         if (category === 'Agents')
           assert.ok(
-            (await settingsEvaluate<number>(
-              'document.querySelector(".settings-wide-field .choice-button").clientWidth',
+            (await settingsEvaluate(
+              pageCall(
+                () => document.querySelector('.settings-wide-field .choice-button')!.clientWidth,
+              ),
             )) >= 240,
             'Agent folder choice fits its placeholder',
           );
         if (category === 'Space') {
-          assert.equal(
-            await settingsEvaluate('document.querySelectorAll(".settings-toolbar-preview").length'),
-            10,
-          );
-          await settingsEvaluate(
-            'document.querySelector(".settings-toolbar-preview").scrollIntoView({block:"start"})',
-          );
+          assert.equal(await settingsEvaluate(countOf('.settings-toolbar-preview')), 10);
+          await settingsEvaluate(pageCall(showToolbarPreview));
           await snapshot(`desktop-native-settings-toolbar-${width}-${look}.png`);
         }
       }
     }
   }
-  await settingsEvaluate(
-    'window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([{path:"settings.appearance",value:"dark"}],snapshot.revision))',
-  );
+  await settingsEvaluate(patchSettings({ path: 'settings.appearance', value: 'dark' }));
   await tab('Agents');
   await settingsEvaluate(
-    `window.viewer.settingsGet().then(value=>window.viewer.settingsPatch([{path:'settings.agents.roots',value:[${JSON.stringify(path.join(fixture.files, 'Folder with a deliberately long descriptive name for permissions and display'))}]}],value.revision))`,
+    patchSettings({
+      path: 'settings.agents.roots',
+      value: [
+        path.join(
+          fixture.files,
+          'Folder with a deliberately long descriptive name for permissions and display',
+        ),
+      ],
+    }),
   );
-  await settingsEvaluate(`(() => {
-    const summary = Array.from(document.querySelectorAll('details > summary'))
-      .find(element => element.textContent.trim() === 'Shared connection');
-    if (!summary.parentElement.open) summary.click();
-  })()`);
+  await settingsEvaluate(
+    pageCall(() => {
+      const summary = Array.from(document.querySelectorAll<HTMLElement>('details > summary')).find(
+        (element) => element.textContent.trim() === 'Shared connection',
+      )!;
+      if (!(summary.parentElement as HTMLDetailsElement).open) summary.click();
+    }),
+  );
   await until(
     () =>
-      settingsEvaluate<string>(
-        `Array.from(document.querySelectorAll('.settings-location span'))
-          .find(element => element.textContent.includes('deliberately long'))?.textContent || ''`,
+      settingsEvaluate(
+        pageCall(
+          () =>
+            Array.from(document.querySelectorAll('.settings-location span')).find((element) =>
+              element.textContent.includes('deliberately long'),
+            )?.textContent || '',
+        ),
       ),
     (value) => value.includes('deliberately long') && value.includes('Requested in config.jsonc'),
     'Requested agent-folder path remains visible without granting access',
   );
   assert.equal(
-    await settingsEvaluate<boolean>(`(() => {
-      const field = Array.from(document.querySelectorAll('.settings-location span'))
-        .find(element => element.textContent.includes('deliberately long'));
-      field.scrollIntoView({block: 'center'});
-      return field.scrollWidth > field.clientWidth;
-    })()`),
+    await settingsEvaluate(
+      pageCall(() => {
+        const field = Array.from(document.querySelectorAll('.settings-location span')).find(
+          (element) => element.textContent.includes('deliberately long'),
+        )!;
+        field.scrollIntoView({ block: 'center' });
+        return field.scrollWidth > field.clientWidth;
+      }),
+    ),
     false,
     'Requested agent-folder path wraps within its row',
   );
-  const requestedAccess = await settingsEvaluate<AgentAccessState>(
-    'window.viewer.agentAccess({kind:"state"})',
+  const requestedAccess = await settingsEvaluate(
+    pageCall(() => window.viewer.agentAccess({ kind: 'state' })),
   );
   assert.equal(requestedAccess.enabled, false);
   assert.deepEqual(requestedAccess.roots, []);
@@ -2640,30 +2954,32 @@ async function verifyRefinements(): Promise<void> {
   await tab('Space');
   await setting('Navigation button');
   await setting('Back button');
-  await settingsEvaluate(
-    'document.querySelector(".settings-toolbar-preview").scrollIntoView({block:"start"})',
-  );
-  assert.equal(
-    await settingsEvaluate(
-      'document.querySelectorAll(".settings-toolbar-preview[data-enabled=false]").length',
-    ),
-    2,
-  );
+  await settingsEvaluate(pageCall(showToolbarPreview));
+  assert.equal(await settingsEvaluate(countOf('.settings-toolbar-preview[data-enabled=false]')), 2);
   await snapshot('desktop-native-settings-toolbar-states.png');
   await setting('Navigation button');
   await setting('Back button');
   await tab('Browsing');
-  await settingsEvaluate(`window.viewer.settingsGet().then(value=>window.viewer.settingsPatch([
-    {path:'settings.browsing.newPlaneLocation',value:'custom'}, {path:'settings.browsing.newPlanePath',value:${JSON.stringify(path.join(fixture.files, 'Documents'))}},
-    {path:'settings.browsing.emptyWorkspaceLocation',value:'custom'}, {path:'settings.browsing.emptyWorkspacePath',value:${JSON.stringify(path.join(fixture.files, 'Data'))}}
-  ],value.revision))`);
+  await settingsEvaluate(
+    patchSettings(
+      { path: 'settings.browsing.newPlaneLocation', value: 'custom' },
+      { path: 'settings.browsing.newPlanePath', value: path.join(fixture.files, 'Documents') },
+      { path: 'settings.browsing.emptyWorkspaceLocation', value: 'custom' },
+      { path: 'settings.browsing.emptyWorkspacePath', value: path.join(fixture.files, 'Data') },
+    ),
+  );
   await until(
-    () => settingsEvaluate<number>('document.querySelectorAll(".settings-folder-choice").length'),
+    () => settingsEvaluate(countOf('.settings-folder-choice')),
     (count) => count === 2,
     'Independent custom starting folders',
   );
   await settingsEvaluate(
-    `document.querySelector('[aria-label="New folder planes start in"]').closest('.settings-row').scrollIntoView({block:'start'})`,
+    pageCall(() =>
+      document
+        .querySelector('[aria-label="New folder planes start in"]')!
+        .closest('.settings-row')!
+        .scrollIntoView({ block: 'start' }),
+    ),
   );
   await snapshot('desktop-native-independent-plane-settings.png');
   await click('dialog [aria-label="Close"]');
@@ -2672,10 +2988,10 @@ async function verifyRefinements(): Promise<void> {
   empty.workspaces[0].roots = [];
   empty.workspaces[0].activePane = undefined;
   empty.workspaces[0].arrangement = {};
-  await evaluate(`window.viewer.save(${JSON.stringify(empty)})`);
+  await evaluate(pageCall(saveState, empty));
   await command('Page.reload');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".empty-actions .primary:not(:disabled)")'),
+    () => evaluate(exists('.empty-actions .primary:not(:disabled)')),
     Boolean,
     'Empty workspace action',
   );
@@ -2711,34 +3027,35 @@ async function inventory(): Promise<string[]> {
     }),
   ).then((entries) => entries.sort());
 }
+/** The command palette's query and its selected result. */
+function paletteState() {
+  return {
+    query: document.querySelector('[aria-label="Search commands"]')?.getAttribute('value') || '',
+    selected: document.querySelector('.command-result[aria-selected="true"]')?.textContent || '',
+  };
+}
 async function paletteCommand(label: string): Promise<void> {
   await click('[aria-label="Commands (⌘K)"]');
   await until(
-    () =>
-      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
+    () => evaluate(pageCall(searchingCommands)),
     (present) => present,
     'focused command palette',
   );
   await command('Input.insertText', { text: label });
   await until(
-    () =>
-      evaluate<{ query: string; selected: string }>(
-        `({query:document.querySelector('[aria-label="Search commands"]')?.getAttribute('value') || '',selected:document.querySelector('.command-result[aria-selected="true"]')?.textContent || ''})`,
-      ),
+    () => evaluate(pageCall(paletteState)),
     (value) => value.query === label && value.selected.includes(label),
     `command ${label}`,
   );
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Search commands"]')`),
+    () => evaluate(exists('[aria-label="Search commands"]')),
     (present) => !present,
     'closed command palette',
   );
   // The menu closes before its action runs on the next animation frame. Waiting
   // for two paints observes that action even when a native frame takes >60ms.
-  await evaluate(
-    'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-  );
+  await evaluate(animationFrames(2));
 }
 /**
  * Editing text: a file edited where it is previewed and saved with ⌘S, the version it
@@ -2747,23 +3064,35 @@ async function paletteCommand(label: string): Promise<void> {
  */
 /** The file query language: the folder filter reads terms, OR and -, keeps the
  * last query that read while one is half typed; :filter and :find take a query. */
+const blurActive = () =>
+  document.activeElement instanceof HTMLElement && document.activeElement.blur();
+const commandLineFocused = () =>
+  document.activeElement?.getAttribute('aria-label') === 'Command line';
+const commandLineClosed = () => !document.querySelector('input[aria-label="Command line"]');
+function selectCommandLine() {
+  document.querySelector<HTMLInputElement>('input[aria-label="Command line"]')!.select();
+}
 async function verifyFileQueries(): Promise<void> {
   const shown = () =>
-    evaluate<string[]>(
-      "Array.from(document.querySelectorAll('[data-file-path]')).map((row) => row.getAttribute('data-file-path').split('/').pop()).sort()",
+    evaluate(
+      pageCall(() =>
+        Array.from(document.querySelectorAll('[data-file-path]'), (row) =>
+          row.getAttribute('data-file-path')!.split('/').pop()!,
+        ).sort(),
+      ),
     );
   const filter = async (text: string) => {
     await evaluate(
-      '(() => { const input = document.querySelector(\'[aria-label="Find files"]\'); input.focus(); input.select(); })()',
+      pageCall(() => {
+        const input = document.querySelector<HTMLInputElement>('[aria-label="Find files"]')!;
+        input.focus();
+        input.select();
+      }),
     );
     await command('Input.insertText', { text });
   };
   await click('[aria-label="Search this folder"]');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(\'[aria-label="Find files"]\')'),
-    Boolean,
-    'the folder filter',
-  );
+  await until(() => evaluate(exists('[aria-label="Find files"]')), Boolean, 'the folder filter');
   await filter('ext:md');
   await until(shown, (names) => names.join() === 'README.md', 'ext:md');
   await filter('kind:folder');
@@ -2777,7 +3106,7 @@ async function verifyFileQueries(): Promise<void> {
   // half typed: said under the filter, the last query that read still filtering
   await filter('ext:tar OR ext:zip size>');
   await until(
-    () => evaluate<string>("document.querySelector('.search-problem')?.textContent ?? ''"),
+    () => evaluate(textOf('.search-problem')),
     (text) => text.includes('size>10mb'),
     'the problem said under the filter',
   );
@@ -2786,24 +3115,13 @@ async function verifyFileQueries(): Promise<void> {
   await key('Escape', 'Escape');
   // the command line: :filter -kind:folder, then :find ext:md as a results plane
   const line = async (text: string) => {
-    await evaluate(
-      'document.activeElement instanceof HTMLElement && document.activeElement.blur()',
-    );
+    await evaluate(pageCall(blurActive));
     await key('b', 'KeyB', 2);
     await key(':', 'Semicolon', 8);
-    await until(
-      () =>
-        evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Command line"'),
-      Boolean,
-      'the command line',
-    );
+    await until(() => evaluate(pageCall(commandLineFocused)), Boolean, 'the command line');
     await command('Input.insertText', { text });
     await key('Enter', 'Enter');
-    await until(
-      () => evaluate<boolean>('!document.querySelector(\'input[aria-label="Command line"]\')'),
-      Boolean,
-      `ran :${text}`,
-    );
+    await until(() => evaluate(pageCall(commandLineClosed)), Boolean, `ran :${text}`);
   };
   await line('filter -kind:folder');
   await until(
@@ -2817,16 +3135,18 @@ async function verifyFileQueries(): Promise<void> {
   // a commander's pair: side by side, the other plane in Documents, ⌃⌘C copies there, < swaps
   await paletteCommand('View side by side');
   await until(
-    () => evaluate<number>("document.querySelectorAll('.plane-pair').length"),
+    () => evaluate(countOf('.plane-pair')),
     (count) => count === 2,
     'the two planes paired',
   );
   // a line runs once the palette has gone: each waits for what it did
   const titles = () =>
-    evaluate<string[]>(
-      "Array.from(document.querySelectorAll('.plane-title')).map((title) => title.textContent)",
+    evaluate(
+      pageCall(() =>
+        Array.from(document.querySelectorAll('.plane-title'), (title) => title.textContent),
+      ),
     );
-  const notice = () => evaluate<string>("document.querySelector('.notice')?.textContent ?? ''");
+  const notice = () => evaluate(textOf('.notice'));
   await line('focus-pair');
   await line('cd Documents');
   await until(titles, (names) => names.includes('Documents'), ':cd Documents in the other plane');
@@ -2835,8 +3155,7 @@ async function verifyFileQueries(): Promise<void> {
   await until(notice, (text) => text.includes('1 selected'), ':select README.md');
   await key('c', 'KeyC', 6);
   await until(
-    () =>
-      evaluate<boolean>('!!document.querySelector(\'[data-file-path$="/Documents/README.md"]\')'),
+    () => evaluate(exists('[data-file-path$="/Documents/README.md"]')),
     Boolean,
     '⌃⌘C copied README.md to the other folder',
   );
@@ -2849,7 +3168,7 @@ async function verifyFileQueries(): Promise<void> {
     (after) => after.join() === [...before].reverse().join(),
     'prefix < swapped the pair’s folders',
   );
-  const planes = () => evaluate<number>("document.querySelectorAll('[data-viewer-pane]').length");
+  const planes = () => evaluate(countOf('[data-viewer-pane]'));
   const planeCount = await planes();
   await line('find ext:md');
   await until(planes, (count) => count === planeCount + 1, ':find opened a results plane');
@@ -2861,22 +3180,20 @@ async function verifyFileQueries(): Promise<void> {
  * close every plane, unsaved text and all, with :qa!. */
 async function verifyCommandLine(): Promise<void> {
   const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
-  const blur = () =>
-    evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  const blur = () => evaluate(pageCall(blurActive));
   const open = async () => {
     await blur();
     await key('b', 'KeyB', 2);
     await key(':', 'Semicolon', 8);
     await until(
-      () =>
-        evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Command line"'),
+      () => evaluate(pageCall(commandLineFocused)),
       (present) => present,
       'the command line after prefix :',
     );
   };
   const closed = () =>
     until(
-      () => evaluate<boolean>('!document.querySelector(\'input[aria-label="Command line"]\')'),
+      () => evaluate(pageCall(commandLineClosed)),
       (gone) => gone,
       'the command line closed',
     );
@@ -2890,20 +3207,21 @@ async function verifyCommandLine(): Promise<void> {
   await open();
   await command('Input.insertText', { text: 'help' });
   await until(
-    () => evaluate<number>("document.querySelectorAll('.command-palette .command-result').length"),
+    () => evaluate(countOf('.command-palette .command-result')),
     (count) => count > 20,
     'help lists the verbs',
   );
   await snapshot('line-help.png');
-  await evaluate(
-    '(() => { const input = document.querySelector(\'input[aria-label="Command line"]\'); input.select(); })()',
-  );
+  await evaluate(pageCall(selectCommandLine));
   await command('Input.insertText', { text: 'tab' });
   await key('Tab', 'Tab');
   await until(
     () =>
-      evaluate<string>(
-        "document.querySelector('input[aria-label=\"Command line\"]')?.getAttribute('value') ?? ''",
+      evaluate(
+        pageCall(
+          () =>
+            document.querySelector('input[aria-label="Command line"]')?.getAttribute('value') ?? '',
+        ),
       ),
     (value) => value.startsWith('tab'),
     'Tab completed',
@@ -2914,18 +3232,10 @@ async function verifyCommandLine(): Promise<void> {
   await key('Escape', 'Escape');
   await closed();
   await click('[aria-label="Commands (⌘K)"]');
-  await until(
-    () =>
-      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
-    Boolean,
-    'the palette',
-  );
+  await until(() => evaluate(pageCall(searchingCommands)), Boolean, 'the palette');
   await command('Input.insertText', { text: '>sort by year' });
   await until(
-    () =>
-      evaluate<string>(
-        "document.querySelector('.prompt-finder .command-result')?.textContent ?? ''",
-      ),
+    () => evaluate(textOf('.prompt-finder .command-result')),
     (text) => /Add a model|receive file names/.test(text),
     'the > mode offering a model',
   );
@@ -2935,13 +3245,11 @@ async function verifyCommandLine(): Promise<void> {
   await open();
   await command('Input.insertText', { text: 'help' });
   // a line that does not parse points at its column and runs nothing
-  await evaluate(
-    '(() => { const input = document.querySelector(\'input[aria-label="Command line"]\'); input.select(); })()',
-  );
+  await evaluate(pageCall(selectCommandLine));
   await command('Input.insertText', { text: 'vs | nosuch' });
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<string>("document.querySelector('.line-error')?.textContent ?? ''"),
+    () => evaluate(textOf('.line-error')),
     (text) => text.includes('Not a command: nosuch'),
     'the error under the line',
   );
@@ -2964,7 +3272,7 @@ async function verifyCommandLine(): Promise<void> {
     ':2 tile-main-grow grew the main tile twice',
   );
   // :set nominimap | set minimap, by name
-  const minimap = () => evaluate<boolean>("!!document.querySelector('[data-plurid-minimap]')");
+  const minimap = () => evaluate(exists('[data-plurid-minimap]'));
   await line('set nominimap');
   await until(minimap, (shown) => !shown, ':set nominimap');
   await line('set minimap');
@@ -2974,7 +3282,9 @@ async function verifyCommandLine(): Promise<void> {
   // a line runs once the palette has gone: the binding arrives a moment later
   await until(
     () =>
-      evaluate<number>('window.viewer.sessionKeys().then((session) => session.bindings.length)'),
+      evaluate(
+        pageCall(() => window.viewer.sessionKeys().then((session) => session.bindings.length)),
+      ),
     (count) => count === 1,
     ':bind kept for the session',
   );
@@ -2993,7 +3303,7 @@ async function verifyCommandLine(): Promise<void> {
   await key('b', 'KeyB', 2);
   await key('R', 'KeyR', 8);
   await until(
-    () => evaluate<string>("document.querySelector('.which-key')?.textContent ?? ''"),
+    () => evaluate(textOf('.which-key')),
     (text) => text.includes('-- RESIZE --'),
     'the resize mode’s line',
   );
@@ -3007,14 +3317,17 @@ async function verifyCommandLine(): Promise<void> {
   await snapshot('line-mode.png');
   await key('Escape', 'Escape');
   await until(
-    () => evaluate<boolean>("!document.querySelector('.which-key')"),
+    () => evaluate(pageCall(() => !document.querySelector('.which-key'))),
     (gone) => gone,
     'Escape left the mode',
   );
   // a command of your own, named for the session
   await line('command Mini set minimap!');
   await until(
-    () => evaluate<number>('window.viewer.sessionKeys().then((session) => session.aliases.length)'),
+    () =>
+      evaluate(
+        pageCall(() => window.viewer.sessionKeys().then((session) => session.aliases.length)),
+      ),
     (count) => count === 1,
     ':command kept for the session',
   );
@@ -3025,17 +3338,13 @@ async function verifyCommandLine(): Promise<void> {
   // the palette shows each row's line, to learn by
   await click('[aria-label="Commands (⌘K)"]');
   await until(
-    () =>
-      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
+    () => evaluate(pageCall(searchingCommands)),
     (present) => present,
     'focused command palette',
   );
   await command('Input.insertText', { text: 'grid' });
   await until(
-    () =>
-      evaluate<string>(
-        "document.querySelector('.command-palette .command-line-hint')?.textContent ?? ''",
-      ),
+    () => evaluate(textOf('.command-palette .command-line-hint')),
     (text) => text.startsWith(':'),
     'a row’s line beside it',
   );
@@ -3044,17 +3353,28 @@ async function verifyCommandLine(): Promise<void> {
   // Settings keeps this session's keys and commands in config.jsonc
   await tab('Shortcuts');
   await until(
-    () => settingsEvaluate<boolean>("!!document.querySelector('.keymap-session')"),
+    () => settingsEvaluate(exists('.keymap-session')),
     Boolean,
     'this session’s keys in Settings',
   );
   await settingsEvaluate(
-    "Array.from(document.querySelectorAll('.keymap-session button')).find((button) => button.textContent.trim() === 'Keep').click()",
+    pageCall(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.keymap-session button'))
+        .find((button) => button.textContent.trim() === 'Keep')!
+        .click(),
+    ),
   );
   await until(
     () =>
-      settingsEvaluate<{ root: boolean; command: boolean }>(
-        "window.viewer.settingsGet().then((value) => ({ root: value.settings.keymap.root['Alt+m'] === 'set minimap!', command: value.settings.customActions.some((action) => action.executor.command === 'Mini') }))",
+      settingsEvaluate(
+        pageCall(() =>
+          window.viewer.settingsGet().then((value) => ({
+            root: value.settings.keymap.root['Alt+m'] === 'set minimap!',
+            command: value.settings.customActions.some(
+              (action) => 'command' in action.executor && action.executor.command === 'Mini',
+            ),
+          })),
+        ),
       ),
     (kept) => kept.root && kept.command,
     'Keep wrote them into config.jsonc',
@@ -3064,16 +3384,16 @@ async function verifyCommandLine(): Promise<void> {
   await blur();
   await key('t', 'KeyT', 4);
   await until(
-    () => evaluate<boolean>("!!document.querySelector('[data-scratch-plane] .cm-content')"),
+    () => evaluate(exists('[data-scratch-plane] .cm-content')),
     (present) => present,
     'a scratch plane',
   );
   // it opens beside the tiles, perhaps past the window's edge: focused, not clicked
-  await evaluate("document.querySelector('[data-scratch-plane] .cm-content').focus()");
+  await evaluate(focus('[data-scratch-plane] .cm-content'));
   await command('Input.insertText', { text: 'unsaved words' });
   await line('qa!');
   await until(
-    () => evaluate<number>("document.querySelectorAll('[data-viewer-pane]').length"),
+    () => evaluate(countOf('[data-viewer-pane]')),
     (count) => count === 0,
     ':qa! closed every plane',
   );
@@ -3084,14 +3404,15 @@ async function verifyCommandLine(): Promise<void> {
 /** Configuration and look: Focus mode, a workspace's own setting and a theme, in the
  * packaged app. */
 async function verifyLook(): Promise<void> {
-  const blur = () =>
-    evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  const blur = () => evaluate(pageCall(blurActive));
   const chrome = () =>
-    evaluate<{ toolbar: boolean; minimap: boolean; titlebar: string }>(`({
-      toolbar: !!document.querySelector('[data-plurid-entity="PluridToolbar"]'),
-      minimap: !!document.querySelector('[data-plurid-minimap]'),
-      titlebar: document.querySelector('.app-shell')?.dataset.titlebar ?? '',
-    })`);
+    evaluate(
+      pageCall(() => ({
+        toolbar: !!document.querySelector('[data-plurid-entity="PluridToolbar"]'),
+        minimap: !!document.querySelector('[data-plurid-minimap]'),
+        titlebar: document.querySelector<HTMLElement>('.app-shell')?.dataset.titlebar ?? '',
+      })),
+    );
   await blur();
   assert.deepEqual(await chrome(), { toolbar: true, minimap: true, titlebar: 'shown' });
   // ⇧⌘F: the chrome away, and back
@@ -3111,7 +3432,9 @@ async function verifyLook(): Promise<void> {
   await paletteCommand('This workspace: Hide minimap');
   await until(chrome, (now) => !now.minimap, 'the minimap hidden in this workspace');
   assert.equal(
-    await evaluate<boolean>('window.viewer.settingsGet().then((value) => value.ui.space.minimap)'),
+    await evaluate(
+      pageCall(() => window.viewer.settingsGet().then((value) => value.ui.space.minimap)),
+    ),
     true,
   );
   await paletteCommand('Use the general settings in this workspace');
@@ -3119,31 +3442,35 @@ async function verifyLook(): Promise<void> {
   // settings apart in the palette: after the commands, a few, with their switches; `,` for them alone
   await click('[aria-label="Commands (⌘K)"]');
   await until(
-    () =>
-      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
+    () => evaluate(pageCall(searchingCommands)),
     (present) => present,
     'focused command palette',
   );
   await command('Input.insertText', { text: 'grid' });
   const sections = await until(
     () =>
-      evaluate<{ headings: string[]; switches: number; first: string }>(`({
-        headings: [...document.querySelectorAll('.command-palette .command-group')].map((item) => item.textContent),
-        switches: document.querySelectorAll('.command-palette .command-switch').length,
-        first: document.querySelector('.command-result')?.textContent || '',
-      })`),
+      evaluate(
+        pageCall(() => ({
+          headings: [...document.querySelectorAll('.command-palette .command-group')].map(
+            (item) => item.textContent,
+          ),
+          switches: document.querySelectorAll('.command-palette .command-switch').length,
+          first: document.querySelector('.command-result')?.textContent || '',
+        })),
+      ),
     (value) => value.headings.includes('Settings') && value.switches > 0,
     'a Settings section for grid',
   );
   assert.match(sections.first, /grid/i);
   await snapshot('palette-settings-section.png');
-  await evaluate(`(() => {
-    const input = document.querySelector('[aria-label="Search commands"]');
-    input.select();
-  })()`);
+  await evaluate(
+    pageCall(() =>
+      document.querySelector<HTMLInputElement>('[aria-label="Search commands"]')!.select(),
+    ),
+  );
   await command('Input.insertText', { text: ',' });
   await until(
-    () => evaluate<number>("document.querySelectorAll('.command-palette .is-setting').length"),
+    () => evaluate(countOf('.command-palette .is-setting')),
     (count) => count > 30,
     'every setting after a comma',
   );
@@ -3152,18 +3479,29 @@ async function verifyLook(): Promise<void> {
   await command('Input.insertText', { text: 'appearance' });
   await until(
     () =>
-      evaluate<{ label: string; value: string }>(`({
-        label: document.querySelector('.command-result[aria-selected="true"] .command-result-text > span')?.textContent || '',
-        value: document.querySelector('.command-result[aria-selected="true"] .command-value')?.textContent || '',
-      })`),
+      evaluate(
+        pageCall(() => ({
+          label:
+            document.querySelector(
+              '.command-result[aria-selected="true"] .command-result-text > span',
+            )?.textContent || '',
+          value:
+            document.querySelector('.command-result[aria-selected="true"] .command-value')
+              ?.textContent || '',
+        })),
+      ),
     (row) => row.label === 'Appearance' && !!row.value,
     'Appearance as one row with its value',
   );
   await key('Enter', 'Enter');
   await until(
     () =>
-      evaluate<string[]>(
-        "[...document.querySelectorAll('.command-palette .command-result-text > span')].map((item) => item.textContent)",
+      evaluate(
+        pageCall(() =>
+          [...document.querySelectorAll('.command-palette .command-result-text > span')].map(
+            (item) => item.textContent,
+          ),
+        ),
       ),
     (labels) => labels.length === 3 && labels.every((label) => label?.startsWith('Appearance: ')),
     'the choices of Appearance',
@@ -3171,14 +3509,27 @@ async function verifyLook(): Promise<void> {
   await snapshot('palette-settings-choices.png');
   await key('Escape', 'Escape');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(\'[aria-label="Search commands"]\')'),
+    () => evaluate(exists('[aria-label="Search commands"]')),
     (present) => present,
     'back to the commands',
   );
   await key('Escape', 'Escape');
   // a theme: its accent is the page's
   await patchInSettings(
-    `[{path:'settings.themes',value:[{id:'smoke',name:'Smoke',look:'dark',shell:{accent:'#ff8800'},syntax:{},terminal:{}}]},{path:'settings.theme',value:{dark:'smoke',light:''}}]`,
+    {
+      path: 'settings.themes',
+      value: [
+        {
+          id: 'smoke',
+          name: 'Smoke',
+          look: 'dark',
+          shell: { accent: '#ff8800' },
+          syntax: {},
+          terminal: {},
+        },
+      ],
+    },
+    { path: 'settings.theme', value: { dark: 'smoke', light: '' } },
   );
   await tab('Themes');
   await snapshot('themes-settings.png');
@@ -3187,8 +3538,10 @@ async function verifyLook(): Promise<void> {
   await click('dialog [aria-label="Close"]');
   await until(
     () =>
-      evaluate<string>(
-        "getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()",
+      evaluate(
+        pageCall(() =>
+          getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+        ),
       ),
     (accent) => accent === '#ff8800',
     "the theme's accent on the page",
@@ -3197,19 +3550,30 @@ async function verifyLook(): Promise<void> {
 }
 /** The space: views flown back to, tmux-style tiling, Explode folder and layout
  * templates, in the packaged app. */
+/** Each pane's plane rectangle, rounded. */
+const paneRects = () =>
+  Array.from(document.querySelectorAll<HTMLElement>('[data-viewer-pane]'), (marker) => {
+    const rect = marker.closest('[data-plurid-plane]')!.getBoundingClientRect();
+    return {
+      pane: marker.dataset.viewerPane!,
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      right: Math.round(rect.right),
+      bottom: Math.round(rect.bottom),
+    };
+  });
 async function verifySpace(): Promise<void> {
   const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
-  const blur = () =>
-    evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  const blur = () => evaluate(pageCall(blurActive));
   const prefix = () => key('b', 'KeyB', 2);
   const camera = () =>
-    evaluate<{ x: number; y: number }>(
-      '(() => { const c = window.__qaEngine.camera.get(); return { x: Math.round(c.offset.x), y: Math.round(c.offset.y) }; })()',
+    evaluate(
+      pageCall(() => {
+        const camera = (window as unknown as SmokeWindow).__qaEngine.camera.get();
+        return { x: Math.round(camera.offset.x), y: Math.round(camera.offset.y) };
+      }),
     );
-  const rects = () =>
-    evaluate<{ pane: string; left: number; top: number; right: number; bottom: number }[]>(
-      `Array.from(document.querySelectorAll('[data-viewer-pane]')).map((marker) => { const plane = marker.closest('[data-plurid-plane]'); const r = plane.getBoundingClientRect(); return { pane: marker.dataset.viewerPane, left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom) }; })`,
-    );
+  const rects = () => evaluate(pageCall(paneRects));
   const tiles = async () => {
     const state = await saved();
     const tiling = state.workspaces[0]!.tiling;
@@ -3222,13 +3586,22 @@ async function verifySpace(): Promise<void> {
   await key('1', 'Digit1', 7);
   await until(
     () =>
-      evaluate<number>(
-        'window.__qaEngine.bookmarks.get().filter((entry) => entry.source === "bookmark").length',
+      evaluate(
+        pageCall(
+          () =>
+            (window as unknown as SmokeWindow).__qaEngine.bookmarks
+              .get()
+              .filter((entry) => entry.source === 'bookmark').length,
+        ),
       ),
     (count) => count === 1,
     'view 1 saved',
   );
-  await evaluate('window.__qaEngine.camera.moveBy({ pan: { x: 320, y: 160 } })');
+  await evaluate(
+    pageCall(() =>
+      (window as unknown as SmokeWindow).__qaEngine.camera.moveBy({ pan: { x: 320, y: 160 } }),
+    ),
+  );
   await until(camera, (now) => now.x !== start.x || now.y !== start.y, 'the camera moved');
   await key('1', 'Digit1', 5);
   await until(
@@ -3270,17 +3643,13 @@ async function verifySpace(): Promise<void> {
   await until(count, (now) => now === before, 'exploded planes collapsed');
   // a template of the planes in view, opened again tiled
   await paletteCommand('Save layout as template…');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector("dialog[open] input")'),
-    Boolean,
-    'the template name dialog',
-  );
+  await until(() => evaluate(exists('dialog[open] input')), Boolean, 'the template name dialog');
   await command('Input.insertText', { text: 'Pair' });
   await click('dialog[open] footer .primary');
   await until(
     () =>
-      evaluate<number>(
-        'window.viewer.settingsGet().then((value) => value.settings.layouts.length)',
+      evaluate(
+        pageCall(() => window.viewer.settingsGet().then((value) => value.settings.layouts.length)),
       ),
     (layouts) => layouts === 1,
     'the template saved',
@@ -3304,13 +3673,17 @@ async function verifySpace(): Promise<void> {
  * and Record macro, in the packaged app. */
 async function verifyKeys(): Promise<void> {
   const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
-  const blur = () =>
-    evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  const blur = () => evaluate(pageCall(blurActive));
   const prefix = () => key('b', 'KeyB', 2);
-  const whichKey = () => evaluate<number>('document.querySelectorAll(".which-key-list li").length');
+  const whichKey = () => evaluate(countOf('.which-key-list li'));
   const activePlane = () =>
-    evaluate<string>(
-      `document.querySelector('[data-plurid-plane][data-plurid-scroll-selected="true"] [data-viewer-pane]')?.dataset.viewerPane ?? ''`,
+    evaluate(
+      pageCall(
+        () =>
+          document.querySelector<HTMLElement>(
+            '[data-plurid-plane][data-plurid-scroll-selected="true"] [data-viewer-pane]',
+          )?.dataset.viewerPane ?? '',
+      ),
     );
   await blur();
   // ⌃B ? lists every binding; Escape closes it
@@ -3328,11 +3701,7 @@ async function verifyKeys(): Promise<void> {
     (state) => state.workspaces[0]!.panes.some((pane) => pane.type === 'terminal'),
     'terminal plane by ⌃B c',
   );
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".terminal-plane .xterm")'),
-    Boolean,
-    'terminal attached',
-  );
+  await until(() => evaluate(exists('.terminal-plane .xterm')), Boolean, 'terminal attached');
   await delay(400);
   await blur();
   // ⌃B f: a label on each plane; typing one makes it the active plane
@@ -3340,8 +3709,13 @@ async function verifyKeys(): Promise<void> {
   await key('f', 'KeyF');
   const hints = await until(
     () =>
-      evaluate<{ label: string; pane: string }[]>(
-        `Array.from(document.querySelectorAll('.plane-hint')).map((hint) => ({ label: hint.textContent, pane: hint.dataset.pane }))`,
+      evaluate(
+        pageCall(() =>
+          Array.from(document.querySelectorAll<HTMLElement>('.plane-hint'), (hint) => ({
+            label: hint.textContent,
+            pane: hint.dataset.pane!,
+          })),
+        ),
       ),
     (list) => list.length >= 2,
     'plane hints',
@@ -3358,15 +3732,10 @@ async function verifyKeys(): Promise<void> {
   // the palette calculates
   await blur();
   await key('k', 'KeyK', 4);
-  await until(
-    () =>
-      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
-    Boolean,
-    'command palette',
-  );
+  await until(() => evaluate(pageCall(searchingCommands)), Boolean, 'command palette');
   await command('Input.insertText', { text: '= 6*7' });
   await until(
-    () => evaluate<string>('document.querySelector(".command-result")?.textContent ?? ""'),
+    () => evaluate(textOf('.command-result')),
     (row) => row.includes('= 42'),
     'the calculator row',
   );
@@ -3375,8 +3744,7 @@ async function verifyKeys(): Promise<void> {
   await blur();
   await prefix();
   await key('q', 'KeyQ');
-  const recording = () =>
-    evaluate<string>('document.querySelector(".macro-recording")?.textContent ?? ""');
+  const recording = () => evaluate(textOf('.macro-recording'));
   await until(recording, (text) => text.includes('Recording'), 'recording a macro');
   await key('s', 'KeyS', 5);
   await until(recording, (text) => text.includes('1'), 'one command recorded');
@@ -3384,17 +3752,21 @@ async function verifyKeys(): Promise<void> {
   await until(recording, (text) => text.includes('2'), 'two commands recorded');
   await prefix();
   await key('q', 'KeyQ');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector("dialog[open] input")'),
-    Boolean,
-    'the macro name dialog',
-  );
+  await until(() => evaluate(exists('dialog[open] input')), Boolean, 'the macro name dialog');
   // a key sent here carries no character, so it submits no form: Save is clicked
   await click('dialog[open] footer .primary');
   await until(
     () =>
-      evaluate<string[][]>(
-        `window.viewer.settingsGet().then((value) => value.settings.customActions.filter((action) => action.executor.kind === 'sequence').map((action) => action.executor.commands))`,
+      evaluate(
+        pageCall(() =>
+          window.viewer
+            .settingsGet()
+            .then((value) =>
+              value.settings.customActions.flatMap((action) =>
+                action.executor.kind === 'sequence' ? [action.executor.commands] : [],
+              ),
+            ),
+        ),
       ),
     (sequences) =>
       sequences.some((commands) => commands.join() === 'toggle-sidebar,toggle-sidebar'),
@@ -3402,9 +3774,9 @@ async function verifyKeys(): Promise<void> {
   );
   // Settings → Shortcuts: the prefix is recorded by pressing it; then ⌃A starts a sequence
   await tab('Shortcuts');
-  await settingsEvaluate(`document.querySelector('[aria-label="Prefix"]').click()`);
+  await settingsEvaluate(clickElement('[aria-label="Prefix"]'));
   await until(
-    () => settingsEvaluate<string>(`document.querySelector('[aria-label="Prefix"]').textContent`),
+    () => settingsEvaluate(requiredText('[aria-label="Prefix"]')),
     (text) => text.includes('Press'),
     'the prefix listening',
   );
@@ -3418,7 +3790,9 @@ async function verifyKeys(): Promise<void> {
     });
   await until(
     () =>
-      evaluate<string>('window.viewer.settingsGet().then((value) => value.settings.keymap.prefix)'),
+      evaluate(
+        pageCall(() => window.viewer.settingsGet().then((value) => value.settings.keymap.prefix)),
+      ),
     (prefix) => prefix === 'Ctrl+A',
     'the prefix recorded as ⌃A',
   );
@@ -3426,7 +3800,7 @@ async function verifyKeys(): Promise<void> {
   await blur();
   await key('a', 'KeyA', 2);
   await until(
-    () => evaluate<string>('document.querySelector(".which-key-trail")?.textContent ?? ""'),
+    () => evaluate(textOf('.which-key-trail')),
     (trail) => trail === '⌃A',
     'which-key after ⌃A',
   );
@@ -3435,6 +3809,21 @@ async function verifyKeys(): Promise<void> {
     'Keys: ⌃B and which-key, a terminal by ⌃B c, plane hints and the next plane, the calculator, a recorded macro, and the prefix set in Settings by pressing it.',
   );
 }
+/** The text toolbar holding the language choice: its items' labels and heights, its edge. */
+function languageToolbar() {
+  const bar = [...document.querySelectorAll('.text-editing-toolbar')].find((item) =>
+    item.querySelector('[aria-label="Language"]'),
+  );
+  const items = [...(bar ? bar.children : [])];
+  const choice = bar?.querySelector('[aria-label="Language"]');
+  return {
+    order: items.map((item) => item.getAttribute('aria-label') || item.textContent.trim()),
+    heights: items.map((item) => Math.round(item.getBoundingClientRect().height)),
+    edge: choice ? getComputedStyle(choice).borderTopColor : '',
+  };
+}
+const spaceStyle = (property: 'backgroundColor' | 'backgroundImage') =>
+  getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]')!)[property];
 async function verifyTextEditing(): Promise<void> {
   const note = path.join(fixture.files, 'Edited note.md');
   await writeFile(note, '# Before\n');
@@ -3448,14 +3837,11 @@ async function verifyTextEditing(): Promise<void> {
     'note preview plane',
   );
   const edit = 'button[title="Edit Text (⌘E)"]';
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(edit)})`),
-    Boolean,
-    'Edit offered',
-  );
+  await until(() => evaluate(exists(edit)), Boolean, 'Edit offered');
   await click(edit);
   await until(
-    () => evaluate<boolean>('document.activeElement?.classList.contains("cm-content") === true'),
+    () =>
+      evaluate(pageCall(() => document.activeElement?.classList.contains('cm-content') === true)),
     Boolean,
     'focused editor',
   );
@@ -3466,11 +3852,11 @@ async function verifyTextEditing(): Promise<void> {
     (value) => value === 'After # Before\n',
     'saved note',
   );
-  const jobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  const jobs = await evaluate(pageCall(viewerJobs));
   const save = jobs.findLast((job) => job.kind === 'rewrite');
   assert.equal(save?.status, 'completed', JSON.stringify(save?.errors));
   assert.equal(save?.undoable, true);
-  await evaluate(`window.viewer.undo(${JSON.stringify(save!.id)})`);
+  await evaluate(pageCall((id: string) => window.viewer.undo(id), save!.id));
   await until(
     () => readFile(note, 'utf8'),
     (value) => value === '# Before\n',
@@ -3484,15 +3870,19 @@ async function verifyTextEditing(): Promise<void> {
   );
   await until(
     () =>
-      evaluate<boolean>(
-        '!!document.activeElement?.closest("[data-scratch-plane]") && document.activeElement.classList.contains("cm-content")',
+      evaluate(
+        pageCall(
+          () =>
+            !!document.activeElement?.closest('[data-scratch-plane]') &&
+            document.activeElement!.classList.contains('cm-content'),
+        ),
       ),
     Boolean,
     'focused scratch editor',
   );
   await command('Input.insertText', { text: 'scratch text' });
   await until(
-    () => evaluate<{ buffers: { kind: string; bytes: number }[] }>('window.viewer.bufferList()'),
+    () => evaluate(pageCall(() => window.viewer.bufferList())),
     (list) => list.buffers.some((buffer) => buffer.kind === 'scratch' && buffer.bytes === 12),
     'scratch text kept in the profile',
   );
@@ -3500,89 +3890,89 @@ async function verifyTextEditing(): Promise<void> {
   await key('f', 'KeyF', 4);
   await until(
     () =>
-      evaluate<boolean>(
-        '!!document.querySelector("[data-scratch-plane] .editor-find") && document.activeElement?.getAttribute("aria-label") === "Find"',
+      evaluate(
+        pageCall(
+          () =>
+            !!document.querySelector('[data-scratch-plane] .editor-find') &&
+            document.activeElement?.getAttribute('aria-label') === 'Find',
+        ),
       ),
     Boolean,
     "Viewer's find over the scratch text",
   );
-  assert.equal(await evaluate<boolean>('!!document.querySelector(".cm-search")'), false);
+  assert.equal(await evaluate(exists('.cm-search')), false);
   await command('Input.insertText', { text: 'text' });
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector("[data-scratch-plane] .editor-find-count")?.textContent ?? ""',
-      ),
+    () => evaluate(textOf('[data-scratch-plane] .editor-find-count')),
     (count) => count === '1 / 1',
     'find counts the match',
   );
   await snapshot('text-find.png');
   await key('Escape', 'Escape');
   await until(
-    () => evaluate<boolean>('!document.querySelector(".editor-find")'),
+    () => evaluate(pageCall(() => !document.querySelector('.editor-find'))),
     Boolean,
     'find closed',
   );
   // Save before the language choice, so the choice keeps its place; one height, filled to the edge
-  const header = await evaluate<{ order: string[]; heights: number[]; edge: string }>(`(() => {
-    const bar = [...document.querySelectorAll('.text-editing-toolbar')].find((item) =>
-      item.querySelector('[aria-label="Language"]'));
-    const items = [...(bar ? bar.children : [])];
-    const choice = bar?.querySelector('[aria-label="Language"]');
-    return {
-      order: items.map((item) => item.getAttribute('aria-label') || item.textContent.trim()),
-      heights: items.map((item) => Math.round(item.getBoundingClientRect().height)),
-      edge: choice ? getComputedStyle(choice).borderTopColor : '',
-    };
-  })()`);
+  const header = await evaluate(pageCall(languageToolbar));
   assert.deepEqual(header.order, ['Save…', 'Language']);
   assert.equal(new Set(header.heights).size, 1, JSON.stringify(header.heights));
   assert.equal(header.edge, 'rgba(0, 0, 0, 0)');
   // plurid's controls solid, and a see-through space only between planes
-  const application = `getComputedStyle(document.querySelector('.workspace-surface [data-plurid-application]'))`;
   assert.equal(
-    await evaluate<string>(`${application}.getPropertyValue('--plurid-opacity-persistent').trim()`),
+    await evaluate(
+      pageCall(() =>
+        getComputedStyle(document.querySelector('.workspace-surface [data-plurid-application]')!)
+          .getPropertyValue('--plurid-opacity-persistent')
+          .trim(),
+      ),
+    ),
     '1',
   );
-  await patchInSettings(`[{path:'ui.space.backdrop',value:'blur'}]`);
+  await patchInSettings({ path: 'ui.space.backdrop', value: 'blur' });
   await until(
-    () => evaluate<string>('document.documentElement.dataset.backdrop ?? ""'),
+    () => evaluate(pageCall(() => document.documentElement.dataset.backdrop ?? '')),
     (backdrop) => backdrop === 'blur',
     'blurred backdrop applied',
   );
-  const backdrop = await evaluate<{ space: string; titlebar: string }>(`({
-    space: getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]')).backgroundColor,
-    titlebar: getComputedStyle(document.querySelector('.app-titlebar')).backgroundColor,
-  })`);
+  const backdrop = await evaluate(
+    pageCall(() => ({
+      space: getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]')!)
+        .backgroundColor,
+      titlebar: getComputedStyle(document.querySelector('.app-titlebar')!).backgroundColor,
+    })),
+  );
   assert.match(backdrop.space, /\/ 0\.6\)|, 0\.6\)/, backdrop.space);
   assert.match(backdrop.titlebar, /^rgb\(/, backdrop.titlebar);
-  await patchInSettings(`[{path:'ui.space.backdrop',value:'opaque'}]`);
+  await patchInSettings({ path: 'ui.space.backdrop', value: 'opaque' });
   // ⌥⌘T hides the title bar and shows it again; the grid; a workspace's own colour
   const titlebarState = () =>
-    evaluate<string>('document.querySelector(".app-shell")?.dataset.titlebar ?? ""');
+    evaluate(
+      pageCall(() => document.querySelector<HTMLElement>('.app-shell')?.dataset.titlebar ?? ''),
+    );
   // the native menu takes ⌥⌘T anywhere; these keys reach the page itself, which leaves an
   // editor's keys to the editor
-  await evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+  await evaluate(pageCall(blurActive));
   await key('t', 'KeyT', 5);
   await until(titlebarState, (state) => state === 'hidden', 'title bar hidden by ⌥⌘T');
   await delay(300);
   assert.ok(
-    (await evaluate<number>(
-      'document.querySelector(".app-titlebar").getBoundingClientRect().bottom',
+    (await evaluate(
+      pageCall(() => document.querySelector('.app-titlebar')!.getBoundingClientRect().bottom),
     )) <= 1,
   );
   await key('t', 'KeyT', 5);
   await until(titlebarState, (state) => state === 'shown', 'title bar shown by ⌥⌘T');
-  const ground = `getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]'))`;
   await paletteCommand('Workspace look…');
   await until(
-    () => evaluate<boolean>('!!document.querySelector("dialog [aria-label=\\"Ocean\\"]")'),
+    () => evaluate(exists('dialog [aria-label="Ocean"]')),
     Boolean,
     'workspace background dialog',
   );
   await click('dialog [aria-label="Ocean"]');
   await until(
-    () => evaluate<string>(`${ground}.backgroundColor`),
+    () => evaluate(pageCall(spaceStyle, 'backgroundColor')),
     (color) => color === 'rgb(15, 38, 51)',
     "the workspace's colour on its space",
   );
@@ -3590,20 +3980,20 @@ async function verifyTextEditing(): Promise<void> {
   await click('dialog footer .primary');
   await paletteCommand('Hide background grid');
   await until(
-    () => evaluate<string>(`${ground}.backgroundImage`),
+    () => evaluate(pageCall(spaceStyle, 'backgroundImage')),
     (image) => !image.includes('gradient'),
     'grid hidden',
   );
   await paletteCommand('Show background grid');
   // every setting is a command: plurid's minimap goes and comes back
-  const minimap = () => evaluate<boolean>('!!document.querySelector("[data-plurid-minimap]")');
+  const minimap = () => evaluate(exists('[data-plurid-minimap]'));
   assert.equal(await minimap(), true);
   await paletteCommand('Hide minimap');
   await until(minimap, (shown) => !shown, 'minimap hidden by its command');
   await paletteCommand('Show minimap');
   await until(minimap, Boolean, 'minimap shown by its command');
   await until(
-    () => evaluate<string>(`${ground}.backgroundImage`),
+    () => evaluate(pageCall(spaceStyle, 'backgroundImage')),
     (image) => image.includes('gradient'),
     'grid shown',
   );
@@ -3612,19 +4002,30 @@ async function verifyTextEditing(): Promise<void> {
   );
 }
 /** Additional release checks against the actual signed Electron bundle. Files remain untouched. */
+/** The workspace surface's bounds and each folder plane's, with its pane id. */
+function folderPlaneBounds() {
+  const bounds = (element: Element) => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  };
+  return {
+    canvas: bounds(document.querySelector('.workspace-surface')!),
+    planes: Array.from(
+      document.querySelectorAll('[data-plurid-plane]:has(.folder-plane)'),
+      (element) => ({
+        id: element.querySelector<HTMLElement>('[data-viewer-plane]')!.dataset.viewerPlane!,
+        ...bounds(element),
+      }),
+    ),
+  };
+}
+const titleOf = (selector: string) => document.querySelector<HTMLElement>(selector)!.title;
 async function verifyPublishedPlaneInput(): Promise<void> {
   const sourceID = fixture.state.workspaces[0].roots[0];
   const plane = (id: string) =>
     `[data-plurid-plane]:has([data-viewer-plane=${JSON.stringify(id)}])`;
-  const folders = () =>
-    evaluate<{
-      canvas: { x: number; y: number; width: number; height: number };
-      planes: { id: string; x: number; y: number; width: number; height: number }[];
-    }>(`(() => {
-    const bounds = el => { const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}; };
-    return {canvas:bounds(document.querySelector('.workspace-surface')),planes:Array.from(document.querySelectorAll('[data-plurid-plane]:has(.folder-plane)')).map(el=>({id:el.querySelector('[data-viewer-plane]').dataset.viewerPlane,...bounds(el)}))};
-  })()`);
-  const camera = () => evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+  const folders = () => evaluate(pageCall(folderPlaneBounds));
+  const camera = () => evaluate(pageCall(cameraJSON));
   const near = (actual: number, expected: number, label: string) =>
     assert.ok(Math.abs(actual - expected) < 2, `${label}: ${actual} vs ${expected}`);
   const roots = (count: number) =>
@@ -3643,17 +4044,12 @@ async function verifyPublishedPlaneInput(): Promise<void> {
     `${plane(peerID)} .location[title=${JSON.stringify(path.join(fixture.files, 'Documents'))}]`,
   );
   await until(
-    () =>
-      evaluate<string>(
-        `document.querySelector(${JSON.stringify(plane(peerID) + ' .plane-heading')}).title`,
-      ),
+    () => evaluate(pageCall(titleOf, plane(peerID) + ' .plane-heading')),
     (value) => value.endsWith('/Documents'),
     'independent peer navigation',
   );
   assert.equal(
-    await evaluate(
-      `document.querySelector(${JSON.stringify(plane(sourceID) + ' .plane-heading')}).title`,
-    ),
+    await evaluate(pageCall(titleOf, plane(sourceID) + ' .plane-heading')),
     fixture.files,
   );
   await click(`${plane(peerID)} [aria-label="Close plane"]`);
@@ -3679,12 +4075,18 @@ async function verifyPublishedPlaneInput(): Promise<void> {
   near(ordered[1].y - ordered[0].y - ordered[0].height, 12, 'stacked gap');
   const top = plane(ordered[0].id);
   const scrollTop = () =>
-    evaluate<number>(
-      `document.querySelector(${JSON.stringify(top + ' .sidebar-scroll')}).scrollTop`,
+    evaluate(
+      pageCall(
+        (selector: string) => document.querySelector(selector)!.scrollTop,
+        top + ' .sidebar-scroll',
+      ),
     );
   const point = () =>
-    evaluate<{ x: number; y: number }>(
-      `(()=>{const r=document.querySelector(${JSON.stringify(top + ' .sidebar-scroll')}).getBoundingClientRect();return{x:r.x+60,y:r.y+80};})()`,
+    evaluate(
+      pageCall((selector: string) => {
+        const rect = document.querySelector(selector)!.getBoundingClientRect();
+        return { x: rect.x + 60, y: rect.y + 80 };
+      }, top + ' .sidebar-scroll'),
     );
   const wheel = async (deltaY: number, modifiers = 0) =>
     command('Input.dispatchMouseEvent', {
@@ -3708,8 +4110,12 @@ async function verifyPublishedPlaneInput(): Promise<void> {
   await click(`${top} .plane-heading`);
   await until(
     () =>
-      evaluate<boolean>(
-        `document.querySelector(${JSON.stringify(top + ' [data-viewer-plane]')}).dataset.scrollSelected==='true'`,
+      evaluate(
+        pageCall(
+          (selector: string) =>
+            document.querySelector<HTMLElement>(selector)!.dataset.scrollSelected === 'true',
+          top + ' [data-viewer-plane]',
+        ),
       ),
     Boolean,
     'clicked plane owns scrolling',
@@ -3733,15 +4139,9 @@ async function verifyPublishedPlaneInput(): Promise<void> {
   const note = path.join(fixture.files, 'README.md');
   await click(`${top} ${fileSelector(note)}`);
   await key(' ', 'Space');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector("dialog[open]")'),
-    Boolean,
-    'Space preview',
-  );
+  await until(() => evaluate(exists('dialog[open]')), Boolean, 'Space preview');
   before = await camera();
-  const previewPoint = await evaluate<{ x: number; y: number }>(
-    `(()=>{const r=document.querySelector('dialog[open]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()`,
-  );
+  const previewPoint = await evaluate(pageCall(centreOf, 'dialog[open]'));
   await command('Input.dispatchMouseEvent', {
     type: 'mouseWheel',
     ...previewPoint,
@@ -3749,7 +4149,7 @@ async function verifyPublishedPlaneInput(): Promise<void> {
     deltaY: 120,
     modifiers: 8,
   });
-  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await evaluate(animationFrames(2));
   assert.equal(
     await camera(),
     before,
@@ -3762,40 +4162,30 @@ async function verifyPublishedPlaneInput(): Promise<void> {
   );
 }
 
+const transformMode = () =>
+  (window as unknown as SmokeWindow).__qaEngine.getSnapshot().configuration.space.transformMode;
 async function verifySpatialTools(): Promise<void> {
   await click('[aria-label="Rotate mode"]');
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
-    'ROTATION',
-  );
+  assert.equal(await evaluate(pageCall(transformMode)), 'ROTATION');
   await paletteCommand('Finish spatial tool');
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
-    'ALL',
-  );
+  assert.equal(await evaluate(pageCall(transformMode)), 'ALL');
   await paletteCommand('Translate space');
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
-    'TRANSLATION',
-  );
+  assert.equal(await evaluate(pageCall(transformMode)), 'TRANSLATION');
   await key('Escape', 'Escape');
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.transformMode'),
-    'ALL',
-  );
+  assert.equal(await evaluate(pageCall(transformMode)), 'ALL');
 }
 async function appearance(look: 'dark' | 'light'): Promise<void> {
   await paletteCommand('Settings');
   await openSettingsProbe();
   await tab('Browsing');
   await until(
-    () => settingsEvaluate<boolean>(`!!document.querySelector('[aria-label="Appearance"]')`),
+    () => settingsEvaluate(exists('[aria-label="Appearance"]')),
     (present) => present,
     'appearance setting',
   );
   await choose('Appearance', look, settingsEvaluate);
   await until(
-    () => evaluate<string>('document.documentElement.dataset.look'),
+    () => evaluate(pageCall(pageLook)),
     (value) => value === look,
     'changed appearance',
   );
@@ -3805,8 +4195,11 @@ async function preview(file: string, expected: string): Promise<void> {
   await click(fileSelector(file));
   await until(
     () =>
-      evaluate<boolean>(
-        `document.querySelector(${JSON.stringify(fileSelector(file))})?.getAttribute('aria-selected') === 'true'`,
+      evaluate(
+        pageCall(
+          (row: string) => document.querySelector(row)?.getAttribute('aria-selected') === 'true',
+          fileSelector(file),
+        ),
       ),
     Boolean,
     `selected preview source ${path.basename(file)}`,
@@ -3815,17 +4208,116 @@ async function preview(file: string, expected: string): Promise<void> {
   await until(text, (value) => value.includes(expected), `preview ${path.basename(file)}`);
   console.log(`Preview: ${path.basename(file)}`);
 }
+/** Where the fixture's 200 by 100 rectangle corners fall on the fitted drawing stage. */
+function drawingCorners() {
+  const stage = document.querySelector('.dxf-stage')!.getBoundingClientRect(),
+    scale = Math.min((stage.width - 80) / 200, (stage.height - 80) / 100);
+  return [
+    [0, 0],
+    [200, 0],
+    [200, 100],
+    [0, 100],
+  ].map(([x, y]) => ({
+    x: stage.left + stage.width / 2 + (x - 100) * scale,
+    y: stage.top + stage.height / 2 - (y - 50) * scale,
+  }));
+}
+/** Records each label the drawing canvas paints in `window.__qaDrawingLabels`. */
+function recordDrawingLabels() {
+  const context = document.querySelector<HTMLCanvasElement>('.dxf-stage canvas')!.getContext('2d')!;
+  const original = context.fillText.bind(context);
+  const page = window as unknown as SmokeWindow;
+  page.__qaDrawingLabels = [];
+  context.fillText = (value, x, y, ...args) => {
+    page.__qaDrawingLabels.push({ value, x, y, width: context.measureText(value).width });
+    original(value, x, y, ...args);
+  };
+  page.__qaDrawingRestore = () => {
+    context.fillText = original;
+  };
+}
+/** Whether the area label lies outside the floating readout. */
+function areaLabelClear() {
+  const readout = document.querySelector<HTMLElement>('.dxf-readout')!;
+  const label = (window as unknown as SmokeWindow).__qaDrawingLabels.find(
+    (row) => row.value === '31 in²',
+  );
+  return (
+    !!label &&
+    (label.x >= readout.offsetLeft + readout.offsetWidth ||
+      label.x + label.width <= readout.offsetLeft ||
+      label.y - 14 >= readout.offsetTop + readout.offsetHeight ||
+      label.y <= readout.offsetTop)
+  );
+}
+/** Whether the draft controls, units and instructions fit the drawing status bar. */
+function draftControlsFit() {
+  const row = document.querySelector('.dxf-info')!.getBoundingClientRect();
+  const finish = document.querySelector<HTMLButtonElement>('.dxf-draft-controls button')!;
+  const actions = document.querySelector('.dxf-draft-controls')!.getBoundingClientRect();
+  const units = document.querySelector('.dxf-units')!.getBoundingClientRect();
+  const instructions = document.querySelector<HTMLElement>('.dxf-guidance > span:first-child')!;
+  return (
+    !finish.disabled &&
+    actions.right <= row.right &&
+    actions.top >= row.top &&
+    actions.bottom <= row.bottom &&
+    units.right <= actions.left &&
+    instructions.title.includes('Enter') &&
+    document.querySelector<HTMLElement>('.dxf-info')!.offsetHeight === 34
+  );
+}
+/** Whether the drawing canvas's corner shows its `--field` colour. */
+function paintsFieldColour() {
+  const canvas = document.querySelector<HTMLCanvasElement>('.dxf-stage canvas')!;
+  const probe = document.createElement('canvas').getContext('2d')!;
+  probe.fillStyle = getComputedStyle(canvas).getPropertyValue('--field').trim();
+  probe.fillRect(0, 0, 1, 1);
+  const expected = probe.getImageData(0, 0, 1, 1).data;
+  const pixels = canvas.getContext('2d')!.getImageData(0, 0, 8, 8).data;
+  for (let i = 0; i < pixels.length; i += 4)
+    if (pixels[i] === expected[0] && pixels[i + 1] === expected[1] && pixels[i + 2] === expected[2])
+      return true;
+  return false;
+}
+/** Whether a linked drawing's name, details and guidance line up before its open action. */
+function drawingHeaderAligned() {
+  const host = document.querySelector('.preview-host[data-preview-module="dxf"]')!;
+  const name = host.querySelector('.preview-filename')!.getBoundingClientRect();
+  const details = host.querySelector('.preview-file-details')!.getBoundingClientRect();
+  const guide = host.querySelector('.dxf-guidance')!.getBoundingClientRect();
+  const open = host.querySelector('.preview-info button')!.getBoundingClientRect();
+  return (
+    Math.abs(name.left - guide.left) < 1 &&
+    details.left >= name.right &&
+    details.left - name.right < 12 &&
+    details.right < open.left
+  );
+}
 async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await preview(path.join(fixture.files, 'Panel.dxf'), 'Click geometry');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('.dxf-viewer[data-dxf-entities="6"]')`),
+    () => evaluate(exists('.dxf-viewer[data-dxf-entities="6"]')),
     Boolean,
     'parsed drawing in worker',
   );
-  assert.equal(await evaluate('document.querySelector(".dxf-viewer").dataset.dxfUnits'), '4');
+  assert.equal(
+    await evaluate(
+      pageCall(() => document.querySelector<HTMLElement>('.dxf-viewer')!.dataset.dxfUnits),
+    ),
+    '4',
+  );
   const checkDrawingToolbar = async (selector: string, height: number) => {
-    const controls = await evaluate<{ height: number; center: number }[]>(
-      `Array.from(document.querySelectorAll(${JSON.stringify(selector)})).map(el=>({height:el.offsetHeight,center:el.getBoundingClientRect().top+el.getBoundingClientRect().height/2}))`,
+    const controls = await evaluate(
+      pageCall(
+        (selector: string) =>
+          Array.from(document.querySelectorAll<HTMLElement>(selector), (element) => ({
+            height: element.offsetHeight,
+            center:
+              element.getBoundingClientRect().top + element.getBoundingClientRect().height / 2,
+          })),
+        selector,
+      ),
     );
     assert.ok(controls.length >= 5, 'All drawing tools are present');
     assert.ok(
@@ -3841,32 +4333,37 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   };
   await checkDrawingToolbar('.quick-preview .preview-toolbar > button', 30);
   assert.equal(
-    await evaluate<number>('document.querySelector(".dxf-info").offsetHeight'),
+    await evaluate(pageCall(() => document.querySelector<HTMLElement>('.dxf-info')!.offsetHeight)),
     34,
     'Quick Preview retains the compact drawing status bar',
   );
   assert.equal(
-    await evaluate<boolean>(`(()=>{
-      const guide=document.querySelector('.dxf-guidance > span:first-child').getBoundingClientRect();
-      const units=document.querySelector('.dxf-units').getBoundingClientRect();
-      return units.left>=guide.right && units.left-guide.right<12;
-    })()`),
+    await evaluate(
+      pageCall(() => {
+        const guide = document
+          .querySelector('.dxf-guidance > span:first-child')!
+          .getBoundingClientRect();
+        const units = document.querySelector('.dxf-units')!.getBoundingClientRect();
+        return units.left >= guide.right && units.left - guide.right < 12;
+      }),
+    ),
     true,
     'Drawing units stay beside the instructions',
   );
   const tool = async (value: string) => {
     await choose('Drawing tool', value);
-    await evaluate(
-      'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))',
-    );
+    await evaluate(animationFrames(2));
   };
-  const corners = () =>
-    evaluate<{ x: number; y: number }[]>(
-      `(()=>{const s=document.querySelector('.dxf-stage').getBoundingClientRect(),scale=Math.min((s.width-80)/200,(s.height-80)/100);return [[0,0],[200,0],[200,100],[0,100]].map(([x,y])=>({x:s.left+s.width/2+(x-100)*scale,y:s.top+s.height/2-(y-50)*scale}));})()`,
-    );
+  const corners = () => evaluate(pageCall(drawingCorners));
   const pick = async (point: { x: number; y: number }) => {
     assert.equal(
-      await evaluate(`document.elementFromPoint(${point.x},${point.y})?.tagName`),
+      await evaluate(
+        pageCall(
+          (x: number, y: number) => document.elementFromPoint(x, y)?.tagName,
+          point.x,
+          point.y,
+        ),
+      ),
       'CANVAS',
       'Every measured vertex remains hit-testable, including while an area draft is open',
     );
@@ -3891,8 +4388,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await pick(points[0]);
   await pick(points[1]);
   await until(
-    () =>
-      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    () => evaluate(textOf('[data-dxf-last-measurement]')),
     (value) => value.includes('200 mm'),
     'snapped model-space distance',
   );
@@ -3901,8 +4397,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await pick(points[0]);
   await pick(points[3]);
   await until(
-    () =>
-      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    () => evaluate(textOf('[data-dxf-last-measurement]')),
     (value) => value.includes('90.00°'),
     'three-point angle',
   );
@@ -3910,17 +4405,15 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   for (const point of points) await pick(point);
   await key('Enter', 'Enter');
   await until(
-    () =>
-      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    () => evaluate(textOf('[data-dxf-last-measurement]')),
     (value) => value.includes('20,000 mm²'),
     'closed polygon area',
   );
   await click('[aria-label="Show drawing details"]');
-  assert.equal(await evaluate('document.querySelectorAll(".dxf-measurement").length'), 3);
+  assert.equal(await evaluate(countOf('.dxf-measurement')), 3);
   await choose('Drawing measurement units', '1');
   await until(
-    () =>
-      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    () => evaluate(textOf('[data-dxf-last-measurement]')),
     (value) => value.includes('31 in²'),
     'square unit conversion',
   );
@@ -3930,8 +4423,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await pick(detailPoints[0]);
   await pick(detailPoints[1]);
   await until(
-    () =>
-      evaluate<string>('document.querySelector("[data-dxf-last-measurement]")?.textContent || ""'),
+    () => evaluate(textOf('[data-dxf-last-measurement]')),
     (value) => value.includes('7.874 in'),
     'fitted drawing retains true coordinates after opening details',
   );
@@ -3942,59 +4434,41 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await evaluate(animationFrames(2));
   const compactPoints = await corners();
   await pick(compactPoints[0]);
   await pick(compactPoints[1]);
   await until(
-    () => evaluate<number>('document.querySelectorAll(".dxf-measurement").length'),
+    () => evaluate(countOf('.dxf-measurement')),
     (count) => count === 5,
     'fitted drawing remains measurable after window resize',
   );
-  const compactBounds = await evaluate<{ overflow: boolean; bottom: number }>(
-    `(()=>{const viewer=document.querySelector('.dxf-viewer');return {overflow:viewer.scrollWidth>viewer.clientWidth,bottom:viewer.getBoundingClientRect().bottom};})()`,
+  const compactBounds = await evaluate(
+    pageCall(() => {
+      const viewer = document.querySelector('.dxf-viewer')!;
+      return {
+        overflow: viewer.scrollWidth > viewer.clientWidth,
+        bottom: viewer.getBoundingClientRect().bottom,
+      };
+    }),
   );
   assert.equal(compactBounds.overflow, false);
   assert.ok(compactBounds.bottom <= 560);
   // Observe actual canvas text placements rather than duplicating its placement calculation.
-  await evaluate(`(()=>{
-    const ctx=document.querySelector('.dxf-stage canvas').getContext('2d');
-    const original=ctx.fillText.bind(ctx);
-    window.__qaDrawingLabels=[];
-    ctx.fillText=(value,x,y,...args)=>{
-      window.__qaDrawingLabels.push({value,x,y,width:ctx.measureText(value).width});
-      original(value,x,y,...args);
-    };
-    window.__qaDrawingRestore=()=>{ctx.fillText=original;};
-  })()`);
+  await evaluate(pageCall(recordDrawingLabels));
   await click('[aria-label="Fit drawing"]');
-  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await evaluate(animationFrames(2));
   assert.equal(
-    await evaluate<boolean>(`(()=>{
-      const readout=document.querySelector('.dxf-readout');
-      const label=window.__qaDrawingLabels.find(row=>row.value==='31 in²');
-      return !!label && (label.x>=readout.offsetLeft+readout.offsetWidth ||
-        label.x+label.width<=readout.offsetLeft ||
-        label.y-14>=readout.offsetTop+readout.offsetHeight || label.y<=readout.offsetTop);
-    })()`),
+    await evaluate(pageCall(areaLabelClear)),
     true,
     'The complete area annotation stays outside the floating readout in the minimum window',
   );
-  await evaluate('window.__qaDrawingRestore()');
+  await evaluate(pageCall(() => (window as unknown as SmokeWindow).__qaDrawingRestore()));
   await snapshot('desktop-native-dxf-minimum.png');
   await tool('area');
   for (const point of compactPoints.slice(0, 3)) await pick(point);
   assert.equal(
-    await evaluate<boolean>(`(()=>{
-      const row=document.querySelector('.dxf-info').getBoundingClientRect();
-      const finish=document.querySelector('.dxf-draft-controls button');
-      const actions=document.querySelector('.dxf-draft-controls').getBoundingClientRect();
-      const units=document.querySelector('.dxf-units').getBoundingClientRect();
-      const instructions=document.querySelector('.dxf-guidance > span:first-child');
-      return !finish.disabled && actions.right<=row.right && actions.top>=row.top &&
-        actions.bottom<=row.bottom && units.right<=actions.left &&
-        instructions.title.includes('Enter') && document.querySelector('.dxf-info').offsetHeight===34;
-    })()`),
+    await evaluate(pageCall(draftControlsFit)),
     true,
     'Area instructions, units and enabled draft controls fit in the minimum window',
   );
@@ -4003,27 +4477,14 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await tool('distance');
   await command('Emulation.clearDeviceMetricsOverride');
   const setLook = async (look: 'dark' | 'light') => {
-    await evaluate(
-      `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:${JSON.stringify(look)}}],s.revision))`,
-    );
+    await evaluate(patchSettings({ path: 'settings.appearance', value: look }));
     await until(
-      () => evaluate<string>('document.documentElement.dataset.look'),
+      () => evaluate(pageCall(pageLook)),
       (value) => value === look,
       'drawing appearance update',
     );
     await until(
-      () =>
-        evaluate<boolean>(`(()=>{
-        const canvas=document.querySelector('.dxf-stage canvas');
-        const probe=document.createElement('canvas').getContext('2d');
-        probe.fillStyle=getComputedStyle(canvas).getPropertyValue('--field').trim();
-        probe.fillRect(0,0,1,1);
-        const expected=probe.getImageData(0,0,1,1).data;
-        const pixels=canvas.getContext('2d').getImageData(0,0,8,8).data;
-        for(let i=0;i<pixels.length;i+=4)
-          if(pixels[i]===expected[0] && pixels[i+1]===expected[1] && pixels[i+2]===expected[2]) return true;
-        return false;
-      })()`),
+      () => evaluate(pageCall(paintsFieldColour)),
       Boolean,
       `canvas painted the live ${look} palette`,
     );
@@ -4031,17 +4492,17 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await setLook('light');
   await snapshot('desktop-native-dxf-light.png');
   await setLook('dark');
-  const camera = await evaluate('JSON.stringify(window.__qaEngine.camera.get())');
+  const camera = await evaluate(pageCall(cameraJSON));
   await click('.dxf-stage canvas');
   await key('ArrowRight', 'ArrowRight', 8);
   assert.equal(
-    await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+    await evaluate(pageCall(cameraJSON)),
     camera,
     'Drawing keys do not rotate the Plurid camera',
   );
-  await evaluate('document.querySelector(".dxf-layer input").click()');
+  await evaluate(clickElement('.dxf-layer input'));
   await click('[aria-label="Fit drawing"]');
-  await evaluate('document.querySelector(".dxf-layer input").click()');
+  await evaluate(clickElement('.dxf-layer input'));
   await closePreview();
   await preview(path.join(fixture.files, 'Broken.dxf'), 'Drawing could not be loaded');
   await closePreview();
@@ -4049,33 +4510,19 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await click(fileSelector(path.join(fixture.files, 'Panel.dxf')), 2);
   await settleCamera();
   await until(
-    () =>
-      evaluate<boolean>(
-        `!!document.querySelector('.plane-module-controls [aria-label="Drawing tool"]')`,
-      ),
+    () => evaluate(exists('.plane-module-controls [aria-label="Drawing tool"]')),
     Boolean,
     'drawing tools in plane header',
   );
   await checkDrawingToolbar('.plane-module-controls .preview-toolbar > button', 28);
   await paletteCommand('Measure distance');
   await until(
-    () =>
-      evaluate<string>(
-        `document.querySelector(${choiceButton('Drawing tool')})?.textContent || ''`,
-      ),
+    () => evaluate(textOf(choiceButton('Drawing tool'))),
     (value) => value === 'Distance',
     'searchable preview measurement command',
   );
   assert.equal(
-    await evaluate<boolean>(`(()=>{
-      const host=document.querySelector('.preview-host[data-preview-module="dxf"]');
-      const name=host.querySelector('.preview-filename').getBoundingClientRect();
-      const details=host.querySelector('.preview-file-details').getBoundingClientRect();
-      const guide=host.querySelector('.dxf-guidance').getBoundingClientRect();
-      const open=host.querySelector('.preview-info button').getBoundingClientRect();
-      return Math.abs(name.left-guide.left)<1 && details.left>=name.right &&
-        details.left-name.right<12 && details.right<open.left;
-    })()`),
+    await evaluate(pageCall(drawingHeaderAligned)),
     true,
     'Linked drawing filename, type and size form one aligned group before the external-open action',
   );
@@ -4084,7 +4531,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
     await paletteCommand('Close plane');
     await preview(path.join(fixture.files, 'User panel.dxf'), 'Click geometry');
     await until(
-      () => evaluate<boolean>(`!!document.querySelector('.dxf-viewer[data-dxf-entities="5"]')`),
+      () => evaluate(exists('.dxf-viewer[data-dxf-entities="5"]')),
       Boolean,
       'user drawing geometry',
     );
@@ -4094,15 +4541,17 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   }
   await paletteCommand('Change workspace');
   await until(
-    () => evaluate<string>('document.activeElement?.getAttribute("aria-label") || ""'),
+    () => evaluate(pageCall(activeLabel)),
     (value) => value === 'Search workspaces',
     'workspace picker focus',
   );
   assert.deepEqual(
     await evaluate(
-      'Array.from(document.querySelectorAll(".command-result")).map(row=>row.textContent.trim())',
+      pageCall(() =>
+        Array.from(document.querySelectorAll('.command-result'), (row) => row.textContent.trim()),
+      ),
     ).then((value) =>
-      (value as string[]).map((row) =>
+      value.map((row) =>
         row.includes('Engineering') ? 'Engineering' : row.includes('Studio') ? 'Studio' : row,
       ),
     ),
@@ -4115,8 +4564,14 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  const pickerBounds = await evaluate<{ bottom: number; overflow: boolean }>(
-    `(()=>{const picker=document.querySelector('.command-palette');return {bottom:picker.getBoundingClientRect().bottom,overflow:picker.scrollWidth>picker.clientWidth};})()`,
+  const pickerBounds = await evaluate(
+    pageCall(() => {
+      const picker = document.querySelector('.command-palette')!;
+      return {
+        bottom: picker.getBoundingClientRect().bottom,
+        overflow: picker.scrollWidth > picker.clientWidth,
+      };
+    }),
   );
   assert.ok(pickerBounds.bottom <= 560);
   assert.equal(pickerBounds.overflow, false);
@@ -4124,7 +4579,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await command('Emulation.clearDeviceMetricsOverride');
   await key('Escape', 'Escape');
   await until(
-    () => evaluate<string>('document.activeElement?.getAttribute("aria-label") || ""'),
+    () => evaluate(pageCall(activeLabel)),
     (value) => value === 'Search commands',
     'workspace picker Escape returns to commands',
   );
@@ -4132,22 +4587,26 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await key('Enter', 'Enter');
   await until(
     () =>
-      evaluate<string>(
-        'document.querySelector(".workspace-menu-button")?.textContent || document.body.innerText',
+      evaluate(
+        pageCall(
+          () =>
+            document.querySelector('.workspace-menu-button')?.textContent ||
+            document.body.innerText,
+        ),
       ),
     (value) => value.includes('Engineering'),
     'direct name switches workspace',
   );
   await paletteCommand('Change workspace');
   await until(
-    () => evaluate<string>('document.activeElement?.getAttribute("aria-label") || ""'),
+    () => evaluate(pageCall(activeLabel)),
     (value) => value === 'Search workspaces',
     'workspace picker after switch',
   );
   await command('Input.insertText', { text: 'Studio' });
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<string>('document.body.innerText'),
+    () => evaluate(pageCall(bodyText)),
     (value) => value.includes('Studio'),
     'filtered workspace restores original planes',
   );
@@ -4159,9 +4618,7 @@ async function closePreview(): Promise<void> {
   await click('dialog [aria-label="Close"]');
 }
 async function snapshot(name: string, clip?: Record<string, number>): Promise<string> {
-  await evaluate(
-    'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-  );
+  await evaluate(animationFrames(2));
   const capture = settingsMode ? settingsCommand : command;
   const value = await capture<{ data: string }>('Page.captureScreenshot', {
     format: 'png',
@@ -4171,19 +4628,34 @@ async function snapshot(name: string, clip?: Record<string, number>): Promise<st
   await writeFile(path.join(captureRoot, name), buffer);
   return createHash('sha256').update(buffer).digest('hex');
 }
+/** The planes' transforms, whether the camera moves, and whether the space is laid out and shown. */
+function cameraState() {
+  const engine = (window as unknown as Partial<SmokeWindow>).__qaEngine;
+  return {
+    transform: JSON.stringify(
+      Array.from(
+        document.querySelectorAll('[data-plurid-plane]'),
+        (element) => getComputedStyle(element).transform,
+      ),
+    ),
+    moving: engine
+      ? engine.camera.motion() !== 'idle'
+      : !!document.querySelector('[data-plurid-motion]'),
+    ready:
+      (!engine || engine.getSnapshot().space.resolvedLayout) &&
+      getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]')!).opacity ===
+        '1',
+  };
+}
 async function settleCamera(): Promise<void> {
   // A stable DOM observation is meaningful only after the native window paints;
   // otherwise an occluded window can look idle with recovery still queued.
-  await evaluate(
-    'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-  );
+  await evaluate(animationFrames(2));
   let prior = '',
     stable = 0;
   await until(
     async () => {
-      const state = await evaluate<{ transform: string; moving: boolean; ready: boolean }>(
-        `({transform:JSON.stringify(Array.from(document.querySelectorAll('[data-plurid-plane]')).map(element=>getComputedStyle(element).transform)),moving:window.__qaEngine ? window.__qaEngine.camera.motion() !== 'idle' : !!document.querySelector('[data-plurid-motion]'),ready:(!window.__qaEngine || window.__qaEngine.getSnapshot().space.resolvedLayout) && getComputedStyle(document.querySelector('[data-plurid-entity="PluridSpace"]')).opacity === '1'})`,
-      );
+      const state = await evaluate(pageCall(cameraState));
       stable = state.ready && state.transform === prior && !state.moving ? stable + 1 : 0;
       prior = state.transform;
       return stable;
@@ -4192,53 +4664,80 @@ async function settleCamera(): Promise<void> {
     'settled spatial camera',
   );
 }
+const indexStatus = () => window.viewer.indexStatus();
+const epubCount = (root: string) =>
+  window.viewer
+    .indexedQuery({ query: 'Book ext:epub', root })
+    .then((result) => result.entries.length);
+/** Whether the plane of pane `id` lies inside the workspace surface. */
+function planeContained(id: string) {
+  const surface = document.querySelector('.workspace-surface')!.getBoundingClientRect();
+  const plane = document
+    .querySelector(`[data-plurid-plane]:has([data-viewer-plane=${JSON.stringify(id)}])`)!
+    .getBoundingClientRect();
+  return (
+    plane.left >= surface.left &&
+    plane.top >= surface.top &&
+    plane.right <= surface.right &&
+    plane.bottom <= surface.bottom
+  );
+}
+/** The camera, layout and planes, for a failure message. */
+function engineReport() {
+  const engine = (window as unknown as SmokeWindow).__qaEngine;
+  return JSON.stringify({
+    camera: engine.camera.get(),
+    resolved: engine.getSnapshot().space.resolvedLayout,
+    view: engine.inspect().view,
+    planes: engine.inspect().planes.map((plane) => ({
+      id: plane.planeID,
+      width: plane.width,
+      height: plane.height,
+      location: plane.location,
+    })),
+  });
+}
+const undoDepth = () => (window as unknown as SmokeWindow).__qaEngine.history.get().undoDepth;
+const currentViewpoint = () =>
+  (window as unknown as SmokeWindow).__qaEngine.getViewpoint({ version: 2 });
+/** Three rapid double-clicks on a row, as repeated activation sends them. */
+function activateThrice(row: string) {
+  const element = document.querySelector(row)!;
+  for (let count = 0; count < 3; count++)
+    element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+}
 async function verifyRestoredPreviews(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
   const untouched = await inventory();
   await until(
-    () => evaluate<{ running: boolean; count: number }>('window.viewer.indexStatus()'),
+    () => evaluate(pageCall(indexStatus)),
     (status) => !status.running && status.count > 10,
     'packaged SQLite utility index',
   );
-  assert.equal(
-    await evaluate(
-      `window.viewer.indexedQuery({ query: 'Book ext:epub', root: ${JSON.stringify(fixture.files)} }).then(result => result.entries.length)`,
-    ),
-    1,
-  );
+  assert.equal(await evaluate(pageCall(epubCount, fixture.files)), 1);
   const restore = async (state: SavedState, count: number) => {
     await delay(800);
-    await evaluate(`window.viewer.save(${JSON.stringify(state)})`);
+    await evaluate(pageCall(saveState, state));
     await reloadPage();
     await restoredEngine(count);
     await settleCamera();
   };
-  const containedActive = (id = 'reused-preview-3') =>
-    evaluate<boolean>(`(() => {
-      const surface = document.querySelector('.workspace-surface').getBoundingClientRect();
-      const plane = document.querySelector(${JSON.stringify(`[data-plurid-plane]:has([data-viewer-plane=${JSON.stringify(id)}])`)}).getBoundingClientRect();
-      return plane.left >= surface.left && plane.top >= surface.top && plane.right <= surface.right && plane.bottom <= surface.bottom;
-    })()`);
+  const containedActive = (id = 'reused-preview-3') => evaluate(pageCall(planeContained, id));
   for (let attempt = 0; attempt < 3; attempt++) {
     await restore(repeatedPreviewFixture(fixture.files), 4);
     assert.equal(
       await containedActive(),
       true,
-      `Restoration ${attempt + 1} must recover an offscreen active plane instead of replaying a clipped oblique view: ${await evaluate('JSON.stringify({camera:window.__qaEngine.camera.get(),resolved:window.__qaEngine.getSnapshot().space.resolvedLayout,view:window.__qaEngine.inspect().view,planes:window.__qaEngine.inspect().planes.map(plane=>({id:plane.planeID,width:plane.width,height:plane.height,location:plane.location}))})')}`,
+      `Restoration ${attempt + 1} must recover an offscreen active plane instead of replaying a clipped oblique view: ${await evaluate(pageCall(engineReport))}`,
     );
   }
   const planeIDs = await enginePlaneIDs();
-  await evaluate(
-    'window.__qaEngine.camera.frame({planeID:window.__qaEngine.tree.get()[0].planeID},{animate:false})',
-  );
+  await evaluate(pageCall(frameFirstPlane));
   await settleCamera();
   const image = fileSelector(path.join(fixture.files, 'Images', 'Color.png'));
   await click(image, 2);
-  await evaluate(`(() => {
-    const row = document.querySelector(${JSON.stringify(image)});
-    for (let count=0;count<3;count++) row.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));
-  })()`);
+  await evaluate(pageCall(activateThrice, image));
   await settleCamera();
   assert.equal(
     await enginePlaneIDs(),
@@ -4252,44 +4751,63 @@ async function verifyRestoredPreviews(): Promise<void> {
   );
   const reopenedID = reopened.workspaces[0].activePane!;
   assert.equal(await containedActive(reopenedID), true);
-  const geometry = await evaluate<string>(
-    `JSON.stringify(window.__qaEngine.tree.get()[0].children.find(node => node.routeDivisions.plane.parameters.id === ${JSON.stringify(reopenedID)}).location)`,
+  const geometry = await evaluate(
+    pageCall(
+      (id: string) =>
+        JSON.stringify(
+          (window as unknown as SmokeWindow).__qaEngine.tree
+            .get()[0]
+            .children!.find((node) => node.routeDivisions.plane.parameters.id === id)!.location,
+        ),
+      reopenedID,
+    ),
   );
-  const history = await evaluate<number>('window.__qaEngine.history.get().undoDepth');
+  const history = await evaluate(pageCall(undoDepth));
   await paletteCommand('Consolidate repeated previews');
   await until(
-    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    () => evaluate(pageCall(inspectedPlaneCount)),
     (count) => count === 2,
     'consolidated repeated image previews',
   );
   await settleCamera();
   assert.equal(await containedActive(reopenedID), true);
   assert.equal(
-    await evaluate('JSON.stringify(window.__qaEngine.tree.get()[0].children[0].location)'),
+    await evaluate(
+      pageCall(() =>
+        JSON.stringify(
+          (window as unknown as SmokeWindow).__qaEngine.tree.get()[0].children![0].location,
+        ),
+      ),
+    ),
     geometry,
     'Recovery keeps the active preview and its placement',
   );
-  assert.equal(await evaluate('window.__qaEngine.history.get().undoDepth'), history + 1);
+  assert.equal(await evaluate(pageCall(undoDepth)), history + 1);
   await paletteCommand('Undo arrangement');
   await until(
-    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    () => evaluate(pageCall(inspectedPlaneCount)),
     (count) => count === 4,
     'one undo restores every consolidated preview',
   );
   await paletteCommand('Redo arrangement');
   await until(
-    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    () => evaluate(pageCall(inspectedPlaneCount)),
     (count) => count === 2,
     'redo preview recovery',
   );
   // A deliberate oblique view that fits remains exact on reopen. Recovery is not
   // a blanket reset of users' saved camera arrangements.
   await evaluate(
-    'window.__qaEngine.camera.moveBy({absolute:{yaw:-74,pitch:8,scale:0.6}},{animate:false})',
+    pageCall(() =>
+      (window as unknown as SmokeWindow).__qaEngine.camera.moveBy(
+        { absolute: { yaw: -74, pitch: 8, scale: 0.6 } },
+        { animate: false },
+      ),
+    ),
   );
   await settleCamera();
   assert.equal(await containedActive(reopenedID), true);
-  const viewpoint = await evaluate<string>('window.__qaEngine.getViewpoint({version:2})');
+  const viewpoint = await evaluate(pageCall(currentViewpoint));
   await until(
     async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
     (state) =>
@@ -4301,15 +4819,13 @@ async function verifyRestoredPreviews(): Promise<void> {
   await reloadPage();
   await restoredEngine(2);
   await settleCamera();
-  assert.equal(await evaluate('window.__qaEngine.getViewpoint({version:2})'), viewpoint);
-  await evaluate(
-    'window.__qaEngine.camera.frame({planeID:window.__qaEngine.tree.get()[0].planeID},{animate:false})',
-  );
+  assert.equal(await evaluate(pageCall(currentViewpoint)), viewpoint);
+  await evaluate(pageCall(frameFirstPlane));
   await settleCamera();
   await click(fileSelector(path.join(fixture.files, 'Images', 'Color.png')));
   await paletteCommand('Open in another plane');
   await until(
-    () => evaluate<number>('window.__qaEngine.inspect().planes.length'),
+    () => evaluate(pageCall(inspectedPlaneCount)),
     (count) => count === 3,
     'explicit independent image preview',
   );
@@ -4325,22 +4841,23 @@ async function verifyRestoredPreviews(): Promise<void> {
   await settleCamera();
   await click('[aria-label="Commands (⌘K)"]');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".command-results")'),
+    () => evaluate(exists('.command-results')),
     Boolean,
     'commands after restoring explicit copy',
   );
   await command('Input.insertText', { text: 'Consolidate repeated previews' });
   await until(
-    () =>
-      evaluate<string>(
-        `document.querySelector('[aria-label="Search commands"]').getAttribute('value')`,
-      ),
+    () => evaluate(requiredAttribute('[aria-label="Search commands"]', 'value')),
     (value) => value === 'Consolidate repeated previews',
     'query for unavailable consolidation after reopening an intentional copy',
   );
   assert.equal(
     await evaluate(
-      'Array.from(document.querySelectorAll(".command-result")).some(row => row.textContent.includes("Consolidate repeated previews"))',
+      pageCall(() =>
+        Array.from(document.querySelectorAll('.command-result')).some((row) =>
+          row.textContent.includes('Consolidate repeated previews'),
+        ),
+      ),
     ),
     false,
     'Explicit copies must be excluded from recovery',
@@ -4354,6 +4871,18 @@ async function verifyRestoredPreviews(): Promise<void> {
   await snapshot('desktop-native-workspace-recovered.png');
   await restore(original, original.workspaces[0].panes.length);
 }
+/** A document's text and evidence, read through a resource released afterwards. */
+async function documentText(file: string) {
+  const source = await window.viewer.resource(file);
+  try {
+    return await window.viewer.document(source.id);
+  } finally {
+    await window.viewer.release(source.id);
+  }
+}
+const actionGet = (id: string) => window.viewer.actionGet(id);
+const chapterQuery = (root: string) =>
+  window.viewer.indexedQuery({ query: 'local chapter fixture', content: true, root });
 async function verifyServiceWorkflows(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
@@ -4361,21 +4890,18 @@ async function verifyServiceWorkflows(): Promise<void> {
   const documents = path.join(fixture.files, 'Documents');
   const book = path.join(documents, 'Book.epub');
   const bookBytes = await readFile(book);
-  const document = await evaluate<{
-    text: string;
-    evidence: { source: string; text: string }[];
-  }>(`(async () => {
-    const source = await window.viewer.resource(${JSON.stringify(path.join(documents, 'Project brief.pdf'))});
-    try { return await window.viewer.document(source.id); } finally { await window.viewer.release(source.id); }
-  })()`);
-  assert.ok(document.text.includes('Searchable PDF text'));
+  const brief = await evaluate(pageCall(documentText, path.join(documents, 'Project brief.pdf')));
+  assert.ok(brief.text.includes('Searchable PDF text'));
   assert.equal(
-    document.evidence.some((item) => item.source.startsWith('OCR page')),
+    brief.evidence.some((item) => item.source.startsWith('OCR page')),
     false,
     'Ordinary document reading leaves OCR opt-in',
   );
-  const inspected = await evaluate<{ evidence: { source: string; text: string }[] }>(
-    `window.viewer.inspect(${JSON.stringify(path.join(documents, 'Project brief.pdf'))}, true, true)`,
+  const inspected = await evaluate(
+    pageCall(
+      (file: string) => window.viewer.inspect(file, true, true),
+      path.join(documents, 'Project brief.pdf'),
+    ),
   );
   assert.ok(
     inspected.evidence.some(
@@ -4390,21 +4916,17 @@ async function verifyServiceWorkflows(): Promise<void> {
   await settleCamera();
   await key(' ', 'Space');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".quick-preview .epub-viewer")'),
+    () => evaluate(exists('.quick-preview .epub-viewer')),
     Boolean,
     'Space after the frame control',
   );
   await key('Escape', 'Escape');
   await click(fileSelector(book));
   await paletteCommand('Rename as book');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".action-config")'),
-    Boolean,
-    'book action configuration',
-  );
+  await until(() => evaluate(exists('.action-config')), Boolean, 'book action configuration');
   await click('.action-config .primary');
   const plan = await until(
-    () => evaluate<ActionPlan[]>('window.viewer.actionList()'),
+    () => evaluate(pageCall(() => window.viewer.actionList())),
     (plans) => plans.some((plan) => plan.recipeID === 'book-name' && plan.status === 'review'),
     'local book proposal',
   ).then((plans) =>
@@ -4416,22 +4938,25 @@ async function verifyServiceWorkflows(): Promise<void> {
   );
   assert.deepEqual(await inventory(), unchanged, 'Creating a proposal must not modify files');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Evidence for Book.epub"]')`),
+    () => evaluate(exists('[aria-label="Evidence for Book.epub"]')),
     Boolean,
     'rendered proposal',
   );
   const destinationSelector = '[aria-label="Destination for Book.epub"]';
   assert.equal(
-    await evaluate<string>(`document.querySelector(${JSON.stringify(destinationSelector)}).value`),
+    await evaluate(requiredValue(destinationSelector)),
     path.basename(plan.rows[0].destination),
     'Review must show the complete proposed filename ahead of its directory',
   );
   await click(destinationSelector);
-  await evaluate(`window.viewer.textEdit('selectAll')`);
+  await evaluate(pageCall(() => window.viewer.textEdit('selectAll')));
   await until(
     () =>
-      evaluate<boolean>(
-        `(() => { const input = document.querySelector(${JSON.stringify(destinationSelector)}); return input.selectionStart === 0 && input.selectionEnd === input.value.length; })()`,
+      evaluate(
+        pageCall((selector: string) => {
+          const input = document.querySelector<HTMLInputElement>(selector)!;
+          return input.selectionStart === 0 && input.selectionEnd === input.value.length;
+        }, destinationSelector),
       ),
     Boolean,
     'native Select All in review input',
@@ -4442,7 +4967,7 @@ async function verifyServiceWorkflows(): Promise<void> {
   await command('Input.insertText', { text: editedName });
   await click('[aria-label="Edit path for Book.epub"]');
   assert.equal(
-    await evaluate<string>(`document.querySelector(${JSON.stringify(destinationSelector)}).value`),
+    await evaluate(requiredValue(destinationSelector)),
     path.join(documents, editedName),
     'Filename edits retain the intended destination directory',
   );
@@ -4454,14 +4979,14 @@ async function verifyServiceWorkflows(): Promise<void> {
   await snapshot('action-review-native.png');
   await click('.task-dialog footer .primary');
   await until(
-    () => evaluate<ActionPlan>(`window.viewer.actionGet(${JSON.stringify(plan.id)})`),
+    () => evaluate(pageCall(actionGet, plan.id)),
     (plan) => plan.status === 'completed',
     'apply reviewed book rename',
   );
   assert.deepEqual(await readFile(plan.rows[0].destination), bookBytes);
   await click('.task-dialog footer button');
   await until(
-    () => evaluate<ActionPlan>(`window.viewer.actionGet(${JSON.stringify(plan.id)})`),
+    () => evaluate(pageCall(actionGet, plan.id)),
     (plan) => !plan.undoable,
     'undo reviewed rename',
   );
@@ -4469,13 +4994,24 @@ async function verifyServiceWorkflows(): Promise<void> {
   await closePreview();
   await paletteCommand('Parent folder');
   await evaluate(
-    `(async () => { const snapshot = await window.viewer.settingsGet(); await window.viewer.settingsPatch([{ path: 'settings.savedSearches', value: [{id:'qa-publications', name:'Publication files', query:'ext:pdf,epub', root:${JSON.stringify(fixture.files)}, recursive:true}] }], snapshot.revision); })()`,
+    patchSettings({
+      path: 'settings.savedSearches',
+      value: [
+        {
+          id: 'qa-publications',
+          name: 'Publication files',
+          query: 'ext:pdf,epub',
+          root: fixture.files,
+          recursive: true,
+        },
+      ],
+    }),
   );
   await paletteCommand('Publication files');
   await restoredEngine(2);
   await settleCamera();
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".search-explorer [data-file-path]")'),
+    () => evaluate(exists('.search-explorer [data-file-path]')),
     Boolean,
     'indexed search root',
   );
@@ -4483,7 +5019,7 @@ async function verifyServiceWorkflows(): Promise<void> {
   await click(`.search-explorer ${fileSelector(book)}`);
   await key(' ', 'Space');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".quick-preview .epub-viewer")'),
+    () => evaluate(exists('.quick-preview .epub-viewer')),
     Boolean,
     'Quick Preview from virtual search',
   );
@@ -4497,38 +5033,46 @@ async function verifyServiceWorkflows(): Promise<void> {
     'shared search result file information',
   );
   await closePreview();
-  await patchInSettings(
-    `[{path:'settings.search.contentRoots',value:[${JSON.stringify(documents)}]}]`,
-  );
+  await patchInSettings({ path: 'settings.search.contentRoots', value: [documents] });
   await until(
-    () =>
-      evaluate<IndexedResult>(
-        `window.viewer.indexedQuery({query:'local chapter fixture',content:true,root:${JSON.stringify(documents)}})`,
-      ),
+    () => evaluate(pageCall(chapterQuery, documents)),
     (result) => result.entries.some((file) => file.path === book),
     'explicitly granted local document-text indexing',
   );
   await patchInSettings(
-    `[{path:'settings.search.contentRoots',value:[]},{path:'settings.search.paused',value:true}]`,
+    { path: 'settings.search.contentRoots', value: [] },
+    { path: 'settings.search.paused', value: true },
   );
   await until(
-    () =>
-      evaluate<IndexedResult>(
-        `window.viewer.indexedQuery({query:'local chapter fixture',content:true,root:${JSON.stringify(documents)}})`,
-      ),
+    () => evaluate(pageCall(chapterQuery, documents)),
     (result) => !result.entries.length,
     'revoking text permission clears stored content while paused',
   );
-  await patchInSettings(`[{path:'settings.search.paused',value:false}]`);
+  await patchInSettings({ path: 'settings.search.paused', value: false });
   await paletteCommand('Settings');
   for (const category of ['Browsing', 'Search', 'Actions', 'Models', 'Agents', 'Shortcuts']) {
     await tab(category);
     await snapshot('settings-' + category.toLowerCase() + '-native.png');
   }
-  await patchInSettings(`[{path:'settings.agents.enabled',value:true}]`);
+  await patchInSettings({ path: 'settings.agents.enabled', value: true });
   const configuration = JSON.parse(
-    await settingsEvaluate<string>(
-      `window.viewer.agentClients({kind:'create',client:{name:'Smoke metadata',roots:[${JSON.stringify(documents)}],capabilities:['metadata'],budgets:{maxReadBytes:1048576,maxTasks:1}}}).then(value=>value.configuration)`,
+    await settingsEvaluate(
+      pageCall(
+        (root: string) =>
+          window.viewer
+            .agentClients({
+              kind: 'create',
+              client: {
+                name: 'Smoke metadata',
+                roots: [root],
+                capabilities: ['metadata'],
+                budgets: { maxReadBytes: 1048576, maxTasks: 1 },
+              },
+            })
+            // a created client's reply carries its configuration
+            .then((reply) => (reply as { configuration: string }).configuration),
+        documents,
+      ),
     ),
   ) as {
     mcpServers: { viewer: { env: Record<string, string> } };
@@ -4588,8 +5132,8 @@ async function verifyServiceWorkflows(): Promise<void> {
         throw new Error('Packaged MCP client timed out');
       }),
     ]);
-    const access = await settingsEvaluate<AgentAccessState>(
-      `window.viewer.agentAccess({kind:'state'})`,
+    const access = await settingsEvaluate(
+      pageCall(() => window.viewer.agentAccess({ kind: 'state' })),
     );
     assert.equal(access.enabled, false);
     assert.equal(access.pending.enable, true);
@@ -4610,13 +5154,14 @@ async function verifyServiceWorkflows(): Promise<void> {
   } finally {
     if (agent.exitCode === null && agent.signalCode === null) agent.kill('SIGKILL');
     await patchInSettings(
-      `[{path:'settings.agents.enabled',value:false},{path:'settings.agents.roots',value:[]}]`,
+      { path: 'settings.agents.enabled', value: false },
+      { path: 'settings.agents.roots', value: [] },
     );
   }
   await click('dialog [aria-label="Close"]');
   await delay(800);
   await assert.rejects(readFile(path.join(profile, 'credentials-v1.json')), { code: 'ENOENT' });
-  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await evaluate(pageCall(saveState, original));
   await reloadPage();
   await restoredEngine(1);
   await settleCamera();
@@ -4625,39 +5170,35 @@ async function verifyServiceWorkflows(): Promise<void> {
     'Services: packaged PDF extraction and OCR, Space after Frame, book proposal/review/apply/Undo, indexed virtual search, shared result commands and modeless Settings.',
   );
 }
+const readResource = (id: string) => window.viewer.read(id);
+const revokeAccess = (folder: string) => window.viewer.fileAccessRevoke(folder);
+const previewShowsNotes = () =>
+  document.querySelector('.quick-preview')?.textContent.includes('A wider view');
 async function verifyIndependentPreviewRevocation(): Promise<void> {
   const documents = path.join(fixture.files, 'Documents');
   const images = path.join(fixture.files, 'Images');
   const file = path.join(documents, 'Project notes.md');
-  const resource = await evaluate<Resource>(`window.viewer.resource(${JSON.stringify(file)})`);
-  const original = await evaluate(`window.viewer.read(${JSON.stringify(resource.id)})`);
+  const resource = await evaluate(pageCall((file: string) => window.viewer.resource(file), file));
+  const original = await evaluate(pageCall(readResource, resource.id));
   await click(fileSelector(documents), 2);
   await preview(file, 'A wider view');
-  await evaluate('window.viewer.openSettings()');
+  await evaluate(pageCall(openSettings));
   await openSettingsProbe();
   try {
-    await settingsEvaluate(`window.viewer.fileAccessRevoke(${JSON.stringify(images)})`);
+    await settingsEvaluate(pageCall(revokeAccess, images));
     assert.deepEqual(
-      await evaluate(`window.viewer.read(${JSON.stringify(resource.id)})`),
+      await evaluate(pageCall(readResource, resource.id)),
       original,
       'Revoking Images must preserve an existing Documents resource',
     );
-    assert.ok(
-      await evaluate(
-        'document.querySelector(".quick-preview")?.textContent.includes("A wider view")',
-      ),
-    );
+    assert.ok(await evaluate(pageCall(previewShowsNotes)));
     // Ordinary-runtime permission denial is sufficient to detect stale decoded
     // UI bytes. Genuine PowerBox authorization is a separate signed scenario.
     await chmod(documents, 0o000);
-    assert.ok(
-      await evaluate(
-        'document.querySelector(".quick-preview")?.textContent.includes("A wider view")',
-      ),
-    );
-    await settingsEvaluate(`window.viewer.fileAccessRevoke(${JSON.stringify(documents)})`);
+    assert.ok(await evaluate(pageCall(previewShowsNotes)));
+    await settingsEvaluate(pageCall(revokeAccess, documents));
     await until(
-      () => evaluate<string>('document.querySelector(".quick-preview")?.textContent || ""'),
+      () => evaluate(textOf('.quick-preview')),
       (value) => value.includes('File unavailable') && !value.includes('A wider view'),
       'revoked preview disposes its decoded text and shows the access error',
     );
@@ -4666,7 +5207,7 @@ async function verifyIndependentPreviewRevocation(): Promise<void> {
   } finally {
     await chmod(documents, 0o700);
     if (settingsMode) await click('dialog [aria-label="Close"]');
-    await evaluate(`window.viewer.release(${JSON.stringify(resource.id)})`);
+    await evaluate(pageCall((id: string) => window.viewer.release(id), resource.id));
     await closePreview();
     await paletteCommand('Parent folder');
   }
@@ -4675,13 +5216,31 @@ async function verifyIndependentPreviewRevocation(): Promise<void> {
   );
 }
 
+/** The error code a document read reports for an unreadable file. */
+async function documentFailure(file: string) {
+  const resource = await window.viewer.resource(file);
+  try {
+    return await window.viewer.document(resource.id).then(
+      () => ({ code: 'UNEXPECTED_SUCCESS' }),
+      (error: { code: string; message: string }) => ({
+        code: error.code,
+        message: error.message,
+      }),
+    );
+  } finally {
+    await window.viewer.release(resource.id);
+  }
+}
 async function verifyStoreFileServices(): Promise<void> {
   await verifyIndependentPreviewRevocation();
-  const task = await evaluate<FolderSizeTask>(
-    `window.viewer.folderSizeStart([${JSON.stringify(path.join(fixture.files, 'Models'))}])`,
+  const task = await evaluate(
+    pageCall(
+      (folder: string) => window.viewer.folderSizeStart([folder]),
+      path.join(fixture.files, 'Models'),
+    ),
   );
   const measured = await until(
-    () => evaluate<FolderSizeTask>(`window.viewer.folderSizeGet(${JSON.stringify(task.id)})`),
+    () => evaluate(pageCall((id: string) => window.viewer.folderSizeGet(id), task.id)),
     (value) => value.status === 'completed',
     'thread-backed recursive size calculation',
   );
@@ -4693,12 +5252,7 @@ async function verifyStoreFileServices(): Promise<void> {
   );
   try {
     await chmod(deniedPDF, 0o000);
-    const failure = await evaluate<{ code: string }>(`(async () => {
-      const resource = await window.viewer.resource(${JSON.stringify(deniedPDF)});
-      try {
-        return await window.viewer.document(resource.id).then(() => ({ code: 'UNEXPECTED_SUCCESS' }), error => ({ code: error.code, message: error.message }));
-      } finally { await window.viewer.release(resource.id); }
-    })()`);
+    const failure = await evaluate(pageCall(documentFailure, deniedPDF));
     assert.ok(
       ['EACCES', 'EPERM'].includes(failure.code),
       'Reader permissions survive the worker and IPC boundaries: ' + JSON.stringify(failure),
@@ -4724,16 +5278,19 @@ async function verifyStoreFileServices(): Promise<void> {
   try {
     await chmod(restricted, 0o000);
     await until(
-      () =>
-        evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(restricted))})`),
+      () => evaluate(exists(fileSelector(restricted))),
       Boolean,
       'new permission fixture appears in the watched folder',
     );
     await click(fileSelector(restricted), 2);
     await until(
       () =>
-        evaluate<boolean>(
-          `[...document.querySelectorAll('.folder-error button')].some(button => button.textContent.includes('Allow folder access'))`,
+        evaluate(
+          pageCall(() =>
+            [...document.querySelectorAll('.folder-error button')].some((button) =>
+              button.textContent.includes('Allow folder access'),
+            ),
+          ),
         ),
       Boolean,
       'actionable native folder access control',
@@ -4742,7 +5299,7 @@ async function verifyStoreFileServices(): Promise<void> {
     assert.ok(!(await text()).includes('This folder is empty'));
     await snapshot('desktop-native-folder-access.png');
     await chmod(restricted, 0o700);
-    await evaluate(`window.dispatchEvent(new Event('viewer:refresh'))`);
+    await evaluate(pageCall(() => window.dispatchEvent(new Event('viewer:refresh'))));
     await until(
       text,
       (value) => !value.includes('Folder access required'),
@@ -4752,8 +5309,7 @@ async function verifyStoreFileServices(): Promise<void> {
     const recovered = path.join(restricted, 'Recovered.txt');
     await writeFile(recovered, 'Generated watcher recovery fixture.');
     await until(
-      () =>
-        evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(recovered))})`),
+      () => evaluate(exists(fileSelector(recovered))),
       Boolean,
       'watch resumes after folder permission recovery',
     );
@@ -4770,6 +5326,22 @@ async function verifyStoreFileServices(): Promise<void> {
   );
 }
 
+/** Opens and frames the root plane whose route ends with pane `id`. */
+function facePane(id: string) {
+  const engine = (window as unknown as SmokeWindow).__qaEngine;
+  const info = engine.inspect().planes.find((plane) => plane.route.endsWith('/' + id))!;
+  engine.tree.open(info.planeID);
+  engine.camera.frame({ planeID: info.planeID }, { animate: false });
+}
+/** Each root's pane id with its children's. */
+const paneTree = () =>
+  (window as unknown as SmokeWindow).__qaEngine.tree.get().map((plane) => ({
+    id: plane.routeDivisions.plane.parameters.id || plane.routeDivisions.path.parameters.id,
+    children: (plane.children || []).map(
+      (child) =>
+        child.routeDivisions.plane.parameters.id || child.routeDivisions.path.parameters.id,
+    ),
+  }));
 async function verifyPreviewOwnership(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
@@ -4791,27 +5363,26 @@ async function verifyPreviewOwnership(): Promise<void> {
       historyIndex: 0,
     })),
   };
-  await evaluate(`window.viewer.save(${JSON.stringify(seeded)})`);
+  await evaluate(pageCall(saveState, seeded));
   await reloadPage();
   await restoredEngine(2);
   const face = async (id: string) => {
-    await evaluate(
-      `(() => { const info = window.__qaEngine.inspect().planes.find(plane=>plane.route.endsWith('/'+${JSON.stringify(id)})); window.__qaEngine.tree.open(info.planeID); window.__qaEngine.camera.frame({planeID:info.planeID},{animate:false}); })()`,
-    );
+    await evaluate(pageCall(facePane, id));
     await settleCamera();
     await until(
-      () => evaluate<boolean>(`!!document.querySelector('[data-viewer-plane="${id}"]')`),
+      () => evaluate(exists(`[data-viewer-plane="${id}"]`)),
       Boolean,
       'root available after culling',
     );
     await evaluate(
-      `document.querySelector('[data-viewer-plane="${id}"]').closest('[data-plurid-plane]').dataset.qaOwner=${JSON.stringify(id)}`,
+      pageCall((id: string) => {
+        document
+          .querySelector(`[data-viewer-plane="${id}"]`)!
+          .closest<HTMLElement>('[data-plurid-plane]')!.dataset.qaOwner = id;
+      }, id),
     );
   };
-  const readTree = () =>
-    evaluate<{ id: string; children: string[] }[]>(
-      `window.__qaEngine.tree.get().map(plane=>({id:plane.routeDivisions.plane.parameters.id||plane.routeDivisions.path.parameters.id,children:(plane.children||[]).map(child=>child.routeDivisions.plane.parameters.id||child.routeDivisions.path.parameters.id)}))`,
-    );
+  const readTree = () => evaluate(pageCall(paneTree));
   for (const id of ['qa-root-one', 'qa-root-two']) {
     await face(id);
     await click(`[data-qa-owner="${id}"] ${fileSelector(image)}`, 2);
@@ -4836,7 +5407,7 @@ async function verifyPreviewOwnership(): Promise<void> {
   assert.equal(await enginePlaneIDs(), identities);
   assert.deepEqual(await readTree(), owned, 'root ownership survives saved-layout reopening');
   assert.deepEqual(await inventory(), before);
-  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await evaluate(pageCall(saveState, original));
   await reloadPage();
   await restoredEngine(1);
   await settleCamera();
@@ -4844,41 +5415,58 @@ async function verifyPreviewOwnership(): Promise<void> {
     'Preview ownership: independent same-file children in two roots, same-root reuse and exact restoration without duplicates.',
   );
 }
-async function verifyResourceBoundaries(source: string): Promise<void> {
-  const grant = await evaluate<{ id: string; url: string }>(
-    `window.viewer.resource(${JSON.stringify(source)})`,
+const openResource = (file: string) => window.viewer.resource(file);
+const releaseResource = (id: string) => window.viewer.release(id);
+/** A ranged read of a granted resource, a traversal out of it and an outside request. */
+async function resourceScope(url: string, escape: string) {
+  const response = await fetch(url, { headers: { Range: 'bytes=0-3' } });
+  const escaped = await fetch(escape);
+  const network = await fetch('https://example.com').then(
+    () => true,
+    () => false,
   );
-  const scopeResult = await evaluate<{
-    range: number;
-    csp: string;
-    escaped: number;
-    network: boolean;
-  }>(
-    `(async()=>{ const response=await fetch(${JSON.stringify(grant.url)}, {headers:{Range:'bytes=0-3'}}); const escaped=await fetch(${JSON.stringify(`viewer-resource://${grant.id}/asset/%2e%2e%2foutside`)}); let network=false; try{await fetch('https://example.com');network=true}catch{} return {range:response.status,csp:response.headers.get('content-security-policy'),escaped:escaped.status,network};})()`,
+  return {
+    range: response.status,
+    csp: response.headers.get('content-security-policy')!,
+    escaped: escaped.status,
+    network,
+  };
+}
+async function verifyResourceBoundaries(source: string): Promise<void> {
+  const grant = await evaluate(pageCall(openResource, source));
+  const scopeResult = await evaluate(
+    pageCall(resourceScope, grant.url, `viewer-resource://${grant.id}/asset/%2e%2e%2foutside`),
   );
   assert.equal(scopeResult.range, 206);
   // A single-file grant exposes only its exact name, including for traversal requests.
   assert.equal(scopeResult.escaped, 404);
   assert.equal(scopeResult.network, false);
   assert.match(scopeResult.csp, /sandbox/);
-  await evaluate(`window.viewer.release(${JSON.stringify(grant.id)})`);
+  await evaluate(pageCall(releaseResource, grant.id));
   // Model grants can resolve companions, so their directory boundary rejects escape explicitly.
-  const model = await evaluate<{ id: string }>(
-    `window.viewer.resource(${JSON.stringify(path.join(fixture.files, 'Models', 'Triangle.gltf'))})`,
+  const model = await evaluate(
+    pageCall(openResource, path.join(fixture.files, 'Models', 'Triangle.gltf')),
   );
   try {
     assert.equal(
-      await evaluate<number>(
-        `fetch(${JSON.stringify(`viewer-resource://${model.id}/asset/%2e%2e%2foutside`)})
-          .then(response => response.status)`,
+      await evaluate(
+        pageCall(
+          (url: string) => fetch(url).then((response) => response.status),
+          `viewer-resource://${model.id}/asset/%2e%2e%2foutside`,
+        ),
       ),
       403,
     );
   } finally {
-    await evaluate(`window.viewer.release(${JSON.stringify(model.id)})`);
+    await evaluate(pageCall(releaseResource, model.id));
   }
-  const validation = await evaluate<boolean>(
-    `window.viewer.stat('relative-path').then(()=>false,()=>true)`,
+  const validation = await evaluate(
+    pageCall(() =>
+      window.viewer.stat('relative-path').then(
+        () => false,
+        () => true,
+      ),
+    ),
   );
   assert.equal(validation, true);
 }
@@ -4886,45 +5474,44 @@ async function verifyResourceBoundaries(source: string): Promise<void> {
 async function verifyCapturedMenus(): Promise<void> {
   const readme = path.join(fixture.files, 'README.md');
   await contextMenu(fileSelector(readme));
-  assert.equal(await evaluate('getComputedStyle(document.activeElement).outlineStyle'), 'none');
-  assert.equal(await evaluate('getComputedStyle(document.activeElement).boxShadow'), 'none');
+  assert.equal(await evaluate(pageCall(focusOutline)), 'none');
+  assert.equal(
+    await evaluate(pageCall(() => getComputedStyle(document.activeElement!).boxShadow)),
+    'none',
+  );
   await command('Input.insertText', { text: 'rn' });
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".command-result[aria-selected=true]")?.textContent || ""',
-      ),
+    () => evaluate(textOf('.command-result[aria-selected=true]')),
     (value) => value.startsWith('Rename'),
     'two-letter Rename alias',
   );
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    () => evaluate(valueOf('dialog input')),
     (value) => value === 'README.md',
     'clicked target captured for rename',
   );
   await click('dialog [aria-label="Close"]');
   await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
-  assert.match(
-    await evaluate<string>(
-      'document.querySelector(".context-menu .command-result")?.textContent || ""',
-    ),
-    /^Rename/,
-  );
+  assert.match(await evaluate(textOf('.context-menu .command-result')), /^Rename/);
   // Recent is an extra shortcut; the action also keeps its ordinary menu position.
   assert.deepEqual(
     await evaluate(
-      `Array.from(document.querySelectorAll('.context-menu .command-result'))
-        .filter(item => item.querySelector('.command-result-text > span')?.textContent === 'Rename…')
-        .map(item => item.getAttribute('data-menu-id'))
-        .sort()`,
+      pageCall(() =>
+        Array.from(document.querySelectorAll('.context-menu .command-result'))
+          .filter(
+            (item) => item.querySelector('.command-result-text > span')?.textContent === 'Rename…',
+          )
+          .map((item) => item.getAttribute('data-menu-id'))
+          .sort(),
+      ),
     ),
     ['recent.rename', 'rename'],
   );
   await snapshot('context-native.png');
   await key('Escape', 'Escape');
   await until(
-    () => evaluate<boolean>('!document.querySelector(".context-menu-layer")'),
+    () => evaluate(pageCall(() => !document.querySelector('.context-menu-layer'))),
     Boolean,
     'context menu closed before header action',
   );
@@ -4937,7 +5524,7 @@ async function verifyCapturedMenus(): Promise<void> {
   await command('Input.insertText', { text: 'rn' });
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    () => evaluate(valueOf('dialog input')),
     (value) => value === 'Models',
     'header menu uses selected folder',
   );
@@ -4946,22 +5533,71 @@ async function verifyCapturedMenus(): Promise<void> {
   await settleCamera();
 }
 
+const planeBackface = () =>
+  (window as unknown as SmokeWindow).__qaEngine.getSnapshot().configuration.elements.plane.backface;
+const childFraming = () =>
+  (window as unknown as SmokeWindow).__qaEngine.getSnapshot().configuration.space.navigation!
+    .childFraming;
+/** A point inside the button that hit-tests to it, or null. */
+function exposedPoint(selector: string) {
+  const button = document.querySelector(selector)!;
+  const rect = button.getBoundingClientRect();
+  for (let y = rect.top + 1; y < rect.bottom; y += 2)
+    for (let x = rect.left + 1; x < rect.right; x += 2)
+      if (button.contains(document.elementFromPoint(x, y))) return { x, y };
+  return null;
+}
+/** The camera's angles plus the plane's own: zero when the camera faces it. */
+function facingAngles(planeID: string) {
+  const engine = (window as unknown as SmokeWindow).__qaEngine;
+  const camera = engine.camera.get();
+  const node = engine.inspect().planes.find((plane) => plane.planeID === planeID)!;
+  return {
+    yaw: camera.yaw + node.location.rotateY,
+    pitch: camera.pitch + node.location.rotateX,
+    roll: camera.roll,
+  };
+}
+/** Where the sidebar's edge, and 64 plane pixels beyond it, fall on screen. */
+function sidebarEdge(sidebarSelector: string, handle: string) {
+  const sidebar = document.querySelector<HTMLElement>(sidebarSelector)!;
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;pointer-events:none;width:0;height:0;top:50%';
+  sidebar.append(probe);
+  const position = (x: number) => {
+    probe.style.left = x + 'px';
+    const rect = probe.getBoundingClientRect();
+    return { x: rect.x, y: rect.y };
+  };
+  const start = position(sidebar.clientWidth);
+  const end = position(sidebar.clientWidth + 64);
+  probe.remove();
+  return {
+    start,
+    end,
+    hit: document.querySelector(handle)!.contains(document.elementFromPoint(start.x, start.y)),
+  };
+}
+function narrowPlane(selector: string) {
+  const plane = document.querySelector(selector)!;
+  const list = plane.querySelector('.file-scroll')!;
+  return {
+    sidebar: plane.querySelector<HTMLElement>('.location-sidebar')!.offsetWidth,
+    plane: plane.clientWidth,
+    overflow: list.scrollWidth > list.clientWidth,
+  };
+}
 async function verifyRootPlanes(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
   const untouched = await inventory();
   await until(
-    () => evaluate<{ running: boolean; count: number }>('window.viewer.indexStatus()'),
+    () => evaluate(pageCall(indexStatus)),
     (status) => !status.running && status.count > 10,
     'packaged SQLite utility index',
   );
-  assert.equal(
-    await evaluate(
-      `window.viewer.indexedQuery({ query: 'Book ext:epub', root: ${JSON.stringify(fixture.files)} }).then(result => result.entries.length)`,
-    ),
-    1,
-  );
-  const jobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  assert.equal(await evaluate(pageCall(epubCount, fixture.files)), 1);
+  const jobs = await evaluate(pageCall(viewerJobs));
   const saved = () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState);
   const roots = async (count: number) => {
     await restoredEngine(count);
@@ -4977,8 +5613,8 @@ async function verifyRootPlanes(): Promise<void> {
   assert.equal(original.ui?.version, 3);
   assert.equal(original.ui.sidebar.visible, false);
   assert.equal(original.workspaces[0].panes[0].type, 'folder');
-  assert.equal(await evaluate('!!document.querySelector(".app-main > .location-sidebar")'), false);
-  assert.equal(await evaluate('!!document.querySelector(".folder-plane .location-sidebar")'), true);
+  assert.equal(await evaluate(exists('.app-main > .location-sidebar')), false);
+  assert.equal(await evaluate(exists('.folder-plane .location-sidebar')), true);
   const backups = (await readdir(profile)).filter((name) =>
     name.includes('before-plane-navigation-v3'),
   );
@@ -4989,16 +5625,18 @@ async function verifyRootPlanes(): Promise<void> {
   );
   // Old engine snapshots may carry these choices independently of the host UI.
   await evaluate(
-    `window.__qaEngine.pubsub.publish({topic:'configuration',data:{elements:{plane:{backface:'hidden'}},space:{navigation:{childFraming:'pair'}}}})`,
+    pageCall(() =>
+      (window as unknown as SmokeWindow).__qaEngine.pubsub.publish({
+        topic: 'configuration',
+        data: {
+          elements: { plane: { backface: 'hidden' } },
+          space: { navigation: { childFraming: 'pair' } },
+        },
+      }),
+    ),
   );
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.elements.plane.backface'),
-    'visible',
-  );
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.navigation.childFraming'),
-    'plane',
-  );
+  assert.equal(await evaluate(pageCall(planeBackface)), 'visible');
+  assert.equal(await evaluate(pageCall(childFraming)), 'plane');
 
   const first = original.workspaces[0].roots[0];
   const firstEngineID = await enginePlaneIDs();
@@ -5008,19 +5646,12 @@ async function verifyRootPlanes(): Promise<void> {
   assert.equal(state.workspaces[0].panes.find((pane) => pane.id === second)?.path, fixture.files);
   assert.ok(JSON.parse(await enginePlaneIDs()).includes(JSON.parse(firstEngineID)[0]));
   await click(`${controls(second)} [aria-label="Hide plane navigation"]`);
-  assert.equal(
-    await evaluate(
-      `!!document.querySelector(${JSON.stringify(folder(second) + ' .location-sidebar')})`,
-    ),
-    false,
-  );
+  assert.equal(await evaluate(exists(folder(second) + ' .location-sidebar')), false);
   await click(`${controls(second)} [aria-label="Show plane navigation"]`);
   await click(`${folder(second)} .sidebar-resizer`);
   await key('ArrowRight', 'ArrowRight');
   assert.equal(
-    await evaluate(
-      `document.querySelector(${JSON.stringify(folder(second) + ' .sidebar-resizer')}).getAttribute('aria-valuenow')`,
-    ),
+    await evaluate(requiredAttribute(folder(second) + ' .sidebar-resizer', 'aria-valuenow')),
     '220',
   );
   await click(
@@ -5053,12 +5684,24 @@ async function verifyRootPlanes(): Promise<void> {
   await roots(6);
   // Two additions in one React batch must retain both roots and all earlier engine IDs.
   await evaluate(
-    `(() => { const button = document.querySelector('[aria-label="New folder plane (⌘N)"]'); button.click(); button.click(); })()`,
+    pageCall(() => {
+      const button = document.querySelector<HTMLButtonElement>(
+        '[aria-label="New folder plane (⌘N)"]',
+      )!;
+      button.click();
+      button.click();
+    }),
   );
   state = await roots(8);
   assert.equal(new Set(state.workspaces[0].roots).size, 8);
   assert.equal(
-    await evaluate('window.__qaEngine.tree.get().every(plane => !plane.parentPlaneID)'),
+    await evaluate(
+      pageCall(() =>
+        (window as unknown as SmokeWindow).__qaEngine.tree
+          .get()
+          .every((plane) => !plane.parentPlaneID),
+      ),
+    ),
     true,
   );
   const allRootIDs = await enginePlaneIDs();
@@ -5097,40 +5740,45 @@ async function verifyRootPlanes(): Promise<void> {
   );
   const previewID = state.workspaces[0].panes.find((pane) => pane.type === 'preview')!.id;
   const face = async (hostID: string, keyboard = false) => {
-    const collapsed = await evaluate<boolean>(
-      `(() => {
+    const collapsed = await evaluate(
+      pageCall(() => {
         const map = document.querySelector('[data-plurid-overlay="minimap"]');
-        return !!map?.hasAttribute('popover') && !map.matches(':popover-open');
-      })()`,
+        return !!map && map.hasAttribute('popover') && !map.matches(':popover-open');
+      }),
     );
     if (collapsed) {
       await paletteCommand('Overview');
       await until(
         () =>
-          evaluate<boolean>(
-            'document.querySelector("[data-plurid-overlay=minimap]")?.matches(":popover-open") === true',
+          evaluate(
+            pageCall(
+              () =>
+                document
+                  .querySelector('[data-plurid-overlay=minimap]')
+                  ?.matches(':popover-open') === true,
+            ),
           ),
         Boolean,
         'crowded workspace overview opens through its command',
       );
     }
-    const engineID = await evaluate<string>(
-      `window.__qaEngine.inspect().planes.find(plane => plane.route.endsWith('/' + ${JSON.stringify(hostID)})).planeID`,
+    const engineID = await evaluate(
+      pageCall(
+        (id: string) =>
+          (window as unknown as SmokeWindow).__qaEngine
+            .inspect()
+            .planes.find((plane) => plane.route.endsWith('/' + id))!.planeID,
+        hostID,
+      ),
     );
     const minimap = `[data-plurid-minimap-plane=${JSON.stringify(engineID)}]`;
     if (keyboard) {
-      await evaluate(`document.querySelector(${JSON.stringify(minimap)}).focus()`);
+      await evaluate(focus(minimap));
       await key('Enter', 'Enter');
     } else {
       // Dense maps have overlapping generous hit boxes. Find an exposed point
       // belonging to this real native button, rather than clicking another plane.
-      const point = await evaluate<{ x: number; y: number } | null>(`(() => {
-        const button = document.querySelector(${JSON.stringify(minimap)});
-        const rect = button.getBoundingClientRect();
-        for (let y=rect.top+1; y<rect.bottom; y+=2) for (let x=rect.left+1; x<rect.right; x+=2)
-          if (button.contains(document.elementFromPoint(x,y))) return {x,y};
-        return null;
-      })()`);
+      const point = await evaluate(pageCall(exposedPoint, minimap));
       assert.ok(point, 'Minimap plane has an exposed clickable target');
       await command('Input.dispatchMouseEvent', {
         type: 'mousePressed',
@@ -5148,11 +5796,7 @@ async function verifyRootPlanes(): Promise<void> {
       });
     }
     await settleCamera();
-    const facing = await evaluate<{ yaw: number; pitch: number; roll: number }>(`(() => {
-      const camera = window.__qaEngine.camera.get();
-      const node = window.__qaEngine.inspect().planes.find(plane => plane.planeID === ${JSON.stringify(engineID)});
-      return { yaw: camera.yaw + node.location.rotateY, pitch: camera.pitch + node.location.rotateX, roll: camera.roll };
-    })()`);
+    const facing = await evaluate(pageCall(facingAngles, engineID));
     for (const value of Object.values(facing))
       assert.ok(Math.abs(value) < 0.01, `Minimap must face ${hostID}: ${JSON.stringify(facing)}`);
     await until(
@@ -5165,35 +5809,25 @@ async function verifyRootPlanes(): Promise<void> {
   await face(previewID);
   await face(previewOwner, true);
   const topology = await enginePlaneIDs();
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.space.navigation.childFraming'),
-    'plane',
-  );
+  assert.equal(await evaluate(pageCall(childFraming)), 'plane');
   await snapshot('desktop-native-root-navigation.png');
 
   // The browser's projected positions are independent evidence of pointer movement
   // in local plane units, including a tilted and zoomed camera.
   await evaluate(
-    'window.__qaEngine.camera.moveBy({absolute:{yaw:12,pitch:6,roll:8,scale:0.65}},{animate:false})',
+    pageCall(() =>
+      (window as unknown as SmokeWindow).__qaEngine.camera.moveBy(
+        { absolute: { yaw: 12, pitch: 6, roll: 8, scale: 0.65 } },
+        { animate: false },
+      ),
+    ),
   );
   await settleCamera();
-  const camera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+  const camera = await evaluate(pageCall(cameraJSON));
   const handle = folder(previewOwner) + ' .sidebar-resizer';
-  const points = await evaluate<{
-    start: { x: number; y: number };
-    end: { x: number; y: number };
-    hit: boolean;
-  }>(`(() => {
-    const sidebar = document.querySelector(${JSON.stringify(folder(previewOwner) + ' .location-sidebar')});
-    const probe = document.createElement('span');
-    probe.style.cssText = 'position:absolute;pointer-events:none;width:0;height:0;top:50%';
-    sidebar.append(probe);
-    const position = (x) => { probe.style.left = x + 'px'; const r = probe.getBoundingClientRect(); return {x:r.x,y:r.y}; };
-    const start = position(sidebar.clientWidth);
-    const end = position(sidebar.clientWidth + 64);
-    probe.remove();
-    return { start, end, hit:document.querySelector(${JSON.stringify(handle)}).contains(document.elementFromPoint(start.x,start.y)) };
-  })()`);
+  const points = await evaluate(
+    pageCall(sidebarEdge, folder(previewOwner) + ' .location-sidebar', handle),
+  );
   assert.equal(points.hit, true, 'Projected sidebar handle must be usable');
   await command('Input.dispatchMouseEvent', {
     type: 'mousePressed',
@@ -5220,16 +5854,10 @@ async function verifyRootPlanes(): Promise<void> {
     ...points.end,
   });
   assert.ok(
-    Math.abs(
-      Number(
-        await evaluate(
-          `document.querySelector(${JSON.stringify(handle)}).getAttribute('aria-valuenow')`,
-        ),
-      ) - 274,
-    ) <= 2,
+    Math.abs(Number(await evaluate(requiredAttribute(handle, 'aria-valuenow'))) - 274) <= 2,
   );
   assert.equal(
-    await evaluate('JSON.stringify(window.__qaEngine.camera.get())'),
+    await evaluate(pageCall(cameraJSON)),
     camera,
     'Sidebar resize must not move the camera',
   );
@@ -5244,17 +5872,8 @@ async function verifyRootPlanes(): Promise<void> {
     mobile: false,
   });
   await settleCamera();
-  assert.equal(
-    await evaluate(
-      `!!document.querySelector(${JSON.stringify(folder(previewOwner) + ' .location-sidebar')})`,
-    ),
-    true,
-  );
-  const narrow = await evaluate<{ sidebar: number; plane: number; overflow: boolean }>(`(() => {
-    const plane = document.querySelector(${JSON.stringify(folder(previewOwner))});
-    const list = plane.querySelector('.file-scroll');
-    return { sidebar:plane.querySelector('.location-sidebar').offsetWidth,plane:plane.clientWidth,overflow:list.scrollWidth > list.clientWidth };
-  })()`);
+  assert.equal(await evaluate(exists(folder(previewOwner) + ' .location-sidebar')), true);
+  const narrow = await evaluate(pageCall(narrowPlane, folder(previewOwner)));
   assert.ok(narrow.sidebar <= narrow.plane / 2 + 1);
   assert.equal(narrow.overflow, false);
   await click(`${controls(previewOwner)} [aria-label="Hide plane navigation"]`);
@@ -5264,14 +5883,14 @@ async function verifyRootPlanes(): Promise<void> {
   await paletteCommand('Reveal space');
   await settleCamera();
   assert.equal(await enginePlaneIDs(), topology);
-  assert.deepEqual(await evaluate('window.viewer.jobs()'), jobs);
+  assert.deepEqual(await evaluate(pageCall(viewerJobs)), jobs);
   assert.deepEqual(
     await inventory(),
     untouched,
     'Roots, navigation and minimap never change files',
   );
   await delay(800);
-  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await evaluate(pageCall(saveState, original));
   await reloadPage();
   await restoredEngine(1);
   await settleCamera();
@@ -5279,10 +5898,12 @@ async function verifyRootPlanes(): Promise<void> {
     'Root planes: +, Cmd+N, Commands, plane actions, shortcut roots, independent history, rapid additions, reload, minimap facing, projected resizing and narrow docked navigation.',
   );
 }
-async function job(request: Record<string, unknown>): Promise<OperationJob> {
-  const id = await evaluate<string>(`window.viewer.operate(${JSON.stringify(request)})`);
+async function job(request: RendererOperationRequest): Promise<OperationJob> {
+  const id = await evaluate(
+    pageCall((request: RendererOperationRequest) => window.viewer.operate(request), request),
+  );
   return until(
-    () => evaluate<OperationJob[]>(`window.viewer.jobs()`),
+    () => evaluate(pageCall(viewerJobs)),
     (jobs) =>
       jobs.some(
         (job) => job.id === id && ['completed', 'failed', 'cancelled'].includes(job.status),
@@ -5290,72 +5911,68 @@ async function job(request: Record<string, unknown>): Promise<OperationJob> {
     'file operation',
   ).then((jobs) => jobs.find((job) => job.id === id)!);
 }
+const settingsSnapshot = () => window.viewer.settingsGet();
+/** Whether a command result is labelled `label`; with `press`, clicks it and throws when missing. */
+function resultButton(label: string, press: boolean) {
+  const row = Array.from(document.querySelectorAll<HTMLElement>('.command-result')).find(
+    (row) => row.querySelector('.command-result-text > span')?.textContent === label,
+  );
+  if (press) row!.click();
+  return !!row;
+}
+function paletteBounds() {
+  const dialog = document.querySelector('.command-palette')!;
+  const rect = dialog.getBoundingClientRect();
+  return {
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+    bottom: rect.bottom,
+    inputTop: dialog.querySelector('input')!.getBoundingClientRect().top,
+    viewport: innerHeight,
+  };
+}
 async function verifyEntryAndPalette(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
-  const settings = await evaluate<{
-    revision: number;
-    settings: {
-      browsing: {
-        newPlaneLocation: string;
-        newPlanePath: string;
-        emptyWorkspaceLocation: string;
-        emptyWorkspacePath: string;
-      };
-    };
-  }>('window.viewer.settingsGet()');
-  await evaluate('window.viewer.openSettings()');
+  const settings = await evaluate(pageCall(settingsSnapshot));
+  await evaluate(pageCall(openSettings));
   await openSettingsProbe();
   await until(
-    () =>
-      settingsEvaluate<boolean>(
-        `Array.from(document.querySelectorAll('.settings-navigation button')).some(button => button.textContent.trim() === 'Browsing')`,
-      ),
+    () => settingsEvaluate(pageCall(categoryButton, 'Browsing', false)),
     Boolean,
     'Settings categories ready',
   );
-  await settingsEvaluate(
-    `Array.from(document.querySelectorAll('.settings-navigation button')).find(button => button.textContent.trim() === 'Browsing').click()`,
-  );
+  await settingsEvaluate(pageCall(categoryButton, 'Browsing', true));
   await until(
-    () =>
-      settingsEvaluate<boolean>(
-        `!!document.querySelector('[aria-label="New folder planes start in"]')`,
-      ),
+    () => settingsEvaluate(exists('[aria-label="New folder planes start in"]')),
     Boolean,
     'new-plane folder preference',
   );
   // a choice is a searchable menu: open it, then choose the row
-  await settingsEvaluate(
-    `document.querySelector('[aria-label="New folder planes start in"]').click()`,
-  );
+  await settingsEvaluate(clickElement('[aria-label="New folder planes start in"]'));
   await until(
-    () =>
-      settingsEvaluate<boolean>(
-        `Array.from(document.querySelectorAll('.command-result')).some(row => row.querySelector('.command-result-text > span')?.textContent === 'Downloads')`,
-      ),
+    () => settingsEvaluate(pageCall(resultButton, 'Downloads', false)),
     Boolean,
     'new-plane folder choices',
   );
-  await settingsEvaluate(
-    `Array.from(document.querySelectorAll('.command-result')).find(row => row.querySelector('.command-result-text > span')?.textContent === 'Downloads').click()`,
-  );
+  await settingsEvaluate(pageCall(resultButton, 'Downloads', true));
   await until(
-    () =>
-      evaluate<{ settings: { browsing: { newPlaneLocation: string } } }>(
-        'window.viewer.settingsGet()',
-      ),
+    () => evaluate(pageCall(settingsSnapshot)),
     (snapshot) => snapshot.settings.browsing.newPlaneLocation === 'downloads',
     'folder preference propagated from Settings',
   );
-  await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
-    {path:'settings.browsing.newPlaneLocation',value:'custom'},
-    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(fixture.files)}},
-    {path:'settings.browsing.emptyWorkspaceLocation',value:'custom'},
-    {path:'settings.browsing.emptyWorkspacePath',value:${JSON.stringify(path.join(fixture.files, 'Data'))}}
-  ],snapshot.revision))`);
+  await evaluate(
+    patchSettings(
+      { path: 'settings.browsing.newPlaneLocation', value: 'custom' },
+      { path: 'settings.browsing.newPlanePath', value: fixture.files },
+      { path: 'settings.browsing.emptyWorkspaceLocation', value: 'custom' },
+      { path: 'settings.browsing.emptyWorkspacePath', value: path.join(fixture.files, 'Data') },
+    ),
+  );
   await until(
-    () => settingsEvaluate<string>('document.body.innerText'),
+    () => settingsEvaluate(pageCall(bodyText)),
     (body) => body.includes(fixture.files) && body.includes('Change folder…'),
     'custom starting folder in Settings',
   );
@@ -5366,20 +5983,24 @@ async function verifyEntryAndPalette(): Promise<void> {
   empty.workspaces[0].roots = [];
   empty.workspaces[0].activePane = undefined;
   empty.workspaces[0].arrangement = {};
-  await evaluate(`window.viewer.save(${JSON.stringify(empty)})`);
+  await evaluate(pageCall(saveState, empty));
   await command('Page.reload');
   await until(
     () =>
-      evaluate<boolean>(
-        'document.readyState === "complete" && !!document.querySelector(".empty-actions .primary:not(:disabled)")',
+      evaluate(
+        pageCall(
+          () =>
+            document.readyState === 'complete' &&
+            !!document.querySelector('.empty-actions .primary:not(:disabled)'),
+        ),
       ),
     Boolean,
     'empty workspace can create a root directly',
   );
   await snapshot('desktop-native-empty-workspace.png');
   assert.equal(
-    await evaluate(`document.querySelector('[aria-label="New folder planes start in"]')`),
-    null,
+    await evaluate(exists('[aria-label="New folder planes start in"]')),
+    false,
     'The starting-folder preference belongs only in Settings',
   );
   await click('.empty-actions .primary');
@@ -5404,35 +6025,35 @@ async function verifyEntryAndPalette(): Promise<void> {
       value.workspaces[0].panes.slice(1).every((pane) => pane.path === fixture.files),
     'plus and Command-N use the populated-workspace preference',
   );
-  await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
-    {path:'settings.browsing.newPlaneLocation',value:${JSON.stringify(settings.settings.browsing.newPlaneLocation)}},
-    {path:'settings.browsing.newPlanePath',value:${JSON.stringify(settings.settings.browsing.newPlanePath)}},
-    {path:'settings.browsing.emptyWorkspaceLocation',value:${JSON.stringify(settings.settings.browsing.emptyWorkspaceLocation)}},
-    {path:'settings.browsing.emptyWorkspacePath',value:${JSON.stringify(settings.settings.browsing.emptyWorkspacePath)}}
-  ],snapshot.revision))`);
+  await evaluate(
+    patchSettings(
+      {
+        path: 'settings.browsing.newPlaneLocation',
+        value: settings.settings.browsing.newPlaneLocation,
+      },
+      { path: 'settings.browsing.newPlanePath', value: settings.settings.browsing.newPlanePath },
+      {
+        path: 'settings.browsing.emptyWorkspaceLocation',
+        value: settings.settings.browsing.emptyWorkspaceLocation,
+      },
+      {
+        path: 'settings.browsing.emptyWorkspacePath',
+        value: settings.settings.browsing.emptyWorkspacePath,
+      },
+    ),
+  );
   await delay(800);
-  await evaluate(`window.viewer.save(${JSON.stringify(original)})`);
+  await evaluate(pageCall(saveState, original));
   await reloadPage();
   await restoredEngine(1);
   await settleCamera();
   await key('k', 'KeyK', 4);
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".command-palette[open]")'),
+    () => evaluate(exists('.command-palette[open]')),
     Boolean,
     'anchored command palette',
   );
-  const bounds = () =>
-    evaluate<{
-      top: number;
-      left: number;
-      width: number;
-      height: number;
-      bottom: number;
-      inputTop: number;
-      viewport: number;
-    }>(
-      `(() => { const dialog=document.querySelector('.command-palette');const r=dialog.getBoundingClientRect();return {top:r.top,left:r.left,width:r.width,height:r.height,bottom:r.bottom,inputTop:dialog.querySelector('input').getBoundingClientRect().top,viewport:innerHeight}; })()`,
-    );
+  const bounds = () => evaluate(pageCall(paletteBounds));
   const expanded = await bounds();
   await snapshot('desktop-native-palette-expanded.png');
   await command('Input.insertText', { text: 'no-such-command-qa' });
@@ -5468,10 +6089,7 @@ async function verifyEntryAndPalette(): Promise<void> {
   await key('Escape', 'Escape');
   await key('f', 'KeyF', 4);
   await until(
-    () =>
-      evaluate<number>(
-        `document.querySelectorAll('.command-palette[open] .command-result').length`,
-      ),
+    () => evaluate(countOf('.command-palette[open] .command-result')),
     (count) => count === 11,
     'file palette has enough results to scroll',
   );
@@ -5479,8 +6097,11 @@ async function verifyEntryAndPalette(): Promise<void> {
   assert.equal(finder.top, narrow.top);
   assert.ok(finder.bottom <= finder.viewport - 19, JSON.stringify(finder));
   assert.ok(
-    await evaluate<boolean>(
-      `(() => { const list=document.querySelector('.command-palette .command-results');return list.scrollHeight > list.clientHeight && getComputedStyle(list).overflowY === 'auto'; })()`,
+    await evaluate(
+      pageCall(() => {
+        const list = document.querySelector('.command-palette .command-results')!;
+        return list.scrollHeight > list.clientHeight && getComputedStyle(list).overflowY === 'auto';
+      }),
     ),
   );
   await snapshot('desktop-native-palette-small-window.png');
@@ -5493,7 +6114,7 @@ async function verifyEntryAndPalette(): Promise<void> {
 async function verifyShutdown(): Promise<void> {
   // Stall only this isolated QA instance's read-only worker. A slow filesystem
   // or extraction must not leave an interactive window without its IPC bridge.
-  await evaluate('window.viewer.openSettings()');
+  await evaluate(pageCall(openSettings));
   await openSettingsProbe();
   settingsMode = false;
   const { stdout } = await execNative('/bin/ps', ['-axo', 'pid=,ppid=,command=']);
@@ -5512,8 +6133,13 @@ async function verifyShutdown(): Promise<void> {
   void command('Browser.close').catch(() => undefined);
   await delay(500);
   if (child.exitCode === null && socket?.readyState === WebSocket.OPEN) {
-    const reply = await evaluate<string>(
-      `window.viewer.jobs().then(() => 'available', error => error.message)`,
+    const reply = await evaluate(
+      pageCall(() =>
+        window.viewer.jobs().then(
+          () => 'available',
+          (error: Error) => error.message,
+        ),
+      ),
     ).catch(() => 'Window closed');
     assert.ok(!reply.includes('No handler registered'), reply);
   }
@@ -5542,6 +6168,68 @@ const performanceContext = {
   evidenceDirectory: captureRoot,
 };
 
+const operate = (request: RendererOperationRequest) => window.viewer.operate(request);
+const treeJSON = () => JSON.stringify((window as unknown as SmokeWindow).__qaEngine.tree.get());
+const surfaceWidth = () => document.querySelector('.workspace-surface')!.clientWidth;
+/** Drags the Favorites section title onto the Locations section. */
+function dragFavoritesSection() {
+  const transfer = new DataTransfer();
+  const titles = Array.from(document.querySelectorAll('.sidebar-section-title'));
+  const source = titles.find((button) => button.textContent.includes('Favorites'))!;
+  const target = titles.find((button) => button.textContent.includes('Locations'))!;
+  source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: transfer }));
+  target
+    .closest('section')!
+    .dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
+}
+/** Plays the open preview's media muted, kept as `window.__qaMedia` to check after closing. */
+function playPreviewMedia() {
+  const media = document.querySelector<HTMLMediaElement>('dialog audio, dialog video');
+  (window as unknown as SmokeWindow).__qaMedia = media;
+  media!.muted = true;
+  return media!.play();
+}
+const collisionAction = (label: string) =>
+  Array.from(document.querySelectorAll<HTMLButtonElement>('.collision-actions button'))
+    .find((button) => button.textContent === label)!
+    .click();
+/** The model canvas's bounds, clipped to the viewport. */
+function visibleModelCanvas() {
+  const rect = document.querySelector('.model-stage canvas')!.getBoundingClientRect();
+  return {
+    x: Math.max(0, rect.x),
+    y: Math.max(0, rect.y),
+    width: Math.min(rect.width, innerWidth - Math.max(0, rect.x)),
+    height: Math.min(rect.height, innerHeight - Math.max(0, rect.y)),
+    scale: 1,
+  };
+}
+/** The workspace surface's edges and each plane's and plane header's. */
+function framedBounds() {
+  const bounds = (element: Element) => {
+    const rect = element.getBoundingClientRect();
+    return [rect.left, rect.top, rect.right, rect.bottom];
+  };
+  return {
+    view: bounds(document.querySelector('.workspace-surface')!),
+    planes: Array.from(document.querySelectorAll('[data-plurid-plane], .plane-controls'), bounds),
+  };
+}
+/** What the page shows when a run fails: visibility, focus, motion, canvases and text layers. */
+function failureDiagnostics() {
+  return {
+    visibility: document.visibilityState,
+    focus: document.hasFocus(),
+    motion: document.querySelector('[data-plurid-motion]')?.getAttribute('data-plurid-motion'),
+    canvas: Array.from(document.querySelectorAll('canvas'), (canvas) => ({
+      width: canvas.width,
+      height: canvas.height,
+    })),
+    textLayers: Array.from(document.querySelectorAll('.textLayer'), (layer) =>
+      layer.innerHTML.slice(0, 200),
+    ),
+  };
+}
 async function verify(): Promise<void> {
   const target = await until(
     async () => {
@@ -5602,8 +6290,10 @@ async function verify(): Promise<void> {
   await command('Page.enable');
   await until(
     () =>
-      evaluate<boolean>(
-        'document.readyState === "complete" && !!document.querySelector(".folder-explorer")',
+      evaluate(
+        pageCall(
+          () => document.readyState === 'complete' && !!document.querySelector('.folder-explorer'),
+        ),
       ),
     Boolean,
     'initial renderer before diagnostic reload',
@@ -5619,7 +6309,7 @@ async function verify(): Promise<void> {
   await activateTestWindow();
   if (foreground)
     await until(
-      () => evaluate<string>('document.visibilityState'),
+      () => evaluate(pageCall(() => document.visibilityState)),
       (value) => value === 'visible',
       'visible native window',
     );
@@ -5638,26 +6328,25 @@ async function verify(): Promise<void> {
     console.log('Packaged foreground performance workloads recorded.');
     return;
   }
-  assert.equal(await evaluate('location.protocol'), 'viewer-app:');
+  assert.equal(await evaluate(pageCall(() => location.protocol)), 'viewer-app:');
   assert.deepEqual(
     await evaluate(
-      '({require:typeof window.require, process:typeof window.process, bridge:typeof window.viewer})',
+      pageCall(() => ({
+        require: typeof (window as unknown as { require?: unknown }).require,
+        process: typeof (window as unknown as { process?: unknown }).process,
+        bridge: typeof window.viewer,
+      })),
     ),
     { require: 'undefined', process: 'undefined', bridge: 'object' },
   );
   await snapshot('desktop-native-initial.png');
   const untouched = await inventory();
   await until(
-    () => evaluate<{ running: boolean; count: number }>('window.viewer.indexStatus()'),
+    () => evaluate(pageCall(indexStatus)),
     (status) => !status.running && status.count > 10,
     'packaged SQLite utility index',
   );
-  assert.equal(
-    await evaluate(
-      `window.viewer.indexedQuery({ query: 'Book ext:epub', root: ${JSON.stringify(fixture.files)} }).then(result => result.entries.length)`,
-    ),
-    1,
-  );
+  assert.equal(await evaluate(pageCall(epubCount, fixture.files)), 1);
   await captureEngine();
   if (process.env.VIEWER_TEST_SCENARIO === 'root-planes') {
     await verifyRootPlanes();
@@ -5869,62 +6558,67 @@ async function verify(): Promise<void> {
   await paletteCommand('Frame plane');
   await settleCamera();
   assert.deepEqual(
-    await evaluate(`({
-    toolbar: !!document.querySelector('[data-plurid-entity="PluridToolbar"]'),
-    minimap: !!document.querySelector('[data-plurid-minimap]'),
-    viewcube: !!document.querySelector('[data-plurid-overlay="viewcube"]'),
-  })`),
+    await evaluate(
+      pageCall(() => ({
+        toolbar: !!document.querySelector('[data-plurid-entity="PluridToolbar"]'),
+        minimap: !!document.querySelector('[data-plurid-minimap]'),
+        viewcube: !!document.querySelector('[data-plurid-overlay="viewcube"]'),
+      })),
+    ),
     { toolbar: true, minimap: true, viewcube: true },
   );
 
   // The first press on the title selects the engine plane before its gesture listener.
-  const firstLocation = await evaluate<string>(
-    'JSON.stringify(window.__qaEngine.tree.get()[0].location)',
-  );
-  const firstCamera = await evaluate<string>('JSON.stringify(window.__qaEngine.camera.get())');
+  const firstLocation = await evaluate(pageCall(firstLocationJSON));
+  const firstCamera = await evaluate(pageCall(cameraJSON));
   await drag('.plane-heading');
-  assert.notEqual(
-    await evaluate('JSON.stringify(window.__qaEngine.tree.get()[0].location)'),
-    firstLocation,
+  assert.notEqual(await evaluate(pageCall(firstLocationJSON)), firstLocation);
+  assert.equal(await evaluate(pageCall(cameraJSON)), firstCamera);
+  assert.equal(
+    await evaluate(
+      pageCall(() => (window as unknown as SmokeWindow).__qaEngine.selection.get().length),
+    ),
+    1,
   );
-  assert.equal(await evaluate('JSON.stringify(window.__qaEngine.camera.get())'), firstCamera);
-  assert.equal(await evaluate('window.__qaEngine.selection.get().length'), 1);
-  assert.equal(await evaluate(`!!document.querySelector('[aria-label^="resize plane"]')`), true);
+  assert.equal(await evaluate(exists('[aria-label^="resize plane"]')), true);
   await paletteCommand('Frame plane');
   await settleCamera();
   await verifySpatialTools();
 
   await click('.plane-controls [aria-label="Search this folder"]');
-  assert.equal(await evaluate('document.activeElement.getAttribute("aria-label")'), 'Find files');
-  assert.equal(await evaluate('getComputedStyle(document.activeElement).outlineStyle'), 'none');
+  assert.equal(await evaluate(pageCall(activeLabel)), 'Find files');
+  assert.equal(await evaluate(pageCall(focusOutline)), 'none');
   await command('Input.insertText', { text: 'README' });
   await click('.plane-controls [aria-label="Close search"]');
-  assert.equal(await evaluate('!!document.querySelector(".search-row")'), false);
+  assert.equal(await evaluate(exists('.search-row')), false);
   assert.equal(
-    await evaluate('document.activeElement.classList.contains("folder-explorer")'),
+    await evaluate(pageCall(() => document.activeElement!.classList.contains('folder-explorer'))),
     true,
   );
   await click('.plane-controls [aria-label="Search this folder"]');
-  assert.equal(await evaluate('document.querySelector(".search-row input").value'), '');
+  assert.equal(await evaluate(requiredValue('.search-row input')), '');
   await click('.plane-controls [aria-label="Close search"]');
 
   assert.equal(
     await evaluate(
-      'getComputedStyle(document.querySelector("[data-plurid-plane]")).backfaceVisibility',
+      pageCall(
+        () => getComputedStyle(document.querySelector('[data-plurid-plane]')!).backfaceVisibility,
+      ),
     ),
     'visible',
   );
   assert.equal(
     await evaluate(
-      '!!document.querySelector(".wordmark, .workspace-tabs, .workspace-footer, .folder-toolbar, .search-row, .breadcrumb-row, .operations-panel, .operations-button")',
+      exists(
+        '.wordmark, .workspace-tabs, .workspace-footer, .folder-toolbar, .search-row, .breadcrumb-row, .operations-panel, .operations-button',
+      ),
     ),
     false,
     'Initial shell has no branding, redundant toolbars, permanent operations or search rows',
   );
   await key('k', 'KeyK', 4);
   await until(
-    () =>
-      evaluate<boolean>('document.activeElement?.getAttribute("aria-label") === "Search commands"'),
+    () => evaluate(pageCall(searchingCommands)),
     (value) => value,
     'keyboard command palette',
   );
@@ -5937,7 +6631,7 @@ async function verify(): Promise<void> {
   const dimensions = [];
   for (const category of ['Appearance', 'Sidebar', 'Space']) {
     await tab(category);
-    dimensions.push(await settingsEvaluate('([innerWidth, innerHeight])'));
+    dimensions.push(await settingsEvaluate(pageCall(() => [innerWidth, innerHeight])));
   }
   assert.deepEqual(dimensions, [dimensions[0], dimensions[0], dimensions[0]]);
   assert.ok((dimensions[0] as number[])[0] >= 760);
@@ -5949,7 +6643,7 @@ async function verify(): Promise<void> {
   ]) {
     await setting(label);
     await until(
-      () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
+      () => evaluate(exists(selector)),
       (value) => !value,
       label,
     );
@@ -5977,7 +6671,9 @@ async function verify(): Promise<void> {
   await settleCamera();
   assert.equal(
     await evaluate(
-      '!!document.querySelector("[data-plurid-minimap], [data-plurid-overlay=viewcube], [data-plurid-entity=PluridToolbar]")',
+      exists(
+        '[data-plurid-minimap], [data-plurid-overlay=viewcube], [data-plurid-entity=PluridToolbar]',
+      ),
     ),
     false,
   );
@@ -5985,54 +6681,42 @@ async function verify(): Promise<void> {
   await tab('Space');
   for (const label of ['Show space toolbar', 'Show minimap', 'Show viewcube']) await setting(label);
   await setting('Show resize handles');
-  assert.equal(await evaluate(`!!document.querySelector('[aria-label^="resize plane"]')`), false);
+  assert.equal(await evaluate(exists('[aria-label^="resize plane"]')), false);
   await setting('Show resize handles');
   await setting('Drag planes by their title', false);
   await click('dialog [aria-label="Close"]');
-  const stationary = await evaluate<string>(
-    'JSON.stringify(window.__qaEngine.tree.get()[0].location)',
-  );
+  const stationary = await evaluate(pageCall(firstLocationJSON));
   await drag('.plane-heading');
-  assert.equal(
-    await evaluate('JSON.stringify(window.__qaEngine.tree.get()[0].location)'),
-    stationary,
-  );
+  assert.equal(await evaluate(pageCall(firstLocationJSON)), stationary);
   await paletteCommand('Settings');
   await tab('Space');
   await setting('Drag planes by their title');
   await setting('Show plane headers');
-  assert.equal(await evaluate('!!document.querySelector(".plane-controls")'), false);
+  assert.equal(await evaluate(exists('.plane-controls')), false);
   await setting('Show plane headers');
   assert.equal((await text()).includes('Show plane backs'), false);
-  assert.equal(
-    await evaluate('window.__qaEngine.getSnapshot().configuration.elements.plane.backface'),
-    'visible',
-  );
+  assert.equal(await evaluate(pageCall(planeBackface)), 'visible');
   await click('dialog [aria-label="Close"]');
   await click('.plane-controls [aria-label="Hide plane navigation"]');
   await paletteCommand('Show plane navigation');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".folder-plane .location-sidebar")'),
+    () => evaluate(exists('.folder-plane .location-sidebar')),
     (value) => value,
     'in-plane navigation',
   );
   assert.equal(
-    await evaluate(
-      'document.querySelector(".folder-plane .sidebar-resizer").getAttribute("aria-valuenow")',
-    ),
+    await evaluate(requiredAttribute('.folder-plane .sidebar-resizer', 'aria-valuenow')),
     '210',
   );
   await click('.folder-plane .sidebar-resizer');
   await key('ArrowRight', 'ArrowRight');
   assert.equal(
-    await evaluate(
-      'document.querySelector(".folder-plane .sidebar-resizer").getAttribute("aria-valuenow")',
-    ),
+    await evaluate(requiredAttribute('.folder-plane .sidebar-resizer', 'aria-valuenow')),
     '220',
   );
   assert.equal(
     await evaluate(
-      'document.querySelector(".app-main > .location-sidebar .sidebar-resizer").getAttribute("aria-valuenow")',
+      requiredAttribute('.app-main > .location-sidebar .sidebar-resizer', 'aria-valuenow'),
     ),
     '210',
   );
@@ -6050,44 +6734,71 @@ async function verify(): Promise<void> {
 
   await verifyCapturedMenus();
 
-  const sidebarJobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  const sidebarJobs = await evaluate(pageCall(viewerJobs));
   const favorites = '.app-main > .location-sidebar .sidebar-group[aria-label="Favorites"]';
   await click(`${favorites} .sidebar-section-title`);
-  assert.equal(
-    await evaluate(`!!document.querySelector(${JSON.stringify(favorites + ' .location')})`),
-    false,
-  );
+  assert.equal(await evaluate(exists(favorites + ' .location')), false);
   // Find the now-collapsed section by its title rather than its hidden contents.
   await evaluate(
-    'Array.from(document.querySelectorAll(".sidebar-section-title")).find(button=>button.textContent.includes("Favorites")).click()',
+    pageCall(() =>
+      Array.from(document.querySelectorAll<HTMLElement>('.sidebar-section-title'))
+        .find((button) => button.textContent.includes('Favorites'))!
+        .click(),
+    ),
   );
-  await evaluate(
-    '(() => { const transfer=new DataTransfer(); const titles=Array.from(document.querySelectorAll(".sidebar-section-title")); const source=titles.find(button=>button.textContent.includes("Favorites")); const target=titles.find(button=>button.textContent.includes("Locations")); source.dispatchEvent(new DragEvent("dragstart",{bubbles:true,dataTransfer:transfer})); target.closest("section").dispatchEvent(new DragEvent("drop",{bubbles:true,dataTransfer:transfer})); })()',
-  );
+  await evaluate(pageCall(dragFavoritesSection));
   assert.deepEqual(
     await evaluate(
-      'Array.from(document.querySelectorAll(".sidebar-section-title")).map(button=>button.textContent.trim())',
+      pageCall(() =>
+        Array.from(document.querySelectorAll('.sidebar-section-title'), (button) =>
+          button.textContent.trim(),
+        ),
+      ),
     ),
     ['Favorites', 'Locations', 'Recent'],
   );
   await evaluate(
-    `(() => { const transfer=new DataTransfer(); const source=document.querySelector('.location[title=${JSON.stringify(path.join(fixture.files, 'Documents'))}]'); const target=document.querySelector('.location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]'); source.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:transfer})); target.dispatchEvent(new DragEvent('drop',{bubbles:true,dataTransfer:transfer})); })()`,
+    pageCall(
+      (source: string, target: string) => {
+        const transfer = new DataTransfer();
+        const from = document.querySelector(source)!,
+          to = document.querySelector(target)!;
+        from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: transfer }));
+        to.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
+      },
+      `.location[title=${JSON.stringify(path.join(fixture.files, 'Documents'))}]`,
+      `.location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
+    ),
   );
   assert.deepEqual(
     await evaluate(
-      `Array.from(document.querySelectorAll(${JSON.stringify(favorites + ' .location')})).map(button => button.textContent.trim())`,
+      pageCall(
+        (selector: string) =>
+          Array.from(document.querySelectorAll(selector), (button) => button.textContent.trim()),
+        favorites + ' .location',
+      ),
     ),
     ['Documents', 'Models'],
   );
   // A folder row offers a separate shortcut payload, so Favorites never moves a file.
   await evaluate(
-    `(() => { const transfer=new DataTransfer(); document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Images')))}).dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:transfer})); document.querySelector(${JSON.stringify(favorites)}).dispatchEvent(new DragEvent('drop',{bubbles:true,dataTransfer:transfer})); })()`,
+    pageCall(
+      (source: string, target: string) => {
+        const transfer = new DataTransfer();
+        document
+          .querySelector(source)!
+          .dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: transfer }));
+        document
+          .querySelector(target)!
+          .dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
+      },
+      fileSelector(path.join(fixture.files, 'Images')),
+      favorites,
+    ),
   );
   await until(
     () =>
-      evaluate<boolean>(
-        `!!document.querySelector('.location[title=${JSON.stringify(path.join(fixture.files, 'Images'))}]')`,
-      ),
+      evaluate(exists(`.location[title=${JSON.stringify(path.join(fixture.files, 'Images'))}]`)),
     (value) => value,
     'folder shortcut drop',
   );
@@ -6097,7 +6808,7 @@ async function verify(): Promise<void> {
   await command('Input.insertText', { text: 'Rename shortcut' });
   await key('Enter', 'Enter');
   await until(
-    () => evaluate<string>('document.querySelector("dialog input")?.value || ""'),
+    () => evaluate(valueOf('dialog input')),
     (value) => value === 'Documents',
     'shortcut alias dialog',
   );
@@ -6105,19 +6816,16 @@ async function verify(): Promise<void> {
   await click('dialog .primary');
   await until(text, (value) => value.includes('Project documents'), 'shortcut alias');
   assert.deepEqual(
-    await evaluate('window.viewer.jobs()'),
+    await evaluate(pageCall(viewerJobs)),
     sidebarJobs,
     'Sidebar changes must not start filesystem operations',
   );
   await click('[aria-label="Sidebar width"]');
   await key('ArrowRight', 'ArrowRight');
-  assert.equal(
-    await evaluate('document.querySelector(".sidebar-resizer").getAttribute("aria-valuenow")'),
-    '220',
-  );
+  assert.equal(await evaluate(requiredAttribute('.sidebar-resizer', 'aria-valuenow')), '220');
   await click('[aria-label="Hide window navigation"]');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".location-sidebar")'),
+    () => evaluate(exists('.location-sidebar')),
     (value) => !value,
     'hidden sidebar',
   );
@@ -6128,8 +6836,8 @@ async function verify(): Promise<void> {
   await key('f', 'KeyF', 4);
   await until(
     () =>
-      evaluate<boolean>(
-        'document.activeElement?.getAttribute("aria-label") === "Find file by name"',
+      evaluate(
+        pageCall(() => document.activeElement?.getAttribute('aria-label') === 'Find file by name'),
       ),
     (value) => value,
     'contextual file finder',
@@ -6137,10 +6845,7 @@ async function verify(): Promise<void> {
   await command('Input.insertText', { text: 'Project brief.pdf' });
   await choose('Search scope', 'subfolders');
   await until(
-    () =>
-      evaluate<string>(
-        'document.querySelector(".command-result[aria-selected=true]")?.textContent || ""',
-      ),
+    () => evaluate(textOf('.command-result[aria-selected=true]')),
     (value) => value.includes('Project brief.pdf'),
     'subtree file search in palette',
   );
@@ -6153,7 +6858,10 @@ async function verify(): Promise<void> {
   await click(fileSelector(path.join(fixture.files, 'Models')), 2);
   await until(text, (value) => value.includes('Triangle.glb'), 'model folder');
   await click(fileSelector(path.join(fixture.files, 'Models', 'Triangle alias.glb')));
-  assert.equal(await evaluate('document.querySelector(".symlink-mark")?.tagName'), 'svg');
+  assert.equal(
+    await evaluate(pageCall(() => document.querySelector('.symlink-mark')?.tagName)),
+    'svg',
+  );
   await snapshot('selected-alias-dark.png');
   for (const extension of ['glb', 'gltf', 'obj', 'stl', 'fbx']) {
     await preview(
@@ -6176,7 +6884,10 @@ async function verify(): Promise<void> {
   await preview(path.join(fixture.files, 'Documents', 'Project notes.md'), 'A wider view');
   await closePreview();
   await preview(path.join(fixture.files, 'Documents', 'Book.epub'), 'A local chapter fixture.');
-  assert.equal(await evaluate('window.__epubUnsafe === undefined'), true);
+  assert.equal(
+    await evaluate(pageCall(() => (window as unknown as SmokeWindow).__epubUnsafe === undefined)),
+    true,
+  );
   await snapshot('epub-native.png');
   await closePreview();
   await preview(path.join(fixture.files, 'Documents', 'Project brief.pdf'), 'Searchable PDF text');
@@ -6211,7 +6922,7 @@ async function verify(): Promise<void> {
   await appearance('light');
   await preview(path.join(fixture.files, 'Data', 'Materials.json'), 'materials');
   assert.ok(
-    await evaluate<boolean>('!!document.querySelector(\'[aria-label="Collapse materials"]\')'),
+    await evaluate(exists('[aria-label="Collapse materials"]')),
     'Data tree expansion is retained when Quick Preview reopens.',
   );
   await until(text, (value) => value.includes('Brushed aluminum'), 'light JSON tree');
@@ -6219,10 +6930,7 @@ async function verify(): Promise<void> {
   await closePreview();
   await paletteCommand('Parent folder');
   await until(
-    () =>
-      evaluate<boolean>(
-        `!!document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Source')))})`,
-      ),
+    () => evaluate(exists(fileSelector(path.join(fixture.files, 'Source')))),
     (present) => present,
     'return before light code',
   );
@@ -6233,10 +6941,7 @@ async function verify(): Promise<void> {
   await closePreview();
   await paletteCommand('Parent folder');
   await until(
-    () =>
-      evaluate<boolean>(
-        `!!document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Data')))})`,
-      ),
+    () => evaluate(exists(fileSelector(path.join(fixture.files, 'Data')))),
     (present) => present,
     'return before data',
   );
@@ -6272,31 +6977,45 @@ async function verify(): Promise<void> {
   for (const file of ['Tone.wav', 'Color.webm']) {
     await preview(path.join(fixture.files, 'Media', file), 'Audio / video');
     await until(
-      () => evaluate<number>('document.querySelector("dialog audio, dialog video")?.duration || 0'),
+      () =>
+        evaluate(
+          pageCall(
+            () =>
+              document.querySelector<HTMLMediaElement>('dialog audio, dialog video')?.duration || 0,
+          ),
+        ),
       (value) => value >= 1,
       `decoded ${file}`,
     );
-    await evaluate(
-      'window.__qaMedia=document.querySelector("dialog audio, dialog video"); window.__qaMedia.muted=true; window.__qaMedia.play()',
-    );
+    await evaluate(pageCall(playPreviewMedia));
     await closePreview();
     assert.equal(
-      await evaluate('window.__qaMedia.paused && !window.__qaMedia.hasAttribute("src")'),
+      await evaluate(
+        pageCall(() => {
+          const media = (window as unknown as SmokeWindow).__qaMedia!;
+          return media.paused && !media.hasAttribute('src');
+        }),
+      ),
       true,
     );
-    await evaluate('window.__qaMedia=null');
+    await evaluate(
+      pageCall(() => {
+        (window as unknown as SmokeWindow).__qaMedia = null;
+      }),
+    );
   }
   await preview(
     path.join(fixture.files, 'Media', 'Malformed.mkv'),
     'Compatibility preview unavailable',
   );
-  assert.equal(
-    await evaluate('!!document.querySelector(".quick-preview .native-open-actions")'),
-    true,
-  );
+  assert.equal(await evaluate(exists('.quick-preview .native-open-actions')), true);
   await snapshot('desktop-native-media-error.png');
   await evaluate(
-    `Array.from(document.querySelectorAll('.quick-preview button')).find(button=>button.textContent.trim()==='Retry conversion').click()`,
+    pageCall(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.quick-preview button'))
+        .find((button) => button.textContent.trim() === 'Retry conversion')!
+        .click(),
+    ),
   );
   await until(
     text,
@@ -6310,51 +7029,45 @@ async function verify(): Promise<void> {
   const source = path.join(fixture.files, 'README.md'),
     destination = path.join(fixture.files, 'Transfers');
   assert.equal((await job({ kind: 'copy', sources: [source], destination })).status, 'completed');
-  const workspaceWidth = await evaluate<number>(
-    'document.querySelector(".workspace-surface").clientWidth',
-  );
-  const collisionID = await evaluate<string>(
-    `window.viewer.operate(${JSON.stringify({ kind: 'copy', sources: [source], destination })})`,
+  const workspaceWidth = await evaluate(pageCall(surfaceWidth));
+  const collisionID = await evaluate(
+    pageCall(operate, { kind: 'copy', sources: [source], destination }),
   );
   await until(
-    () => evaluate<OperationJob[]>('window.viewer.jobs()'),
+    () => evaluate(pageCall(viewerJobs)),
     (jobs) => jobs.some((job) => job.id === collisionID && job.status === 'collision'),
     'pending collision',
   );
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".operations-button")'),
+    () => evaluate(exists('.operations-button')),
     (value) => value,
     'conditional operations control',
   );
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".operations-panel .collision")'),
+    () => evaluate(exists('.operations-panel .collision')),
     Boolean,
     'collision automatically opens File operations',
   );
   await click('.operations-button');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".operations-panel")'),
+    () => evaluate(exists('.operations-panel')),
     (open) => !open,
     'operations control closes the automatic popover',
   );
   await click('.operations-button');
   await until(text, (value) => value.includes('already exists.'), 'collision popover');
   assert.equal(
-    await evaluate('document.querySelector(".workspace-surface").clientWidth'),
+    await evaluate(pageCall(surfaceWidth)),
     workspaceWidth,
     'Operations must not reduce workspace width',
   );
   await snapshot('operations-native.png');
-  await evaluate(
-    'Array.from(document.querySelectorAll(".collision-actions button")).find(button=>button.textContent === "Replace").click()',
-  );
+  await evaluate(pageCall(collisionAction, 'Replace'));
   await until(text, (value) => value.includes('Replace existing item?'), 'protected replacement');
   await click('dialog [aria-label="Close"]');
-  await evaluate(
-    'Array.from(document.querySelectorAll(".collision-actions button")).find(button=>button.textContent === "Skip").click()',
-  );
+  await evaluate(pageCall(collisionAction, 'Skip'));
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".operations-button, .operations-panel")'),
+    () => evaluate(exists('.operations-button, .operations-panel')),
     (value) => !value,
     'operations control removed after completion',
   );
@@ -6367,7 +7080,7 @@ async function verify(): Promise<void> {
     name: 'Copied notes.md',
   });
   assert.equal(renamed.undoable, true);
-  await evaluate(`window.viewer.undo(${JSON.stringify(renamed.id)})`);
+  await evaluate(pageCall((id: string) => window.viewer.undo(id), renamed.id));
   assert.equal(
     await readFile(path.join(destination, 'README.md'), 'utf8'),
     '# Studio\n\nSynthetic files for local Viewer verification.\n',
@@ -6375,7 +7088,10 @@ async function verify(): Promise<void> {
   await verifyResourceBoundaries(source);
 
   await paletteCommand('Grid view');
-  assert.equal(await evaluate('document.querySelectorAll(".file-tile").length > 0'), true);
+  assert.equal(
+    await evaluate(pageCall(() => document.querySelectorAll('.file-tile').length > 0)),
+    true,
+  );
   await paletteCommand('Columns view');
   await click(fileSelector(path.join(fixture.files, 'Documents')));
   await until(text, (value) => value.includes('Project brief.pdf'), 'column child folder');
@@ -6383,16 +7099,13 @@ async function verify(): Promise<void> {
   await closePreview();
   await paletteCommand('Gallery view');
   await until(
-    () =>
-      evaluate<boolean>(
-        `!!document.querySelector(${JSON.stringify(fileSelector(path.join(fixture.files, 'Documents', 'Project notes.md')))})`,
-      ),
+    () => evaluate(exists(fileSelector(path.join(fixture.files, 'Documents', 'Project notes.md')))),
     Boolean,
     'view switch retains the browsed column folder',
   );
   await paletteCommand('Parent folder');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(fileSelector(source))})`),
+    () => evaluate(exists(fileSelector(source))),
     Boolean,
     'parent folder returns to Studio before gallery inspection',
   );
@@ -6410,16 +7123,26 @@ async function verify(): Promise<void> {
     '1 meshes · 1 triangles · 3 vertices',
   );
   await evaluate(
-    `Array.from(document.querySelectorAll('dialog button')).find(button=>button.textContent==='Open linked plane').click()`,
+    pageCall(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('dialog button'))
+        .find((button) => button.textContent === 'Open linked plane')!
+        .click(),
+    ),
   );
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-plurid-plane]").length'),
+    () => evaluate(countOf('[data-plurid-plane]')),
     (count) => count === 2,
     'linked spatial preview',
   );
   await settleCamera();
-  const facing = await evaluate<{ yaw: number; rotateY: number }>(
-    '({yaw:window.__qaEngine.camera.get().yaw,rotateY:window.__qaEngine.tree.get()[0].children[0].location.rotateY})',
+  const facing = await evaluate(
+    pageCall(() => {
+      const engine = (window as unknown as SmokeWindow).__qaEngine;
+      return {
+        yaw: engine.camera.get().yaw,
+        rotateY: engine.tree.get()[0].children![0].location.rotateY,
+      };
+    }),
   );
   assert.ok(
     Math.abs(((facing.yaw + facing.rotateY + 540) % 360) - 180) < 0.1,
@@ -6429,52 +7152,53 @@ async function verify(): Promise<void> {
   await settleCamera();
   const modelFile = path.join(fixture.files, 'Models', 'Triangle.glb');
   // Repeated activation reuses the original linked node, including a rapid repeated event.
-  const branch = await evaluate<string>('JSON.stringify(window.__qaEngine.tree.get())');
-  await evaluate(`(() => { const row = document.querySelector(${JSON.stringify(fileSelector(modelFile))});
-    for (let i = 0; i < 3; i++) row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); })()`);
+  const branch = await evaluate(pageCall(treeJSON));
+  await evaluate(pageCall(activateThrice, fileSelector(modelFile)));
   await settleCamera();
-  assert.equal(await evaluate('document.querySelectorAll("[data-viewer-plane]").length'), 2);
-  assert.equal(await evaluate('JSON.stringify(window.__qaEngine.tree.get())'), branch);
+  assert.equal(await evaluate(countOf('[data-viewer-plane]')), 2);
+  assert.equal(await evaluate(pageCall(treeJSON)), branch);
   await paletteCommand('Models');
   await settleCamera();
   await click(fileSelector(modelFile));
   await paletteCommand('Open in another plane');
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 3,
     'intentional second view',
   );
   await settleCamera();
   await paletteCommand('Close plane');
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 2,
     'closed second view',
   );
   await paletteCommand('Triangle.glb');
   await settleCamera();
-  assert.equal(await evaluate('document.querySelector(".model-stage canvas") !== null'), true);
   assert.equal(
-    await evaluate('!!document.querySelector(".plane-module-controls .preview-toolbar")'),
+    await evaluate(pageCall(() => document.querySelector('.model-stage canvas') !== null)),
+    true,
+  );
+  assert.equal(
+    await evaluate(exists('.plane-module-controls .preview-toolbar')),
     true,
     'Preview controls belong in the plane header',
   );
   await paletteCommand('Show wireframe');
   await paletteCommand('Hide wireframe');
   const transforms = () =>
-    evaluate<string>(
-      'JSON.stringify(Array.from(document.querySelectorAll(".workspace-surface [style*=transform]")).map(element=>getComputedStyle(element).transform))',
+    evaluate(
+      pageCall(() =>
+        JSON.stringify(
+          Array.from(
+            document.querySelectorAll('.workspace-surface [style*=transform]'),
+            (element) => getComputedStyle(element).transform,
+          ),
+        ),
+      ),
     );
   const beforeTransform = await transforms();
-  const bounds = await evaluate<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    scale: number;
-  }>(
-    '(()=>{const rect=document.querySelector(".model-stage canvas").getBoundingClientRect();return{x:Math.max(0,rect.x),y:Math.max(0,rect.y),width:Math.min(rect.width,innerWidth-Math.max(0,rect.x)),height:Math.min(rect.height,innerHeight-Math.max(0,rect.y)),scale:1}})()',
-  );
+  const bounds = await evaluate(pageCall(visibleModelCanvas));
   const beforeImage = await snapshot('model-before-orbit.png', bounds);
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
   await command('Input.dispatchMouseEvent', {
@@ -6527,9 +7251,7 @@ async function verify(): Promise<void> {
   });
   await paletteCommand('Frame all planes');
   await settleCamera();
-  const framed = await evaluate<{ view: number[]; planes: number[][] }>(
-    '(()=>{const bounds=element=>{const r=element.getBoundingClientRect();return[r.left,r.top,r.right,r.bottom]};return{view:bounds(document.querySelector(".workspace-surface")),planes:Array.from(document.querySelectorAll("[data-plurid-plane], .plane-controls")).map(bounds)}})()',
-  );
+  const framed = await evaluate(pageCall(framedBounds));
   for (const plane of framed.planes) {
     assert.ok(
       plane[0] >= framed.view[0] - 1 &&
@@ -6546,7 +7268,17 @@ async function verify(): Promise<void> {
   await delay(200);
   assert.equal(
     await evaluate(
-      '(()=>{const button=document.querySelector(".preview-info button");const r=button.getBoundingClientRect();return button.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)) && r.right<=innerWidth && r.bottom<=innerHeight;})()',
+      pageCall(() => {
+        const button = document.querySelector('.preview-info button')!;
+        const rect = button.getBoundingClientRect();
+        return (
+          button.contains(
+            document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2),
+          ) &&
+          rect.right <= innerWidth &&
+          rect.bottom <= innerHeight
+        );
+      }),
     ),
     true,
     'Dock navigation must leave the external-app action visible and reachable',
@@ -6566,25 +7298,25 @@ async function verify(): Promise<void> {
   await settleCamera();
   await click('[data-plurid-plane]:has(.folder-explorer) [aria-label="Close plane"]');
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 0,
     'closed linked branch',
   );
   await paletteCommand('Undo arrangement');
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 2,
     'undo closed branch',
   );
   await paletteCommand('Redo arrangement');
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 0,
     'redo closed branch',
   );
   await paletteCommand('Undo arrangement');
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 2,
     'restore closed branch again',
   );
@@ -6593,12 +7325,12 @@ async function verify(): Promise<void> {
   await command('Input.insertText', { text: 'Second workspace' });
   await click('dialog .primary');
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 1,
     'new workspace',
   );
   const filesBeforeDelete = await inventory();
-  const jobsBeforeDelete = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  const jobsBeforeDelete = await evaluate(pageCall(viewerJobs));
   await paletteCommand('Delete workspace');
   await until(
     text,
@@ -6610,7 +7342,7 @@ async function verify(): Promise<void> {
   await paletteCommand('Delete workspace');
   await click('dialog .danger');
   await until(
-    () => evaluate<string>('document.querySelector(".workspace-switcher")?.textContent || ""'),
+    () => evaluate(textOf('.workspace-switcher')),
     (value) => value.trim() === fixture.state.workspaces[0].name,
     'layout-only deletion switches workspace',
   );
@@ -6620,20 +7352,20 @@ async function verify(): Promise<void> {
     'Workspace deletion must preserve every fixture file, folder and symlink',
   );
   assert.deepEqual(
-    await evaluate('window.viewer.jobs()'),
+    await evaluate(pageCall(viewerJobs)),
     jobsBeforeDelete,
     'Workspace deletion must preserve file jobs',
   );
   await paletteCommand('Undo workspace deletion');
   await until(
-    () => evaluate<string>('document.querySelector(".workspace-switcher")?.textContent || ""'),
+    () => evaluate(textOf('.workspace-switcher')),
     (value) => value.trim() === 'Second workspace',
     'workspace recovery',
   );
   assert.deepEqual(await inventory(), filesBeforeDelete, 'Recovery must preserve fixture contents');
   await paletteCommand(fixture.state.workspaces[0].name);
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-viewer-plane]").length'),
+    () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 2,
     'switched workspace restored',
   );
@@ -6644,7 +7376,7 @@ async function verify(): Promise<void> {
   );
   await reloadPage();
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-plurid-plane]").length'),
+    () => evaluate(countOf('[data-plurid-plane]')),
     (count) => count === 2,
     'restored planes after reload',
   );
@@ -6658,7 +7390,7 @@ async function verify(): Promise<void> {
   // A native application quit exercises the renderer/main flush handshake, even
   // when the 400ms persistence debounce has not fired.
   await appearance('light');
-  assert.equal(await evaluate('document.documentElement.dataset.look'), 'light');
+  assert.equal(await evaluate(pageCall(pageLook)), 'light');
   await verifyBackgroundApp();
   // Electron's renderer window.close() bypasses BrowserWindow's native close
   // event. Browser.close drives app.quit(), including before-quit and close.
@@ -6684,11 +7416,7 @@ try {
   console.error('Renderer diagnostics:', rendererLog.slice(-10), exceptions);
   console.error(launched.output().slice(-3500));
   if (socket?.readyState === WebSocket.OPEN) {
-    console.error(
-      await evaluate(
-        '({visibility:document.visibilityState,focus:document.hasFocus(),motion:document.querySelector("[data-plurid-motion]")?.getAttribute("data-plurid-motion"),canvas:Array.from(document.querySelectorAll("canvas")).map(canvas=>({width:canvas.width,height:canvas.height})),textLayers:Array.from(document.querySelectorAll(".textLayer")).map(layer=>layer.innerHTML.slice(0,200))})',
-      ).catch(() => 'No diagnostic DOM'),
-    );
+    console.error(await evaluate(pageCall(failureDiagnostics)).catch(() => 'No diagnostic DOM'));
     await snapshot('failure.png').catch(() => undefined);
   }
   if (socket?.readyState === WebSocket.OPEN)
