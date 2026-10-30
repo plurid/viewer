@@ -7,8 +7,11 @@ import { ownedApp, until } from './owned-app';
 import { entry } from '../src/desktop/files/filesystem';
 import { sourceVersion } from '../src/domain/files/inspection';
 import { workflowDefinitionSchema, type WorkflowRun } from '../src/domain/automation/workflows';
+import type { RelationshipsResult } from '../src/domain/files/relationships';
 import { panelDrawing } from './dxf-fixtures';
-import type { SavedState, OperationJob } from '../src/domain/contracts';
+import type { SavedState } from '../src/domain/contracts';
+import { click, exists, patchSettings, textOf } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const root = await temporaryRoot('viewer-native-workflow-');
@@ -147,6 +150,69 @@ const initial: SavedState = {
   ],
 };
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(initial));
+
+const workflowRuns = () => window.viewer.workflow({ kind: 'list' }) as Promise<WorkflowRun[]>;
+const workflowRun = (id: string) =>
+  window.viewer.workflow({ kind: 'get', id }) as Promise<WorkflowRun>;
+const relationsOf = (file: string) =>
+  window.viewer.relationships({
+    kind: 'read',
+    file,
+    content: false,
+  }) as Promise<RelationshipsResult>;
+const sendWindowEvent = (name: string, detail: unknown) =>
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+
+/** Clicks the first button in the scope reading exactly `label`; a busy, disabled one ignores it. */
+const clickButton = (scope: string, label: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>(scope + ' button')]
+    .find((button) => button.textContent === label)!
+    .click();
+
+/** Opens the definition disclosure and its JSONC editor. */
+function editDefinition() {
+  document.querySelector<HTMLElement>('.workflow-definition summary')!.click();
+  [...document.querySelectorAll<HTMLButtonElement>('.workflow-definition button')]
+    .find((button) => button.textContent === 'Edit definition')!
+    .click();
+}
+
+function cancelEditing() {
+  [...document.querySelectorAll<HTMLButtonElement>('.workflow-definition button')]
+    .find((button) => button.textContent === 'Cancel editing')!
+    .click();
+  document.querySelector<HTMLElement>('.workflow-definition summary')!.click();
+}
+
+const reviewCopy = () =>
+  [...document.querySelectorAll<HTMLButtonElement>('.workflow-run button')]
+    .find((button) => button.textContent.includes('Review copy'))!
+    .click();
+
+const completedShown = () =>
+  !!document.querySelector('.workflow-run h3')?.textContent.includes('Completed') &&
+  !!document
+    .querySelector('.workflow-run-choice[aria-pressed=true]')
+    ?.textContent.includes('Completed');
+
+/** Closes Workflows, then opens Related files for the paths. */
+function openRelationships(detail: { paths: string[]; paneID: string }) {
+  document.querySelector<HTMLElement>('.workflow-dialog [aria-label=Close]')!.click();
+  window.dispatchEvent(new CustomEvent('viewer:relationships', { detail }));
+}
+
+/** Types the note through the textarea's own value setter, so React sees the input. */
+function typeNote(text: string) {
+  const input = document.querySelector<HTMLTextAreaElement>('.relationship-note textarea')!;
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, text);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function foldNote() {
+  document.querySelector<HTMLElement>('.relationship-note summary')!.click();
+  document.querySelector('.relationship-map')!.scrollTop = 0;
+}
+
 const binary =
   process.env.VIEWER_TEST_BINARY ??
   path.resolve('out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
@@ -156,9 +222,9 @@ const evidence: string[] = [];
 try {
   connection = await viewer.connect();
   const evaluate = connection.evaluate;
-  const drawing = await evaluate<{
-    facts: { drawingWidth: { value: number; unit: string }; drawingHeight: { value: number } };
-  }>(`window.viewer.inspect(${JSON.stringify(path.join(root, 'Panel.dxf'))},true)`);
+  const drawing = await evaluate(
+    pageCall((file: string) => window.viewer.inspect(file, true), path.join(root, 'Panel.dxf')),
+  );
   assert.equal(drawing.facts.drawingWidth.value, 200);
   assert.equal(drawing.facts.drawingWidth.unit, 'mm');
   assert.equal(drawing.facts.drawingHeight.value, 100);
@@ -166,13 +232,12 @@ try {
     'The packaged inspection worker exposes shared DXF bounds and declared units without importing renderer code.',
   );
   await until(
-    () =>
-      evaluate<string>(`document.querySelector('.data-scroll .evidence-cell')?.textContent||''`),
+    () => evaluate(textOf('.data-scroll .evidence-cell')),
     (text) => text === '60',
     'CSV evidence cell',
   );
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('.image-evidence-overlay')`),
+    () => evaluate(exists('.image-evidence-overlay')),
     Boolean,
     'normalized image evidence region',
   );
@@ -189,30 +254,23 @@ try {
     clipboard: null,
     jobs: [],
   };
-  await evaluate(
-    `window.dispatchEvent(new CustomEvent('viewer:workflows',{detail:${JSON.stringify({ file, context })}}))`,
-  );
+  await evaluate(pageCall(sendWindowEvent, 'viewer:workflows', { file, context }));
   await until(
-    () =>
-      evaluate<boolean>(
-        `document.querySelector('.workflow-definition')?.textContent.includes('Inspect and copy')`,
-      ),
-    Boolean,
+    () => evaluate(textOf('.workflow-definition')),
+    (text) => text.includes('Inspect and copy'),
     'opened workflow controls',
   );
   assert.equal(await readFile(path.join(destination, 'Source.txt'), 'utf8').catch(() => ''), '');
-  assert.deepEqual(await evaluate(`window.viewer.workflow({kind:'list'})`), []);
-  await evaluate(
-    `Array.from(document.querySelectorAll('.workflow-definition button')).find(button=>button.textContent==='Run workflow').click()`,
-  );
+  assert.deepEqual(await evaluate(pageCall(workflowRuns)), []);
+  await evaluate(pageCall(clickButton, '.workflow-definition', 'Run workflow'));
   const runs = await until(
-    () => evaluate<WorkflowRun[]>(`window.viewer.workflow({kind:'list'})`),
+    () => evaluate(pageCall(workflowRuns)),
     (runs) => runs[0]?.status === 'waiting-review',
     'workflow awaits review',
   );
   const id = runs[0].id;
   await until(
-    () => evaluate<string>(`document.querySelector('.workflow-run')?.textContent||''`),
+    () => evaluate(textOf('.workflow-run')),
     (text) => text.includes('Review copy'),
     'rendered step review',
   );
@@ -223,67 +281,39 @@ try {
     await writeFile(path.join(output, name + '.png'), Buffer.from(shot.data, 'base64'));
   };
   await capture('waiting-review');
-  await evaluate(
-    `document.querySelector('.workflow-definition summary').click();Array.from(document.querySelectorAll('.workflow-definition button')).find(button=>button.textContent==='Edit definition').click()`,
-  );
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector('.workflow-editor')`),
-    Boolean,
-    'actual JSONC editor',
-  );
+  await evaluate(pageCall(editDefinition));
+  await until(() => evaluate(exists('.workflow-editor')), Boolean, 'actual JSONC editor');
   await capture('editor-dark');
-  await evaluate(
-    `Array.from(document.querySelectorAll('.workflow-definition button')).find(button=>button.textContent==='Cancel editing').click();document.querySelector('.workflow-definition summary').click()`,
-  );
-  await evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-  );
+  await evaluate(pageCall(cancelEditing));
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () => evaluate<string>(`document.documentElement.dataset.look||''`),
+    () => evaluate(pageCall(() => document.documentElement.dataset.look || '')),
     (look) => look === 'light',
     'light workflow surface',
   );
   await capture('waiting-review-light');
-  await evaluate(
-    `document.querySelector('.workflow-definition summary').click();Array.from(document.querySelectorAll('.workflow-definition button')).find(button=>button.textContent==='Edit definition').click()`,
-  );
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector('.workflow-editor')`),
-    Boolean,
-    'light JSONC editor',
-  );
+  await evaluate(pageCall(editDefinition));
+  await until(() => evaluate(exists('.workflow-editor')), Boolean, 'light JSONC editor');
   await capture('editor-light');
-  await evaluate(
-    `Array.from(document.querySelectorAll('.workflow-definition button')).find(button=>button.textContent==='Cancel editing').click();document.querySelector('.workflow-definition summary').click()`,
-  );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.workflow-run button')).find(button=>button.textContent.includes('Review copy')).click()`,
-  );
+  await evaluate(pageCall(cancelEditing));
+  await evaluate(pageCall(reviewCopy));
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('.operation-review-body')`),
+    () => evaluate(exists('.operation-review-body')),
     Boolean,
     'normal operation review from workflow',
   );
   assert.equal(await readFile(path.join(destination, 'Source.txt'), 'utf8').catch(() => ''), '');
-  await evaluate(`document.querySelector('.operation-review-dialog button.primary').click()`);
+  await evaluate(click('.operation-review-dialog button.primary'));
   await until(
-    () => evaluate<OperationJob[]>(`window.viewer.jobs()`),
+    () => evaluate(pageCall(() => window.viewer.jobs())),
     (jobs) => jobs.some((job) => job.kind === 'copy' && job.status === 'completed'),
     'reviewed journaled copy',
   );
-  await evaluate(
-    `window.dispatchEvent(new CustomEvent('viewer:workflows',{detail:${JSON.stringify({ context })}}))`,
-  );
+  await evaluate(pageCall(sendWindowEvent, 'viewer:workflows', { context }));
+  await until(() => evaluate(exists('.workflow-run')), Boolean, 'resumed run controls');
+  await evaluate(pageCall(clickButton, '.workflow-run', 'Resume workflow'));
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('.workflow-run')`),
-    Boolean,
-    'resumed run controls',
-  );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.workflow-run button')).find(button=>button.textContent==='Resume workflow').click()`,
-  );
-  await until(
-    () => evaluate<WorkflowRun>(`window.viewer.workflow({kind:'get',id:${JSON.stringify(id)}})`),
+    () => evaluate(pageCall(workflowRun, id)),
     (run) => run.status === 'completed',
     'dependent inspection after reviewed copy',
   );
@@ -295,42 +325,35 @@ try {
     'Opening is dormant. The actual Run and Review copy controls create a durable plan without writing; actual Apply and Resume controls perform journaled copy and dependent inspection.',
   );
   await until(
-    () =>
-      evaluate<boolean>(
-        `document.querySelector('.workflow-run h3')?.textContent.includes('Completed')&&document.querySelector('.workflow-run-choice[aria-pressed=true]')?.textContent.includes('Completed')`,
-      ),
+    () => evaluate(pageCall(completedShown)),
     Boolean,
     'rendered completed run and history labels',
   );
   await capture('completed-light');
   await evaluate(
-    `document.querySelector('.workflow-dialog [aria-label=Close]').click();window.dispatchEvent(new CustomEvent('viewer:relationships',{detail:${JSON.stringify({ paths: [source, path.join(destination, 'Source.txt')], paneID: 'folder' })}}))`,
+    pageCall(openRelationships, {
+      paths: [source, path.join(destination, 'Source.txt')],
+      paneID: 'folder',
+    }),
   );
   await until(
-    () => evaluate<string>(`document.querySelector('.relationship-list')?.textContent||''`),
+    () => evaluate(textOf('.relationship-list')),
     (text) => text.includes('Recorded operation') && text.includes('Source.txt'),
     'recorded copy in Related files',
   );
   await capture('relationships-list-light');
-  await evaluate(
-    `Array.from(document.querySelectorAll('.relationships-body button')).find(button=>button.textContent==='Map').click()`,
-  );
+  await evaluate(pageCall(clickButton, '.relationships-body', 'Map'));
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('.relationship-map svg rect')`),
+    () => evaluate(exists('.relationship-map svg rect')),
     Boolean,
     'bounded relationship diagram',
   );
   await capture('relationships-map-light');
-  await evaluate(`document.querySelector('.relationship-note summary').click()`);
-  await evaluate(
-    `(()=>{const input=document.querySelector('.relationship-note textarea');const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set;setter.call(input,'Generated relationship note');input.dispatchEvent(new Event('input',{bubbles:true}));})()`,
-  );
-  await evaluate(`document.querySelector('.relationship-note button[type=submit]').click()`);
+  await evaluate(click('.relationship-note summary'));
+  await evaluate(pageCall(typeNote, 'Generated relationship note'));
+  await evaluate(click('.relationship-note button[type=submit]'));
   await until(
-    () =>
-      evaluate<{ relations: { basis: string; note?: string }[] }>(
-        `window.viewer.relationships({kind:'read',file:${JSON.stringify(source)},content:false})`,
-      ),
+    () => evaluate(pageCall(relationsOf, source)),
     (result) =>
       result.relations.some(
         (row) => row.basis === 'reported' && row.note === 'Generated relationship note',
@@ -338,15 +361,13 @@ try {
     'actual note control saves a reported relationship',
   );
   await until(
-    () => evaluate<string>(`document.querySelector('.relationship-map-links')?.textContent||''`),
+    () => evaluate(textOf('.relationship-map-links')),
     (text) => text.includes('Recorded operation') && text.includes('User note'),
     'map explicitly separates recorded links and reported notes',
   );
-  await evaluate(
-    `document.querySelector('.relationship-note summary').click();document.querySelector('.relationship-map').scrollTop=0`,
-  );
+  await evaluate(pageCall(foldNote));
   await capture('relationships-map-light');
-  await evaluate(`document.querySelector('.relationships-dialog [aria-label=Close]').click()`);
+  await evaluate(click('.relationships-dialog [aria-label=Close]'));
   evidence.push(
     'Actual Related files list/map show copy provenance, and the note form saves a separate reported link.',
   );
@@ -355,14 +376,10 @@ try {
   const cold = await ownedApp(binary, profile),
     second = await cold.connect();
   try {
-    const restored = await second.evaluate<WorkflowRun>(
-      `window.viewer.workflow({kind:'get',id:${JSON.stringify(id)}})`,
-    );
+    const restored = await second.evaluate(pageCall(workflowRun, id));
     assert.equal(restored.status, 'completed');
     assert.equal(restored.steps[2].sources[0].path, path.join(destination, 'Source.txt'));
-    const relations = await second.evaluate<{ relations: { basis: string; note?: string }[] }>(
-      `window.viewer.relationships({kind:'read',file:${JSON.stringify(source)},content:false})`,
-    );
+    const relations = await second.evaluate(pageCall(relationsOf, source));
     assert.ok(
       relations.relations.some(
         (row) => row.basis === 'reported' && row.note === 'Generated relationship note',

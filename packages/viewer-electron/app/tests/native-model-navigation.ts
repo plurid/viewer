@@ -7,6 +7,17 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import type { SavedState } from '../src/domain/contracts';
 import { cadMeshes, type ImportedCad } from '../src/renderer/previews/model/cad-data';
 import { ownedApp, until } from './owned-app';
+import {
+  animationFrames,
+  click as clickElement,
+  countOf,
+  exists,
+  focus,
+  patchSettings,
+  textOf,
+} from './native/runtime/page';
+import type { PageExpression } from './native/runtime/page-function';
+import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot } from '../tools/temporary';
 const source =
   process.env.VIEWER_TEST_STEP_FILE ??
@@ -69,6 +80,128 @@ const state: SavedState = {
   ],
 };
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state));
+
+/** The parts of the Plurid engine ref these checks read. */
+interface PlaneNode {
+  planeID: string;
+  children: PlaneNode[];
+  routeDivisions: { plane: { parameters: { id: string } } };
+}
+interface EngineRef {
+  camera: { frame: unknown; get(): unknown; docked(): string };
+  tree: { get(): PlaneNode[] };
+}
+/** A hook's ref may hold anything; only an engine has a camera that frames and a tree. */
+interface Hook {
+  memoizedState?: { current?: Partial<EngineRef> | null } | null;
+  next: Hook | null;
+}
+interface Fiber {
+  memoizedState: Hook | null;
+  return: Fiber | null;
+}
+type FiberHost = Element & Record<string, Fiber | undefined>;
+interface ModelWindow {
+  __modelQA: EngineRef;
+  __modelCanvas: Element | null;
+}
+
+/** Clicks the first button labelled `label`; a disabled one ignores the click. */
+const clickLabelledButton = (label: string) =>
+  [...document.querySelectorAll('button')]
+    .find((button) => button.textContent.trim() === label)!
+    .click();
+
+const focusedLabel = () => document.activeElement?.getAttribute('aria-label') || '';
+
+const hasRow = (file: string) =>
+  [...document.querySelectorAll<HTMLElement>('[data-file-path]')].some(
+    (row) => row.dataset.filePath === file,
+  );
+
+const clickRow = (file: string) =>
+  [...document.querySelectorAll<HTMLElement>('[data-file-path]')]
+    .find((row) => row.dataset.filePath === file)!
+    .click();
+
+/** The selector's opacity through its ancestors, with each one's box and transform. */
+function settledGeometry(selector: string) {
+  let node = document.querySelector(selector),
+    opacity = 1;
+  const geometry: (number | string)[][] = [];
+  if (!node) return { opacity: 0, geometry };
+  while (node) {
+    const style = getComputedStyle(node),
+      rect = node.getBoundingClientRect();
+    opacity *= Number(style.opacity);
+    geometry.push([rect.x, rect.y, rect.width, rect.height, style.transform]);
+    node = node.parentElement;
+  }
+  return { opacity, geometry };
+}
+
+/** Finds the engine ref through React's fiber tree and keeps it as `window.__modelQA`. */
+function captureEngine() {
+  const marker = document.querySelector('[data-viewer-plane]') as FiberHost;
+  const key = Object.keys(marker).find((key) => key.startsWith('__reactFiber'))!;
+  for (let fiber: Fiber | null | undefined = marker[key]; fiber; fiber = fiber.return)
+    for (let hook = fiber.memoizedState; hook; hook = hook.next) {
+      const api = hook.memoizedState?.current;
+      if (api?.camera?.frame && api?.tree?.get) {
+        (window as unknown as ModelWindow).__modelQA = api as EngineRef;
+        return true;
+      }
+    }
+  return false;
+}
+
+const cameraPose = () => JSON.stringify((window as unknown as ModelWindow).__modelQA.camera.get());
+
+const dockedPlane = () => (window as unknown as ModelWindow).__modelQA.camera.docked();
+
+/** The linked folder plane: the first child of the root plane. */
+const linkedFolderPlane = () =>
+  (window as unknown as ModelWindow).__modelQA.tree.get()[0].children[0].planeID;
+
+const linkedFolderID = () =>
+  (window as unknown as ModelWindow).__modelQA.tree.get()[0].children[0].routeDivisions.plane
+    .parameters.id;
+
+/** The linked model plane, opened from the linked folder. */
+const linkedModelID = () =>
+  (window as unknown as ModelWindow).__modelQA.tree.get()[0].children[0].children[0].routeDivisions
+    .plane.parameters.id;
+
+function rememberCanvas() {
+  (window as unknown as ModelWindow).__modelCanvas = document.querySelector('.model-stage canvas');
+  return true;
+}
+
+const sameCanvas = () =>
+  (window as unknown as ModelWindow).__modelCanvas ===
+  document.querySelector('.model-stage canvas');
+
+const toggleEdges = () =>
+  [...document.querySelectorAll('.model-shading-panel label')]
+    .find((label) => label.textContent.includes('Show edges'))!
+    .querySelector('input')!
+    .click();
+
+/** Sets the brightness slider through the input's own value setter, so React sees the change. */
+function setBrightness(value: string) {
+  const input = document.querySelector<HTMLInputElement>('[aria-label="Model brightness"]')!;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function canvasCenter() {
+  const rect = document.querySelector('.model-stage canvas')!.getBoundingClientRect();
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+}
+
+const parentButton = (planeID: string) =>
+  `[data-viewer-plane="${planeID}"] [aria-label="Back to parent plane"]`;
+
 const output = await mkdtemp(path.resolve('out/model-navigation-acceptance-'));
 const binary =
   process.env.VIEWER_TEST_BINARY ??
@@ -77,11 +210,9 @@ let viewer = await ownedApp(binary, profile),
   main: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const evidence: string[] = [],
   captures: string[] = [];
-const evaluate = <T = unknown>(expression: string) => main!.evaluate<T>(expression);
-const button = (label: string) =>
-  `Array.from(document.querySelectorAll('button')).find(button=>button.textContent.trim()===${JSON.stringify(label)})`;
+const evaluate = <R>(expression: PageExpression<R>) => main!.evaluate(expression);
 async function click(label: string) {
-  await evaluate(`${button(label)}.click()`);
+  await evaluate(pageCall(clickLabelledButton, label));
 }
 async function key(key: string, code = key) {
   for (const type of ['keyDown', 'keyUp'])
@@ -99,45 +230,33 @@ async function key(key: string, code = key) {
     });
 }
 async function palette(label: string) {
-  await evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+  await evaluate(clickElement('[aria-label="Commands (⌘K)"]'));
   await until(
-    () => evaluate<string>('document.activeElement?.getAttribute("aria-label")||""'),
+    () => evaluate(pageCall(focusedLabel)),
     (value) => value === 'Search commands',
     'palette focus',
   );
   await main!.command('Input.insertText', { text: label });
   await until(
-    () =>
-      evaluate<string>(
-        `document.querySelector('.command-result[aria-selected="true"]')?.textContent||''`,
-      ),
+    () => evaluate(textOf('.command-result[aria-selected="true"]')),
     (text) => text.includes(label),
     'command ' + label,
   );
   await key('Enter');
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('[aria-label="Search commands"]')`),
+    () => evaluate(exists('[aria-label="Search commands"]')),
     (value) => !value,
     'palette closed',
   );
-  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await evaluate(animationFrames(2));
 }
 async function select(file: string) {
-  await until(
-    () =>
-      evaluate<boolean>(
-        `Array.from(document.querySelectorAll('[data-file-path]')).some(n=>n.dataset.filePath===${JSON.stringify(file)})`,
-      ),
-    Boolean,
-    'visible source',
-  );
-  await evaluate(
-    `Array.from(document.querySelectorAll('[data-file-path]')).find(n=>n.dataset.filePath===${JSON.stringify(file)}).click()`,
-  );
+  await until(() => evaluate(pageCall(hasRow, file)), Boolean, 'visible source');
+  await evaluate(pageCall(clickRow, file));
 }
 async function models() {
   await until(
-    () => evaluate<string>(`document.querySelector('.model-statistics')?.textContent||''`),
+    () => evaluate(textOf('.model-statistics')),
     (text) => text.includes('meshes'),
     'loaded model',
   );
@@ -155,9 +274,7 @@ async function capture(name: string, selector = '.model-stage') {
     stable = 0;
   await until(
     async () => {
-      const value = await evaluate<{ opacity: number; geometry: unknown[] }>(
-        `(()=>{let n=document.querySelector(${JSON.stringify(selector)}),opacity=1,geometry=[];if(!n)return{opacity:0,geometry};while(n){const s=getComputedStyle(n),r=n.getBoundingClientRect();opacity*=Number(s.opacity);geometry.push([r.x,r.y,r.width,r.height,s.transform]);n=n.parentElement}return{opacity,geometry}})()`,
-      );
+      const value = await evaluate(pageCall(settledGeometry, selector));
       const serialized = JSON.stringify(value);
       stable = previous === serialized ? stable + 1 : 0;
       previous = serialized;
@@ -172,26 +289,20 @@ async function capture(name: string, selector = '.model-stage') {
   captures.push(file);
 }
 async function theme(look: 'dark' | 'light') {
-  await evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:${JSON.stringify(look)}}],s.revision))`,
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: look }));
   await until(
-    () => evaluate<string>('document.documentElement.dataset.look'),
+    () => evaluate(pageCall(() => document.documentElement.dataset.look)),
     (value) => value === look,
     'theme',
   );
-  if (await evaluate<boolean>('!!document.querySelector(".model-viewer")')) await models();
+  if (await evaluate(exists('.model-viewer'))) await models();
 }
 /** Chooses in a choice menu (ui/ChoiceMenu.tsx) as a person does: its button, then the value's row. */
 async function choose(label: string, value: string) {
-  const row = JSON.stringify(`.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`);
-  await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(label)}]').click()`);
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector(${row})`),
-    Boolean,
-    label + ' menu',
-  );
-  await evaluate(`document.querySelector(${row}).click()`);
+  const row = `.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`;
+  await evaluate(clickElement(`button[aria-label=${JSON.stringify(label)}]`));
+  await until(() => evaluate(exists(row)), Boolean, label + ' menu');
+  await evaluate(clickElement(row));
 }
 async function surface(value: string) {
   await choose('Model surface', value);
@@ -208,18 +319,14 @@ async function active(id: string) {
   await until(saved, (s) => s.workspaces[0].activePane === id, 'active ' + id);
 }
 async function engine() {
-  assert.ok(
-    await evaluate<boolean>(
-      `(()=>{const n=document.querySelector('[data-viewer-plane]'),key=Object.keys(n).find(k=>k.startsWith('__reactFiber'));for(let f=n[key];f;f=f.return)for(let h=f.memoizedState;h;h=h.next){const api=h.memoizedState?.current;if(api?.camera?.frame&&api?.tree?.get){window.__modelQA=api;return true;}}return false;})()`,
-    ),
-  );
+  assert.ok(await evaluate(pageCall(captureEngine)));
 }
 async function settle() {
   let previous = '',
     stable = 0;
   await until(
     async () => {
-      const s = await evaluate<string>('JSON.stringify(window.__modelQA.camera.get())');
+      const s = await evaluate(pageCall(cameraPose));
       stable = previous === s ? stable + 1 : 0;
       previous = s;
       return s;
@@ -234,23 +341,14 @@ try {
   await select(folder);
   await palette('Open linked plane');
   await until(
-    () =>
-      evaluate<boolean>(
-        `!!document.querySelector('[data-file-owner] [aria-label="View linked plane for Engineering"]')`,
-      ),
+    () => evaluate(exists('[data-file-owner] [aria-label="View linked plane for Engineering"]')),
     Boolean,
     'folder link marker',
   );
   await engine();
   await settle();
-  const folderID = await evaluate<string>(
-    'window.__modelQA.tree.get()[0].children[0].routeDivisions.plane.parameters.id',
-  );
-  assert.ok(
-    await evaluate<boolean>(
-      `!!document.querySelector('[data-viewer-plane="'+${JSON.stringify(folderID)}+'"] [aria-label="Back to parent plane"]')`,
-    ),
-  );
+  const folderID = await evaluate(pageCall(linkedFolderID));
+  assert.ok(await evaluate(exists(parentButton(folderID))));
   await select(step);
   await palette('Quick preview');
   await models();
@@ -260,14 +358,8 @@ try {
   } else {
     await capture('step-contrast-dark');
     await click('Shading');
-    await until(
-      () => evaluate<boolean>('!!document.querySelector(".model-shading-panel")'),
-      Boolean,
-      'shading controls',
-    );
-    const canvas = await evaluate<boolean>(
-      '(()=>{window.__modelCanvas=document.querySelector(".model-stage canvas");return true;})()',
-    );
+    await until(() => evaluate(exists('.model-shading-panel')), Boolean, 'shading controls');
+    const canvas = await evaluate(pageCall(rememberCanvas));
     assert.ok(canvas);
     await lighting('studio');
     await capture('step-studio-controls-dark');
@@ -276,42 +368,38 @@ try {
     await surface('clay');
     await lighting('contrast');
     await capture('step-clay-dark');
-    await evaluate(
-      `Array.from(document.querySelectorAll('.model-shading-panel label')).find(n=>n.textContent.includes('Show edges')).querySelector('input').click()`,
-    );
+    await evaluate(pageCall(toggleEdges));
     await capture('step-clay-edges-dark');
     await surface('normals');
     assert.ok(
-      await evaluate<boolean>(`document.querySelector('[aria-label="Model lighting"]').disabled`),
+      await evaluate(
+        pageCall(
+          () =>
+            document.querySelector<HTMLButtonElement>('[aria-label="Model lighting"]')!.disabled,
+        ),
+      ),
     );
     await capture('step-normals-dark');
     await surface('clay');
-    await evaluate(
-      `(()=>{const input=document.querySelector('[aria-label="Model brightness"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'0.65');input.dispatchEvent(new Event('input',{bubbles:true}));})()`,
-    );
+    await evaluate(pageCall(setBrightness, '0.65'));
     await until(
-      () => evaluate<string>('document.querySelector(".model-brightness output").textContent'),
+      () => evaluate(textOf('.model-brightness output')),
       (text) => text === '65%',
       'brightness',
     );
-    assert.ok(
-      await evaluate<boolean>(
-        'window.__modelCanvas===document.querySelector(".model-stage canvas")',
-      ),
-      'shading does not recreate the canvas',
-    );
+    assert.ok(await evaluate(pageCall(sameCanvas)), 'shading does not recreate the canvas');
     await main.command('Input.dispatchKeyEvent', {
       type: 'keyDown',
       key: 'Escape',
       code: 'Escape',
     });
     await until(
-      () => evaluate<boolean>('!!document.querySelector(".model-shading-panel")'),
+      () => evaluate(exists('.model-shading-panel')),
       (v) => !v,
       'Escape closes shading',
     );
     assert.ok(
-      await evaluate<boolean>('!!document.querySelector("dialog .model-stage canvas")'),
+      await evaluate(exists('dialog .model-stage canvas')),
       'Escape leaves Quick Preview open',
     );
     await click('Shading');
@@ -319,39 +407,31 @@ try {
     await metrics(900, 640);
     await theme('light');
     await capture('step-controls-compact-light');
-    await evaluate(`document.querySelector('[aria-label="Close shading controls"]').click()`);
-    await evaluate(`document.querySelector('dialog[open] > header [aria-label="Close"]').click()`);
+    await evaluate(clickElement('[aria-label="Close shading controls"]'));
+    await evaluate(clickElement('dialog[open] > header [aria-label="Close"]'));
     await select(stl);
     await palette('Quick preview');
     await models();
     await click('Shading');
     await surface('clay');
     await capture('stl-clay-compact-light');
-    await evaluate(`document.querySelector('dialog[open] > header [aria-label="Close"]').click()`);
+    await evaluate(clickElement('dialog[open] > header [aria-label="Close"]'));
     await theme('dark');
     await select(step);
     await palette('Quick preview');
     await models();
-    await evaluate(`${button('Open linked plane')}.click()`);
+    await click('Open linked plane');
     await models();
     await engine();
     await settle();
-    const modelID = await evaluate<string>(
-      'window.__modelQA.tree.get()[0].children[0].children[0].routeDivisions.plane.parameters.id',
-    );
+    const modelID = await evaluate(pageCall(linkedModelID));
     await active(modelID);
-    assert.ok(
-      await evaluate<boolean>(
-        `!!document.querySelector('[data-viewer-plane="'+${JSON.stringify(modelID)}+'"] [aria-label="Back to parent plane"]')`,
-      ),
-    );
+    assert.ok(await evaluate(exists(parentButton(modelID))));
     await palette('Dock plane');
     await settle();
     // Orbit once so this check compares a user camera pose, rather than an
     // absent default camera record (initial framing is deliberately unsaved).
-    const canvasBounds = await evaluate<{ x: number; y: number }>(
-      `(()=>{const r=document.querySelector('.model-stage canvas').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`,
-    );
+    const canvasBounds = await evaluate(pageCall(canvasCenter));
     await main.command('Input.dispatchMouseEvent', {
       type: 'mousePressed',
       button: 'left',
@@ -379,7 +459,7 @@ try {
     await surface('clay');
     await lighting('contrast');
     await capture('linked-model-docked-compact-dark');
-    await evaluate(`document.querySelector('[aria-label="Close shading controls"]').click()`);
+    await evaluate(clickElement('[aria-label="Close shading controls"]'));
     let previousCamera = '',
       stableCamera = 0;
     const before = await until(
@@ -400,18 +480,16 @@ try {
       JSON.stringify((await saved()).previewStates?.['test:' + modelID]?.['model.camera']),
       camera,
     );
-    await evaluate(`document.querySelector('[aria-label="Close shading controls"]').click()`);
-    await evaluate(
-      `document.querySelector('[data-viewer-plane="'+${JSON.stringify(modelID)}+'"] [aria-label="Back to parent plane"]').click()`,
-    );
+    await evaluate(clickElement('[aria-label="Close shading controls"]'));
+    await evaluate(clickElement(parentButton(modelID)));
     await active(folderID);
     await settle();
     assert.equal(
-      await evaluate<string>('window.__modelQA.camera.docked()'),
-      await evaluate<string>(`window.__modelQA.tree.get()[0].children[0].planeID`),
+      await evaluate(pageCall(dockedPlane)),
+      await evaluate(pageCall(linkedFolderPlane)),
     );
-    const marker = `document.querySelector('[aria-label="View linked plane for Part.step"]')`;
-    await until(() => evaluate<boolean>(`!!${marker}`), Boolean, 'model link marker');
+    const marker = '[aria-label="View linked plane for Part.step"]';
+    await until(() => evaluate(exists(marker)), Boolean, 'model link marker');
     await metrics(1440, 940);
     await capture('parent-link-markers-dark', '[data-viewer-plane]');
     const count = (await saved()).workspaces[0].panes.length;
@@ -423,9 +501,9 @@ try {
     await palette('Back to parent plane');
     await active(folderID);
     await settle();
-    await evaluate(`${marker}.focus()`);
+    await evaluate(focus(marker));
     assert.equal(
-      await evaluate<string>('document.activeElement?.getAttribute("aria-label")'),
+      await evaluate(pageCall(() => document.activeElement?.getAttribute('aria-label'))),
       'View linked plane for Part.step',
       'link marker receives actual DOM focus',
     );
@@ -436,39 +514,21 @@ try {
     await palette('Back to parent plane');
     await active(folderID);
     await settle();
-    await evaluate(
-      `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'ui.space.headerControls.parent',value:false}],s.revision))`,
-    );
+    await evaluate(patchSettings({ path: 'ui.space.headerControls.parent', value: false }));
     await until(
-      () =>
-        evaluate<number>(
-          `document.querySelectorAll('[data-viewer-plane] [aria-label="Back to parent plane"]').length`,
-        ),
+      () => evaluate(countOf('[data-viewer-plane] [aria-label="Back to parent plane"]')),
       (count) => count === 0,
       'hidden parent buttons',
     );
-    await evaluate(
-      `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'ui.space.headerControls.parent',value:true}],s.revision))`,
-    );
-    await until(
-      () =>
-        evaluate<boolean>(
-          `!!document.querySelector('[data-viewer-plane="'+${JSON.stringify(folderID)}+'"] [aria-label="Back to parent plane"]')`,
-        ),
-      Boolean,
-      'restored parent buttons',
-    );
+    await evaluate(patchSettings({ path: 'ui.space.headerControls.parent', value: true }));
+    await until(() => evaluate(exists(parentButton(folderID))), Boolean, 'restored parent buttons');
     await palette('Back to parent plane');
     await active('parent');
     await settle();
     assert.ok(
-      !(await evaluate<boolean>(
-        `!!document.querySelector('[data-viewer-plane=parent] [aria-label="Back to parent plane"]')`,
-      )),
+      !(await evaluate(exists('[data-viewer-plane=parent] [aria-label="Back to parent plane"]'))),
     );
-    await evaluate(
-      `document.querySelector('[aria-label="View linked plane for Engineering"]').click()`,
-    );
+    await evaluate(clickElement('[aria-label="View linked plane for Engineering"]'));
     await active(folderID);
     await settle();
     await palette('Grid view');
@@ -492,7 +552,7 @@ try {
           ?.shading === 'clay',
       'retained appearance',
     );
-    await evaluate(`document.querySelector('[aria-label="Close shading controls"]').click()`);
+    await evaluate(clickElement('[aria-label="Close shading controls"]'));
     await viewer.close(main);
     main = undefined;
     viewer = await ownedApp(binary, profile);
@@ -501,10 +561,7 @@ try {
     await models();
     await metrics(900, 640);
     await click('Shading');
-    assert.equal(
-      await evaluate<string>(`document.querySelector('[aria-label="Model surface"]').textContent`),
-      'Clay',
-    );
+    assert.equal(await evaluate(textOf('[aria-label="Model surface"]')), 'Clay');
     await capture('restored-shading-compact-dark');
     evidence.push(
       'STEP and STL use Contrast by default; Studio/Soft, clay/normals, edges, shadows and brightness update the live canvas with unchanged dimensions and source bytes.',

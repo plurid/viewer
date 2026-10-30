@@ -5,6 +5,18 @@ import path from 'node:path';
 import type { SavedState } from '../src/domain/contracts';
 import type { ProjectAssociation } from '../src/domain/workspaces/project';
 import { ownedApp, until } from './owned-app';
+import {
+  animationFrames,
+  click as clickElement,
+  countOf,
+  exists,
+  focus,
+  patchSettings,
+  pressButton,
+  textOf,
+} from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
+import type { PageExpression } from './native/runtime/page-function';
 import { temporaryRoot } from '../tools/temporary';
 
 const root = await temporaryRoot('viewer-project-exit-');
@@ -88,19 +100,26 @@ let app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const evidence: string[] = [],
   captures: string[] = [];
-const evaluate = <T = unknown>(expression: string) => connection!.evaluate<T>(expression);
-const notice = () =>
-  evaluate<string>(`document.querySelector('.project-file-notice')?.textContent || ''`);
-async function capture(name: string) {
-  await evaluate(`new Promise((resolve, reject) => {
-    let previous = '', stable = 0, frames = 0;
+interface ProjectWindow {
+  __projectFolderEvents: number;
+}
+/** Resolves once the dialog, notice or folder has been opaque and still for four frames. */
+function settled() {
+  return new Promise<boolean>((resolve, reject) => {
+    let previous = '',
+      stable = 0,
+      frames = 0;
     function check() {
-      const surface = document.querySelector('dialog') || document.querySelector('.project-file-notice') || document.querySelector('.folder-explorer');
+      const surface =
+        document.querySelector('dialog') ||
+        document.querySelector('.project-file-notice') ||
+        document.querySelector('.folder-explorer');
       const rect = surface?.getBoundingClientRect();
-      let opaque = true, transforms = [];
-      for (let node = surface; node; node = node.parentElement) {
+      let opaque = true;
+      const transforms: string[] = [];
+      for (let node: Element | null = surface; node; node = node.parentElement) {
         const style = getComputedStyle(node);
-        if (Number(style.opacity) < .999) opaque = false;
+        if (Number(style.opacity) < 0.999) opaque = false;
         transforms.push(style.transform);
       }
       const next = JSON.stringify([rect?.x, rect?.y, rect?.width, rect?.height, transforms]);
@@ -111,7 +130,34 @@ async function capture(name: string) {
       else requestAnimationFrame(check);
     }
     requestAnimationFrame(check);
-  })`);
+  });
+}
+/** Clicks the first button labelled `label`: false when there is none. */
+function clickLabelled(label: string) {
+  const button = [...document.querySelectorAll('button')].find(
+    (button) => button.textContent.trim() === label,
+  );
+  button?.click();
+  return !!button;
+}
+/** Counts the folder-changed events for `folder` in `window.__projectFolderEvents`. */
+function countFolderEvents(folder: string) {
+  const page = window as unknown as ProjectWindow;
+  page.__projectFolderEvents = 0;
+  window.viewer.onEvent((event) => {
+    if (event.type === 'folder-changed' && event.path === folder) page.__projectFolderEvents++;
+  });
+}
+/** Whether the project notice ends above the docked plane's toolbar. */
+function noticeAboveToolbar() {
+  const warning = document.querySelector('.project-file-notice')!.getBoundingClientRect();
+  const toolbar = document.querySelector('.plane-controls')!.getBoundingClientRect();
+  return warning.bottom <= toolbar.top + 1;
+}
+const evaluate = <R>(expression: PageExpression<R>) => connection!.evaluate(expression);
+const notice = () => evaluate(textOf('.project-file-notice'));
+async function capture(name: string) {
+  await evaluate(pageCall(settled));
   const shot = await connection!.command<{ data: string }>('Page.captureScreenshot', {
     format: 'png',
   });
@@ -120,22 +166,16 @@ async function capture(name: string) {
   captures.push(destination);
 }
 async function click(label: string) {
-  assert.equal(
-    await evaluate<boolean>(`(() => {
-    const button = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === ${JSON.stringify(label)});
-    button?.click(); return !!button;
-  })()`),
-    true,
-    'Visible button ' + label,
-  );
+  assert.equal(await evaluate(pageCall(clickLabelled, label)), true, 'Visible button ' + label);
 }
 async function settleProjectRead() {
   await evaluate(
-    `window.viewer.project({ kind: 'read', file: ${JSON.stringify(file)} }).catch(() => null)`,
+    pageCall(
+      (file: string) => window.viewer.project({ kind: 'read', file }).catch(() => null),
+      file,
+    ),
   );
-  await evaluate(
-    'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))',
-  );
+  await evaluate(animationFrames(2));
 }
 try {
   connection = await app.connect();
@@ -143,12 +183,10 @@ try {
   await capture('missing-project-before-dismiss');
   await click('Dismiss');
   await until(notice, (text) => !text, 'notice dismissed');
-  await evaluate(`window.__projectFolderEvents = 0; window.viewer.onEvent(event => {
-    if (event.type === 'folder-changed' && event.path === ${JSON.stringify(folder)}) window.__projectFolderEvents++;
-  })`);
+  await evaluate(pageCall(countFolderEvents, folder));
   await writeFile(path.join(folder, 'Unrelated.txt'), 'Generated unrelated change.\n');
   await until(
-    () => evaluate<number>('window.__projectFolderEvents'),
+    () => evaluate(pageCall(() => (window as unknown as ProjectWindow).__projectFolderEvents)),
     Boolean,
     'real folder notification',
   );
@@ -178,14 +216,10 @@ try {
       (text) => text.includes('Project file is missing'),
       'clear missing-file recovery',
     );
-    await evaluate(`document.querySelector('.folder-explorer').focus()`);
+    await evaluate(focus('.folder-explorer'));
     await capture('missing-project-dark');
     assert.equal(
-      await evaluate<boolean>(`(() => {
-      const warning = document.querySelector('.project-file-notice').getBoundingClientRect();
-      const toolbar = document.querySelector('.plane-controls').getBoundingClientRect();
-      return warning.bottom <= toolbar.top + 1;
-    })()`),
+      await evaluate(pageCall(noticeAboveToolbar)),
       true,
       'Project warning must not cover the docked plane toolbar',
     );
@@ -195,22 +229,17 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await evaluate(
-      `window.viewer.settingsGet().then(s => window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-    );
+    await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
     await capture('missing-project-compact-light');
-    await evaluate(`document.querySelector('[aria-label="Commands (⌘K)"]').click()`);
+    await evaluate(clickElement('[aria-label="Commands (⌘K)"]'));
     await until(
-      () => evaluate<string>('document.activeElement?.getAttribute("aria-label") || ""'),
+      () => evaluate(pageCall(() => document.activeElement?.getAttribute('aria-label') || '')),
       (value) => value === 'Search commands',
       'command focus',
     );
     await connection.command('Input.insertText', { text: 'Close project' });
     await until(
-      () =>
-        evaluate<string>(
-          `document.querySelector('.command-result[aria-selected="true"]')?.textContent || ''`,
-        ),
+      () => evaluate(textOf('.command-result[aria-selected="true"]')),
       (text) => text.includes('Close project'),
       'Close project command',
     );
@@ -238,11 +267,7 @@ try {
     assert.deepEqual(detached.workspaces[0].roots, ['folder']);
     assert.equal(detached.workspaces[0].activePane, 'folder');
     await writeFile(path.join(folder, 'AfterClose.txt'), 'Generated change after closing.\n');
-    await until(
-      () => evaluate<number>('document.querySelectorAll(".folder-explorer").length'),
-      Boolean,
-      'folder remains open',
-    );
+    await until(() => evaluate(countOf('.folder-explorer')), Boolean, 'folder remains open');
     assert.equal(await notice(), '');
     await capture('closed-project-compact-light');
     evidence.push(
@@ -252,25 +277,20 @@ try {
     connection = undefined;
     app = await ownedApp(binary, profile);
     connection = await app.connect();
-    await until(
-      () => evaluate<number>('document.querySelectorAll(".folder-explorer").length'),
-      Boolean,
-      'cold ordinary workspace',
-    );
+    await until(() => evaluate(countOf('.folder-explorer')), Boolean, 'cold ordinary workspace');
     assert.equal(await notice(), '');
     evidence.push(
       'A cold restart keeps the ordinary workspace and does not reattach the missing project.',
     );
-    await evaluate(
-      `Array.from(document.querySelectorAll('.location-sidebar button')).find(b => b.textContent.trim() === 'Trash').click()`,
-    );
+    await evaluate(pressButton('Trash', '.location-sidebar'));
     await until(
-      () => evaluate<boolean>(`!!document.querySelector('dialog[aria-label="Trash"]')`),
+      () => evaluate(exists('dialog[aria-label="Trash"]')),
       Boolean,
       'native Trash dialog',
     );
     const trash = await until(
-      () => evaluate<string>(`document.querySelector('dialog[aria-label="Trash"]').textContent`),
+      () =>
+        evaluate(pageCall(() => document.querySelector('dialog[aria-label="Trash"]')!.textContent)),
       (text) =>
         text.includes('unavailable') || text.includes('empty') || text.includes('Trash location'),
       'Trash read complete',
@@ -279,9 +299,7 @@ try {
       assert.ok(trash.includes('Privacy Settings'));
       assert.ok(!trash.includes('EPERM'));
       assert.ok(!trash.includes('Allow access…'));
-      await evaluate(
-        `window.viewer.settingsGet().then(s => window.viewer.settingsPatch([{path:'settings.appearance',value:'dark'}],s.revision))`,
-      );
+      await evaluate(patchSettings({ path: 'settings.appearance', value: 'dark' }));
       await capture('trash-permission-dark');
       await connection.command('Emulation.setDeviceMetricsOverride', {
         width: 900,
@@ -289,9 +307,7 @@ try {
         deviceScaleFactor: 1,
         mobile: false,
       });
-      await evaluate(
-        `window.viewer.settingsGet().then(s => window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-      );
+      await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
       await capture('trash-permission-compact-light');
       evidence.push(
         'Actual macOS denial explains Full Disk Access and offers Privacy Settings; erasure stays disabled.',

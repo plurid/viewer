@@ -9,8 +9,7 @@ import { createFixtures } from './fixtures';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences/ui';
 import { ownedApp, until } from './owned-app';
-import type { Volume } from '../src/domain/files/volumes';
-import type { ResourceRead } from '../src/domain/contracts';
+import { pageCall } from './native/runtime/page-function';
 import { trashTemporary } from '../tools/temporary';
 type Entity = { 'mount-point'?: string; 'dev-entry': string };
 type Attach = { 'system-entities': Entity[] };
@@ -89,6 +88,22 @@ async function verifyOwnedDevice() {
   assert.ok(entry, 'Only the generated image may be detached');
   assert.ok(entry['system-entities'].some((v) => v['dev-entry'] === device));
 }
+const workspaceReady = () => !!window.viewer && !!document.querySelector('.folder-explorer');
+const openResource = (file: string) => window.viewer.resource(file);
+const readResource = (id: string) => window.viewer.read(id);
+/** True once the resource `id` no longer reads. */
+const readFails = (id: string) =>
+  window.viewer.read(id).then(
+    () => false,
+    () => true,
+  );
+const eject = (root: string) => window.viewer.volumeEject(root);
+/** Ejects `root`, answering with the refusal instead of throwing. */
+const tryEject = (root: string): Promise<{ success?: boolean; error?: string; code?: string }> =>
+  window.viewer.volumeEject(root).then(
+    () => ({ success: true }),
+    (error: Error & { code?: string }) => ({ error: error.message, code: error.code }),
+  );
 async function check(scenario: string, run: () => Promise<unknown>) {
   const details = await run();
   results.push({ scenario, result: 'passed', details });
@@ -114,12 +129,8 @@ try {
   app = await ownedApp(binary, profile);
   connection = await app.connect();
   const { evaluate } = connection;
-  await until(
-    () => evaluate('!!window.viewer && !!document.querySelector(".folder-explorer")'),
-    Boolean,
-    'Owned volume workspace',
-  );
-  const volumes = () => evaluate<Volume[]>('window.viewer.volumesList()');
+  await until(() => evaluate(pageCall(workspaceReady)), Boolean, 'Owned volume workspace');
+  const volumes = () => evaluate(pageCall(() => window.viewer.volumesList()));
   await check('Mounted generated image: inventory, capacity and writable state', async () => {
     const volume = await until(
       volumes,
@@ -133,46 +144,34 @@ try {
     assert.equal(current.ejectable, true);
     return current;
   });
-  const unrelated = await evaluate<{ id: string }>(
-    `window.viewer.resource(${JSON.stringify(path.join(fixture.files, 'README.md'))})`,
-  );
-  const baseline = await evaluate(`window.viewer.read(${JSON.stringify(unrelated.id)})`);
+  const unrelated = await evaluate(pageCall(openResource, path.join(fixture.files, 'README.md')));
+  const baseline = await evaluate(pageCall(readResource, unrelated.id));
   busy = await open(file, 'r');
   await check('Busy eject fails visibly and preserves independent preview and mount', async () => {
     await verifyOwnedDevice();
-    const result = await evaluate<{ success?: boolean; error?: string; code?: string }>(
-      `window.viewer.volumeEject(${JSON.stringify(root)}).then(()=>({success:true}),error=>({error:error.message,code:error.code}))`,
-    );
+    const result = await evaluate(pageCall(tryEject, root));
     assert.ok(result.error, 'An externally held descriptor prevents ordinary eject');
     assert.equal(result.code, 'EBUSY');
     assert.match(result.error, /disk is in use/i);
-    assert.deepEqual(
-      await evaluate(`window.viewer.read(${JSON.stringify(unrelated.id)})`),
-      baseline,
-    );
+    assert.deepEqual(await evaluate(pageCall(readResource, unrelated.id)), baseline);
     assert.ok((await volumes()).some((v) => v.path === root));
     assert.match(await readFile(file, 'utf8'), /Generated/);
     return result;
   });
   await busy.close();
   busy = undefined;
-  const volumeResource = await evaluate<{ id: string }>(
-    `window.viewer.resource(${JSON.stringify(file)})`,
+  const volumeResource = await evaluate(pageCall(openResource, file));
+  await evaluate(
+    pageCall((root: string) => window.viewer.watch(root, 'generated-volume-watch'), root),
   );
-  await evaluate(`window.viewer.watch(${JSON.stringify(root)},'generated-volume-watch')`);
   await check('Successful eject drains the owned watcher and preview', async () => {
     await verifyOwnedDevice();
-    await evaluate(`window.viewer.volumeEject(${JSON.stringify(root)})`);
+    await evaluate(pageCall(eject, root));
     await until(volumes, (items) => !items.some((v) => v.path === root), 'Ejected volume removed');
     mounted = false;
-    const expired = await evaluate(
-      `window.viewer.read(${JSON.stringify(volumeResource.id)}).then(()=>false,()=>true)`,
-    );
+    const expired = await evaluate(pageCall(readFails, volumeResource.id));
     assert.equal(expired, true);
-    assert.deepEqual(
-      await evaluate(`window.viewer.read(${JSON.stringify(unrelated.id)})`),
-      baseline,
-    );
+    assert.deepEqual(await evaluate(pageCall(readResource, unrelated.id)), baseline);
   });
   const restored = await attach(true);
   assert.equal(restored, root);
@@ -185,25 +184,24 @@ try {
     const current = items.find((v) => v.path === root)!;
     assert.equal(current.readOnly, true);
     assert.ok(current.total > 0);
-    assert.equal(
-      await evaluate(
-        `window.viewer.read(${JSON.stringify(volumeResource.id)}).then(()=>false,()=>true)`,
+    assert.equal(await evaluate(pageCall(readFails, volumeResource.id)), true);
+    const next = await evaluate(
+      pageCall(
+        (file: string) =>
+          window.viewer.resource(file).then((resource) => window.viewer.read(resource.id)),
+        file,
       ),
-      true,
-    );
-    const next = await evaluate<ResourceRead>(
-      `window.viewer.resource(${JSON.stringify(file)}).then(resource=>window.viewer.read(resource.id))`,
     );
     assert.match(next.text, /Generated/);
     return current;
   });
   await check('Read-only generated mount ejects cleanly', async () => {
     await verifyOwnedDevice();
-    await evaluate(`window.viewer.volumeEject(${JSON.stringify(root)})`);
+    await evaluate(pageCall(eject, root));
     await until(volumes, (items) => !items.some((v) => v.path === root), 'Final eject');
     mounted = false;
   });
-  await evaluate(`window.viewer.release(${JSON.stringify(unrelated.id)})`);
+  await evaluate(pageCall((id: string) => window.viewer.release(id), unrelated.id));
   await app.close(connection);
   quit = true;
   await writeFile(

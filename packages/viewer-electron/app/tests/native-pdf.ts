@@ -5,6 +5,8 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
+import { click, exists, patchSettings, textOf } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const root = await temporaryRoot('viewer-native-pdf-');
@@ -35,18 +37,18 @@ for (const [i, [width, height, rotation]] of pages.entries()) {
     `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
   );
 }
-let document = '%PDF-1.4\n';
+let pdf = '%PDF-1.4\n';
 const offsets = [0];
 for (const [i, body] of bodies.entries()) {
-  offsets.push(Buffer.byteLength(document));
-  document += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  offsets.push(Buffer.byteLength(pdf));
+  pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
 }
-const xref = Buffer.byteLength(document);
-document += `xref\n0 ${bodies.length + 1}\n0000000000 65535 f \n${offsets
+const xref = Buffer.byteLength(pdf);
+pdf += `xref\n0 ${bodies.length + 1}\n0000000000 65535 f \n${offsets
   .slice(1)
   .map((n) => `${String(n).padStart(10, '0')} 00000 n \n`)
   .join('')}trailer\n<< /Size ${bodies.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-await writeFile(file, document);
+await writeFile(file, pdf);
 const state: SavedState = {
   version: 4,
   look: 'dark',
@@ -97,6 +99,51 @@ const binary =
 let viewer = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const checks: string[] = [];
+/** The page canvas's size, the stage's room inside its padding, and the stage's scroll extent. */
+function pdfGeometry() {
+  const stage = document.querySelector('.pdf-scroll')!,
+    canvas = stage.querySelector('canvas')!,
+    style = getComputedStyle(stage);
+  return {
+    width: parseFloat(canvas.style.width),
+    height: parseFloat(canvas.style.height),
+    availableWidth:
+      stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+    availableHeight:
+      stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
+    scrollWidth: stage.scrollWidth,
+    scrollHeight: stage.scrollHeight,
+    clientWidth: stage.clientWidth,
+    clientHeight: stage.clientHeight,
+  };
+}
+/** The PDF viewer's, or else the context menu's, opacity and transforms through its ancestors,
+ * with the page canvas's inline style. */
+function pdfSurface() {
+  let node = document.querySelector('.pdf-viewer') || document.querySelector('.context-menu'),
+    opacity = 1;
+  const chain: string[] = [];
+  while (node) {
+    const style = getComputedStyle(node);
+    opacity *= Number(style.opacity);
+    chain.push(style.transform);
+    node = node.parentElement;
+  }
+  return {
+    opacity,
+    chain,
+    canvas: document.querySelector('.pdf-sheet canvas')?.getAttribute('style') || '',
+  };
+}
+/** The icon path of the Workspace and Project context menu items, by label. */
+function menuIcons() {
+  return Object.fromEntries(
+    [...document.querySelectorAll('.context-menu [role="menuitem"]')]
+      .filter((item) => ['Workspace', 'Project'].includes(item.textContent.trim()))
+      .map((item) => [item.textContent.trim(), item.querySelector('svg path')?.getAttribute('d')]),
+  );
+}
+const zoomLabel = () => document.querySelector('button[aria-label="PDF zoom"]')!.textContent;
 async function metrics(width: number, height: number) {
   await connection!.command('Emulation.setDeviceMetricsOverride', {
     width,
@@ -107,27 +154,13 @@ async function metrics(width: number, height: number) {
 }
 async function rendered(page: number) {
   await until(
-    () =>
-      connection!.evaluate<string>(
-        `document.querySelector('.pdf-viewer .textLayer')?.textContent||''`,
-      ),
+    () => connection!.evaluate(textOf('.pdf-viewer .textLayer')),
     (text) => text.includes('Page ' + page),
     'PDF text layer on page ' + page,
   );
 }
 async function geometry() {
-  return connection!.evaluate<{
-    width: number;
-    height: number;
-    availableWidth: number;
-    availableHeight: number;
-    scrollWidth: number;
-    scrollHeight: number;
-    clientWidth: number;
-    clientHeight: number;
-  }>(
-    `(()=>{const stage=document.querySelector('.pdf-scroll'),canvas=stage.querySelector('canvas'),s=getComputedStyle(stage);return {width:parseFloat(canvas.style.width),height:parseFloat(canvas.style.height),availableWidth:stage.clientWidth-parseFloat(s.paddingLeft)-parseFloat(s.paddingRight),availableHeight:stage.clientHeight-parseFloat(s.paddingTop)-parseFloat(s.paddingBottom),scrollWidth:stage.scrollWidth,scrollHeight:stage.scrollHeight,clientWidth:stage.clientWidth,clientHeight:stage.clientHeight}})()`,
-  );
+  return connection!.evaluate(pageCall(pdfGeometry));
 }
 async function fitted() {
   const size = await until(
@@ -151,14 +184,10 @@ async function fitted() {
 }
 /** Chooses a zoom in its choice menu (ui/ChoiceMenu.tsx): the button, then the value's row. */
 async function selectZoom(value: string) {
-  const row = JSON.stringify(`.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`);
-  await connection!.evaluate(`document.querySelector('button[aria-label="PDF zoom"]').click()`);
-  await until(
-    () => connection!.evaluate<boolean>(`!!document.querySelector(${row})`),
-    Boolean,
-    'PDF zoom menu',
-  );
-  await connection!.evaluate(`document.querySelector(${row}).click()`);
+  const row = `.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`;
+  await connection!.evaluate(click('button[aria-label="PDF zoom"]'));
+  await until(() => connection!.evaluate(exists(row)), Boolean, 'PDF zoom menu');
+  await connection!.evaluate(click(row));
 }
 async function capture(name: string) {
   let previous = '',
@@ -166,13 +195,7 @@ async function capture(name: string) {
   await until(
     async () => {
       await delay(120);
-      const value = await connection!.evaluate<{
-        opacity: number;
-        chain: string[];
-        canvas: string;
-      }>(
-        `(()=>{let node=document.querySelector('.pdf-viewer')||document.querySelector('.context-menu'),opacity=1,chain=[];while(node){const s=getComputedStyle(node);opacity*=Number(s.opacity);chain.push(s.transform);node=node.parentElement}return {opacity,chain,canvas:document.querySelector('.pdf-sheet canvas')?.getAttribute('style')||''}})()`,
-      );
+      const value = await connection!.evaluate(pageCall(pdfSurface));
       const serialized = JSON.stringify(value);
       stable = previous === serialized ? stable + 1 : 0;
       previous = serialized;
@@ -190,29 +213,34 @@ try {
   connection = await viewer.connect();
   await metrics(2560, 1440);
   const selector = `[data-file-path=${JSON.stringify(file)}]`;
-  await until(
-    () => connection!.evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
-    Boolean,
-    'Generated PDF listing',
-  );
+  await until(() => connection!.evaluate(exists(selector)), Boolean, 'Generated PDF listing');
   await connection.evaluate(
-    `document.querySelector(${JSON.stringify(selector)}).dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:200,clientY:180}))`,
+    pageCall(
+      (selector: string) =>
+        document
+          .querySelector(selector)!
+          .dispatchEvent(
+            new MouseEvent('contextmenu', { bubbles: true, clientX: 200, clientY: 180 }),
+          ),
+      selector,
+    ),
   );
   await until(
-    () =>
-      connection!.evaluate<boolean>(`!!document.querySelector('.context-menu [role="menuitem"]')`),
+    () => connection!.evaluate(exists('.context-menu [role="menuitem"]')),
     Boolean,
     'Context menu',
   );
-  const icons = await connection.evaluate<Record<string, string>>(
-    `Object.fromEntries(Array.from(document.querySelectorAll('.context-menu [role="menuitem"]')).filter(e=>['Workspace','Project'].includes(e.textContent.trim())).map(e=>[e.textContent.trim(),e.querySelector('svg path')?.getAttribute('d')]))`,
-  );
+  const icons = await connection.evaluate(pageCall(menuIcons));
   assert.ok(
     icons.Workspace && icons.Project && icons.Workspace !== icons.Project,
     'Workspace and Project have different icons',
   );
   await connection.evaluate(
-    `Array.from(document.querySelectorAll('.context-menu [role="menuitem"]')).find(e=>e.textContent.trim()==='Project').scrollIntoView({block:'nearest'})`,
+    pageCall(() =>
+      [...document.querySelectorAll('.context-menu [role="menuitem"]')]
+        .find((item) => item.textContent.trim() === 'Project')!
+        .scrollIntoView({ block: 'nearest' }),
+    ),
   );
   await capture('context-project-icon-dark');
   await connection.command('Input.dispatchKeyEvent', {
@@ -228,7 +256,7 @@ try {
     windowsVirtualKeyCode: 27,
   });
   checks.push('The actual context menu uses distinct Workspace and Project icons.');
-  await connection.evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+  await connection.evaluate(click(selector));
   await connection.command('Input.dispatchKeyEvent', {
     type: 'keyDown',
     key: ' ',
@@ -243,26 +271,21 @@ try {
   });
   await rendered(1);
   await fitted();
-  assert.equal(
-    await connection.evaluate(
-      `document.querySelector('button[aria-label="PDF zoom"]').textContent`,
-    ),
-    'Fit page',
-  );
+  assert.equal(await connection.evaluate(pageCall(zoomLabel)), 'Fit page');
   await capture('pdf-portrait-wide-dark');
   await metrics(900, 640);
   await fitted();
   await capture('pdf-portrait-compact-dark');
-  await connection.evaluate(`document.querySelector('[aria-label="Search PDF"]').click()`);
+  await connection.evaluate(click('[aria-label="Search PDF"]'));
   const searchSize = await fitted();
   assert.ok(searchSize.availableHeight < 500, 'Search row reserves its own height');
   await capture('pdf-search-compact-dark');
-  await connection.evaluate(`document.querySelector('[aria-label="Close PDF search"]').click()`);
+  await connection.evaluate(click('[aria-label="Close PDF search"]'));
   checks.push(
     'Quick Preview opens in Fit page; whole portrait page remains visible on large and compact windows and when search opens.',
   );
   for (let page = 2; page <= pages.length; page++) {
-    await connection.evaluate(`document.querySelector('[aria-label="Next page"]').click()`);
+    await connection.evaluate(click('[aria-label="Next page"]'));
     await rendered(page);
     const size = await fitted();
     assert.equal(size.width > size.height, page === 2 || page === 3);
@@ -273,7 +296,7 @@ try {
   );
   // Return to portrait before testing intentional width fitting and actual-size zoom.
   for (let page = pages.length - 1; page >= 1; page--) {
-    await connection.evaluate(`document.querySelector('[aria-label="Previous page"]').click()`);
+    await connection.evaluate(click('[aria-label="Previous page"]'));
     await rendered(page);
   }
   await selectZoom('width');
@@ -298,11 +321,9 @@ try {
     'Fit width remains an explicit option; 100% uses CSS document scale and stays fixed across window resize.',
   );
   await selectZoom('page');
-  await connection.evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-  );
+  await connection.evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () => connection!.evaluate<string>('document.documentElement.dataset.look'),
+    () => connection!.evaluate(pageCall(() => document.documentElement.dataset.look)),
     (s) => s === 'light',
     'PDF light theme',
   );
@@ -311,11 +332,15 @@ try {
   await metrics(900, 640);
   await fitted();
   await capture('pdf-portrait-compact-light');
-  await connection.evaluate(`document.querySelector('.quick-preview-actions .primary').click()`);
+  await connection.evaluate(click('.quick-preview-actions .primary'));
   await until(
     () =>
-      connection!.evaluate<boolean>(
-        `!document.querySelector('.quick-preview-dialog[open]')&&!!document.querySelector('.pdf-viewer')`,
+      connection!.evaluate(
+        pageCall(
+          () =>
+            !document.querySelector('.quick-preview-dialog[open]') &&
+            !!document.querySelector('.pdf-viewer'),
+        ),
       ),
     Boolean,
     'Linked PDF plane',
@@ -329,12 +354,7 @@ try {
   viewer = await ownedApp(binary, profile);
   connection = await viewer.connect();
   await rendered(1);
-  assert.equal(
-    await connection.evaluate(
-      `document.querySelector('button[aria-label="PDF zoom"]').textContent`,
-    ),
-    '150%',
-  );
+  assert.equal(await connection.evaluate(pageCall(zoomLabel)), '150%');
   await until(
     geometry,
     (s) => Math.abs(s.width - 595 * 2) < 1,

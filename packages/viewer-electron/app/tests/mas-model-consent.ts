@@ -8,8 +8,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { createFixtures } from './fixtures';
 import { defaultSettings } from '../src/domain/services';
+import type { ActionRequest, SettingsPatch } from '../src/domain/services';
+import type { ModelDataLevel } from '../src/domain/models/permissions';
 import { normalizePreferences } from '../src/domain/preferences/ui';
 import { ownedApp, until } from './owned-app';
+import { patchSettings } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
 import { trashTemporary } from '../tools/temporary';
 
 const bundle = process.env.VIEWER_TEST_MAS_BUNDLE!,
@@ -47,7 +51,6 @@ await writeFile(
   }),
   { mode: 0o600 },
 );
-type ObservedPlan = { status: string; error?: string };
 const requests: { url: string; body: unknown; mode: string; aborted?: boolean }[] = [];
 let mode = 'success';
 const sockets = new Set<Socket>();
@@ -125,36 +128,49 @@ const results: { scenario: string; result: string; details?: unknown }[] = [];
 let app: Awaited<ReturnType<typeof ownedApp>> | undefined;
 let main: Awaited<ReturnType<Awaited<ReturnType<typeof ownedApp>>['connect']>> | undefined;
 let quit = false;
+const permissionOf = (id: string) => window.viewer.providerPermissionGet(id);
 try {
   app = await ownedApp(path.join(bundle, 'Contents/MacOS/Viewer'), profile);
   main = await app.connect();
   const { evaluate } = main;
   await until(
-    () => evaluate('!!window.viewer && !!document.querySelector(".folder-explorer")'),
+    () => evaluate(pageCall(() => !!window.viewer && !!document.querySelector('.folder-explorer'))),
     Boolean,
     'Signed model workspace',
   );
-  const patch = async (patches: unknown[]) =>
-    evaluate(
-      `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch(${JSON.stringify(patches)},s.revision))`,
-    );
+  const patch = async (patches: SettingsPatch[]) => evaluate(patchSettings(...patches));
   await patch([
     { path: 'settings.providers', value: [provider] },
     { path: 'settings.recipes', value: [recipe('names')] },
   ]);
   const begin = () =>
-    evaluate<string>(
-      `window.viewer.actionStart(${JSON.stringify({ recipeID: 'generated-native-recipe', context: { workspaceID: 'fixture-workspace', rootID: 'fixture-folder', paneID: 'fixture-folder', sources: [file], actor: 'user' } })})`,
+    evaluate(
+      pageCall((request: ActionRequest) => window.viewer.actionStart(request), {
+        recipeID: 'generated-native-recipe',
+        context: {
+          workspaceID: 'fixture-workspace',
+          rootID: 'fixture-folder',
+          paneID: 'fixture-folder',
+          sources: [file],
+          actor: 'user',
+        },
+      }),
     );
   const plan = async (id: string) =>
     until(
-      () => evaluate<ObservedPlan>(`window.viewer.actionGet(${JSON.stringify(id)})`),
+      () => evaluate(pageCall((id: string) => window.viewer.actionGet(id), id)),
       (p) => ['review', 'failed', 'cancelled'].includes(p.status),
       'Finished generated model plan',
     );
-  const permission = async (level: string | null) =>
+  const permission = async (level: ModelDataLevel | null) =>
     evaluate(
-      `window.viewer.providerPermissionSet(${JSON.stringify(provider.id)},${JSON.stringify(provider.endpoint)},${JSON.stringify(level)})`,
+      pageCall(
+        (id: string, endpoint: string, level: ModelDataLevel | null) =>
+          window.viewer.providerPermissionSet(id, endpoint, level),
+        provider.id,
+        provider.endpoint,
+        level,
+      ),
     );
   async function check(scenario: string, run: () => Promise<unknown>) {
     const details = await run();
@@ -215,10 +231,7 @@ try {
   await check('Endpoint edit invalidates private consent before transmission', async () => {
     const count = requests.length;
     await patch([{ path: 'settings.providers', value: [provider] }]);
-    assert.equal(
-      await evaluate(`window.viewer.providerPermissionGet(${JSON.stringify(provider.id)})`),
-      null,
-    );
+    assert.equal(await evaluate(pageCall(permissionOf, provider.id)), null);
     const p = await plan(await begin());
     assert.equal(p.status, 'failed');
     assert.equal(requests.length, count);
@@ -237,14 +250,17 @@ try {
   });
   mode = 'success';
   await check('Clearing a key invalidates approval through the Settings-only API', async () => {
-    await evaluate('window.viewer.openSettings()');
+    await evaluate(pageCall(() => window.viewer.openSettings()));
     const settings = await app!.connect(true);
-    await until(() => settings.evaluate('!!window.viewer'), Boolean, 'Signed model Settings');
-    await settings.evaluate(`window.viewer.providerCredential(${JSON.stringify(provider.id)},'')`);
-    assert.equal(
-      await evaluate(`window.viewer.providerPermissionGet(${JSON.stringify(provider.id)})`),
-      null,
+    await until(
+      () => settings.evaluate(pageCall(() => !!window.viewer)),
+      Boolean,
+      'Signed model Settings',
     );
+    await settings.evaluate(
+      pageCall((id: string) => window.viewer.providerCredential(id, ''), provider.id),
+    );
+    assert.equal(await evaluate(pageCall(permissionOf, provider.id)), null);
     const count = requests.length;
     const p = await plan(await begin());
     assert.equal(p.status, 'failed');

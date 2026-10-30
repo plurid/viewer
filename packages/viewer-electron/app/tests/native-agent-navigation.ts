@@ -7,6 +7,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { AgentProposal, AgentWorkspace } from '../src/domain/agents/requests';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
+import { countOf, exists, patchSettings } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
+import type { PageExpression } from './native/runtime/page-function';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const binary =
@@ -85,18 +88,30 @@ const pending = new Map<
   }
 >();
 const evidence: string[] = [];
+
+/** Presses the open review's primary button, or its Reject button. */
+function answerReview(approve: boolean) {
+  const dialog = document.querySelector('dialog[open]')!;
+  const button = approve
+    ? dialog.querySelector<HTMLButtonElement>('button.primary')
+    : [...dialog.querySelectorAll('button')].find(
+        (button) => button.textContent.trim() === 'Reject',
+      );
+  if (!button) throw new Error('Review control missing');
+  button.click();
+}
+
 try {
   connection = await viewer.connect();
-  const evaluate = <T = unknown>(expression: string) => connection!.evaluate<T>(expression);
+  const evaluate = <R>(expression: PageExpression<R>) => connection!.evaluate(expression);
   const readState = async () =>
     JSON.parse(await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8')) as SavedState;
-  await until(
-    () => evaluate<number>(`document.querySelectorAll('.folder-explorer').length`),
-    Boolean,
-    'owned folder renderer',
-  );
+  await until(() => evaluate(countOf('.folder-explorer')), Boolean, 'owned folder renderer');
   await evaluate(
-    `window.viewer.settingsGet().then(s => window.viewer.settingsPatch([{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(shared)}]}],s.revision))`,
+    patchSettings(
+      { path: 'settings.agents.enabled', value: true },
+      { path: 'settings.agents.roots', value: [shared] },
+    ),
   );
   await until(
     () => readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8').catch(() => ''),
@@ -163,13 +178,11 @@ try {
   const review = async (id: string, approve = true) => {
     assert.equal((await status(id)).status, 'review');
     await until(
-      () => evaluate<boolean>(`!!document.querySelector('dialog[open] form button.primary')`),
+      () => evaluate(exists('dialog[open] form button.primary')),
       Boolean,
       'rendered action review',
     );
-    await evaluate(
-      `(() => { const dialog = document.querySelector('dialog[open]'); const button = ${approve ? "dialog.querySelector('button.primary')" : "Array.from(dialog.querySelectorAll('button')).find(button => button.textContent.trim() === 'Reject')"}; if (!button) throw new Error('Review control missing'); button.click(); })()`,
-    );
+    await evaluate(pageCall(answerReview, approve));
     return until(
       () => status(id),
       (proposal) => ['completed', 'rejected', 'failed'].includes(proposal.status),
@@ -230,7 +243,9 @@ try {
     (result) => result.target.selection.length === 2,
     'actual explorer selection',
   );
-  const viewText = await evaluate<string>(`document.querySelector('.folder-explorer').textContent`);
+  const viewText = await evaluate(
+    pageCall(() => document.querySelector('.folder-explorer')!.textContent),
+  );
   assert.match(viewText, /2 selected/);
   evidence.push(
     'Rendered Reject/Open path/Select files controls, deferred execution, ordinary folder history and actual two-file selection.',

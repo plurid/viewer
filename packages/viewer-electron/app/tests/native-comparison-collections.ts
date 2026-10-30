@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ownedApp, until } from './owned-app';
-import type { SavedState, OperationJob } from '../src/domain/contracts';
+import { click, countOf, exists } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
+import type { SavedState } from '../src/domain/contracts';
+import type { CheckpointRecord, CheckpointReply } from '../src/domain/operations/change-plan';
 import { entry } from '../src/desktop/files/filesystem';
 import { sourceVersion } from '../src/domain/files/inspection';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
@@ -72,11 +75,31 @@ let connection: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const evidence: string[] = [];
 const output = path.resolve('out/comparison-collection-acceptance');
 await mkdir(output, { recursive: true });
+type CheckpointList = Extract<CheckpointReply, { records: CheckpointRecord[] }>;
+/** Ticks the content comparison and presses Compare. */
+function compareContents() {
+  document.querySelector<HTMLElement>('.comparison-body input[type=checkbox]')!.click();
+  [...document.querySelectorAll<HTMLElement>('dialog[open] footer button')]
+    .find((button) => button.textContent.trim() === 'Compare')!
+    .click();
+}
+/** Clicks the first button inside `scope` whose text includes `label`. */
+function pressIncluding(scope: string, label: string) {
+  [...document.querySelectorAll<HTMLElement>(scope + ' button')]
+    .find((button) => button.textContent.includes(label))!
+    .click();
+}
+/** Sets the field's value through the native setter, so React sees an input event. */
+function typeInto(selector: string, value: string) {
+  const input = document.querySelector<HTMLInputElement>(selector)!;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
 try {
   connection = await viewer.connect();
   const evaluate = connection.evaluate;
   await until(
-    () => evaluate<number>(`document.querySelectorAll('.collection-explorer .file-row').length`),
+    () => evaluate(countOf('.collection-explorer .file-row')),
     (count) => count === 2,
     'collection plane from two folders',
   );
@@ -84,13 +107,18 @@ try {
     'A restored collection plane displays references from two folders using the normal virtualized file table.',
   );
   await evaluate(
-    `window.dispatchEvent(new CustomEvent('viewer:compare',{detail:${JSON.stringify([left, right])}}))`,
+    pageCall(
+      (folders: string[]) =>
+        window.dispatchEvent(new CustomEvent('viewer:compare', { detail: folders })),
+      [left, right],
+    ),
   );
-  await evaluate(
-    `(()=>{document.querySelector('.comparison-body input[type=checkbox]').click();Array.from(document.querySelectorAll('dialog[open] footer button')).find(b=>b.textContent.trim()==='Compare').click();})()`,
-  );
+  await evaluate(pageCall(compareContents));
   await until(
-    () => evaluate<string>(`document.querySelector('.comparison-table')?.innerText||''`),
+    () =>
+      evaluate(
+        pageCall(() => document.querySelector<HTMLElement>('.comparison-table')?.innerText || ''),
+      ),
     (text) => text.includes('Equal SHA-256') && text.includes('Only.txt'),
     'rendered verified content comparison',
   );
@@ -98,17 +126,16 @@ try {
     format: 'png',
   });
   await writeFile(path.join(output, 'comparison.png'), Buffer.from(shot.data, 'base64'));
-  await evaluate(
-    `Array.from(document.querySelectorAll('dialog[open] footer button')).find(b=>b.textContent.includes('Review copy')).click()`,
-  );
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector('.operation-review-body')`),
-    Boolean,
-    'shared operation review',
-  );
+  await evaluate(pageCall(pressIncluding, 'dialog[open] footer', 'Review copy'));
+  await until(() => evaluate(exists('.operation-review-body')), Boolean, 'shared operation review');
   assert.ok(!(await readFile(path.join(right, 'Only.txt'), 'utf8').catch(() => '')));
   await evaluate(
-    `document.querySelector('.operation-review-body .review-checkpoint input').click();document.querySelector('dialog[open] [aria-label=Close]').focus()`,
+    pageCall(() => {
+      document
+        .querySelector<HTMLElement>('.operation-review-body .review-checkpoint input')!
+        .click();
+      document.querySelector<HTMLElement>('dialog[open] [aria-label=Close]')!.focus();
+    }),
   );
   const reviewShot = await connection.command<{ data: string }>('Page.captureScreenshot', {
     format: 'png',
@@ -118,42 +145,43 @@ try {
     Buffer.from(reviewShot.data, 'base64'),
   );
   assert.equal(
-    await evaluate<string>(
-      `getComputedStyle(document.querySelector('dialog[open] [aria-label=Close]')).outlineStyle`,
+    await evaluate(
+      pageCall(
+        () =>
+          getComputedStyle(document.querySelector('dialog[open] [aria-label=Close]')!).outlineStyle,
+      ),
     ),
     'none',
   );
-  await evaluate(`document.querySelector('dialog[open] button.primary').click()`);
+  await evaluate(click('dialog[open] button.primary'));
   await until(
-    () => evaluate<OperationJob[]>(`window.viewer.jobs()`),
+    () => evaluate(pageCall(() => window.viewer.jobs())),
     (jobs) => jobs.some((job) => job.kind === 'copy' && job.status === 'completed'),
     'journaled reconciliation copy',
   );
   assert.equal(await readFile(path.join(right, 'Only.txt'), 'utf8'), 'Original left file');
-  const saved = await evaluate<{ records: { id: string }[] }>(
-    `window.viewer.checkpoints({kind:'list'})`,
+  const saved = await evaluate(
+    pageCall(() => window.viewer.checkpoints({ kind: 'list' }) as Promise<CheckpointList>),
   );
   assert.equal(saved.records.length, 1);
   evidence.push(
     'Actual comparison produces a selectable revisioned review without writes; opt-in snapshot precedes the queued copy and the focused Close control has no outline.',
   );
-  await evaluate(`window.dispatchEvent(new Event('viewer:collections'))`);
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector('.collections-body')`),
-    Boolean,
-    'basket controls',
-  );
+  await evaluate(pageCall(() => window.dispatchEvent(new Event('viewer:collections'))));
+  await until(() => evaluate(exists('.collections-body')), Boolean, 'basket controls');
   assert.ok(
-    await evaluate<boolean>(
-      `document.querySelector('.collections-body').innerText.includes('Basket · 2 files')`,
+    await evaluate(
+      pageCall(() =>
+        document
+          .querySelector<HTMLElement>('.collections-body')!
+          .innerText.includes('Basket · 2 files'),
+      ),
     ),
   );
   await evaluate(
-    `(()=>{const input=document.querySelector('.collections-body > label input');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Retained cross-folder collection');input.dispatchEvent(new Event('input',{bubbles:true}));})()`,
+    pageCall(typeInto, '.collections-body > label input', 'Retained cross-folder collection'),
   );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.collections-body button')).find(button=>button.textContent.includes('Save basket as collection')).click()`,
-  );
+  await evaluate(pageCall(pressIncluding, '.collections-body', 'Save basket as collection'));
   await until(
     async () =>
       JSON.parse(await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8')) as SavedState,
@@ -176,10 +204,7 @@ try {
   const second = await cold.connect();
   try {
     await until(
-      () =>
-        second.evaluate<number>(
-          `document.querySelectorAll('.collection-explorer .file-row').length`,
-        ),
+      () => second.evaluate(countOf('.collection-explorer .file-row')),
       (count) => count === 2,
       'cold collection plane',
     );

@@ -43,11 +43,13 @@ describe('native scenario fixtures', () => {
     expect(scenarioSettings(performance, 'performance').settings.git.enabled).toBe(false);
   });
 
-  it('preserves foundation shell fixture arguments and creates no program execution', async () => {
+  it('gives foundations the built-in login shell and creates no program execution', async () => {
     const fixture = await createScenarioFixtures();
     const settings = scenarioSettings(fixture, 'foundations');
+    // Any other profile waits for a native confirmation that no automated run may answer; the
+    // smoke harness starts the app with SHELL=/bin/sh, which this profile runs.
     expect(settings.settings.terminals.profiles).toEqual([
-      { id: 'login', name: 'Fixture shell', executable: '/bin/sh', args: [], env: {} },
+      { id: 'login', name: 'Fixture shell', executable: '', args: [], env: {} },
     ]);
     expect(settings.settings.customActions).toMatchObject([
       {

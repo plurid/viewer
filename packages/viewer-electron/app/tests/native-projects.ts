@@ -6,6 +6,14 @@ import path from 'node:path';
 import type { SavedState } from '../src/domain/contracts';
 import type { ProjectDefinition, ProjectDocument } from '../src/domain/workspaces/project';
 import { ownedApp, until } from './owned-app';
+import {
+  click as clickElement,
+  countOf,
+  exists,
+  patchSettings,
+  textOf,
+} from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
 import { decodeProject } from '../src/desktop/workspaces/projects';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const root = await temporaryRoot('viewer-native-project-');
@@ -102,43 +110,45 @@ let connection: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const checks: string[] = [];
 const evidenceDirectory = path.resolve('out/project-acceptance');
 await mkdir(evidenceDirectory, { recursive: true });
+/** Clicks the first dialog button labelled `label`: false when there is none. */
+function clickDialogButton(label: string) {
+  const button = [...document.querySelectorAll<HTMLButtonElement>('dialog button')].find(
+    (button) => button.textContent.trim() === label,
+  );
+  button?.click();
+  return !!button;
+}
+const dispatch = (name: string, detail: string) =>
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+/** Sets the dialog's text area through the native setter, so React sees an input event. */
+function typeNote(value: string) {
+  const input = document.querySelector<HTMLTextAreaElement>('dialog textarea')!;
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
 try {
   connection = await viewer.connect();
   let evaluate = connection.evaluate;
   const click = async (label: string) => {
-    assert.equal(
-      await evaluate<boolean>(`(() => { const b = [...document.querySelectorAll('dialog button')]
-      .find(b => b.textContent.trim() === ${JSON.stringify(label)}); b?.click(); return !!b; })()`),
-      true,
-    );
+    assert.equal(await evaluate(pageCall(clickDialogButton, label)), true);
   };
   const dialog = (label: string) =>
-    until(
-      () =>
-        evaluate<boolean>(
-          `!!document.querySelector('dialog[aria-label=${JSON.stringify(label)}]')`,
-        ),
-      Boolean,
-      label,
-    );
-  await until(
-    () => evaluate<number>(`document.querySelectorAll('.folder-explorer').length`),
-    Boolean,
-    'project folder',
+    until(() => evaluate(exists(`dialog[aria-label=${JSON.stringify(label)}]`)), Boolean, label);
+  await until(() => evaluate(countOf('.folder-explorer')), Boolean, 'project folder');
+  assert.equal(await evaluate(countOf('.terminal-plane')), 0);
+  const opened = await evaluate(
+    pageCall(
+      (file: string) => window.viewer.project({ kind: 'read', file }) as Promise<ProjectDocument>,
+      projectFile,
+    ),
   );
-  assert.equal(await evaluate(`document.querySelectorAll('.terminal-plane').length`), 0);
-  const document = await evaluate<ProjectDocument>(
-    `window.viewer.project({kind:'read',file:${JSON.stringify(projectFile)}})`,
-  );
-  assert.equal(document.definition.id, definition.id);
+  assert.equal(opened.definition.id, definition.id);
   checks.push('Project file read, root/child restoration and dormant imported terminal.');
-  await evaluate(`window.dispatchEvent(new CustomEvent('viewer:notes',{detail:'preview'}))`);
+  await evaluate(pageCall(dispatch, 'viewer:notes', 'preview'));
   await dialog('Plane notes');
-  await evaluate(`(() => { const input = document.querySelector('dialog textarea');
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'Generated durable note.');
-    input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  await evaluate(pageCall(typeNote, 'Generated durable note.'));
   await click('Save notes');
-  await evaluate(`window.dispatchEvent(new CustomEvent('viewer:project',{detail:'save'}))`);
+  await evaluate(pageCall(dispatch, 'viewer:project', 'save'));
   await until(
     async () =>
       decodeProject(await readFile(projectFile, 'utf8')).planes.find(
@@ -154,18 +164,16 @@ try {
   checks.push(
     'Rendered note editor, explicit save, portable parent/docking export and comment preservation.',
   );
-  await evaluate(
-    `window.dispatchEvent(new CustomEvent('viewer:inspect',{detail:${JSON.stringify(file)}}))`,
-  );
+  await evaluate(pageCall(dispatch, 'viewer:inspect', file));
   await dialog('Inspect file');
   await until(
-    () => evaluate<string>(`document.querySelector('dialog .inspection-facts')?.textContent || ''`),
+    () => evaluate(textOf('dialog .inspection-facts')),
     (value) => value.includes('bytes'),
     'metadata inspection',
   );
-  await evaluate(`document.querySelector('dialog input[type=checkbox]').click()`);
+  await evaluate(clickElement('dialog input[type=checkbox]'));
   await until(
-    () => evaluate<string>(`document.querySelector('dialog .inspection-facts')?.textContent || ''`),
+    () => evaluate(textOf('dialog .inspection-facts')),
     (value) => value.includes('characters'),
     'shared worker content inspection',
   );
@@ -184,14 +192,12 @@ try {
     });
     await writeFile(path.join(evidenceDirectory, name + '.png'), Buffer.from(shot.data, 'base64'));
   };
-  await evaluate(`window.dispatchEvent(new CustomEvent('viewer:project',{detail:'arrangements'}))`);
+  await evaluate(pageCall(dispatch, 'viewer:project', 'arrangements'));
   await dialog('Saved arrangements');
   await capture('arrangements');
   await click('Done');
-  await evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-  );
-  await evaluate(`window.dispatchEvent(new CustomEvent('viewer:notes',{detail:'preview'}))`);
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
+  await evaluate(pageCall(dispatch, 'viewer:notes', 'preview'));
   await dialog('Plane notes');
   await capture('notes-light');
   await click('Cancel');
@@ -201,14 +207,12 @@ try {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await evaluate(`window.dispatchEvent(new CustomEvent('viewer:project',{detail:'arrangements'}))`);
+  await evaluate(pageCall(dispatch, 'viewer:project', 'arrangements'));
   await dialog('Saved arrangements');
   await capture('arrangements-compact-light');
   await click('Done');
   await connection.command('Emulation.clearDeviceMetricsOverride');
-  await evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'dark'}],s.revision))`,
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'dark' }));
   const changed = decodeProject(await readFile(projectFile, 'utf8'));
   changed.name = 'Reloaded project';
   await writeFile(
@@ -216,18 +220,21 @@ try {
     '// Native acceptance comment.\n' + JSON.stringify(changed, null, 2) + '\n',
   );
   await until(
-    () => evaluate<string>(`document.querySelector('.project-file-notice')?.textContent||''`),
+    () => evaluate(textOf('.project-file-notice')),
     (text) => text.includes('changed on disk'),
     'external definition edit notification',
   );
   await capture('project-file-notice');
-  await evaluate(`document.querySelector('.project-file-notice button').click()`);
+  await evaluate(clickElement('.project-file-notice button'));
   await dialog('Reload project?');
   await click('Reload project');
   await until(
     () =>
-      evaluate<string>(
-        `document.querySelector('.workspace-button')?.textContent || document.body.textContent`,
+      evaluate(
+        pageCall(
+          () =>
+            document.querySelector('.workspace-button')?.textContent || document.body.textContent,
+        ),
       ),
     (value) => value.includes('Reloaded project'),
     'explicit same-workspace project reload',
@@ -245,15 +252,13 @@ try {
   viewer = await ownedApp(binary, profile);
   connection = await viewer.connect();
   evaluate = connection.evaluate;
-  await until(
-    () => evaluate<number>(`document.querySelectorAll('.folder-explorer').length`),
-    Boolean,
-    'cold project',
-  );
-  await evaluate(`window.dispatchEvent(new CustomEvent('viewer:notes',{detail:'preview'}))`);
+  await until(() => evaluate(countOf('.folder-explorer')), Boolean, 'cold project');
+  await evaluate(pageCall(dispatch, 'viewer:notes', 'preview'));
   await dialog('Plane notes');
   assert.equal(
-    await evaluate(`document.querySelector('dialog textarea').value`),
+    await evaluate(
+      pageCall(() => document.querySelector<HTMLTextAreaElement>('dialog textarea')!.value),
+    ),
     'Generated durable note.',
   );
   checks.push('Graceful Quit and a fresh process preserve the private note and project session.');

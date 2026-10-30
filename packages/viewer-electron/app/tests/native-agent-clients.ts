@@ -4,7 +4,9 @@ import net from 'node:net';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ownedApp, until } from './owned-app';
-import type { AgentClient, AgentClientReply } from '../src/domain/agents/clients';
+import { countOf, exists, patchSettings } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
+import type { AgentClient, AgentClientInput, AgentClientReply } from '../src/domain/agents/clients';
 import type { DrawingGeometryPage } from '../src/domain/previews/drawings/geometry';
 import { panelDrawing } from './dxf-fixtures';
 import { officeFixture } from './office-fixtures';
@@ -59,38 +61,44 @@ const viewer = await ownedApp(
 );
 let main: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const evidence: string[] = [];
+type CreatedClient = Extract<AgentClientReply, { token: string }>;
+const listClients = () => window.viewer.agentClients({ kind: 'list' }) as Promise<AgentClient[]>;
+/** The reply carries the new client's token, shown once. */
+const createClient = (client: AgentClientInput) =>
+  window.viewer.agentClients({ kind: 'create', client }) as Promise<CreatedClient>;
+const revokeClient = (id: string, revision: number) =>
+  window.viewer.agentClients({ kind: 'revoke', id, revision });
 try {
   main = await viewer.connect();
   const evaluate = main.evaluate;
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector('.folder-explorer')`),
-    Boolean,
-    'owned folder renderer',
-  );
-  await evaluate(
-    `window.viewer.settingsGet().then(s => window.viewer.settingsPatch([{path:'settings.agents.enabled',value:true}],s.revision))`,
-  );
+  await until(() => evaluate(exists('.folder-explorer')), Boolean, 'owned folder renderer');
+  await evaluate(patchSettings({ path: 'settings.agents.enabled', value: true }));
   assert.match(
-    await evaluate<string>(`window.viewer.agentClients({kind:'list'}).then(()=>'',e=>e.message)`),
+    await evaluate(
+      pageCall(() =>
+        window.viewer.agentClients({ kind: 'list' }).then(
+          () => '',
+          (error: Error) => error.message,
+        ),
+      ),
+    ),
     /Manage credentials/,
   );
-  await evaluate(`window.viewer.openSettings()`);
+  await evaluate(pageCall(() => window.viewer.openSettings()));
   const settings = await viewer.connect(true);
-  const input = {
+  const input: AgentClientInput = {
     name: 'Navigator',
     roots: [shared],
     capabilities: ['metadata', 'content', 'navigation'],
     budgets: { maxReadBytes: 1048576, maxTasks: 2 },
   };
-  const reply = await settings.evaluate<AgentClientReply>(
-    `window.viewer.agentClients({kind:'create',client:${JSON.stringify(input)}})`,
-  );
+  const reply = await settings.evaluate(pageCall(createClient, input));
   assert.ok(!Array.isArray(reply) && 'token' in reply);
   const client = reply.client,
     token = reply.token;
   assert.ok(reply.configuration?.includes('--mcp'));
-  const metadata = await settings.evaluate<{ client: AgentClient; token: string }>(
-    `window.viewer.agentClients({kind:'create',client:${JSON.stringify({ ...input, name: 'Metadata only', capabilities: ['metadata'] })}})`,
+  const metadata = await settings.evaluate(
+    pageCall(createClient, { ...input, name: 'Metadata only', capabilities: ['metadata'] }),
   );
   const connection = JSON.parse(
     await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
@@ -201,7 +209,7 @@ try {
   })) as { id: string; requiresUserReview: boolean };
   assert.equal(navigation.requiresUserReview, false);
   await until(
-    () => evaluate<number>(`document.querySelectorAll('.preview').length`),
+    () => evaluate(countOf('.preview')),
     (count) => count > 0,
     'granted automatic preview navigation',
   ).catch(async () => {
@@ -219,14 +227,10 @@ try {
   evidence.push(
     'Saved navigation capability opens an actual independent preview without approval; another client cannot read the proposal.',
   );
-  await settings.evaluate(
-    `window.viewer.agentClients({kind:'revoke',id:${JSON.stringify(client.id)},revision:${client.revision}})`,
-  );
+  await settings.evaluate(pageCall(revokeClient, client.id, client.revision));
   await assert.rejects(call(token, 'read_content', { path: file }), /invalid/);
   assert.equal(
-    (await settings.evaluate<AgentClient[]>(`window.viewer.agentClients({kind:'list'})`)).find(
-      (item) => item.id === client.id,
-    )?.revoked,
+    (await settings.evaluate(pageCall(listClients))).find((item) => item.id === client.id)?.revoked,
     true,
   );
   assert.ok(!(await readFile(path.join(profile, 'agent-clients-v1.json'), 'utf8')).includes(token));
@@ -234,7 +238,11 @@ try {
     'Settings-only revocation immediately invalidates the credential; private storage contains hashes and no plain client token.',
   );
   await settings.evaluate(
-    `Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'Agents')?.click()`,
+    pageCall(() =>
+      [...document.querySelectorAll('button')]
+        .find((button) => button.textContent.trim() === 'Agents')
+        ?.click(),
+    ),
   );
   const out = path.resolve('out/agent-client-acceptance');
   await mkdir(out, { recursive: true });

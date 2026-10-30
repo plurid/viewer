@@ -4,8 +4,11 @@ import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { ownedApp, until } from './owned-app';
-import type { FileInformation } from '../src/domain/files/information';
-import type { OperationJob, SavedState } from '../src/domain/contracts';
+import { click, exists, textOf } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
+import type { PageExpression } from './native/runtime/page-function';
+import type { FileInformationPatch } from '../src/domain/files/information';
+import type { RendererOperationRequest, SavedState } from '../src/domain/contracts';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const binary =
   process.env.VIEWER_TEST_BINARY ||
@@ -47,33 +50,48 @@ const initial: SavedState = {
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(initial));
 let viewer = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof viewer.connect>> | undefined;
+const bridgeKind = () => typeof window.viewer?.fileInformation;
+const informationOf = (file: string) => window.viewer.fileInformation(file);
+const updateInformation = (file: string, revision: string, patch: FileInformationPatch) =>
+  window.viewer.fileInformationUpdate(file, revision, patch);
+const viewerJobs = () => window.viewer.jobs();
+/** Clicks the row of `file`, comparing composed Unicode forms. */
+function clickFile(file: string) {
+  [...document.querySelectorAll<HTMLElement>('[data-file-path]')]
+    .find((element) => element.dataset.filePath!.normalize('NFC') === file)!
+    .click();
+}
 try {
   connection = await viewer.connect();
   await until(
-    () => connection!.evaluate('typeof window.viewer?.fileInformation'),
+    () => connection!.evaluate(pageCall(bridgeKind)),
     (value) => value === 'function',
     'Packaged information bridge',
   );
-  const call = <T>(method: string, ...args: unknown[]) =>
-    connection!.evaluate<T>(
-      'window.viewer.' + method + '(' + args.map((value) => JSON.stringify(value)).join(',') + ')',
-    );
-  const original = await call<FileInformation>('fileInformation', file);
-  const edited = await call<FileInformation>('fileInformationUpdate', file, original.revision, {
-    tags: [{ name: 'Project', color: 4 }],
-    comment: 'Generated metadata test.',
-    locked: true,
-  });
+  const evaluate = <R>(expression: PageExpression<R>) => connection!.evaluate(expression);
+  const original = await evaluate(pageCall(informationOf, file));
+  const edited = await evaluate(
+    pageCall(updateInformation, file, original.revision, {
+      tags: [{ name: 'Project', color: 4 }],
+      comment: 'Generated metadata test.',
+      locked: true,
+    }),
+  );
   assert.equal(edited.locked, true);
   assert.deepEqual(edited.systemTagNames, ['Project']);
   await assert.rejects(
-    call('fileInformationUpdate', file, original.revision, { comment: 'Stale edit' }),
+    evaluate(pageCall(updateInformation, file, original.revision, { comment: 'Stale edit' })),
     /changed/,
   );
-  await call('fileInformationUpdate', file, edited.revision, { locked: false });
-  const aliasID = await call<string>('operate', { kind: 'alias', sources: [file] });
+  await evaluate(pageCall(updateInformation, file, edited.revision, { locked: false }));
+  const aliasID = await evaluate(
+    pageCall((request: RendererOperationRequest) => window.viewer.operate(request), {
+      kind: 'alias',
+      sources: [file],
+    }),
+  );
   const aliasJob = await until(
-    () => call<OperationJob[]>('jobs'),
+    () => evaluate(pageCall(viewerJobs)),
     (jobs) =>
       jobs.some((job) => job.id === aliasID && ['completed', 'failed'].includes(job.status)),
     'Packaged alias job',
@@ -82,45 +100,41 @@ try {
   assert.equal(job.status, 'completed', JSON.stringify(job.errors));
   assert.equal(job.undoable, true);
   const alias = job.completed[0].destination!;
-  assert.equal((await call<FileInformation>('fileInformation', alias)).alias, true);
+  assert.equal((await evaluate(pageCall(informationOf, alias))).alias, true);
   await viewer.close(connection);
   connection = undefined;
   viewer = await ownedApp(binary, profile);
   connection = await viewer.connect();
   await until(
-    () => connection!.evaluate('typeof window.viewer?.fileInformation'),
+    () => connection!.evaluate(pageCall(bridgeKind)),
     (value) => value === 'function',
     'Cold information bridge',
   );
-  const restored = await call<FileInformation>('fileInformation', file);
+  const restored = await evaluate(pageCall(informationOf, file));
   assert.deepEqual(restored.tags, [{ name: 'Project', color: 4 }]);
   assert.equal(restored.comment, 'Generated metadata test.');
   assert.equal(
-    (await call<OperationJob[]>('jobs')).find((job) => job.id === aliasID)?.undoable,
+    (await evaluate(pageCall(viewerJobs))).find((job) => job.id === aliasID)?.undoable,
     true,
   );
-  await call('undo', aliasID);
+  await evaluate(pageCall((id: string) => window.viewer.undo(id), aliasID));
   await assert.rejects(readFile(alias), { code: 'ENOENT' });
   assert.equal(await readFile(file, 'utf8'), 'Preserve this generated content.');
   await until(
     () =>
-      connection!.evaluate(
-        "!!document.querySelector('[aria-label=\"Dock plane\"]') && !!document.querySelector('.file-row')",
+      evaluate(
+        pageCall(
+          () =>
+            !!document.querySelector('[aria-label="Dock plane"]') &&
+            !!document.querySelector('.file-row'),
+        ),
       ),
     Boolean,
     'Generated folder UI',
   );
-  await connection.evaluate('document.querySelector(\'[aria-label="Dock plane"]\').click()');
-  await connection.evaluate(
-    'Array.from(document.querySelectorAll("[data-file-path]")).find(element => element.dataset.filePath.normalize("NFC") === ' +
-      JSON.stringify(file.normalize('NFC')) +
-      ').click()',
-  );
-  await until(
-    () => connection!.evaluate("!!document.querySelector('.file-row.is-selected')"),
-    Boolean,
-    'Generated file selected',
-  );
+  await evaluate(click('[aria-label="Dock plane"]'));
+  await evaluate(pageCall(clickFile, file.normalize('NFC')));
+  await until(() => evaluate(exists('.file-row.is-selected')), Boolean, 'Generated file selected');
   await connection.command('Input.dispatchKeyEvent', {
     type: 'keyDown',
     key: 'i',
@@ -134,33 +148,35 @@ try {
     modifiers: 4,
   });
   await until(
-    () =>
-      connection!.evaluate(
-        '!!document.querySelector(\'.information-editor [aria-label="Color for Project"]\')',
-      ),
+    () => evaluate(exists('.information-editor [aria-label="Color for Project"]')),
     Boolean,
     'Get Info metadata controls',
   );
-  await connection.evaluate("document.querySelector('.information-permissions').open = true");
-  await connection.evaluate(
-    'document.querySelector(\'.information-editor [aria-label="Owner write"]\').click()',
+  await evaluate(
+    pageCall(() => {
+      document.querySelector<HTMLDetailsElement>('.information-permissions')!.open = true;
+    }),
   );
+  await evaluate(click('.information-editor [aria-label="Owner write"]'));
   await until(
     () =>
-      connection!.evaluate("!document.querySelector('.information-save button.primary').disabled"),
+      evaluate(
+        pageCall(
+          () =>
+            !document.querySelector<HTMLButtonElement>('.information-save button.primary')!
+              .disabled,
+        ),
+      ),
     Boolean,
     'Permission edit enables Save',
   );
-  await connection.evaluate("document.querySelector('.information-save button.primary').click()");
+  await evaluate(click('.information-save button.primary'));
   await until(
-    () =>
-      connection!.evaluate(
-        "document.querySelector('.information-save [role=\"status\"]')?.textContent === 'Saved'",
-      ),
-    Boolean,
+    () => evaluate(textOf('.information-save [role="status"]')),
+    (text) => text === 'Saved',
     'Permission edit saved through UI',
   );
-  assert.equal((await call<FileInformation>('fileInformation', file)).mode & 0o200, 0);
+  assert.equal((await evaluate(pageCall(informationOf, file))).mode & 0o200, 0);
   const review = path.resolve('../../../.impeccable/review');
   await mkdir(review, { recursive: true });
   for (const [width, height, name] of [
@@ -174,12 +190,16 @@ try {
       mobile: false,
     });
     await until(
-      () => connection!.evaluate('innerWidth'),
+      () => evaluate(pageCall(() => innerWidth)),
       (value) => value === width,
       'Metadata viewport',
     );
-    const overflow: boolean = await connection.evaluate<boolean>(
-      "Array.from(document.querySelectorAll('dialog[open], .file-information, .information-tags')).some(element => element.scrollWidth > element.clientWidth + 1)",
+    const overflow = await evaluate(
+      pageCall(() =>
+        [...document.querySelectorAll('dialog[open], .file-information, .information-tags')].some(
+          (element) => element.scrollWidth > element.clientWidth + 1,
+        ),
+      ),
     );
     assert.equal(overflow, false, 'Metadata dialog must fit the native viewport');
     const shot = await connection.command<{ data: string }>('Page.captureScreenshot', {
@@ -189,8 +209,11 @@ try {
       path.join(review, 'file-information-' + name + '.png'),
       Buffer.from(shot.data, 'base64'),
     );
-    await connection.evaluate(
-      "document.querySelector('.file-information').scrollTop = document.querySelector('.file-information').scrollHeight",
+    await evaluate(
+      pageCall(() => {
+        const panel = document.querySelector('.file-information')!;
+        panel.scrollTop = panel.scrollHeight;
+      }),
     );
     const details = await connection.command<{ data: string }>('Page.captureScreenshot', {
       format: 'png',
@@ -199,7 +222,11 @@ try {
       path.join(review, 'file-information-' + name + '-details.png'),
       Buffer.from(details.data, 'base64'),
     );
-    await connection.evaluate("document.querySelector('.file-information').scrollTop = 0");
+    await evaluate(
+      pageCall(() => {
+        document.querySelector('.file-information')!.scrollTop = 0;
+      }),
+    );
   }
   console.log(
     'PASS packaged native metadata, stale-edit rejection, Foundation tags/alias, cold alias Undo, Get Info keyboard entry and two viewport layouts. Native Quick Look/Share UI and Store sandbox acceptance remain separate.',

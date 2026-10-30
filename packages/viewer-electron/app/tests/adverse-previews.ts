@@ -7,6 +7,8 @@ import { crc32, deflateSync } from 'node:zlib';
 import { zipSync, strToU8 } from 'fflate';
 import { createFixtures } from './fixtures';
 import { ownedApp, until } from './owned-app';
+import { attributeOf, exists, textOf } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences/ui';
 import { trashTemporary } from '../tools/temporary';
@@ -74,6 +76,32 @@ function png(width: number, height: number, compressed: Buffer) {
     chunk('IEND', Buffer.alloc(0)),
   ]);
 }
+/** Scrolls the match to the middle; its centre, and whether a pointer there reaches it. */
+function pointAt(selector: string) {
+  const element = document.querySelector(selector);
+  if (!element) throw Error('Missing row');
+  element.scrollIntoView({ block: 'center' });
+  const rect = element.getBoundingClientRect(),
+    x = rect.x + rect.width / 2,
+    y = rect.y + rect.height / 2;
+  return { x, y, hit: element.contains(document.elementFromPoint(x, y)) };
+}
+/** The image stage's centre, and whether a pointer there reaches it. */
+function stageCentre() {
+  const stage = document.querySelector('dialog .image-stage')!;
+  const rect = stage.getBoundingClientRect(),
+    x = rect.x + rect.width / 2,
+    y = rect.y + rect.height / 2;
+  return { x, y, hit: stage.contains(document.elementFromPoint(x, y)) };
+}
+/** The preview image's natural size once it has decoded, else null. */
+function decodedSize() {
+  const image = document.querySelector<HTMLImageElement>('dialog .image-stage img');
+  return image && image.complete && image.naturalWidth > 0
+    ? { width: image.naturalWidth, height: image.naturalHeight }
+    : null;
+}
+const dialogText = () => document.querySelector('dialog')?.innerText || '';
 async function sample(name: string, data: Buffer, kind: Case['kind'], expected: string) {
   await writeFile(path.join(corpus, name), data);
   cases.push({
@@ -166,15 +194,9 @@ try {
   app = await ownedApp(binary, profile);
   connection = await app.connect();
   const { command, evaluate } = connection;
-  await until(
-    () => evaluate('!!document.querySelector(".folder-explorer")'),
-    Boolean,
-    'Adverse workspace',
-  );
+  await until(() => evaluate(exists('.folder-explorer')), Boolean, 'Adverse workspace');
   const click = async (selector: string) => {
-    const point = await evaluate<{ x: number; y: number; hit: boolean }>(
-      `(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw Error('Missing row');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;return{x,y,hit:e.contains(document.elementFromPoint(x,y))}})()`,
-    );
+    const point = await evaluate(pageCall(pointAt, selector));
     assert.ok(point.hit);
     for (const type of ['mousePressed', 'mouseReleased'])
       await command('Input.dispatchMouseEvent', {
@@ -191,18 +213,11 @@ try {
       selector = `[data-file-path=${JSON.stringify(file)}]`,
       observation: Record<string, unknown> = { ...item };
     try {
-      await until(
-        () => evaluate(`!!document.querySelector(${JSON.stringify(selector)})`),
-        Boolean,
-        'Generated adverse row',
-      );
+      await until(() => evaluate(exists(selector)), Boolean, 'Generated adverse row');
       await click(selector);
       await until(
-        () =>
-          evaluate(
-            `document.querySelector(${JSON.stringify(selector)})?.getAttribute('aria-selected')==='true'`,
-          ),
-        Boolean,
+        () => evaluate(attributeOf(selector, 'aria-selected')),
+        (value) => value === 'true',
         'Adverse selection',
       );
       for (const type of ['keyDown', 'keyUp'])
@@ -212,24 +227,15 @@ try {
           code: 'Space',
           windowsVirtualKeyCode: 32,
         });
-      await until(
-        () => evaluate('!!document.querySelector("dialog .quick-preview")'),
-        Boolean,
-        'Adverse preview',
-      );
+      await until(() => evaluate(exists('dialog .quick-preview')), Boolean, 'Adverse preview');
       if (item.kind === 'image' || item.kind === 'bounded') {
         const decoded = await until(
-          () =>
-            evaluate<{ width: number; height: number } | null>(
-              '(()=>{const i=document.querySelector("dialog .image-stage img");return i&&i.complete&&i.naturalWidth>0?{width:i.naturalWidth,height:i.naturalHeight}:null})()',
-            ),
+          () => evaluate(pageCall(decodedSize)),
           Boolean,
           'Generated image decodes',
         );
         observation.decoded = decoded;
-        const point = await evaluate<{ x: number; y: number; hit: boolean }>(
-          '(()=>{const e=document.querySelector("dialog .image-stage");const r=e.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;return{x,y,hit:e.contains(document.elementFromPoint(x,y))}})()',
-        );
+        const point = await evaluate(pageCall(stageCentre));
         assert.ok(point.hit, 'Decoded image receives pointer input');
         await command('Input.dispatchMouseEvent', {
           type: 'mouseWheel',
@@ -240,8 +246,12 @@ try {
         });
         observation.wheelZoom = await until(
           () =>
-            evaluate<number>(
-              'parseInt(document.querySelector("dialog .preview-toolbar .tabular")?.textContent||"0")',
+            evaluate(
+              pageCall(() =>
+                parseInt(
+                  document.querySelector('dialog .preview-toolbar .tabular')?.textContent || '0',
+                ),
+              ),
             ),
           (value) => value > 100,
           'Image wheel zoom works after decode',
@@ -258,44 +268,46 @@ try {
           });
         observation.pan = await until(
           () =>
-            evaluate<string>(
-              'document.querySelector("dialog .image-stage img")?.style.transform||""',
+            evaluate(
+              pageCall(
+                () =>
+                  document.querySelector<HTMLElement>('dialog .image-stage img')?.style.transform ||
+                  '',
+              ),
             ),
           (value) => value.includes('translate(32px, 18px)'),
           'Image drag works after decode',
         );
         await click('dialog .preview-toolbar [aria-label="Fit image"]');
         await until(
-          () =>
-            evaluate<string>(
-              'document.querySelector("dialog .preview-toolbar .tabular")?.textContent||""',
-            ),
+          () => evaluate(textOf('dialog .preview-toolbar .tabular')),
           (value) => value === '100%',
           'Image resets to fit after input',
         );
         if (item.kind === 'bounded') {
           assert.ok(decoded && decoded.width <= 512 && decoded.height <= 512);
-          assert.match(
-            await evaluate<string>('document.querySelector("dialog")?.innerText||""'),
-            /Large image/,
-          );
+          assert.match(await evaluate(pageCall(dialogText)), /Large image/);
         }
       } else if (item.kind === 'text')
         await until(
-          () => evaluate<string>('document.querySelector("dialog")?.innerText||""'),
+          () => evaluate(pageCall(dialogText)),
           (v) => /truncat|first.*MB|preview limit/i.test(v),
           'Text reports its read bound',
         );
       else
         await until(
-          () => evaluate<string>('document.querySelector("dialog")?.innerText||""'),
+          () => evaluate(pageCall(dialogText)),
           (v) => v.includes(item.expected),
           'Adverse limit state',
           6000,
         );
       if (item.kind === 'archive')
         assert.equal(
-          await evaluate('document.querySelector("dialog .archive-row")?.disabled'),
+          await evaluate(
+            pageCall(
+              () => document.querySelector<HTMLButtonElement>('dialog .archive-row')?.disabled,
+            ),
+          ),
           true,
           'Oversized archive member stays disabled',
         );
@@ -317,16 +329,25 @@ try {
       observation.result = 'failed';
       observation.error = String(error);
       observation.surface = await evaluate(
-        'document.querySelector("dialog")?.innerText||document.body.innerText',
+        pageCall(() => document.querySelector('dialog')?.innerText || document.body.innerText),
       );
       observation.image = await evaluate(
-        '(()=>{const i=document.querySelector("dialog img");return i?{src:i.getAttribute("src"),width:i.naturalWidth,height:i.naturalHeight}:null})()',
+        pageCall(() => {
+          const image = document.querySelector<HTMLImageElement>('dialog img');
+          return image
+            ? {
+                src: image.getAttribute('src'),
+                width: image.naturalWidth,
+                height: image.naturalHeight,
+              }
+            : null;
+        }),
       );
     } finally {
-      if (await evaluate('!!document.querySelector("dialog [aria-label=Close]")'))
+      if (await evaluate(exists('dialog [aria-label=Close]')))
         await click('dialog [aria-label=Close]');
       await until(
-        () => evaluate('!!document.querySelector("dialog .quick-preview")'),
+        () => evaluate(exists('dialog .quick-preview')),
         (v) => !v,
         'Adverse preview disposed',
       );

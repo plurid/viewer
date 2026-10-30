@@ -30,11 +30,13 @@ import { verifyMilestones } from './native/scenarios/milestones';
 import { pageCall } from './native/runtime/page-function';
 import {
   animationFrames,
+  buttonState,
   click as clickElement,
   countOf,
   exists,
   focus,
   patchSettings,
+  pressButton,
   textOf,
   valueOf,
 } from './native/runtime/page';
@@ -117,6 +119,9 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 // compositor profiling requires a separately requested foreground run.
 const foreground = process.env.VIEWER_TEST_FOREGROUND === '1';
 const scenario = process.env.VIEWER_TEST_SCENARIO;
+// With VIEWER_TEST_NO_REMOVAL=1 the packaged app refuses every Trash move (AGENTS.md), including
+// the replaced version a save keeps for Undo: scenarios check the refusal and that files stay.
+const removalBlocked = process.env.VIEWER_TEST_NO_REMOVAL === '1';
 assertPerformanceMode(scenario, foreground);
 const execNative = promisify(execFile);
 const binary =
@@ -134,7 +139,12 @@ const owned = await prepareOwnedApplication({
   mode: foreground ? 'foreground' : 'hidden',
   label: 'electron-smoke',
   evidenceRoot: path.join(appRoot, 'out/native-evidence'),
-  environment: scenario === 'store-file-services' ? { VIEWER_TEST_FILE_THREADS: '1' } : undefined,
+  environment:
+    scenario === 'store-file-services'
+      ? { VIEWER_TEST_FILE_THREADS: '1' }
+      : scenario === 'foundations'
+        ? { SHELL: '/bin/sh' }
+        : undefined,
 });
 const stateFile = path.join(profile, 'viewer-state-v1.json');
 await writeFile(stateFile, JSON.stringify(fixture.state));
@@ -668,6 +678,12 @@ async function verifyDailyFileWork(): Promise<void> {
         ),
       'native Trash result',
     ).then((jobs) => jobs.find((job) => !prior.has(job.id) && job.kind === 'trash')!);
+    if (removalBlocked) {
+      assert.equal(job.status, 'failed');
+      assert.match(job.errors[0]?.message ?? '', /^Automated native tests cannot move /);
+      assert.ok((await readFile(note)).equals(content), 'A refused Trash move keeps the file');
+      return;
+    }
     assert.equal(job.status, 'completed', JSON.stringify(job.errors));
     await assert.rejects(lstat(note), { code: 'ENOENT' });
     await evaluate(pageCall((id: string) => window.viewer.undo(id), job.id));
@@ -892,7 +908,9 @@ async function verifyDailyFileWork(): Promise<void> {
   await key('Escape', 'Escape');
   await command('Emulation.clearDeviceMetricsOverride');
   console.log(
-    'Daily file work: exact shortcut keys, Trash preference/Enter/Escape/Undo, shared folder sizes, inline column previews, retained docking and responsive Quick Preview.',
+    'Daily file work: exact shortcut keys, Trash preference/Enter/Escape/' +
+      (removalBlocked ? 'refusal in automated runs' : 'Undo') +
+      ', shared folder sizes, inline column previews, retained docking and responsive Quick Preview.',
   );
 }
 
@@ -1057,6 +1075,16 @@ async function verifySelectionReliability(): Promise<void> {
 }
 
 const terminalWrite = (id: string, data: string) => window.viewer.terminalWrite(id, data);
+/** Writes once the plane's session has started: the plane shows its terminal first. False while
+ * the session is still starting. */
+const writeWhenStarted = (id: string, data: string) =>
+  window.viewer.terminalWrite(id, data).then(
+    () => true,
+    (error: unknown) => {
+      if (String(error).includes('Terminal is no longer available')) return false;
+      throw error;
+    },
+  );
 /** The root plane of pane `folderID`, its terminal child and the angle between them. */
 function terminalBranch(folderID: string, terminalID: string) {
   const parent = (window as unknown as SmokeWindow).__qaEngine.tree
@@ -1116,7 +1144,14 @@ async function verifyFoundations(): Promise<void> {
     [path.join(fixture.files, 'Transfers')],
     'Finder Left returns selection to the parent folder',
   );
+  // As in Finder, List view opens the folder Columns has open: with a file selected, its own.
+  await click(fileSelector(path.join(fixture.files, 'README.md')));
   await key('1', 'Digit1', 4);
+  await until(
+    () => evaluate(countOf('.file-head')),
+    (count) => count > 0,
+    'List view of the folder Columns had open',
+  );
   await click(fileSelector(path.join(fixture.files, 'Transfers')));
   await key('ArrowDown', 'ArrowDown', 4);
   await until(
@@ -1154,7 +1189,11 @@ async function verifyFoundations(): Promise<void> {
     (count) => count === 1,
     'packaged xterm ready',
   );
-  await evaluate(pageCall(terminalWrite, terminalID, "printf 'PTY_%s\\n' READY; stty size\r"));
+  await until(
+    () => evaluate(pageCall(writeWhenStarted, terminalID, "printf 'PTY_%s\\n' READY; stty size\r")),
+    Boolean,
+    'terminal session started',
+  );
   await until(
     () => evaluate(textOf('.terminal-plane .xterm-rows')),
     (text) => text.includes('PTY_READY'),
@@ -2341,26 +2380,31 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   await command('Emulation.clearDeviceMetricsOverride');
 
   await tab('Models');
-  await until(
-    () => settingsEvaluate(exists(choiceButton('New model provider'))),
-    Boolean,
-    'provider picker',
-  );
+  // Add model opens the provider picker; setting one up closes it again.
+  const addModel = async () => {
+    await until(
+      () => settingsEvaluate(buttonState('Add model', '.models-introduction')),
+      (state) => state === 'enabled',
+      'Add model',
+    );
+    await settingsEvaluate(pressButton('Add model', '.models-introduction'));
+    await until(
+      () => settingsEvaluate(exists(choiceButton('New model provider'))),
+      Boolean,
+      'provider picker',
+    );
+  };
+  await addModel();
   assert.equal(
     (await choiceValues('New model provider', settingsEvaluate)).length,
     8,
     'complete provider picker',
   );
   await snapshot('desktop-native-models-empty.png');
-  for (const kind of ['zai', 'deepseek', 'qwen', 'gemini', 'openrouter']) {
+  for (const [index, kind] of ['zai', 'deepseek', 'qwen', 'gemini', 'openrouter'].entries()) {
+    if (index) await addModel();
     await choose('New model provider', kind, settingsEvaluate);
-    await settingsEvaluate(
-      pageCall(() =>
-        Array.from(document.querySelectorAll<HTMLButtonElement>('.settings-provider-add button'))
-          .find((button) => button.textContent.trim() === 'Add provider')!
-          .click(),
-      ),
-    );
+    await settingsEvaluate(pressButton('Set up model', '.settings-provider-add'));
   }
   await until(
     () => settingsEvaluate(pageCall(providerKinds)),
@@ -3847,21 +3891,31 @@ async function verifyTextEditing(): Promise<void> {
   );
   await command('Input.insertText', { text: 'After ' });
   await key('s', 'KeyS', 4);
-  await until(
-    () => readFile(note, 'utf8'),
-    (value) => value === 'After # Before\n',
-    'saved note',
-  );
-  const jobs = await evaluate(pageCall(viewerJobs));
-  const save = jobs.findLast((job) => job.kind === 'rewrite');
-  assert.equal(save?.status, 'completed', JSON.stringify(save?.errors));
-  assert.equal(save?.undoable, true);
-  await evaluate(pageCall((id: string) => window.viewer.undo(id), save!.id));
-  await until(
-    () => readFile(note, 'utf8'),
-    (value) => value === '# Before\n',
-    'Undo put back the version the save replaced',
-  );
+  if (removalBlocked) {
+    const refused = await until(
+      () => evaluate(pageCall(viewerJobs)),
+      (jobs) => jobs.some((job) => job.kind === 'rewrite' && job.status === 'failed'),
+      'refused save',
+    ).then((jobs) => jobs.findLast((job) => job.kind === 'rewrite')!);
+    assert.match(refused.errors[0]?.message ?? '', /^Automated native tests cannot move /);
+    assert.equal(await readFile(note, 'utf8'), '# Before\n', 'A refused save keeps the file');
+  } else {
+    await until(
+      () => readFile(note, 'utf8'),
+      (value) => value === 'After # Before\n',
+      'saved note',
+    );
+    const jobs = await evaluate(pageCall(viewerJobs));
+    const save = jobs.findLast((job) => job.kind === 'rewrite');
+    assert.equal(save?.status, 'completed', JSON.stringify(save?.errors));
+    assert.equal(save?.undoable, true);
+    await evaluate(pageCall((id: string) => window.viewer.undo(id), save!.id));
+    await until(
+      () => readFile(note, 'utf8'),
+      (value) => value === '# Before\n',
+      'Undo put back the version the save replaced',
+    );
+  }
   await key('t', 'KeyT', 4);
   await until(
     saved,
@@ -3998,7 +4052,9 @@ async function verifyTextEditing(): Promise<void> {
     'grid shown',
   );
   console.log(
-    "Text editing: saved, undone, scratch text kept, Viewer's find, and the header's Save; a see-through space between solid controls; the title bar hidden and shown, the grid, and a workspace's colour.",
+    'Text editing: ' +
+      (removalBlocked ? 'save refused in automated runs' : 'saved, undone') +
+      ", scratch text kept, Viewer's find, and the header's Save; a see-through space between solid controls; the title bar hidden and shown, the grid, and a workspace's colour.",
   );
 }
 /** Additional release checks against the actual signed Electron bundle. Files remain untouched. */
@@ -4096,6 +4152,9 @@ async function verifyPublishedPlaneInput(): Promise<void> {
       deltaY,
       modifiers,
     });
+  // The palette returned focus to its ⌘K button, outside the space; Escape releases the plane that
+  // holds the wheel only from inside it.
+  await evaluate(focus(`${top} .folder-explorer`));
   await key('Escape', 'Escape');
   let before = await camera();
   const originalScroll = await scrollTop();

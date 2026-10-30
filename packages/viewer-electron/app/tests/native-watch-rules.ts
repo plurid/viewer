@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdir, realpath, readFile, writeFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { ownedApp, until } from './owned-app';
-import { workflowDefinitionSchema, type WorkflowRun } from '../src/domain/automation/workflows';
-import type { WatchRule } from '../src/domain/automation/watch-rules';
+import { animationFrames, exists, patchSettings, textOf } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
+import { workflowDefinitionSchema } from '../src/domain/automation/workflows';
+import type { WorkflowDocument, WorkflowRun } from '../src/domain/automation/workflows';
+import type { WatchRule, WatchRuleScope } from '../src/domain/automation/watch-rules';
 import type { SavedState } from '../src/domain/contracts';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
@@ -74,6 +77,31 @@ const binary =
 let viewer = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const evidence: string[] = [];
+/** Approves a watch over `scope` at the workflow file's current revision. */
+async function approveWatch(scope: Omit<WatchRuleScope, 'fileRevision'>) {
+  const opened = (await window.viewer.workflow({
+    kind: 'read',
+    file: scope.file,
+  })) as WorkflowDocument;
+  return window.viewer.watchRules({
+    kind: 'approve',
+    scope: { ...scope, fileRevision: opened.revision },
+  }) as Promise<WatchRule>;
+}
+const watchRules = () => window.viewer.watchRules({ kind: 'list' }) as Promise<WatchRule[]>;
+const workflowRuns = () => window.viewer.workflow({ kind: 'list' }) as Promise<WorkflowRun[]>;
+const showWorkflows = (detail: unknown) =>
+  window.dispatchEvent(new CustomEvent('viewer:workflows', { detail }));
+/** Clicks the watch rule's button whose text is exactly `label`. */
+function pressRuleButton(label: string) {
+  [...document.querySelectorAll<HTMLElement>('.watch-rule-row button')]
+    .find((button) => button.textContent === label)!
+    .click();
+}
+/** The approval form is laid out and its disclosure is open. */
+const approvalOpen = () =>
+  !!document.querySelector('.watch-rule-form')?.getClientRects().length &&
+  document.querySelector('.watch-rule-form')!.closest('details')!.open;
 try {
   connection = await viewer.connect();
   let evaluate = connection.evaluate;
@@ -83,7 +111,7 @@ try {
     });
     await writeFile(path.join(output, name + '.png'), Buffer.from(shot.data, 'base64'));
   };
-  const scope = {
+  const scope: Omit<WatchRuleScope, 'fileRevision'> = {
     file,
     root: inbox,
     bindings: {},
@@ -92,11 +120,9 @@ try {
     allowContent: false,
     cooldownSeconds: 30,
   };
-  const rule = await evaluate<WatchRule>(
-    `(async()=>{const document=await window.viewer.workflow({kind:'read',file:${JSON.stringify(file)}});return window.viewer.watchRules({kind:'approve',scope:{...${JSON.stringify(scope)},fileRevision:document.revision}})})()`,
-  );
+  const rule = await evaluate(pageCall(approveWatch, scope));
   assert.equal(rule.enabled, true);
-  assert.deepEqual(await evaluate('window.viewer.workflow({kind:"list"})'), []);
+  assert.deepEqual(await evaluate(pageCall(workflowRuns)), []);
   const context = {
     scope: 'folder',
     workspaceID: 'watch',
@@ -107,54 +133,44 @@ try {
     clipboard: null,
     jobs: [],
   };
-  await evaluate(
-    `window.dispatchEvent(new CustomEvent('viewer:workflows',{detail:${JSON.stringify({ file, context })}}))`,
-  );
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".watch-rule-row")'),
-    Boolean,
-    'actual watch rule controls',
-  );
+  await evaluate(pageCall(showWorkflows, { file, context }));
+  await until(() => evaluate(exists('.watch-rule-row')), Boolean, 'actual watch rule controls');
   assert.equal(
-    await evaluate<boolean>(
-      'Array.from(document.querySelectorAll(".workflow-definition button")).find(button=>button.textContent==="Run workflow").disabled',
+    await evaluate(
+      pageCall(
+        () =>
+          [...document.querySelectorAll<HTMLButtonElement>('.workflow-definition button')].find(
+            (button) => button.textContent === 'Run workflow',
+          )!.disabled,
+      ),
     ),
     true,
   );
-  await evaluate(
-    'Array.from(document.querySelectorAll(".watch-rule-row button")).find(button=>button.textContent==="Pause").click()',
-  );
+  await evaluate(pageCall(pressRuleButton, 'Pause'));
   await until(
-    () => evaluate<WatchRule[]>('window.viewer.watchRules({kind:"list"})'),
+    () => evaluate(pageCall(watchRules)),
     (rules) => !rules[0].enabled,
     'actual Pause control',
   );
+  await evaluate(pageCall(pressRuleButton, 'Review and enable…'));
+  await until(() => evaluate(pageCall(approvalOpen)), Boolean, 'explicit approval form');
   await evaluate(
-    'Array.from(document.querySelectorAll(".watch-rule-row button")).find(button=>button.textContent==="Review and enable…").click()',
+    pageCall(() => document.querySelector('.watch-rule-form')!.scrollIntoView({ block: 'center' })),
   );
-  await until(
-    () =>
-      evaluate<boolean>(
-        '!!document.querySelector(".watch-rule-form")?.getClientRects().length && document.querySelector(".watch-rule-form").closest("details").open',
-      ),
-    Boolean,
-    'explicit approval form',
-  );
-  await evaluate('document.querySelector(".watch-rule-form").scrollIntoView({block:"center"})');
-  await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+  await evaluate(animationFrames(2));
   await capture('approval-dark');
-  await evaluate(
-    'window.viewer.settingsGet().then(snapshot=>window.viewer.settingsPatch([{path:"settings.appearance",value:"light"}],snapshot.revision))',
-  );
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () => evaluate<string>('document.documentElement.dataset.look'),
+    () => evaluate(pageCall(() => document.documentElement.dataset.look)),
     (look) => look === 'light',
     'light workflow scope',
   );
   await capture('approval-light');
-  await evaluate('document.querySelector(".watch-rule-form").requestSubmit()');
+  await evaluate(
+    pageCall(() => document.querySelector<HTMLFormElement>('.watch-rule-form')!.requestSubmit()),
+  );
   await until(
-    () => evaluate<WatchRule[]>('window.viewer.watchRules({kind:"list"})'),
+    () => evaluate(pageCall(watchRules)),
     (rules) => rules[0].enabled,
     'actual Enable watch rule control',
   );
@@ -164,22 +180,20 @@ try {
   const incoming = path.join(inbox, 'Generated.txt');
   await writeFile(incoming, 'Real directory-watch event.');
   const runs = await until(
-    () => evaluate<WorkflowRun[]>('window.viewer.workflow({kind:"list"})'),
+    () => evaluate(pageCall(workflowRuns)),
     (runs) => runs[0]?.status === 'waiting-review',
     'real FSEvents-triggered workflow',
   );
   assert.deepEqual(runs[0].context.sources, [incoming]);
   assert.deepEqual(await readdir(destination), []);
   const ruleAfter = await until(
-    () => evaluate<WatchRule[]>('window.viewer.watchRules({kind:"list"})'),
+    () => evaluate(pageCall(watchRules)),
     (rules) => rules[0].runStatus === 'waiting-review',
     'review notification',
   );
-  await evaluate(
-    `window.dispatchEvent(new CustomEvent('viewer:workflows',{detail:{runID:${JSON.stringify(runs[0].id)}}}))`,
-  );
+  await evaluate(pageCall(showWorkflows, { runID: runs[0].id }));
   await until(
-    () => evaluate<string>('document.querySelector(".workflow-run")?.textContent||""'),
+    () => evaluate(textOf('.workflow-run')),
     (text) => text.includes('Review copy'),
     'watched run review',
   );
@@ -192,12 +206,12 @@ try {
   viewer = await ownedApp(binary, profile);
   connection = await viewer.connect();
   evaluate = connection.evaluate;
-  const restored = await evaluate<WatchRule[]>('window.viewer.watchRules({kind:"list"})');
+  const restored = await evaluate(pageCall(watchRules));
   assert.equal(restored[0].id, ruleAfter[0].id);
   assert.equal(restored[0].runID, runs[0].id);
   await writeFile(path.join(inbox, 'Second.txt'), 'Wait behind the existing review.');
   await new Promise((resolve) => setTimeout(resolve, 1800));
-  assert.equal((await evaluate<WorkflowRun[]>('window.viewer.workflow({kind:"list"})')).length, 1);
+  assert.equal((await evaluate(pageCall(workflowRuns))).length, 1);
   assert.deepEqual(await readdir(destination), []);
   evidence.push(
     'Cold process restores the approved watch and pending review without replaying it or creating a second run while its first review remains pending.',
@@ -208,11 +222,11 @@ try {
   );
   await writeFile(path.join(inbox, 'Third.txt'), 'Trigger approval revalidation.');
   await until(
-    () => evaluate<WatchRule[]>('window.viewer.watchRules({kind:"list"})'),
+    () => evaluate(pageCall(watchRules)),
     (rules) => !rules[0].enabled,
     'changed definition pauses rule',
   );
-  assert.equal((await evaluate<WorkflowRun[]>('window.viewer.workflow({kind:"list"})')).length, 1);
+  assert.equal((await evaluate(pageCall(workflowRuns))).length, 1);
   assert.deepEqual(await readdir(destination), []);
   evidence.push(
     'Editing the public workflow invalidates its private approval and pauses the restored rule before another proposal is created.',

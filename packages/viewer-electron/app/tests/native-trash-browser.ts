@@ -4,7 +4,19 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { SavedState } from '../src/domain/contracts';
+import type { TrashItem } from '../src/domain/files/trash';
 import { ownedApp, until } from './owned-app';
+import {
+  click as syntheticClick,
+  countOf,
+  exists,
+  focus,
+  patchSettings,
+  pressButton,
+  textOf,
+} from './native/runtime/page';
+import type { PageExpression } from './native/runtime/page-function';
+import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot } from '../tools/temporary';
 
 const root = await temporaryRoot('viewer-trash-browser-');
@@ -53,18 +65,203 @@ const state: SavedState = {
   ],
 };
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state));
+
+type TrashMode = 'normal' | 'collision' | 'empty';
+type TrashDates = 'added' | 'none';
+type TrashCall = 'confirmation' | 'restore' | 'paths' | 'preview';
+/** What the Trash stubs keep on the renderer's window. */
+interface TrashFixtureWindow {
+  __trashFixtureReady?: boolean;
+  __trashCalls: Record<TrashCall, number>;
+  __trashMode: TrashMode;
+  __trashDates: TrashDates;
+  __trashFixtureItems: TrashItem[];
+  __trashLastRestore?: { ids: string[]; destination: string };
+}
+interface FixtureChange {
+  mode?: TrashMode;
+  dates?: TrashDates;
+  add?: TrashItem;
+}
+
+const fixtureReady = () =>
+  (window as unknown as TrashFixtureWindow).__trashFixtureReady === true &&
+  !!window.viewer &&
+  !!document.querySelector('[data-file-owner]');
+
+/** Replaces the renderer's Trash calls with stubs over four generated items. */
+function installTrashFixture(noteOriginal: string, longOriginal: string, preview: string) {
+  const fixture = window as unknown as TrashFixtureWindow,
+    api = window.viewer,
+    resource = api.resource;
+  fixture.__trashCalls = { confirmation: 0, restore: 0, paths: 0, preview: 0 };
+  fixture.__trashMode = 'normal';
+  fixture.__trashDates = 'added';
+  const make = (
+    digit: string,
+    name: string,
+    directory: boolean,
+    originalPath?: string,
+  ): TrashItem => ({
+    id: digit.repeat(64),
+    name,
+    directory,
+    previewable: !directory,
+    size: directory ? 0 : 1040,
+    location: 'Home',
+    modified: 1791950400000,
+    addedToTrash: '2026-10-14T17:15:00',
+    ...(originalPath ? { originalPath } : {}),
+  });
+  const folder = make('1', 'Project archive', true);
+  fixture.__trashFixtureItems = [
+    folder,
+    make('2', 'Build notes.txt', false, noteOriginal),
+    make('3', 'Unsorted notes — original location unavailable.txt', false),
+    make('4', '00026295_T02.200.008_00A_Assembly-review-notes.txt', false, longOriginal),
+  ];
+  api.trashList = async (folderID) => ({
+    revision: 'a'.repeat(64),
+    locations: [{ id: 'home', name: 'Home', state: 'ready' }],
+    truncated: false,
+    canEmpty: fixture.__trashMode !== 'empty',
+    totalItems: 4,
+    items: (fixture.__trashMode === 'empty'
+      ? []
+      : folderID
+        ? [make('5', 'Nested notes.txt', false)]
+        : fixture.__trashFixtureItems
+    ).map((item) =>
+      fixture.__trashDates === 'none' || folderID ? { ...item, addedToTrash: undefined } : item,
+    ),
+    ancestors: folderID ? [folder] : [],
+  });
+  api.trashConfirmation = async () => {
+    fixture.__trashCalls.confirmation++;
+  };
+  api.trashRestore = async (ids, destination) => {
+    fixture.__trashCalls.restore++;
+    fixture.__trashLastRestore = { ids, destination };
+    if (fixture.__trashMode === 'collision')
+      throw new Error(
+        '“Build notes.txt” already exists. Use Restore to… to choose another folder.',
+      );
+    fixture.__trashFixtureItems = fixture.__trashFixtureItems.filter(
+      (item) => !ids.includes(item.id),
+    );
+    return { restored: ids.length, cancelled: false };
+  };
+  api.trashCopyPaths = async () => {
+    fixture.__trashCalls.paths++;
+  };
+  api.trashPreview = async () => {
+    fixture.__trashCalls.preview++;
+    return resource(preview);
+  };
+}
+
+/** Changes the stubbed inventory, then presses the footer's Refresh, enabled or not. */
+function refreshTrash({ mode, dates, add }: FixtureChange) {
+  const fixture = window as unknown as TrashFixtureWindow;
+  if (mode) fixture.__trashMode = mode;
+  if (dates) fixture.__trashDates = dates;
+  if (add) fixture.__trashFixtureItems.push(add);
+  [...document.querySelectorAll<HTMLButtonElement>('.trash-footer button')]
+    .find((button) => button.textContent === 'Refresh')!
+    .click();
+}
+
+/** Sets how the restore stub answers, then presses Restore for the selection. */
+function restoreSelection(mode: TrashMode) {
+  (window as unknown as TrashFixtureWindow).__trashMode = mode;
+  document
+    .querySelector<HTMLButtonElement>('.trash-selection-actions button:not(.icon-button)')!
+    .click();
+}
+
+const confirmations = () => (window as unknown as TrashFixtureWindow).__trashCalls.confirmation;
+
+const chooseTrashCommand = (label: string) =>
+  [...document.querySelectorAll<HTMLElement>('.trash-context-menu .command-result')]
+    .find((command) => command.textContent.includes(label))!
+    .click();
+
+const trashAffordances = () => ({
+  rootBack: !!document.querySelector('.trash-toolbar > button[aria-label="Back to parent folder"]'),
+  duplicateRoot: !!document.querySelector('.trash-breadcrumbs button[aria-current="page"]'),
+  sortableName: [...document.querySelectorAll('.trash-heading button')].some((button) =>
+    button.textContent.includes('Name'),
+  ),
+  originalLocationDetails: !!document.querySelector('[aria-label="Original location details"]'),
+});
+
+/** Where a trusted click on the selector lands: its middle, at most 180 pixels in. */
+function clickPoint(selector: string) {
+  const rect = document.querySelector(selector)!.getBoundingClientRect();
+  return { x: rect.x + Math.min(rect.width / 2, 180), y: rect.y + rect.height / 2 };
+}
+
+/** The open dialogs' boxes and opacity, serialized so successive reads compare. */
+const openDialogBoxes = () =>
+  JSON.stringify(
+    [...document.querySelectorAll('dialog[open]')].map((dialog) => {
+      const rect = dialog.getBoundingClientRect();
+      return [rect.x, rect.y, rect.width, rect.height, getComputedStyle(dialog).opacity];
+    }),
+  );
+
+const trashNames = () =>
+  [...document.querySelectorAll('.trash-filename > span:not(.file-icon)')].map(
+    (name) => name.textContent,
+  );
+
+const sortLabel = () =>
+  document.querySelector('.trash-heading button')!.getAttribute('aria-label') ?? '';
+
+/** Whether Empty Trash is centered in the footer, with the utilities to its right. */
+function footerLayout() {
+  const footer = document.querySelector('.trash-footer')!.getBoundingClientRect(),
+    empty = document.querySelector('.trash-empty')!.getBoundingClientRect(),
+    utilities = document.querySelector('.trash-utility-actions')!.getBoundingClientRect();
+  return {
+    centered: Math.abs(empty.x + empty.width / 2 - (footer.x + footer.width / 2)) < 1,
+    utilitiesRight: utilities.x > empty.right,
+  };
+}
+
+const planeLabels = () =>
+  [...document.querySelectorAll('[data-file-owner]')].map((plane) =>
+    plane.getAttribute('aria-label'),
+  );
+
+/** The open dialog's text, the stub calls, the inventory stub and the Trash layout. */
+function failureState() {
+  return JSON.stringify({
+    text: document.querySelector('dialog[open]')?.textContent,
+    fixture: (window as unknown as TrashFixtureWindow).__trashCalls,
+    list: window.viewer.trashList.toString(),
+    rects: [
+      ...document.querySelectorAll('.trash-dialog,.trash-body,.trash-inventory,.trash-scroll'),
+    ].map((element) => ({
+      class: element.className,
+      height: element.clientHeight,
+      width: element.clientWidth,
+    })),
+  });
+}
+
 const output = await mkdtemp(path.resolve('out/trash-browser-acceptance-'));
 const binary =
   process.env.VIEWER_TEST_BINARY ||
   path.resolve('out/Viewer-trash-folder-v1-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
 const app = await ownedApp(binary, profile);
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
-const evaluate = <T = unknown>(expression: string) => connection!.evaluate<T>(expression);
+const evaluate = <R>(expression: PageExpression<R>) => connection!.evaluate(expression);
 const evidence: string[] = [],
   captures: string[] = [];
 try {
   connection = await app.connect();
-  const methods = await evaluate<string[]>('Object.keys(window.viewerNative)');
+  const methods = await evaluate(pageCall(() => Object.keys(window.viewerNative!)));
   assert.equal(
     methods.some((method) => /empty|erase|approv.*trash/i.test(method)),
     false,
@@ -79,56 +276,38 @@ try {
   `,
   });
   await connection.command('Page.reload', { ignoreCache: true });
-  await until(
-    () =>
-      evaluate<boolean>(
-        'window.__trashFixtureReady===true && !!window.viewer && !!document.querySelector("[data-file-owner]")',
-      ),
-    Boolean,
-    'fixture renderer',
-  );
+  await until(() => evaluate(pageCall(fixtureReady)), Boolean, 'fixture renderer');
   assert.equal(
-    await evaluate<boolean>('Object.isFrozen(window.viewer)'),
+    await evaluate(pageCall(() => Object.isFrozen(window.viewer))),
     false,
     'UI fixture interception must be installed before any Trash interaction',
   );
-  await evaluate(`(() => {
-    const api=window.viewer, resource=api.resource;
-    window.__trashCalls={confirmation:0,restore:0,paths:0,preview:0};
-    window.__trashMode='normal'; window.__trashDates='added';
-    const make=(digit,name,directory,originalPath)=>({id:digit.repeat(64),name,directory,previewable:!directory,size:directory?0:1040,location:'Home',modified:1791950400000,addedToTrash:'2026-10-14T17:15:00',...(originalPath?{originalPath}:{})});
-    const folder=make('1','Project archive',true);
-    const note=make('2','Build notes.txt',false,${JSON.stringify(path.join(originalFolder, 'Build notes.txt'))});
-    const loose=make('3','Unsorted notes — original location unavailable.txt',false);
-    const long=make('4','00026295_T02.200.008_00A_Assembly-review-notes.txt',false,${JSON.stringify(path.join(root, 'Missing original folder', '00026295_T02.200.008_00A_Assembly-review-notes.txt'))});
-    window.__trashFixtureItems=[folder,note,loose,long];
-    api.trashList=async(folderID)=>({revision:'a'.repeat(64),locations:[{id:'home',name:'Home',state:'ready'}],truncated:false,canEmpty:window.__trashMode!=='empty',totalItems:4,items:(window.__trashMode==='empty'?[]:folderID?[make('5','Nested notes.txt',false)]:window.__trashFixtureItems).map(item=>window.__trashDates==='none'||folderID?{...item,addedToTrash:undefined}:item),ancestors:folderID?[folder]:[]});
-    api.trashConfirmation=async()=>{window.__trashCalls.confirmation++};
-    api.trashRestore=async(ids,destination)=>{window.__trashCalls.restore++;window.__trashLastRestore={ids,destination};if(window.__trashMode==='collision')throw Error('“Build notes.txt” already exists. Use Restore to… to choose another folder.');window.__trashFixtureItems=window.__trashFixtureItems.filter(item=>!ids.includes(item.id));return {restored:ids.length,cancelled:false}};
-    api.trashCopyPaths=async()=>{window.__trashCalls.paths++};
-    api.trashPreview=async()=>{window.__trashCalls.preview++;return resource(${JSON.stringify(note)})};
-  })()`);
+  await evaluate(
+    pageCall(
+      installTrashFixture,
+      path.join(originalFolder, 'Build notes.txt'),
+      path.join(
+        root,
+        'Missing original folder',
+        '00026295_T02.200.008_00A_Assembly-review-notes.txt',
+      ),
+      note,
+    ),
+  );
   assert.match(
-    await evaluate<string>('window.viewer.trashList.toString()'),
+    await evaluate(pageCall(() => window.viewer.trashList.toString())),
     /__trashMode/,
     'fixture must intercept the inventory',
   );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.location-sidebar button')).find(button=>button.textContent.trim()==='Trash').click()`,
-  );
+  await evaluate(pressButton('Trash', '.location-sidebar'));
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-trash-id]").length'),
+    () => evaluate(countOf('[data-trash-id]')),
     (value) => value === 4,
     'Trash fixture rows',
   );
   if (process.argv.includes('--metadata-repro')) {
-    await evaluate(`document.querySelector('[data-trash-id="${'2'.repeat(64)}"]').click()`);
-    const report = await evaluate(`(()=>({
-      rootBack:!!document.querySelector('.trash-toolbar > button[aria-label="Back to parent folder"]'),
-      duplicateRoot:!!document.querySelector('.trash-breadcrumbs button[aria-current="page"]'),
-      sortableName:!!Array.from(document.querySelectorAll('.trash-heading button')).find(button=>button.textContent.includes('Name')),
-      originalLocationDetails:!!document.querySelector('[aria-label="Original location details"]')
-    }))()`);
+    await evaluate(syntheticClick(`[data-trash-id="${'2'.repeat(64)}"]`));
+    const report = await evaluate(pageCall(trashAffordances));
     console.log('Trash affordance repro:', JSON.stringify(report));
     assert.deepEqual(report, {
       rootBack: false,
@@ -136,12 +315,10 @@ try {
       sortableName: true,
       originalLocationDetails: true,
     });
-    await evaluate('document.querySelector(".trash-scroll").click()');
+    await evaluate(syntheticClick('.trash-scroll'));
   }
   const click = async (selector: string, button = 'left', count = 1) => {
-    const point = await evaluate<{ x: number; y: number }>(
-      `(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+Math.min(r.width/2,180),y:r.y+r.height/2}})()`,
-    );
+    const point = await evaluate(pageCall(clickPoint, selector));
     for (const type of ['mousePressed', 'mouseReleased'])
       await connection!.command('Input.dispatchMouseEvent', {
         type,
@@ -177,14 +354,12 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await evaluate('document.fonts.ready');
+    await evaluate(pageCall(() => document.fonts.ready));
     let previous = '',
       stable = 0;
     await until(
       () =>
-        evaluate<string>(
-          `JSON.stringify(Array.from(document.querySelectorAll('dialog[open]')).map(e=>{const r=e.getBoundingClientRect();return [r.x,r.y,r.width,r.height,getComputedStyle(e).opacity]}))`,
-        ).then((value) => {
+        evaluate(pageCall(openDialogBoxes)).then((value) => {
           stable = previous === value ? stable + 1 : 0;
           previous = value;
           return value;
@@ -200,115 +375,65 @@ try {
     captures.push(file);
   };
   await capture('desktop-dark', 1440, 940);
-  assert.equal(await evaluate<boolean>('!!document.querySelector(".trash-breadcrumbs")'), false);
-  assert.match(
-    await evaluate<string>('document.querySelector(".trash-heading").textContent'),
-    /Date added/,
-  );
-  assert.doesNotMatch(
-    await evaluate<string>('document.querySelector(".trash-heading").textContent'),
-    /Date deleted/,
-  );
-  const ascending = await evaluate<string[]>(
-    'Array.from(document.querySelectorAll(".trash-filename > span:not(.file-icon)")).map(e=>e.textContent)',
-  );
+  assert.equal(await evaluate(exists('.trash-breadcrumbs')), false);
+  assert.match(await evaluate(textOf('.trash-heading')), /Date added/);
+  assert.doesNotMatch(await evaluate(textOf('.trash-heading')), /Date deleted/);
+  const ascending = await evaluate(pageCall(trashNames));
   await click('.trash-heading button');
-  const descending = await evaluate<string[]>(
-    'Array.from(document.querySelectorAll(".trash-filename > span:not(.file-icon)")).map(e=>e.textContent)',
-  );
+  const descending = await evaluate(pageCall(trashNames));
   assert.deepEqual(descending, ascending.toReversed());
-  assert.match(
-    await evaluate<string>(
-      'document.querySelector(".trash-heading button").getAttribute("aria-label")',
-    ),
-    /sorted descending/,
-  );
+  assert.match(await evaluate(pageCall(sortLabel)), /sorted descending/);
   // Keyboard activation must toggle the same header.
-  await evaluate('document.querySelector(".trash-heading button").focus()');
+  await evaluate(focus('.trash-heading button'));
   await key('Enter', 'Enter');
-  assert.match(
-    await evaluate<string>(
-      'document.querySelector(".trash-heading button").getAttribute("aria-label")',
-    ),
-    /sorted ascending/,
-  );
-  await evaluate(
-    'window.__trashDates="none";Array.from(document.querySelectorAll(".trash-footer button")).find(button=>button.textContent==="Refresh").click()',
-  );
+  assert.match(await evaluate(pageCall(sortLabel)), /sorted ascending/);
+  await evaluate(pageCall(refreshTrash, { dates: 'none' }));
   await until(
-    () => evaluate<boolean>('!document.querySelector(".trash-inventory.with-date")'),
-    Boolean,
+    () => evaluate(exists('.trash-inventory.with-date')),
+    (found) => !found,
     'missing dates hide unpopulated column',
   );
   await capture('compact-dark-no-dates', 900, 640);
   await click('[data-trash-id="' + '1'.repeat(64) + '"]');
-  assert.match(
-    await evaluate<string>('document.querySelector(".trash-origin-details").textContent'),
-    /no verified original location/,
-  );
+  assert.match(await evaluate(textOf('.trash-origin-details')), /no verified original location/);
   await capture('compact-dark-unknown-origin', 900, 640);
   await click('[data-trash-id="' + '1'.repeat(64) + '"]', 'right');
+  await until(() => evaluate(exists('.trash-context-menu')), Boolean, 'unknown metadata menu');
+  await evaluate(pageCall(chooseTrashCommand, 'Get Info'));
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".trash-context-menu")'),
-    Boolean,
-    'unknown metadata menu',
-  );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.trash-context-menu .command-result')).find(button=>button.textContent.includes('Get Info')).click()`,
-  );
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".trash-info-dialog")'),
+    () => evaluate(exists('.trash-info-dialog')),
     Boolean,
     'unknown metadata information',
   );
-  assert.match(
-    await evaluate<string>('document.querySelector(".trash-info-dialog").textContent'),
-    /No date was recorded/,
-  );
-  assert.match(
-    await evaluate<string>('document.querySelector(".trash-info-dialog").textContent'),
-    /no verified original location/,
-  );
+  assert.match(await evaluate(textOf('.trash-info-dialog')), /No date was recorded/);
+  assert.match(await evaluate(textOf('.trash-info-dialog')), /no verified original location/);
   await capture('compact-dark-unknown-info', 900, 640);
-  await evaluate(
-    'Array.from(document.querySelectorAll(".trash-info-dialog footer button")).find(button=>button.textContent==="Done").click()',
-  );
-  await evaluate(
-    'window.__trashDates="added";Array.from(document.querySelectorAll(".trash-footer button")).find(button=>button.textContent==="Refresh").click()',
-  );
+  await evaluate(pressButton('Done', '.trash-info-dialog footer'));
+  await evaluate(pageCall(refreshTrash, { dates: 'added' }));
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".trash-inventory.with-date")'),
+    () => evaluate(exists('.trash-inventory.with-date')),
     Boolean,
     'date-added metadata returns',
   );
   await click('[data-trash-id="' + '2'.repeat(64) + '"]');
   assert.equal(
-    await evaluate<string>('document.querySelector(".trash-original-path").textContent'),
+    await evaluate(textOf('.trash-original-path')),
     path.join(originalFolder, 'Build notes.txt'),
   );
   await capture('compact-dark-full-original-path', 900, 640);
   evidence.push(
     'Root has one Trash title and no disabled Back. All four headers sort; Name toggles by pointer and keyboard. macOS date-added metadata is labeled distinctly and an entirely unavailable date column is omitted. Known original paths wrap in selectable detail; unknown Finder-like origins are explicit.',
   );
-  const layout = await evaluate<{ centered: boolean; utilitiesRight: boolean }>(
-    `(()=>{const f=document.querySelector('.trash-footer').getBoundingClientRect(),b=document.querySelector('.trash-empty').getBoundingClientRect(),u=document.querySelector('.trash-utility-actions').getBoundingClientRect();return {centered:Math.abs((b.x+b.width/2)-(f.x+f.width/2))<1,utilitiesRight:u.x>b.right}})()`,
-  );
+  const layout = await evaluate(pageCall(footerLayout));
   assert.deepEqual(layout, { centered: true, utilitiesRight: true });
-  assert.equal(
-    await evaluate<boolean>('!!document.querySelector(".trash-footer [aria-haspopup=menu]")'),
-    false,
-  );
-  await evaluate('document.querySelector(".trash-empty").click()');
-  assert.equal(
-    await evaluate<number>('window.__trashCalls.confirmation'),
-    0,
-    'synthetic empty click is ignored',
-  );
+  assert.equal(await evaluate(exists('.trash-footer [aria-haspopup=menu]')), false);
+  await evaluate(syntheticClick('.trash-empty'));
+  assert.equal(await evaluate(pageCall(confirmations)), 0, 'synthetic empty click is ignored');
   // This trusted button click can reach ONLY the stub above. No native dialog or
   // erasure routine is invoked, and no approval is supplied by this test.
   await click('.trash-empty');
   await until(
-    () => evaluate<number>('window.__trashCalls.confirmation'),
+    () => evaluate(pageCall(confirmations)),
     (value) => value === 1,
     'native-prompt presenter stub',
   );
@@ -317,43 +442,33 @@ try {
   );
   await click('[data-trash-id="' + '2'.repeat(64) + '"]');
   await key('a', 'KeyA', 4);
-  assert.equal(
-    await evaluate<number>(
-      'document.querySelectorAll("[data-trash-id][aria-selected=true]").length',
-    ),
-    4,
-  );
+  assert.equal(await evaluate(countOf('[data-trash-id][aria-selected=true]')), 4);
   await capture('compact-dark-selection', 900, 640);
   await key('Escape', 'Escape');
   await click('[data-trash-id="' + '2'.repeat(64) + '"]', 'right');
   await until(
-    () => evaluate<string>('document.activeElement?.getAttribute("aria-label")||""'),
+    () => evaluate(pageCall(() => document.activeElement?.getAttribute('aria-label') || '')),
     (value) => value === 'Search actions',
     'Trash menu focus',
   );
   await capture('compact-dark-context', 900, 640);
-  assert.equal(
-    await evaluate<boolean>('!!document.querySelector(".trash-context-menu .command-result")'),
-    true,
-  );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.trash-context-menu .command-result')).find(button=>button.textContent.includes('Quick Look')).click()`,
-  );
+  assert.equal(await evaluate(exists('.trash-context-menu .command-result')), true);
+  await evaluate(pageCall(chooseTrashCommand, 'Quick Look'));
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".trash-preview-dialog .preview-host")'),
+    () => evaluate(exists('.trash-preview-dialog .preview-host')),
     Boolean,
     'scoped Quick Look',
   );
   await capture('desktop-dark-preview', 1440, 940);
   assert.equal(
-    await evaluate<number>('document.querySelectorAll(".trash-preview-dialog footer").length'),
+    await evaluate(countOf('.trash-preview-dialog footer')),
     1,
     'preview has one metadata/actions footer',
   );
-  await evaluate('document.querySelector(".trash-preview-dialog header button").click()');
+  await evaluate(syntheticClick('.trash-preview-dialog header button'));
   await until(
-    () => evaluate<boolean>('!document.querySelector(".trash-preview-dialog")'),
-    Boolean,
+    () => evaluate(exists('.trash-preview-dialog')),
+    (found) => !found,
     'preview closes',
   );
   evidence.push(
@@ -361,90 +476,63 @@ try {
   );
   await click('[data-trash-id="' + '1'.repeat(64) + '"]', 'left', 2);
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-trash-id]").length'),
+    () => evaluate(countOf('[data-trash-id]')),
     (value) => value === 1,
     'folder contents',
   );
-  assert.match(
-    await evaluate<string>('document.querySelector(".trash-breadcrumbs").textContent'),
-    /Project archive/,
-  );
-  await evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-  );
+  assert.match(await evaluate(textOf('.trash-breadcrumbs')), /Project archive/);
+  await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await capture('compact-light-folder', 900, 640);
-  await evaluate('document.querySelector(".trash-breadcrumbs button").click()');
+  await evaluate(syntheticClick('.trash-breadcrumbs button'));
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-trash-id]").length'),
+    () => evaluate(countOf('[data-trash-id]')),
     (value) => value === 4,
     'back to Trash',
   );
   await click('[data-trash-id="' + '2'.repeat(64) + '"]', 'right');
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".trash-context-menu")'),
-    Boolean,
-    'info context menu',
-  );
-  await evaluate(
-    `Array.from(document.querySelectorAll('.trash-context-menu .command-result')).find(button=>button.textContent.includes('Get Info')).click()`,
-  );
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".trash-info-dialog")'),
-    Boolean,
-    'Get Info',
-  );
+  await until(() => evaluate(exists('.trash-context-menu')), Boolean, 'info context menu');
+  await evaluate(pageCall(chooseTrashCommand, 'Get Info'));
+  await until(() => evaluate(exists('.trash-info-dialog')), Boolean, 'Get Info');
   await capture('compact-light-info', 900, 640);
-  assert.match(
-    await evaluate<string>('document.querySelector(".trash-info-dialog").textContent'),
-    /Original location/,
-  );
-  await evaluate(
-    'Array.from(document.querySelectorAll(".trash-info-dialog footer button")).find(button=>button.textContent==="Done").click()',
-  );
+  assert.match(await evaluate(textOf('.trash-info-dialog')), /Original location/);
+  await evaluate(pressButton('Done', '.trash-info-dialog footer'));
 
   await click('[data-trash-id="' + '2'.repeat(64) + '"]');
-  await evaluate(
-    'window.__trashMode="collision";document.querySelector(".trash-selection-actions button:not(.icon-button)").click()',
-  );
+  await evaluate(pageCall(restoreSelection, 'collision'));
   await until(
-    () => evaluate<string>('document.querySelector(".trash-body [role=alert]")?.textContent||""'),
+    () => evaluate(textOf('.trash-body [role=alert]')),
     (value) => value.includes('already exists'),
     'safe collision state',
   );
   await capture('compact-light-collision', 900, 640);
-  await evaluate(
-    'window.__trashMode="normal";document.querySelector(".trash-selection-actions button:not(.icon-button)").click()',
-  );
+  await evaluate(pageCall(restoreSelection, 'normal'));
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-trash-id]").length'),
+    () => evaluate(countOf('[data-trash-id]')),
     (value) => value === 3,
     'restore stub result',
   );
   evidence.push(
     'Folder navigation/breadcrumbs and restore success/collision states render correctly. Restore calls are stubs; no physical restore is claimed by this UI test.',
   );
-  await evaluate(
-    'window.__trashMode="empty";Array.from(document.querySelectorAll(".trash-footer button")).find(button=>button.textContent==="Refresh").click()',
+  await evaluate(pageCall(refreshTrash, { mode: 'empty' }));
+  await until(() => evaluate(exists('.trash-body .empty-state')), Boolean, 'empty state');
+  assert.equal(
+    await evaluate(
+      pageCall(() => document.querySelector<HTMLButtonElement>('.trash-empty')!.disabled),
+    ),
+    true,
   );
-  await until(
-    () => evaluate<boolean>('!!document.querySelector(".trash-body .empty-state")'),
-    Boolean,
-    'empty state',
-  );
-  assert.equal(await evaluate<boolean>('document.querySelector(".trash-empty").disabled'), true);
   await capture('compact-light-empty', 900, 640);
-  await evaluate(
-    'window.__trashMode="normal";Array.from(document.querySelectorAll(".trash-footer button")).find(button=>button.textContent==="Refresh").click()',
-  );
+  await evaluate(pageCall(refreshTrash, { mode: 'normal' }));
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-trash-id]").length'),
+    () => evaluate(countOf('[data-trash-id]')),
     (value) => value === 3,
     'restored fixture inventory',
   );
   await click('[data-trash-id="' + '4'.repeat(64) + '"]');
-  await evaluate('document.querySelector(".trash-origin-details button").click()');
+  await evaluate(syntheticClick('.trash-origin-details button'));
   await until(
-    () => evaluate<string>('document.querySelector(".trash-body [role=alert]")?.textContent||""'),
+    () => evaluate(textOf('.trash-body [role=alert]')),
     (value) => value.includes('original folder no longer exists'),
     'missing original parent feedback',
   );
@@ -452,25 +540,32 @@ try {
   // Restore the fixture inventory only, then open a real generated parent as a
   // root plane through the ordinary workspace navigation (no shell or mutation).
   await evaluate(
-    `window.__trashFixtureItems.push({id:'2'.repeat(64),name:'Build notes.txt',directory:false,previewable:true,size:1040,location:'Home',originalPath:${JSON.stringify(path.join(originalFolder, 'Build notes.txt'))}});Array.from(document.querySelectorAll('.trash-footer button')).find(button=>button.textContent==='Refresh').click()`,
+    pageCall(refreshTrash, {
+      add: {
+        id: '2'.repeat(64),
+        name: 'Build notes.txt',
+        directory: false,
+        previewable: true,
+        size: 1040,
+        location: 'Home',
+        originalPath: path.join(originalFolder, 'Build notes.txt'),
+      },
+    }),
   );
   await until(
-    () => evaluate<number>('document.querySelectorAll("[data-trash-id]").length'),
+    () => evaluate(countOf('[data-trash-id]')),
     (value) => value === 4,
     'known origin fixture',
   );
   await click('[data-trash-id="' + '2'.repeat(64) + '"]');
-  await evaluate('document.querySelector(".trash-origin-details button").click()');
+  await evaluate(syntheticClick('.trash-origin-details button'));
   await until(
-    () => evaluate<boolean>('!document.querySelector(".trash-dialog")'),
-    Boolean,
+    () => evaluate(exists('.trash-dialog')),
+    (found) => !found,
     'original folder opens and Trash closes',
   );
   await until(
-    () =>
-      evaluate<string[]>(
-        'Array.from(document.querySelectorAll("[data-file-owner]")).map(e=>e.getAttribute("aria-label"))',
-      ),
+    () => evaluate(pageCall(planeLabels)),
     (values) => values.includes(`Folder ${originalFolder}`),
     'actual original folder plane',
   );
@@ -501,12 +596,7 @@ try {
   console.log('Evidence:', output);
 } catch (error) {
   if (connection) {
-    console.log(
-      'Failure state:',
-      await evaluate(
-        `JSON.stringify({text:document.querySelector('dialog[open]')?.textContent,fixture:window.__trashCalls,list:window.viewer.trashList.toString(),rects:Array.from(document.querySelectorAll('.trash-dialog,.trash-body,.trash-inventory,.trash-scroll')).map(e=>({class:e.className,height:e.clientHeight,width:e.clientWidth}))})`,
-      ),
-    );
+    console.log('Failure state:', await evaluate(pageCall(failureState)));
     const shot = await connection.command<{ data: string }>('Page.captureScreenshot', {
       format: 'png',
     });

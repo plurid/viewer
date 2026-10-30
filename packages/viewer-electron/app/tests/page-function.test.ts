@@ -81,15 +81,20 @@ describe('page function scope', () => {
     ]);
   });
 
-  it('finds nothing outside in the scenarios, the packaged smoke and tools', () => {
-    const files = ['tests/native', 'tools']
+  // Unit tests run page code in their own contexts; every harness and tool runs it in Viewer.
+  it('finds nothing outside in the harnesses and tools', () => {
+    const files = ['tests', 'tools']
       .flatMap((folder) =>
         readdirSync(path.join(app, folder), { recursive: true, encoding: 'utf8' }).map((file) =>
           path.join(app, folder, file),
         ),
       )
-      .concat(path.join(app, 'tests/electron-smoke.ts'))
-      .filter((file) => file.endsWith('.ts') && readFileSync(file, 'utf8').includes('pageCall('));
+      .filter(
+        (file) =>
+          file.endsWith('.ts') &&
+          !file.endsWith('.test.ts') &&
+          readFileSync(file, 'utf8').includes('pageCall('),
+      );
     expect(files.length).toBeGreaterThan(50);
     expect(pageScopeProblems(files)).toEqual([]);
   });

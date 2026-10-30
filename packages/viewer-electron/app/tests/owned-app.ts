@@ -5,7 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { adoptGeneratedProfile, type NativeWindowMode } from './native/runtime/owned-application';
+import { animationFrames } from './native/runtime/page';
 import type { PageExpression } from './native/runtime/page-function';
+import { pageCall } from './native/runtime/page-function';
 
 interface DebugTarget {
   id: string;
@@ -161,11 +163,11 @@ export async function ownedApp(
     // A debugger target exists before loadURL resolves. Browser.close during
     // that interval can close only the loading Mac window rather than Quit.
     await until(
-      () => evaluate<string>('document.readyState'),
+      () => evaluate(pageCall(() => document.readyState)),
       (state) => state === 'complete',
       'owned renderer finished loading',
     );
-    await evaluate('new Promise(resolve=>requestAnimationFrame(()=>resolve(true)))');
+    await evaluate(animationFrames(1));
     const onEvent = (listener: (method: string, params: Record<string, unknown>) => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);

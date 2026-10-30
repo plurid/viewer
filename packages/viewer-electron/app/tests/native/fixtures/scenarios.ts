@@ -158,7 +158,9 @@ export function scenarioSettings(fixture: NativeScenarioFixture, scenario?: stri
             terminals: {
               ...settings.terminals,
               profiles: [
-                { id: 'login', name: 'Fixture shell', executable: '/bin/sh', args: [], env: {} },
+                // The built-in login profile needs no native confirmation; the harness starts
+                // the app with SHELL=/bin/sh, which it runs.
+                { id: 'login', name: 'Fixture shell', executable: '', args: [], env: {} },
               ],
             },
             customActions: [

@@ -8,11 +8,13 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences/ui';
 import { settingsSchema } from '../src/desktop/preferences/settings-schema';
-import type { AgentClientReply } from '../src/domain/agents/clients';
+import type { AgentClientInput } from '../src/domain/agents/clients';
 import type { AgentProposal } from '../src/domain/agents/requests';
 import type { CustomAction } from '../src/domain/automation/actions';
 import type { SavedState } from '../src/domain/contracts';
 import { ownedApp, until } from './owned-app';
+import { buttonState, patchSettings, pressButton, textOf } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot } from '../tools/temporary';
 
 const root = await temporaryRoot('viewer-agent-safety-');
@@ -106,6 +108,107 @@ const initial: SavedState = {
   ],
 };
 await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(initial));
+
+const hasRow = (file: string) =>
+  [...document.querySelectorAll<HTMLElement>('[data-file-path]')].some(
+    (row) => row.dataset.filePath === file,
+  );
+
+/** Clicks the file's row, then adds the folder's with Command. */
+function selectFileAndFolder(file: string, folder: string) {
+  const rows = [...document.querySelectorAll<HTMLElement>('[data-file-path]')];
+  rows.find((row) => row.dataset.filePath === file)!.click();
+  rows
+    .find((row) => row.dataset.filePath === folder)!
+    .dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }));
+}
+
+/** Clicks each row in order, adding all but the first with Command. */
+function selectRows(paths: string[]) {
+  paths.forEach((file, index) => {
+    const row = [...document.querySelectorAll<HTMLElement>('[data-file-path]')].find(
+      (row) => row.dataset.filePath === file,
+    );
+    if (!row) throw new Error('Long-selection row is unavailable');
+    row.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: index > 0 }));
+  });
+}
+
+/** The selector's opacity through its ancestors, with each one's box and transform. */
+function settledBoxes(selector: string) {
+  let node = document.querySelector(selector),
+    opacity = 1;
+  const boxes: (number | string)[][] = [];
+  if (!node) return { opacity: 0, boxes };
+  while (node) {
+    const css = getComputedStyle(node),
+      rect = node.getBoundingClientRect();
+    opacity *= Number(css.opacity);
+    boxes.push([rect.x, rect.y, rect.width, rect.height, css.transform]);
+    node = node.parentElement;
+  }
+  return { opacity, boxes };
+}
+
+const theme = () =>
+  document.documentElement.dataset.theme ||
+  document.body.dataset.look ||
+  document.documentElement.dataset.look ||
+  '';
+
+/** Whether the review dialog's header and footer are in view, and whether its body scrolls. */
+function reviewControls() {
+  const dialog = document.querySelector('.agent-review-dialog')!,
+    body = dialog.querySelector('.agent-review-body')!;
+  const box = dialog.getBoundingClientRect(),
+    header = dialog.querySelector('header')!.getBoundingClientRect(),
+    footer = dialog.querySelector('footer')!.getBoundingClientRect();
+  return {
+    visible:
+      header.top >= box.top &&
+      footer.bottom <= box.bottom &&
+      box.top >= 0 &&
+      box.bottom <= innerHeight,
+    scrolls: body.scrollHeight > body.clientHeight,
+  };
+}
+
+function scrollReviewToEnd() {
+  const body = document.querySelector('.agent-review-body')!;
+  body.scrollTop = body.scrollHeight;
+  const detail = document.querySelector('.agent-proposal-detail')!;
+  detail.scrollTop = detail.scrollHeight;
+}
+
+/** Whether every settings row naming one of the labels has a disabled, unchecked input. */
+const inputsUnavailable = (labels: string[]) =>
+  labels.every((text) => {
+    const row = [...document.querySelectorAll('label.settings-row')].find((row) =>
+      row.textContent.includes(text),
+    );
+    const input = row?.querySelector('input');
+    return input?.disabled && !input.checked;
+  });
+
+/** Opens the disclosure whose summary reads `summary`, then scrolls `reveal` into view. */
+function openDisclosure(summary: string, reveal?: string) {
+  [...document.querySelectorAll('details')].find(
+    (details) => details.querySelector('summary')?.textContent === summary,
+  )!.open = true;
+  if (reveal) document.querySelector(reveal)!.scrollIntoView({ block: 'center' });
+}
+
+const revealSettingsRow = (text: string) =>
+  [...document.querySelectorAll('label.settings-row')]
+    .find((row) => row.textContent.includes(text))!
+    .scrollIntoView({ block: 'center' });
+
+/** Clicks the review dialog's button; while the review is busy, the disabled button ignores it. */
+const clickReviewButton = (label: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>('.dialog button')]
+    .find((button) => button.textContent.trim() === label)!
+    .click();
+
 const output = await mkdtemp(path.resolve('out/agent-safety-acceptance-'));
 const binary =
   process.env.VIEWER_TEST_BINARY ??
@@ -116,35 +219,24 @@ const evidence: string[] = [];
 const captures: string[] = [];
 try {
   main = await viewer.connect();
-  await until(
-    () =>
-      main!.evaluate<boolean>(
-        `Array.from(document.querySelectorAll('[data-file-path]')).some(n=>n.dataset.filePath===${JSON.stringify(file)})`,
-      ),
-    Boolean,
-    'generated file row',
-  );
-  await main.evaluate(`(() => {
-    const rows=Array.from(document.querySelectorAll('[data-file-path]'));
-    rows.find(n=>n.dataset.filePath===${JSON.stringify(file)}).click();
-    rows.find(n=>n.dataset.filePath===${JSON.stringify(nested)})
-      .dispatchEvent(new MouseEvent('click', {bubbles:true,metaKey:true}));
-  })()`);
-  await main.evaluate('window.viewer.openSettings()');
+  await until(() => main!.evaluate(pageCall(hasRow, file)), Boolean, 'generated file row');
+  await main.evaluate(pageCall(selectFileAndFolder, file, nested));
+  await main.evaluate(pageCall(() => window.viewer.openSettings()));
   const settings = await viewer.connect(true);
-  const reply = await settings.evaluate<AgentClientReply>(
-    `window.viewer.agentClients({kind:'create',client:${JSON.stringify({
+  const reply = await settings.evaluate(
+    pageCall((client: AgentClientInput) => window.viewer.agentClients({ kind: 'create', client }), {
       name: 'Safety checks',
       roots: [shared],
       // Old capabilities may be imported; neither bypasses the new desktop policy.
       capabilities: ['metadata', 'propose', 'execute', 'terminal-write'],
       budgets: { maxReadBytes: 1048576, maxTasks: 4 },
-    })}})`,
+    }),
   );
   assert.ok(!Array.isArray(reply) && 'token' in reply);
   const named = reply.token;
-  const sharedToken = JSON.parse(await settings.evaluate<string>('window.viewer.agentToken()'))
-    .mcpServers.viewer.env.VIEWER_AGENT_TOKEN as string;
+  const sharedToken = JSON.parse(
+    await settings.evaluate(pageCall(() => window.viewer.agentToken())),
+  ).mcpServers.viewer.env.VIEWER_AGENT_TOKEN as string;
   const connection = JSON.parse(
     await readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
   ) as { socket: string };
@@ -252,12 +344,7 @@ try {
       stable = 0;
     await until(
       async () => {
-        const state = await connection.evaluate<{ opacity: number; boxes: unknown[] }>(`(() => {
-        let node=document.querySelector(${JSON.stringify(selector)}), opacity=1, boxes=[];
-        if(!node) return {opacity:0,boxes};
-        while(node){const css=getComputedStyle(node),r=node.getBoundingClientRect();
-          opacity*=Number(css.opacity);boxes.push([r.x,r.y,r.width,r.height,css.transform]);node=node.parentElement}
-        return {opacity,boxes};})()`);
+        const state = await connection.evaluate(pageCall(settledBoxes, selector));
         const serialized = JSON.stringify(state);
         stable = serialized === previous ? stable + 1 : 0;
         previous = serialized;
@@ -284,28 +371,18 @@ try {
   assert.equal(captured.removal, 'trash');
   assert.ok(captured.detail.includes(file) && captured.detail.includes(nested));
   await until(
-    () =>
-      main!.evaluate<string>(`document.querySelector('.agent-proposal-detail')?.textContent||''`),
+    () => main!.evaluate(textOf('.agent-proposal-detail')),
     (text) => text.includes(file) && text.includes(nested),
     'exact-path review dialog',
   );
-  assert.ok(
-    await main.evaluate<boolean>(
-      `Array.from(document.querySelectorAll('.dialog button')).some(b=>b.textContent.trim()==='Move to Trash')`,
-    ),
-  );
+  assert.notEqual(await main.evaluate(buttonState('Move to Trash', '.dialog')), 'missing');
   await metrics(main, 1440, 940);
   await capture(main, 'review-desktop-dark', '.agent-proposal-detail');
   await metrics(main, 900, 640);
   await capture(main, 'review-compact-dark', '.agent-proposal-detail');
-  await settings.evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-  );
+  await settings.evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await until(
-    () =>
-      main!.evaluate<string>(
-        'document.documentElement.dataset.theme||document.body.dataset.look||document.documentElement.dataset.look||""',
-      ),
+    () => main!.evaluate(pageCall(theme)),
     (look) => look === 'light',
     'light main theme',
   );
@@ -313,9 +390,7 @@ try {
   await metrics(main, 1440, 940);
   await capture(main, 'review-desktop-light', '.agent-proposal-detail');
   // Deliberately reject. Never approve a real removal, even for a generated fixture.
-  await main.evaluate(
-    `Array.from(document.querySelectorAll('.dialog button')).find(b=>b.textContent.trim()==='Reject').click()`,
-  );
+  await main.evaluate(pageCall(clickReviewButton, 'Reject'));
   await until(
     () => call<AgentProposal>(sharedToken, 'get_proposal', { id: proposal.id }),
     (p) => p.status === 'rejected',
@@ -328,20 +403,13 @@ try {
   });
   assert.equal(second.requiresUserReview, true);
   assert.notEqual(second.id, proposal.id);
-  await main.evaluate(`window.viewer.agentReview(${JSON.stringify(second.id)},false)`);
+  await main.evaluate(pageCall((id: string) => window.viewer.agentReview(id, false), second.id));
   evidence.push(
     'Hidden manual confirmation and a valid saved shared-connection Trash-alias grant still require a fresh exact-path review; Reject preserves both items, and the next named request needs new approval.',
   );
 
   await metrics(main, 1440, 940);
-  await main.evaluate(`(() => {
-    const paths=${JSON.stringify([...longFiles, nested])};
-    paths.forEach((file,index)=>{
-      const row=Array.from(document.querySelectorAll('[data-file-path]')).find(row=>row.dataset.filePath===file);
-      if(!row) throw new Error('Long-selection row is unavailable');
-      row.dispatchEvent(new MouseEvent('click',{bubbles:true,metaKey:index>0}));
-    });
-  })()`);
+  await main.evaluate(pageCall(selectRows, [...longFiles, nested]));
   await until(
     () => call<{ target: { selection: unknown[] } }>(named, 'list_commands'),
     (value) => value.target.selection.length === 9,
@@ -349,75 +417,58 @@ try {
   );
   const longProposal = await call<{ id: string }>(named, 'propose_command', { commandID: 'trash' });
   await until(
-    () =>
-      main!.evaluate<string>(`document.querySelector('.agent-proposal-detail')?.textContent||''`),
+    () => main!.evaluate(textOf('.agent-proposal-detail')),
     (text) => longFiles.every((file) => text.includes(file)),
     'long selection review',
   );
   await metrics(main, 900, 640);
-  const controls = () =>
-    main!.evaluate<{ visible: boolean; scrolls: boolean }>(`(()=>{
-    const dialog=document.querySelector('.agent-review-dialog'), body=dialog.querySelector('.agent-review-body');
-    const d=dialog.getBoundingClientRect(),header=dialog.querySelector('header').getBoundingClientRect(),footer=dialog.querySelector('footer').getBoundingClientRect();
-    return {visible:header.top>=d.top&&footer.bottom<=d.bottom&&d.top>=0&&d.bottom<=innerHeight,
-      scrolls:body.scrollHeight>body.clientHeight};})()`);
+  const controls = () => main!.evaluate(pageCall(reviewControls));
   await until(
     controls,
     (value) => value.visible && value.scrolls,
     'bounded review body with visible approval controls',
   );
   await capture(main, 'review-long-top-compact-light', '.agent-review-body');
-  await main.evaluate(
-    `const body=document.querySelector('.agent-review-body');body.scrollTop=body.scrollHeight;const detail=document.querySelector('.agent-proposal-detail');detail.scrollTop=detail.scrollHeight;`,
-  );
+  await main.evaluate(pageCall(scrollReviewToEnd));
   assert.ok((await controls()).visible);
   await capture(main, 'review-long-bottom-compact-light', '.agent-review-body');
-  await main.evaluate(`window.viewer.agentReview(${JSON.stringify(longProposal.id)},false)`);
+  await main.evaluate(
+    pageCall((id: string) => window.viewer.agentReview(id, false), longProposal.id),
+  );
   for (const file of longFiles) assert.equal(await readFile(file, 'utf8'), original);
   evidence.push(
     'Nine selected items with long exact paths scroll inside the compact approval body while header and Reject/Move to Trash remain visible; top/bottom states are captured and rejection preserves every item.',
   );
 
-  await settings.evaluate(
-    `Array.from(document.querySelectorAll('.settings-navigation button')).find(b=>b.textContent.trim()==='Agents').click()`,
-  );
+  await settings.evaluate(pressButton('Agents', '.settings-navigation'));
   await until(
-    () => settings.evaluate<string>(`document.querySelector('.settings-page')?.textContent||''`),
+    () => settings.evaluate(textOf('.settings-page')),
     (text) => text.includes('Unattended execution unavailable'),
     'agent settings',
   );
-  const disabled =
-    await settings.evaluate<boolean>(`['Unattended execution unavailable','Terminal input unavailable'].every(text=>{
-    const row=Array.from(document.querySelectorAll('label.settings-row')).find(row=>row.textContent.includes(text));
-    return row?.querySelector('input')?.disabled && !row.querySelector('input').checked;})`);
-  assert.ok(disabled);
-  await settings.evaluate(
-    `const disclosure=Array.from(document.querySelectorAll('details')).find(d=>d.querySelector('summary')?.textContent==='Shared connection');disclosure.open=true;`,
+  const disabled = await settings.evaluate(
+    pageCall(inputsUnavailable, ['Unattended execution unavailable', 'Terminal input unavailable']),
   );
+  assert.ok(disabled);
+  await settings.evaluate(pageCall(openDisclosure, 'Shared connection'));
   await until(
-    () => settings.evaluate<string>(`document.querySelector('.settings-page')?.textContent||''`),
+    () => settings.evaluate(textOf('.settings-page')),
     (text) => text.includes('Agent permissions'),
     'shared connection permissions',
   );
-  await settings.evaluate(
-    `Array.from(document.querySelectorAll('details')).find(d=>d.querySelector('summary')?.textContent==='Existing grants').open=true;document.querySelector('.settings-grant').scrollIntoView({block:'center'});`,
-  );
+  await settings.evaluate(pageCall(openDisclosure, 'Existing grants', '.settings-grant'));
   assert.ok(
-    await settings.evaluate<boolean>(
-      `document.querySelector('.settings-grant')?.textContent.includes('Inactive; approval is required each time')`,
+    (await settings.evaluate(textOf('.settings-grant'))).includes(
+      'Inactive; approval is required each time',
     ),
   );
   await metrics(settings, 1440, 940);
   await capture(settings, 'permissions-desktop-light', '.settings-grant');
   await metrics(settings, 900, 640);
   await capture(settings, 'permissions-compact-light', '.settings-grant');
-  await settings.evaluate(
-    `Array.from(document.querySelectorAll('label.settings-row')).find(row=>row.textContent.includes('Unattended execution unavailable')).scrollIntoView({block:'center'})`,
-  );
+  await settings.evaluate(pageCall(revealSettingsRow, 'Unattended execution unavailable'));
   await capture(settings, 'client-compact-light', '.settings-page');
-  await settings.evaluate(
-    `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'dark'}],s.revision))`,
-  );
+  await settings.evaluate(patchSettings({ path: 'settings.appearance', value: 'dark' }));
   await metrics(settings, 1440, 940);
   await capture(settings, 'client-desktop-dark', '.settings-page');
   evidence.push(

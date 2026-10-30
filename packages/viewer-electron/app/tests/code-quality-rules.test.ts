@@ -105,14 +105,15 @@ describe('typed page code', () => {
     expect(result?.messages).toEqual([]);
   });
 
-  it('covers every scenario and leaves a harness that is not yet migrated alone', async () => {
-    const code = "await connection.evaluate('document.title');";
-    const [scenario] = await eslint.lintText(code, {
-      filePath: 'tests/native/page-policy-fixture.ts',
+  it.each([
+    'tests/native/page-policy-fixture.ts',
+    'tests/page-policy-fixture.ts',
+    'tools/page-policy-fixture.ts',
+  ])('covers %s', async (filePath) => {
+    const [result] = await eslint.lintText("await connection.evaluate('document.title');", {
+      filePath,
     });
-    expect(scenario?.messages).toContainEqual(expect.objectContaining({ message }));
-    const [result] = await eslint.lintText(code, { filePath: 'tests/page-policy-fixture.ts' });
-    expect(result?.messages).toEqual([]);
+    expect(result?.messages).toContainEqual(expect.objectContaining({ message }));
   });
 });
 

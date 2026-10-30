@@ -12,14 +12,16 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import type {
-  OperationJob,
-  OperationRequest,
+  ApiMethod,
+  RendererOperationRequest,
   SavedState,
   ViewerAPI,
 } from '../src/domain/contracts';
 import { stateSchema } from '../src/desktop/persistence/storage';
 import { temporaryRoot } from '../tools/temporary';
 import { prepareOwnedApplication, type OwnedLaunch } from './native/runtime/owned-application';
+import { pageCall } from './native/runtime/page-function';
+import type { PageExpression } from './native/runtime/page-function';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bundle =
@@ -220,8 +222,9 @@ function command<T>(method: string, params: Record<string, unknown> = {}): Promi
     socket!.send(JSON.stringify({ id: request, method, params }));
   });
 }
-async function evaluate<T>(expression: string): Promise<T> {
-  const reply = await command<{ result: { value: T }; exceptionDetails?: unknown }>(
+function evaluate<R>(expression: PageExpression<R>): Promise<Awaited<R>>;
+async function evaluate(expression: string): Promise<unknown> {
+  const reply = await command<{ result: { value: unknown }; exceptionDetails?: unknown }>(
     'Runtime.evaluate',
     { expression, awaitPromise: true, returnByValue: true, userGesture: true },
   );
@@ -232,12 +235,32 @@ async function evaluate<T>(expression: string): Promise<T> {
   );
   return reply.result.value;
 }
-const call = <T>(method: string, ...args: unknown[]) =>
-  evaluate<T>(`window.viewer[${JSON.stringify(method)}](...${JSON.stringify(args)})`);
-async function denied(method: string, ...args: unknown[]) {
-  const value = await evaluate<string>(
-    `(async()=>{try{await window.viewer[${JSON.stringify(method)}](...${JSON.stringify(args)});return 'unexpected success';}catch(error){return error.code;}})()`,
-  );
+type ViewerMethods = Record<string, (...args: unknown[]) => Promise<unknown>>;
+type Reply<M extends ApiMethod> = Awaited<ReturnType<ViewerAPI[M]>>;
+const viewerCall = (method: ApiMethod, args: unknown[]) =>
+  (window.viewer as unknown as ViewerMethods)[method](...args);
+/** Calls `window.viewer[method]`: the refusal's code, or 'unexpected success'. */
+async function refusalCode(method: ApiMethod, args: unknown[]) {
+  try {
+    await (window.viewer as unknown as ViewerMethods)[method](...args);
+    return 'unexpected success';
+  } catch (error) {
+    return (error as { code?: string }).code;
+  }
+}
+/** Asks the workspace to revoke `root`: whether it was refused, and with which code. */
+async function workspaceRevoke(root: string) {
+  try {
+    await window.viewer.fileAccessRevoke(root);
+    return { blocked: false };
+  } catch (error) {
+    return { blocked: true, code: (error as { code?: string }).code };
+  }
+}
+const call = <M extends ApiMethod>(method: M, ...args: Parameters<ViewerAPI[M]>) =>
+  evaluate(pageCall(viewerCall, method, args)) as Promise<Reply<M>>;
+async function denied<M extends ApiMethod>(method: M, ...args: Parameters<ViewerAPI[M]>) {
+  const value = await evaluate(pageCall(refusalCode, method, args));
   if (value !== 'FILE_ACCESS_REQUIRED') {
     observations.push({
       stage: 'unexpected-access:' + method,
@@ -302,14 +325,16 @@ async function launch() {
   workspaceDebugger = await rendererTarget();
   await connectRenderer(workspaceDebugger);
   await wait(
-    () => evaluate<boolean>('typeof window.viewer?.bootstrap === "function"'),
+    () => evaluate(pageCall(() => typeof window.viewer?.bootstrap === 'function')),
     Boolean,
     'Viewer startup',
   );
   await wait(
     () =>
-      evaluate<boolean>(
-        'document.readyState === "complete" && !!document.querySelector(".workspace-main")',
+      evaluate(
+        pageCall(
+          () => document.readyState === 'complete' && !!document.querySelector('.workspace-main'),
+        ),
       ),
     Boolean,
     'the rendered test workspace',
@@ -317,9 +342,7 @@ async function launch() {
   await command('Page.bringToFront');
 }
 async function revokeFromSettings(root: string) {
-  const workspaceResult = await evaluate<{ blocked: boolean; code?: string }>(
-    `(async()=>{try{await window.viewer.fileAccessRevoke(${JSON.stringify(root)});return {blocked:false};}catch(error){return {blocked:true,code:error.code};}})()`,
-  );
+  const workspaceResult = await evaluate(pageCall(workspaceRevoke, root));
   assert.deepEqual(workspaceResult, { blocked: true, code: 'VIEWER_ERROR' });
   await call('list', root);
   observations.push({ stage: 'workspace-revoke-rejected', grants: await call('fileAccessList') });
@@ -329,8 +352,12 @@ async function revokeFromSettings(root: string) {
   try {
     await wait(
       () =>
-        evaluate<boolean>(
-          'typeof window.viewer?.fileAccessRevoke === "function" && document.readyState === "complete"',
+        evaluate(
+          pageCall(
+            () =>
+              typeof window.viewer?.fileAccessRevoke === 'function' &&
+              document.readyState === 'complete',
+          ),
         ),
       Boolean,
       'Settings startup',
@@ -378,7 +405,7 @@ async function choose(root: string, cancel = false) {
   if (cancel) await denied('list', root);
   observations.push({ stage: 'before-picker', grants: await call('fileAccessList') });
   await save();
-  const result = await call<string | null>('chooseFolder', root);
+  const result = await call('chooseFolder', root);
   observations.push({
     stage: 'after-picker',
     grants: await call('fileAccessList'),
@@ -398,10 +425,10 @@ async function choose(root: string, cancel = false) {
     assert.equal(await realpath(result), await realpath(root));
   }
 }
-async function operation(request: OperationRequest) {
-  const jobID = await call<string>('operate', request);
+async function operation(request: RendererOperationRequest) {
+  const jobID = await call('operate', request);
   const jobs = await wait(
-    () => call<OperationJob[]>('jobs'),
+    () => call('jobs'),
     (value) =>
       value.some(
         (job) => job.id === jobID && ['completed', 'failed', 'cancelled'].includes(job.status),
@@ -459,8 +486,8 @@ try {
       'Two actual native grants allow only the chosen roots; the generated sibling is denied.',
     );
     if (!finderOnly) {
-      const resource = await call<{ id: string }>('resource', path.join(source, 'Generated.txt'));
-      const content = await call<{ text?: string }>('read', resource.id);
+      const resource = await call('resource', path.join(source, 'Generated.txt'));
+      const content = await call('read', resource.id);
       assert.equal(content.text, generated);
       await call('release', resource.id);
       await passed(
@@ -505,8 +532,7 @@ try {
       await input.question(
         '\nIn Finder, select BOTH Generated.txt and Nested, then Command-C. Return to this terminal and press Enter only AFTER copying. ',
       );
-      const selection =
-        await call<Awaited<ReturnType<ViewerAPI['clipboardRead']>>>('clipboardRead');
+      const selection = await call('clipboardRead');
       const paths = selection
         ? (await Promise.all(selection.paths.map((file) => realpath(file)))).sort()
         : [];

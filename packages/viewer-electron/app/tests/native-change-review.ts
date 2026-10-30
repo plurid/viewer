@@ -2,10 +2,12 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { SavedState, OperationJob } from '../src/domain/contracts';
-import type { ActionPlan } from '../src/domain/services';
-import type { CheckpointRecord } from '../src/domain/operations/change-plan';
+import type { SavedState } from '../src/domain/contracts';
+import type { ActionContext, ActionRequest } from '../src/domain/services';
+import type { CheckpointRecord, CheckpointReply } from '../src/domain/operations/change-plan';
 import { ownedApp, until } from './owned-app';
+import { click, countOf, exists, textOf } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 const root = await temporaryRoot('viewer-native-review-');
 const profile = root + '/Profile',
@@ -53,23 +55,32 @@ let connection: Awaited<ReturnType<typeof viewer.connect>> | undefined;
 const checks: string[] = [];
 const output = path.resolve('out/change-review-acceptance');
 await mkdir(output, { recursive: true });
+type CheckpointList = Extract<CheckpointReply, { records: CheckpointRecord[] }>;
+type CheckpointRestore = Extract<CheckpointReply, { jobs: string[] }>;
+const actionStart = (request: ActionRequest) => window.viewer.actionStart(request);
+const actionGet = (id: string) => window.viewer.actionGet(id);
+/** Presses Apply 2 changes: false when it is missing or disabled. */
+function applyChanges() {
+  const button = [...document.querySelectorAll<HTMLButtonElement>('.task-dialog button')].find(
+    (button) => /^Apply 2 changes$/.test(button.textContent.trim()),
+  );
+  if (!button || button.disabled) return false;
+  button.click();
+  return true;
+}
 try {
   connection = await viewer.connect();
   const evaluate = connection.evaluate;
-  await until(
-    () => evaluate<number>(`document.querySelectorAll('.folder-explorer').length`),
-    Boolean,
-    'source renderer',
-  );
-  const context = {
+  await until(() => evaluate(countOf('.folder-explorer')), Boolean, 'source renderer');
+  const context: ActionContext = {
     workspaceID: 'work',
     rootID: 'folder',
     paneID: 'folder',
     actor: 'user',
     sources: files,
   };
-  const id = await evaluate<string>(
-    `window.viewer.actionStart(${JSON.stringify({
+  const id = await evaluate(
+    pageCall(actionStart, {
       recipeID: 'batch-rename',
       context,
       options: {
@@ -78,31 +89,27 @@ try {
         padding: 2,
         template: '{number}_{name}{extension}',
       },
-    })})`,
+    }),
   );
   const plan = await until(
-    () => evaluate<ActionPlan>(`window.viewer.actionGet(${JSON.stringify(id)})`),
+    () => evaluate(pageCall(actionGet, id)),
     (plan) => plan.status !== 'planning',
     'prepared naming proposal',
   );
   assert.equal(plan.status, 'review');
   assert.equal(plan.version, 1);
   assert.equal(await readFile(files[0], 'utf8'), 'Original A.');
-  await evaluate(`window.dispatchEvent(new Event('viewer:tasks'))`);
+  await evaluate(pageCall(() => window.dispatchEvent(new Event('viewer:tasks'))));
+  await until(() => evaluate(exists('.task-list button')), Boolean, 'rendered task list');
+  await evaluate(click('.task-list button'));
   await until(
-    () => evaluate<boolean>(`!!document.querySelector('.task-list button')`),
-    Boolean,
-    'rendered task list',
-  );
-  await evaluate(`document.querySelector('.task-list button').click()`);
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector('.checkpoint-choice input')`),
+    () => evaluate(exists('.checkpoint-choice input')),
     Boolean,
     'review checkpoint control',
   );
-  await evaluate(`document.querySelector('.checkpoint-choice input').click()`);
+  await evaluate(click('.checkpoint-choice input'));
   await until(
-    () => evaluate<string>(`document.querySelector('.checkpoint-choice')?.textContent || ''`),
+    () => evaluate(textOf('.checkpoint-choice')),
     (text) => text.includes('available'),
     'storage preflight',
   );
@@ -110,12 +117,10 @@ try {
     format: 'png',
   });
   await writeFile(output + '/review.png', Buffer.from(shot.data, 'base64'));
-  const clicked =
-    await evaluate<boolean>(`(() => { const b=[...document.querySelectorAll('.task-dialog button')]
-    .find(b => /^Apply 2 changes$/.test(b.textContent.trim())); if (!b || b.disabled) return false; b.click(); return true; })()`);
+  const clicked = await evaluate(pageCall(applyChanges));
   assert.equal(clicked, true);
   const completed = await until(
-    () => evaluate<ActionPlan>(`window.viewer.actionGet(${JSON.stringify(id)})`),
+    () => evaluate(pageCall(actionGet, id)),
     (plan) => ['completed', 'partial', 'failed'].includes(plan.status),
     'reviewed apply',
   );
@@ -126,20 +131,25 @@ try {
   checks.push(
     'Rendered review estimates an opt-in checkpoint before applying the revisioned rename.',
   );
-  const list = await evaluate<{ records: CheckpointRecord[]; budgetBytes: number }>(
-    `window.viewer.checkpoints({kind:'list'})`,
+  const list = await evaluate(
+    pageCall(() => window.viewer.checkpoints({ kind: 'list' }) as Promise<CheckpointList>),
   );
   assert.equal(list.budgetBytes, 5 * 1024 ** 3);
   assert.equal(list.records.length, 1);
-  const restore = await evaluate<{ jobs: string[] }>(
-    `window.viewer.checkpoints(${JSON.stringify({
-      kind: 'restore',
-      id: completed.checkpointID,
-      destination: restored,
-    })})`,
+  const restore = await evaluate(
+    pageCall(
+      (id: string, destination: string) =>
+        window.viewer.checkpoints({
+          kind: 'restore',
+          id,
+          destination,
+        }) as Promise<CheckpointRestore>,
+      completed.checkpointID,
+      restored,
+    ),
   );
   await until(
-    () => evaluate<OperationJob[]>(`window.viewer.jobs()`),
+    () => evaluate(pageCall(() => window.viewer.jobs())),
     (jobs) =>
       restore.jobs.every((id) => jobs.some((job) => job.id === id && job.status === 'completed')),
     'guarded restore jobs',
@@ -150,15 +160,15 @@ try {
   const slow = source + '/' + 'a'.repeat(220) + '!.txt';
   await writeFile(slow, 'Worker deadline fixture.');
   const started = Date.now();
-  const deadlineID = await evaluate<string>(
-    `window.viewer.actionStart(${JSON.stringify({
+  const deadlineID = await evaluate(
+    pageCall(actionStart, {
       recipeID: 'batch-rename',
       context: { ...context, sources: [slow] },
       options: { regex: true, find: '^(a+)+$', replace: 'x' },
-    })})`,
+    }),
   );
   const deadline = await until(
-    () => evaluate<ActionPlan>(`window.viewer.actionGet(${JSON.stringify(deadlineID)})`),
+    () => evaluate(pageCall(actionGet, deadlineID)),
     (plan) => plan.status !== 'planning',
     'bounded adversarial regex',
   );
@@ -167,11 +177,8 @@ try {
   assert.ok(Date.now() - started < 10000);
   assert.equal(await readFile(slow, 'utf8'), 'Worker deadline fixture.');
   assert.equal(
-    (
-      (await evaluate(`window.viewer.stat(${JSON.stringify(source + '/01_Cut-a.txt')})`)) as {
-        name: string;
-      }
-    ).name,
+    (await evaluate(pageCall((file: string) => window.viewer.stat(file), source + '/01_Cut-a.txt')))
+      .name,
     '01_Cut-a.txt',
   );
   checks.push(

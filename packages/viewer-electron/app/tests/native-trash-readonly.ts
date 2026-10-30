@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import type { SavedState } from '../src/domain/contracts';
-import type { TrashSnapshot } from '../src/domain/files/trash';
 import { ownedApp, until } from './owned-app';
+import { attributeOf, exists, pressButton } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot } from '../tools/temporary';
 const root = await temporaryRoot('viewer-trash-readonly-');
 const profile = path.join(root, 'Profile'),
@@ -48,19 +49,33 @@ const binary =
   );
 const viewer = await ownedApp(binary, profile);
 let main: Awaited<ReturnType<typeof viewer.connect>> | undefined;
+
+/** The Trash dialog's, or else the folder's, opacity through its ancestors, with each ancestor's
+ * box and transform. */
+function ancestry() {
+  let node = document.querySelector('.trash-dialog') || document.querySelector('[data-file-owner]');
+  let opacity = 1;
+  const geometry: [number, number, number, number, string][] = [];
+  if (!node) return { opacity: 0, geometry };
+  while (node) {
+    const style = getComputedStyle(node),
+      rect = node.getBoundingClientRect();
+    opacity *= Number(style.opacity);
+    geometry.push([rect.x, rect.y, rect.width, rect.height, style.transform]);
+    node = node.parentElement;
+  }
+  return { opacity, geometry };
+}
+
 try {
   main = await viewer.connect();
-  await until(
-    () => main!.evaluate<boolean>(`!!document.querySelector('[data-file-owner]')`),
-    Boolean,
-    'folder',
-  );
-  const advertised = await main.evaluate<string[]>('Object.keys(window.viewerNative)');
+  await until(() => main!.evaluate(exists('[data-file-owner]')), Boolean, 'folder');
+  const advertised = await main.evaluate(pageCall(() => Object.keys(window.viewerNative!)));
   assert.equal(
     advertised.some((method) => /empty|erase|delete.*trash/i.test(method)),
     false,
   );
-  const snapshot = await main.evaluate<TrashSnapshot>('window.viewer.trashList()');
+  const snapshot = await main.evaluate(pageCall(() => window.viewer.trashList()));
   assert.equal(
     snapshot.canEmpty,
     snapshot.items.length > 0 &&
@@ -68,18 +83,20 @@ try {
       snapshot.locations.every((location) => location.state === 'ready'),
   );
   // Drive only the ordinary sidebar link. Never open or select the native menu.
-  await main.evaluate(
-    `Array.from(document.querySelectorAll('.location-sidebar button')).find(button=>button.textContent.trim()==='Trash').click()`,
-  );
+  await main.evaluate(pressButton('Trash', '.location-sidebar'));
   await until(
     () =>
-      main!.evaluate<boolean>(
-        '!!document.querySelector(".trash-footer")&&!document.querySelector(".trash-body .loading")',
+      main!.evaluate(
+        pageCall(
+          () =>
+            !!document.querySelector('.trash-footer') &&
+            !document.querySelector('.trash-body .loading'),
+        ),
       ),
     Boolean,
     'Trash view',
   );
-  const unavailable = await main.evaluate<boolean>('!!document.querySelector(".trash-access")');
+  const unavailable = await main.evaluate(exists('.trash-access'));
   assert.equal(
     unavailable,
     snapshot.locations.some((location) => location.state === 'unavailable'),
@@ -95,9 +112,7 @@ try {
       stable = 0;
     await until(
       async () => {
-        const value = await main!.evaluate<{ opacity: number; geometry: unknown[] }>(
-          `(()=>{let n=document.querySelector('.trash-dialog')||document.querySelector('[data-file-owner]'),opacity=1,geometry=[];if(!n)return{opacity:0,geometry};while(n){const s=getComputedStyle(n),r=n.getBoundingClientRect();opacity*=Number(s.opacity);geometry.push([r.x,r.y,r.width,r.height,s.transform]);n=n.parentElement}return{opacity,geometry}})()`,
-        );
+        const value = await main!.evaluate(pageCall(ancestry));
         const serialized = JSON.stringify(value);
         stable = previous === serialized ? stable + 1 : 0;
         previous = serialized;
@@ -111,22 +126,15 @@ try {
   };
   await capture('native-trash-dark', 1440, 940);
   await capture('native-trash-compact-dark', 900, 640);
-  await main.evaluate(
-    `Array.from(document.querySelectorAll('.trash-footer button')).find(button=>button.textContent.trim()==='Done').click()`,
-  );
-  await main.evaluate(
-    `Array.from(document.querySelectorAll('.location-sidebar button')).find(button=>button.textContent.trim()==='Applications').click()`,
-  );
+  await main.evaluate(pressButton('Done', '.trash-footer'));
+  await main.evaluate(pressButton('Applications', '.location-sidebar'));
   await until(
-    () =>
-      main!.evaluate<string>(
-        'document.querySelector("[data-file-owner]")?.getAttribute("aria-label")||""',
-      ),
+    () => main!.evaluate(attributeOf('[data-file-owner]', 'aria-label')),
     (value) => value === 'Folder /Applications',
     'Applications shortcut',
   );
   await until(
-    () => main!.evaluate<boolean>('!document.querySelector("[data-file-owner] .loading")'),
+    () => main!.evaluate(pageCall(() => !document.querySelector('[data-file-owner] .loading'))),
     Boolean,
     'Applications listing',
   );

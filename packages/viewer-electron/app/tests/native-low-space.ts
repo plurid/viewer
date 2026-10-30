@@ -7,9 +7,10 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { createFixtures } from './fixtures';
 import { ownedApp, until } from './owned-app';
+import { pageCall } from './native/runtime/page-function';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences/ui';
-import type { OperationJob, OperationRequest } from '../src/domain/contracts';
+import type { RendererOperationRequest } from '../src/domain/contracts';
 import { trashTemporary } from '../tools/temporary';
 
 const binary = process.env.VIEWER_TEST_BINARY!,
@@ -81,6 +82,8 @@ const hash = async (file: string) =>
   createHash('sha256')
     .update(await readFile(file))
     .digest('hex');
+const workspaceReady = () => !!window.viewer && !!document.querySelector('.folder-explorer');
+const viewerJobs = () => window.viewer.jobs();
 async function check(scenario: string, work: () => Promise<unknown>) {
   const details = await work();
   results.push({ scenario, result: 'passed', details });
@@ -131,15 +134,13 @@ try {
   app = await ownedApp(binary, profile);
   connection = await app.connect();
   const { evaluate } = connection;
-  await until(
-    () => evaluate('!!window.viewer && !!document.querySelector(".folder-explorer")'),
-    Boolean,
-    'Owned low-space workspace',
-  );
-  async function operate(request: OperationRequest) {
-    const id = await evaluate<string>(`window.viewer.operate(${JSON.stringify(request)})`);
+  await until(() => evaluate(pageCall(workspaceReady)), Boolean, 'Owned low-space workspace');
+  async function operate(request: RendererOperationRequest) {
+    const id = await evaluate(
+      pageCall((request: RendererOperationRequest) => window.viewer.operate(request), request),
+    );
     const jobs = await until(
-      () => evaluate<OperationJob[]>('window.viewer.jobs()'),
+      () => evaluate(pageCall(viewerJobs)),
       (jobs) =>
         jobs.some(
           (job) => job.id === id && ['completed', 'failed', 'cancelled'].includes(job.status),
@@ -185,21 +186,21 @@ try {
     assert.equal(job.errors.length, 0);
     return { status: job.status };
   });
-  const before = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  const before = await evaluate(pageCall(viewerJobs));
   await app.close(connection);
   quit = true;
   app = await ownedApp(binary, profile);
   quit = false;
   connection = await app.connect();
   await until(
-    () => connection!.evaluate('!!window.viewer && !!document.querySelector(".folder-explorer")'),
+    () => connection!.evaluate(pageCall(workspaceReady)),
     Boolean,
     'Cold low-space workspace ready',
   );
   await check(
     'Known disk-space failures retain their status and error count after cold relaunch',
     async () => {
-      const restored = await connection!.evaluate<OperationJob[]>('window.viewer.jobs()');
+      const restored = await connection!.evaluate(pageCall(viewerJobs));
       for (const job of before) {
         const current = restored.find((item) => item.id === job.id);
         assert.ok(current);

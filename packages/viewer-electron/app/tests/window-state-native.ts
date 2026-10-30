@@ -10,6 +10,9 @@ import { promisify } from 'node:util';
 import { defaultSettings } from '../src/domain/services';
 import type { WindowFrame } from '../src/desktop/windows/window-state';
 import { createFixtures } from './fixtures';
+import { exists } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
+import type { PageExpression } from './native/runtime/page-function';
 import { trashTemporary } from '../tools/temporary';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -101,8 +104,9 @@ async function launch(expected?: WindowFrame['bounds']): Promise<WindowFrame> {
     }
     throw new Error(`Timed out waiting for native state: ${JSON.stringify(last)}`);
   }
-  async function evaluate<T>(expression: string): Promise<T> {
-    const reply = await command<{ result: { value: T }; exceptionDetails?: unknown }>(
+  function evaluate<R>(expression: PageExpression<R>): Promise<Awaited<R>>;
+  async function evaluate(expression: string): Promise<unknown> {
+    const reply = await command<{ result: { value: unknown }; exceptionDetails?: unknown }>(
       'Runtime.evaluate',
       { expression, returnByValue: true, awaitPromise: true },
     );
@@ -141,11 +145,11 @@ async function launch(expected?: WindowFrame['bounds']): Promise<WindowFrame> {
       pending.clear();
     });
     await command('Runtime.enable');
-    await until(() => evaluate<boolean>('!!document.querySelector("[data-file-path]")'), Boolean);
+    await until(() => evaluate(exists('[data-file-path]')), Boolean);
     // Offscreen Chromium reports screenX/screenY as zero; the main process
     // captures real native coordinates on Quit. Renderer dimensions still apply.
-    const size = await evaluate<{ width: number; height: number }>(
-      '({width:window.outerWidth,height:window.outerHeight})',
+    const size = await evaluate(
+      pageCall(() => ({ width: window.outerWidth, height: window.outerHeight })),
     );
     if (expected)
       assert.deepEqual(

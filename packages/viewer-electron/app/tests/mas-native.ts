@@ -9,16 +9,12 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import store from '../mac-app-store.json' with { type: 'json' };
-import type {
-  Bootstrap,
-  FolderListing,
-  OperationJob,
-  OperationRequest,
-} from '../src/domain/contracts';
-import type { TerminalEvent } from '../src/domain/automation/actions';
-import type { Volume } from '../src/domain/files/volumes';
-import type { IndexedResult, IndexStatus, SettingsSnapshot } from '../src/domain/services';
+import type { Bootstrap, RendererOperationRequest, SavedState } from '../src/domain/contracts';
+import type { TerminalEvent, TerminalStart } from '../src/domain/automation/actions';
 import { AwakeClock, QualificationInterrupted } from './awake-clock';
+import { click, exists, focus, patchSettings, pressButton } from './native/runtime/page';
+import { pageCall } from './native/runtime/page-function';
+import type { PageExpression } from './native/runtime/page-function';
 import {
   ownedDirectory,
   temporaryRoot,
@@ -141,6 +137,79 @@ const pending = new Map<number, { resolve(value: unknown): void; reject(error: E
 const exceptions: string[] = [];
 let passed = false;
 
+interface MasWindow {
+  __masOwnedChildEvents: TerminalEvent[];
+  __masTerminalEvents: TerminalEvent[];
+}
+type GuardedRead = 'list' | 'stat' | 'resource';
+const operate = (request: RendererOperationRequest) => window.viewer.operate(request);
+const viewerJobs = () => window.viewer.jobs();
+const undo = (id: string) => window.viewer.undo(id);
+const bootstrap = () => window.viewer.bootstrap();
+const terminalWrite = (id: string, data: string) => window.viewer.terminalWrite(id, data);
+const pageIncludes = (text: string) => document.body.innerText.includes(text);
+/** Reads `file` through `method`: whether the sandbox refused it, and with which code. */
+async function refusal(method: GuardedRead, file: string) {
+  try {
+    await window.viewer[method](file);
+    return { denied: false };
+  } catch (error) {
+    return { denied: true, code: (error as { code?: string }).code };
+  }
+}
+/** Saves the workspace: whether it was saved, or the refusal's code. */
+async function trySave(state: SavedState) {
+  try {
+    await window.viewer.save(state);
+    return { saved: true };
+  } catch (error) {
+    return { saved: false, code: (error as { code?: string }).code };
+  }
+}
+/** Opens, reads and releases `file` as a resource `count` times. */
+async function resourceCycles(file: string, count: number) {
+  for (let cycle = 0; cycle < count; cycle++) {
+    const resource = await window.viewer.resource(file);
+    await window.viewer.read(resource.id);
+    await window.viewer.release(resource.id);
+  }
+}
+/** One soak cycle: a watch, ten resource reads of `file` and a workspace save. */
+async function soakCycle(folder: string, file: string, state: SavedState) {
+  await window.viewer.watch(folder, 'mas-soak');
+  for (let i = 0; i < 10; i++) {
+    const item = await window.viewer.resource(file);
+    await window.viewer.read(item.id);
+    await window.viewer.release(item.id);
+  }
+  await window.viewer.unwatch('mas-soak');
+  await window.viewer.save(state);
+}
+/** Starts the terminal, recording its events in `window.__masOwnedChildEvents`. */
+function startOwnedTerminal(start: TerminalStart) {
+  const page = window as unknown as MasWindow;
+  page.__masOwnedChildEvents = [];
+  window.viewer.onEvent((event) => {
+    if (event.type === 'terminal' && event.event.id === start.id)
+      page.__masOwnedChildEvents.push(event.event);
+  });
+  return window.viewer.terminalStart(start);
+}
+/** Starts the terminal, recording every terminal event in `window.__masTerminalEvents`. */
+function startTerminal(start: TerminalStart) {
+  const page = window as unknown as MasWindow;
+  page.__masTerminalEvents = [];
+  window.viewer.onEvent((event) => {
+    if (event.type === 'terminal') page.__masTerminalEvents.push(event.event);
+  });
+  return window.viewer.terminalStart(start);
+}
+/** The output the owned terminal has written so far. */
+const ownedOutput = () =>
+  (window as unknown as MasWindow).__masOwnedChildEvents
+    .flatMap((event) => (event.type === 'data' ? [event.data] : []))
+    .join('');
+
 async function until<T>(read: () => Promise<T>, accepts: (value: T) => boolean, label: string) {
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
@@ -178,18 +247,19 @@ function command<T>(method: string, params: Record<string, unknown> = {}): Promi
     socket!.send(JSON.stringify({ id, method, params }));
   });
 }
-async function evaluate<T>(expression: string): Promise<T> {
-  const reply = await command<{ result: { value: T }; exceptionDetails?: unknown }>(
+function evaluate<R>(expression: PageExpression<R>): Promise<Awaited<R>>;
+async function evaluate(expression: string): Promise<unknown> {
+  const reply = await command<{ result: { value: unknown }; exceptionDetails?: unknown }>(
     'Runtime.evaluate',
     { expression, awaitPromise: true, returnByValue: true, userGesture: true },
   );
   assert.equal(reply.exceptionDetails, undefined, 'Renderer evaluation failed');
   return reply.result.value;
 }
-async function operation(request: OperationRequest) {
-  const id = await evaluate<string>(`window.viewer.operate(${JSON.stringify(request)})`);
+async function operation(request: RendererOperationRequest) {
+  const id = await evaluate(pageCall(operate, request));
   const job = await until(
-    () => evaluate<OperationJob[]>(`window.viewer.jobs()`),
+    () => evaluate(pageCall(viewerJobs)),
     (jobs) =>
       jobs.some(
         (job) => job.id === id && ['completed', 'failed', 'cancelled'].includes(job.status),
@@ -238,8 +308,11 @@ async function nativeMetadataAndUndo() {
       .filter((line) => /^\s*\d+:/.test(line));
   assert.deepEqual(acl(target), acl(file));
   assert.equal(
-    await evaluate<string>(
-      `window.viewer.stat(${JSON.stringify(path.join(path.dirname(target), 'relative-link'))}).then(entry=>entry.name)`,
+    await evaluate(
+      pageCall(
+        (file: string) => window.viewer.stat(file).then((entry) => entry.name),
+        path.join(path.dirname(target), 'relative-link'),
+      ),
     ),
     'relative-link',
   );
@@ -249,13 +322,16 @@ async function nativeMetadataAndUndo() {
   for (const item of [target, source]) {
     const trashed = await operation({ kind: 'trash', sources: [item] });
     assert.ok(trashed.undoable, 'Native Trash must yield a guarded private receipt.');
-    await evaluate(`window.viewer.undo(${JSON.stringify(trashed.id)})`);
+    await evaluate(pageCall(undo, trashed.id));
     await stat(item);
   }
 }
 async function independentMCP() {
   await evaluate(
-    `window.viewer.settingsGet().then(snapshot=>window.viewer.settingsPatch([{path:'settings.agents.enabled',value:true},{path:'settings.agents.roots',value:[${JSON.stringify(stress)}]}],snapshot.revision))`,
+    patchSettings(
+      { path: 'settings.agents.enabled', value: true },
+      { path: 'settings.agents.roots', value: [stress] },
+    ),
   );
   await until(
     () => readFile(path.join(profile, 'agent-connection-v1.json'), 'utf8'),
@@ -352,11 +428,11 @@ async function renderedPreview() {
     windowsVirtualKeyCode: 76,
   });
   await until(
-    () => evaluate<boolean>('!!document.querySelector("dialog input, [role=dialog] input")'),
+    () => evaluate(exists('dialog input, [role=dialog] input')),
     Boolean,
     'Go to folder dialog',
   );
-  await evaluate('document.querySelector("dialog input, [role=dialog] input").focus()');
+  await evaluate(focus('dialog input, [role=dialog] input'));
   await command('Input.dispatchKeyEvent', {
     type: 'keyDown',
     key: 'a',
@@ -364,25 +440,22 @@ async function renderedPreview() {
     modifiers: 4,
   });
   await command('Input.insertText', { text: stress });
-  await evaluate('document.querySelector("dialog form, [role=dialog] form").requestSubmit()');
-  const selector = `[data-file-path=${JSON.stringify(file)}]`;
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector(${JSON.stringify(selector)})`),
-    Boolean,
-    'generated native preview row',
+  await evaluate(
+    pageCall(() =>
+      document.querySelector<HTMLFormElement>('dialog form, [role=dialog] form')!.requestSubmit(),
+    ),
   );
-  await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+  const selector = `[data-file-path=${JSON.stringify(file)}]`;
+  await until(() => evaluate(exists(selector)), Boolean, 'generated native preview row');
+  await evaluate(click(selector));
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: ' ', code: 'Space' });
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space' });
   await until(
-    () =>
-      evaluate<boolean>('document.body.innerText.includes("1 meshes · 1 triangles · 3 vertices")'),
+    () => evaluate(pageCall(pageIncludes, '1 meshes · 1 triangles · 3 vertices')),
     Boolean,
     'rendered signed STL preview',
   );
-  await evaluate(
-    'document.querySelector("dialog [aria-label=Close], [role=dialog] [aria-label=Close]").click()',
-  );
+  await evaluate(click('dialog [aria-label=Close], [role=dialog] [aria-label=Close]'));
 }
 async function soak(minutes: number, state: Bootstrap['state']) {
   assert.ok(Number.isFinite(minutes) && minutes >= 0 && minutes <= 1440);
@@ -426,9 +499,7 @@ async function soak(minutes: number, state: Bootstrap['state']) {
     await command('Performance.enable');
     while (clock.elapsed().awakeMs < duration) {
       const before = Date.now();
-      await evaluate(
-        `(async()=>{ await window.viewer.watch(${JSON.stringify(stress)},'mas-soak'); for(let i=0;i<10;i++){const item=await window.viewer.resource(${JSON.stringify(path.join(stress, 'Flat-0.txt'))});await window.viewer.read(item.id);await window.viewer.release(item.id);} await window.viewer.unwatch('mas-soak');await window.viewer.save(${JSON.stringify(state)}); })()`,
-      );
+      await evaluate(pageCall(soakCycle, stress, path.join(stress, 'Flat-0.txt'), state!));
       if (cycle % 5 === 0) await renderedPreview();
       const metrics = await command<{ metrics: { name: string; value: number }[] }>(
         'Performance.getMetrics',
@@ -556,35 +627,48 @@ async function coldTrashUndo() {
   await attachRenderer();
   await until(
     () =>
-      evaluate<boolean>(
-        'typeof window.viewer?.jobs === "function" && !!document.querySelector(".folder-explorer")',
+      evaluate(
+        pageCall(
+          () =>
+            typeof window.viewer?.jobs === 'function' &&
+            !!document.querySelector('.folder-explorer'),
+        ),
       ),
     Boolean,
     'the relaunched signed renderer',
   );
-  const jobs = await evaluate<OperationJob[]>('window.viewer.jobs()');
+  const jobs = await evaluate(pageCall(viewerJobs));
   assert.equal(
     jobs.find((job) => job.id === trashed.id)?.undoable,
     true,
     'Cold launch must recover the guarded native Trash receipt.',
   );
-  await evaluate(`window.viewer.undo(${JSON.stringify(trashed.id)})`);
+  await evaluate(pageCall(undo, trashed.id));
   assert.equal(await readFile(file, 'utf8'), 'Generated cold-start Trash receipt fixture.');
   console.log('Signed native Trash receipt restored after graceful Quit and cold relaunch.');
 }
 async function stoppedTerminalChildren() {
   const id = 'mas-pty-child-' + randomUUID();
   await evaluate(
-    `window.__masOwnedChildEvents=[]; window.viewer.onEvent(event=>{if(event.type==='terminal' && event.event.id===${JSON.stringify(id)}) window.__masOwnedChildEvents.push(event.event)}); window.viewer.terminalStart(${JSON.stringify({ id, workspaceID: 'mas-qa', rootID: 'mas-qa', profileID: 'mas-qa', cwd: stress, cols: 80, rows: 24 })})`,
+    pageCall(startOwnedTerminal, {
+      id,
+      workspaceID: 'mas-qa',
+      rootID: 'mas-qa',
+      profileID: 'mas-qa',
+      cwd: stress,
+      cols: 80,
+      rows: 24,
+    }),
   );
   await evaluate(
-    `window.viewer.terminalWrite(${JSON.stringify(id)},${JSON.stringify('set +H\nsleep 180 & printf "VIEWER_QA_OWNED_PIDS=%s,%s\\n" "$$" "$!"; wait\n')})`,
+    pageCall(
+      terminalWrite,
+      id,
+      'set +H\nsleep 180 & printf "VIEWER_QA_OWNED_PIDS=%s,%s\\n" "$$" "$!"; wait\n',
+    ),
   );
   const text = await until(
-    () =>
-      evaluate<string>(
-        "window.__masOwnedChildEvents.filter(event=>event.type==='data').map(event=>event.data).join('')",
-      ),
+    () => evaluate(pageCall(ownedOutput)),
     (value) => /VIEWER_QA_OWNED_PIDS=(\d+),(\d+)/.test(value),
     'the generated terminal child process',
   );
@@ -593,7 +677,7 @@ async function stoppedTerminalChildren() {
     .slice(1)
     .map(Number);
   assert.ok(pids.every((pid) => Number.isSafeInteger(pid) && pid > 1));
-  await evaluate(`window.viewer.terminalClose(${JSON.stringify(id)})`);
+  await evaluate(pageCall((id: string) => window.viewer.terminalClose(id), id));
   await until(
     async () =>
       pids.every((pid) => {
@@ -613,42 +697,48 @@ try {
   await attachRenderer();
   await until(
     () =>
-      evaluate<boolean>(
-        '!!window.viewer && !!document.querySelector(\'[aria-label="Close plane"]\') && document.body.innerText.includes("Allow folder access")',
+      evaluate(
+        pageCall(
+          () =>
+            !!window.viewer &&
+            !!document.querySelector('[aria-label="Close plane"]') &&
+            document.body.innerText.includes('Allow folder access'),
+        ),
       ),
     Boolean,
     'the initial folder permission request',
   );
-  const bootstrap = await evaluate<Bootstrap>('window.viewer.bootstrap()');
+  const started = await evaluate(pageCall(bootstrap));
   console.log('Signed startup readiness: ' + (Date.now() - launchedAt) + ' ms.');
-  assert.equal(bootstrap.home, os.homedir(), 'MAS must preserve the actual home location.');
-  const settings = await evaluate<SettingsSnapshot>('window.viewer.settingsGet()');
+  assert.equal(started.home, os.homedir(), 'MAS must preserve the actual home location.');
+  const settings = await evaluate(pageCall(() => window.viewer.settingsGet()));
   assert.equal(settings.config?.path, path.join(profile, 'config.jsonc'));
-  const internal = await evaluate<FolderListing>(`window.viewer.list(${JSON.stringify(profile)})`);
+  const internal = await evaluate(
+    pageCall((folder: string) => window.viewer.list(folder), profile),
+  );
   assert.ok(internal.entries.some((entry) => entry.name === 'config.jsonc'));
-  for (const expression of [
-    `window.viewer.list(${JSON.stringify(fixture)})`,
-    `window.viewer.stat(${JSON.stringify(externalFile)})`,
-    `window.viewer.resource(${JSON.stringify(externalFile)})`,
-  ]) {
-    const result = await evaluate<{ denied: boolean; code?: string }>(
-      `(async () => { try { await ${expression}; return {denied:false}; } catch(error) { return {denied:true,code:error.code}; } })()`,
-    );
+  const guarded: [GuardedRead, string][] = [
+    ['list', fixture],
+    ['stat', externalFile],
+    ['resource', externalFile],
+  ];
+  for (const [method, file] of guarded) {
+    const result = await evaluate(pageCall(refusal, method, file));
     assert.deepEqual(result, { denied: true, code: 'FILE_ACCESS_REQUIRED' });
   }
   // Exercise both native pasteboard-version queries during a real sandbox
   // revocation, without reading or overwriting the user's clipboard contents.
-  await evaluate('window.viewer.openSettings()');
+  await evaluate(pageCall(() => window.viewer.openSettings()));
   socket?.close();
   await attachRenderer('settings');
   await until(
-    () => evaluate<boolean>('!!document.querySelector(".settings-window") && !!window.viewer'),
+    () => evaluate(pageCall(() => !!document.querySelector('.settings-window') && !!window.viewer)),
     Boolean,
     'the signed Settings revocation boundary',
   );
-  await evaluate(`window.viewer.fileAccessRevoke(${JSON.stringify(fixture)})`);
+  await evaluate(pageCall((folder: string) => window.viewer.fileAccessRevoke(folder), fixture));
   // Closing can destroy this debugger target before it acknowledges evaluation.
-  void evaluate('window.close()').catch(() => undefined);
+  void evaluate(pageCall(() => window.close())).catch(() => undefined);
   await until(
     async () =>
       (
@@ -659,47 +749,54 @@ try {
   );
   socket?.close();
   await attachRenderer();
-  const revoked = await evaluate<{ denied: boolean; code?: string }>(
-    `(async () => { try { await window.viewer.list(${JSON.stringify(fixture)}); return {denied:false}; } catch(error) { return {denied:true,code:error.code}; } })()`,
-  );
+  const revoked = await evaluate(pageCall(refusal, 'list', fixture));
   assert.deepEqual(revoked, { denied: true, code: 'FILE_ACCESS_REQUIRED' });
-  await evaluate('document.querySelector(\'[aria-label="Close plane"]\').click()');
+  await evaluate(click('[aria-label="Close plane"]'));
   await until(
-    () => evaluate<boolean>('document.body.innerText.includes("No open planes")'),
+    () => evaluate(pageCall(pageIncludes, 'No open planes')),
     Boolean,
     'the empty workspace after closing its initial plane',
   );
-  await evaluate(
-    'Array.from(document.querySelectorAll("button")).find(button => button.textContent.trim() === "New folder plane").click()',
-  );
+  await evaluate(pressButton('New folder plane'));
   await until(
-    () => evaluate<boolean>('document.body.innerText.includes("Allow folder access")'),
+    () => evaluate(pageCall(pageIncludes, 'Allow folder access')),
     Boolean,
     'the native-grant recovery action',
   );
   const saved = await until(
-    () => evaluate<Bootstrap>('window.viewer.bootstrap()'),
+    () => evaluate(pageCall(bootstrap)),
     (value) => !!value.state,
     'the initial workspace save',
   );
-  const volumes = await evaluate<Volume[]>('window.viewer.volumesList()');
+  const volumes = await evaluate(pageCall(() => window.viewer.volumesList()));
   assert.ok(
     volumes.some((volume) => volume.path === '/' && volume.total > 0 && volume.available >= 0),
     'Mounted volumes must be visible without a /Volumes picker grant.',
   );
-  await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
-    {path:'settings.terminals.profiles',value:[${JSON.stringify({ id: 'mas-qa', name: 'Disposable MAS shell', ...disposableShell })}]},
-    {path:'settings.terminals.profileID',value:'mas-qa'}
-  ],snapshot.revision))`);
+  await evaluate(
+    patchSettings(
+      {
+        path: 'settings.terminals.profiles',
+        value: [{ id: 'mas-qa', name: 'Disposable MAS shell', ...disposableShell }],
+      },
+      { path: 'settings.terminals.profileID', value: 'mas-qa' },
+    ),
+  );
   const terminalID = 'mas-pty-' + randomUUID();
   await evaluate(
-    `window.__masTerminalEvents=[]; window.viewer.onEvent(event=>{if(event.type==='terminal') window.__masTerminalEvents.push(event.event)}); window.viewer.terminalStart(${JSON.stringify({ id: terminalID, workspaceID: 'mas-qa', rootID: 'mas-qa', profileID: 'mas-qa', cwd: stress, cols: 80, rows: 24 })})`,
+    pageCall(startTerminal, {
+      id: terminalID,
+      workspaceID: 'mas-qa',
+      rootID: 'mas-qa',
+      profileID: 'mas-qa',
+      cwd: stress,
+      cols: 80,
+      rows: 24,
+    }),
   );
-  await evaluate(
-    `window.viewer.terminalWrite(${JSON.stringify(terminalID)},${JSON.stringify("printf 'VIEWER_MAS_PTY_OK\\n'; pwd; exit\n")})`,
-  );
+  await evaluate(pageCall(terminalWrite, terminalID, "printf 'VIEWER_MAS_PTY_OK\\n'; pwd; exit\n"));
   const terminalEvents = await until(
-    () => evaluate<TerminalEvent[]>('window.__masTerminalEvents'),
+    () => evaluate(pageCall(() => (window as unknown as MasWindow).__masTerminalEvents)),
     (events) =>
       events.some((event) => event.type === 'exit') ||
       events.some((event) => event.type === 'error'),
@@ -720,19 +817,19 @@ try {
   assert.ok(terminalEvents.some((event) => event.type === 'exit' && event.code === 0));
   await stoppedTerminalChildren();
   const previewFile = path.join(stress, 'Flat-0.txt');
+  await evaluate(pageCall(resourceCycles, previewFile, 40));
   await evaluate(
-    `(async () => { for(let cycle=0;cycle<40;cycle++) { const resource=await window.viewer.resource(${JSON.stringify(previewFile)}); await window.viewer.read(resource.id); await window.viewer.release(resource.id); } })()`,
+    patchSettings(
+      { path: 'settings.search.roots', value: [stress] },
+      { path: 'settings.search.exclusions', value: [] },
+      { path: 'settings.search.contentRoots', value: [] },
+    ),
   );
-  await evaluate(`window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([
-    {path:'settings.search.roots',value:[${JSON.stringify(stress)}]},
-    {path:'settings.search.exclusions',value:[]},
-    {path:'settings.search.contentRoots',value:[]}
-  ],snapshot.revision))`);
-  await evaluate(`window.viewer.watch(${JSON.stringify(stress)},'mas-watch-pressure')`);
+  await evaluate(
+    pageCall((folder: string) => window.viewer.watch(folder, 'mas-watch-pressure'), stress),
+  );
   await delay(2000);
-  const stateWrite = await evaluate<{ saved: boolean; code?: string }>(
-    `(async () => { try { await window.viewer.save(${JSON.stringify(saved.state)}); return {saved:true}; } catch(error) { return {saved:false,code:error.code}; } })()`,
-  );
+  const stateWrite = await evaluate(pageCall(trySave, saved.state!));
   assert.deepEqual(
     stateWrite,
     { saved: true },
@@ -743,7 +840,7 @@ try {
     .filter((line) => /^f\d/.test(line)).length;
   assert.ok(handles < 192, `Directory watches must stay bounded; found ${handles} open handles.`);
   await until(
-    () => evaluate<IndexStatus>('window.viewer.indexStatus()'),
+    () => evaluate(pageCall(() => window.viewer.indexStatus())),
     (value) =>
       !value.running && value.count >= 2304 && value.roots.every((root) => root.errors === 0),
     'the complete stress index',
@@ -753,8 +850,12 @@ try {
   await mkdir(liveDirectory);
   await writeFile(liveFile, 'Generated live update.');
   const find = (name: string) =>
-    evaluate<IndexedResult>(
-      `window.viewer.indexedQuery({query:${JSON.stringify(name)},root:${JSON.stringify(stress)}})`,
+    evaluate(
+      pageCall(
+        (query: string, root: string) => window.viewer.indexedQuery({ query, root }),
+        name,
+        stress,
+      ),
     );
   await until(
     () => find('Live-watch-added'),
@@ -779,10 +880,8 @@ try {
     (value) => value.entries.length === 0,
     'removal of the deleted subtree',
   );
-  await evaluate(`window.viewer.unwatch('mas-watch-pressure')`);
-  await evaluate(
-    'window.viewer.settingsGet().then(snapshot => window.viewer.settingsPatch([{path:"settings.search.paused",value:true}],snapshot.revision))',
-  );
+  await evaluate(pageCall(() => window.viewer.unwatch('mas-watch-pressure')));
+  await evaluate(patchSettings({ path: 'settings.search.paused', value: true }));
   await nativeMetadataAndUndo();
   await independentMCP();
   await coldTrashUndo();
@@ -800,7 +899,13 @@ try {
     console.error(
       'MAS renderer state:',
       await evaluate(
-        '({title:document.title,text:document.body.innerText.slice(0,2000),nativeAPI:!!window.viewerNative,rendererAPI:!!window.viewer,ownedChildEvents:window.__masOwnedChildEvents})',
+        pageCall(() => ({
+          title: document.title,
+          text: document.body.innerText.slice(0, 2000),
+          nativeAPI: !!window.viewerNative,
+          rendererAPI: !!window.viewer,
+          ownedChildEvents: (window as unknown as MasWindow).__masOwnedChildEvents,
+        })),
       ).catch(() => 'Renderer diagnostics unavailable.'),
     );
   console.error(output.slice(-3500));

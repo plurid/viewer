@@ -9,6 +9,17 @@ import { sourceVersion } from '../src/domain/files/inspection';
 import { entry } from '../src/desktop/files/filesystem';
 import { ownedApp, until } from './owned-app';
 import { officeFixture, workbookSheet } from './office-fixtures';
+import {
+  animationFrames,
+  click,
+  countOf,
+  exists,
+  focus,
+  patchSettings,
+  textOf,
+} from './native/runtime/page';
+import type { PageExpression } from './native/runtime/page-function';
+import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const root = await temporaryRoot('viewer-native-office-');
@@ -47,6 +58,34 @@ const binary =
   process.env.VIEWER_TEST_BINARY ??
   path.resolve('out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
 const evidence: string[] = [];
+
+const documentLook = () => document.documentElement.dataset.look;
+
+/** The Office plane's opacity through its ancestors, with each one's class and transform. */
+function settledChain() {
+  let node = document.querySelector('.office-viewer') || document.querySelector('.preview-host'),
+    opacity = 1;
+  const chain: { className: string; opacity: string; transform: string }[] = [];
+  while (node) {
+    const style = getComputedStyle(node);
+    opacity *= Number(style.opacity);
+    chain.push({ className: node.className, opacity: style.opacity, transform: style.transform });
+    node = node.parentElement;
+  }
+  return { opacity, chain };
+}
+
+/** Whether Preview details is tall enough to read and on top where it starts. */
+function coverageVisible() {
+  const coverage = document.querySelector('.office-coverage');
+  if (!coverage) return false;
+  const rect = coverage.getBoundingClientRect();
+  return (
+    rect.height > 40 &&
+    !!document.elementFromPoint(rect.left + 20, rect.top + 20)?.closest('.office-coverage')
+  );
+}
+
 async function prepare(file: string, name: string, anchor: EvidenceAnchor) {
   const profile = path.join(root, name);
   await mkdir(profile);
@@ -104,42 +143,30 @@ async function checkWord() {
       mobile: false,
     });
     const passage = await until(
-      () =>
-        evaluate<string>(
-          `document.querySelector('.office-document .evidence-passage')?.textContent||''`,
-        ),
+      () => evaluate(textOf('.office-document .evidence-passage')),
       (text) => text.includes('Știință'),
       'Word source passage',
     );
     assert.ok(passage.includes('200 mm'));
+    assert.equal(await evaluate(countOf('.office-document table td')), 4);
+    assert.equal(await evaluate(exists('.office-document iframe, .office-document script')), false);
     assert.equal(
-      await evaluate<number>(`document.querySelectorAll('.office-document table td').length`),
-      4,
-    );
-    assert.equal(
-      await evaluate<boolean>(
-        `!!document.querySelector('.office-document iframe, .office-document script')`,
+      await evaluate(
+        pageCall(() =>
+          document.querySelector('.office-document')!.textContent.includes('Deleted secret'),
+        ),
       ),
       false,
     );
-    assert.equal(
-      await evaluate<boolean>(
-        `document.querySelector('.office-document').textContent.includes('Deleted secret')`,
-      ),
-      false,
+    const facts = await evaluate(
+      pageCall((file: string) => window.viewer.inspect(file, true), word),
     );
-    const facts = await evaluate<{
-      facts: { title: { value: string } };
-      coverage: { content: string };
-    }>(`window.viewer.inspect(${JSON.stringify(word)},true)`);
     assert.equal(facts.facts.title.value, 'Panel fabrication');
     assert.equal(facts.coverage.content, 'partial');
     await capture(connection, 'word-dark');
-    await evaluate(
-      `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-    );
+    await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
     await until(
-      () => evaluate<string>(`document.documentElement.dataset.look`),
+      () => evaluate(pageCall(documentLook)),
       (look) => look === 'light',
       'light Word theme',
     );
@@ -167,12 +194,7 @@ async function capture(
   const settled = await until(
     async () => {
       await delay(120);
-      const value = await connection.evaluate<{
-        opacity: number;
-        chain: { className: string; opacity: string; transform: string }[];
-      }>(
-        `(()=>{let node=document.querySelector('.office-viewer')||document.querySelector('.preview-host'),opacity=1,chain=[];while(node){const s=getComputedStyle(node);opacity*=Number(s.opacity);chain.push({className:node.className,opacity:s.opacity,transform:s.transform});node=node.parentElement}return {opacity,chain}})()`,
-      );
+      const value = await connection.evaluate(pageCall(settledChain));
       const serialized = JSON.stringify(value);
       stable = serialized === previous ? stable + 1 : 0;
       previous = serialized;
@@ -182,9 +204,7 @@ async function capture(
     'Office plane opacity settled for ' + name,
   );
   await writeFile(path.join(output, name + '-styles.json'), JSON.stringify(settled, null, 2));
-  await connection.evaluate(
-    'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))',
-  );
+  await connection.evaluate(animationFrames(2));
   const shot = await connection.command<{ data: string }>('Page.captureScreenshot', {
     format: 'png',
   });
@@ -192,18 +212,22 @@ async function capture(
 }
 /** Chooses in a choice menu (ui/ChoiceMenu.tsx) as a person does: its button, then the value's row. */
 async function choose(
-  evaluate: <T>(expression: string) => Promise<T>,
+  evaluate: <R>(expression: PageExpression<R>) => Promise<Awaited<R>>,
   label: string,
   value: string,
 ) {
-  const row = JSON.stringify(`.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`);
-  await evaluate(`document.querySelector('button[aria-label=${JSON.stringify(label)}]').click()`);
-  await until(
-    () => evaluate<boolean>(`!!document.querySelector(${row})`),
-    Boolean,
-    label + ' menu',
+  const row = `.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`;
+  await evaluate(click(`button[aria-label=${JSON.stringify(label)}]`));
+  await until(() => evaluate(exists(row)), Boolean, label + ' menu');
+  await evaluate(click(row));
+}
+/** Clicks a worksheet's tab; a hidden sheet's tab says so after its name. */
+function sheetTab(name: string): void {
+  const tab = [...document.querySelectorAll<HTMLElement>('.worksheet-tab-list [role=tab]')].find(
+    (tab) => [name, name + ' (hidden)'].includes(tab.textContent.trim()),
   );
-  await evaluate(`document.querySelector(${row}).click()`);
+  if (!tab) throw new Error('No worksheet tab: ' + name);
+  tab.click();
 }
 async function checkBook() {
   const profile = await prepare(book, 'BookProfile', {
@@ -224,61 +248,44 @@ async function checkBook() {
       mobile: false,
     });
     await until(
-      () =>
-        evaluate<string>(`document.querySelector('.data-scroll .evidence-cell')?.textContent||''`),
+      () => evaluate(textOf('.data-scroll .evidence-cell')),
       (text) => text === '20',
       'original worksheet B61',
     );
-    assert.match(
-      await evaluate<string>(`document.querySelector('.workbook-cell-detail').textContent`),
-      /B61.*Saved value: 20.*SUM/,
-    );
+    assert.match(await evaluate(textOf('.workbook-cell-detail')), /B61.*Saved value: 20.*SUM/);
     await capture(connection, 'workbook-dark');
-    await evaluate(
-      `document.querySelector('input[aria-label="Filter current worksheet page"]').focus()`,
-    );
+    await evaluate(focus('input[aria-label="Filter current worksheet page"]'));
     await connection.command('Input.insertText', { text: 'Panel front' });
     await until(
-      () => evaluate<number>(`document.querySelectorAll('.data-scroll [role="rowheader"]').length`),
+      () => evaluate(countOf('.data-scroll [role="rowheader"]')),
       (n) => n === 1,
       'filtered worksheet',
     );
+    assert.equal(await evaluate(textOf('.data-scroll [role="rowheader"]')), '61');
+    await evaluate(click('button[aria-label="C61: No saved value"]'));
+    assert.match(await evaluate(textOf('.workbook-cell-detail')), /C61.*No saved value.*HYPERLINK/);
     assert.equal(
-      await evaluate<string>(
-        `document.querySelector('.data-scroll [role="rowheader"]').textContent`,
-      ),
-      '61',
-    );
-    await evaluate(`document.querySelector('button[aria-label="C61: No saved value"]').click()`);
-    assert.match(
-      await evaluate<string>(`document.querySelector('.workbook-cell-detail').textContent`),
-      /C61.*No saved value.*HYPERLINK/,
-    );
-    assert.equal(
-      await evaluate<boolean>(
-        `performance.getEntriesByType('resource').some(e=>e.name.startsWith('https://example.invalid'))`,
+      await evaluate(
+        pageCall(() =>
+          performance
+            .getEntriesByType('resource')
+            .some((entry) => entry.name.startsWith('https://example.invalid')),
+        ),
       ),
       false,
     );
     evidence.push(
       'Packaged XLSX preview selects evidence sheet B61, marks saved formula value, filters without renumbering source row 61, and shows missing cached values without executing formulas.',
     );
-    await evaluate(
-      `Array.from(document.querySelectorAll('.preview-toolbar button')).find(b=>b.textContent==='Preview details').click()`,
-    );
+    await choose(evaluate, 'Preview options', 'details');
     await until(
-      () =>
-        evaluate<boolean>(
-          `(()=>{const e=document.querySelector('.office-coverage');if(!e)return false;const r=e.getBoundingClientRect();return r.height>40&&!!document.elementFromPoint(r.left+20,r.top+20)?.closest('.office-coverage')})()`,
-        ),
+      () => evaluate(pageCall(coverageVisible)),
       Boolean,
       'coverage is visibly rendered outside the header',
     );
-    await evaluate(
-      `window.viewer.settingsGet().then(s=>window.viewer.settingsPatch([{path:'settings.appearance',value:'light'}],s.revision))`,
-    );
+    await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
     await until(
-      () => evaluate<string>(`document.documentElement.dataset.look`),
+      () => evaluate(pageCall(documentLook)),
       (look) => look === 'light',
       'light workbook theme',
     );
@@ -290,24 +297,22 @@ async function checkBook() {
       mobile: false,
     });
     await capture(connection, 'workbook-compact-light');
-    await evaluate(
-      `Array.from(document.querySelectorAll('.preview-toolbar button')).find(b=>b.textContent==='Preview details').click()`,
-    );
-    await choose(evaluate, 'Worksheet', 'Hidden');
+    await choose(evaluate, 'Preview options', 'details');
+    await evaluate(pageCall(sheetTab, 'Hidden'));
     await until(
-      () => evaluate<string>(`document.querySelector('.data-scroll')?.textContent||''`),
+      () => evaluate(textOf('.data-scroll')),
       (text) => text.includes('Hidden source'),
       'hidden worksheet selection',
     );
     await capture(connection, 'workbook-hidden-compact-light');
-    await choose(evaluate, 'Worksheet', 'Empty');
+    await evaluate(pageCall(sheetTab, 'Empty'));
     await until(
-      () => evaluate<string>(`document.querySelector('.data-viewer')?.textContent||''`),
+      () => evaluate(textOf('.data-viewer')),
       (text) => text.includes('No stored rows in this sheet.'),
       'empty worksheet message',
     );
     await capture(connection, 'workbook-empty-compact-light');
-    await choose(evaluate, 'Worksheet', 'Hidden');
+    await evaluate(pageCall(sheetTab, 'Hidden'));
     await viewer.close(connection);
     connection = undefined;
     const saved = JSON.parse(
@@ -317,10 +322,7 @@ async function checkBook() {
     viewer = await ownedApp(binary, profile);
     connection = await viewer.connect();
     await until(
-      () =>
-        connection!.evaluate<string>(
-          `document.querySelector('.data-scroll .evidence-cell')?.textContent||''`,
-        ),
+      () => connection!.evaluate(textOf('.data-scroll .evidence-cell')),
       (text) => text === '20',
       'cold original worksheet evidence',
     );
@@ -346,14 +348,17 @@ async function checkError() {
       mobile: false,
     });
     await until(
-      () =>
-        connection!.evaluate<string>(`document.querySelector('.preview-host')?.textContent||''`),
+      () => connection!.evaluate(textOf('.preview-host')),
       (text) => text.includes('Office preview unavailable'),
       'unreadable Office recovery',
     );
     assert.equal(
-      await connection.evaluate<boolean>(
-        `Array.from(document.querySelectorAll('.preview-host button')).some(b=>b.textContent==='Open in Default App')`,
+      await connection.evaluate(
+        pageCall(() =>
+          [...document.querySelectorAll('.preview-host button')].some(
+            (button) => button.textContent === 'Open in Default App',
+          ),
+        ),
       ),
       true,
     );
