@@ -2,7 +2,7 @@
 
 **A file explorer that opens everything.** Look inside more than 300 kinds of file without leaving
 the folder, act on them with the right tool, and keep folders, files, terminals and browsers side by
-side as planes in one workspace.
+side as planes in one 3D workspace.
 
 ![A folder and its PDF open side by side as linked planes in Viewer](docs/media/hero.png)
 
@@ -47,8 +47,10 @@ it needs.
 ## Work in planes
 
 Every open view is a **plane**: a folder, a file, a note, a terminal or a browser. A file opened
-from a folder stays linked to it. Dock one plane to focus, tile several, or press **⌘0** to see them
-all. Each workspace keeps its own planes, and a project file brings a whole arrangement back.
+from a folder stays linked to it. The planes stand in a 3D space: **rotate**, **scale** and
+**translate** it from the toolbar at the bottom, dock one plane to focus, tile several, or press
+**⌘0** to see them all. Each workspace keeps its own planes, and a project file brings a whole
+arrangement back.
 
 ![A branch task with its folder, note, terminal and Git changes as planes](docs/media/develop.png)
 

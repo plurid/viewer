@@ -1,6 +1,7 @@
 import type { AgentCapability } from '../src/domain/agents/clients';
 import type { AgentToolName } from '../src/desktop/agents/tool-catalog';
 import { describe, expect, it } from 'vitest';
+import { maxQueryLength } from '../src/domain/search/query';
 import { agentTools } from '../src/desktop/agents/agent-tools';
 import { serviceToolNames, serviceTools } from '../src/desktop/agents/service-catalog';
 import {
@@ -373,7 +374,7 @@ describe('agent tool catalog', () => {
 
   it('advertises the search query bound the broker enforces', () => {
     expect(advertised('search_files')).toMatchObject({
-      properties: { query: { type: 'string', maxLength: 300 } },
+      properties: { query: { type: 'string', maxLength: maxQueryLength } },
       required: ['query', 'root'],
       additionalProperties: false,
     });

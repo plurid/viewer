@@ -1,7 +1,8 @@
 # Viewer documentation
 
 Viewer is a file explorer that opens everything: it shows a file beside its folder, gives each kind
-of file the tools it needs, and keeps folders, files, terminals and browsers side by side as planes.
+of file the tools it needs, and keeps folders, files, terminals and browsers side by side as planes
+in one 3D workspace.
 
 ## Start here
 
