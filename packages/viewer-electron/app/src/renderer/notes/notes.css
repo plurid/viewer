@@ -7,8 +7,8 @@
 .note-title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: var(--gap-content);
+  padding: 10px var(--gap-panel);
   color: var(--muted);
   border-bottom: 1px solid var(--line);
 }
@@ -18,7 +18,7 @@
 }
 .note-reading {
   overflow: auto;
-  padding: 16px 24px;
+  padding: var(--gap-panel) 24px;
   font-size: var(--note-font-size, 16px);
   flex: 1;
 }
@@ -29,13 +29,13 @@
 .note-checklist {
   list-style: none;
   padding: 0;
-  margin: 0 0 16px;
+  margin: 0 0 var(--gap-panel);
 }
 .note-checklist li {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-block: 6px;
+  gap: var(--gap-inline);
+  padding-block: var(--gap-small);
 }
 .note-checklist li input[type='text'],
 .note-checklist li input:not([type]) {
@@ -49,7 +49,7 @@
 }
 .note-add {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .note-add input {
   flex: 1;
@@ -60,13 +60,13 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 .notes-library-body {
-  padding: 18px;
+  padding: var(--gap-dialog);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap-content);
 }
 .notes-library-body > p {
   margin: 0;
@@ -74,14 +74,14 @@
 .notes-library-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .notes-library-row > button:first-child {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--gap-tight);
   align-items: flex-start;
   text-align: left;
 }

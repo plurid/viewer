@@ -11,7 +11,11 @@ import {
   type ReactNode,
 } from 'react';
 import { WorkspaceContext } from '../workspace/context';
-import { effectiveWindowLook, effectiveWindowSettings } from '../state/effective-ui';
+import {
+  effectiveWindowLook,
+  effectiveWindowSettings,
+  effectiveWindowUI,
+} from '../state/effective-ui';
 import type { FileEntry, Resource } from '../../domain/contracts';
 import { Empty, ErrorBoundary, IconButton, Loading } from '../ui/primitives';
 import {
@@ -24,7 +28,13 @@ import {
 } from '../state/store';
 import { useCommands } from '../commands/context';
 import { usePreviewControlsSlot } from './controls';
-import type { AttachmentSave, PreviewCommand, PreviewContext, PreviewModule } from './contracts';
+import type {
+  AttachmentSave,
+  PreviewCommand,
+  PreviewContext,
+  PreviewModule,
+  PreviewToolbarSet,
+} from './contracts';
 import { previewState } from './state';
 import { choosePreview } from './registry';
 import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
@@ -71,7 +81,7 @@ const hexModule: PreviewModule = {
   detect: () => 0,
   load: () => import('./modules/HexPreview'),
 };
-/** Show as hex, offered where the footer has room for it. */
+/** Show as hex, which a footer of the caller's own may offer, as Quick Preview's does. */
 export interface HexToggle {
   shown: boolean;
   toggle(): void;
@@ -225,6 +235,12 @@ export const PreviewHost = memo(function PreviewHost({
   );
   const look = useViewer(effectiveWindowLook);
   const pages = useDarkPages();
+  // a workspace plane's header shows a format's main tools, unless the person wants every one
+  const formatTools = useViewer(
+    (state) => effectiveWindowUI(state).space.headerControls.formatTools,
+  );
+  const toolbar: PreviewToolbarSet | undefined =
+    paneID && !supplied ? (formatTools ? 'all' : 'essential') : undefined;
   useEffect(
     () =>
       window.viewer.onEvent((event) => {
@@ -298,6 +314,8 @@ export const PreviewHost = memo(function PreviewHost({
         path: resource.entry.path,
         resourceID: resource.id,
         selection: [],
+        // what this plane's file tools act on: the plane's own file, never borrowed elsewhere
+        subject: resource.entry,
         jobs: getState().jobs,
         clipboard: getState().clipboard,
       }),
@@ -417,6 +435,7 @@ export const PreviewHost = memo(function PreviewHost({
               services={scopedServices}
               look={look}
               pages={pages}
+              toolbar={toolbar}
               commands={commands}
               state={viewState}
               limits={limits}
@@ -458,17 +477,6 @@ export const PreviewHost = memo(function PreviewHost({
               <span className="separator">·</span> <PreviewSize entry={current ?? resource.entry} />
             </span>
           </div>
-          {hex && (
-            <button
-              type="button"
-              className="preview-hex-toggle"
-              title={hex.shown ? 'Show preview' : 'Show as hex'}
-              aria-pressed={hex.shown}
-              onClick={hex.toggle}
-            >
-              Hex
-            </button>
-          )}
           {!supplied && (
             <IconButton
               icon="external"

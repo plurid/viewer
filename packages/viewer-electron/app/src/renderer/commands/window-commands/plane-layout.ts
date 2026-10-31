@@ -24,7 +24,7 @@ export function planeLayoutCommands({ actions, paneScope }: WindowScopes): Comma
       id: 'plane-fill',
       label: 'Fill workspace',
       group: 'Layout',
-      icon: 'frame',
+      icon: 'resize',
       aliases: ['maximize plane', 'full size', 'full width and height'],
       when: paneScope,
       run: (context) =>

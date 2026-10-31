@@ -1,6 +1,6 @@
 import type { TrashItem } from '../../../domain/files/trash';
 import { formatBytes } from '../../../domain/files/entries';
-import { Dialog } from '../primitives';
+import { Dialog, PathField } from '../primitives';
 import { originUnavailable, trashDate } from './items';
 
 /** Get Info for a Trash item, with its recorded dates and original location. */
@@ -50,9 +50,17 @@ export function TrashInformation({
           )}
         </dd>
         <dt>Original location</dt>
-        <dd className="trash-original-path">{item.originalPath || originUnavailable}</dd>
+        <dd>
+          {item.originalPath ? (
+            <PathField className="trash-original-path" path={item.originalPath} />
+          ) : (
+            originUnavailable
+          )}
+        </dd>
         <dt>Trash location</dt>
-        <dd>{item.location}</dd>
+        <dd>
+          <PathField path={item.location} />
+        </dd>
       </dl>
       <footer>
         {item.originalPath && (

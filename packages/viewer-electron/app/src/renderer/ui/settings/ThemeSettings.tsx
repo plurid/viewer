@@ -14,6 +14,8 @@ import type { SettingsEditor } from './editor';
 import type { SettingsPatch, SettingsSnapshot } from '../../../domain/services';
 import type { Look } from '../../../domain/contracts';
 import { errorMessage } from '../../../domain/errors';
+import { CopyButton } from '../primitives';
+import { Disclosure } from '../Disclosure';
 
 const words: Record<string, string> = {
   space: 'Space',
@@ -204,19 +206,18 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
       {themes.map((theme) => {
         const base = builtInTheme(theme.look);
         return (
-          <details
+          <Disclosure
+            variant="row"
             key={theme.id}
             className="theme-editor"
+            summary={theme.name}
+            meta={theme.look === 'dark' ? 'Dark' : 'Light'}
             open={open === theme.id}
-            onToggle={(event) => {
-              if ((event.currentTarget as HTMLDetailsElement).open) setOpen(theme.id);
+            onOpenChange={(shown) => {
+              if (shown) setOpen(theme.id);
               else if (open === theme.id) setOpen(null);
             }}
           >
-            <summary>
-              {theme.name}
-              <small>{theme.look === 'dark' ? 'Dark' : 'Light'}</small>
-            </summary>
             <label className="settings-row">
               <span>Name</span>
               <Field
@@ -289,13 +290,12 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
             ))}
             <div className="settings-actions">
               <button onClick={() => duplicate(theme)}>Duplicate</button>
-              <button
-                onClick={() =>
-                  void navigator.clipboard.writeText(JSON.stringify(theme, null, 2)).catch(() => {})
-                }
-              >
-                Copy as JSON
-              </button>
+              <CopyButton
+                appearance="text"
+                label="Copy as JSON"
+                copy={{ text: JSON.stringify(theme, null, 2) }}
+                onError={(failure) => error(errorMessage(failure))}
+              />
               <button
                 onClick={() => {
                   save((current) => {
@@ -315,7 +315,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
                 Remove
               </button>
             </div>
-          </details>
+          </Disclosure>
         );
       })}
     </>

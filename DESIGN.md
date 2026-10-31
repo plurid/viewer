@@ -269,6 +269,30 @@ components:
     typography: '{typography.body-compact}'
     padding: '0 20px'
     height: '42px'
+  button-secondary:
+    backgroundColor: '{colors.field}'
+    textColor: '{colors.ink}'
+    rounded: '{rounded.control}'
+    padding: '6px 10px'
+  button-danger:
+    textColor: '{colors.danger}'
+    rounded: '{rounded.control}'
+    padding: '6px 10px'
+  setting-row:
+    typography: '{typography.body}'
+    height: '40px'
+  setting-row-compact:
+    height: '32px'
+  panel:
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.ink}'
+    rounded: '{rounded.menu}'
+    padding: '12px'
+  popover:
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.ink}'
+    rounded: '{rounded.menu}'
+    padding: '12px'
 ---
 
 # Design System: Viewer
@@ -324,8 +348,19 @@ document flow for warnings and recovery; they must not cover toolbars, lists or 
 Modeless Settings keeps stable dimensions across sections and flushes changes on close.
 
 Respect the system-following and always-visible scrollbar choices. Reserve stable scrollbar space in
-long lists and keep overflowing plane tools horizontally scrollable, with compact scrollbars that
-preserve room for the surrounding header controls.
+long lists.
+
+**The Essential Header Rule.** A plane header starts Essential: navigation, View, search, Frame,
+Dock, pinned tools, **…** and ×, and a format's main tools only, such as a PDF's pages, zoom and
+search. Layout, What can I do here? and a format's rarer tools are rows of **…**. Full shows every
+control, one choice away in Settings. A hidden button never hides its command.
+
+**The Header Spill Rule.** Measure a narrow plane header, never hide its items by breakpoint. Items
+give way strictly in rank order into the plane's **…** menu, where they lead as their commands; a
+read-only detail such as a size just gives way. The title keeps 96 px; Frame, Dock, **…** and ×
+stay. A format control with no command never gives way: the format's toolbar scrolls only as the
+last resort, with a fading edge and a compact scrollbar. A format control the person also pinned
+shows once, as the pin.
 
 ## Preview controls
 
@@ -409,6 +444,17 @@ Keep the shared token system and authored icon family. Use real file content for
 dedicated public-safe sample work for documentation. Dense tables need hierarchy and alignment, not
 decorative cards or extra labels.
 
+**The Token Scale Rule.** Size app type with the five type steps only: label (never under 11 px),
+compact, body, section and title, each following the interface density. Space with the six gap
+steps. A panel, a popover or a floating bar takes the panel shadow; dialogs, the palette and menus
+keep the overlay shadow. Rendered documents keep their own sizes. `tests/design-tokens.test.ts`
+checks the stylesheet's scales against this file's tokens and holds each stylesheet's off-scale
+spacing to a budget that only goes down.
+
+**The One Meaning Rule.** An icon means one thing everywhere. Frame frames a plane, Fit fits its
+content and Layout arranges planes, each with its own glyph; zoom, new folder, edit, stop and pin
+have theirs. Two controls in one header never share an icon.
+
 Retain the existing product choices: no persistent wordmark/tagline in the app, plane tab bar,
 global arrangement toolbar, theme button, shortcut footer or operations rail. Settings and
 contextual commands own those controls. Keep foreground profiling separate from routine hidden
@@ -421,23 +467,79 @@ details; opening Settings must not connect to a provider.
 
 ## Components
 
+### Shared controls
+
+Build from the shared controls before styling a one-off. Each keeps the class its caller gives it,
+so a feature still sets its own spacing.
+
+**The One Disclosure Rule.** Every disclosure is native and has the one summary look: a 12 px
+chevron that turns as it opens and no browser marker; a summary with its own icon keeps it. Use the
+row form for a list of expandable items, such as recipes, with a count or state at the far end and
+the settings row's height; the compact form for a secondary part of a form or dialog, where only its
+words take the click; the inline form for a few words inside a status line, such as search coverage.
+Disclosures that compete for room in a dialog form a group: opening one closes the others, and
+Escape closes the open one before the dialog.
+
+**The Toggle Text Rule.** A click on a summary, a checkbox or radio label, a tab, a menu item or an
+option acts; it never starts a text selection. Paths, values and messages stay selectable.
+
+**The Whole Path Rule.** Show a read-only path as a path field: one click selects all of it, and the
+copy button beside it copies it as text, then says Copied for a moment, announced politely, or Not
+copied with the reason. A path wraps under its name, or keeps to one line where room is short and
+shows all of it on hover. Paths copy through the desktop pasteboard, other text through the
+clipboard.
+
+**The Button Kinds Rule.** A context has at most one primary action, in the accent fill. A visible
+text button is secondary: an outline on the field fill. A bare button is the quiet ghost, filled
+only under the pointer, as icon buttons are. An action that removes or discards uses the danger ink.
+Never re-add a border to one button to make it look secondary.
+
+**The Shared Edge Rule.** A setting-like row in a dialog or panel is the Settings row: a sentence
+label, an optional muted detail line, and the control at the shared 180 px edge. Below 540 px of its
+container the control goes under the label.
+
+**The Held Panel Rule.** A panel beside the work has a title bar, a body that scrolls and an
+optional footer, with sections headed inside the body. It never places itself and never takes a
+fixed position: the space's overlay grid or a plane holds it and sets its width, so the same panel
+works inside a transformed or pinned plane, and its rows follow the panel's width, not the window's.
+Panels in the overlay grid share it and never cover each other. A collapsible panel collapses from
+its title to the title bar and a short status.
+
+**The Anchored Layer Rule.** A popover or menu opens from its button or the pointer, placed from the
+anchor's box on screen, so it lines up with a control in a transformed plane. It stays 8 px inside
+the window, opens above the anchor when there is no room below, and closes on an outside press or
+Escape, returning focus to what opened it.
+
 ### Contextual discovery and pinned tools
 
-What can I do here? uses the shared dialog and ordinary action rows. Show the context name first;
-keep the full captured path selectable in a secondary disclosure. Keep search and Done stationary
-around the scrolling action list. With optional sections closed, the minimum window (760 × 540px)
-shows two complete action rows even with eight saved pins.
+What can I do here? uses the shared dialog and ordinary action rows. Show the context name first,
+then the captured path on one line: one click selects all of it, its copy button copies it and
+hovering shows it whole. Keep search and Done stationary around the scrolling action list. With
+optional sections closed, the minimum window (760 × 540px) shows two complete action rows even with
+eight saved pins.
 
 **The Discovery Space Rule.** Pinned tools and keyboard help start closed. Opening either closes the
 other; each expanded section has bounded scrolling while search and the footer stay reachable.
 Escape closes an open disclosure before dismissing the dialog.
 
-Keep the pin count in the collapsed summary. At 8/8, explain that a tool must be unpinned before
+Keep the pin count in the collapsed summary. At 8 of 8, explain that a tool must be unpinned before
 another can be added. Empty results offer Clear search or Show all actions when applicable.
 
 **The Captured Action Rule.** Discovery, pinned tools, menus and shortcuts retain the captured
 target. Show why an action is unavailable, and preserve missing saved action IDs for repair or
 explicit unpinning without substituting another action.
+
+### First run
+
+A first run is quiet: the space toolbar and viewcube start off, the grid on, and the minimap appears
+once the space holds three planes.
+
+**The First-Run Tips Rule.** A new profile shows one card above its first folder, in the folder's
+own flow before any insight cards: Space previews the selected file, the palette's keys find any
+action, and a plane's title drags it. The card names the keys the person has, leaves out dragging
+while titles do not move planes, and drops each step once it is used. With Space and the palette
+both used, or the card dismissed, it retires for good. A profile made before it never shows it. It
+never floats over content and never becomes a shortcut footer.
 
 ### Backup review
 

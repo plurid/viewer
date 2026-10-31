@@ -5,6 +5,7 @@ import { sourceVersion } from '../../../domain/files/inspection';
 import { formatBytes } from '../../../domain/files/entries';
 import { useWorkspace } from '../../workspace/context';
 import { Dialog, Loading } from '../primitives';
+import { Disclosure } from '../Disclosure';
 import { prepareOperationReview } from '../operations/OperationReview';
 import { errorMessage } from '../../../domain/errors';
 import { useWindowEvent } from '../../app/window-events';
@@ -173,14 +174,16 @@ export function ComparisonControls() {
               {selected.size} selected
             </p>
             {result.errors.length > 0 && (
-              <details>
-                <summary>{result.errors.length} unreadable or changed locations</summary>
+              <Disclosure
+                variant="inline"
+                summary={`${result.errors.length} unreadable or changed ${result.errors.length === 1 ? 'location' : 'locations'}`}
+              >
                 {result.errors.slice(0, 100).map((issue, index) => (
                   <p className="error" key={index}>
                     {issue.path}: {issue.message}
                   </p>
                 ))}
-              </details>
+              </Disclosure>
             )}
             <div
               className="comparison-table"

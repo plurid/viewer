@@ -1,6 +1,37 @@
 import { tileLayouts, tileLayoutLabels } from '../workspaces/tiling';
 import { listColumns } from './list-columns';
 import { newFileExtension, textLanguages } from '../editing/languages';
+import type { HeaderControl } from './header';
+import { headerControlKeys, headerControlPath } from './header';
+
+/** The Plane toolbar's preset row: no setting of its own, every control at once (header.ts). */
+export const planeToolbar = {
+  section: 'Plane toolbar',
+  label: 'Buttons',
+  detail: 'Essential keeps the everyday buttons; the rest are in the plane’s “…” menu.',
+  /** Shown while the buttons match no preset; not a choice. */
+  custom: 'Custom',
+} as const;
+/** Each plane toolbar control's row, in header order: its label, and what it shows where needed. */
+const headerControlLabels: Record<HeaderControl, readonly [string, string?]> = {
+  parent: ['Back to parent button'],
+  sidebar: ['Navigation button'],
+  back: ['Back button'],
+  forward: ['Forward button'],
+  view: ['View menu'],
+  search: ['Folder search'],
+  layout: ['Layout button'],
+  frame: ['Frame plane button'],
+  dock: ['Dock plane button'],
+  pins: ['Pinned tools', 'Pin tools for each kind of plane in “What can I do here?”.'],
+  discover: ['“What can I do here?” button'],
+  formatTools: [
+    'Every format tool',
+    'Off, the header shows a format’s main tools, such as a PDF’s page and zoom controls; the rest are in “…”.',
+  ],
+  actions: ['Actions menu'],
+  close: ['Close plane button'],
+};
 
 export interface SettingDefinition {
   path: string;
@@ -611,6 +642,7 @@ export const settingCatalog: SettingDefinition[] = [
       // plurid's toolbar along the space's bottom: rotate, scale, translate
       ['toolbar', 'Show space toolbar'],
       ['minimap', 'Show minimap'],
+      ['minimapAuto', 'Minimap only with 3 or more planes'],
       ['viewcube', 'Show viewcube'],
       ['planeHeaders', 'Show plane headers'],
       ['dragging', 'Drag planes by their title'],
@@ -623,26 +655,17 @@ export const settingCatalog: SettingDefinition[] = [
     label,
     kind: 'boolean' as const,
   })),
-  ...(
-    [
-      ['parent', 'Back to parent button'],
-      ['sidebar', 'Navigation button'],
-      ['back', 'Back button'],
-      ['forward', 'Forward button'],
-      ['view', 'View menu'],
-      ['search', 'Folder search'],
-      ['frame', 'Frame plane button'],
-      ['dock', 'Dock plane button'],
-      ['actions', 'Actions menu'],
-      ['close', 'Close plane button'],
-    ] as const
-  ).map(([key, label]) => ({
-    path: 'ui.space.headerControls.' + key,
-    category: 'Space',
-    section: 'Plane toolbar',
-    label,
-    kind: 'boolean' as const,
-  })),
+  ...headerControlKeys.map((key) => {
+    const [label, detail] = headerControlLabels[key];
+    return {
+      path: headerControlPath(key),
+      category: 'Space',
+      section: planeToolbar.section,
+      label,
+      ...(detail ? { detail } : {}),
+      kind: 'boolean' as const,
+    };
+  }),
   {
     path: 'settings.search.paused',
     category: 'Search',

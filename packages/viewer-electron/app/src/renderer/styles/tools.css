@@ -35,7 +35,7 @@
 }
 .terminal-find-count {
   min-width: 64px;
-  font-size: 12px;
+  font-size: var(--text-compact);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -64,24 +64,14 @@
   background: var(--raised);
 }
 
+/* Command progress: a panel (ui/Panel.tsx) the window holds at its bottom right. */
 .execution-panel {
   position: absolute;
   right: 16px;
   bottom: 16px;
-  max-width: min(560px, calc(100% - 32px));
+  width: min(480px, calc(100% - 32px));
   max-height: 55%;
-  overflow: auto;
   z-index: 40;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  padding: 8px 12px;
-}
-.execution-panel > div,
-.execution-panel section > div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 .execution-panel pre {
   max-height: 200px;
@@ -89,12 +79,9 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font:
-    12px/1.5 Menlo,
+    var(--text-compact)/1.5 Menlo,
     monospace;
   user-select: text;
-}
-.execution-panel section {
-  padding-top: 12px;
 }
 
 .settings-page {
@@ -162,10 +149,10 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font:
-    12px/1.5 Menlo,
+    var(--text-compact)/1.5 Menlo,
     monospace;
   padding: 16px;
-  background: var(--bg);
+  background: var(--field);
   user-select: text;
 }
 .agent-proposal-files {
@@ -186,9 +173,9 @@
   line-height: 26px;
   padding-inline: 16px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
   font-weight: 600;
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .command-selection-range {
@@ -235,7 +222,7 @@
   flex: none;
   padding: 6px 12px;
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--text-compact);
   color: var(--muted);
 }
 .search-coverage summary {
@@ -367,7 +354,7 @@
   gap: 4px;
   max-width: 440px;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .checkpoint-choice > span {
   overflow-wrap: anywhere;
@@ -438,7 +425,7 @@
 }
 .comparison-heading {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .comparison-name {
   overflow-wrap: anywhere;
@@ -551,7 +538,7 @@
 .review-checkpoint small {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
   line-height: 1.5;
   margin-top: 4px;
 }
@@ -569,14 +556,7 @@
 .project-file-notice {
   flex-shrink: 0;
   margin: 12px 24px;
-  display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  padding: 12px 16px;
 }
 .project-file-notice span {
   min-width: 0;
@@ -601,18 +581,11 @@
   padding-top: 14px;
 }
 .workflow-definition > summary {
-  cursor: pointer;
-  display: list-item;
-}
-.workflow-definition > summary strong {
-  margin-left: 6px;
-}
-.workflow-definition > summary .muted {
-  margin-left: 16px;
+  padding-block: 8px;
 }
 .workflow-body h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-section);
 }
 .workflow-body .settings-actions {
   align-items: end;
@@ -791,7 +764,7 @@
 .relationship-map svg {
   display: block;
   font:
-    13px -apple-system,
+    var(--text-body) -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
@@ -846,6 +819,10 @@
 }
 .watch-rule-row p {
   overflow-wrap: anywhere;
+}
+.watch-rules .path-field {
+  margin-top: 6px;
+  font-size: var(--text-compact);
 }
 .watch-rules details {
   margin-top: 16px;

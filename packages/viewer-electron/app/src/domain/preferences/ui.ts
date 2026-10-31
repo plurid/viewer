@@ -1,5 +1,14 @@
 import type { PaneSidebar, SidebarSection, UIPreferences, ListColumn } from '../contracts';
 import { columnWidth, listColumns } from './list-columns';
+import type { HeaderControls } from './header';
+import { headerControlKeys, headerPresets } from './header';
+import { normalizeFirstRunHint } from './first-run';
+
+/**
+ * The UI preference format. 3 moved plane navigation into each plane; 4 started every profile's
+ * plane header from Essential (header.ts), once.
+ */
+export const uiPreferencesVersion = 4;
 
 export const sidebarSections: SidebarSection[] = ['locations', 'favorites', 'recents'];
 const object = (value: unknown): Record<string, unknown> =>
@@ -31,7 +40,8 @@ const boolean = (value: unknown, fallback: boolean) =>
   typeof value === 'boolean' ? value : fallback;
 
 export function needsNavigationMigration(value: unknown): boolean {
-  return object(object(value).ui).version !== 3;
+  const version = object(object(value).ui).version;
+  return version !== 3 && version !== uiPreferencesVersion;
 }
 
 /** Run before UI normalization, so an old preference version cannot hide the migration. */
@@ -67,6 +77,31 @@ export function normalizePaneSidebar(value: unknown): PaneSidebar | undefined {
   return { visible: boolean(sidebar.visible, true), width: width(sidebar.width) };
 }
 
+/**
+ * A configuration's `ui` from before version 4, upgraded: its plane header becomes Essential, the
+ * rest as it was. Anything else is left for validation. Run before the schema, on config.jsonc.
+ */
+export function upgradeUIPreferences(value: unknown): unknown {
+  const ui = object(value);
+  if (ui !== value || ui.version !== 3) return value;
+  return {
+    ...ui,
+    version: uiPreferencesVersion,
+    space: { ...object(ui.space), headerControls: { ...headerPresets.essential } },
+  };
+}
+/** Saved controls of this format, each missing or invalid one Essential's; any earlier, Essential. */
+function headerControls(ui: Record<string, unknown>): HeaderControls {
+  const saved = object(object(ui.space).headerControls);
+  const current = ui.version === uiPreferencesVersion;
+  return Object.fromEntries(
+    headerControlKeys.map((key) => [
+      key,
+      current ? boolean(saved[key], headerPresets.essential[key]) : headerPresets.essential[key],
+    ]),
+  ) as HeaderControls;
+}
+
 /** A space colour as `#rrggbb`, lowercased; anything else is no colour. */
 export const spaceColor = (value: unknown): string | undefined =>
   typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : undefined;
@@ -75,13 +110,17 @@ export function normalizePreferences(value?: unknown): UIPreferences {
   const ui = object(value);
   const sidebar = object(ui.sidebar);
   const space = object(ui.space);
-  const controls = object(space.headerControls);
+  // a first run is quiet: no space toolbar or viewcube, and a minimap once there are planes to find
+  const fresh = ui !== value;
+  // the spatial aids were restored once, for profiles made before they could be turned off
+  const aidsChosen = ui.version === 2 || ui.version === 3 || ui.version === uiPreferencesVersion;
   const list = object(ui.list);
   const visible = object(list.visible);
   const widths = object(list.widths);
   const order = strings(sidebar.order, 3, 20).filter((item): item is SidebarSection =>
     sidebarSections.includes(item as SidebarSection),
   );
+  const firstRunHint = normalizeFirstRunHint(ui.firstRunHint);
   const labels = Object.fromEntries(
     Object.entries(object(sidebar.labels))
       .filter(
@@ -94,7 +133,7 @@ export function normalizePreferences(value?: unknown): UIPreferences {
       .slice(0, 200),
   );
   return {
-    version: 3,
+    version: uiPreferencesVersion,
     sidebar: {
       visible: boolean(sidebar.visible, false),
       inNewPlanes: boolean(sidebar.inNewPlanes, true),
@@ -109,10 +148,10 @@ export function normalizePreferences(value?: unknown): UIPreferences {
     },
     titlebar: { visible: boolean(object(ui.titlebar).visible, true) },
     space: {
-      // Restore the spatial aids once for profiles made before the controls were exposed.
-      toolbar: ui.version === 2 || ui.version === 3 ? boolean(space.toolbar, true) : true,
-      minimap: ui.version === 2 || ui.version === 3 ? boolean(space.minimap, true) : true,
-      viewcube: ui.version === 2 || ui.version === 3 ? boolean(space.viewcube, true) : true,
+      toolbar: fresh ? false : aidsChosen ? boolean(space.toolbar, true) : true,
+      minimap: aidsChosen ? boolean(space.minimap, true) : true,
+      minimapAuto: boolean(space.minimapAuto, fresh),
+      viewcube: fresh ? false : aidsChosen ? boolean(space.viewcube, true) : true,
       origin: boolean(space.origin, false),
       planeHeaders: boolean(space.planeHeaders, true),
       dragging: boolean(space.dragging, true),
@@ -129,18 +168,7 @@ export function normalizePreferences(value?: unknown): UIPreferences {
           : 60,
       grid: boolean(space.grid, true),
       color: spaceColor(space.color) ?? '',
-      headerControls: {
-        parent: boolean(controls.parent, true),
-        sidebar: boolean(controls.sidebar, true),
-        back: boolean(controls.back, true),
-        forward: boolean(controls.forward, true),
-        view: boolean(controls.view, true),
-        search: boolean(controls.search, true),
-        frame: boolean(controls.frame, true),
-        dock: boolean(controls.dock, true),
-        actions: boolean(controls.actions, true),
-        close: boolean(controls.close, true),
-      },
+      headerControls: headerControls(ui),
     },
     list: {
       visible: Object.fromEntries(
@@ -190,6 +218,8 @@ export function normalizePreferences(value?: unknown): UIPreferences {
         .filter(([, ids]) => ids.length)
         .slice(-200),
     ),
+    // never started here: only a new configuration starts it (desktop preferences/settings.ts)
+    ...(firstRunHint ? { firstRunHint } : {}),
   };
 }
 

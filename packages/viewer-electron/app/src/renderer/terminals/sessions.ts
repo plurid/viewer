@@ -2,7 +2,7 @@ import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
 import type { TerminalStart } from '../../domain/automation/actions';
-import { report } from '../state/store';
+import { copyText, report } from '../state/store';
 import { terminalTheme } from './theme';
 export interface TerminalSession {
   terminal: Terminal;
@@ -133,7 +133,7 @@ export function terminalSession(
       terminal.attachCustomKeyEventHandler((event) => {
         if (event.metaKey && event.key.toLowerCase() === 'c') {
           if (event.type === 'keydown' && terminal.hasSelection())
-            void navigator.clipboard.writeText(terminal.getSelection()).catch(report);
+            void copyText(terminal.getSelection()).catch(report);
           return false;
         }
         if (event.metaKey && event.key.toLowerCase() === 'v') {
@@ -174,7 +174,6 @@ export async function terminalEditing(id: string, command: string): Promise<bool
   const session = await pending;
   if (command === 'paste') session.terminal.paste(await navigator.clipboard.readText());
   else if (command === 'select-all') session.terminal.selectAll();
-  else if (session.terminal.hasSelection())
-    await navigator.clipboard.writeText(session.terminal.getSelection());
+  else if (session.terminal.hasSelection()) await copyText(session.terminal.getSelection());
   return true;
 }

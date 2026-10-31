@@ -2,7 +2,7 @@
   width: min(900px, 94vw);
 }
 .worktree-create {
-  padding: 6px 18px 0;
+  padding: var(--gap-small) var(--gap-dialog) 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -10,13 +10,13 @@
 .worktree-create-mode,
 .worktree-create-destination {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .worktree-create label {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: var(--gap-small);
 }
 .worktree-create input,
 .worktree-create-destination input {
@@ -31,18 +31,18 @@
 .worktree-create-revision,
 .worktrees-creation-problem {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .worktrees-creation-problem {
   margin: 0;
-  padding: 4px 18px 12px;
+  padding: var(--gap-tight) var(--gap-dialog) var(--gap-content);
 }
 .worktree-create-warning {
   color: var(--danger);
 }
 .worktree-create-occupied {
   display: grid;
-  gap: 12px;
+  gap: var(--gap-content);
   justify-items: start;
 }
 .worktree-create footer {
@@ -61,8 +61,8 @@
 }
 .worktrees-controls {
   display: flex;
-  gap: 8px;
-  padding: 16px 18px 8px;
+  gap: var(--gap-inline);
+  padding: var(--gap-panel) var(--gap-dialog) var(--gap-inline);
 }
 .worktrees-controls input {
   flex: 1;
@@ -70,7 +70,7 @@
 }
 .worktrees-repository {
   margin: 0;
-  padding: 0 18px 12px;
+  padding: 0 var(--gap-dialog) var(--gap-content);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -84,9 +84,9 @@
   display: grid;
   grid-template-columns: minmax(130px, 1fr) minmax(180px, 2fr) minmax(110px, auto);
   align-items: center;
-  gap: 12px;
+  gap: var(--gap-content);
   width: 100%;
-  padding: 10px 18px;
+  padding: 10px var(--gap-dialog);
   border: 0;
   border-radius: 0;
   border-bottom: 1px solid var(--line);
@@ -112,16 +112,16 @@
 }
 .worktree-state {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .worktrees-empty {
-  padding: 20px 18px;
+  padding: 20px var(--gap-dialog);
   margin: 0;
   color: var(--muted);
   text-align: center;
 }
 .worktree-inspection {
-  padding: 14px 18px;
+  padding: 14px var(--gap-dialog);
   background: var(--field);
   border-bottom: 1px solid var(--line);
 }
@@ -129,7 +129,7 @@
   overflow-wrap: anywhere;
 }
 .worktree-inspection p {
-  margin: 6px 0 0;
+  margin: var(--gap-small) 0 0;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
@@ -139,29 +139,29 @@
 .worktrees-error {
   color: var(--danger);
   margin: 0;
-  padding: 8px 18px;
+  padding: var(--gap-inline) var(--gap-dialog);
   overflow-wrap: anywhere;
 }
 .worktree-inspection .worktrees-error {
   padding: 0;
 }
 .worktrees-preferences {
-  padding: 12px 18px;
+  padding: var(--gap-content) var(--gap-dialog);
 }
 .worktrees-preferences label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .worktrees-preferences p {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
   margin: 10px 0 0;
 }
 @media (max-width: 760px) {
   .worktree-option {
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 4px 12px;
+    gap: var(--gap-tight) var(--gap-content);
   }
   .worktree-location {
     grid-column: 1 / -1;

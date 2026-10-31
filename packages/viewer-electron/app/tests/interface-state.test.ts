@@ -3,7 +3,7 @@ import type { OperationJob, OperationProgress } from '../src/domain/contracts';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import { setWorkspaceOverride } from '../src/renderer/state/workspaces';
 import { stateSchema } from '../src/desktop/persistence/storage';
-import { normalizePreferences, reorder } from '../src/domain/preferences/ui';
+import { normalizePreferences, reorder, uiPreferencesVersion } from '../src/domain/preferences/ui';
 import { CommandRegistry } from '../src/renderer/commands/registry';
 import { windowCommands, type WindowActions } from '../src/renderer/commands/window';
 import {
@@ -345,7 +345,9 @@ describe('layout-only changes', () => {
     expect(corrupt.ui.sidebar.visible).toBe(false);
     expect(corrupt.ui.sidebar.width).toBe(210);
     expect(corrupt.ui.sidebar.order).toEqual(['recents', 'locations', 'favorites']);
-    expect(corrupt.ui.space).toEqual(normalizePreferences().space);
+    // an earlier profile's: its spatial aids on, not a first run's quiet ones
+    expect(corrupt.ui.space).toEqual(normalizePreferences({}).space);
+    expect(corrupt.ui.space).toMatchObject({ toolbar: true, viewcube: true, minimapAuto: false });
     expect(corrupt.ui.recentCommands).toEqual(['rename']);
     expect(normalizePreferences('broken')).toEqual(normalizePreferences());
   });
@@ -353,7 +355,7 @@ describe('layout-only changes', () => {
     const migrated = normalizePreferences({
       space: { toolbar: false, minimap: false, viewcube: false },
     });
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(uiPreferencesVersion);
     expect(migrated.space).toMatchObject({ toolbar: true, minimap: true, viewcube: true });
     changePreferences((ui) => ({
       ...ui,
@@ -483,7 +485,7 @@ describe('layout-only changes', () => {
     const migrated = stateSchema.parse(version2);
     expect(JSON.stringify(version2)).toBe(unchanged);
     expect(migrated.ui).toMatchObject({
-      version: 3,
+      version: uiPreferencesVersion,
       sidebar: { visible: false, inNewPlanes: true, width: 280 },
       space: { toolbar: false, minimap: false, viewcube: false },
     });

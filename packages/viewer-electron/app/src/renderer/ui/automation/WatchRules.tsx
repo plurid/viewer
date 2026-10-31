@@ -3,6 +3,8 @@ import { workflowUsesSelection, type WorkflowDocument } from '../../../domain/au
 import type { WatchRule } from '../../../domain/automation/watch-rules';
 import { ChoiceButton } from '../ChoiceMenu';
 import { errorMessage } from '../../../domain/errors';
+import { PathField } from '../primitives';
+import { Disclosure } from '../Disclosure';
 
 export function WatchRuleControls({
   document,
@@ -72,7 +74,11 @@ export function WatchRuleControls({
           <div className="project-control-row">
             <div>
               <strong>{rule.name}</strong>
-              <small className="muted">{rule.scope.root}</small>
+              <PathField
+                className="muted"
+                path={rule.scope.root}
+                onError={(error) => setError(errorMessage(error))}
+              />
             </div>
             <span>
               {!rule.enabled
@@ -149,8 +155,12 @@ export function WatchRuleControls({
         </div>
       ))}
       {document && (
-        <details open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
-          <summary>{editing ? 'Review watch rule' : 'Watch a folder…'}</summary>
+        <Disclosure
+          variant="compact"
+          summary={editing ? 'Review watch rule' : 'Watch a folder…'}
+          open={expanded}
+          onOpenChange={setExpanded}
+        >
           <form
             className="watch-rule-form"
             onSubmit={(event) => {
@@ -191,7 +201,16 @@ export function WatchRuleControls({
             )}
             <div className="project-control-row">
               <span>
-                Watched folder<small className="muted">{root || 'Choose a folder'}</small>
+                Watched folder
+                {root ? (
+                  <PathField
+                    className="muted"
+                    path={root}
+                    onError={(error) => setError(errorMessage(error))}
+                  />
+                ) : (
+                  <small className="muted">Choose a folder</small>
+                )}
               </span>
               <button
                 type="button"
@@ -285,7 +304,7 @@ export function WatchRuleControls({
               </button>
             </div>
           </form>
-        </details>
+        </Disclosure>
       )}
       {error && (
         <p className="error" role="alert">

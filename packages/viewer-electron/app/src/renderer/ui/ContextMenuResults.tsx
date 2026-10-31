@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { contextMenuSections, type MenuEntry, type MenuSection } from '../commands/menu';
 import { rankCommands, type ResolvedCommand } from '../commands/registry';
 import type { Suggestion } from '../commands/suggestions';
+import type { HeaderLead } from '../workspace/header-overflow';
 import { Icon } from './Icon';
 
 const entries = (sections: MenuSection[]) => sections.flatMap((section) => section.entries);
@@ -13,6 +14,7 @@ export function ContextMenuResults({
   recent,
   focused,
   suggested,
+  lead,
   onSelect,
   onClose,
   searchLabel = 'actions',
@@ -23,6 +25,8 @@ export function ContextMenuResults({
   focused: boolean;
   /** Actions that fit the selection, shown after Recent. */
   suggested?: readonly Suggestion[];
+  /** What the plane header could not show, before everything else. */
+  lead?: HeaderLead;
   onSelect(command: ResolvedCommand): void;
   onClose(): void;
   /** What the search finds, in its label: “Search actions”, or a choice's name. */
@@ -39,8 +43,8 @@ export function ContextMenuResults({
   const id = useId();
   const searching = !!query.trim();
   const sections = useMemo(
-    () => contextMenuSections(commands, recent, focused, suggested),
-    [commands, recent, focused, suggested],
+    () => contextMenuSections(commands, recent, focused, suggested, lead),
+    [commands, recent, focused, suggested, lead],
   );
   const levels = [sections];
   for (const branchID of opened) {

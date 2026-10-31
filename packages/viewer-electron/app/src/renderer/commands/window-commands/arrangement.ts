@@ -15,7 +15,7 @@ export function arrangementCommands({
       id: 'overview',
       label: 'Overview',
       group: 'Space',
-      icon: 'frame',
+      icon: 'map',
       aliases: ['minimap', 'navigate space'],
       when: (context) => windowScope(context) && !!actions.overviewAvailable,
       run: () => actions.overview?.(),
@@ -199,7 +199,7 @@ export function arrangementCommands({
       id: `space-${tool}`,
       label: `${tool.charAt(0).toUpperCase() + tool.slice(1)} space`,
       group: 'Space',
-      icon: tool === 'rotate' ? 'refresh' : tool === 'scale' ? 'frame' : 'move',
+      icon: tool === 'rotate' ? 'refresh' : tool === 'scale' ? 'resize' : 'move',
       when: (context) => windowScope(context) && actions.ready && space.panes.length > 0,
       run: () => actions.spatialTool(tool),
     });

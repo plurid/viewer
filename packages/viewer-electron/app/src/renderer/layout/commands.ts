@@ -19,7 +19,7 @@ export function layoutCommands(workspace: WorkspaceController): CommandDefinitio
       id: 'lay-out',
       label: 'Lay out…',
       group: 'Files',
-      icon: 'grid',
+      icon: 'gallery',
       aliases: [
         'layout',
         'collage',

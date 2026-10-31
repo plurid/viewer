@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 import { transformableImage } from '../../../domain/operations/image-conversions';
 import { optimizable } from '../../../domain/operations/optimization';
@@ -147,32 +148,44 @@ export default function ImagePreview(context: PreviewContext) {
         </p>
       )}
       <PreviewToolbar context={context}>
-        {context.optimize && optimizable(resource.entry) && (
-          <button onClick={context.optimize}>Optimize…</button>
+        {context.toolbar !== 'essential' && context.optimize && optimizable(resource.entry) && (
+          <button {...headerItem('optimize', 8, ['optimize-files'])} onClick={context.optimize}>
+            Optimize…
+          </button>
         )}
         {context.editImage && transformableImage(resource.entry) && (
-          <button onClick={context.editImage}>Image tools…</button>
+          <button {...headerItem('image-tools', 5, ['image-tools'])} onClick={context.editImage}>
+            Image tools…
+          </button>
         )}
         <IconButton
-          icon="frame"
+          {...headerItem('fit', 3, ['preview.image-fit'])}
+          icon="fit"
           label="Fit image"
           onClick={() => {
             setZoom(1);
             setPan({ x: 0, y: 0 });
           }}
         />
-        <button
+        <IconButton
+          {...headerItem('zoom-out', 4, ['preview.zoom-out'])}
+          icon="zoom-out"
+          label="Zoom out"
           onClick={() => setZoom((value) => Math.max(0.1, value / 1.25))}
-          aria-label="Zoom out"
-        >
-          −
-        </button>
-        <span className="tabular">{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom((value) => Math.min(20, value * 1.25))} aria-label="Zoom in">
-          +
-        </button>
+        />
+        <span className="tabular" {...headerItem('zoom', 6, 'detail')}>
+          {Math.round(zoom * 100)}%
+        </span>
+        <IconButton
+          {...headerItem('zoom-in', 4, ['preview.zoom-in'])}
+          icon="zoom-in"
+          label="Zoom in"
+          onClick={() => setZoom((value) => Math.min(20, value * 1.25))}
+        />
         <span className="toolbar-spacer" />
-        <span className="muted">{dimensions}</span>
+        <span className="muted" {...headerItem('size', 9, 'detail')}>
+          {dimensions}
+        </span>
       </PreviewToolbar>
       <div
         className="image-stage"

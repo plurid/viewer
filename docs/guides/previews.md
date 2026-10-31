@@ -21,6 +21,17 @@ a large PDF.
 
 ## Each kind of file has its own controls
 
+A file's plane shows its main controls in the header. The rest are in the plane's **…** menu and
+**⌘K**:
+
+- A PDF shows **PDF tools…**, the page buttons, zoom, search and **Dark pages**. **Show PDF pages**,
+  **Show PDF outline** and **Print PDF…** are in **…**. **Optimize…** is under **Suggested** for a
+  large PDF, otherwise under **More file actions**.
+- An image shows **Image tools…**, **Fit image**, zoom and its size. **Optimize…** is in **…**.
+
+To show every control in the header, open **Settings → Space → Plane toolbar** and turn on **Every
+format tool**, or choose **Buttons → Full**. Quick Preview always shows every control.
+
 | File                                      | What you can do                                                                   |
 | ----------------------------------------- | --------------------------------------------------------------------------------- |
 | PDF                                       | Move through pages, show thumbnails and the outline, search the text              |
@@ -100,8 +111,8 @@ A Safari web archive shows only what Safari saved: nothing loads from the networ
 ## Read a file's bytes
 
 A file no preview reads shows its bytes, under what its first bytes say it is. To see any other
-file's bytes, choose **Hex** in the preview's footer, or **Show as hex** in Quick Preview or **⌘K**.
-Choose **Hex** again, or **Show preview**, to go back.
+file's bytes, choose **Show as hex** in Quick Preview, in the plane's **…** menu or in **⌘K**.
+Choose **Show preview** to go back.
 
 - Click a byte, or use the arrow keys, **Page Up** and **Page Down**, **Home** and **End**, to move.
   **⌘↑** and **⌘↓** go to the first and last byte.

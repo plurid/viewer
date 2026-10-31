@@ -137,7 +137,8 @@ keeps its own keys; **Escape** still stops the tour. See
 | **⌃⌘F** | **View → Toggle Full Screen** |
 
 Menu items not in these tables have no key by default. In `settings.shortcuts`, any command ID can
-take a key; the menu shows the keys given to `new-terminal-plane`, `setting.ui.space.toolbar`,
+take a key, such as `plane-toolbar.full` and `plane-toolbar.essential` for the plane headers'
+buttons. The menu shows the keys given to `new-terminal-plane`, `setting.ui.space.toolbar`,
 `setting.ui.space.minimap`, `setting.ui.space.viewcube` and `setting.ui.space.grid`.
 
 ## Prefix keys

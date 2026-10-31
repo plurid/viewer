@@ -26,6 +26,7 @@ import {
 import { createTableSession } from './table-session';
 import { delimitedRows, type DelimitedPreview } from './table-data';
 import { Empty, Loading } from '../ui/primitives';
+import { copyText } from '../state/store';
 import type { PreviewContext } from './contracts';
 import { usePreviewScroll } from './scroll';
 import { usePreviewState } from './state';
@@ -320,7 +321,7 @@ export function DataTable({
         ? await copyRange(range, signal)
         : tableTSV(range, rows, merges, formatted);
       signal.throwIfAborted();
-      await navigator.clipboard.writeText(text);
+      await copyText(text);
       if (!abort.signal.aborted) setCopyStatus(`Copied ${rangeLabel(range)}`);
     } catch (error) {
       if (!abort.signal.aborted) setCopyStatus(errorMessage(error) || 'Could not copy. Try again.');

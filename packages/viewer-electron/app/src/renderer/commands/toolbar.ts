@@ -20,6 +20,7 @@ export function toolbarRequest(
       paneID: pane.id,
       path: pane.path,
       selection: owned?.selection ?? [],
+      subject: owned?.subject,
       folder: pane.type === 'folder' ? pane : owned?.folder,
       directory:
         owned?.directory ??

@@ -17,7 +17,14 @@ import {
   type JournalRecord,
 } from '../../domain/journal/events';
 import { errorMessage } from '../../domain/errors';
-import { activeWorkspace, getState, switchWorkspace, updatePane, useViewer } from '../state/store';
+import {
+  activeWorkspace,
+  copyPaths,
+  getState,
+  switchWorkspace,
+  updatePane,
+  useViewer,
+} from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { Empty, IconButton, NameDialog } from '../ui/primitives';
@@ -385,7 +392,7 @@ export default function JournalPlane({ pane, active }: { pane: Pane; active: boo
               void goSource();
             }}
             onCopy={() => {
-              void perform(() => window.viewer.copyPaths([selected.id]));
+              void perform(() => copyPaths([selected.id]));
             }}
           />
         )}

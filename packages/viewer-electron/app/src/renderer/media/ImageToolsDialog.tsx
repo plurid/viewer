@@ -8,7 +8,7 @@ import {
 } from '../../domain/operations/transforms';
 import { sourceVersion } from '../../domain/files/inspection';
 import { baseName } from '../../domain/workspaces/planes';
-import { Dialog, Empty, Loading } from '../ui/primitives';
+import { Dialog, Empty, Loading, Row } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { measureLocalPoint, type Point } from '../ui/projectedResize';
 import { report, useViewer } from '../state/store';
@@ -257,41 +257,45 @@ export function ImageToolsDialog({
           )}
         </div>
         <div className="image-tools-options">
-          <label>
-            Format
-            <ChoiceButton
-              label="Image output format"
-              value={plan.format}
-              choices={[
-                { value: 'webp', label: 'WebP' },
-                { value: 'avif', label: 'AVIF' },
-                { value: 'jpeg', label: 'JPEG' },
-                { value: 'png', label: 'PNG' },
-              ]}
-              onChoose={(format) => {
-                setPlan((plan) => ({ ...plan, format: format as ImageTransform['format'] }));
-                setName(
-                  name.replace(/\.[^.]+$/, '') +
-                    '.' +
-                    transformExtension(format as ImageTransform['format']),
-                );
-              }}
-            />
-          </label>
-          {plan.format !== 'png' && (
-            <label>
-              Quality · {plan.quality}
-              <input
-                aria-label="Image quality"
-                type="range"
-                min={1}
-                max={100}
-                value={plan.quality}
-                onChange={(event) =>
-                  setPlan((plan) => ({ ...plan, quality: Number(event.target.value) }))
-                }
+          <Row
+            label="Format"
+            control={
+              <ChoiceButton
+                label="Image output format"
+                value={plan.format}
+                choices={[
+                  { value: 'webp', label: 'WebP' },
+                  { value: 'avif', label: 'AVIF' },
+                  { value: 'jpeg', label: 'JPEG' },
+                  { value: 'png', label: 'PNG' },
+                ]}
+                onChoose={(format) => {
+                  setPlan((plan) => ({ ...plan, format: format as ImageTransform['format'] }));
+                  setName(
+                    name.replace(/\.[^.]+$/, '') +
+                      '.' +
+                      transformExtension(format as ImageTransform['format']),
+                  );
+                }}
               />
-            </label>
+            }
+          />
+          {plan.format !== 'png' && (
+            <Row
+              label={`Quality · ${plan.quality}`}
+              control={
+                <input
+                  aria-label="Image quality"
+                  type="range"
+                  min={1}
+                  max={100}
+                  value={plan.quality}
+                  onChange={(event) =>
+                    setPlan((plan) => ({ ...plan, quality: Number(event.target.value) }))
+                  }
+                />
+              }
+            />
           )}
           <div className="image-tools-dimensions">
             <label>

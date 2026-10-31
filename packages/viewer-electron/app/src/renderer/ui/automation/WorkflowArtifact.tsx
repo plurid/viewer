@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import { inspectionResultSchema } from '../../../domain/files/inspection';
+import { factLabel } from '../../../domain/files/fact-labels';
 import { workflowArtifactSchema } from '../../../domain/automation/workflows';
 import { useWorkspace } from '../../workspace/context';
 import { report } from '../../state/store';
+import { PathField } from '../primitives';
+import { Disclosure } from '../Disclosure';
 
 const inspections = z.object({
   kind: z.literal('inspection'),
@@ -22,18 +25,21 @@ export function WorkflowArtifact({ value }: { value: z.infer<typeof workflowArti
     return (
       <div className="workflow-facts">
         {inspection.data.results.map((result) => (
-          <details key={result.path}>
-            <summary>
-              {result.path.split('/').pop()} ·{' '}
-              {result.coverage.content === 'not-requested'
+          <Disclosure
+            variant="compact"
+            key={result.path}
+            summary={result.path.split('/').pop()}
+            meta={
+              result.coverage.content === 'not-requested'
                 ? 'Metadata'
-                : 'Content ' + result.coverage.content}
-            </summary>
-            <p className="muted inspection-path">{result.path}</p>
+                : 'Content ' + result.coverage.content
+            }
+          >
+            <PathField className="muted inspection-path" path={result.path} />
             <dl className="inspection-facts">
               {Object.entries(result.facts).map(([name, fact]) => (
                 <div key={name}>
-                  <dt>{name}</dt>
+                  <dt>{factLabel(name)}</dt>
                   <dd>
                     {String(fact.value)}
                     {fact.unit ? ' ' + fact.unit : ''}
@@ -64,7 +70,7 @@ export function WorkflowArtifact({ value }: { value: z.infer<typeof workflowArti
                   <span>{item.text.slice(0, 200)}</span>
                 </button>
               ))}
-          </details>
+          </Disclosure>
         ))}
       </div>
     );

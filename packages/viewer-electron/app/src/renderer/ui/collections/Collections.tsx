@@ -15,6 +15,7 @@ import type { Collection } from '../../../domain/workspaces/collections';
 import { errorMessage } from '../../../domain/errors';
 import { maxQueryLength } from '../../../domain/search/query';
 import { useWindowEvent } from '../../app/window-events';
+import { Disclosure } from '../Disclosure';
 /** Every basket reference stays reachable, however many there are. */
 function BasketList({ paths, busy }: { paths: string[]; busy: boolean }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -175,8 +176,7 @@ export function CollectionControls() {
             Save basket as collection
           </button>
         </div>
-        <details>
-          <summary>New query collection</summary>
+        <Disclosure variant="compact" summary="New query collection">
           <div className="collections-query-form">
             <label className="field-label">
               Query
@@ -222,7 +222,7 @@ export function CollectionControls() {
               Save query collection
             </button>
           </div>
-        </details>
+        </Disclosure>
         <h3>Named collections</h3>
         {(space.collections ?? []).map((collection) => (
           <div className="project-control-row" key={collection.id}>

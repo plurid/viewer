@@ -1386,15 +1386,27 @@ async function verifyConfiguredChrome(): Promise<void> {
     'Folder search',
     'Frame plane button',
     'Dock plane button',
+    'Pinned tools',
     'Actions menu',
     'Close plane button',
   ];
+  const preset = () =>
+    settingsEvaluate(
+      pageCall(
+        () =>
+          document.querySelector('[data-setting-path="ui.space.headerControls"] .choice-button')
+            ?.textContent ?? '',
+      ),
+    );
+  // a fresh profile's header is Essential: Layout and “What can I do here?” are in “…”
+  assert.equal(await preset(), 'Essential');
   for (const control of controls) await setting(control);
   await until(
     () => evaluate(countOf('.plane-controls button')),
     (count) => count === 0,
     'all toolbar controls can be hidden independently',
   );
+  assert.equal(await preset(), 'Custom');
   await settingsEvaluate(
     pageCall(() =>
       Array.from(document.querySelectorAll('.settings-page h2'))
@@ -1404,6 +1416,7 @@ async function verifyConfiguredChrome(): Promise<void> {
   );
   await snapshot('desktop-native-toolbar-settings.png');
   for (const control of controls) await setting(control);
+  await until(preset, (value) => value === 'Essential', 'the Essential toolbar is back');
   await tab('Browsing');
   for (const column of ['Date modified', 'Kind', 'Size']) await setting(column);
   await until(
@@ -3315,8 +3328,10 @@ async function verifyCommandLine(): Promise<void> {
     (main) => Math.abs(main - (0.6 + 2 / 12)) < 0.001,
     ':2 tile-main-grow grew the main tile twice',
   );
-  // :set nominimap | set minimap, by name
+  // :set nominimap | set minimap, by name; a first run's minimap waits for a third plane
   const minimap = () => evaluate(exists('[data-plurid-minimap]'));
+  await line('set nominimapauto');
+  await until(minimap, (shown) => shown, ':set nominimapauto');
   await line('set nominimap');
   await until(minimap, (shown) => !shown, ':set nominimap');
   await line('set minimap');
@@ -3458,6 +3473,11 @@ async function verifyLook(): Promise<void> {
       })),
     );
   await blur();
+  // a first run is quiet: no space toolbar, and the minimap only once three planes are open
+  assert.equal((await chrome()).toolbar, false);
+  await paletteCommand('Show space toolbar');
+  await paletteCommand('Turn off: Minimap only with 3 or more planes');
+  await until(chrome, (now) => now.toolbar && now.minimap, 'the space toolbar and minimap shown');
   assert.deepEqual(await chrome(), { toolbar: true, minimap: true, titlebar: 'shown' });
   // ⇧⌘F: the chrome away, and back
   await key('f', 'KeyF', 12);
@@ -4039,9 +4059,11 @@ async function verifyTextEditing(): Promise<void> {
     'grid hidden',
   );
   await paletteCommand('Show background grid');
-  // every setting is a command: plurid's minimap goes and comes back
+  // every setting is a command: plurid's minimap goes and comes back; always, not only from the
+  // third plane as on a first run
   const minimap = () => evaluate(exists('[data-plurid-minimap]'));
-  assert.equal(await minimap(), true);
+  await paletteCommand('Turn off: Minimap only with 3 or more planes');
+  await until(minimap, Boolean, 'the minimap shown always');
   await paletteCommand('Hide minimap');
   await until(minimap, (shown) => !shown, 'minimap hidden by its command');
   await paletteCommand('Show minimap');
@@ -4224,6 +4246,10 @@ async function verifyPublishedPlaneInput(): Promise<void> {
 const transformMode = () =>
   (window as unknown as SmokeWindow).__qaEngine.getSnapshot().configuration.space.transformMode;
 async function verifySpatialTools(): Promise<void> {
+  // a first run has no space toolbar
+  if (!(await evaluate(exists('[data-plurid-entity="PluridToolbar"]'))))
+    await paletteCommand('Show space toolbar');
+  await until(() => evaluate(exists('[aria-label="Rotate mode"]')), Boolean, 'the space toolbar');
   await click('[aria-label="Rotate mode"]');
   assert.equal(await evaluate(pageCall(transformMode)), 'ROTATION');
   await paletteCommand('Finish spatial tool');
@@ -4366,7 +4392,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
     ),
     '4',
   );
-  const checkDrawingToolbar = async (selector: string, height: number) => {
+  const checkDrawingToolbar = async (selector: string, height: number, count: number) => {
     const controls = await evaluate(
       pageCall(
         (selector: string) =>
@@ -4378,7 +4404,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
         selector,
       ),
     );
-    assert.ok(controls.length >= 5, 'All drawing tools are present');
+    assert.ok(controls.length >= count, 'All drawing tools are present');
     assert.ok(
       controls.every((control) => control.height === height),
       `Drawing buttons and selectors share a ${height}px height: ${JSON.stringify(controls)}`,
@@ -4390,7 +4416,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
       'Drawing controls align vertically',
     );
   };
-  await checkDrawingToolbar('.quick-preview .preview-toolbar > button', 30);
+  await checkDrawingToolbar('.quick-preview .preview-toolbar > button', 30, 5);
   assert.equal(
     await evaluate(pageCall(() => document.querySelector<HTMLElement>('.dxf-info')!.offsetHeight)),
     34,
@@ -4573,7 +4599,8 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
     Boolean,
     'drawing tools in plane header',
   );
-  await checkDrawingToolbar('.plane-module-controls .preview-toolbar > button', 28);
+  // the plane's Essential header leaves the drawing grid to "…"
+  await checkDrawingToolbar('.plane-module-controls .preview-toolbar > button', 28, 4);
   await paletteCommand('Measure distance');
   await until(
     () => evaluate(textOf(choiceButton('Drawing tool'))),
@@ -6616,16 +6643,22 @@ async function verify(): Promise<void> {
   await click('[aria-label="Show window navigation"]');
   await paletteCommand('Frame plane');
   await settleCamera();
-  assert.deepEqual(
-    await evaluate(
+  const aids = () =>
+    evaluate(
       pageCall(() => ({
         toolbar: !!document.querySelector('[data-plurid-entity="PluridToolbar"]'),
         minimap: !!document.querySelector('[data-plurid-minimap]'),
         viewcube: !!document.querySelector('[data-plurid-overlay="viewcube"]'),
       })),
-    ),
-    { toolbar: true, minimap: true, viewcube: true },
+    );
+  // a first run is quiet: no space toolbar or viewcube; its minimap comes with the third plane
+  assert.deepEqual(
+    { ...(await aids()), minimap: undefined },
+    { toolbar: false, minimap: undefined, viewcube: false },
   );
+  await paletteCommand('Show space toolbar');
+  await paletteCommand('Show viewcube');
+  await until(aids, (now) => now.toolbar && now.viewcube, 'the space toolbar and viewcube shown');
 
   // The first press on the title selects the engine plane before its gesture listener.
   const firstLocation = await evaluate(pageCall(firstLocationJSON));
@@ -6714,7 +6747,7 @@ async function verify(): Promise<void> {
         ui: NonNullable<SavedState['ui']>;
       },
     (state) =>
-      state.ui?.version === 3 &&
+      state.ui?.version === 4 &&
       !state.ui.space.toolbar &&
       !state.ui.space.minimap &&
       !state.ui.space.viewcube,

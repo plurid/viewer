@@ -9,11 +9,19 @@ const drawers = (Object.keys(TOOLBAR_DRAWERS) as (keyof typeof TOOLBAR_DRAWERS)[
   (drawer) => drawer !== 'ALL' && drawer !== 'GLOBAL',
 );
 
+/** From this many planes, the minimap helps find one; below it, it only covers the space. */
+export const minimapPlanes = 3;
+/** Whether the minimap shows: on, always, or, automatic, once the space holds enough planes. */
+export function minimapShown(preferences: UIPreferences['space'], planes: number): boolean {
+  return preferences.minimap && (!preferences.minimapAuto || planes >= minimapPlanes);
+}
+
 /** The engine configuration of a workspace surface. */
 export function surfaceConfiguration({
   look,
   size,
   preferences,
+  minimap,
   color,
   palette,
   tiled = false,
@@ -21,6 +29,8 @@ export function surfaceConfiguration({
   look: keyof typeof looks;
   size: { width: number; height: number };
   preferences: UIPreferences['space'];
+  /** `minimapShown` for the space as it is. */
+  minimap: boolean;
   /** The workspace's own space colour, over the general one. */
   color?: string;
   /** The theme's colours plurid derives its look from. */
@@ -70,7 +80,7 @@ export function surfaceConfiguration({
       // bridges would cross unrelated tiles and obscure their controls.
       planeBridge: { show: !tiled },
       planeLinks: { show: !tiled },
-      minimap: { show: preferences.minimap },
+      minimap: { show: minimap },
       viewcube: { show: preferences.viewcube },
       toolbar: { show: preferences.toolbar, drawers },
       shortcuts: { show: false },

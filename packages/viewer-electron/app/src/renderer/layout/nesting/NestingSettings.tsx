@@ -24,7 +24,8 @@ import {
   sheetPresetsIn,
 } from '../../../domain/layout/nesting/plan';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
-import { IconButton } from '../../ui/primitives';
+import { PanelSection } from '../../ui/Panel';
+import { IconButton, Row } from '../../ui/primitives';
 
 export interface FormatChoice {
   width: number;
@@ -159,10 +160,12 @@ export function NestingSettings({
   };
   return (
     <>
-      <section className="nesting-settings" aria-label="Sheets">
-        <div className="nesting-heading">
-          <h3>Sheets</h3>
-          <div className="nesting-segmented" role="group" aria-label="Units">
+      <PanelSection
+        className="nesting-settings"
+        title="Sheets"
+        // the units sit by the Sheets heading: every length in the panel reads in them
+        meta={
+          <span className="nesting-segmented" role="group" aria-label="Units">
             {lengthUnits.map((value) => (
               <button
                 type="button"
@@ -174,8 +177,9 @@ export function NestingSettings({
                 {value}
               </button>
             ))}
-          </div>
-        </div>
+          </span>
+        }
+      >
         {chosen.length > 0 ? (
           <div className="nesting-formats" role="table" aria-label="Sheet formats">
             <div role="row" className="nesting-format nesting-format-head">
@@ -305,68 +309,82 @@ export function NestingSettings({
               })
             }
           />
-          <span className="nesting-choice">
-            Direction
-            <ChoiceButton
-              label="Nesting direction"
-              value={choices.direction}
-              choices={directionChoices}
-              onChoose={(value) => change({ direction: value as NestDirection })}
-            />
-          </span>
-          <span className="nesting-choice">
-            Search
-            <ChoiceButton
-              label="Search time"
-              value={String(choices.budget)}
-              choices={budgetChoices}
-              onChoose={(value) => change({ budget: Number(value) })}
-            />
-          </span>
-          <label className="nesting-check">
-            <input
-              type="checkbox"
-              checked={choices.labels}
-              onChange={(event) => change({ labels: event.target.checked })}
-            />
-            Part numbers in the DXF
-          </label>
-        </div>
-      </section>
-      <section className="nesting-settings" aria-label="Cutting">
-        <h3>Cutting</h3>
-        <div className="nesting-wide">
-          Material
-          <ChoiceButton
-            label="Material and thickness"
-            value={String(choices.preset)}
-            placeholder="Custom values"
-            choices={presetChoices}
-            onChoose={(value) => change(withPreset(choices, Number(value)))}
+          <Row
+            compact
+            label="Direction"
+            control={
+              <ChoiceButton
+                label="Nesting direction"
+                value={choices.direction}
+                choices={directionChoices}
+                onChoose={(value) => change({ direction: value as NestDirection })}
+              />
+            }
+          />
+          <Row
+            compact
+            label="Search"
+            control={
+              <ChoiceButton
+                label="Search time"
+                value={String(choices.budget)}
+                choices={budgetChoices}
+                onChoose={(value) => change({ budget: Number(value) })}
+              />
+            }
+          />
+          <Row
+            compact
+            label="Part numbers in the DXF"
+            control={
+              <input
+                type="checkbox"
+                checked={choices.labels}
+                onChange={(event) => change({ labels: event.target.checked })}
+              />
+            }
           />
         </div>
+      </PanelSection>
+      <PanelSection className="nesting-settings" title="Cutting">
         <div className="nesting-fields">
-          <span className="nesting-choice">
-            Process
-            <ChoiceButton
-              label="Cutting process"
-              value={choices.cutting.process}
-              choices={processChoices}
-              onChoose={(value) => {
-                const process = value as CuttingProcess;
-                const index = presetFor(
-                  process,
-                  choices.cutting.material,
-                  choices.cutting.thickness,
-                );
-                change(
-                  index < 0
-                    ? { cutting: { ...choices.cutting, process }, preset: -1 }
-                    : withPreset(choices, index),
-                );
-              }}
-            />
-          </span>
+          <Row
+            compact
+            label="Material"
+            control={
+              <ChoiceButton
+                label="Material and thickness"
+                value={String(choices.preset)}
+                placeholder="Custom values"
+                choices={presetChoices}
+                onChoose={(value) => change(withPreset(choices, Number(value)))}
+              />
+            }
+          />
+          <Row
+            compact
+            label="Process"
+            control={
+              <ChoiceButton
+                label="Cutting process"
+                value={choices.cutting.process}
+                choices={processChoices}
+                onChoose={(value) => {
+                  const process = value as CuttingProcess;
+                  const index = presetFor(
+                    process,
+                    choices.cutting.material,
+                    choices.cutting.thickness,
+                  );
+                  change(
+                    index < 0
+                      ? { cutting: { ...choices.cutting, process }, preset: -1 }
+                      : withPreset(choices, index),
+                  );
+                }}
+              />
+            }
+          />
           <NumberField
             label="Thickness"
             unit="mm"
@@ -398,22 +416,25 @@ export function NestingSettings({
             value={choices.cutting.rate}
             set={(rate) => setCutting({ rate })}
           />
-          <label>
-            Currency
-            <input
-              aria-label="Currency"
-              maxLength={8}
-              value={choices.cutting.currency}
-              onChange={(event) => setCutting({ currency: event.target.value.slice(0, 8) })}
-            />
-          </label>
+          <Row
+            compact
+            label="Currency"
+            control={
+              <input
+                aria-label="Currency"
+                maxLength={8}
+                value={choices.cutting.currency}
+                onChange={(event) => setCutting({ currency: event.target.value.slice(0, 8) })}
+              />
+            }
+          />
         </div>
         <p className="muted nesting-hint">
           {choices.cutting.process === 'waterjet'
             ? 'Typical abrasive values at 4,100 bar, a 0.30 mm orifice and a 1.0 mm focusing tube, medium edge quality. Check them against your machine.'
             : 'Typical values. Check them against your machine.'}
         </p>
-      </section>
+      </PanelSection>
     </>
   );
 }
@@ -438,22 +459,25 @@ function NumberField({
   set(value: number): void;
 }) {
   return (
-    <label>
-      {label}
-      <span className="nesting-unit">
-        <input
-          type="number"
-          min={0}
-          step="any"
-          aria-label={name}
-          value={units ? fieldValue(value, units) : value}
-          onChange={(event) => {
-            const typed = amount(event.target.value, 0, 1_000_000);
-            set(units ? fromUnit(typed, units) : typed);
-          }}
-        />
-        {unit ?? (units && unitSymbol(units))}
-      </span>
-    </label>
+    <Row
+      compact
+      label={label}
+      control={
+        <span className="nesting-unit">
+          <input
+            type="number"
+            min={0}
+            step="any"
+            aria-label={name}
+            value={units ? fieldValue(value, units) : value}
+            onChange={(event) => {
+              const typed = amount(event.target.value, 0, 1_000_000);
+              set(units ? fromUnit(typed, units) : typed);
+            }}
+          />
+          {unit ?? (units && unitSymbol(units))}
+        </span>
+      }
+    />
   );
 }

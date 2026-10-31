@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import type { CapturedTarget } from '../../domain/automation/actions';
 import { errorMessage } from '../../domain/errors';
-import { Dialog } from '../ui/primitives';
+import { Dialog, PathField } from '../ui/primitives';
 import { attachCommandReceipt } from '../tasks/state';
 import { report } from '../state/store';
 import './run-command.css';
@@ -68,7 +68,7 @@ export function RunCommandDialog({ target, onClose }: { target: CapturedTarget; 
         }}
         aria-busy={busy}
       >
-        <p className="run-command-folder">{target.directory}</p>
+        <PathField className="run-command-folder" path={target.directory} />
         {saving && (
           <label className="field-label">
             Name

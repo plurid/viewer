@@ -7,7 +7,8 @@ import { spokenText } from '../../domain/command-line/spoken';
 import { listText } from '../../domain/fabrication/plan';
 import { useCommands } from '../commands/context';
 import { getState } from '../state/store';
-import { IconButton } from '../ui/primitives';
+import { Panel } from '../ui/Panel';
+import { Button } from '../ui/primitives';
 import { useDictation } from '../speech/useDictation';
 import {
   askSpoken,
@@ -122,10 +123,44 @@ export function SpokenRequest({
   };
   const own = phase === 'review' && session?.transcript === words ? session : undefined;
   const running = own && ['reading', 'running', 'waiting'].includes(own.stage);
+  const editable = phase === 'review' && !!words;
+  const footer = (phase === 'listening' || (active && !moved) || running || editable) && (
+    <>
+      {phase === 'listening' && (
+        <Button variant="primary" onClick={() => void finish()}>
+          {speech.processing?.kind === 'hosted' ? 'Finish and transcribe' : 'Finish'}
+        </Button>
+      )}
+      {active && !moved && (
+        <Button variant="secondary" onClick={close}>
+          Cancel
+        </Button>
+      )}
+      {running && (
+        <Button variant="secondary" onClick={stopSpoken}>
+          Stop
+        </Button>
+      )}
+      {editable && (
+        <Button
+          variant="secondary"
+          onClick={() => {
+            closeSpoken();
+            onEdit(words);
+          }}
+        >
+          Edit as text
+        </Button>
+      )}
+    </>
+  );
   return (
-    <aside
+    <Panel
       className="spoken-request"
-      aria-label="Ask Viewer by voice"
+      label="Ask Viewer by voice"
+      title="Ask Viewer"
+      onClose={close}
+      footer={footer}
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || event.defaultPrevented) return;
         event.preventDefault();
@@ -133,102 +168,68 @@ export function SpokenRequest({
         close();
       }}
     >
-      <header>
-        <h2>Ask Viewer</h2>
-        <IconButton icon="close" label="Close" onClick={close} />
-      </header>
-      <div className="spoken-body">
-        {moved ? (
-          <p role="status">
-            You moved to another plane while speaking, so Viewer stopped. Speak again.
+      {moved ? (
+        <p role="status">
+          You moved to another plane while speaking, so Viewer stopped. Speak again.
+        </p>
+      ) : early ? (
+        <p role="status">
+          The keys came up before the microphone was ready. Hold them while you speak.
+        </p>
+      ) : phase === 'failed' ? (
+        <>
+          <p className="error" role="alert">
+            {speech.error}
           </p>
-        ) : early ? (
-          <p role="status">
-            The keys came up before the microphone was ready. Hold them while you speak.
-          </p>
-        ) : phase === 'failed' ? (
-          <>
-            <p className="error" role="alert">
-              {speech.error}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                close();
-                void window.viewer.openSettings('settings.speech');
-              }}
-            >
-              Open speech settings
-            </button>
-          </>
-        ) : phase !== 'review' ? (
-          <>
-            <p className="spoken-status" role="status" aria-live="polite">
-              {phase === 'listening'
-                ? held
-                  ? 'Listening. Release the keys to send it.'
-                  : 'Listening. Choose Finish when you are done.'
-                : phase === 'transcribing'
-                  ? speech.processing?.kind === 'hosted'
-                    ? `Transcribing with ${speech.processing.providerName}…`
-                    : 'Transcribing on this Mac…'
-                  : 'Preparing the microphone…'}
-            </p>
-            {(phase === 'listening' || phase === 'transcribing') && (
-              <div className="speech-level-row">
-                <meter min="0" max="0.3" value={speech.level} aria-label="Microphone level" />
-                <span>{Math.floor(speech.seconds)} / 60 s</span>
-              </div>
-            )}
-            {speech.processing && (
-              <p className="muted spoken-note">{processedText(speech.processing, false)}</p>
-            )}
-          </>
-        ) : !words ? (
-          <p role="status">No speech came through. Move closer to the microphone and try again.</p>
-        ) : (
-          <>
-            <p className="spoken-transcript">“{words}”</p>
-            <p className="muted spoken-note">{processedText(speech.processing, true)}</p>
-            {words.length > transcriptLimit ? (
-              <p role="status">
-                That is more than {transcriptLimit} characters. Ask for less at a time.
-              </p>
-            ) : (
-              own && <Plan session={own} />
-            )}
-          </>
-        )}
-      </div>
-      <footer>
-        {phase === 'listening' && (
-          <button type="button" className="primary" onClick={() => void finish()}>
-            {speech.processing?.kind === 'hosted' ? 'Finish and transcribe' : 'Finish'}
-          </button>
-        )}
-        {active && !moved && (
-          <button type="button" onClick={close}>
-            Cancel
-          </button>
-        )}
-        {running && (
-          <button type="button" onClick={stopSpoken}>
-            Stop
-          </button>
-        )}
-        {phase === 'review' && !!words && (
           <button
             type="button"
             onClick={() => {
-              closeSpoken();
-              onEdit(words);
+              close();
+              void window.viewer.openSettings('settings.speech');
             }}
           >
-            Edit as text
+            Open speech settings
           </button>
-        )}
-      </footer>
-    </aside>
+        </>
+      ) : phase !== 'review' ? (
+        <>
+          <p className="spoken-status" role="status" aria-live="polite">
+            {phase === 'listening'
+              ? held
+                ? 'Listening. Release the keys to send it.'
+                : 'Listening. Choose Finish when you are done.'
+              : phase === 'transcribing'
+                ? speech.processing?.kind === 'hosted'
+                  ? `Transcribing with ${speech.processing.providerName}…`
+                  : 'Transcribing on this Mac…'
+                : 'Preparing the microphone…'}
+          </p>
+          {(phase === 'listening' || phase === 'transcribing') && (
+            <div className="speech-level-row">
+              <meter min="0" max="0.3" value={speech.level} aria-label="Microphone level" />
+              <span>{Math.floor(speech.seconds)} / 60 s</span>
+            </div>
+          )}
+          {speech.processing && (
+            <p className="muted spoken-note">{processedText(speech.processing, false)}</p>
+          )}
+        </>
+      ) : !words ? (
+        <p role="status">No speech came through. Move closer to the microphone and try again.</p>
+      ) : (
+        <>
+          <p className="spoken-transcript">“{words}”</p>
+          <p className="muted spoken-note">{processedText(speech.processing, true)}</p>
+          {words.length > transcriptLimit ? (
+            <p role="status">
+              That is more than {transcriptLimit} characters. Ask for less at a time.
+            </p>
+          ) : (
+            own && <Plan session={own} />
+          )}
+        </>
+      )}
+    </Panel>
   );
 }
 

@@ -125,6 +125,8 @@ async function run(
   };
   ui.sidebar.inNewPlanes = false;
   ui.space.opening = 'dock';
+  // the Layout button the captures press, which Essential leaves to "…"
+  ui.space.headerControls.layout = true;
   const state: SavedState = {
     version: CURRENT_STATE_VERSION,
     look: 'dark',

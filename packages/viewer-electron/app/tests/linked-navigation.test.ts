@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import type { TreePlane } from '@plurid/plurid-data';
 import type { Workspace } from '../src/domain/contracts';
 import { linkedPaneID, parentPaneID } from '../src/renderer/workspace/tree';
-import { normalizePreferences } from '../src/domain/preferences/ui';
+import { normalizePreferences, uiPreferencesVersion } from '../src/domain/preferences/ui';
 import { preferencesSchema } from '../src/desktop/preferences/preferences-schema';
 const node = (id: string, children: TreePlane[] = []) =>
   ({
@@ -54,7 +54,9 @@ it('normalizes missing parent controls in old saved UI and retains an explicit h
   delete withoutParent.space.headerControls.parent;
   expect(preferencesSchema.parse(withoutParent).space.headerControls.parent).toBe(true);
   expect(
-    normalizePreferences({ space: { headerControls: { parent: false } } }).space.headerControls
-      .parent,
+    normalizePreferences({
+      version: uiPreferencesVersion,
+      space: { headerControls: { parent: false } },
+    }).space.headerControls.parent,
   ).toBe(false);
 });

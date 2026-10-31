@@ -195,7 +195,7 @@ export default function EPUBPreview(context: PreviewContext) {
     <div className="epub-viewer">
       <PreviewToolbar context={context}>
         <IconButton
-          icon="sidebar"
+          icon="list"
           label="Show contents"
           aria-pressed={contents && !marking}
           onClick={() => {

@@ -10,6 +10,7 @@ import { IconButton } from '../../ui/primitives';
 import { openedTour, stopTour, subscribeTour, tourControls, tourPlayback } from '../tour';
 import type { TourPlayback } from './player';
 import { editTour, tourDraft } from './recorder';
+import { TourStops } from './TourStops';
 import './tours.css';
 
 /** Where in the workspace a stop goes: its file and the place in it, or the saved view. */
@@ -57,7 +58,11 @@ function Ended({ playback, onEdit }: { playback: TourPlayback; onEdit?: () => vo
   const shown = tour.stops.length - skipped;
   const { title, detail } = summary(playback);
   return (
-    <section className="tour-bar" data-status="ended" aria-label={`Tour “${tour.name}”`}>
+    <section
+      className="bar bar-floating tour-bar"
+      data-status="ended"
+      aria-label={`Tour “${tour.name}”`}
+    >
       <div className="tour-bar-text">
         <strong>{title}</strong>
         <span className="muted">{detail}</span>
@@ -80,7 +85,7 @@ function Running({ playback }: { playback: TourPlayback }) {
   const grade = stop.finding?.grade;
   return (
     <section
-      className="tour-bar"
+      className="bar bar-floating tour-bar"
       data-status={status}
       data-paused={paused || undefined}
       aria-label={`Tour “${tour.name}”`}
@@ -169,13 +174,15 @@ export function TourBar() {
   );
 }
 /**
- * The space's overlay: `children`, such as the check panel, in its top row and the tour bar in the
- * bottom one, so the bar never covers them and they never cover the bar (tours.css).
+ * The space's overlay: `children`, such as the check panel, and the stops of a tour being
+ * recorded in its top row, the tour bar in the bottom one, so the bar never covers them and they
+ * never cover the bar (tours.css).
  */
 export function SpaceOverlay({ children }: { children?: ReactNode }) {
   return (
     <div className="space-overlay">
       {children}
+      <TourStops />
       <TourBar />
     </div>
   );

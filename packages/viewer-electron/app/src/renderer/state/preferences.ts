@@ -7,6 +7,8 @@ import { scopedPresentation } from './folder-presentation';
 import { sameJSON } from '../../domain/json';
 import { rememberSuggestion, selectionKind } from '../../domain/suggestions/rules';
 import { rememberDismissal } from '../../domain/suggestions/insights';
+import type { FirstRunStep } from '../../domain/preferences/first-run';
+import { firstRunHintAfter } from '../../domain/preferences/first-run';
 
 let preferenceTimer: ReturnType<typeof setTimeout> | undefined;
 export const pendingPreferences = new Map<string, unknown>();
@@ -119,6 +121,9 @@ export function changePreferences(transform: (ui: UIPreferences) => UIPreference
     queuePreference('ui.suggestionHistory', ui.suggestionHistory ?? {});
   if (old.insightsDismissed !== ui.insightsDismissed)
     queuePreference('ui.insightsDismissed', ui.insightsDismissed ?? {});
+  // only ever changed from a hint the profile holds, so never written where there was none
+  if (old.firstRunHint !== ui.firstRunHint && ui.firstRunHint)
+    queuePreference('ui.firstRunHint', ui.firstRunHint);
   schedulePreferences();
 }
 /** A command the person ran: first in Recent, and, for a file selection, in its kind's history. */
@@ -136,6 +141,19 @@ export function dismissInsight(folder: string, id: string): void {
     ...ui,
     insightsDismissed: rememberDismissal(ui.insightsDismissed, folder, id),
   }));
+}
+/** The first-run tips learn that `step` was used: with every step used, they retire. */
+export function noteFirstRunStep(step: FirstRunStep): void {
+  changePreferences((ui) => {
+    const firstRunHint = firstRunHintAfter(ui.firstRunHint, step);
+    return firstRunHint === ui.firstRunHint ? ui : { ...ui, firstRunHint };
+  });
+}
+/** Dismissed, the first-run tips retire for good. */
+export function dismissFirstRunHint(): void {
+  changePreferences((ui) =>
+    ui.firstRunHint && ui.firstRunHint !== 'retired' ? { ...ui, firstRunHint: 'retired' } : ui,
+  );
 }
 /** A line run from the command line, first in its history. */
 export function rememberLine(line: string): void {

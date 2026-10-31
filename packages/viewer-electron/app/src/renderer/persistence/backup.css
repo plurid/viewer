@@ -1,6 +1,6 @@
 .backup-body {
   display: grid;
-  gap: 16px;
+  gap: var(--gap-panel);
 }
 .backup-body p {
   margin: 0;
@@ -8,13 +8,8 @@
 }
 .backup-choices {
   display: flex;
-  gap: 12px;
+  gap: var(--gap-content);
   flex-wrap: wrap;
-}
-.backup-choices button,
-.backup-roots button {
-  border-color: var(--line);
-  background: var(--field);
 }
 .backup-counts {
   display: flex;
@@ -25,18 +20,19 @@
 .backup-counts dt {
   text-transform: capitalize;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .backup-counts dd {
-  margin: 4px 0 0;
-  font-size: 18px;
+  margin: var(--gap-tight) 0 0;
+  font-size: var(--text-section);
+  font-weight: 600;
 }
 .backup-notices {
-  padding: 12px;
+  padding: var(--gap-content);
   border: 1px solid var(--line);
   border-radius: 6px;
   display: grid;
-  gap: 8px;
+  gap: var(--gap-inline);
   color: var(--muted);
 }
 .backup-roots {
@@ -47,7 +43,7 @@
 .backup-roots li {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--gap-panel);
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
@@ -59,7 +55,7 @@
 .backup-roots small,
 .backup-preferences small {
   display: block;
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
   color: var(--muted);
 }
 .backup-preferences {

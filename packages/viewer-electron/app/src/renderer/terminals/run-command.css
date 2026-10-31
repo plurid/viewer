@@ -1,7 +1,7 @@
 .run-command-dialog form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap-content);
   max-height: calc(100vh - 130px);
   overflow: auto;
 }
@@ -13,14 +13,14 @@
 .run-command-dialog textarea {
   width: 100%;
   min-height: 100px;
-  padding: 10px 12px;
+  padding: 10px var(--gap-content);
   resize: vertical;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--field);
   color: var(--ink);
   font:
-    13px/1.5 Menlo,
+    var(--text-body)/1.5 Menlo,
     monospace;
   caret-color: var(--accent);
 }

@@ -38,7 +38,7 @@ import {
   getState,
   useViewer,
 } from '../state/store';
-import { Dialog, NameDialog } from '../ui/primitives';
+import { Dialog, NameDialog, PathField } from '../ui/primitives';
 import { useWorkspace } from './context';
 import { errorMessage } from '../../domain/errors';
 import { sendWindowEvent, useWindowEvent } from '../app/window-events';
@@ -127,7 +127,7 @@ export function ProjectFileNotice() {
       : undefined;
   if (!project || !noticeID || noticeID === ignored) return null;
   return (
-    <div className="project-file-notice" role="status">
+    <div className="bar project-file-notice" role="status">
       <span title={project.file}>
         {problem?.missing
           ? 'Project file is missing. Your open planes are still available.'
@@ -450,7 +450,7 @@ export function ProjectControls() {
           {project?.dirty && (
             <p>Your private session has changes that have not been saved to the project file.</p>
           )}
-          <p className="muted">{reload.file}</p>
+          <PathField className="muted" path={reload.file} />
         </div>
         <footer>
           <button disabled={busy} onClick={() => setReload(undefined)}>

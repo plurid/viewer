@@ -9,6 +9,9 @@ export interface CommandContext {
   rootID?: string;
   paneID?: string;
   selection: readonly FileEntry[];
+  /** The file a preview plane shows: its own context's, never another plane's. File tools act on
+   * it when nothing is selected (target.ts `toolFiles`). */
+  subject?: FileEntry;
   folder?: FolderPane;
   searchOpen?: boolean;
   directory?: string;

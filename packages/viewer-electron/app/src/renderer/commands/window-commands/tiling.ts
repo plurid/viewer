@@ -127,7 +127,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
       id: `tile-resize-${direction}`,
       label: `Grow tile ${direction}`,
       group: 'Space',
-      icon: 'frame' as const,
+      icon: 'resize' as const,
       aliases: ['resize', 'tile'],
       when: (context: CommandContext) => tiled(context) && !!tiling?.panes.includes(active()),
       run: () => {

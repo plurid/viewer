@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from '@testing-library/react';
 import { builtInProfiles, profilePaths } from '../src/domain/preferences/profiles';
+import { headerPresets } from '../src/domain/preferences/header';
 import { defaultShortcuts } from '../src/domain/preferences/shortcuts';
 import { agentCommandID } from '../src/domain/agents/safety';
 import { profileSchema } from '../src/desktop/preferences/settings-schema';
@@ -29,6 +30,15 @@ beforeEach(() => {
   settingsPatch.mockClear();
   Object.assign(window, { viewer: { save: vi.fn(async () => {}), settingsPatch } });
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
+  // a profile that shows every spatial aid, unlike a first run's quiet space
+  const saved = getState().saved;
+  replaceState({
+    ...getState(),
+    saved: {
+      ...saved,
+      ui: { ...saved.ui, space: { ...saved.ui.space, toolbar: true, viewcube: true } },
+    },
+  });
 });
 const controller: Record<string, unknown> = {
   parentPaneID: () => undefined,
@@ -61,6 +71,14 @@ describe('profiles', () => {
     act(() => changeWorkspace((space) => ({ ...space, overrides: { 'ui.space.toolbar': false } })));
     expect(space().toolbar).toBe(false);
     expect(getState().saved.ui.space.toolbar).toBe(true);
+  });
+  it('shows every plane toolbar control in Full, the general Essential set untouched', async () => {
+    expect(space().headerControls).toEqual(headerPresets.essential);
+    await act(async () => find('profile.full').run(context));
+    expect(space().headerControls).toEqual(headerPresets.full);
+    expect(getState().saved.ui.space.headerControls).toEqual(headerPresets.essential);
+    expect(label('plane-toolbar.full')).toBe('Plane toolbar: Full');
+    expect(find('plane-toolbar.full').icon).toBe('check');
   });
   it('applies editor and list preferences at their actual consumer seams', async () => {
     const state = getState();

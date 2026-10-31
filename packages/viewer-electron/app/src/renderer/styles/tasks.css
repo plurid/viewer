@@ -13,7 +13,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 18px;
+  padding: var(--gap-content) var(--gap-dialog);
   color: var(--muted);
   border-bottom: 1px solid var(--line);
 }
@@ -25,12 +25,12 @@
 .check-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .task-list {
   flex: 1;
   overflow: auto;
-  padding: 12px;
+  padding: var(--gap-content);
 }
 .task-list > button {
   width: 100%;
@@ -54,19 +54,19 @@
   grid-template-columns: 22px minmax(0, 1fr) 28px;
   align-items: center;
   gap: 10px;
-  padding: 8px 18px;
+  padding: var(--gap-inline) var(--gap-dialog);
   border-bottom: 1px solid var(--line);
 }
 .task-source {
   display: flex;
-  gap: 16px;
+  gap: var(--gap-panel);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  margin-bottom: 8px;
+  margin-bottom: var(--gap-inline);
 }
 .task-source span {
-  font-size: 12px;
+  font-size: var(--text-compact);
   color: var(--muted);
   margin-left: auto;
 }
@@ -75,19 +75,19 @@
   align-items: center;
   gap: 10px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .task-destination input {
   width: 100%;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .task-location {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 4px 0 0 42px;
-  font-size: 12px;
+  margin: var(--gap-tight) 0 0 42px;
+  font-size: var(--text-compact);
   color: var(--muted);
 }
 .task-location > span {
@@ -104,28 +104,28 @@
 .task-evidence {
   max-height: 160px;
   overflow: auto;
-  padding: 16px 18px;
+  padding: var(--gap-panel) var(--gap-dialog);
   border-top: 1px solid var(--line);
 }
 .task-evidence p {
-  margin: 8px 0;
+  margin: var(--gap-inline) 0;
 }
 .task-evidence p > span {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .task-summary {
   flex: 1;
   min-height: 180px;
   overflow: auto;
   white-space: pre-wrap;
-  padding: 18px;
+  padding: var(--gap-dialog);
   line-height: 1.6;
   font-family: inherit;
 }
 .action-config form {
-  padding: 18px;
+  padding: var(--gap-dialog);
 }
 .action-config footer {
   padding: 14px 0 0;
@@ -133,7 +133,7 @@
 .batch-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--gap-content);
 }
 .batch-fields > :first-child,
 .batch-fields > p {
@@ -165,7 +165,7 @@
   display: block;
   text-align: left;
   width: 100%;
-  padding: 8px;
+  padding: var(--gap-inline);
   line-height: 1.5;
 }
 .epub-body nav button[aria-current] {
@@ -206,14 +206,14 @@
 }
 .epub-search {
   flex: none;
-  padding: 6px 12px;
+  padding: var(--gap-small) var(--gap-content);
   border-bottom: 1px solid var(--line);
   max-height: 35%;
   overflow: auto;
 }
 .epub-search > div {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-inline);
   align-items: center;
   flex-wrap: wrap;
 }
@@ -222,7 +222,7 @@
   width: 180px;
 }
 .epub-search ol {
-  margin: 4px 0;
+  margin: var(--gap-tight) 0;
   padding-left: 20px;
 }
 .epub-search li button {
@@ -232,13 +232,13 @@
   white-space: normal;
 }
 .epub-search li button strong {
-  margin-right: 8px;
+  margin-right: var(--gap-inline);
 }
 .epub-body .epub-bookmarks form {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 0 12px;
+  gap: var(--gap-small);
+  padding: 0 0 var(--gap-content);
 }
 .epub-bookmarks label {
   width: 100%;
@@ -246,7 +246,7 @@
 .epub-bookmarks input {
   width: 100%;
   min-width: 0;
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
 }
 .epub-bookmarks ol {
   list-style: none;
@@ -255,7 +255,7 @@
 }
 .epub-bookmarks li {
   border-top: 1px solid var(--line);
-  padding: 8px 0;
+  padding: var(--gap-inline) 0;
 }
 .epub-bookmarks li > button {
   overflow-wrap: anywhere;
@@ -263,35 +263,35 @@
 }
 .epub-body .epub-bookmark-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 .epub-body .epub-bookmark-actions button {
   width: auto;
-  font-size: 12px;
-  padding: 4px;
+  font-size: var(--text-compact);
+  padding: var(--gap-tight);
 }
 @media (max-width: 800px) {
   .epub-body nav {
     width: 150px;
-    padding: 8px;
+    padding: var(--gap-inline);
   }
   .epub-chapter {
-    padding: 16px;
+    padding: var(--gap-panel);
   }
 }
 .settings-discovery {
   width: 100%;
   display: flex;
   justify-content: space-between;
-  padding: 12px;
-  margin-bottom: 8px;
+  padding: var(--gap-content);
+  margin-bottom: var(--gap-inline);
   text-align: left;
 }
 
 .search-content-option {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-small);
   white-space: nowrap;
 }
 .search-content-option input {
@@ -301,7 +301,7 @@
 .selection-size {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-small);
   min-width: 0;
 }
 .selection-size .icon-button {
@@ -312,7 +312,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding-bottom: 12px;
+  padding-bottom: var(--gap-content);
 }
 .application-search input {
   flex: 1;
@@ -350,16 +350,13 @@
   color: var(--muted);
 }
 .application-empty {
-  margin: 12px 0;
+  margin: var(--gap-content) 0;
 }
 .native-open-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
-}
-.native-open-actions button {
-  border-color: var(--line);
+  gap: var(--gap-inline);
 }
 .media-preview {
   width: 100%;
@@ -379,7 +376,7 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--gap-content);
   padding: 10px;
   color: var(--muted);
   border-top: 1px solid var(--line);
@@ -390,7 +387,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: var(--gap-content);
   padding: 24px;
   text-align: center;
 }

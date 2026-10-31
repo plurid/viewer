@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCommands, useCommandRevision } from '../commands/context';
 import { ContextMenuResults } from './ContextMenuResults';
 import { type CommandRequest, type ResolvedCommand } from '../commands/registry';
 import { report, useViewer } from '../state/store';
-import { dialogOpen } from './modal';
+import { layerContainer, useAnchoredLayer } from './Popover';
 import { suggestionsFor } from '../commands/suggestions';
+import { toolFiles } from '../commands/target';
+import type { HeaderLead } from '../workspace/header-overflow';
 
 /** Outside transformed planes, with a fixed target and keyboard-first search. */
 export function ContextMenu({
@@ -14,44 +16,28 @@ export function ContextMenu({
   onClose,
   label = 'Actions',
   anchor,
+  lead,
 }: {
   position: { x: number; y: number };
   request: CommandRequest;
   onClose(): void;
   label?: string;
   anchor?: HTMLElement;
+  /** The commands of what the plane header could not show: first, in the header's order. */
+  lead?: HeaderLead;
 }) {
   const registry = useCommands();
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
-  const menu = useRef<HTMLDivElement>(null);
-  const previousFocus = useRef(document.activeElement as HTMLElement | null);
-  const close = useRef(onClose);
-  const trigger = useRef(anchor);
-  close.current = onClose;
-  trigger.current = anchor;
-  useEffect(() => {
-    const previous = previousFocus.current;
-    const element = menu.current?.querySelector<HTMLElement>('.context-menu');
-    if (element) {
-      const rect = element.getBoundingClientRect();
-      element.style.left = `${Math.max(8, Math.min(position.x, innerWidth - rect.width - 8))}px`;
-      const top = Math.max(8, Math.min(position.y, innerHeight - rect.height - 8));
-      element.style.top = `${top}px`;
-      element.style.maxHeight = `min(540px, calc(100vh - ${top + 8}px))`;
-    }
-    const dismiss = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!menu.current?.contains(target) && !trigger.current?.contains(target)) close.current();
-    };
-    window.addEventListener('pointerdown', dismiss);
-    return () => {
-      window.removeEventListener('pointerdown', dismiss);
-      if (!dialogOpen() && previous?.isConnected) previous.focus({ preventScroll: true });
-    };
-    // Placed once when opened; re-running would also move focus back on each change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // at the pointer, inside the window and at most 540 px tall; focus goes back to what had it
+  const menu = useAnchoredLayer({
+    anchor,
+    point: position,
+    fit: 540,
+    select: (root) => root.querySelector<HTMLElement>('.context-menu'),
+    onClose,
+  });
+  const [container] = useState(() => layerContainer(anchor ?? document.activeElement));
   const select = (command: ResolvedCommand) => {
     onClose();
     // Commit closure/focus restoration before a handler opens a protected dialog.
@@ -60,12 +46,21 @@ export function ContextMenu({
     });
   };
   const available = registry.list(request);
-  // a view or column picker is already scoped; a file menu offers what fits its selection
-  const suggested = request.ids ? [] : suggestionsFor(available, request.context?.selection ?? []);
+  // a view or column picker is already scoped; a file menu offers what fits its selection, and a
+  // preview's what fits its file
+  const suggested = request.ids
+    ? []
+    : suggestionsFor(
+        available,
+        toolFiles({
+          selection: request.context?.selection ?? [],
+          subject: request.context?.subject,
+        }),
+      );
   return createPortal(
     <div
       className="context-menu-layer"
-      ref={menu}
+      ref={menu.ref}
       style={
         { '--menu-left': `${position.x}px`, '--menu-top': `${position.y}px` } as React.CSSProperties
       }
@@ -74,6 +69,7 @@ export function ContextMenu({
       data-plurid-overlay="context-menu"
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
+        menu.onKeyDown(event);
         if (event.key === 'Tab') onClose();
       }}
     >
@@ -84,8 +80,9 @@ export function ContextMenu({
         recent={recent}
         focused={!!request.ids}
         suggested={suggested}
+        lead={lead}
       />
     </div>,
-    document.body,
+    container,
   );
 }

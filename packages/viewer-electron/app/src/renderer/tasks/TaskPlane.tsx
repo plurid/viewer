@@ -13,7 +13,7 @@ import { errorMessage } from '../../domain/errors';
 import { activeWorkspace, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { ChoiceButton } from '../ui/ChoiceMenu';
-import { Empty } from '../ui/primitives';
+import { Empty, PathField } from '../ui/primitives';
 import { renameTaskArea } from './state';
 import { receiptOutcome } from './ReceiptPlane';
 import './tasks.css';
@@ -144,7 +144,7 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
             }
           }}
         />
-        <p className="task-checkout-path">{area.checkout.path}</p>
+        <PathField className="task-checkout-path" path={area.checkout.path} />
         <p className="muted">
           {area.checkout.branch ?? 'Folder task'}
           {area.checkout.commit ? ' · ' + area.checkout.commit.slice(0, 12) : ''} · observed{' '}

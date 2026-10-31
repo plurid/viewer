@@ -10,7 +10,9 @@ import {
 import type { ActionContext } from '../../../domain/services';
 import { activeWorkspace } from '../../state/store';
 import { useWorkspace } from '../../workspace/context';
-import { Dialog, Loading } from '../primitives';
+import { Dialog, Loading, PathField } from '../primitives';
+import { baseName } from '../../../domain/workspaces/planes';
+import { Disclosure } from '../Disclosure';
 import { reviewOperationPlan } from '../operations/OperationReview';
 import { WorkflowArtifact } from './WorkflowArtifact';
 import { WatchRuleControls } from './WatchRules';
@@ -132,7 +134,7 @@ export function WorkflowControls() {
   };
   if (!open)
     return notice ? (
-      <div className="project-file-notice watch-rule-notice" role="status">
+      <div className="bar project-file-notice watch-rule-notice" role="status">
         <span>
           {notice.name} · {notice.enabled ? 'Changes ready for review' : 'Watch rule paused'}
         </span>
@@ -249,16 +251,16 @@ export function WorkflowControls() {
           </button>
         </div>
         {document && (
-          <details
+          <Disclosure
+            variant="row"
             className="workflow-definition"
             aria-label="Workflow definition"
             open={!selected}
+            summary={<strong>{document.definition.name}</strong>}
+            meta={baseName(document.file)}
           >
-            <summary className="project-control-row">
-              <strong>{document.definition.name}</strong>
-              <span className="muted">{document.file}</span>
-            </summary>
             <div className="workflow-definition-content">
+              <PathField className="muted" path={document.file} />
               <ol className="workflow-steps">
                 {document.definition.steps.map((step) => (
                   <li key={step.id}>
@@ -397,7 +399,7 @@ export function WorkflowControls() {
                 </form>
               )}
             </div>
-          </details>
+          </Disclosure>
         )}
         <WatchRuleControls
           document={document}

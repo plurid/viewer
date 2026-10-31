@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { AgentProposal } from '../../domain/agents/requests';
 import { reviewButton, reviewNote } from '../../domain/agents/review';
-import { Dialog } from '../ui/primitives';
+import { Dialog, PathField } from '../ui/primitives';
 import { report } from '../state/store';
 import { followSnapshot } from '../state/requests';
 import type { DesktopEvent } from '../../domain/contracts';
@@ -59,9 +59,8 @@ export function AgentReview() {
           <p>An agent requested this action.</p>
           {proposal.target && (
             <>
-              <p className="configuration-path">
-                {proposal.target.directory} · {proposal.target.selection.length} selected
-              </p>
+              <PathField className="configuration-path" path={proposal.target.directory} />
+              <p className="muted">{proposal.target.selection.length} selected</p>
               {!!proposal.target.selection.length && (
                 <ul className="agent-proposal-files">
                   {proposal.target.selection.slice(0, 8).map((file) => (

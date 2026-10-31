@@ -80,6 +80,7 @@ describe("plurid's look", () => {
       look: 'light',
       size: { width: 800, height: 600 },
       preferences: { ...normalizePreferences().space, grid: false },
+      minimap: true,
       color: '#f5efe4',
     });
     expect(configuration.global?.look).toMatchObject({ grid: false, space: '#f5efe4' });

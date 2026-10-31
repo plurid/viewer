@@ -650,8 +650,8 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
             aria-label="Find files"
             placeholder={
               subtree
-                ? 'Search subfolders: name ext:md size>10mb modified<7d tag:red'
-                : 'Filter: name ext:md size>10mb modified<7d tag:red'
+                ? 'Search subfolders by name, or ext:pdf size>10mb…'
+                : 'Filter by name, or ext:pdf size>10mb…'
             }
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -674,7 +674,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
             Search contents
           </button>
           {search.running && (
-            <IconButton icon="pause" label="Cancel search" onClick={search.cancel} />
+            <IconButton icon="stop" label="Cancel search" onClick={search.cancel} />
           )}
         </div>
       )}

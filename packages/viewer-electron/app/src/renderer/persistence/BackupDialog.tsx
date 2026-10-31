@@ -3,7 +3,7 @@ import type { BackupRequest, BackupReview } from '../../domain/persistence/backu
 import type { WorkspaceController } from '../workspace/context';
 import { errorMessage } from '../../domain/errors';
 import { formatBytes } from '../../domain/files/entries';
-import { Dialog, Loading } from '../ui/primitives';
+import { Dialog, Loading, PathField } from '../ui/primitives';
 import {
   activeWorkspace,
   changeWorkspace,
@@ -140,8 +140,21 @@ export function BackupDialog({
                   {review.roots.map((root) => (
                     <li key={root.source}>
                       <div>
-                        <span>{root.source}</span>
-                        <small>{root.destination ?? 'Keep original location'}</small>
+                        <PathField
+                          path={root.source}
+                          onError={(value) => setError(errorMessage(value))}
+                        />
+                        <small>
+                          {root.destination ? (
+                            <PathField
+                              path={root.destination}
+                              label="Copy new location"
+                              onError={(value) => setError(errorMessage(value))}
+                            />
+                          ) : (
+                            'Keep original location'
+                          )}
+                        </small>
                       </div>
                       <button
                         disabled={busy}

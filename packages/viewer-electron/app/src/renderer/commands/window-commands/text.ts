@@ -49,7 +49,7 @@ export function textCommands({
       unavailable: 'Open a text preview that supports editing.',
       label: 'Edit text',
       group: 'Text',
-      icon: 'rename',
+      icon: 'pencil',
       aliases: ['edit', 'modify'],
       shortcut: '⌘E',
       when: (context) => paneScope(context) && !!plane(context)?.edit,

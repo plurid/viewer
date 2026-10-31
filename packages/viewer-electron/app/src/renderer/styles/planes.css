@@ -9,9 +9,26 @@
   background: var(--raised);
   border-bottom: 1px solid var(--line);
   user-select: none;
-  container-type: inline-size;
+}
+/* a narrow header's items wait in "…" (workspace/header-overflow.ts), measured, not by breakpoint */
+.plane-controls [data-spilled],
+.plane-controls [data-pinned-twin] {
+  display: none !important;
+}
+.plane-navigation:not(:has(> :not([data-spilled]))),
+.plane-spatial-controls:not(:has(> :not([data-spilled]))),
+.plane-controls .plane-pinned-tools:not(:has(> :not([data-spilled]))) {
+  display: none;
+}
+.plane-header-item {
+  display: flex;
+  flex-shrink: 0;
+}
+.plane-header-item:empty {
+  display: none;
 }
 .plane-controls .icon-button {
+  flex-shrink: 0;
   width: 28px;
   height: 28px;
 }
@@ -40,7 +57,8 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  min-width: 56px;
+  /* header-overflow.ts titleMinimum: the title's room before anything gives way */
+  min-width: 96px;
   flex: 1;
   cursor: grab;
   padding: 7px 4px;
@@ -53,7 +71,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--text-body);
   font-weight: 600;
 }
 /* text not saved: a file's edits, or a scratch plane's text */
@@ -72,11 +90,33 @@
   flex-shrink: 0;
   height: 28px;
 }
+/* a format's controls with no command of their own scroll, as the last resort, at a fading edge */
 .plane-module-controls {
-  max-width: 64%;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  --plane-edge: 20px;
+}
+.plane-module-controls[data-overflow='end'] {
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--plane-edge)), transparent);
+}
+.plane-module-controls[data-overflow='start'] {
+  mask-image: linear-gradient(to left, #000 calc(100% - var(--plane-edge)), transparent);
+}
+.plane-module-controls[data-overflow='both'] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--plane-edge),
+    #000 calc(100% - var(--plane-edge)),
+    transparent
+  );
+}
+/* pins wait in "…" with the rest, never in a scroller of their own */
+.plane-controls .plane-pinned-tools {
+  flex-shrink: 0;
+  max-width: none;
+  overflow: visible;
 }
 .plane-module-controls .preview-toolbar {
   --preview-control-height: 28px;
@@ -115,49 +155,6 @@
 .plane-heading[data-dragging='false'] {
   cursor: default;
 }
-@container (max-width: 320px) {
-  .plane-navigation,
-  .plane-view-button,
-  .plane-search-button,
-  .plane-module-controls {
-    display: none;
-  }
-  .plane-heading {
-    min-width: 0;
-  }
-}
-@container (max-width: 540px) {
-  .plane-layout-button {
-    display: none;
-  }
-  .plane-navigation .plane-forward {
-    display: none;
-  }
-  .plane-module-controls {
-    max-width: 50%;
-  }
-  .plane-module-controls .preview-toolbar > .muted,
-  .plane-module-controls .preview-toolbar > .tabular,
-  .plane-module-controls .preview-toolbar > label {
-    display: none;
-  }
-}
-@container (max-width: 480px) {
-  .plane-view-button,
-  .plane-search-button,
-  .plane-module-controls,
-  .git-branch {
-    display: none;
-  }
-  .plane-heading {
-    min-width: 0;
-  }
-}
-@container (max-width: 260px) {
-  .plane-spatial-controls {
-    display: none;
-  }
-}
 /* the pane's id on its plane's content: no box of its own */
 .pane-marker {
   display: contents;
@@ -166,6 +163,6 @@
 .plane-pair {
   flex-shrink: 0;
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--text-compact);
   line-height: 1;
 }

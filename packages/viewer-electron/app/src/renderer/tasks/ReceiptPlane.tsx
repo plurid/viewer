@@ -3,7 +3,7 @@ import type { ReceiptPane as Record } from '../../domain/contracts';
 import type { CommandReceipt } from '../../domain/automation/receipts';
 import { receiptMarkdown } from '../../domain/automation/receipts';
 import { errorMessage } from '../../domain/errors';
-import { Empty, Loading } from '../ui/primitives';
+import { CopyButton, Empty, Loading, PathField } from '../ui/primitives';
 import './tasks.css';
 export function receiptOutcome(receipt: Pick<CommandReceipt, 'status' | 'exitCode'>): string {
   return receipt.status === 'running'
@@ -88,15 +88,12 @@ export default function ReceiptPlane({ pane, active }: { pane: Record; active: b
             Stop
           </button>
         )}
-        <button
-          onClick={() =>
-            void navigator.clipboard
-              .writeText(receipt.output)
-              .catch((value) => setError(errorMessage(value)))
-          }
-        >
-          Copy output
-        </button>
+        <CopyButton
+          appearance="text"
+          label="Copy output"
+          copy={{ text: receipt.output }}
+          onError={(value) => setError(errorMessage(value))}
+        />
         <button onClick={() => void exportReceipt()}>Export Markdown…</button>
       </header>
       <div className="receipt-scroll">
@@ -108,7 +105,12 @@ export default function ReceiptPlane({ pane, active }: { pane: Record; active: b
         {receipt.error && <p className="inline-warning">{receipt.error}</p>}
         <dl>
           <dt>Folder</dt>
-          <dd>{receipt.directory}</dd>
+          <dd>
+            <PathField
+              path={receipt.directory}
+              onError={(value) => setError(errorMessage(value))}
+            />
+          </dd>
           <dt>Observed folder</dt>
           <dd>{receipt.folderIdentity ?? 'Identity unavailable'} · before launch</dd>
         </dl>

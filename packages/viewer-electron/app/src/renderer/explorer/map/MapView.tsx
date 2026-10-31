@@ -653,13 +653,13 @@ export const MapView = memo(function MapView({
         </div>
       </div>
       <div className="map-toolbar" role="toolbar" aria-label="Map zoom">
-        <IconButton icon="down" label="Zoom out" onClick={() => zoomTo(zoom / 1.25)} />
+        <IconButton icon="zoom-out" label="Zoom out" onClick={() => zoomTo(zoom / 1.25)} />
         <button className="map-zoom-value" title="Actual size" onClick={() => zoomTo(1)}>
           {Math.round(zoom * 100)}%
         </button>
-        <IconButton icon="up" label="Zoom in" onClick={() => zoomTo(zoom * 1.25)} />
+        <IconButton icon="zoom-in" label="Zoom in" onClick={() => zoomTo(zoom * 1.25)} />
         <IconButton
-          icon="frame"
+          icon="fit"
           label="Fit map"
           onClick={() => {
             const element = scroll.current;

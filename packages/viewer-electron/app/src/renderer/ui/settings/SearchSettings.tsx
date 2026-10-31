@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { IndexStatus } from '../../../domain/services';
 import { Field } from './SettingField';
-import { IconButton } from '../primitives';
+import { IconButton, PathField } from '../primitives';
 import type { SettingsEditor } from './editor';
 import { commonSearchExclusions } from '../../../domain/search/exclusions';
 import type { DesktopEvent } from '../../../domain/contracts';
@@ -32,8 +32,8 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
         const status = index?.roots.find((item) => item.path === root);
         return (
           <div className="settings-location" key={root}>
-            <span title={root}>
-              {root}
+            <span>
+              <PathField path={root} onError={(error) => setError(errorMessage(error))} />
               <small>
                 {status
                   ? status.status +

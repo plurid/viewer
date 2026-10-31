@@ -362,8 +362,8 @@ function panelState() {
     collapsed: panel?.dataset.collapsed === 'true',
     hidden: panel?.querySelector<HTMLElement>('.check-panel-body')?.hidden ?? false,
     title: text(panel?.querySelector('.check-panel-toggle')),
-    sources: [...(panel?.querySelectorAll('.check-files li') ?? [])].map((item) => ({
-      ref: text(item.querySelector('.check-ref')),
+    sources: [...(panel?.querySelectorAll<HTMLElement>('.check-files li') ?? [])].map((item) => ({
+      ref: item.dataset.ref ?? '',
       name: text(item.querySelector('.check-file')),
       sending: text(item.querySelector('.muted')),
     })),

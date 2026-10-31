@@ -23,8 +23,10 @@
   outline: 3px solid var(--accent);
   outline-offset: -3px;
 }
+/* The folder's bars share one inset, --gap-content, so the path, the search, the insights, an
+   error and the status line start in one column. */
 .breadcrumb-row {
-  padding: 7px 13px;
+  padding: 7px var(--gap-content);
   min-height: 34px;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
@@ -45,7 +47,7 @@
 }
 .breadcrumbs button {
   padding: 2px 5px;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .breadcrumbs span:last-child button {
   color: var(--ink);
@@ -54,8 +56,8 @@
 .search-row {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
+  gap: var(--gap-inline);
+  padding: var(--gap-inline) var(--gap-content);
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   flex-shrink: 0;
@@ -64,12 +66,12 @@
   flex: 1;
   border: none;
   background: transparent;
-  padding: 4px 0;
+  padding: var(--gap-tight) 0;
   color: var(--ink);
 }
 .search-row button {
-  font-size: 11px;
-  padding: 4px 7px;
+  font-size: var(--text-label);
+  padding: var(--gap-tight) 7px;
   white-space: nowrap;
 }
 .file-head,
@@ -77,14 +79,14 @@
   display: grid;
   grid-template-columns: minmax(200px, 1fr) 160px 96px 95px;
   align-items: center;
-  padding: 0 18px;
+  padding: 0 var(--gap-dialog);
 }
 .file-head {
   height: 30px;
   color: var(--muted);
   overflow: hidden;
   scrollbar-gutter: stable;
-  font-size: 11px;
+  font-size: var(--text-label);
   background: var(--field);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
@@ -93,7 +95,7 @@
   text-align: left;
   padding: 3px 0;
   border: 0;
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .file-head > :first-child {
   padding-left: 27px;
@@ -118,7 +120,7 @@
   height: 36px;
   user-select: none;
   cursor: default;
-  font-size: 12px;
+  font-size: var(--text-compact);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
 }
 .file-row:hover {
@@ -163,14 +165,14 @@
   flex-shrink: 0;
   width: 24px;
   height: 24px;
-  padding: 4px;
+  padding: var(--gap-tight);
   color: var(--accent);
 }
 .file-linked-label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 .file-linked-label > span {
   min-width: 0;
@@ -213,8 +215,8 @@
 }
 .file-heading .column-label {
   width: calc(100% - 8px);
-  margin-inline: 4px;
-  padding: 3px 4px;
+  margin-inline: var(--gap-tight);
+  padding: 3px var(--gap-tight);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -248,7 +250,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-  padding-inline: 8px;
+  padding-inline: var(--gap-inline);
 }
 .file-table .file-row > [data-column='size'] {
   text-align: right;
@@ -256,7 +258,7 @@
 .file-table[data-wrap-names='true'] .file-row {
   height: auto;
   min-height: 36px;
-  padding-block: 8px;
+  padding-block: var(--gap-inline);
 }
 [data-density='compact'] .file-table[data-wrap-names='true'] .file-row {
   min-height: 30px;
@@ -300,7 +302,7 @@
 .file-kind,
 .file-size {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .file-size {
   text-align: right;
@@ -311,20 +313,20 @@
   justify-content: space-between;
   gap: 10px;
   height: 31px;
-  padding: 0 15px;
+  padding: 0 var(--gap-content);
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
   flex-shrink: 0;
 }
 .folder-error {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-inline);
   align-items: center;
   color: var(--danger);
-  padding: 9px 15px;
+  padding: var(--gap-inline) var(--gap-content);
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .folder-error span {
   flex: 1;
@@ -334,22 +336,22 @@
 .folder-insights {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(max(240px, calc((100% - 12px) / 3)), 1fr));
-  gap: 6px;
-  padding: 8px 12px;
+  gap: var(--gap-small);
+  padding: var(--gap-inline) var(--gap-content);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
 }
 .folder-insight {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   min-width: 0;
-  padding: 5px 4px 5px 10px;
+  padding: 5px var(--gap-tight) 5px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--field);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .folder-insight > svg {
   flex-shrink: 0;
@@ -368,13 +370,12 @@
 }
 .folder-insight-text span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .folder-insight > button:not(.icon-button) {
   flex-shrink: 0;
-  padding: 4px 8px;
-  border-color: var(--line);
-  font-size: 11px;
+  padding: var(--gap-tight) var(--gap-inline);
+  font-size: var(--text-label);
   white-space: nowrap;
 }
 .folder-insight > .folder-insight-dismiss {
@@ -383,8 +384,30 @@
   padding: 3px;
   color: var(--muted);
 }
+/* a new profile's first-run tips: one whole row before the insight cards, its steps in a line */
+.folder-tips {
+  grid-column: 1 / -1;
+}
+.folder-tips > ul {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.folder-tips li + li::before {
+  content: '·' / '';
+  padding: 0 var(--gap-inline);
+  color: var(--muted);
+}
+.folder-tips kbd {
+  font: inherit;
+  padding: 0 var(--gap-tight);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
 .grid-scroll {
-  padding: 12px 12px 0;
+  padding: var(--gap-content) var(--gap-content) 0;
 }
 .grid-row {
   display: grid;
@@ -396,7 +419,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px;
+  padding: var(--gap-small);
   gap: 3px;
   user-select: none;
   min-width: 0;
@@ -423,11 +446,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .file-tile small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-label);
 }
 .columns-view {
   flex: 1;
@@ -460,9 +483,9 @@
   flex-shrink: 0;
 }
 .column-title {
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
-  padding: 8px 14px;
+  padding: var(--gap-inline) 14px;
   background: var(--field);
   border-bottom: 1px solid var(--line);
   overflow: hidden;
@@ -491,7 +514,7 @@
   flex-shrink: 0;
   border-top: 1px solid var(--line);
   display: flex;
-  gap: 6px;
+  gap: var(--gap-small);
   padding: 7px 10px;
   overflow-x: auto;
 }
@@ -506,7 +529,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--gap-small);
 }
 .gallery-item img {
   max-width: 88px;
@@ -522,7 +545,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 10px;
+  font-size: var(--text-label);
 }
 .empty-state {
   display: flex;
@@ -537,25 +560,25 @@
 }
 .empty-state > svg {
   color: var(--subtle);
-  margin-bottom: 4px;
+  margin-bottom: var(--gap-tight);
 }
 .empty-state strong {
-  font-size: 15px;
+  font-size: var(--text-section);
   font-weight: 600;
 }
 .empty-state p {
   color: var(--muted);
   max-width: 420px;
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-compact);
   overflow-wrap: anywhere;
 }
 .empty-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
-  margin-top: 6px;
+  gap: var(--gap-inline);
+  margin-top: var(--gap-small);
 }
 .loading {
   height: 100%;
@@ -609,16 +632,18 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: var(--gap-content);
   height: 100%;
   color: var(--ink);
 }
 /* a filter that does not read yet: said under it, the last that did still filtering */
 .search-problem {
   margin: 0;
-  padding: 4px 12px 6px 38px;
+  /* under the search field's text: past the inset, the 16 px icon and the gap */
+  padding: var(--gap-tight) var(--gap-content) var(--gap-small)
+    calc(var(--gap-content) + 16px + var(--gap-inline));
   color: var(--danger);
-  font-size: 11.5px;
+  font-size: var(--text-compact);
 }
 .file-column .column-title {
   display: block;

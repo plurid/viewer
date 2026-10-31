@@ -23,7 +23,7 @@ export function comparisonCommands({
       id: 'new-chat',
       label: 'Chat about files',
       group: 'Files',
-      icon: 'info',
+      icon: 'chat',
       aliases: ['conversation', 'ask', 'model'],
       when: paneScope,
       run: (context) =>

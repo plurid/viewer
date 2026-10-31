@@ -173,6 +173,7 @@ function open(
     pages?: PreviewContext['pages'];
     anchor?: EvidenceAnchor;
     saved?: Record<string, unknown>;
+    toolbar?: PreviewContext['toolbar'];
   } = {},
 ) {
   const values = new Map<string, unknown>(Object.entries(options.saved ?? {}));
@@ -192,6 +193,7 @@ function open(
     interactive: true,
     look: 'light',
     pages: options.pages,
+    toolbar: options.toolbar,
     signal: new AbortController().signal,
     state: {
       get: (key: string) => values.get(key),
@@ -365,6 +367,20 @@ describe('what dark pages leave alone', () => {
     fireEvent.click(view.getByText('PDF tools…'));
     expect(context.optimize).toHaveBeenCalledTimes(1);
     expect(context.editPDF).toHaveBeenCalledTimes(1);
+  });
+  it('keep Dark pages in the Essential header, and leave the rest to the plane’s commands', async () => {
+    const { view } = open({ pages: { toggle() {} }, toolbar: 'essential' });
+    await waitFor(() => expect(renders).toHaveLength(1));
+    // fabrication's native check presses this one
+    expect(view.getByRole('button', { name: 'Dark pages' })).toBeTruthy();
+    for (const name of ['Search PDF', 'Previous page', 'Next page'])
+      expect(view.getByRole('button', { name })).toBeTruthy();
+    expect(view.getByText('PDF tools…')).toBeTruthy();
+    for (const name of ['Show pages', 'Show outline', 'Print…'])
+      expect(view.queryByRole('button', { name })).toBeNull();
+    expect(view.queryByText('Optimize…')).toBeNull();
+    for (const id of ['pdf-pages', 'pdf-outline', 'pdf-print'])
+      expect(command(id)?.available, id).toBe(true);
   });
   it('are drawn only by the page previews: printing, exports, layout and nesting never use them', async () => {
     const source = path.join(import.meta.dirname, '../src');

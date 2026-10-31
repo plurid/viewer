@@ -17,6 +17,7 @@ import { useOptimizationSession } from './useOptimizationSession';
 import { OptimizationComparison } from './OptimizationComparison';
 import { OptimizationResults } from './OptimizationResults';
 import { OptimizationNumberField } from './OptimizationNumberField';
+import { Disclosure } from '../ui/Disclosure';
 import './optimization.css';
 import { pathContains } from '../../domain/files/paths';
 import { isActiveJob } from '../../domain/operations/jobs';
@@ -205,8 +206,11 @@ export function OptimizeDialog({
             Prepare candidates, compare quality, then save selected smaller copies. Originals stay
             intact.
           </p>
-          <details className="optimization-advanced">
-            <summary>Quality and dimensions</summary>
+          <Disclosure
+            variant="compact"
+            className="optimization-advanced"
+            summary="Quality and dimensions"
+          >
             <div className="optimization-advanced-fields">
               {options.targetSize && options.preset !== 'lossless' && (
                 <label>
@@ -288,12 +292,13 @@ export function OptimizeDialog({
                 quality.
               </p>
             </div>
-          </details>
-          <details className="optimization-recipes">
-            <summary>
-              Saved batch recipes
-              {recipeID ? ` · ${recipes.find((recipe) => recipe.id === recipeID)?.name ?? ''}` : ''}
-            </summary>
+          </Disclosure>
+          <Disclosure
+            variant="compact"
+            className="optimization-recipes"
+            summary="Saved batch recipes"
+            meta={recipeID && recipes.find((recipe) => recipe.id === recipeID)?.name}
+          >
             <div className="optimization-recipe-fields">
               {!!recipes.length && (
                 <ChoiceButton
@@ -339,7 +344,7 @@ export function OptimizeDialog({
                 with this batch.
               </p>
             </div>
-          </details>
+          </Disclosure>
           <label>
             Save smaller copies in
             <div className="media-destination">

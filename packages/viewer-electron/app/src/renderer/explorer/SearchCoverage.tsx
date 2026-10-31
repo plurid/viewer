@@ -2,6 +2,7 @@ import type { IndexedQuery, IndexedResult } from '../../domain/services';
 import { indexedCoverage } from '../../domain/search/coverage';
 import { useViewer, report } from '../state/store';
 import type { SearchBatch } from '../../domain/contracts';
+import { Disclosure } from '../ui/Disclosure';
 
 export function SearchCoverage({
   result,
@@ -17,20 +18,25 @@ export function SearchCoverage({
   const settings = useViewer((state) => state.settings.settings.search);
   const coverage = result && indexedCoverage(result, request, settings.contentRoots);
   return (
-    <details className="search-coverage">
-      <summary>
-        {request.content ? 'Names and document text' : 'Names'} ·{' '}
-        {request.recursive === false ? 'This folder' : 'Including subfolders'} ·{' '}
-        {cancelled
-          ? 'Search stopped'
-          : streamed
-            ? !streamed.done
-              ? 'Searching folders…'
-              : streamed.errors || streamed.truncated
-                ? 'Partial coverage'
-                : 'Search finished'
-            : (coverage?.summary ?? 'Searching…')}
-      </summary>
+    <Disclosure
+      variant="inline"
+      className="search-coverage"
+      summary={
+        <>
+          {request.content ? 'Names and document text' : 'Names'} ·{' '}
+          {request.recursive === false ? 'This folder' : 'Including subfolders'} ·{' '}
+          {cancelled
+            ? 'Search stopped'
+            : streamed
+              ? !streamed.done
+                ? 'Searching folders…'
+                : streamed.errors || streamed.truncated
+                  ? 'Partial coverage'
+                  : 'Search finished'
+              : (coverage?.summary ?? 'Searching…')}
+        </>
+      }
+    >
       <div>
         <p>
           {request.root || 'All indexed locations'}
@@ -63,6 +69,6 @@ export function SearchCoverage({
           Search settings…
         </button>
       </div>
-    </details>
+    </Disclosure>
   );
 }

@@ -14,6 +14,11 @@ import type { WindowActions } from '../src/renderer/commands/window-commands/sco
 import type { CommandContext } from '../src/renderer/commands/registry';
 import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
 import { setWorkspaceOverride } from '../src/renderer/state/workspaces';
+import { changeWorkspace } from '../src/renderer/state/core';
+import { headerPresets } from '../src/domain/preferences/header';
+
+const setWorkspaceProfile = (profileID: string) =>
+  changeWorkspace((space) => ({ ...space, profileID }));
 
 beforeEach(() => {
   Object.assign(window, { viewer: { save: vi.fn(async () => {}) } });
@@ -82,6 +87,30 @@ describe('a workspace override', () => {
     expect(getState().saved.ui.space.minimap).toBe(true);
     expect(find('workspace-overrides-clear').when(context)).toBe(true);
     await act(async () => find('workspace-overrides-clear').run(context));
+    expect(activeWorkspace()).not.toHaveProperty('overrides');
+  });
+  it('chooses a plane toolbar preset for this workspace under a profile, control by control', async () => {
+    const actions = {
+      workspace: new Proxy({} as Record<string, unknown>, { get: () => vi.fn() }),
+      ready: true,
+      tool: null,
+    } as unknown as WindowActions;
+    const context = {
+      scope: 'window',
+      workspaceID: '',
+      selection: [],
+    } as unknown as CommandContext;
+    const find = (id: string) => windowCommands(actions).find((command) => command.id === id)!;
+    act(() => setWorkspaceProfile('focus'));
+    await act(async () => find('plane-toolbar.full').run(context));
+    expect(activeWorkspace().overrides).toEqual({
+      'ui.space.headerControls.layout': true,
+      'ui.space.headerControls.discover': true,
+      'ui.space.headerControls.formatTools': true,
+    });
+    expect(getState().saved.ui.space.headerControls).toEqual(headerPresets.essential);
+    // Essential again is the inherited set: no override is left
+    await act(async () => find('plane-toolbar.essential').run(context));
     expect(activeWorkspace()).not.toHaveProperty('overrides');
   });
 });

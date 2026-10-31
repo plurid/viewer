@@ -1,9 +1,11 @@
 import type { JSONValue } from '../workspaces/project';
+import { headerPresetPatches } from './header';
 
 /**
- * Setting profiles: named sets of settings applied at once, as presentation modes: Focus
- * hides the chrome, Present hides headers too, Full shows everything. Only settings the workspace
- * window may change itself belong in one (setting-catalog.ts `workspaceMayChange`).
+ * Setting profiles: named sets of settings applied at once, as presentation modes: Focus hides
+ * the chrome, Present hides headers too, Full shows everything, every plane toolbar button
+ * included. Only settings the workspace window may change itself belong in one (catalog.ts
+ * `workspaceMayChange`).
  */
 export interface SettingProfile {
   id: string;
@@ -46,6 +48,7 @@ export const builtInProfiles: readonly SettingProfile[] = [
       'ui.space.viewcube': true,
       'ui.space.grid': true,
       'ui.space.planeHeaders': true,
+      ...Object.fromEntries(headerPresetPatches('full').map(({ path, value }) => [path, value])),
     },
   },
 ];

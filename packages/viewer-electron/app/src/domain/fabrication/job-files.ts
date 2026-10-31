@@ -110,8 +110,13 @@ export function jobContents(
   own: FolderContents,
   inside: readonly ReadFolder[],
 ): JobContents {
-  const separate = inside.filter(({ contents }) => isJob(contents));
-  const rest = inside.filter(({ contents }) => !isJob(contents) && holdsWork(contents));
+  // by name, as a listing's order is the filesystem's: jobs first, then folders of parts
+  const byName = (a: ReadFolder, b: ReadFolder) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  const separate = inside.filter(({ contents }) => isJob(contents)).sort(byName);
+  const rest = inside
+    .filter(({ contents }) => !isJob(contents) && holdsWork(contents))
+    .sort(byName);
   const jobs =
     !holdsWork(own) && separate.length ? [...separate, ...rest].map(({ name }) => name) : [];
   const read = jobs.length ? [] : rest;

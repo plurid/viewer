@@ -5,7 +5,6 @@ import type { SettingsPatch, SettingsSnapshot } from '../../../domain/services';
 import type { CustomAction, TerminalProfile } from '../../../domain/automation/actions';
 import { Field } from './SettingField';
 import { referencesTo } from '../../../domain/automation/references';
-import { Icon } from '../Icon';
 import { ChoiceButton } from '../ChoiceMenu';
 import { CommandFields } from './CommandFields';
 import {
@@ -15,6 +14,9 @@ import {
   type SettingsChange,
 } from './settings-edits';
 import { defaultSettings } from '../../../domain/services';
+import { errorMessage } from '../../../domain/errors';
+import { PathField } from '../primitives';
+import { Disclosure } from '../Disclosure';
 interface Props {
   snapshot: SettingsSnapshot;
   save(patches: SettingsPatch[]): void;
@@ -115,11 +117,7 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
       </label>
       <h2>Shell profiles</h2>
       {value.profiles.map((item) => (
-        <details className="settings-recipe" key={item.id}>
-          <summary>
-            <Icon name="right" size={12} />
-            <span>{item.name}</span>
-          </summary>
+        <Disclosure variant="row" className="settings-recipe" key={item.id} summary={item.name}>
           <label className="settings-row">
             <span>Name</span>
             <Field
@@ -158,7 +156,7 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
               Remove profile
             </ReferencedRemove>
           )}
-        </details>
+        </Disclosure>
       ))}
       <div className="settings-actions">
         <button
@@ -258,11 +256,7 @@ export function CustomActionSettings({
         actions receive the directory as $1 and selected paths as $2 onward.
       </p>
       {actions.map((action) => (
-        <details className="settings-recipe" key={action.id}>
-          <summary>
-            <Icon name="right" size={12} />
-            <span>{action.name}</span>
-          </summary>
+        <Disclosure variant="row" className="settings-recipe" key={action.id} summary={action.name}>
           <label className="settings-row">
             <span>Name</span>
             <Field
@@ -539,7 +533,7 @@ export function CustomActionSettings({
           <button onClick={() => set((actions) => actions.filter((item) => item.id !== action.id))}>
             Remove command
           </button>
-        </details>
+        </Disclosure>
       ))}
       <div className="settings-actions">
         <button
@@ -579,7 +573,13 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
         Settings and config.jsonc edit the same configuration. Comments are preserved. Invalid edits
         keep the last valid configuration active.
       </p>
-      <p className="configuration-path">{config?.path}</p>
+      {config?.path && (
+        <PathField
+          className="configuration-path"
+          path={config.path}
+          onError={(error) => setMessage(errorMessage(error))}
+        />
+      )}
       <div className="settings-action-row">
         <button className="primary" onClick={() => run(window.viewer.configOpen())}>
           Open config.jsonc
@@ -693,21 +693,19 @@ export function FolderOverrideSettings({ snapshot, save }: Props) {
   const folders = snapshot.settings.folders;
   const count = Object.keys(folders).length;
   return (
-    <details className="settings-recipe">
-      <summary>
-        <Icon name="right" size={12} />
-        <span>
-          Folder views
-          {count > 0 && ` · ${count} ${count === 1 ? 'folder' : 'folders'}`}
-        </span>
-      </summary>
+    <Disclosure
+      variant="row"
+      className="settings-recipe"
+      summary="Folder views"
+      meta={count > 0 && `${count} ${count === 1 ? 'folder' : 'folders'}`}
+    >
       <p className="settings-note">
         A folder’s view is shared across planes, roots and workspaces. The controls above set
         defaults for folders without overrides.
       </p>
       {Object.entries(folders).map(([path, view]) => (
         <div className="settings-folder-override" key={path}>
-          <span title={path}>{path}</span>
+          <PathField path={path} />
           <ChoiceButton
             label={'View for ' + path}
             value={view.mode || snapshot.settings.browsing.mode}
@@ -755,6 +753,6 @@ export function FolderOverrideSettings({ snapshot, save }: Props) {
           Add folder override…
         </button>
       </div>
-    </details>
+    </Disclosure>
   );
 }

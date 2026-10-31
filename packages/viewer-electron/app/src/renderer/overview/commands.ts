@@ -7,7 +7,7 @@ export function overviewCommands({ actions, windowScope }: WindowScopes): Comman
       id: 'open-overview',
       label: 'File overview',
       group: 'Files',
-      icon: 'grid',
+      icon: 'data',
       aliases: ['dashboard', 'insights', 'tidy', 'clean up', 'what needs attention', 'space'],
       when: (context) => actions.ready && windowScope(context),
       run: () => actions.workspace.openOverview(),

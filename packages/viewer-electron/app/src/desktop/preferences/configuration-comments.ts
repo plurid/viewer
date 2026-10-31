@@ -302,7 +302,7 @@ const descriptions: Record<string, string[]> = {
   ui: [
     'Shared UI preferences. Folder-specific presentation belongs in settings.folders, not workspace state.',
   ],
-  'ui.version': ['UI preference format version. Keep 3.'],
+  'ui.version': ['UI preference format version. Keep 4.'],
   'ui.sidebar': [
     'Window navigation defaults and shared sections. Each plane keeps its own navigation session.',
   ],
@@ -334,6 +334,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'ui.space.headerControls': [
     'Show/hide individual plane toolbar icons. false hides an icon, not the underlying command.',
+    'Essential: every one true except layout, discover and formatTools. Full: all true.',
   ],
   'ui.space.headerControls.parent': [
     'Show Back to parent on linked-plane headers. Root planes have no parent button.',
@@ -361,6 +362,10 @@ const descriptions: Record<string, string[]> = {
   ],
   'ui.insightsDismissed': [
     'App-managed: the insight cards dismissed in each folder, by folder path. Clearing it shows them again.',
+  ],
+  'ui.firstRunHint': [
+    'App-managed: the tips a new profile shows above its first folder. used gains "palette" (Cmd+K)',
+    'and "quick-preview" (Space) as each is used. "retired", or no field, shows no tips.',
   ],
 };
 
@@ -401,6 +406,10 @@ const revisedGuidance: [RegExp, string][] = [
   [
     /^([\t ]*\/\/ )Remembered Settings window size and last category\. Usually leave these UI-managed values alone\.(?=\r?$)/m,
     '$1No longer used: Viewer keeps the Settings window size and category privately. Safe to delete.',
+  ],
+  [
+    /^([\t ]*\/\/ )UI preference format version\. Keep 3\.(?=\r?$)/m,
+    '$1UI preference format version. Keep 4.',
   ],
   [
     /^([\t ]*\/\/ )Enable the local MCP server\. false closes it and rejects further client requests\.(?=\r?$)/m,

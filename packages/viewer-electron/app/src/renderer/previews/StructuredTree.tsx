@@ -9,7 +9,7 @@ import {
   type StructuredData,
   type TreeExpansion,
 } from '../../domain/previews/data/structured';
-import { report } from '../state/store';
+import { copyText, report } from '../state/store';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 
 export function StructuredTree({
@@ -57,7 +57,7 @@ export function StructuredTree({
     setSelected(row.path);
     virtual.scrollToIndex(index, { align: 'auto' });
   };
-  const copy = (value: string) => void navigator.clipboard.writeText(value).catch(report);
+  const copy = (value: string) => void copyText(value).catch(report);
   const copyValue = () => {
     if (!node) return;
     try {

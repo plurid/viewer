@@ -1,4 +1,4 @@
-import { refreshClipboard } from '../state/store';
+import { copyPaths } from '../state/store';
 import type { CommandContext, CommandDefinition } from './registry';
 
 function paths(context: CommandContext): string[] {
@@ -16,8 +16,5 @@ export const copyPathCommand: CommandDefinition = {
   aliases: ['copy pathname', 'copy file path', 'copy folder path'],
   shortcut: '⌥⌘C',
   when: (context) => paths(context).length > 0,
-  run: async (context) => {
-    await window.viewer.copyPaths(paths(context));
-    await refreshClipboard();
-  },
+  run: (context) => copyPaths(paths(context)),
 };

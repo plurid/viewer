@@ -64,6 +64,8 @@ settings.toolbars = { folder: ['missing.extension', 'new-folder'] };
 const ui = normalizePreferences();
 ui.sidebar.inNewPlanes = false;
 ui.space.headerControls.back = false;
+// the discovery button this check opens, which Essential leaves to "…"
+ui.space.headerControls.discover = true;
 ui.space.opening = 'dock';
 const state: SavedState = {
   version: CURRENT_STATE_VERSION,
@@ -343,7 +345,7 @@ async function session(restart: boolean) {
       );
       await until(
         () => evaluate(textOf('.capabilities-pins > summary')),
-        (text) => text.includes('8/8'),
+        (text) => text.includes('8 of 8'),
         'eight-pin limit',
       );
       await viewport(760, 540);

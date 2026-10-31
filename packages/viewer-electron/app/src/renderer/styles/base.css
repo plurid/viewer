@@ -20,8 +20,23 @@
   --radius-control: 5px;
   --radius-panel: 8px;
   --radius-dialog: 10px;
+  /* The spacing scale (DESIGN.md spacing): tests/design-tokens.test.ts holds each file's
+     off-scale values to a budget that only goes down. */
+  --gap-tight: 4px;
+  --gap-small: 6px;
+  --gap-inline: 8px;
+  --gap-content: 12px;
+  --gap-panel: 16px;
+  --gap-dialog: 18px;
+  /* The type scale (DESIGN.md typography), following the interface density as the root size
+     does. A label never goes under 11 px, the smallest size that stays legible. */
+  --text-label: max(11px, calc(11px * var(--density-scale, 1)));
+  --text-compact: calc(12px * var(--density-scale, 1));
+  --text-body: calc(13px * var(--density-scale, 1));
+  --text-section: calc(14px * var(--density-scale, 1));
+  --text-title: calc(22px * var(--density-scale, 1));
   font-family: var(--interface-font, -apple-system), BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: calc(13px * var(--density-scale, 1));
+  font-size: var(--text-body);
   line-height: 1.45;
   font-synthesis: none;
   --space: #272a30;
@@ -42,6 +57,8 @@
   --syntax-number: #dfb891;
   --syntax-function: #82b3cf;
   --shadow: 0 18px 56px var(--shadow-color, #0005);
+  /* A panel over the space sits nearer than a dialog: a shorter, softer shadow. */
+  --shadow-panel: 0 8px 24px var(--shadow-color, #0005);
   color: var(--ink);
   background: var(--space);
   color-scheme: dark;
@@ -65,6 +82,7 @@
   --syntax-number: #805d32;
   --syntax-function: #337396;
   --shadow: 0 18px 56px var(--shadow-color, #20304025);
+  --shadow-panel: 0 8px 24px var(--shadow-color, #20304025);
   color-scheme: light;
 }
 * {
@@ -102,8 +120,10 @@ button:disabled {
   cursor: default;
   opacity: 0.45;
 }
+/* Disabled, a button keeps its resting fill under the pointer: a ghost stays clear, a secondary
+   button its field. */
 button:disabled:hover {
-  background: transparent;
+  background: var(--button-fill, transparent);
 }
 button.selected,
 button[aria-pressed='true'] {
@@ -238,10 +258,107 @@ select {
   :is(.plane-module-controls, .plane-pinned-tools)::-webkit-scrollbar {
   height: 6px;
 }
-.dialog footer > button:not(.primary),
-.media-destination > button {
+/* The button kinds (ui/primitives.tsx Button). A bare button is the ghost: quiet until hovered.
+   A secondary button shows its outline on the field fill. The places whose text buttons all read
+   as secondary are listed here once, at an element's specificity, so a class of their own (a
+   swatch, a toggle) still sets its fill; `.button-quiet` keeps a ghost among them. */
+.button-secondary,
+.button-label,
+.danger,
+:where(
+    .dialog footer,
+    .media-destination,
+    .settings-page,
+    .panel-body,
+    .capabilities-body,
+    .backup-choices,
+    .backup-roots,
+    .chat-permission,
+    .chat-setup,
+    .chat-message,
+    .collision-actions,
+    .views-list,
+    .destination-options,
+    .keymap-row,
+    .key-capture,
+    .native-open-actions,
+    .folder-insight,
+    .overview-card > footer
+  )
+  button:where(:not(.primary, .icon-button, .button-quiet)) {
+  --button-fill: var(--field);
   border-color: var(--line);
-  background: var(--field);
+  background: var(--button-fill);
+}
+/* A bar: a toast, a notice or the tour bar, one line of state and its actions on the surface in
+   an outline. What holds it places it; floating over the work, it takes the panel shadow. */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-content);
+  padding: var(--gap-inline) var(--gap-inline) var(--gap-inline) var(--gap-panel);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+.bar-floating {
+  box-shadow: var(--shadow-panel);
+}
+/* A row (ui/primitives.tsx Row): a sentence label with a muted detail line under it, and its
+   control at the shared edge, so a column of rows lines up as Settings does. Below 540 px of its
+   container, the control goes under the label. */
+:is(.row, .settings-row) {
+  --row-control: 180px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--gap-dialog);
+  min-height: calc(40px * var(--density-scale, 1));
+}
+.row-compact {
+  gap: var(--gap-content);
+  min-height: calc(32px * var(--density-scale, 1));
+}
+:is(.row, .settings-row) > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+:is(.row, .settings-row) small {
+  display: block;
+  margin-top: var(--gap-tight);
+  line-height: 1.5;
+  color: var(--muted);
+  font-size: var(--text-compact);
+  font-weight: 400;
+}
+:is(.row, .settings-row) input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+.row > :is(input:not([type='checkbox'], [type='radio'], [type='range']), .choice-button) {
+  width: var(--row-control);
+  max-width: 100%;
+  flex-shrink: 0;
+}
+@container (max-width: 540px) {
+  .row:has(> .choice-button, > input:not([type='checkbox'], [type='radio']), > div) {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--gap-inline);
+  }
+  .row > :is(.choice-button, input:not([type='checkbox'], [type='radio']), div) {
+    width: 100%;
+    max-width: none;
+  }
+}
+.button-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-small);
+}
+.button-icon > svg {
+  flex-shrink: 0;
 }
 .icon-button {
   display: inline-flex;
@@ -272,7 +389,6 @@ select {
 }
 .danger {
   color: var(--danger);
-  border-color: var(--line);
 }
 .error {
   color: var(--danger);
@@ -377,7 +493,7 @@ select {
   padding: 5px 7px;
   margin-bottom: 3px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
   font-weight: 600;
   text-align: left;
   cursor: grab;
@@ -409,7 +525,7 @@ select {
 }
 .sidebar-hint {
   margin: 5px 9px;
-  font-size: 12px;
+  font-size: var(--text-compact);
   color: var(--subtle);
 }
 .sidebar-drop {
@@ -435,7 +551,7 @@ select {
   min-width: 17px;
   padding: 0 3px;
   color: var(--ink);
-  font-size: 11px;
+  font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
 }
 .workspace-switcher {
@@ -521,7 +637,7 @@ select {
   border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
   border-radius: var(--radius-dialog);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .macro-dot {
   width: 8px;
@@ -539,4 +655,94 @@ select {
   .macro-dot {
     animation: none;
   }
+}
+
+/* DISCLOSURES AND SELECTION: one look for every summary (ui/Disclosure.tsx sets where it sits),
+   and controls whose text a click acts on, never selects. Zero specificity, so a component's own
+   summary rule sets its spacing. A summary that carries its own icon keeps it. */
+:where(summary) {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+:where(summary)::-webkit-details-marker {
+  display: none;
+}
+:where(summary:not(:has(> svg)))::before {
+  content: '';
+  display: inline-block;
+  flex: none;
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  margin-inline-end: var(--gap-small);
+  vertical-align: -1px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 5 7 7-7 7'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  transition: transform 120ms ease;
+}
+:where(details[open] > summary)::before {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(summary)::before {
+    transition: none;
+  }
+}
+:where(
+  label:has(> input:is([type='checkbox'], [type='radio'])),
+  [role='tab'],
+  [role='menuitem'],
+  [role='menuitemcheckbox'],
+  [role='menuitemradio'],
+  [role='option']
+) {
+  user-select: none;
+}
+/* PATHS (ui/primitives.tsx PathField): a click selects the whole path; its copy button stays a
+   quiet icon, even in a row that gives its buttons a field's fill, centred on the first line. */
+.path-field {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-tight);
+  min-width: 0;
+}
+.path-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: all;
+  cursor: text;
+}
+.path-field[data-layout='line'] {
+  align-items: center;
+}
+.path-field[data-layout='line'] > .path-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.path-field > .copy-button {
+  width: 1.75em;
+  height: 1.75em;
+  margin-block: -0.15em;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.path-field > .copy-button svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+.path-field > .copy-button:hover:where(:not(:disabled)) {
+  color: var(--ink);
+  background: var(--raised);
+}
+.copy-button[data-copied='copied'] {
+  color: var(--accent);
+}
+.copy-button[data-copied='failed'] {
+  color: var(--danger);
 }

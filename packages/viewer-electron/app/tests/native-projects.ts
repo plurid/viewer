@@ -168,13 +168,13 @@ try {
   await dialog('Inspect file');
   await until(
     () => evaluate(textOf('dialog .inspection-facts')),
-    (value) => value.includes('bytes'),
+    (value) => value.toLowerCase().includes('bytes'),
     'metadata inspection',
   );
   await evaluate(clickElement('dialog input[type=checkbox]'));
   await until(
     () => evaluate(textOf('dialog .inspection-facts')),
-    (value) => value.includes('characters'),
+    (value) => value.toLowerCase().includes('characters'),
     'shared worker content inspection',
   );
   const image = await connection.command<{ data: string }>('Page.captureScreenshot', {

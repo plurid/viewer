@@ -70,7 +70,17 @@ describe('a command for every setting', () => {
     for (const path of own) expect(ids.has('setting.' + path)).toBe(false);
   });
   it('toggles an on/off setting: the space toolbar, minimap and viewcube', async () => {
+    // a first run is quiet: no space toolbar, the minimap automatic
+    expect(label('setting.ui.space.toolbar')).toBe('Show space toolbar');
+    await act(async () => find('setting.ui.space.toolbar').run(context));
+    expect(getState().saved.ui.space.toolbar).toBe(true);
     expect(label('setting.ui.space.toolbar')).toBe('Hide space toolbar');
+    await act(async () => find('setting.ui.space.toolbar').run(context));
+    expect(getState().saved.ui.space.toolbar).toBe(false);
+    expect(label('setting.ui.space.viewcube')).toBe('Show viewcube');
+    expect(label('setting.ui.space.minimapAuto')).toBe(
+      'Turn off: Minimap only with 3 or more planes',
+    );
     expect(label('setting.ui.space.minimap')).toBe('Hide minimap');
     await act(async () => find('setting.ui.space.minimap').run(context));
     expect(getState().saved.ui.space.minimap).toBe(false);

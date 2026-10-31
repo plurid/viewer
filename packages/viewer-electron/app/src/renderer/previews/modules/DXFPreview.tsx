@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
 import { usePreviewState } from '../state';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
@@ -170,7 +171,7 @@ export default function DXFPreview(context: PreviewContext) {
         },
         ...(['inspect', 'distance', 'angle', 'area'] as const).map((value) => ({
           id: `dxf-${value}`,
-          label: value === 'inspect' ? 'Inspect drawing geometry' : `Measure ${value}`,
+          label: value === 'inspect' ? 'Select drawing geometry' : `Measure ${value}`,
           aliases: ['dxf', `drawing ${value}`],
           available: ready,
           run: () => setTool(value),
@@ -219,7 +220,7 @@ export default function DXFPreview(context: PreviewContext) {
     formatMeasure(convertUnits(value, sourceUnit, displayUnit, squared), displayUnit, squared);
   const instructions =
     tool === 'inspect'
-      ? 'Click geometry to inspect · drag to pan · scroll to zoom'
+      ? 'Click geometry to select it · drag to pan · scroll to zoom'
       : tool === 'distance'
         ? 'Pick two points · Shift temporarily disables snap'
         : tool === 'angle'
@@ -234,7 +235,8 @@ export default function DXFPreview(context: PreviewContext) {
     >
       <PreviewToolbar context={context}>
         <IconButton
-          icon="frame"
+          {...headerItem('fit', 3, ['preview.dxf-frame'])}
+          icon="fit"
           label="Fit drawing"
           disabled={!ready}
           onClick={() => session.current?.frame()}
@@ -244,7 +246,7 @@ export default function DXFPreview(context: PreviewContext) {
           disabled={!ready}
           value={tool}
           choices={[
-            { value: 'inspect', label: 'Inspect' },
+            { value: 'inspect', label: 'Select' },
             { value: 'distance', label: 'Distance' },
             { value: 'angle', label: 'Angle' },
             { value: 'area', label: 'Area' },
@@ -252,6 +254,7 @@ export default function DXFPreview(context: PreviewContext) {
           onChoose={(value) => setTool(value as Tool)}
         />
         <button
+          {...headerItem('snap', 5, ['preview.dxf-snap'])}
           aria-pressed={snap}
           className={snap ? 'selected' : ''}
           disabled={!ready}
@@ -259,15 +262,20 @@ export default function DXFPreview(context: PreviewContext) {
         >
           Snap
         </button>
+        {/* Essential leaves the drawing grid to "…" */}
+        {context.toolbar !== 'essential' && (
+          <IconButton
+            {...headerItem('grid', 7, ['preview.dxf-grid'])}
+            icon="grid-lines"
+            label={grid ? 'Hide drawing grid' : 'Show drawing grid'}
+            aria-pressed={grid}
+            disabled={!ready}
+            onClick={() => setGrid(!grid)}
+          />
+        )}
         <IconButton
-          icon="grid"
-          label={grid ? 'Hide drawing grid' : 'Show drawing grid'}
-          aria-pressed={grid}
-          disabled={!ready}
-          onClick={() => setGrid(!grid)}
-        />
-        <IconButton
-          icon="sidebar"
+          {...headerItem('details', 6, ['preview.dxf-panel'])}
+          icon="details"
           label={panel ? 'Hide drawing details' : 'Show drawing details'}
           aria-pressed={panel}
           disabled={!ready}
@@ -279,7 +287,7 @@ export default function DXFPreview(context: PreviewContext) {
           <canvas
             ref={canvas}
             tabIndex={0}
-            aria-label="DXF drawing. Click to inspect or measure, drag to pan, scroll to zoom. Home fits the drawing. Enter finishes an area and Escape cancels."
+            aria-label="DXF drawing. Click to select or measure, drag to pan, scroll to zoom. Home fits the drawing. Enter finishes an area and Escape cancels."
           />
           {!drawing && !error && (
             <div className="preview-overlay">

@@ -5,7 +5,7 @@ import { errorMessage } from '../../domain/errors';
 import { sourceVersion } from '../../domain/files/inspection';
 import { activeWorkspace } from '../state/store';
 import { useWorkspace } from '../workspace/context';
-import { Empty, Loading } from '../ui/primitives';
+import { Empty, Loading, PathField } from '../ui/primitives';
 import './chat.css';
 
 export default function SessionPlane({ pane }: { pane: ChatPane }) {
@@ -56,7 +56,7 @@ export default function SessionPlane({ pane }: { pane: ChatPane }) {
         <span>{session.clientName}</span>
       </header>
       <div className="chat-context">
-        <span>{session.directory}</span>
+        <PathField path={session.directory} />
       </div>
       <p className="session-reported-status" role="status">
         Reported {session.status} · {new Date(session.updated).toLocaleString()} · sequence{' '}

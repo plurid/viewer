@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { InspectionResult } from '../../../domain/files/inspection';
+import { factLabel } from '../../../domain/files/fact-labels';
 import { activeWorkspace, previewValues, report, savePreviewValue } from '../../state/store';
 import { useWorkspace } from '../../workspace/context';
-import { Dialog, Loading } from '../primitives';
+import { Dialog, Loading, PathField } from '../primitives';
 import { useWindowEvent } from '../../app/window-events';
 export function InspectionControls() {
   const workspace = useWorkspace();
@@ -86,7 +87,7 @@ export function InspectionControls() {
   return (
     <Dialog title="Inspect file" onClose={() => setFile(undefined)}>
       <div className="dialog-body inspection-details">
-        <p className="muted inspection-path">{file}</p>
+        <PathField className="muted inspection-path" path={file} />
         <label>
           <input
             type="checkbox"
@@ -116,7 +117,7 @@ export function InspectionControls() {
             <dl className="inspection-facts">
               {Object.entries(result.facts).map(([key, fact]) => (
                 <div key={key}>
-                  <dt>{key}</dt>
+                  <dt>{factLabel(key)}</dt>
                   <dd>
                     {String(fact.value)}
                     {fact.unit ? ' ' + fact.unit : ''}

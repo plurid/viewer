@@ -10,7 +10,9 @@ export {
 } from './core';
 export {
   changePreferences,
+  dismissFirstRunHint,
   dismissInsight,
+  noteFirstRunStep,
   receiveSettings,
   rememberCommand,
   rememberLine,
@@ -54,7 +56,14 @@ export {
   settledJob,
   undoSignature,
 } from './jobs';
-export { quickPreview, refreshClipboard, stepQuickPreview, writeFileClipboard } from './ui';
+export {
+  copyPaths,
+  copyText,
+  quickPreview,
+  refreshClipboard,
+  stepQuickPreview,
+  writeFileClipboard,
+} from './ui';
 export { addFavorite, favorite, remember, removeFavorite, renameShortcut } from './places';
 export {
   addCollectionPane,

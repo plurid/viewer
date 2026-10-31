@@ -42,14 +42,14 @@
 .command-search-field {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--gap-inline);
+  padding: 10px var(--gap-content);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
   color: var(--muted);
 }
 .command-search-field input {
-  padding: 4px 2px;
+  padding: var(--gap-tight) 2px;
   width: 100%;
   color: var(--ink);
   background: transparent;
@@ -61,7 +61,7 @@
 }
 .command-clear-recent {
   flex: none;
-  font-size: 12px;
+  font-size: var(--text-compact);
   white-space: nowrap;
 }
 .command-results {
@@ -76,7 +76,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 9px;
+  padding: var(--gap-inline) 9px;
   text-align: left;
   min-height: 34px;
 }
@@ -111,20 +111,20 @@
   white-space: nowrap;
 }
 .command-result-text small {
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
   font-weight: 400;
 }
 .command-result kbd {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
   margin-left: auto;
   flex-shrink: 0;
 }
 .command-group {
-  padding: 7px 9px 4px;
-  font-size: 11px;
+  padding: 7px 9px var(--gap-tight);
+  font-size: var(--text-label);
   color: var(--muted);
 }
 .command-divider {
@@ -133,7 +133,7 @@
   margin: 5px 9px;
 }
 .command-empty {
-  font-size: 12px;
+  font-size: var(--text-compact);
   color: var(--muted);
   padding: 14px 9px;
 }
@@ -153,7 +153,7 @@
   display: none;
 }
 .command-palette .command-search-field {
-  padding: 14px 16px;
+  padding: 14px var(--gap-panel);
 }
 .command-palette .command-results {
   max-height: min(430px, calc(100vh - 180px));
@@ -161,14 +161,14 @@
 .palette-context {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   min-height: 38px;
   flex-shrink: 0;
   flex-wrap: wrap;
-  padding: 6px 14px;
+  padding: var(--gap-small) 14px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .palette-context > span {
   flex: 1 0 100%;
@@ -194,7 +194,7 @@
 }
 .palette-context > button {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 /* A choice menu checks only the current choice; the other rows keep the icon's place. */
 .command-icon-spacer {
@@ -207,7 +207,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gap-inline);
   min-width: 120px;
   max-width: 260px;
   border-color: var(--line);
@@ -242,19 +242,19 @@
   max-height: 46vh;
   overflow: auto;
   transform: translateX(-50%);
-  padding: 10px 12px 12px;
+  padding: 10px var(--gap-content) var(--gap-content);
   border: 1px solid var(--line);
   border-radius: var(--radius-dialog);
   color: var(--ink);
   background: var(--surface);
   box-shadow: 0 12px 32px var(--strong-shadow-color);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .which-key-trail {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: var(--gap-tight);
+  margin-bottom: var(--gap-inline);
   color: var(--muted);
 }
 .which-key kbd {
@@ -263,19 +263,19 @@
   justify-content: center;
   min-width: 22px;
   height: 22px;
-  padding: 0 6px;
+  padding: 0 var(--gap-small);
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   color: var(--ink);
   background: var(--field);
   font:
-    600 12px/1 ui-monospace,
+    600 var(--text-compact)/1 ui-monospace,
     Menlo,
     monospace;
 }
 .which-key-list {
   display: grid;
-  gap: 4px 16px;
+  gap: var(--gap-tight) var(--gap-panel);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -283,7 +283,7 @@
 .which-key-list li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   min-width: 0;
 }
 .which-key-list li span {
@@ -310,13 +310,13 @@
 .plane-hint {
   position: absolute;
   transform: translate(-50%, -50%);
-  padding: 6px 12px;
+  padding: var(--gap-small) var(--gap-content);
   border-radius: var(--radius-panel);
   color: var(--space);
   background: var(--accent);
   box-shadow: 0 4px 12px var(--strong-shadow-color);
   font:
-    700 20px/1 ui-monospace,
+    700 var(--text-title)/1 ui-monospace,
     Menlo,
     monospace;
   text-transform: uppercase;
@@ -357,11 +357,11 @@
   max-width: 120px;
   margin-left: auto;
   overflow: hidden;
-  padding: 1px 6px;
+  padding: 1px var(--gap-small);
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -378,7 +378,7 @@
 .line-finder .command-search-field input,
 .line-finder .command-result-text > span {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
+  font-size: var(--text-compact);
 }
 /* the colon is the field's sign: no magnifier beside it */
 .line-finder .command-search-field > svg {
@@ -388,21 +388,21 @@
   margin-right: -4px;
   color: var(--accent);
   font:
-    600 14px ui-monospace,
+    600 var(--text-section) ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
 }
 .line-error {
   display: grid;
-  margin: 0 14px 8px;
-  padding: 6px 10px;
+  margin: 0 14px var(--gap-inline);
+  padding: var(--gap-small) 10px;
   overflow-x: auto;
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--danger) 14%, transparent);
   color: var(--danger);
   font:
-    12px/1.5 ui-monospace,
+    var(--text-compact)/1.5 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -417,7 +417,7 @@
 .which-key-mode {
   color: var(--accent);
   font:
-    600 12px ui-monospace,
+    600 var(--text-compact) ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -428,7 +428,7 @@
   margin-left: auto;
   color: var(--muted);
   font:
-    11px ui-monospace,
+    var(--text-label) ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -447,7 +447,7 @@
 }
 .prompt-finder.has-line .command-results > div:first-child .command-result-text > span {
   font:
-    12.5px ui-monospace,
+    var(--text-compact) ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;

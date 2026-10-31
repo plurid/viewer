@@ -1,5 +1,5 @@
 import { contentPlaneActions } from './content-planes';
-import { effectiveWindowSettings } from '../state/effective-ui';
+import { effectiveWindowSettings, effectiveWindowUI } from '../state/effective-ui';
 import type { PlanePlacement } from '../../domain/workspaces/project';
 import { useCallback, useMemo, useRef, type RefObject } from 'react';
 import { pluridStateModules, type PluridApplicationHandle } from '@plurid/plurid-react';
@@ -55,6 +55,9 @@ import { rememberTiling, restoreTiling } from './tiling-history';
 import { gitTerminalProfileID } from '../../domain/comparison/git-actions';
 import { runGitAction } from '../git/runtime';
 import { taskController } from '../tasks/controller';
+
+/** Where a new plane goes, as this window shows the space: its workspace may choose its own. */
+const openingPreference = () => effectiveWindowUI(getState()).space.opening;
 /**
  * Makes a plane the active one, as following a link does: it takes the wheel (plurid's
  * click-to-scroll owner, whose header is tinted) and the keys. The camera alone moved there, and the
@@ -562,7 +565,7 @@ export function useWorkspaceController({
         const pane = addScratchPane();
         setActivePane(pane.id);
         frameWorkspace(engine, surface, [pane.id], {
-          dock: getState().saved.ui.space.opening === 'dock',
+          dock: openingPreference() === 'dock',
         });
       },
       async newNote(kind, directory, parentID) {
@@ -585,7 +588,7 @@ export function useWorkspaceController({
         };
         registerContent(pane, parentID);
         frameWorkspace(engine, surface, [pane.id], {
-          dock: getState().saved.ui.space.opening === 'dock',
+          dock: openingPreference() === 'dock',
         });
       },
       async openNote(id) {
@@ -610,7 +613,7 @@ export function useWorkspaceController({
         };
         registerContent(pane);
         frameWorkspace(engine, surface, [pane.id], {
-          dock: getState().saved.ui.space.opening === 'dock',
+          dock: openingPreference() === 'dock',
         });
       },
       newRootFolder(target) {
@@ -618,7 +621,7 @@ export function useWorkspaceController({
         const pane = addRootFolder(target);
         if (pane)
           frameWorkspace(engine, surface, [pane.id], {
-            dock: getState().saved.ui.space.opening === 'dock',
+            dock: openingPreference() === 'dock',
           });
       },
       splitFolder(target, axis, destination) {
@@ -822,7 +825,7 @@ export function useWorkspaceController({
           const liveParent = flattenTree(api.tree.get()).find(
             (node) => hostID(node) === parentPaneID,
           );
-          const opening = getState().saved.ui.space.opening;
+          const opening = openingPreference();
           frameWorkspace(
             engine,
             surface,
@@ -831,7 +834,7 @@ export function useWorkspaceController({
           );
         } else
           frameWorkspace(engine, surface, [pane.id], {
-            dock: getState().saved.ui.space.opening === 'dock',
+            dock: openingPreference() === 'dock',
           });
         if (options?.activate) activatePlane(engine, pane.id);
       },

@@ -6,6 +6,7 @@ import { terminalReadCharacters } from '../../../domain/agents/requests';
 import type { ApplicationSettings } from '../../../domain/services';
 import { sharedClientID } from '../../../domain/agents/clients';
 import { ChoiceButton } from '../ChoiceMenu';
+import { Disclosure } from '../Disclosure';
 export function AgentGrants({
   settings,
   clientID = sharedClientID,
@@ -89,8 +90,7 @@ export function AgentGrants({
         </p>
       )}
       {grants.some((grant) => (grant.clientID ?? sharedClientID) === clientID) && (
-        <details>
-          <summary>Existing grants</summary>
+        <Disclosure variant="compact" summary="Existing grants">
           {grants
             .filter((grant) => (grant.clientID ?? sharedClientID) === clientID)
             .map((grant) => (
@@ -113,7 +113,7 @@ export function AgentGrants({
                 </button>
               </div>
             ))}
-        </details>
+        </Disclosure>
       )}
     </>
   );

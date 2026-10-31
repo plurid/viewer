@@ -6,13 +6,13 @@
 .pdf-tools-order-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
 .pdf-tools-toolbar .muted {
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .pdf-tools-range > .choice-button {
   max-width: 300px;
@@ -20,8 +20,8 @@
 .pdf-tools-range label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: var(--gap-inline);
+  font-size: var(--text-label);
   color: var(--muted);
 }
 .pdf-tools-range input {
@@ -41,7 +41,7 @@
 }
 .pdf-tools-order-actions {
   flex-wrap: nowrap;
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .pdf-tools-list {
   flex: 1;
@@ -55,8 +55,8 @@
   right: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 12px;
+  gap: var(--gap-inline);
+  padding: 3px var(--gap-content);
   border-bottom: 1px solid var(--line);
 }
 .pdf-tools-row.is-active {
@@ -74,7 +74,7 @@
   padding: 2px 0;
   display: flex;
   flex-direction: column;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .pdf-tools-row > button span {
   max-width: 100%;
@@ -83,7 +83,7 @@
   white-space: nowrap;
 }
 .pdf-tools-row .muted {
-  font-size: 10px;
+  font-size: var(--text-label);
 }
 .pdf-tools-inspection {
   display: flex;
@@ -94,7 +94,7 @@
 }
 .pdf-tools-page-label {
   padding: 10px 14px;
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -107,7 +107,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 12px;
+  padding: var(--gap-content);
 }
 .pdf-tools-page img {
   display: block;
@@ -121,17 +121,17 @@
   display: none;
 }
 .pdf-tools-export {
-  padding: 12px 16px;
+  padding: var(--gap-content) var(--gap-panel);
   border-top: 1px solid var(--line);
   display: grid;
   grid-template-columns: minmax(140px, 1fr) minmax(240px, 2fr);
-  gap: 10px 16px;
+  gap: 10px var(--gap-panel);
 }
 .pdf-tools-export > label {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
   min-width: 0;
 }
@@ -140,7 +140,7 @@
 }
 .pdf-tools-export .media-destination {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .pdf-tools-export .media-destination input {
   flex: 1;
@@ -153,22 +153,22 @@
 .pdf-tools-export > p {
   margin: 0;
   grid-column: 1 / -1;
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .pdf-tools-results {
   grid-column: 1 / -1;
   max-height: 90px;
   overflow: auto;
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .pdf-tools-results > div {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--gap-content);
   justify-content: space-between;
 }
 .pdf-tools-dialog > footer {
-  gap: 8px;
+  gap: var(--gap-inline);
   flex-wrap: wrap;
 }
 @media (max-width: 720px) {
@@ -186,6 +186,6 @@
   }
   .pdf-tools-order-actions {
     gap: 3px;
-    padding: 8px;
+    padding: var(--gap-inline);
   }
 }

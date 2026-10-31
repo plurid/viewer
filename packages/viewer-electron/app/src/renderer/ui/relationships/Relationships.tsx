@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { FileRelation, RelationshipsResult } from '../../../domain/files/relationships';
 import { sameSourceVersion } from '../../../domain/files/inspection';
 import { useWorkspace } from '../../workspace/context';
-import { Dialog, Loading } from '../primitives';
+import { Dialog, Loading, PathField } from '../primitives';
+import { Disclosure } from '../Disclosure';
 import { RelationshipMap } from './RelationshipMap';
 import { relationshipBasis as basis } from './relationship-labels';
 import { errorMessage } from '../../../domain/errors';
@@ -94,7 +95,7 @@ export function RelationshipControls() {
       onClose={() => !busy && setFile(undefined)}
     >
       <div className="dialog-body relationships-body">
-        <p className="inspection-path muted">{file}</p>
+        <PathField className="inspection-path muted" path={file} />
         <div className="settings-actions">
           <button aria-pressed={view === 'list'} onClick={() => setView('list')}>
             List
@@ -208,8 +209,11 @@ export function RelationshipControls() {
             )}
           </>
         )}
-        <details className="relationship-note">
-          <summary>Add a relationship note</summary>
+        <Disclosure
+          variant="compact"
+          className="relationship-note"
+          summary="Add a relationship note"
+        >
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -244,7 +248,7 @@ export function RelationshipControls() {
               Save relationship note
             </button>
           </form>
-        </details>
+        </Disclosure>
       </div>
     </Dialog>
   );

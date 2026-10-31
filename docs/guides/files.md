@@ -45,6 +45,7 @@ Sizes use decimal units, as Finder shows them: 1 KB is 1,000 bytes and 1 MB is 1
 | Duplicate                | **⌘D**                                                                     |
 | Make a folder            | **⌘⇧N**; **⌃⌘N** (**New folder with selection…**) puts the selection in it |
 | Copy a file's full path  | **⌥⌘C** (**Copy path**)                                                    |
+| Copy a path in a dialog  | Click the path to select all of it, or click the copy button beside it     |
 | See size, dates and tags | **⌘I** (**Get info…**)                                                     |
 
 A copy on the same disk is instant: on APFS, Viewer clones the file, so the copy shares the

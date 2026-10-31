@@ -10,6 +10,8 @@ import {
   resetPreferences,
 } from '../src/renderer/state/preferences';
 import { resetPersistence } from '../src/renderer/state/persistence';
+import { choosePlaneToolbar } from '../src/renderer/commands/window-commands/settings';
+import { headerPresets } from '../src/domain/preferences/header';
 import { temporaryRoot } from '../tools/temporary';
 
 let service: SettingsService;
@@ -136,4 +138,17 @@ it('preserves peer sibling conflicts when a queued parent overlaps its own child
     ...headerControls,
     close: true,
   });
+});
+
+it('writes a plane toolbar preset as one change of its controls', async () => {
+  await choosePlaneToolbar('full');
+  const flush = flushPreferences();
+  await started;
+  release();
+  await flush;
+  expect(write).toHaveBeenCalledTimes(1);
+  expect(write.mock.calls[0]![0]).toEqual([
+    { path: 'ui.space.headerControls', value: headerPresets.full },
+  ]);
+  expect(service.snapshot().ui.space.headerControls).toEqual(headerPresets.full);
 });

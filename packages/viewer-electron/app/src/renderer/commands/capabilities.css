@@ -18,35 +18,18 @@
   border-bottom: 1px solid var(--line);
 }
 .capabilities-context > strong {
+  flex: 0 1 auto;
+  max-width: 50%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
 }
+/* the captured path on one line beside the context name: all of it on hover, a click or Copy */
 .capabilities-path {
-  position: relative;
-  flex: none;
+  flex: 1;
   color: var(--muted);
-  font-size: 12px;
-}
-.capabilities-path summary {
-  cursor: pointer;
-}
-.capabilities-path > div {
-  position: absolute;
-  right: 0;
-  top: 24px;
-  z-index: 2;
-  width: min(580px, 75vw);
-  max-height: 100px;
-  overflow: auto;
-  overflow-wrap: anywhere;
-  user-select: text;
-  color: var(--ink);
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--raised);
+  font-size: var(--text-compact);
 }
 .capabilities-search {
   display: flex;
@@ -79,12 +62,12 @@
 }
 .capabilities-pins > summary {
   padding: 8px 0;
-  cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
-.capabilities-pins > summary span {
-  margin-left: 8px;
-  color: var(--muted);
+/* each section's whole bar opens it, not only its words */
+.capabilities-pins > summary,
+.capabilities-help > summary {
+  width: auto;
 }
 .capabilities-pins > summary small {
   display: inline;
@@ -92,9 +75,6 @@
 }
 .capabilities-pins[open] {
   padding-bottom: 12px;
-}
-.capabilities-section-heading h3 {
-  text-transform: capitalize;
 }
 .capabilities-results {
   flex: 1;
@@ -133,11 +113,11 @@
 }
 .capabilities-section-heading h3 {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-body);
 }
 .capabilities-pins p {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .capabilities-pins ol,
 .capabilities-results ul {
@@ -164,12 +144,12 @@
 .capabilities-results small {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
   line-height: 1.4;
 }
 .capabilities-results > p {
   padding: 0 20px;
-  font-size: 12px;
+  font-size: var(--text-compact);
   color: var(--muted);
 }
 .capabilities-results li {
@@ -185,16 +165,12 @@
   overflow-wrap: anywhere;
 }
 .capabilities-results strong {
-  font-size: 13px;
+  font-size: var(--text-body);
   font-weight: 500;
 }
 .capabilities-results kbd {
   flex: none;
-  font-size: 12px;
-}
-.capabilities-body button {
-  border-color: var(--line);
-  background: var(--field);
+  font-size: var(--text-compact);
 }
 .capabilities-help {
   flex: none;

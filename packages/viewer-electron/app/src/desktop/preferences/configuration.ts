@@ -50,6 +50,8 @@ export class JsoncConfiguration<T> {
   constructor(
     directory: string,
     private validate: (value: unknown) => T,
+    /** An earlier format's value as this one's; `validate` applies it too. */
+    private upgrade?: (value: unknown) => unknown,
   ) {
     this.file = path.join(directory, 'config.jsonc');
   }
@@ -66,10 +68,34 @@ export class JsoncConfiguration<T> {
     }
     return this.validate(value);
   }
+  /**
+   * A file of an earlier format, rewritten with its upgrade: only what the upgrade changes, its
+   * comments kept. Left as it was, it would be upgraded again at each read, over the choices made
+   * since. A file that cannot be written stays as it is, upgraded in memory.
+   */
+  private async upgraded(text: string): Promise<string> {
+    if (!this.upgrade) return text;
+    const before: unknown = parse(text, [], { allowTrailingComma: true, disallowComments: false });
+    const after = this.upgrade(before);
+    const edits = configEdits(before, after);
+    if (!edits.length) return text;
+    try {
+      const upgraded = documentConfiguration(
+        applyConfigEdits(text, edits, { insertSpaces: true, tabSize: 2 }),
+        new Set(addedPaths(before, after)),
+      );
+      this.decode(upgraded);
+      await this.atomic(this.file, upgraded, text);
+      return upgraded;
+    } catch {
+      return text;
+    }
+  }
   async read(): Promise<T | undefined> {
     try {
-      const text = await fs.readFile(this.file, 'utf8');
-      const value = this.decode(text);
+      const original = await fs.readFile(this.file, 'utf8');
+      const value = this.decode(original);
+      const text = await this.upgraded(original);
       const changes = this.text
         ? configChanges(this.decode(this.text), value).map((change) => change.keys.join('.'))
         : [];

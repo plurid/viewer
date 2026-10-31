@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ResolvedCommand } from '../commands/registry';
 import { ContextMenuResults } from './ContextMenuResults';
 import { Icon, type IconName } from './Icon';
-import { dialogOpen } from './modal';
+import { layerContainer, useAnchoredLayer } from './Popover';
 
 export interface Choice {
   value: string;
@@ -38,36 +38,13 @@ export function ChoiceMenu({
   onChoose(value: string): void;
   onClose(): void;
 }) {
-  const root = useRef<HTMLDivElement>(null);
-  const close = useRef(onClose);
-  close.current = onClose;
-  const opener = anchor.getBoundingClientRect();
-  useEffect(() => {
-    const element = root.current?.querySelector<HTMLElement>('.context-menu');
-    if (element) {
-      const rect = element.getBoundingClientRect();
-      const left = opener.right - rect.width;
-      element.style.left = `${Math.max(8, Math.min(left, innerWidth - rect.width - 8))}px`;
-      const below = opener.bottom + 4;
-      // below the button, or above it when the window ends first
-      const top =
-        below + rect.height <= innerHeight - 8 ? below : Math.max(8, opener.top - 4 - rect.height);
-      element.style.top = `${top}px`;
-    }
-    const dismiss = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!root.current?.contains(target) && !anchor.contains(target)) close.current();
-    };
-    window.addEventListener('pointerdown', dismiss);
-    return () => {
-      window.removeEventListener('pointerdown', dismiss);
-      // back to the button, unless a dialog it is not in has opened over it meanwhile
-      if (anchor.isConnected && (anchor.closest('dialog[open]') || !dialogOpen()))
-        anchor.focus({ preventScroll: true });
-    };
-    // Placed once when opened, like the context menu.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // under the button, its end lined up with the button's, or above it when the window ends first
+  const layer = useAnchoredLayer({
+    anchor,
+    align: 'end',
+    select: (root) => root.querySelector<HTMLElement>('.context-menu'),
+    onClose,
+  });
   const commands: ResolvedCommand[] = choices.map((choice) => ({
     id: 'choice:' + choice.value,
     label: choice.label,
@@ -82,19 +59,14 @@ export function ChoiceMenu({
   }));
   return createPortal(
     <div
-      ref={root}
+      ref={layer.ref}
       className="context-menu-layer choice-menu"
-      style={
-        {
-          '--menu-left': `${opener.left}px`,
-          '--menu-top': `${opener.bottom + 4}px`,
-        } as CSSProperties
-      }
       role="dialog"
       aria-label={label}
       data-plurid-overlay="context-menu"
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
+        layer.onKeyDown(event);
         event.stopPropagation();
         if (event.key === 'Tab') onClose();
       }}
@@ -176,7 +148,7 @@ export function ChoiceButton({
           choices={choices}
           value={value}
           anchor={button.current}
-          container={button.current.closest<HTMLElement>('dialog[open]') ?? document.body}
+          container={layerContainer(button.current)}
           onChoose={onChoose}
           onClose={() => setOpen(false)}
         />

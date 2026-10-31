@@ -8,7 +8,8 @@ import {
 import type { AgentClient, AgentClientInput, AgentAudit } from '../../../domain/agents/clients';
 import type { ApplicationSettings } from '../../../domain/services';
 import { AgentGrants } from './AgentGrants';
-import { IconButton } from '../primitives';
+import { IconButton, PathField } from '../primitives';
+import { Disclosure } from '../Disclosure';
 import { errorMessage } from '../../../domain/errors';
 
 const descriptions = {
@@ -201,7 +202,7 @@ export function AgentClientSettings({
         </label>
         {draft.roots.map((root) => (
           <div className="settings-location" key={root}>
-            <span>{root}</span>
+            <PathField path={root} onError={(error) => setError(errorMessage(error))} />
             <IconButton
               label="Remove client folder"
               icon="close"
@@ -325,8 +326,7 @@ export function AgentClientSettings({
         />
       )}
       {history.length > 0 && (
-        <details open>
-          <summary>Recent activity</summary>
+        <Disclosure variant="compact" summary="Recent activity" defaultOpen>
           <ol className="agent-activity">
             {history
               .slice(-50)
@@ -343,7 +343,7 @@ export function AgentClientSettings({
                 </li>
               ))}
           </ol>
-        </details>
+        </Disclosure>
       )}
       {error && (
         <p className="settings-error" role="alert">

@@ -48,7 +48,29 @@ const paths = {
   clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 3v6l4 2',
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
   link: 'm9 15 6-6M9 6l3-3a4 4 0 0 1 6 6l-3 3M15 18l-3 3a4 4 0 0 1-6-6l3-3',
+  // the camera's Frame plane only; fitting content to its view is `fit`
   frame: 'M3 9V3h6m6 0h6v6m0 6v6h-6m-6 0H3v-6',
+  fit: 'M3 5h18v14H3V5Zm5 4h8v6H8V9Z',
+  // a plane's Layout menu: move, size and align
+  arrange: 'M3 3h7v9H3V3Zm11 0h7v5h-7V3Zm0 9h7v9h-7v-9ZM3 16h7v5H3v-5Z',
+  'zoom-in': 'M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15ZM16 16l5 5M10.5 7.5v6m-3-3h6',
+  'zoom-out': 'M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15ZM16 16l5 5m-13.5-10.5h6',
+  'folder-plus':
+    'M3 7V5a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Zm9 3v6m-3-3h6',
+  pencil: 'M16 3l5 5L8 21H3v-5L16 3Zm-3 3 5 5',
+  stop: 'M6 6h12v12H6V6Z',
+  tasks: 'm3 7 2 2 4-4m-6 12 2 2 4-4M13 6h8m-8 6h8m-8 6h8',
+  pin: 'M9 3h6m-5 0v6l-4 5h12l-4-5V3m-2 11v7',
+  // What can I do here?, apart from a file's Get info
+  help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4m0 3h.01',
+  chat: 'M4 4h16v12H9l-5 4V4Z',
+  // a plane of its own, apart from New folder plane's plus
+  planes: 'M8 8h13v12H8V8ZM3 4h13v4M3 4v12h5',
+  // a document's page thumbnails, apart from the plane's navigation
+  pages: 'M8 3h12v14H8V3ZM4 7v14h12',
+  details: 'M3 4h18v16H3V4Zm12 0v16m2-12h2m-2 4h2',
+  'grid-lines': 'M3 3h18v18H3V3Zm0 6h18M3 15h18M9 3v18m6-18v18',
+  titlebar: 'M3 4h18v16H3V4Zm0 4h18M6 6h.01M9 6h.01',
   dock: 'M3 4h18v16H3V4Zm0 4h18',
   trash: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7',
   copy: 'M9 9h12v12H9V9ZM5 15H3V3h12v2',

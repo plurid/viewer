@@ -45,8 +45,34 @@ then keep their size when the window changes; **⌘0** frames them all again.
 In the spatial view, click inside a plane to scroll it and type into it. Click the background or
 press **Escape** to move around the space again. Drag a plane by its header.
 
+The minimap appears once three planes are open, to find one among them. **Settings → Space** shows
+it always (turn off **Minimap only with 3 or more planes**), and adds the space toolbar and the
+viewcube (**Show space toolbar**, **Show viewcube**).
+
 **⌥⌘Z** only undoes arrangement. File changes have their own **⌘Z**; see
 [Browse and organize](files.md#copy-move-and-rename).
+
+## Choose a plane's header buttons
+
+A plane's header starts with its everyday buttons: back and forward, the view, search, **Frame
+plane**, **Dock plane**, the actions menu (**…**) and **×**. Every other command is in **…**, which
+ends with **What can I do here?**.
+
+In a narrow plane, the buttons that no longer fit move to the top of **…**, and come back as the
+plane widens. **Frame plane**, **Dock plane**, **…** and **×** always stay in the header.
+
+1. Open **Settings → Space → Plane toolbar**.
+2. Choose **Buttons → Full** to add **Layout**, **What can I do here?** and each file's full set of
+   tools, such as a PDF's **Show pages** and **Print…**. **Buttons → Essential** goes back.
+3. Turn single buttons on or off below it. **Buttons** then reads **Custom**.
+
+**⌘K** → **Plane toolbar: Full** or **Plane toolbar: Essential** does the same from the workspace.
+While a profile is in use, the choice is this workspace's own. The **Full** profile shows every
+button.
+
+A hidden button keeps its command: **…**, **⌘K** and its shortcut still reach it. To put a tool you
+use often in the header, pin it in **What can I do here?**. A text plane starts with **Edit text**
+pinned.
 
 ## Save a view and return to it
 

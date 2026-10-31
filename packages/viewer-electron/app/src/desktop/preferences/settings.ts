@@ -9,7 +9,8 @@ import { profileDiagnostics } from '../../domain/preferences/presentation/resolv
 import type { SettingsPatch, SettingsSnapshot } from '../../domain/services';
 import { defaultSettings } from '../../domain/services';
 import type { UIPreferences, Pane, FolderPane, Look } from '../../domain/contracts';
-import { normalizePreferences } from '../../domain/preferences/ui';
+import { normalizePreferences, upgradeUIPreferences } from '../../domain/preferences/ui';
+import { freshFirstRunHint } from '../../domain/preferences/first-run';
 import fs from 'node:fs/promises';
 import { JsoncConfiguration, configChanges, overlaps } from './configuration';
 import { referenceIssues } from '../../domain/automation/references';
@@ -28,10 +29,15 @@ const configSchema = z
     $schema: z.literal('config.schema.json').default('config.schema.json'),
     version: z.literal(1),
     settings: settingsSchema,
-    ui: preferencesSchema,
+    ui: z.preprocess(upgradeUIPreferences, preferencesSchema),
   })
   .strict();
 type Configuration = z.infer<typeof configSchema>;
+/** An earlier configuration as this one: config.jsonc is rewritten with it once (configuration.ts). */
+function upgradeConfiguration(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !('ui' in value)) return value;
+  return { ...value, ui: upgradeUIPreferences(value.ui) };
+}
 /** The keys a patch names, under `settings` or `ui` and never through an object's prototype. */
 function patchKeys(patch: SettingsPatch): string[] {
   const keys = patch.keys || patch.path.split('.');
@@ -124,12 +130,16 @@ export class SettingsService {
     private dark: () => boolean,
     private emit: (value: SettingsSnapshot) => void,
   ) {
-    this.store = new JsoncConfiguration(dataPath, (value) => {
-      const parsed = configSchema.parse(value);
-      if (this.profilesReady)
-        validateCustomProfiles(parsed.settings.profiles, this.document.settings.profiles);
-      return parsed;
-    });
+    this.store = new JsoncConfiguration(
+      dataPath,
+      (value) => {
+        const parsed = configSchema.parse(value);
+        if (this.profilesReady)
+          validateCustomProfiles(parsed.settings.profiles, this.document.settings.profiles);
+        return parsed;
+      },
+      upgradeConfiguration,
+    );
     this.document = {
       $schema: 'config.schema.json',
       version: 1,
@@ -200,7 +210,14 @@ export class SettingsService {
           if (seed) {
             this.document.ui = normalizePreferences(seed.ui);
             this.document.settings.appearance = seed.look;
-          }
+          } else if (
+            !migrated &&
+            !last.unreadable &&
+            (error as NodeJS.ErrnoException).code === 'ENOENT'
+          )
+            // nothing came before this configuration: a new profile, whose first folder shows the
+            // first-run tips (domain/preferences/first-run.ts); an earlier profile never does
+            this.document.ui = { ...this.document.ui, firstRunHint: freshFirstRunHint() };
         }
         await this.write();
       }

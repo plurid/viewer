@@ -39,7 +39,7 @@ export function keysCommands({ actions, state, windowScope }: WindowScopes): Com
       id: 'plane-hints',
       label: 'Jump to plane…',
       group: 'Plane',
-      icon: 'frame',
+      icon: 'compass',
       aliases: ['hints', 'jump', 'vimium', 'pick plane'],
       when: (context) => windowScope(context) && actions.ready,
       run: () => {

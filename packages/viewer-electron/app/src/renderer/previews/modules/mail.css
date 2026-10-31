@@ -11,11 +11,11 @@
 .mail-header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-inline);
   flex: none;
   max-height: 45%;
   overflow: auto;
-  padding: 14px 18px 10px;
+  padding: 14px var(--gap-dialog) 10px;
   border-bottom: 1px solid var(--line);
   user-select: text;
 }
@@ -27,7 +27,7 @@
 .mail-attachments ul {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--gap-small);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -35,13 +35,13 @@
 .mail-attachments li {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--gap-small);
   max-width: 100%;
-  padding: 4px 8px;
+  padding: var(--gap-tight) var(--gap-inline);
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--field);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .mail-attachment-name {
   min-width: 0;
@@ -51,7 +51,7 @@
 }
 .mail-attachments .muted {
   flex: none;
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .mail-attachment-actions,
 .mail-attachments-all {
@@ -64,11 +64,11 @@
   margin-left: 2px;
 }
 .mail-attachments-all {
-  margin-top: 6px;
+  margin-top: var(--gap-small);
 }
 .mail-attachments button {
-  padding: 1px 6px;
-  font-size: 11px;
+  padding: 1px var(--gap-small);
+  font-size: var(--text-label);
 }
 /* Email HTML is written for a white page, whatever the app's look. */
 .mail-frame {
@@ -78,12 +78,12 @@
   flex: 1;
   min-height: 0;
   margin: 0;
-  padding: 14px 18px 32px;
+  padding: 14px var(--gap-dialog) 32px;
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font:
-    13px/1.5 ui-monospace,
+    var(--text-body)/1.5 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -114,12 +114,12 @@
 .mailbox-messages button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px 8px;
+  gap: 2px var(--gap-inline);
   width: 100%;
   padding: 7px 10px;
   border-radius: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
-  font-size: 12px;
+  font-size: var(--text-compact);
   text-align: left;
 }
 .mailbox-messages button[aria-current='true'] {
@@ -141,7 +141,7 @@
 }
 .mailbox-messages .mail-notice {
   padding: 10px;
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .mailbox-message {
   display: flex;
@@ -156,7 +156,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 @container (max-width: 520px) {
   .mailbox-layout {

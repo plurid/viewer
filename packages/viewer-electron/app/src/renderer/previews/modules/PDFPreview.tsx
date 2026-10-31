@@ -10,6 +10,7 @@ import {
 } from 'pdfjs-dist';
 import workerURL from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { pdfCanvasRatio, pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
@@ -429,12 +430,23 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
       </form>
     );
   if (!pdf) return <Loading label="Opening PDF…" />;
+  // Essential leaves Optimize, the sidebars and Print to "…", where each is a command
+  const every = context.toolbar !== 'essential';
   return (
     <div className="pdf-viewer">
       <PreviewToolbar context={context}>
-        {context.optimize && <button onClick={context.optimize}>Optimize…</button>}
-        {context.editPDF && <button onClick={context.editPDF}>PDF tools…</button>}
+        {every && context.optimize && (
+          <button {...headerItem('optimize', 8, ['optimize-files'])} onClick={context.optimize}>
+            Optimize…
+          </button>
+        )}
+        {context.editPDF && (
+          <button {...headerItem('pdf-tools', 5, ['pdf-tools'])} onClick={context.editPDF}>
+            PDF tools…
+          </button>
+        )}
         <IconButton
+          {...headerItem('previous', 3, ['preview.pdf-previous'])}
           icon="left"
           label="Previous page"
           disabled={page <= 1}
@@ -454,6 +466,7 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
         />
         <span className="muted">/ {pdf.numPages}</span>
         <IconButton
+          {...headerItem('next', 3, ['preview.pdf-next'])}
           icon="right"
           label="Next page"
           disabled={page >= pdf.numPages}
@@ -486,23 +499,47 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
             setZoom(pdfZoom(value === 'page' || value === 'width' ? value : Number(value)))
           }
         />
-        <IconButton icon="search" label="Search PDF" onClick={() => setSearchOpen(true)} />
         <IconButton
-          icon="sidebar"
-          label={sidebar === 'pages' ? 'Hide pages' : 'Show pages'}
-          aria-pressed={sidebar === 'pages'}
-          onClick={() => setSidebar(sidebar === 'pages' ? 'none' : 'pages')}
+          {...headerItem('search', 4, ['preview.pdf-search'])}
+          icon="search"
+          label="Search PDF"
+          onClick={() => setSearchOpen(true)}
         />
-        <IconButton
-          icon="list"
-          label={sidebar === 'outline' ? 'Hide outline' : 'Show outline'}
-          aria-pressed={sidebar === 'outline'}
-          onClick={() => setSidebar(sidebar === 'outline' ? 'none' : 'outline')}
-        />
-        {pages && (
-          <IconButton icon="moon" label="Dark pages" aria-pressed={!!dark} onClick={pages.toggle} />
+        {every && (
+          <IconButton
+            {...headerItem('pages', 7, ['preview.pdf-pages'])}
+            icon="pages"
+            label={sidebar === 'pages' ? 'Hide pages' : 'Show pages'}
+            aria-pressed={sidebar === 'pages'}
+            onClick={() => setSidebar(sidebar === 'pages' ? 'none' : 'pages')}
+          />
         )}
-        {printable && <IconButton icon="print" label="Print…" onClick={print} />}
+        {every && (
+          <IconButton
+            {...headerItem('outline', 7, ['preview.pdf-outline'])}
+            icon="list"
+            label={sidebar === 'outline' ? 'Hide outline' : 'Show outline'}
+            aria-pressed={sidebar === 'outline'}
+            onClick={() => setSidebar(sidebar === 'outline' ? 'none' : 'outline')}
+          />
+        )}
+        {pages && (
+          <IconButton
+            {...headerItem('dark-pages', 6, ['preview.dark-pages'])}
+            icon="moon"
+            label="Dark pages"
+            aria-pressed={!!dark}
+            onClick={pages.toggle}
+          />
+        )}
+        {every && printable && (
+          <IconButton
+            {...headerItem('print', 8, ['preview.pdf-print'])}
+            icon="print"
+            label="Print…"
+            onClick={print}
+          />
+        )}
       </PreviewToolbar>
       {searchOpen && (
         <div className="search-row">

@@ -1,25 +1,40 @@
 import { Fragment, useEffect, useRef } from 'react';
-import { settingValue, type SettingDefinition } from '../../../domain/preferences/catalog';
+import type { SettingDefinition } from '../../../domain/preferences/catalog';
+import { planeToolbar, settingValue } from '../../../domain/preferences/catalog';
+import type { HeaderControl, HeaderPresetName } from '../../../domain/preferences/header';
+import {
+  headerPreset,
+  headerPresetLabels,
+  headerPresetNames,
+  headerPresetPatches,
+} from '../../../domain/preferences/header';
 import { Icon, type IconName } from '../Icon';
 import type { SettingsEditor } from './editor';
 import { ChoiceButton } from '../ChoiceMenu';
+import type { RowElement } from '../primitives';
+import { Row } from '../primitives';
 import { ColorField } from '../ColorField';
 import { looks } from '../../workspace/look';
 import { errorMessage } from '../../../domain/errors';
 import { DarkPagesDetail } from './DarkPagesSettings';
 
-const toolbarIcons: Record<string, IconName> = {
+const toolbarIcons: Record<HeaderControl, IconName> = {
   parent: 'parent-plane',
   sidebar: 'sidebar',
   back: 'left',
   forward: 'right',
   view: 'list',
   search: 'search',
+  layout: 'arrange',
   frame: 'frame',
   dock: 'dock',
+  pins: 'pin',
+  discover: 'help',
+  formatTools: 'sliders',
   actions: 'more',
   close: 'close',
 };
+const headerControlsPath = 'ui.space.headerControls';
 /** The generic rows for catalogued settings, in one category or across search results. */
 export function CatalogSettings({
   editor,
@@ -77,83 +92,119 @@ export function CatalogSettings({
           locationField === 'newPlaneLocation'
             ? settings.browsing.newPlanePath
             : settings.browsing.emptyWorkspacePath;
-        const toolbarKey = definition.path.startsWith('ui.space.headerControls.')
-          ? definition.path.split('.').at(-1)!
+        const toolbarKey = definition.path.startsWith(headerControlsPath + '.')
+          ? (definition.path.split('.').at(-1) as HeaderControl)
           : undefined;
+        // the preset row leads the toolbar's controls, wherever they are listed
+        const presetRow =
+          toolbarKey && !definitions[index - 1]?.path.startsWith(headerControlsPath + '.');
         const checked = settingValue(snapshot, definition.path) === true;
         // a row of buttons is no label: a click on its text would press the first
-        const Row = definition.kind === 'color' ? 'div' : 'label';
+        const element: RowElement = definition.kind === 'color' ? 'div' : 'label';
         return (
           <Fragment key={definition.path}>
             {definition.section && definition.section !== definitions[index - 1]?.section && (
               <h2>{definition.section}</h2>
             )}
-            <Row className="settings-row" data-setting-path={definition.path}>
-              <span>
-                {toolbarKey ? (
+            {presetRow && (
+              // a row of a choice button is no label: a click on its text would press it
+              <Row
+                as="div"
+                className="settings-row"
+                data-setting-path={headerControlsPath}
+                label={planeToolbar.label}
+                detail={planeToolbar.detail}
+                control={
+                  <ChoiceButton
+                    label={`${planeToolbar.section} ${planeToolbar.label.toLowerCase()}`}
+                    value={headerPreset(snapshot.ui.space.headerControls)}
+                    placeholder={planeToolbar.custom}
+                    choices={headerPresetNames.map((name) => ({
+                      value: name,
+                      label: headerPresetLabels[name],
+                    }))}
+                    onChoose={(value) => patches(headerPresetPatches(value as HeaderPresetName))}
+                  />
+                }
+              />
+            )}
+            <Row
+              as={element}
+              className="settings-row"
+              data-setting-path={definition.path}
+              label={
+                toolbarKey ? (
                   <span className="settings-toolbar-label">
                     <span
                       className="settings-toolbar-preview"
                       data-enabled={checked}
                       aria-hidden="true"
                     >
-                      <Icon name={toolbarIcons[toolbarKey] ?? 'more'} size={18} />
+                      <Icon name={toolbarIcons[toolbarKey]} size={18} />
                       {toolbarKey === 'view' && <Icon name="down" size={9} />}
                     </span>
                     <span>{definition.label}</span>
                   </span>
                 ) : (
                   definition.label
-                )}
-                {definition.detail && <small>{definition.detail}</small>}
-                {query && <small>{definition.category}</small>}
-              </span>
-              {definition.kind === 'boolean' ? (
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(event) => patch(definition.path, event.target.checked)}
-                />
-              ) : definition.kind === 'choice' ? (
-                // the searchable choice menu, not a native dropdown
-                <ChoiceButton
-                  label={definition.label}
-                  value={String(settingValue(snapshot, definition.path))}
-                  choices={(definition.choices ?? []).map(([value, label]) => ({ value, label }))}
-                  onChoose={(value) => {
-                    if (locationField && value === 'custom') {
-                      chooseNewPlaneFolder(locationField);
-                      return;
-                    }
-                    patch(
-                      definition.path,
-                      // a numeric setting (thumbnail size, line spacing) keeps its type
-                      typeof settingValue(snapshot, definition.path) === 'number'
-                        ? Number(value)
-                        : value,
-                    );
-                  }}
-                />
-              ) : definition.kind === 'color' ? (
-                <ColorField
-                  label={definition.label}
-                  value={String(settingValue(snapshot, definition.path) ?? '')}
-                  look={snapshot.look}
-                  automatic="Automatic"
-                  automaticColor={looks[snapshot.look].space}
-                  onChange={(value) => patchColor(definition.path, value)}
-                />
-              ) : (
-                <input
-                  aria-label={definition.label}
-                  type="number"
-                  min={definition.min}
-                  max={definition.max}
-                  defaultValue={Number(settingValue(snapshot, definition.path))}
-                  onBlur={(event) => patch(definition.path, Number(event.target.value))}
-                />
-              )}
-            </Row>
+                )
+              }
+              detail={
+                (definition.detail || query) && (
+                  <>
+                    {definition.detail}
+                    {query && <small>{definition.category}</small>}
+                  </>
+                )
+              }
+              control={
+                definition.kind === 'boolean' ? (
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => patch(definition.path, event.target.checked)}
+                  />
+                ) : definition.kind === 'choice' ? (
+                  // the searchable choice menu, not a native dropdown
+                  <ChoiceButton
+                    label={definition.label}
+                    value={String(settingValue(snapshot, definition.path))}
+                    choices={(definition.choices ?? []).map(([value, label]) => ({ value, label }))}
+                    onChoose={(value) => {
+                      if (locationField && value === 'custom') {
+                        chooseNewPlaneFolder(locationField);
+                        return;
+                      }
+                      patch(
+                        definition.path,
+                        // a numeric setting (thumbnail size, line spacing) keeps its type
+                        typeof settingValue(snapshot, definition.path) === 'number'
+                          ? Number(value)
+                          : value,
+                      );
+                    }}
+                  />
+                ) : definition.kind === 'color' ? (
+                  <ColorField
+                    label={definition.label}
+                    value={String(settingValue(snapshot, definition.path) ?? '')}
+                    look={snapshot.look}
+                    automatic="Automatic"
+                    automaticColor={looks[snapshot.look].space}
+                    onChange={(value) => patchColor(definition.path, value)}
+                  />
+                ) : (
+                  <input
+                    aria-label={definition.label}
+                    type="number"
+                    min={definition.min}
+                    max={definition.max}
+                    defaultValue={Number(settingValue(snapshot, definition.path))}
+                    onBlur={(event) => patch(definition.path, Number(event.target.value))}
+                  />
+                )
+              }
+            />
             {definition.path === 'settings.previews.darkPages' && (
               <DarkPagesDetail editor={editor} />
             )}

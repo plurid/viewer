@@ -82,6 +82,11 @@ input, commands, agents or server starts.
 A **captured target** freezes workspace, root, plane, directory and selection before asynchronous
 work. Contextual commands, recipes and custom actions use it instead of reading a later selection.
 
+A preview plane's command context carries its **subject**, the file it shows
+(`CommandContext.subject`, set by `renderer/previews/PreviewHost.tsx` and passed on by
+`renderer/commands/toolbar.ts`). `toolFiles` in `renderer/commands/target.ts` gives a file tool the
+selection, else the subject, so a preview's pinned tools act on its own file.
+
 A **command** is a contextual registry action. A **spoken request** is Ask Viewer by voice: its
 transcript becomes a plan of registry commands, checked against the captured target
 (`domain/command-line/spoken.ts`) and run through the registry (`renderer/command-line/spoken.ts`),
@@ -125,6 +130,37 @@ before the change it covers; a finished item's record waits for the next sync, s
 failure that item reads as interrupted and recovery changes nothing. **Journal** is a bounded
 human-readable projection; it cannot authorize or replay an event. An external session's
 **Reported** state comes from its authenticated adapter, not terminal output or elapsed time.
+
+## Interface
+
+Shared controls live in `src/renderer/ui/`; a feature's own dialogs and panels stay with the
+feature. `SpaceOverlay` (`renderer/workspace/tours/TourBar.tsx`) is the grid that holds the panels
+over the space. [DESIGN.md](DESIGN.md) holds their rules.
+
+| Control                         | Owner                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `Disclosure`                    | `renderer/ui/Disclosure.tsx`; base.css draws every summary, `disclosure.css` places each variant |
+| `Button`, `Row`                 | `renderer/ui/primitives.tsx`; base.css styles the button kinds and the shared row edge           |
+| `CopyButton`, `PathField`       | `renderer/ui/primitives.tsx`, copying through the clipboard helpers below                        |
+| `Panel`, `PanelSection`         | `renderer/ui/Panel.tsx`; what holds a panel places it, such as `SpaceOverlay`'s grid             |
+| `Popover`, `useAnchoredLayer`   | `renderer/ui/Popover.tsx`; `ChoiceMenu` and `ContextMenu` place their layers with the hook       |
+| Type, spacing and shadow tokens | `renderer/styles/base.css` `:root`, checked against DESIGN.md by `tests/design-tokens.test.ts`   |
+
+The clipboard helpers in `renderer/state/ui.ts` own copying text: `copyPaths` sends paths through
+the desktop pasteboard (`window.viewer.copyPaths`), `copyText` other text through the clipboard.
+Both read the file clipboard again, as copied text replaces a copied file. Features call them, or
+`CopyButton`, never `navigator.clipboard.writeText`.
+
+The **plane header**'s controls are `ui.space.headerControls`, one key each. Their Essential and
+Full presets and the version 4 migration that started every profile from Essential belong to
+`domain/preferences/header.ts` and `ui.ts`. `renderer/workspace/PlaneHeader.tsx` reads the window's
+effective preferences, so profiles and workspaces reach it; `renderer/workspace/header-overflow.ts`
+measures the header and spills ranked items into **…** (`spillHeader`, `useHeaderOverflow`).
+
+A new profile's **first-run tips** are `ui.firstRunHint` (`domain/preferences/first-run.ts`). Only
+the desktop settings service starts them, for a configuration with nothing before it;
+`renderer/explorer/FolderInsights.tsx` shows them, and the palette and Quick Preview record their
+steps through `renderer/state/preferences.ts`.
 
 ## Persistence and decisions
 

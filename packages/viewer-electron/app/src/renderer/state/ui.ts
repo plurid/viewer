@@ -1,6 +1,7 @@
-// Transient window state: Quick Look and the file clipboard.
+// Transient window state: Quick Look, the file clipboard and copied text.
 import { focusFiles } from '../workspace/sessions';
 import { getState, update } from './core';
+import { noteFirstRunStep } from './preferences';
 
 export function quickPreview(
   paths: string | string[] | null,
@@ -19,6 +20,7 @@ export function quickPreview(
       : null,
   });
   if (!paths && old?.paneID) focusFiles(old.paneID);
+  if (paths) noteFirstRunStep('quick-preview');
 }
 export function stepQuickPreview(delta: number): void {
   const quick = getState().quickPreview;
@@ -45,4 +47,20 @@ export async function refreshClipboard(quiet = false): Promise<void> {
 export async function writeFileClipboard(paths: string[], cut: boolean): Promise<void> {
   await window.viewer.clipboardWrite(paths, cut);
   update({ ...getState(), clipboard: { paths, cut } });
+}
+/**
+ * Copied text replaces a copied or cut file on the pasteboard, so Paste is read again. Settings
+ * keeps no workspace state and offers no Paste.
+ */
+async function afterTextCopy(): Promise<void> {
+  if (getState()) await refreshClipboard(true);
+}
+/** Copies paths as text, one per line, through the desktop pasteboard. */
+export async function copyPaths(paths: readonly string[]): Promise<void> {
+  await window.viewer.copyPaths([...paths]);
+  await afterTextCopy();
+}
+export async function copyText(text: string): Promise<void> {
+  await navigator.clipboard.writeText(text);
+  await afterTextCopy();
 }

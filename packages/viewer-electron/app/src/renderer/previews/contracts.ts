@@ -45,8 +45,13 @@ export interface AttachmentSave {
   destination: AttachmentDestination;
 }
 
+/** Which of its controls a module shows in the plane header: `essential`, its main ones, each
+ * other one also a command, in the plane's "…" menu; `all`, every one. */
+export type PreviewToolbarSet = 'essential' | 'all';
 export interface PreviewContext {
   evidence?: EvidenceNavigation;
+  /** Undefined shows every control: Quick Preview, galleries and tests. */
+  toolbar?: PreviewToolbarSet;
   resource: Resource;
   state?: { get(key: string): unknown; set(key: string, value: unknown): void };
   limits?: { maxImagePixels: number; maxModelMB: number };

@@ -6,8 +6,9 @@ import {
   tagColors,
   type FileInformation as Information,
 } from '../../domain/files/information';
-import { Dialog, IconButton } from '../ui/primitives';
+import { Dialog, IconButton, PathField } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { Disclosure } from '../ui/Disclosure';
 import { SelectionSize, calculateSize } from './sizes';
 import { getState, report } from '../state/store';
 import { errorMessage } from '../../domain/errors';
@@ -192,8 +193,7 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
                 />
               </label>
             </fieldset>
-            <details className="information-permissions">
-              <summary>Permissions</summary>
+            <Disclosure variant="compact" className="information-permissions" summary="Permissions">
               <fieldset disabled={draft.locked}>
                 <table>
                   <thead>
@@ -238,7 +238,7 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
                   </tbody>
                 </table>
               </fieldset>
-            </details>
+            </Disclosure>
           </fieldset>
           {draft.readOnly ? (
             <p className="muted">This volume is read-only.</p>
@@ -287,13 +287,15 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
 function AdditionalInformation({ entry }: { entry: FileEntry }) {
   const [open, setOpen] = useState(false);
   return (
-    <details
+    <Disclosure
+      variant="compact"
       className="information-additional"
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      summary="Tags, comments and permissions"
+      open={open}
+      onOpenChange={setOpen}
     >
-      <summary>Tags, comments and permissions</summary>
       {open && <InformationEditor entry={entry} />}
-    </details>
+    </Disclosure>
   );
 }
 export function FileInformation({ entries, onClose }: { entries: FileEntry[]; onClose(): void }) {
@@ -304,7 +306,9 @@ export function FileInformation({ entries, onClose }: { entries: FileEntry[]; on
           <section key={entry.path} aria-label={entry.name}>
             <dl>
               <dt>{entry.name}</dt>
-              <dd>{entry.path}</dd>
+              <dd>
+                <PathField path={entry.path} />
+              </dd>
               <dt>Kind</dt>
               <dd>
                 {entry.kind === 'symlink'
@@ -328,7 +332,9 @@ export function FileInformation({ entries, onClose }: { entries: FileEntry[]; on
               {entry.linkTarget && (
                 <>
                   <dt>Target</dt>
-                  <dd>{entry.linkTarget}</dd>
+                  <dd>
+                    <PathField path={entry.linkTarget} label="Copy target path" />
+                  </dd>
                 </>
               )}
               {entry.error && <dd className="error">{entry.error}</dd>}

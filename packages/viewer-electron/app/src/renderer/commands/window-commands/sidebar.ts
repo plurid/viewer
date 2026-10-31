@@ -34,7 +34,7 @@ export function sidebarCommands({
       id: 'shortcut-new-root',
       label: 'Open in new root plane',
       group: 'Sidebar',
-      icon: 'plus',
+      icon: 'planes',
       aliases: ['np', 'root'],
       when: (context) => shortcut(context) && actions.ready && space.panes.length < 200,
       run: (context) =>

@@ -208,7 +208,7 @@ export function EditorFind({
             </div>
             <button
               type="button"
-              className="editor-find-action"
+              className="button-secondary editor-find-action"
               disabled={!found}
               title="Replace (Enter)"
               onClick={() => valid() && replaceNext(view)}
@@ -217,7 +217,7 @@ export function EditorFind({
             </button>
             <button
               type="button"
-              className="editor-find-action"
+              className="button-secondary editor-find-action"
               aria-label="Replace all"
               disabled={!found}
               title="Replace all (⌘Enter)"

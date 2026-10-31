@@ -39,7 +39,7 @@ import { frameWorkspace, refitWorkspace } from './framing';
 import { focusFiles } from './sessions';
 import { applyTiling } from './tiling';
 import { useWorkspace } from './context';
-import { surfaceConfiguration } from './surface-configuration';
+import { minimapShown, surfaceConfiguration } from './surface-configuration';
 import { placeRoots } from './root-placement';
 import { routeFileKeyboard } from '../explorer/selection';
 
@@ -383,11 +383,13 @@ export function WorkspaceSurface({
     [theme],
   );
   const preferences = useMemo(() => general.space, [general]);
+  // automatic, the minimap comes with the third plane and goes with it
+  const minimap = minimapShown(preferences, space.panes.length);
   const [size, setSize] = useState({ width: 992, height: 692 });
   const [api, setApi] = useState<PluridApi | null>(null);
   const overview = useSpatialOverview({
     root: surface,
-    enabled: (preferences.minimap || preferences.viewcube) && !!api,
+    enabled: (minimap || preferences.viewcube) && !!api,
     epoch: space.id + ':' + (space.epoch ?? 0),
     labelsVersion: space.panes,
     subscribeEngine: (listener) => workspace.subscribeEngine(listener),
@@ -460,11 +462,12 @@ export function WorkspaceSurface({
         look,
         size,
         preferences,
+        minimap,
         color: space.spaceColor,
         palette,
         tiled: !!space.tiling,
       }),
-    [look, size, preferences, space.spaceColor, palette, space.tiling],
+    [look, size, preferences, minimap, space.spaceColor, palette, space.tiling],
   );
   useEffect(() => {
     if (!api) return;
@@ -476,7 +479,7 @@ export function WorkspaceSurface({
       const { elements, space: engineSpace } = api.getSnapshot().configuration;
       if (
         elements.toolbar.show === preferences.toolbar &&
-        elements.minimap?.show === preferences.minimap &&
+        elements.minimap?.show === minimap &&
         elements.viewcube.show === preferences.viewcube &&
         elements.planeBridge?.show === !space.tiling &&
         elements.planeLinks?.show === !space.tiling &&
@@ -512,7 +515,7 @@ export function WorkspaceSurface({
       disposed = true;
       unsubscribe();
     };
-  }, [api, configuration, preferences, engine, space.tiling]);
+  }, [api, configuration, preferences, minimap, engine, space.tiling]);
   // Stable callbacks: the engine memoizes plane chrome on their identity, so inline
   // functions would re-render every plane header on each store change.
   const handleReady = (api: PluridApi) => {

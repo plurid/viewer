@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CollisionDecision, OperationKind } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files/entries';
-import { report, setOperationsOpen, useViewer } from '../state/store';
+import { copyPaths, report, setOperationsOpen, useViewer } from '../state/store';
 import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
+import { Panel } from '../ui/Panel';
 import { baseName } from '../../domain/workspaces/planes';
 import { dialogOpen } from '../ui/modal';
 import { isActiveJob } from '../../domain/operations/jobs';
@@ -56,11 +57,14 @@ export function OperationsPanel() {
   }, [open]);
   if (!open) return null;
   return (
-    <aside
-      className="operations-panel"
-      aria-label="File operations"
-      role="dialog"
+    <Panel
       ref={panel}
+      className="operations-panel"
+      label="File operations"
+      role="dialog"
+      title="File operations"
+      onClose={() => setOperationsOpen(false)}
+      closeLabel="Close operations"
       onKeyDown={(event) => {
         if (event.key === 'Escape' && !replace) {
           event.preventDefault();
@@ -69,14 +73,6 @@ export function OperationsPanel() {
         }
       }}
     >
-      <header>
-        <strong>File operations</strong>
-        <IconButton
-          icon="close"
-          label="Close operations"
-          onClick={() => setOperationsOpen(false)}
-        />
-      </header>
       {!visibleJobs.length && <p className="muted panel-empty">No recent file operations.</p>}
       {visibleJobs.map((job) => (
         <section className={`operation operation-${job.status}`} key={job.id}>
@@ -190,15 +186,11 @@ export function OperationsPanel() {
                 ))}
               <button
                 onClick={() => {
-                  void window.viewer
-                    .copyPaths(
-                      [
-                        job.recovery!.source,
-                        job.recovery!.destination,
-                        job.recovery!.staging,
-                      ].filter((file): file is string => !!file),
-                    )
-                    .catch(report);
+                  void copyPaths(
+                    [job.recovery!.source, job.recovery!.destination, job.recovery!.staging].filter(
+                      (file): file is string => !!file,
+                    ),
+                  ).catch(report);
                 }}
               >
                 Copy recovery paths
@@ -244,6 +236,6 @@ export function OperationsPanel() {
           </footer>
         </Dialog>
       )}
-    </aside>
+    </Panel>
   );
 }

@@ -23,7 +23,7 @@ export function QuitHint() {
   return (
     <div className="quit-hint" role="status">
       {shown && (
-        <p>
+        <p className="bar bar-floating">
           Press <kbd>⌘Q</kbd> again to quit
         </p>
       )}

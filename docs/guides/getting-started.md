@@ -7,6 +7,10 @@ yet, follow [Install and update Viewer](install.md).
 **Find it:** **Help → Getting Started** opens this page; **Help → Keyboard Shortcuts** lists every
 key.
 
+The first time Viewer opens, a card above the folder's files names three things to try: **Space**,
+**⌘K** and dragging a plane by its title. **Space** and **⌘K** each leave the card once used, and
+once both have, the card goes for good. Its **×** closes it for good too.
+
 ## 1. Open a folder
 
 1. Press **⌘⇧O**, or choose **File → Open Folder…**, and pick a folder. The sidebar also opens Home,

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { gitCommitMessageLimit } from '../../domain/comparison/git-actions';
 import { errorMessage } from '../../domain/errors';
-import { Dialog } from '../ui/primitives';
+import { Dialog, PathField } from '../ui/primitives';
 import './commit-dialog.css';
 
 export interface CommitDialogProps {
@@ -57,7 +57,7 @@ export function CommitDialog({ directory, onSubmit, onClose }: CommitDialogProps
       >
         <p className="git-commit-folder">
           <strong>Current folder</strong>
-          <span>{directory}</span>
+          <PathField path={directory} />
         </p>
         <p className="git-commit-hint" id={hintID}>
           Commit only changes already staged in the repository containing this folder.

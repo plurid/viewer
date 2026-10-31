@@ -19,10 +19,10 @@
   flex: 1;
 }
 .trash-message {
-  margin: 16px 20px;
+  margin: var(--gap-panel) 20px;
 }
 .trash-access {
-  padding: 16px 20px;
+  padding: var(--gap-panel) 20px;
   border-bottom: 1px solid var(--line);
 }
 .trash-access > div {
@@ -31,14 +31,14 @@
   gap: 20px;
 }
 .trash-access > div + div {
-  margin-top: 12px;
+  margin-top: var(--gap-content);
 }
 .trash-access > div > div {
   flex: 1;
   min-width: 0;
 }
 .trash-access p {
-  margin: 4px 0 0;
+  margin: var(--gap-tight) 0 0;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -60,7 +60,7 @@
 .trash-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(120px, 170px);
-  gap: 12px;
+  gap: var(--gap-content);
   align-items: center;
   padding: 10px 20px;
   border-bottom: 1px solid var(--line);
@@ -77,7 +77,7 @@
 .trash-utility-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   min-width: 0;
 }
 .trash-breadcrumbs {
@@ -91,7 +91,7 @@
 }
 .trash-breadcrumbs button {
   border: 0;
-  padding: 6px;
+  padding: var(--gap-small);
   background: transparent;
   max-width: 160px;
   overflow: hidden;
@@ -102,7 +102,7 @@
   font-weight: 600;
 }
 .trash-search {
-  padding: 6px 8px;
+  padding: var(--gap-small) var(--gap-inline);
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   color: var(--muted);
@@ -175,12 +175,12 @@
   flex: none;
   color: var(--muted);
   background: var(--raised);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .trash-heading button {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -204,16 +204,16 @@
   flex: none;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 20px;
+  gap: var(--gap-panel);
+  padding: var(--gap-content) 20px;
   border-top: 1px solid var(--line);
 }
 .trash-origin-details > div {
   min-width: 0;
 }
-.trash-origin-details p {
+.trash-origin-details :is(p, .path-field) {
   max-height: 88px;
-  margin: 4px 0 0;
+  margin: var(--gap-tight) 0 0;
   overflow: auto;
   overflow-wrap: anywhere;
   user-select: text;
@@ -227,14 +227,14 @@
 }
 .trash-info-note {
   display: block;
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
 }
 .trash-dialog .trash-footer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--gap-panel);
   align-items: center;
-  padding: 16px 20px;
+  padding: var(--gap-panel) 20px;
   border-top: 1px solid var(--line);
   flex: none;
 }

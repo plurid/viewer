@@ -14,7 +14,7 @@ import { useWorkspace } from '../../workspace/context';
 import { openWorkspacePath } from '../../workspace/open-path';
 import { FileIcon } from '../../explorer/views';
 import { FileSelection } from '../../explorer/selection';
-import { Dialog, Empty, IconButton, Loading } from '../primitives';
+import { Dialog, Empty, IconButton, Loading, PathField } from '../primitives';
 import { Icon } from '../Icon';
 import { asFile, originUnavailable, trashDate } from './items';
 import { TrashMenu } from './TrashMenu';
@@ -553,7 +553,7 @@ export function Trash({ onClose }: { onClose(): void }) {
             <div>
               <span className="muted">Original location</span>
               {selectedItem.originalPath ? (
-                <p className="trash-original-path">{selectedItem.originalPath}</p>
+                <PathField className="trash-original-path" path={selectedItem.originalPath} />
               ) : (
                 <p>{originUnavailable}</p>
               )}

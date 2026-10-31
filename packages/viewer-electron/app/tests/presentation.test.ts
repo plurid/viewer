@@ -140,6 +140,24 @@ describe('window presentation resolution', () => {
     expect(first.values['ui.space.grid']).toBe(false);
   });
 
+  it('overrides each plane toolbar control alone, its siblings kept', () => {
+    const result = resolveWindowPreferences(
+      input({ 'ui.space.headerControls': { layout: true, close: false } }),
+    );
+    expect(result.ui.space.headerControls).toEqual({
+      ...normalizePreferences().space.headerControls,
+      layout: true,
+      close: false,
+    });
+    expect(Object.keys(presentationFields)).toEqual(
+      expect.arrayContaining([
+        'ui.space.headerControls.pins',
+        'ui.space.headerControls.discover',
+        'ui.space.headerControls.formatTools',
+      ]),
+    );
+  });
+
   it('diagnoses invalid and protected entries and never aliases an unknown path', () => {
     const source = input({
       'ui.space.missing.toolbar': false,

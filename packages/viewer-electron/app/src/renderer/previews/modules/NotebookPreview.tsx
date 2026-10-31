@@ -11,6 +11,7 @@ import { notebookLimits, parseNotebook } from '../../../domain/previews/data/not
 import { ParsedDocument } from '../ParsedDocument';
 import { HighlightedCode, MarkdownContent } from '../Markdown';
 import { usePreviewScroll } from '../scroll';
+import { Disclosure } from '../../ui/Disclosure';
 
 const plural = (count: number, one: string, many: string) =>
   `${count.toLocaleString()} ${count === 1 ? one : many}`;
@@ -72,11 +73,10 @@ function Output({ output, context }: { output: NotebookOutput; context: PreviewC
       return (
         <div className="notebook-output">
           <p className="notebook-note">HTML output is not rendered.</p>
-          <details className="notebook-html">
-            <summary>HTML source</summary>
+          <Disclosure variant="compact" className="notebook-html" summary="HTML source">
             <pre>{output.source}</pre>
             {output.truncated && <p className="notebook-note">{shortened}</p>}
-          </details>
+          </Disclosure>
         </div>
       );
     case 'error':

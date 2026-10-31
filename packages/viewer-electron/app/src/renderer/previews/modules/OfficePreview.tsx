@@ -4,6 +4,7 @@ import type { PreviewContext, PreviewModule } from '../contracts';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
 import { DataTable, type TableControls } from '../DataTable';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { Empty, Loading } from '../../ui/primitives';
@@ -240,7 +241,7 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
       )}
       <span className="toolbar-spacer" />
       {filter && (
-        <span className="muted office-row-count">
+        <span className="muted office-row-count" {...headerItem('rows', 9, 'detail')}>
           {filter.rows.toLocaleString()} rows · {filter.columns} columns
         </span>
       )}

@@ -7,66 +7,40 @@
   align-self: start;
   width: 380px;
   max-width: 100%;
-  max-height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  box-shadow: var(--shadow);
 }
 /* Beside the check panel, it gives way first: the check is what the plan acts on. */
 .space-overlay:has(> .check-panel) > .spoken-request {
   max-width: max(260px, 100cqw - 436px);
 }
-.spoken-request > header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 10px 10px 14px;
-  border-bottom: 1px solid var(--line);
-}
-.spoken-request > header h2 {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-.spoken-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 10px 14px;
-  font-size: 13px;
+.spoken-request-body {
+  font-size: var(--text-body);
   line-height: 1.45;
 }
-.spoken-body p {
-  margin: 0 0 8px;
+.spoken-request-body p {
+  margin: 0 0 var(--gap-inline);
   overflow-wrap: anywhere;
 }
 .spoken-transcript {
-  font-size: 14px;
+  font-size: var(--text-section);
 }
 .spoken-plan {
   font-weight: 600;
 }
 .spoken-note {
-  font-size: 12px;
+  font-size: var(--text-compact);
   line-height: 1.4;
 }
 .spoken-offer {
   display: grid;
   justify-items: start;
-  gap: 8px;
-  margin: 4px 0 10px;
+  gap: var(--gap-inline);
+  margin: var(--gap-tight) 0 var(--gap-content);
 }
 .spoken-offer p {
   margin: 0;
 }
 .spoken-steps {
-  margin: 0 0 8px;
+  margin: 0 0 var(--gap-inline);
   padding: 0;
   list-style: none;
 }
@@ -74,8 +48,8 @@
 .spoken-step {
   display: grid;
   grid-template-columns: 92px 1fr;
-  gap: 2px 8px;
-  padding: 6px 0;
+  gap: 2px var(--gap-inline);
+  padding: var(--gap-small) 0;
   border-bottom: 1px solid var(--line);
 }
 .spoken-step:last-child {
@@ -83,7 +57,7 @@
 }
 .spoken-step-state {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .spoken-step[data-state='running'] .spoken-step-state,
 .spoken-step[data-state='press'] .spoken-step-state {
@@ -97,23 +71,13 @@
 .spoken-step-text {
   grid-column: 2;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
   overflow-wrap: anywhere;
 }
 .spoken-step-press {
   grid-column: 2;
   display: grid;
   justify-items: start;
-  gap: 4px;
-  margin-top: 4px;
-}
-.spoken-request > footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 8px 14px 12px;
-}
-.spoken-request > footer:empty {
-  display: none;
+  gap: var(--gap-tight);
+  margin-top: var(--gap-tight);
 }

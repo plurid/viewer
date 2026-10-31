@@ -111,6 +111,7 @@ it('scrolls the page under the clicked browser plane, and the space everywhere e
         look: 'dark',
         size: { width: 1280, height: 800 },
         preferences: normalizePreferences().space,
+        minimap: true,
       }),
     ),
   });

@@ -10,7 +10,7 @@ import { newPlaneFolder } from '../../domain/services';
 import type { WorkspaceController } from '../workspace/context';
 import { requestAction } from '../actions/commands';
 import type { IconName } from '../ui/Icon';
-import { captureTarget } from './target';
+import { captureTarget, toolFiles } from './target';
 import { localServerCommands } from '../local-servers/commands';
 import { layoutCommands } from '../layout/commands';
 import { checkCommands, checkResultCommands } from '../fabrication/commands';
@@ -78,7 +78,7 @@ export function programCommands(
       id: 'open-tasks',
       label: 'Tasks…',
       group: 'Workspace',
-      icon: 'dock',
+      icon: 'tasks',
       aliases: ['task areas', 'task context', 'command history'],
       when: () => !!tools.showTasks,
       run: () => tools.showTasks?.(),
@@ -87,7 +87,7 @@ export function programCommands(
       id: 'new-task-area',
       label: 'New task area…',
       group: 'Workspace',
-      icon: 'dock',
+      icon: 'tasks',
       aliases: ['task', 'branch workspace', 'task context'],
       when: (context) => !!tools.showTasks && !!context.folder && folder(context),
       run: (context) => tools.showTasks?.(target(context)),
@@ -118,10 +118,10 @@ export function programCommands(
       icon: preset.kind === 'image' ? 'image' : preset.kind === 'pdf' ? 'pdf' : 'audio',
       aliases: [preset.description, 'export preset'],
       when: (context) =>
-        exportPresetAvailable(preset, context.selection) &&
+        exportPresetAvailable(preset, toolFiles(context)) &&
         (preset.kind === 'image' ? !!imageTools : preset.kind === 'pdf' ? !!optimizeFiles : true),
       run: (context) => {
-        const files = structuredClone([...context.selection]);
+        const files = structuredClone(toolFiles(context));
         if (preset.kind === 'image') return imageTools?.(files, context.paneID, preset.preset);
         if (preset.kind === 'pdf') return optimizeFiles?.(files, context.paneID, preset.preset);
         return workspace.openMedia(
@@ -138,14 +138,16 @@ export function programCommands(
       group: 'Files',
       icon: 'file',
       aliases: ['merge pdf', 'split pdf', 'extract pages', 'rotate pages', 'reorder pages'],
-      when: (context) =>
-        !!pdfTools &&
-        context.selection.length > 0 &&
-        context.selection.length <= 16 &&
-        context.selection.every(
-          (file) => file.kind === 'file' && file.extension.toLowerCase() === 'pdf',
-        ),
-      run: (context) => pdfTools?.(structuredClone([...context.selection]), context.paneID),
+      when: (context) => {
+        const files = toolFiles(context);
+        return (
+          !!pdfTools &&
+          files.length > 0 &&
+          files.length <= 16 &&
+          files.every((file) => file.kind === 'file' && file.extension.toLowerCase() === 'pdf')
+        );
+      },
+      run: (context) => pdfTools?.(structuredClone(toolFiles(context)), context.paneID),
     },
     {
       id: 'optimize-files',
@@ -161,12 +163,13 @@ export function programCommands(
         'minimize',
         'shrink',
       ],
-      when: (context) =>
-        !!optimizeFiles &&
-        context.selection.length > 0 &&
-        context.selection.length <= 1000 &&
-        context.selection.every(optimizable),
-      run: (context) => optimizeFiles?.(structuredClone([...context.selection]), context.paneID),
+      when: (context) => {
+        const files = toolFiles(context);
+        return (
+          !!optimizeFiles && files.length > 0 && files.length <= 1000 && files.every(optimizable)
+        );
+      },
+      run: (context) => optimizeFiles?.(structuredClone(toolFiles(context)), context.paneID),
     },
     {
       id: 'edit-media',
@@ -174,17 +177,21 @@ export function programCommands(
       group: 'Files',
       icon: 'video',
       aliases: ['trim', 'join clips', 'extract audio', 'mute video', 'mix audio', 'media editor'],
-      when: (context) =>
-        context.selection.length > 0 &&
-        context.selection.length <= 16 &&
-        context.selection.every(
-          (file) =>
-            file.kind === 'file' &&
-            (mediaFormats as readonly string[]).includes(file.extension.toLowerCase()),
-        ),
+      when: (context) => {
+        const files = toolFiles(context);
+        return (
+          files.length > 0 &&
+          files.length <= 16 &&
+          files.every(
+            (file) =>
+              file.kind === 'file' &&
+              (mediaFormats as readonly string[]).includes(file.extension.toLowerCase()),
+          )
+        );
+      },
       run: (context) =>
         workspace.openMedia(
-          context.selection.map((file) => file.path),
+          toolFiles(context).map((file) => file.path),
           context.paneID,
         ),
     },
@@ -197,12 +204,16 @@ export function programCommands(
       group: 'Images',
       icon: 'image',
       aliases: ['webp', 'avif', 'resize', 'crop', 'image tools', 'quality'],
-      when: (context) =>
-        !!imageTools &&
-        context.selection.length > 0 &&
-        context.selection.length <= 1000 &&
-        context.selection.every((file) => file.kind === 'file' && transformableImage(file)),
-      run: (context) => imageTools?.(structuredClone([...context.selection]), context.paneID),
+      when: (context) => {
+        const files = toolFiles(context);
+        return (
+          !!imageTools &&
+          files.length > 0 &&
+          files.length <= 1000 &&
+          files.every((file) => file.kind === 'file' && transformableImage(file))
+        );
+      },
+      run: (context) => imageTools?.(structuredClone(toolFiles(context)), context.paneID),
     },
     {
       id: 'open-browser-plane',

@@ -147,9 +147,9 @@ then measure every DXF part itself and say where the job disagrees with itself: 
    compares there, such as "Compare Job 1042’s request email and 1 drawing with its 5 DXF parts".
    Elsewhere **⌘K** lists it greyed out with why, such as "fabrication holds Job 1042 and
    Evaluation: select one to check it." Parts kept in a folder inside the job, such as `DXF/`, are
-   read too. The check panel lists **What is sent**: each file with its ref, such as `S2`, and how
-   it goes. A request goes as its text, a drawing as its pages with their text, a photo as a picture
-   without location or camera details, and a DXF only as Viewer's measurement.
+   read too. The check panel lists **Sent to the model**: each file and how it goes. A request goes
+   as its text, a drawing as its pages with their text, a photo as a picture without location or
+   camera details, and a DXF only as Viewer's measurement.
    - Without a request or a drawing, the check reads the parts' names and measurements, and any
      photos.
    - A DWG part is left out: save it as DXF from the CAD app first, as Viewer measures DXF only.

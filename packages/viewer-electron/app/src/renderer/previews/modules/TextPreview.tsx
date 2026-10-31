@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import Prism from 'prismjs';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
 import type { PreviewContext } from '../contracts';
 import { Empty, Loading } from '../../ui/primitives';
 import { DelimitedTable } from '../DataTable';
@@ -237,8 +238,37 @@ export default function TextPreview(context: TextPreviewProps) {
               isStructured(resource.entry.extension)),
           run: () => setRaw((value) => !value),
         },
+        // the header's size and wrap buttons, which Essential leaves here
+        {
+          id: 'text-smaller',
+          label: 'Smaller preview text',
+          aliases: ['zoom out', 'font size'],
+          available: !!data && !data.binary && scale > 0.6,
+          run: () => setScale((value) => Math.max(0.6, value - 0.1)),
+        },
+        {
+          id: 'text-larger',
+          label: 'Larger preview text',
+          aliases: ['zoom in', 'font size'],
+          available: !!data && !data.binary && scale < 2.5,
+          run: () => setScale((value) => Math.min(2.5, value + 0.1)),
+        },
+        {
+          id: 'text-size-reset',
+          label: 'Reset preview text size',
+          aliases: ['actual size', 'font size'],
+          available: !!data && !data.binary && scale !== 1,
+          run: () => setScale(1),
+        },
+        {
+          id: 'text-wrap',
+          label: wrap ? 'Stop wrapping lines' : 'Wrap lines',
+          aliases: ['wrap', 'word wrap'],
+          available: !!data && !data.binary,
+          run: () => setWrap((value) => !value),
+        },
       ],
-      [raw, data, resource.entry.extension, setRaw],
+      [raw, data, resource.entry.extension, setRaw, scale, setScale, wrap, setWrap],
     ),
   );
   if (editing && paneID)
@@ -268,38 +298,65 @@ export default function TextPreview(context: TextPreviewProps) {
         <PreviewToolbar context={context}>
           {(markdown || isStructured(ext)) && (
             <>
-              <button className={!raw ? 'selected' : ''} onClick={() => setRaw(false)}>
+              <button
+                {...headerItem('document', 5, ['preview.view-source'])}
+                className={!raw ? 'selected' : ''}
+                onClick={() => setRaw(false)}
+              >
                 {markdown ? 'Document' : 'Tree'}
               </button>
-              <button className={raw ? 'selected' : ''} onClick={() => setRaw(true)}>
+              <button
+                {...headerItem('source', 5, ['preview.view-source'])}
+                className={raw ? 'selected' : ''}
+                onClick={() => setRaw(true)}
+              >
                 Source
               </button>
             </>
           )}
           {editable && (
-            <button title="Edit Text (⌘E)" onClick={startEditing}>
+            <button
+              {...headerItem('edit', 3, ['edit-file'])}
+              title="Edit Text (⌘E)"
+              onClick={startEditing}
+            >
               Edit
             </button>
           )}
           <span className="toolbar-spacer" />
+          {/* Essential leaves the text size to "…" */}
+          {context.toolbar !== 'essential' && (
+            <>
+              <button
+                {...headerItem('smaller', 8, ['preview.text-smaller'])}
+                aria-label="Smaller preview text"
+                disabled={scale <= 0.6}
+                onClick={() => setScale((value) => Math.max(0.6, value - 0.1))}
+              >
+                −
+              </button>
+              <button
+                {...headerItem('size', 8, ['preview.text-size-reset'])}
+                title="Reset preview text size"
+                onClick={() => setScale(1)}
+              >
+                {Math.round(textSettings.fontSize)} px
+              </button>
+              <button
+                {...headerItem('larger', 8, ['preview.text-larger'])}
+                aria-label="Larger preview text"
+                disabled={scale >= 2.5}
+                onClick={() => setScale((value) => Math.min(2.5, value + 0.1))}
+              >
+                +
+              </button>
+            </>
+          )}
           <button
-            aria-label="Smaller preview text"
-            disabled={scale <= 0.6}
-            onClick={() => setScale((value) => Math.max(0.6, value - 0.1))}
+            {...headerItem('wrap', 6, ['preview.text-wrap'])}
+            aria-pressed={wrap}
+            onClick={() => setWrap((value) => !value)}
           >
-            −
-          </button>
-          <button title="Reset preview text size" onClick={() => setScale(1)}>
-            {Math.round(textSettings.fontSize)} px
-          </button>
-          <button
-            aria-label="Larger preview text"
-            disabled={scale >= 2.5}
-            onClick={() => setScale((value) => Math.min(2.5, value + 0.1))}
-          >
-            +
-          </button>
-          <button aria-pressed={wrap} onClick={() => setWrap((value) => !value)}>
             Wrap
           </button>
         </PreviewToolbar>

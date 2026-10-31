@@ -8,7 +8,8 @@ import type {
 } from '../../../domain/agents/clients';
 import { AgentClientSettings } from '../agents/AgentClients';
 import { AgentGrants } from '../agents/AgentGrants';
-import { IconButton } from '../primitives';
+import { IconButton, PathField } from '../primitives';
+import { Disclosure } from '../Disclosure';
 import type { SettingsEditor } from './editor';
 
 /** What the shared connection may do; its navigation is always reviewed. */
@@ -64,8 +65,7 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
         </p>
       )}
       <AgentClientSettings settings={settings} enabled={!!access?.enabled} />
-      <details>
-        <summary>Shared connection</summary>
+      <Disclosure variant="row" summary="Shared connection">
         <p className="settings-note">
           Local MCP clients can inspect authorized folders and propose tasks. File changes require
           your review in this app.
@@ -73,7 +73,7 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
         <h2>Authorized folders</h2>
         {access?.roots.map((root) => (
           <div className="settings-location" key={root}>
-            <span>{root}</span>
+            <PathField path={root} onError={(error) => setError(errorMessage(error))} />
             <IconButton
               icon="close"
               label="Remove agent folder access"
@@ -84,7 +84,7 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
         {access?.pending.roots.map((root) => (
           <div className="settings-location" key={root}>
             <span>
-              {root}
+              <PathField path={root} onError={(error) => setError(errorMessage(error))} />
               <small>Requested in config.jsonc</small>
             </span>
             <button onClick={() => change({ kind: 'allow', roots: [root] })}>Allow…</button>
@@ -151,7 +151,7 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
             onFocus={(event) => event.target.select()}
           />
         )}
-      </details>
+      </Disclosure>
     </>
   );
 }

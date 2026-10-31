@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { PluridPlaneChromeContext, TreePlane } from '@plurid/plurid-data';
 import {
   activeWorkspace,
@@ -23,8 +23,21 @@ import { baseName, paneTitle } from '../../domain/workspaces/planes';
 import { hostID } from './tree';
 import { buffersGeneration, heldBuffer, subscribeBuffers } from '../editing/buffers';
 import { GitBranch } from '../git/status';
-import { PinnedTools } from '../commands/PinnedTools';
+import { DiscoverButton, PinnedTools } from '../commands/PinnedTools';
+import { effectiveWindowUI } from '../state/effective-ui';
 import { RelatedPlanes } from './RelatedPlanes';
+import { headerItem, headerMenu, useHeaderOverflow } from './header-overflow';
+
+/** The View menu's choices, which lead "…" as the View submenu once the button gives way. */
+const viewModeIDs = [
+  'view-list',
+  'view-grid',
+  'view-columns',
+  'view-gallery',
+  'view-map',
+  'view-side-by-side',
+  'view-stacked',
+];
 
 /** Chooses and edits a folder's lenses; shown once the folder has one, and on the Map. */
 function LensButton({
@@ -45,14 +58,16 @@ function LensButton({
     group: map ? 'lens' : presentation.group,
     lens: presentation.lens,
   });
+  const ids = lensMenuIDs(data);
   return (
     <button
+      {...headerItem('lens', 7, ids)}
       className="plane-view-button plane-lens-button"
       aria-label={current ? `Lens: ${current.lens.name}` : 'Lenses'}
       title={current ? `Lens: ${current.lens.name}` : 'Lenses'}
       aria-haspopup="dialog"
       aria-expanded={open}
-      onClick={(event) => onOpen(event, lensMenuIDs(data))}
+      onClick={(event) => onOpen(event, ids)}
     >
       <Icon name="lens" size={15} />
       {current && <span>{current.lens.name}</span>}
@@ -84,8 +99,9 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     pane?.type === 'scratch'
       ? !!heldBuffer(pane.bufferID)?.text
       : (pane?.type === 'preview' || pane?.type === 'diff') && !!pane.bufferID;
-  const dragging = useViewer((state) => state.saved.ui.space.dragging);
-  const controls = useViewer((state) => state.saved.ui.space.headerControls);
+  // as this window shows them: its profile's and its workspace's own over the general settings
+  const dragging = useViewer((state) => effectiveWindowUI(state).space.dragging);
+  const controls = useViewer((state) => effectiveWindowUI(state).space.headerControls);
   const registry = useCommands();
   const revision = useCommandRevision(id);
   // some commands' availability depends on which plane is active
@@ -101,6 +117,8 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     (element: HTMLDivElement | null) => setPreviewControlsSlot(id, element),
     [id],
   );
+  const header = useRef<HTMLDivElement>(null);
+  const lead = useHeaderOverflow(header);
   const request = useMemo(
     (): CommandRequest => ({
       paneID: id,
@@ -171,6 +189,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
   };
   return (
     <div
+      ref={header}
       className="plane-controls"
       data-viewer-plane={id}
       data-scroll-selected={context.scrollSelected || undefined}
@@ -178,6 +197,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     >
       {controls.parent && available.some((item) => item.id === 'parent-plane') && (
         <IconButton
+          {...headerItem('parent', 2, ['parent-plane'])}
           icon="parent-plane"
           label="Back to parent plane"
           onClick={() => run('parent-plane')}
@@ -188,6 +208,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
         <div className="plane-navigation">
           {controls.sidebar && (
             <IconButton
+              {...headerItem('sidebar', 6, ['plane-sidebar'])}
               icon="sidebar"
               label={
                 pane.sidebar?.visible !== false ? 'Hide plane navigation' : 'Show plane navigation'
@@ -198,6 +219,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           )}
           {controls.back && (
             <IconButton
+              {...headerItem('back', 3, ['back'])}
               icon="left"
               label="Back"
               disabled={!available.some((item) => item.id === 'back')}
@@ -206,6 +228,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           )}
           {controls.forward && (
             <IconButton
+              {...headerItem('forward', 5, ['forward'])}
               icon="right"
               className="plane-forward"
               label="Forward"
@@ -263,24 +286,18 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       </span>
       {pane?.type === 'folder' ? (
         <>
-          <GitBranch path={pane.path} paneID={pane.id} />
+          <span className="plane-header-item" {...headerItem('git', 8, ['git-changes'])}>
+            <GitBranch path={pane.path} paneID={pane.id} />
+          </span>
           {controls.view && (
             <button
+              {...headerItem('view', 4, viewModeIDs)}
               className="plane-view-button"
               aria-label="View mode"
+              title={`View as ${pane.mode}`}
               aria-haspopup="dialog"
               aria-expanded={menu?.kind === 'view'}
-              onClick={(event) =>
-                openMenu(event, [
-                  'view-list',
-                  'view-grid',
-                  'view-columns',
-                  'view-gallery',
-                  'view-map',
-                  'view-side-by-side',
-                  'view-stacked',
-                ])
-              }
+              onClick={(event) => openMenu(event, viewModeIDs)}
             >
               <Icon name={pane.mode} size={17} />
               <Icon name="down" size={10} />
@@ -294,6 +311,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           />
           {controls.search && (
             <IconButton
+              {...headerItem('search', 4, ['search'])}
               icon="search"
               className="plane-search-button"
               label={registry.context(id)?.searchOpen ? 'Close search' : 'Search this folder'}
@@ -305,11 +323,12 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       ) : (
         <div className="plane-module-controls" ref={slot} />
       )}
-      {(controls.frame || controls.dock || controls.actions) && (
+      {(controls.layout || controls.frame || controls.dock) && (
         <div className="plane-spatial-controls">
-          {controls.actions && (
+          {controls.layout && (
             <IconButton
-              icon="resize"
+              {...headerItem('layout', 8, planeLayoutCommandIDs)}
+              icon="arrange"
               label="Layout"
               className="plane-layout-button"
               aria-haspopup="dialog"
@@ -329,9 +348,11 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           )}
         </div>
       )}
-      {controls.actions && pane && <PinnedTools pane={pane} scope={request.scope} />}
-      {controls.actions && (
+      {controls.pins && pane && <PinnedTools pane={pane} scope={request.scope} />}
+      {controls.discover && pane && <DiscoverButton pane={pane} scope={request.scope} />}
+      {(controls.actions || lead.length > 0) && (
         <IconButton
+          {...headerMenu}
           icon="more"
           label={
             pane?.type === 'folder'
@@ -366,6 +387,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           anchor={menu.anchor}
           onClose={() => setMenu(null)}
           label={menu.kind === 'layout' ? 'Layout' : 'Plane actions'}
+          lead={menu.kind === 'actions' ? lead : undefined}
         />
       )}
     </div>

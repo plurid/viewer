@@ -210,7 +210,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
       id: 'check-cut-sheets',
       label: 'Prepare cut sheets',
       group: 'Files',
-      icon: 'grid',
+      icon: 'drawing',
       aliases: ['cut sheets', 'nest', 'nest the parts', 'nesting'],
       detail: () =>
         `Nest ${checkedJob()}’s ${countText(graded()!.result!.parts.length, 'part')} in a Layout plane, as the check reads them`,

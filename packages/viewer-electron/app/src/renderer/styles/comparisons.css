@@ -8,7 +8,7 @@
   border-radius: 3px;
   background: var(--raised);
   color: var(--accent);
-  font: 600 10px / 1 var(--interface-font);
+  font: 600 var(--text-label) / 1 var(--interface-font);
 }
 .git-conflict,
 .git-deleted {
@@ -38,7 +38,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .git-review {
   display: flex;
@@ -63,7 +63,7 @@
   height: 100%;
   border-radius: 0;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   text-align: left;
 }
 .git-review-file > span:last-child,
@@ -94,13 +94,13 @@
 .git-review-hunk header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 6px 12px;
+  gap: var(--gap-content);
+  padding: var(--gap-small) var(--gap-content);
   background: var(--raised);
 }
 .git-review-hunk pre {
   margin: 0;
-  padding: 8px 12px;
+  padding: var(--gap-inline) var(--gap-content);
   font: 16px / 1.5 var(--editor-font, monospace);
   tab-size: 4;
 }
@@ -116,12 +116,12 @@
 }
 .git-review-footer {
   border-top: 1px solid var(--line);
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: var(--gap-small) var(--gap-content);
+  font-size: var(--text-compact);
   color: var(--muted);
 }
 .git-review-error {
-  padding: 8px 12px;
+  padding: var(--gap-inline) var(--gap-content);
   color: var(--danger);
 }
 .diff-plane {
@@ -135,16 +135,16 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--gap-inline);
+  padding: var(--gap-inline) var(--gap-content);
   border-bottom: 1px solid var(--line);
 }
 .diff-sources {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 6px 12px;
-  font-size: 11px;
+  gap: var(--gap-content);
+  padding: var(--gap-small) var(--gap-content);
+  font-size: var(--text-label);
   color: var(--muted);
 }
 .diff-sources > span {
@@ -185,13 +185,13 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px;
+  padding: var(--gap-content);
   background: var(--media-stage);
 }
 .image-diff-control {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--gap-content);
   margin: 10px 0;
 }
 .image-diff-control input {
@@ -217,7 +217,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: start;
-  gap: 12px;
+  gap: var(--gap-content);
 }
 .image-diff-pair img,
 .image-difference {

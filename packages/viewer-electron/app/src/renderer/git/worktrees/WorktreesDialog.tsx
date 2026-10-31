@@ -16,7 +16,7 @@ import {
 import { errorMessage } from '../../../domain/errors';
 import type { WorkspaceController } from '../../workspace/context';
 import { getState, receiveSettings, useViewer } from '../../state/store';
-import { Dialog, IconButton } from '../../ui/primitives';
+import { Dialog, IconButton, PathField } from '../../ui/primitives';
 import './worktrees.css';
 import { CreateWorktree } from './CreateWorktree';
 
@@ -406,7 +406,7 @@ export function WorktreesDialog({
             {selected && (
               <section className="worktree-inspection" aria-label="Selected checkout">
                 <strong>{worktreeLabel(selected)}</strong>
-                <p className="worktree-inspection-path">{selected.path}</p>
+                <PathField className="worktree-inspection-path" path={selected.path} />
                 {!selected.available ? (
                   <p>{selected.problem}</p>
                 ) : status?.error ? (

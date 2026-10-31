@@ -293,6 +293,14 @@ describe('set', () => {
     expect(activeWorkspace().overrides).toEqual({ 'ui.space.backdrop': 'blur' });
     expect(getState().saved.ui.space.backdrop).toBe('opaque');
   });
+  it('shows a plane toolbar button by its path, or in this workspace alone', async () => {
+    const live = host();
+    await act(async () => void (await runLine('set ui.space.headerControls.discover', live)));
+    expect(getState().saved.ui.space.headerControls.discover).toBe(true);
+    await act(async () => void (await runLine('setl ui.space.headerControls.layout', live)));
+    expect(activeWorkspace().overrides).toEqual({ 'ui.space.headerControls.layout': true });
+    expect(getState().saved.ui.space.headerControls.layout).toBe(false);
+  });
   it('with nothing after it lists the settings', async () => {
     const live = host();
     await runLine('set', live);

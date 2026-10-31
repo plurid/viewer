@@ -18,7 +18,7 @@ import { sourceVersion } from '../../domain/files/inspection';
 import { isActiveJob } from '../../domain/operations/jobs';
 import { baseName } from '../../domain/workspaces/planes';
 import { errorMessage } from '../../domain/errors';
-import { Empty, IconButton, Loading } from '../ui/primitives';
+import { Empty, IconButton, Loading, Row } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { report, updatePane, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
@@ -444,48 +444,58 @@ function Output({
   const paper = page.size !== 'fit' && !isScreenSize(page.size);
   return (
     <section className="layout-section" aria-label="Save">
-      <div className="layout-field">
-        <span>Save as</span>
-        <div className="layout-segmented" role="group" aria-label="Format">
-          {(['pdf', 'png', 'jpeg'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={value === format}
-              disabled={!plan.formats.includes(value)}
-              title={
-                plan.formats.includes(value)
-                  ? undefined
-                  : 'An image holds one page without PDF pages.'
-              }
-              onClick={() => onChange(changeMode(settings, mode, { format: value }))}
-            >
-              {formatLabels[value]}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Row
+        as="div"
+        compact
+        label="Save as"
+        control={
+          <div className="layout-segmented" role="group" aria-label="Format">
+            {(['pdf', 'png', 'jpeg'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={value === format}
+                disabled={!plan.formats.includes(value)}
+                title={
+                  plan.formats.includes(value)
+                    ? undefined
+                    : 'An image holds one page without PDF pages.'
+                }
+                onClick={() => onChange(changeMode(settings, mode, { format: value }))}
+              >
+                {formatLabels[value]}
+              </button>
+            ))}
+          </div>
+        }
+      />
       {format !== 'pdf' && paper && (
-        <label className="layout-field">
-          <span>Resolution</span>
-          <ChoiceButton
-            label="Resolution"
-            value={String(settings.dpi)}
-            choices={[150, 300, 600].map((dpi) => ({ value: String(dpi), label: `${dpi} dpi` }))}
-            onChoose={(value) => onChange({ ...settings, dpi: Number(value) })}
-          />
-        </label>
+        <Row
+          compact
+          label="Resolution"
+          control={
+            <ChoiceButton
+              label="Resolution"
+              value={String(settings.dpi)}
+              choices={[150, 300, 600].map((dpi) => ({ value: String(dpi), label: `${dpi} dpi` }))}
+              onChoose={(value) => onChange({ ...settings, dpi: Number(value) })}
+            />
+          }
+        />
       )}
       {plan.note && <p className="layout-note">{plan.note}</p>}
-      <label className="layout-field">
-        <span>Name</span>
-        <input
-          aria-label="Output name"
-          value={name}
-          maxLength={200}
-          onChange={(event) => onName(event.target.value)}
-        />
-      </label>
+      <Row
+        compact
+        label="Name"
+        control={
+          <input
+            aria-label="Output name"
+            value={name}
+            maxLength={200}
+            onChange={(event) => onName(event.target.value)}
+          />
+        }
+      />
       <p className="muted layout-folder" title={folder}>
         Saves a new file in {baseName(folder)}, beside the originals.
       </p>

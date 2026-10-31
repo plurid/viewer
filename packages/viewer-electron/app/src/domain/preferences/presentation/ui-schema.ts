@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { portablePath as localPath } from '../../schemas';
+import type { HeaderControl } from '../header';
+import { headerControlKeys, headerPresets } from '../header';
+import { firstRunSteps } from '../first-run';
+import { uiPreferencesVersion } from '../ui';
 const sections = z.enum(['locations', 'favorites', 'recents']);
 const fields = z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size', 'git']);
 const boolean = z.boolean();
@@ -7,7 +11,7 @@ const boolean = z.boolean();
 const color = z.union([z.literal(''), z.string().regex(/^#[0-9a-f]{6}$/i)]);
 export const preferencesSchema = z
   .object({
-    version: z.literal(3),
+    version: z.literal(uiPreferencesVersion),
     sidebar: z
       .object({
         visible: boolean,
@@ -28,6 +32,8 @@ export const preferencesSchema = z
       .object({
         toolbar: boolean,
         minimap: boolean,
+        // a file written before it shows the minimap as it did, always
+        minimapAuto: boolean.default(false),
         viewcube: boolean,
         origin: boolean,
         planeHeaders: boolean,
@@ -38,19 +44,13 @@ export const preferencesSchema = z
         backdropOpacity: z.number().int().min(0).max(100).default(60),
         grid: boolean.default(true),
         color: color.default(''),
+        // a control a hand-written file leaves out is Essential's
         headerControls: z
-          .object({
-            parent: boolean.default(true),
-            sidebar: boolean,
-            back: boolean,
-            forward: boolean,
-            view: boolean,
-            search: boolean,
-            frame: boolean,
-            dock: boolean,
-            actions: boolean,
-            close: boolean,
-          })
+          .object(
+            Object.fromEntries(
+              headerControlKeys.map((key) => [key, boolean.default(headerPresets.essential[key])]),
+            ) as Record<HeaderControl, z.ZodDefault<z.ZodBoolean>>,
+          )
           .strict(),
       })
       .strict(),
@@ -97,6 +97,13 @@ export const preferencesSchema = z
     insightsDismissed: z
       .record(localPath, z.array(z.string().min(1).max(60)).max(20))
       .refine((folders) => Object.keys(folders).length <= 200)
+      .optional(),
+    // only a new configuration starts it (first-run.ts)
+    firstRunHint: z
+      .union([
+        z.literal('retired'),
+        z.object({ used: z.array(z.enum(firstRunSteps)).max(firstRunSteps.length) }).strict(),
+      ])
       .optional(),
   })
   .strict();

@@ -37,6 +37,26 @@ Shared UI primitives live at the UI root; business dialogs belong to their featu
 tests enforce layer boundaries. Shared catalogs remain in domain code rather than repeated
 renderer/desktop unions.
 
+## UI primitives
+
+The shared controls are in `src/renderer/ui/`. [DESIGN.md](../../DESIGN.md) holds their rules and
+the [domain map](../../CONTEXT.md#interface) their owners. Use one before styling a one-off:
+
+- `Disclosure` for every `<details>`: `variant` `row`, `compact` or `inline`, and `group` with
+  `closeOnEscape` for sections in a dialog that close each other.
+- `Button` with a `variant` for a text button. A bare `<button>` stays the quiet ghost.
+- `Row` for a label, a detail line and a control at the shared edge.
+- `PathField` for a read-only path and `CopyButton` for any copy. Both go through `copyPaths` and
+  `copyText` in `state/ui.ts`.
+- `Panel` and `PanelSection` for a panel beside the work. Its holder places it and sets its width;
+  the panel never uses a fixed position.
+- `Popover` for an anchored layer, and `useAnchoredLayer` for a menu with its own markup.
+
+Size type with the `--text-*` tokens and space with `--gap-*`, both in `styles/base.css`.
+`tests/design-tokens.test.ts` checks them against DESIGN.md and keeps a budget of off-scale spacing
+per stylesheet: it fails a file over its budget, and one under it until the budget is lowered to
+match.
+
 ## Views and lifetimes
 
 The workspace controller is the Plurid adapter. It owns engine IDs, placement, framing and view

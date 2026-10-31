@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
 import type { PreviewContext } from '../contracts';
 import { Empty } from '../../ui/primitives';
 import { Icon } from '../../ui/Icon';
@@ -321,7 +322,11 @@ function MediaPlayer(
     <div className="media-preview">
       {(context.editMedia || context.compatible || !!subtitles?.files.length) && (
         <PreviewToolbar context={context}>
-          {context.compatible && <span className="muted">Compatibility copy · up to 720p</span>}
+          {context.compatible && (
+            <span className="muted" {...headerItem('compatibility', 9, 'detail')}>
+              Compatibility copy · up to 720p
+            </span>
+          )}
           {!!subtitles?.files.length && (
             <ChoiceButton
               label="Subtitles"
@@ -333,7 +338,11 @@ function MediaPlayer(
               onChoose={subtitles.choose}
             />
           )}
-          {context.editMedia && <button onClick={context.editMedia}>Edit media…</button>}
+          {context.editMedia && (
+            <button {...headerItem('edit-media', 5, ['edit-media'])} onClick={context.editMedia}>
+              Edit media…
+            </button>
+          )}
         </PreviewToolbar>
       )}
       {media}

@@ -12,7 +12,14 @@ import {
   type ResolvedCommand,
 } from './registry';
 import { parentPath } from './folder';
-import { activeWorkspace, getState, report, useViewer } from '../state/store';
+import {
+  activeWorkspace,
+  copyText,
+  getState,
+  noteFirstRunStep,
+  report,
+  useViewer,
+} from '../state/store';
 import { Dialog, IconButton, NameDialog } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { useFolder } from '../explorer/useFolder';
@@ -74,6 +81,10 @@ export function CommandPalette({
   line?: { host: LineHost; run(text: string, model?: boolean): void };
 }) {
   const registry = useCommands();
+  // the first-run tips name ⌘K: the palette's actions, seen once, take that step off them
+  useEffect(() => {
+    if (mode === 'commands') noteFirstRunStep('palette');
+  }, [mode]);
   // what was typed, carried into the mode it chose: `,wrap` searches the settings for "wrap"
   const [carried, setCarried] = useState(initialQuery);
   const change = (next: PaletteMode, query = '') => {
@@ -400,7 +411,7 @@ function useSmartRows(
           detail: 'Copy the result',
           group: 'Calculator',
           icon: 'copy',
-          run: () => navigator.clipboard.writeText(text),
+          run: () => copyText(text),
         }),
       ];
     }
@@ -654,9 +665,7 @@ function FileFinder({
         <button disabled={!query.trim()} onClick={() => setSaving(true)}>
           Save search…
         </button>
-        {search.running && (
-          <IconButton icon="pause" label="Cancel search" onClick={search.cancel} />
-        )}
+        {search.running && <IconButton icon="stop" label="Cancel search" onClick={search.cancel} />}
       </div>
       {content && !contentRoots.length && (
         <p className="inline-warning">

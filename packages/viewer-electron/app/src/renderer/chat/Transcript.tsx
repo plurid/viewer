@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef } from 'react';
 import type { ChatMessage } from '../../domain/models/chat';
 import { messageAuthor } from './presentation';
+import { Disclosure } from '../ui/Disclosure';
 
 const followDistance = 40;
 
@@ -45,15 +46,19 @@ export const Transcript = memo(function Transcript({
       )}
       {messages.map((message) =>
         message.role === 'tool' ? (
-          <details className="chat-tool" key={message.id}>
-            <summary>Inspected context</summary>
+          <Disclosure
+            variant="compact"
+            className="chat-tool"
+            key={message.id}
+            summary="Inspected context"
+          >
             <pre>{message.text}</pre>
             {message.links?.map((link) => (
               <button key={link.path} onClick={() => onOpen?.(link.path)}>
                 Open current file: {link.path.split('/').at(-1)}
               </button>
             ))}
-          </details>
+          </Disclosure>
         ) : (
           <article
             className="chat-message"

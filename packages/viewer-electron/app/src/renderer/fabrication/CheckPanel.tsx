@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { OperationJob } from '../../domain/contracts';
 import type { CheckFinding, CheckOutline, CheckSource } from '../../domain/fabrication/check';
 import type { ThicknessGroup } from '../../domain/fabrication/names';
@@ -19,9 +19,9 @@ import { fileName, findingGradeLabels } from '../../domain/tours/tour';
 import { errorMessage } from '../../domain/errors';
 import { report, useViewer } from '../state/store';
 import { ChoiceButton } from '../ui/ChoiceMenu';
-import { Icon } from '../ui/Icon';
 import { overlayOpen } from '../ui/modal';
-import { IconButton } from '../ui/primitives';
+import { Panel, PanelSection } from '../ui/Panel';
+import { Button, Row } from '../ui/primitives';
 import { useModelPermission } from '../ui/models/ModelDataPermission';
 import { startingSheets } from '../layout/nesting/headless';
 import { preparedNestings, subscribeNestings } from '../layout/nesting/prepared';
@@ -113,13 +113,23 @@ function collapsedStatus(current: CheckSession): { text: string; since?: number 
 function CheckPanelBody({ current, collapsed }: { current: CheckSession; collapsed: boolean }) {
   const opening = current.opening;
   const job = opening?.job ?? current.nothing?.job;
-  const body = useId();
   const status = collapsedStatus(current);
   return (
-    <aside
+    <Panel
       className="check-panel"
-      aria-label={`Check ${job ?? 'laser job'}`}
-      data-collapsed={collapsed || undefined}
+      label={`Check ${job ?? 'laser job'}`}
+      title={job ? `Check ${job}` : 'Check laser job'}
+      status={
+        <>
+          {status.text}
+          <Elapsed since={status.since} />
+        </>
+      }
+      collapsed={collapsed}
+      onCollapsedChange={toggleCheckPanel}
+      onClose={closeCheck}
+      closeLabel="Close the check"
+      data-stale={current.phase === 'checked' && current.stale ? true : undefined}
       onKeyDown={(event) => {
         // a menu or dialog inside keeps its own Escape; a running tour takes it first
         if (event.key !== 'Escape' || event.defaultPrevented || overlayOpen()) return;
@@ -128,70 +138,40 @@ function CheckPanelBody({ current, collapsed }: { current: CheckSession; collaps
         closeCheck();
       }}
     >
-      <header>
-        <h2>
-          <button
-            type="button"
-            className="check-panel-toggle"
-            aria-expanded={!collapsed}
-            aria-controls={body}
-            title={collapsed ? 'Show the whole check' : 'Show only the title'}
-            onClick={toggleCheckPanel}
-          >
-            <Icon name={collapsed ? 'right' : 'down'} size={12} />
-            <span className="check-panel-title">{job ? `Check ${job}` : 'Check laser job'}</span>
-            {collapsed && (
-              <span className="check-panel-status">
-                {' '}
-                · {status.text}
-                <Elapsed since={status.since} />
-              </span>
-            )}
+      {current.phase === 'opening' && (
+        <p className="muted" role="status">
+          Listing the job’s files…
+        </p>
+      )}
+      {current.phase === 'comparing' && (
+        <p className="muted" role="status">
+          Comparing {job}’s files with the check at {clockText(current.checked ?? Date.now())}…
+        </p>
+      )}
+      {current.phase === 'empty' && (
+        <p className="check-summary" role="status">
+          {current.nothing?.text}
+        </p>
+      )}
+      {opening && listingPhases.includes(current.phase) && <Inventory current={current} />}
+      {(current.phase === 'drawing' || current.phase === 'asking') && (
+        <div className="check-progress" role="status">
+          <span>
+            {current.progress}
+            <Elapsed since={current.since} />
+          </span>
+          <button type="button" onClick={cancelCheck}>
+            Cancel
           </button>
-        </h2>
-        <IconButton icon="close" label="Close the check" onClick={closeCheck} />
-      </header>
-      <div
-        id={body}
-        className="check-panel-body"
-        hidden={collapsed}
-        data-stale={current.phase === 'checked' && current.stale ? true : undefined}
-      >
-        {current.phase === 'opening' && (
-          <p className="muted" role="status">
-            Listing the job’s files…
-          </p>
-        )}
-        {current.phase === 'comparing' && (
-          <p className="muted" role="status">
-            Comparing {job}’s files with the check at {clockText(current.checked ?? Date.now())}…
-          </p>
-        )}
-        {current.phase === 'empty' && (
-          <p className="check-summary" role="status">
-            {current.nothing?.text}
-          </p>
-        )}
-        {opening && listingPhases.includes(current.phase) && <Inventory current={current} />}
-        {(current.phase === 'drawing' || current.phase === 'asking') && (
-          <div className="check-progress" role="status">
-            <span>
-              {current.progress}
-              <Elapsed since={current.since} />
-            </span>
-            <button type="button" onClick={cancelCheck}>
-              Cancel
-            </button>
-          </div>
-        )}
-        {current.phase === 'failed' && (
-          <p className="error" role="alert">
-            {current.error}
-          </p>
-        )}
-        {current.phase === 'checked' && <Result current={current} />}
-      </div>
-    </aside>
+        </div>
+      )}
+      {current.phase === 'failed' && (
+        <p className="error" role="alert">
+          {current.error}
+        </p>
+      )}
+      {current.phase === 'checked' && <Result current={current} />}
+    </Panel>
   );
 }
 
@@ -238,12 +218,10 @@ function Inventory({ current }: { current: CheckSession }) {
   const running = current.phase === 'drawing' || current.phase === 'asking';
   return (
     <>
-      <section aria-label="What is sent">
-        <h3>What is sent</h3>
+      <PanelSection title="Sent to the model">
         <ul className="check-files">
           {opening.sources.map((source) => (
-            <li key={source.ref}>
-              <span className="check-ref tabular">{source.ref}</span>
+            <li key={source.ref} data-ref={source.ref}>
               <span className="check-file" title={source.path}>
                 {source.name}
               </span>
@@ -252,28 +230,40 @@ function Inventory({ current }: { current: CheckSession }) {
           ))}
         </ul>
         <p className="muted check-note">
-          The model sees each file by its ref and name, never its folder. Viewer measures every DXF
-          itself and grades each finding.
+          The model sees each file by its name, never its folder. Viewer measures every DXF itself
+          and grades each finding.
         </p>
         {opening.skipped.length > 0 && (
           <p className="muted check-note">
             Left out: {opening.skipped.map((item) => `${item.name} (${item.reason})`).join(', ')}.
           </p>
         )}
-      </section>
-      <section aria-label="Model">
-        <h3>Model</h3>
+      </PanelSection>
+      <PanelSection label="Model">
         {pictures.length ? (
-          <ChoiceButton
-            label="Model to check with"
-            value={current.providerID ?? ''}
-            placeholder="Choose a model"
-            choices={pictures.map((item) => ({
-              value: item.id,
-              label: `${item.name} · ${item.model || 'no model ID'}`,
-            }))}
-            onChoose={chooseCheckProvider}
-            disabled={running}
+          <Row
+            label="Model"
+            detail={
+              provider && (
+                <>
+                  Sends {modelDataLabels.images} to{' '}
+                  <span className="check-endpoint">{modelEndpoint(provider)}</span>.
+                </>
+              )
+            }
+            control={
+              <ChoiceButton
+                label="Model to check with"
+                value={current.providerID ?? ''}
+                placeholder="Choose a model"
+                choices={pictures.map((item) => ({
+                  value: item.id,
+                  label: `${item.name} · ${item.model || 'no model ID'}`,
+                }))}
+                onChoose={chooseCheckProvider}
+                disabled={running}
+              />
+            }
           />
         ) : (
           <p className="check-note">
@@ -288,7 +278,7 @@ function Inventory({ current }: { current: CheckSession }) {
           </p>
         )}
         {provider && <Permission provider={provider} running={running} current={current} />}
-      </section>
+      </PanelSection>
     </>
   );
 }
@@ -308,29 +298,33 @@ function Permission({
   const count = current.opening!.sources.length;
   return (
     <>
-      <p className="check-note">
-        Sends {modelDataLabels.images} to{' '}
-        <span className="check-endpoint">{modelEndpoint(provider)}</span>.
-      </p>
       {!loading && !allowed && (
-        <p className="check-note" role="status">
-          {permission
-            ? `${provider.name} may receive ${modelDataLabels[permission.level]}; this check also sends pictures.`
-            : `${provider.name} may not receive file data yet.`}{' '}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              void window.viewer
-                .providerPermissionSet(provider.id, provider.endpoint, 'images')
-                .catch(report)
-                .finally(() => setBusy(false));
-            }}
-          >
-            Allow pictures for {provider.name}
-          </button>
-        </p>
+        <Row
+          as="div"
+          compact
+          role="status"
+          className="check-permission"
+          label={
+            permission
+              ? `${provider.name} may receive ${modelDataLabels[permission.level]}; this check also sends pictures.`
+              : `${provider.name} may not receive file data yet.`
+          }
+          control={
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void window.viewer
+                  .providerPermissionSet(provider.id, provider.endpoint, 'images')
+                  .catch(report)
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Allow pictures for {provider.name}
+            </Button>
+          }
+        />
       )}
       <footer className="check-actions">
         <button
@@ -383,7 +377,7 @@ function Result({ current }: { current: CheckSession }) {
   return (
     <>
       {shownAgain && <Since current={current} />}
-      <section aria-label="Summary">
+      <PanelSection label="Summary">
         <p className="check-summary">
           {result.summary
             ? namedRefs(result.summary, current.opening!.sources)
@@ -396,31 +390,29 @@ function Result({ current }: { current: CheckSession }) {
             : 'no findings'}
         </p>
         {notSent.length > 0 && <p className="muted check-note">Not sent: {notSent.join(' ')}</p>}
-      </section>
+      </PanelSection>
       {result.findings.length > 0 && (
-        <section aria-label="Findings">
-          <h3>
-            {stale ? `Findings from ${clockText(current.checked ?? Date.now())}` : 'Findings'}
-          </h3>
+        <PanelSection
+          label="Findings"
+          title={stale ? `Findings from ${clockText(current.checked ?? Date.now())}` : 'Findings'}
+        >
           <ol className="check-findings">
             {result.findings.map((item) => (
               <Finding key={item.finding.id} item={item} current={current} jobs={jobs} />
             ))}
           </ol>
-        </section>
+        </PanelSection>
       )}
       {result.issues.length > 0 && (
-        <section aria-label="Notes on the answer">
-          <h3>Notes on the answer</h3>
+        <PanelSection title="Notes on the answer">
           <ul className="check-notes">
             {result.issues.map((issue) => (
               <li key={issue}>{issue}</li>
             ))}
           </ul>
-        </section>
+        </PanelSection>
       )}
-      <section aria-label="Tour">
-        <h3>Tour</h3>
+      <PanelSection title="Tour">
         <p className="check-note">
           {result.tour.stops.length
             ? `${countText(result.tour.stops.length, 'stop')} through the job’s files, each finding with Viewer’s grade.`
@@ -441,7 +433,7 @@ function Result({ current }: { current: CheckSession }) {
         >
           Play the tour
         </button>
-      </section>
+      </PanelSection>
       <CutSheets current={current} jobs={jobs} />
       <Handoff current={current} jobs={jobs} />
       {!shownAgain && (
@@ -553,8 +545,7 @@ function CutSheets({ current, jobs }: { current: CheckSession; jobs: readonly Op
   const workspace = useWorkspace();
   const { parts, copies } = cutSheets(current, jobs);
   return (
-    <section aria-label="Cut sheets">
-      <h3>Cut sheets</h3>
+    <PanelSection title="Cut sheets">
       <ul className="check-parts">
         {parts.map((part) => (
           <li key={part.ref} data-question={part.question ? true : undefined}>
@@ -576,7 +567,7 @@ function CutSheets({ current, jobs }: { current: CheckSession; jobs: readonly Op
       >
         Prepare cut sheets
       </button>
-    </section>
+    </PanelSection>
   );
 }
 
@@ -606,8 +597,7 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
     (nesting) => `“${nesting.title}” on ${countText(nesting.plan.sheets.length, 'sheet')}`,
   );
   return (
-    <section aria-label="Handoff">
-      <h3>Handoff</h3>
+    <PanelSection title="Handoff">
       <p className="check-note">
         A folder for the shop: {countText(files, 'file')} as evidence, the tour pointed at them, the
         check record{sheets.length ? `, and ${listText(sheets)}` : ''}.
@@ -651,6 +641,6 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
           {current.handoffError}
         </p>
       )}
-    </section>
+    </PanelSection>
   );
 }

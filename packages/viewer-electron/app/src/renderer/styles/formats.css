@@ -8,15 +8,15 @@
 .model-info {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px;
-  font-size: 10px;
+  gap: var(--gap-content);
+  padding: var(--gap-inline) var(--gap-content);
+  font-size: var(--text-label);
   color: var(--muted);
   border-top: 1px solid var(--line);
 }
 .preview-host .model-info {
   min-height: 34px;
-  padding: 6px 14px;
+  padding: var(--gap-small) 14px;
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-start;
@@ -28,7 +28,7 @@
 .model-measurement {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .dxf-viewer {
   display: flex;
@@ -60,12 +60,12 @@
   width: 208px;
   max-width: 42%;
   flex-shrink: 0;
-  padding: 10px 12px;
+  padding: 10px var(--gap-content);
   overflow-y: auto;
   scrollbar-gutter: stable;
   border-left: 1px solid var(--line);
   background: var(--surface);
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .dxf-details header,
 .dxf-section-heading,
@@ -74,26 +74,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: var(--gap-small);
 }
 .dxf-details header {
-  margin-bottom: 12px;
+  margin-bottom: var(--gap-content);
 }
 .dxf-details > label:not(.dxf-layer) {
   display: grid;
-  gap: 6px;
+  gap: var(--gap-small);
 }
 .dxf-details .choice-button {
   min-width: 0;
   max-width: none;
   width: 100%;
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .dxf-details > strong,
 .dxf-section-heading {
   display: flex;
-  margin-top: 16px;
-  margin-bottom: 6px;
+  margin-top: var(--gap-panel);
+  margin-bottom: var(--gap-small);
 }
 .dxf-layer {
   min-height: 28px;
@@ -120,10 +120,10 @@
   top: 10px;
   left: 10px;
   max-width: calc(100% - 20px);
-  padding: 6px 9px;
+  padding: var(--gap-small) 9px;
   background: var(--surface);
   border-radius: var(--radius-control);
-  font-size: 11px;
+  font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
@@ -137,18 +137,18 @@
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   padding: 0 14px;
   height: 34px;
   flex-shrink: 0;
   border-top: 1px solid var(--line);
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
 }
 .dxf-guidance {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   flex: 1;
   min-width: 0;
 }
@@ -161,7 +161,7 @@
 .dxf-units {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -184,12 +184,12 @@
   padding: 2px;
 }
 .inline-warning {
-  padding: 8px 13px;
+  padding: var(--gap-inline) 13px;
   margin: 0;
   color: var(--muted);
   background: var(--field);
   border-bottom: 1px solid var(--line);
-  font-size: 11px;
+  font-size: var(--text-label);
   overflow-wrap: anywhere;
 }
 .pdf-body {
@@ -210,12 +210,12 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 6px;
+  gap: var(--gap-tight);
+  padding: var(--gap-small);
   border: 0;
   background: none;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .pdf-thumbnails canvas {
   background: white;
@@ -233,24 +233,24 @@
 }
 .pdf-outline ul {
   margin: 0;
-  padding-inline-start: 12px;
+  padding-inline-start: var(--gap-content);
   list-style: none;
 }
 .pdf-outline > ul {
-  padding: 8px 6px;
+  padding: var(--gap-inline) var(--gap-small);
 }
 .pdf-outline button {
   display: flex;
   width: 100%;
-  gap: 6px;
+  gap: var(--gap-small);
   justify-content: space-between;
-  padding: 3px 6px;
+  padding: 3px var(--gap-small);
   border: 0;
   border-radius: var(--radius-control);
   background: none;
   color: var(--ink);
   text-align: start;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .pdf-outline button span {
   overflow: hidden;
@@ -260,7 +260,7 @@
   background: var(--selection);
 }
 .pdf-outline-empty {
-  padding: 12px;
+  padding: var(--gap-content);
   width: 168px;
   flex: none;
 }
@@ -299,15 +299,15 @@
   width: 54px;
 }
 .pdf-search-results {
-  padding: 6px 12px;
+  padding: var(--gap-small) var(--gap-content);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
   max-height: 64px;
   overflow: auto;
 }
 .pdf-search-results button {
-  font-size: 11px;
-  margin-left: 4px;
+  font-size: var(--text-label);
+  margin-left: var(--gap-tight);
 }
 .textLayer {
   position: absolute;
@@ -347,7 +347,7 @@
   font-size: var(--editor-font-size, 12px);
   line-height: var(--editor-line-height, 22px);
   tab-size: var(--editor-tab-size, 4);
-  padding: 12px 0;
+  padding: var(--gap-content) 0;
 }
 .code-line {
   display: flex;
@@ -358,7 +358,7 @@
   width: 58px;
   flex-shrink: 0;
   text-align: right;
-  padding-right: 16px;
+  padding-right: var(--gap-panel);
   color: var(--subtle);
   user-select: none;
 }
@@ -408,9 +408,9 @@
   flex: 1;
 }
 .json-scroll {
-  padding: 18px;
+  padding: var(--gap-dialog);
   font:
-    12px/24px ui-monospace,
+    var(--text-compact)/24px ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -420,9 +420,9 @@
   align-items: center;
 }
 .json-value button {
-  padding: 0 4px;
+  padding: 0 var(--gap-tight);
   width: 22px;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .json-key {
   color: var(--accent);
@@ -457,7 +457,7 @@
   margin-top: 24px;
 }
 .markdown p {
-  margin: 12px 0;
+  margin: var(--gap-content) 0;
 }
 .markdown-link {
   color: var(--accent);
@@ -478,14 +478,14 @@ button.markdown-link {
 }
 .markdown code {
   font:
-    12px ui-monospace,
+    var(--text-compact) ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
 }
 .markdown blockquote {
   border-left: 3px solid var(--accent);
-  padding-left: 16px;
+  padding-left: var(--gap-panel);
   color: var(--muted);
   margin-left: 0;
 }
@@ -495,7 +495,7 @@ button.markdown-link {
 .markdown th,
 .markdown td {
   border: 1px solid var(--line);
-  padding: 7px 12px;
+  padding: 7px var(--gap-content);
 }
 .data-scroll {
   flex: 1;
@@ -505,7 +505,7 @@ button.markdown-link {
 .data-row {
   display: grid;
   font:
-    11px/32px ui-monospace,
+    var(--text-label)/32px ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -534,7 +534,7 @@ button.markdown-link {
 .workbook-sheet-picker {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   min-width: 0;
 }
 .office-viewer > .office-viewer,
@@ -561,14 +561,14 @@ button.markdown-link {
 }
 .worksheet-tabs {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-inline);
   align-items: center;
-  padding: 6px 10px;
+  padding: var(--gap-small) 10px;
   border-top: 1px solid var(--line);
 }
 .worksheet-tab-list {
   display: flex;
-  gap: 4px;
+  gap: var(--gap-tight);
   min-width: 0;
   flex: 1;
   overflow-x: auto;
@@ -587,7 +587,7 @@ button.markdown-link {
 .worksheet-navigation {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
   padding: 5px 10px;
   border-top: 1px solid var(--line);
   flex: none;
@@ -597,7 +597,7 @@ button.markdown-link {
 .worksheet-navigation label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-small);
 }
 .worksheet-navigation form {
   margin-left: auto;
@@ -610,10 +610,10 @@ button.markdown-link {
   max-width: 280px;
 }
 .office-coverage {
-  font-size: 12px;
+  font-size: var(--text-compact);
   background: var(--raised);
   border-bottom: 1px solid var(--line);
-  padding: 4px 12px;
+  padding: var(--gap-tight) var(--gap-content);
   flex: none;
 }
 .office-coverage p {
@@ -621,9 +621,9 @@ button.markdown-link {
 }
 .workbook-cell-detail {
   display: flex;
-  gap: 12px;
-  padding: 8px 12px;
-  font-size: 12px;
+  gap: var(--gap-content);
+  padding: var(--gap-inline) var(--gap-content);
+  font-size: var(--text-compact);
   order: 2;
   flex: none;
   border-top: 1px solid var(--line);
@@ -634,14 +634,14 @@ button.markdown-link {
 .workbook-copy {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-small);
   flex: none;
 }
 .workbook-copy-status {
   order: 3;
   margin: 0;
-  padding: 4px 12px;
-  font-size: 12px;
+  padding: var(--gap-tight) var(--gap-content);
+  font-size: var(--text-compact);
   overflow-wrap: anywhere;
 }
 .data-scroll:focus [data-active-cell] {
@@ -654,7 +654,7 @@ button.markdown-link {
 .data-viewer .workbook-cell-detail form {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   flex: none;
   padding: 0;
 }
@@ -693,7 +693,7 @@ button.markdown-link {
 }
 .office-row-count {
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .office-viewer .preview-toolbar input[type='search'] {
   min-width: 80px;
@@ -760,7 +760,7 @@ button.markdown-link {
 }
 .office-inline-image {
   display: block;
-  margin-block: 12px;
+  margin-block: var(--gap-content);
 }
 .office-inline-image img {
   display: block;
@@ -770,13 +770,13 @@ button.markdown-link {
 .office-image-placeholder {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 16px;
+  gap: var(--gap-small);
+  padding: var(--gap-panel);
   min-height: 100px;
   color: var(--muted);
   background: var(--raised);
   border: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--text-compact);
   font-weight: normal;
 }
 .office-document h1,
@@ -791,11 +791,11 @@ button.markdown-link {
 .office-document table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 13px;
+  font-size: var(--text-body);
 }
 .office-document td {
   border: 1px solid var(--line);
-  padding: 8px 12px;
+  padding: var(--gap-inline) var(--gap-content);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -816,7 +816,7 @@ button.markdown-link {
   border-radius: 0;
   padding: 0 15px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .archive-row > span:first-of-type {
   flex: 1;
@@ -826,7 +826,7 @@ button.markdown-link {
   text-align: left;
 }
 .archive-row > .muted {
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .font-viewer {
   display: flex;
@@ -839,8 +839,8 @@ button.markdown-link {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--gap-panel);
+  padding: var(--gap-panel);
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
@@ -851,8 +851,8 @@ button.markdown-link {
 }
 .font-specimen {
   display: grid;
-  gap: 8px;
-  padding-bottom: 16px;
+  gap: var(--gap-inline);
+  padding-bottom: var(--gap-panel);
   border-bottom: 1px solid var(--line);
   line-height: 1.2;
   overflow-wrap: anywhere;
@@ -863,13 +863,13 @@ button.markdown-link {
 .font-facts {
   display: grid;
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .font-facts > div {
   display: grid;
   grid-template-columns: minmax(80px, 1fr) minmax(0, 3fr);
-  gap: 12px;
-  padding: 6px 0;
+  gap: var(--gap-content);
+  padding: var(--gap-small) 0;
   border-bottom: 1px solid var(--line);
 }
 .font-facts dt {
@@ -880,8 +880,8 @@ button.markdown-link {
   overflow-wrap: anywhere;
 }
 .font-characters h3 {
-  margin: 0 0 8px;
-  font-size: 12px;
+  margin: 0 0 var(--gap-inline);
+  font-size: var(--text-compact);
   font-weight: 600;
   line-height: 1.3;
 }
@@ -891,7 +891,7 @@ button.markdown-link {
 .font-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
-  gap: 4px;
+  gap: var(--gap-tight);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -901,7 +901,7 @@ button.markdown-link {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 6px 2px 4px;
+  padding: var(--gap-small) 2px var(--gap-tight);
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--field);
@@ -912,7 +912,7 @@ button.markdown-link {
 }
 .font-glyph small {
   color: var(--subtle);
-  font-size: 10px;
+  font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
 }
 /* the character is drawn in the interface face, so a fallback glyph never passes as the font's */
@@ -948,7 +948,7 @@ button.markdown-link {
 }
 .workbook-merged-cell small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
   line-height: 14px;
 }
 .structured-viewer > .preview-toolbar {
@@ -959,7 +959,7 @@ button.markdown-link {
   flex-shrink: 0;
 }
 .structured-scroll {
-  padding: 10px 12px;
+  padding: 10px var(--gap-content);
 }
 .structured-row {
   display: flex;
@@ -978,8 +978,8 @@ button.markdown-link {
 }
 .structured-status {
   border-top: 1px solid var(--line);
-  padding: 5px 12px;
-  font-size: 11px;
+  padding: 5px var(--gap-content);
+  font-size: var(--text-label);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

@@ -19,20 +19,15 @@
 .nesting-main {
   min-height: 0;
   overflow: auto;
-  padding: 12px 16px 16px;
+  padding: var(--gap-content) var(--gap-panel) var(--gap-panel);
 }
 .nesting-sidebar {
   border-right: 1px solid var(--line);
   background: var(--surface);
 }
-.nesting-panel h3 {
-  margin: 12px 0 8px;
-  font-size: 12px;
-  font-weight: 600;
-}
 .nesting-panel h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
+  margin: 0 0 var(--gap-tight);
+  font-size: var(--text-section);
   font-weight: 600;
 }
 .nesting-panel input[type='number'] {
@@ -40,16 +35,16 @@
 }
 .nesting-file + .nesting-file {
   border-top: 1px solid var(--line);
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: var(--gap-small);
+  padding-top: var(--gap-small);
 }
 .nesting-file-options {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 12px;
-  margin: 4px 0;
-  font-size: 12px;
+  gap: var(--gap-small) var(--gap-content);
+  margin: var(--gap-tight) 0;
+  font-size: var(--text-compact);
 }
 .nesting-file-name {
   font-weight: 600;
@@ -60,13 +55,13 @@
 }
 .nesting-layers label {
   display: flex;
-  margin: 4px 0 0 12px;
+  margin: var(--gap-tight) 0 0 var(--gap-content);
 }
 .nesting-part {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
   gap: 10px;
-  padding: 6px 0;
+  padding: var(--gap-small) 0;
 }
 .nesting-thumbnail {
   width: 44px;
@@ -87,62 +82,65 @@
 .nesting-part-title .muted,
 .nesting-notes,
 .nesting-hint {
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .nesting-part-controls,
-.nesting-fields,
 .nesting-custom,
 .nesting-status {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 12px;
-  margin-top: 6px;
+  gap: var(--gap-small) var(--gap-content);
+  margin-top: var(--gap-small);
 }
 .nesting-part-controls label,
-.nesting-fields label,
-.nesting-choice,
-.nesting-wide {
+.nesting-choice {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-.nesting-wide .choice-button {
-  flex: 1;
-  min-width: 0;
+  gap: var(--gap-small);
+  font-size: var(--text-compact);
 }
 .nesting-check {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
+}
+/* The settings are rows (base.css), their controls at the shared edge. */
+.nesting-fields {
+  margin-top: var(--gap-small);
+}
+.nesting-fields .row {
+  font-size: var(--text-compact);
+}
+.nesting-fields .row > .nesting-unit {
+  width: var(--row-control);
 }
 .nesting-unit {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   color: var(--muted);
 }
 .nesting-notes {
-  margin: 2px 0 4px;
-  padding-left: 18px;
+  margin: 2px 0 var(--gap-tight);
+  padding-left: var(--gap-dialog);
   color: var(--muted);
 }
 .nesting-problem {
-  margin: 4px 0;
+  margin: var(--gap-tight) 0;
   color: var(--danger);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .nesting-formats {
   display: grid;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 .nesting-format {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 76px 76px 22px;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: var(--gap-inline);
+  font-size: var(--text-compact);
   font-variant-numeric: tabular-nums;
 }
 .nesting-format-head {
@@ -152,13 +150,6 @@
   width: 22px;
   height: 22px;
   padding: 2px;
-}
-/* The Sheets heading carries the units: every length in the panel reads in them. */
-.nesting-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
 }
 .nesting-segmented {
   display: inline-flex;
@@ -170,41 +161,41 @@
   min-width: 0;
 }
 .nesting-segmented button {
-  padding: 1px 8px;
-  font-size: 12px;
+  padding: 1px var(--gap-inline);
+  font-size: var(--text-compact);
 }
 .nesting-segmented button[aria-pressed='true'] {
   background: var(--selection);
 }
 .nesting-empty {
-  margin: 0 0 4px;
-  font-size: 15px;
+  margin: 0 0 var(--gap-tight);
+  font-size: var(--text-section);
   font-weight: 600;
 }
 /* One nesting per thickness: its tabs, and every thickness's sheets, time and cost. */
 .nesting-thickness {
   display: grid;
-  gap: 8px;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
+  gap: var(--gap-inline);
+  padding-bottom: var(--gap-content);
+  margin-bottom: var(--gap-content);
   border-bottom: 1px solid var(--line);
 }
 .nesting-thickness-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 .nesting-thickness-tabs button[aria-pressed='true'] {
   background: var(--selection);
 }
 .nesting-thickness-table {
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--text-compact);
   font-variant-numeric: tabular-nums;
 }
 .nesting-thickness-table th,
 .nesting-thickness-table td {
-  padding: 2px 16px 2px 0;
+  padding: 2px var(--gap-panel) 2px 0;
   text-align: left;
   font-weight: normal;
 }
@@ -220,13 +211,13 @@
   border-top: 1px solid var(--line);
 }
 .nesting-summary {
-  padding-bottom: 8px;
+  padding-bottom: var(--gap-inline);
 }
 .nesting-figures {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  margin: 0 0 4px;
+  gap: var(--gap-tight) 14px;
+  margin: 0 0 var(--gap-tight);
 }
 .nesting-figures span + span::before {
   content: '·';
@@ -246,7 +237,7 @@
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 .nesting-advice li {
   padding-left: 10px;
@@ -264,7 +255,7 @@
 }
 .nesting-zoom {
   display: flex;
-  gap: 4px;
+  gap: var(--gap-tight);
   justify-self: end;
 }
 .nesting-zoom button[aria-pressed='true'] {
@@ -274,9 +265,9 @@
   margin: 0;
 }
 .nesting-sheet figcaption {
-  margin-bottom: 4px;
+  margin-bottom: var(--gap-tight);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .nesting-sheet-scroll {
   overflow: auto;
@@ -333,11 +324,11 @@
   grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
-  padding: 8px 10px;
+  margin-bottom: var(--gap-content);
+  padding: var(--gap-inline) 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .nesting-selection > div:not(.nesting-selection-actions) {
   display: flex;
@@ -345,7 +336,7 @@
   min-width: 0;
 }
 .nesting-selection strong {
-  font-size: 13px;
+  font-size: var(--text-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -353,7 +344,7 @@
 .nesting-selection-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-small);
 }
 .nesting-open {
   fill: none;

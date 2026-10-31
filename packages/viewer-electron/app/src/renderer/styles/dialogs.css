@@ -46,9 +46,6 @@
   max-width: 175px;
   padding: 6px 8px;
 }
-.dialog footer button {
-  border-color: var(--line);
-}
 .dialog-keyboard-action {
   display: inline-flex;
   align-items: center;
@@ -56,7 +53,7 @@
 }
 .dialog-keyboard-action kbd {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
 }
 .trash-dialog .dialog-copy {
@@ -82,11 +79,11 @@
 }
 .file-information dt {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
   margin-top: 10px;
 }
 .file-information dt:first-child {
-  font-size: 14px;
+  font-size: var(--text-section);
   color: var(--ink);
   font-weight: 600;
   margin-top: 0;
@@ -94,7 +91,7 @@
 .file-information dd {
   margin: 3px 0 0;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .file-information dl {
   margin: 0;
@@ -138,7 +135,7 @@
 }
 .file-information .information-native-details dt {
   margin-top: 0;
-  font-size: 11px;
+  font-size: var(--text-label);
   font-weight: 400;
   color: var(--muted);
 }
@@ -215,7 +212,7 @@
 .information-permissions td {
   padding: 7px 8px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .information-permissions th:first-child {
   text-align: left;
@@ -316,7 +313,7 @@
 .quick-preview-metadata {
   min-width: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -332,7 +329,7 @@
   gap: 2px;
   flex-shrink: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
 }
 .open-default-button {
@@ -344,16 +341,13 @@
 .quick-preview-actions > .primary {
   flex-shrink: 0;
 }
+/* a bar along the window's foot: only its top edge is drawn */
 .notice {
   flex: none;
   min-height: 0;
   max-height: min(180px, 30vh);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--line);
-  background: var(--surface);
+  border-width: 1px 0 0;
+  border-radius: 0;
 }
 .notice > svg {
   color: var(--danger);
@@ -370,6 +364,8 @@
   overflow: auto;
   overflow-wrap: anywhere;
 }
+/* File operations: a panel (ui/Panel.tsx) the window holds under its title bar's operations
+   button. It is window chrome, never in a plane, so the window's fixed position places it. */
 .operations-panel {
   position: fixed;
   z-index: 200;
@@ -378,23 +374,9 @@
   width: 370px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 80px);
-  overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  box-shadow: var(--shadow);
 }
-.operations-panel > header {
-  position: sticky;
-  top: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 9px 13px;
-  height: 46px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  z-index: 1;
+.operations-panel > .panel-body {
+  padding: 0;
 }
 .panel-empty {
   padding: 20px;
@@ -409,16 +391,16 @@
   gap: 8px;
 }
 .operation-title .muted {
-  font-size: 11px;
+  font-size: var(--text-label);
   margin-left: auto;
 }
 .operation p {
-  font-size: 12px;
+  font-size: var(--text-compact);
   overflow-wrap: anywhere;
   margin: 9px 0;
 }
 .operation-count {
-  font-size: 11px;
+  font-size: var(--text-label);
   margin: 8px 0;
 }
 .operation progress {
@@ -430,13 +412,13 @@
   padding: 12px 0;
 }
 .collision strong {
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .collision label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
 }
 .collision-actions {
@@ -445,8 +427,7 @@
   margin-top: 12px;
 }
 .collision-actions button {
-  border-color: var(--line);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 /* Views: the space's saved camera positions */
 .views-list {
@@ -472,7 +453,4 @@
 .views-list input {
   flex: 1;
   min-width: 0;
-}
-.views-list button {
-  border-color: var(--line);
 }

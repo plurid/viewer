@@ -4,7 +4,9 @@ import { rotationLabels, rotationModes } from '../../../domain/layout/nesting/pl
 import type { PartChoice } from '../../../domain/layout/nesting/problem';
 import { units, unitInfo } from '../../../domain/previews/drawings/dxf/units';
 import { ChoiceButton, type Choice } from '../../ui/ChoiceMenu';
+import { PanelSection } from '../../ui/Panel';
 import { Loading } from '../../ui/primitives';
+import { Disclosure } from '../../ui/Disclosure';
 import { PartThumbnail } from './SheetView';
 import type { FileOptions, NestingFile } from './useNestingFiles';
 
@@ -43,8 +45,7 @@ export function PartList({
   selected?: string;
 }) {
   return (
-    <section className="nesting-parts" aria-label="Parts">
-      <h3>Parts</h3>
+    <PanelSection className="nesting-parts" title="Parts">
       {files.map((file) => (
         <div key={file.key} className="nesting-file">
           {file.status === 'reading' && <Loading label={`Reading ${file.entry.name}…`} />}
@@ -144,7 +145,7 @@ export function PartList({
           )}
         </div>
       ))}
-    </section>
+    </PanelSection>
   );
 }
 
@@ -196,10 +197,12 @@ function FileOptionsRow({
         </span>
       )}
       {layers.length > 1 && (
-        <details className="nesting-layers">
-          <summary>
-            Layers{file.marks.length ? ` · ${file.marks.length} marked, not cut` : ''}
-          </summary>
+        <Disclosure
+          variant="compact"
+          className="nesting-layers"
+          summary="Layers"
+          meta={file.marks.length > 0 && `${file.marks.length} marked, not cut`}
+        >
           {layers.map((layer) => (
             <label key={layer.name} className="nesting-check">
               <input
@@ -216,7 +219,7 @@ function FileOptionsRow({
               {layer.name} <span className="muted">· mark only</span>
             </label>
           ))}
-        </details>
+        </Disclosure>
       )}
     </div>
   );

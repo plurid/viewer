@@ -25,6 +25,7 @@ import { nativeOpening } from './opening';
 import { useContextPublish } from './context-publish';
 import { errorMessage } from '../../domain/errors';
 import { onWindowEvent } from '../app/window-events';
+import { Disclosure } from '../ui/Disclosure';
 export function CollectionExplorer({ id }: { id: string }) {
   const active = useViewer((state) => state.activePane);
   const pane = useViewer((state) => activeWorkspace(state).panes.find((pane) => pane.id === id)) as
@@ -259,14 +260,17 @@ export function CollectionExplorer({ id }: { id: string }) {
         )}
       </FileTable>
       {issues.length > 0 && (
-        <details className="collection-issues">
-          <summary>{issues.length} unavailable locations</summary>
+        <Disclosure
+          variant="inline"
+          className="collection-issues"
+          summary={`${issues.length} unavailable ${issues.length === 1 ? 'location' : 'locations'}`}
+        >
           {issues.slice(0, 100).map((issue, index) => (
             <p className="error" key={index}>
               {issue}
             </p>
           ))}
-        </details>
+        </Disclosure>
       )}
       <footer className="folder-status">
         <span>

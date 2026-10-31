@@ -27,6 +27,8 @@ import type { PreviewHistory } from './previews/history';
 import type { MediaRequest, MediaReply } from './media/documents';
 import type { LayoutMode } from './layout/modes';
 import type { LengthUnit } from './layout/nesting/plan';
+import type { HeaderControls } from './preferences/header';
+import type { FirstRunHint } from './preferences/first-run';
 import type { BrowserRequest, BrowserSnapshot } from './previews/browser';
 import type {
   JournalFilter,
@@ -400,7 +402,8 @@ export interface SavedState {
 }
 export type SidebarSection = 'locations' | 'favorites' | 'recents';
 export interface UIPreferences {
-  version: 3;
+  /** preferences/ui.ts `uiPreferencesVersion`. */
+  version: 4;
   sidebar: {
     visible: boolean;
     inNewPlanes: boolean;
@@ -418,6 +421,8 @@ export interface UIPreferences {
   space: {
     toolbar: boolean;
     minimap: boolean;
+    /** With `minimap`, it shows only once the space holds 3 or more planes. */
+    minimapAuto: boolean;
     viewcube: boolean;
     origin: boolean;
     planeHeaders: boolean;
@@ -432,18 +437,8 @@ export interface UIPreferences {
     grid: boolean;
     /** The space's colour, `#rrggbb`; empty follows the appearance. A workspace may have its own. */
     color: string;
-    headerControls: {
-      parent: boolean;
-      sidebar: boolean;
-      back: boolean;
-      forward: boolean;
-      view: boolean;
-      search: boolean;
-      frame: boolean;
-      dock: boolean;
-      actions: boolean;
-      close: boolean;
-    };
+    /** Which plane header buttons show (preferences/header.ts). */
+    headerControls: HeaderControls;
   };
   list: {
     visible: Record<Exclude<ListColumn, 'name'>, boolean>;
@@ -463,6 +458,8 @@ export interface UIPreferences {
   /** Insight cards dismissed in each folder (`domain/suggestions/insights.ts`): folder path to
    * insight ids, the latest folder last. */
   insightsDismissed?: Record<string, string[]>;
+  /** A new profile's first-run hint (`domain/preferences/first-run.ts`); absent, it never shows. */
+  firstRunHint?: FirstRunHint;
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {

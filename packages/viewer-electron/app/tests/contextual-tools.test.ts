@@ -1,6 +1,11 @@
-import { expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { CommandRegistry, rankCommands } from '../src/renderer/commands/registry';
 import type { CommandContext } from '../src/renderer/commands/registry';
+import type { FileEntry, Pane } from '../src/domain/contracts';
+import type { WorkspaceController } from '../src/renderer/workspace/context';
+import { programCommands } from '../src/renderer/commands/programs';
+import { toolFiles } from '../src/renderer/commands/target';
+import { initialize } from '../src/renderer/state/store';
 import {
   toolbarsSchema,
   toolbarCommands,
@@ -157,4 +162,88 @@ it('persists ordered tools, intentional empty choices and missing identities', (
   expect(toolbarsSchema.safeParse({ folder: Array(9).fill('rename') }).success).toBe(false);
   expect(workspaceMayChange(['settings', 'toolbars'])).toBe(true);
   expect(restored.browsing.scrollbars).toBe('system');
+});
+
+describe('a preview plane’s file', () => {
+  beforeAll(() =>
+    initialize({
+      home: '/fixtures',
+      platform: 'darwin',
+      state: null,
+      locations: [],
+      openPaths: [],
+    }),
+  );
+  const pdf = {
+    path: '/Jobs/Bracket.pdf',
+    name: 'Bracket.pdf',
+    extension: 'pdf',
+    kind: 'file',
+    size: 2048,
+  } as FileEntry;
+  const preview = (subject?: FileEntry): CommandContext => ({
+    scope: 'preview',
+    workspaceID: 'one',
+    paneID: 'preview',
+    path: pdf.path,
+    selection: [],
+    subject,
+    clipboard: null,
+    jobs: [],
+  });
+  const registry = (context: CommandContext, pdfTools = vi.fn()) => {
+    const commands = new CommandRegistry();
+    commands.register('preview:preview', { context: () => context, definitions: () => [] });
+    commands.register('window', {
+      context: () => ({ ...context, scope: 'window', paneID: 'folder', subject: undefined }),
+      definitions: () =>
+        programCommands(
+          {} as WorkspaceController,
+          async () => true,
+          undefined,
+          undefined,
+          undefined,
+          {
+            pdfTools,
+            optimizeFiles: vi.fn(),
+          },
+        ),
+    });
+    return commands;
+  };
+  it('is what its PDF tools and Optimize act on while nothing is selected', async () => {
+    const pdfTools = vi.fn();
+    const commands = registry(preview(pdf), pdfTools);
+    const request = toolbarRequest(
+      { id: 'preview', type: 'preview', path: pdf.path } as Pane,
+      commands.context('preview'),
+      'preview',
+    );
+    const [tools] = commands.discover({ ...request, ids: ['pdf-tools'] });
+    expect(tools?.available).toBe(true);
+    expect(commands.list({ ...request, ids: ['optimize-files'] })).toHaveLength(1);
+    await commands.run(tools!);
+    expect(pdfTools).toHaveBeenCalledWith([pdf], 'preview');
+    expect(toolFiles({ selection: [{ ...pdf, name: 'Other.pdf' }], subject: pdf })).toEqual([
+      { ...pdf, name: 'Other.pdf' },
+    ]);
+  });
+  it('is never borrowed by another plane’s toolbar', () => {
+    const commands = registry(preview(pdf));
+    const request = toolbarRequest(
+      { id: 'another', type: 'preview', path: '/Jobs/Other.pdf' } as Pane,
+      commands.context('preview'),
+      'preview',
+    );
+    expect(request.context?.subject).toBeUndefined();
+    expect(commands.discover({ ...request, ids: ['pdf-tools'] })[0]?.available).toBe(false);
+    expect(toolFiles(preview())).toEqual([]);
+  });
+  it('has no pinned tools of a PDF or an image by default; a text plane keeps Edit text', () => {
+    expect(toolbarCommands({}, 'preview:pdf')).toEqual([]);
+    expect(toolbarCommands({}, 'preview:image')).toEqual([]);
+    expect(toolbarCommands({}, 'folder')).toEqual([]);
+    expect(toolbarCommands({}, 'preview:text')).toEqual(['edit-file']);
+    expect(toolbarCommands({ folder: ['new-folder'] }, 'folder')).toEqual(['new-folder']);
+  });
 });

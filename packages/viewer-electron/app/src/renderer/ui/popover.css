@@ -1,0 +1,15 @@
+/* A popover (ui/Popover.tsx): anchored outside the planes, in the page or an open dialog, so a
+   fixed position is the window's. Its hook places it from its anchor's box. */
+:where(.popover) {
+  position: fixed;
+  z-index: 1000;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: var(--gap-content);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+}

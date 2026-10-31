@@ -10,20 +10,20 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--gap-content);
+  padding: var(--gap-panel);
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
 .inspection-note {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .inspection-card {
   display: grid;
   gap: 10px;
-  padding: 12px 14px;
+  padding: var(--gap-content) 14px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--surface);
@@ -32,18 +32,18 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
+  gap: var(--gap-small) var(--gap-inline);
 }
 .inspection-card h3 {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-body);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .inspection-card h4 {
-  margin: 4px 0 0;
+  margin: var(--gap-tight) 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
   font-weight: 600;
 }
 .inspection-badge {
@@ -51,7 +51,7 @@
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
   white-space: nowrap;
 }
 .inspection-badge.warning {
@@ -61,9 +61,9 @@
 .inspection-facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 4px 14px;
+  gap: var(--gap-tight) 14px;
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .inspection-facts > div {
   display: contents;
@@ -86,7 +86,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .inspection-list li {
   display: grid;
@@ -94,22 +94,22 @@
 }
 .inspection-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: var(--text-label);
   overflow-wrap: anywhere;
 }
 .inspection-chain {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
+  gap: var(--gap-tight) var(--gap-small);
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .inspection-chain li + li::before {
   content: '→';
-  margin-right: 6px;
+  margin-right: var(--gap-small);
   color: var(--subtle);
 }
 .inspection-link {
@@ -129,30 +129,30 @@
 .inspection-text {
   max-height: 240px;
   margin: 0;
-  padding: 8px 10px;
+  padding: var(--gap-inline) 10px;
   overflow: auto;
   border-radius: 5px;
   background: var(--field);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: var(--text-label);
   white-space: pre;
 }
 .inspection-warning {
   margin: 0;
   color: var(--danger);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .shortcut-address {
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
+  font-size: var(--text-body);
   overflow-wrap: anywhere;
   user-select: text;
 }
 .shortcut-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .torrent-files {
   flex: 1;
@@ -163,11 +163,11 @@
 }
 .torrent-file {
   display: flex;
-  gap: 12px;
+  gap: var(--gap-content);
   align-items: center;
-  padding: 0 16px;
+  padding: 0 var(--gap-panel);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .torrent-file > span:first-child {
   flex: 1;
@@ -193,18 +193,18 @@
 .unknown-file-summary {
   display: grid;
   justify-items: start;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: var(--gap-inline);
+  padding: 14px var(--gap-panel);
   border-bottom: 1px solid var(--line);
 }
 .unknown-file-summary strong {
-  font-size: 14px;
+  font-size: var(--text-section);
   font-weight: 600;
 }
 .unknown-file-summary p {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .unknown-file-summary .empty-actions {
   justify-content: flex-start;
@@ -225,7 +225,7 @@
   min-height: 0;
   overflow: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: var(--text-compact);
   line-height: 20px;
   outline-offset: -2px;
 }
@@ -237,8 +237,8 @@
   position: absolute;
   left: 0;
   display: flex;
-  gap: 16px;
-  padding: 0 16px;
+  gap: var(--gap-panel);
+  padding: 0 var(--gap-panel);
   white-space: pre;
 }
 .hex-offset {
@@ -247,10 +247,10 @@
 }
 .hex-bytes {
   display: flex;
-  gap: 6px;
+  gap: var(--gap-small);
 }
 .hex-byte:nth-child(8) {
-  margin-right: 8px;
+  margin-right: var(--gap-inline);
 }
 .hex-byte.pending,
 .hex-ascii {

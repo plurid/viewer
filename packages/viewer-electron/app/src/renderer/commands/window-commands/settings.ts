@@ -1,17 +1,29 @@
 import { overridable } from '../../../domain/preferences/overrides';
 import { clearWorkspaceOverrides, setWorkspaceOverride } from '../../state/workspaces';
 import {
+  planeToolbar,
   settingCatalog,
   settingContext,
   settingValue,
   workspaceMayChange,
   type SettingDefinition,
 } from '../../../domain/preferences/catalog';
+import type { HeaderPresetName } from '../../../domain/preferences/header';
+import {
+  headerPreset,
+  headerPresetLabels,
+  headerPresetNames,
+  headerPresetPatches,
+} from '../../../domain/preferences/header';
 import type { UIPreferences } from '../../../domain/contracts';
 import { activeWorkspace, changePreferences, getState, receiveSettings } from '../../state/store';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
-import { effectiveWindowPreferences, inheritedWindowPreferences } from '../../state/effective-ui';
+import {
+  effectiveWindowPreferences,
+  effectiveWindowUI,
+  inheritedWindowPreferences,
+} from '../../state/effective-ui';
 import {
   presentationPath,
   presentationValue,
@@ -65,6 +77,10 @@ export async function changeSetting(path: string, value: unknown): Promise<void>
 }
 /** A setting's value as it is now, from the settings or the window's preferences. */
 export const settingNow = (path: string) => current(path);
+/** Every plane toolbar button as a preset has it, each changed as `changeSetting` changes one. */
+export async function choosePlaneToolbar(name: HeaderPresetName): Promise<void> {
+  for (const { path, value } of headerPresetPatches(name)) await changeSetting(path, value);
+}
 /**
  * A command for every setting: in the palette, the Settings menu, a shortcut's reach and
  * an agent's proposals. An on/off setting toggles; a choice offers each value, the current one
@@ -90,8 +106,25 @@ export function settingsCommands({ windowScope }: WindowScopes): CommandDefiniti
           },
         ]
       : [];
+  const preset = headerPreset(effectiveWindowUI(getState()).space.headerControls);
+  const planeToolbarPresets = headerPresetNames.map((name): CommandDefinition => ({
+    id: 'plane-toolbar.' + name,
+    label: `${planeToolbar.section}: ${headerPresetLabels[name]}`,
+    group: 'Settings',
+    detail: 'Space',
+    icon: preset === name ? 'check' : 'settings',
+    aliases: ['header buttons', 'toolbar buttons', 'plane header'],
+    setting: {
+      name: planeToolbar.section,
+      choice: headerPresetLabels[name],
+      current: preset === name,
+    },
+    when: windowScope,
+    run: () => choosePlaneToolbar(name),
+  }));
   return [
     ...clear,
+    ...planeToolbarPresets,
     ...settingCatalog.flatMap((definition): CommandDefinition[] => {
       if (ownCommands.has(definition.path) || definition.path.startsWith('ui.list.')) return [];
       const name = settingName(definition);

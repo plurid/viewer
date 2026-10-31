@@ -96,15 +96,15 @@ Export an ASCII DXF from your CAD app." Native DWG and paper-space layouts are n
 Text in a drawing from AutoCAD 2007 or later is read as UTF-8. An older drawing uses its
 `$DWGCODEPAGE`; an encoding the preview cannot read asks for a UTF-8 ASCII DXF.
 
-| Control                  | Does                                                                                                                                                                   |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Fit drawing**          | Fits the drawing in view; **Home** does the same                                                                                                                       |
-| **Drawing tool**         | **Inspect** (click geometry), **Distance** (two points), **Angle** (first point, vertex, last point) or **Area** (boundary points; **Enter** or double-click finishes) |
-| **Snap**                 | On at first: snaps to endpoints, midpoints, centres and quadrants. Hold **Shift** to measure without it                                                                |
-| **Show drawing grid**    | Shows or hides the grid                                                                                                                                                |
-| **Show drawing details** | Opens the panel of units, layers and measurements                                                                                                                      |
-| **Measurement units**    | **From file**, or **Millimetres**, **Centimetres**, **Metres**, **Inches** or **Feet**                                                                                 |
-| **Layers**               | Show or hide each layer, with its entity count. Layers hidden or frozen in the drawing start hidden                                                                    |
+| Control                  | Does                                                                                                                                                                  |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Fit drawing**          | Fits the drawing in view; **Home** does the same                                                                                                                      |
+| **Drawing tool**         | **Select** (click geometry), **Distance** (two points), **Angle** (first point, vertex, last point) or **Area** (boundary points; **Enter** or double-click finishes) |
+| **Snap**                 | On at first: snaps to endpoints, midpoints, centres and quadrants. Hold **Shift** to measure without it                                                               |
+| **Show drawing grid**    | Shows or hides the grid                                                                                                                                               |
+| **Show drawing details** | Opens the panel of units, layers and measurements                                                                                                                     |
+| **Measurement units**    | **From file**, or **Millimetres**, **Centimetres**, **Metres**, **Inches** or **Feet**                                                                                |
+| **Layers**               | Show or hide each layer, with its entity count. Layers hidden or frozen in the drawing start hidden                                                                   |
 
 Drag pans, scroll zooms and the arrow keys pan. **Escape** cancels a measurement in progress, and
 **Delete** removes its last point. A drawing that does not say its units shows coordinates as

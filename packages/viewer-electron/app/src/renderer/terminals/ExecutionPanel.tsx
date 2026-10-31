@@ -3,7 +3,8 @@ import type { ExecutionTask } from '../../domain/automation/actions';
 import { report } from '../state/store';
 import { followSnapshot } from '../state/requests';
 import type { DesktopEvent } from '../../domain/contracts';
-import { IconButton } from '../ui/primitives';
+import { Panel, PanelSection } from '../ui/Panel';
+import { Button, CopyButton, PathField } from '../ui/primitives';
 import { useWorkspace } from '../workspace/context';
 import { useWindowEvent } from '../app/window-events';
 export function ExecutionPanel() {
@@ -45,39 +46,46 @@ export function ExecutionPanel() {
   }, []);
   if (!tasks.length || dismissed) return null;
   return (
-    <aside className="execution-panel" aria-label="Command progress">
-      <div>
-        <button onClick={() => setExpanded((value) => !value)}>
-          {running
-            ? `${running} command${running === 1 ? '' : 's'} running`
-            : tasks.at(-1)!.title + ': ' + tasks.at(-1)!.status}
-        </button>
-        <IconButton icon="close" label="Hide command progress" onClick={() => setDismissed(true)} />
-      </div>
+    <Panel
+      className="execution-panel"
+      label="Command progress"
+      title={
+        running
+          ? `${running} command${running === 1 ? '' : 's'} running`
+          : tasks.at(-1)!.title + ': ' + tasks.at(-1)!.status
+      }
+      collapsed={!expanded}
+      onCollapsedChange={(collapsed) => setExpanded(!collapsed)}
+      onClose={() => setDismissed(true)}
+      closeLabel="Hide command progress"
+    >
       {expanded &&
         tasks.map((task) => (
-          <section key={task.id}>
-            <div>
-              <strong>{task.title}</strong>
-              <span>
+          <PanelSection
+            key={task.id}
+            title={task.title}
+            meta={
+              <>
                 {task.status}
                 {task.exitCode !== undefined ? ` · exit ${task.exitCode}` : ''}
                 {task.started !== undefined
                   ? ` · ${Math.max(0, Math.round(((task.ended ?? now) - task.started) / 1000))}s`
                   : ''}
-              </span>
-              {task.status === 'running' && (
-                <button
-                  onClick={() => {
-                    void window.viewer.executionCancel(task.id).catch(report);
-                  }}
-                >
-                  Stop
-                </button>
-              )}
-            </div>
+              </>
+            }
+          >
+            {task.status === 'running' && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void window.viewer.executionCancel(task.id).catch(report);
+                }}
+              >
+                Stop
+              </Button>
+            )}
             {task.error && <p role="alert">{task.error}</p>}
-            {task.directory && <p className="muted">{task.directory}</p>}
+            {task.directory && <PathField className="muted" path={task.directory} />}
             {task.truncated && <p role="status">Showing the last 256 KiB of output.</p>}
             {task.command && (
               <button onClick={() => workspace.openReceipt(task.id, task.directory)}>
@@ -85,13 +93,11 @@ export function ExecutionPanel() {
               </button>
             )}
             {!!task.output && (
-              <button onClick={() => void navigator.clipboard.writeText(task.output).catch(report)}>
-                Copy output
-              </button>
+              <CopyButton appearance="text" label="Copy output" copy={{ text: task.output }} />
             )}
             {task.output && <pre>{task.output}</pre>}
-          </section>
+          </PanelSection>
         ))}
-    </aside>
+    </Panel>
   );
 }

@@ -11,7 +11,7 @@
 .image-tools-preview {
   min-width: 0;
   min-height: 260px;
-  padding: 18px;
+  padding: var(--gap-dialog);
   background: var(--field);
   display: flex;
   justify-content: center;
@@ -37,23 +37,27 @@
   background: var(--image-region);
   pointer-events: none;
 }
+/* The options column holds rows (base.css): in it, a control goes under its label. */
 .image-tools-options {
-  padding: 18px;
+  container-type: inline-size;
+  padding: var(--gap-dialog);
   display: flex;
   flex-direction: column;
   gap: 14px;
   border-left: 1px solid var(--line);
 }
-.image-tools-options > label,
+.image-tools-options > .row {
+  min-height: 0;
+}
 .image-tools-dimensions label {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
 }
 .image-tools-options p {
-  font-size: 11px;
+  font-size: var(--text-label);
   line-height: 1.5;
   margin: 0;
 }
@@ -62,7 +66,7 @@
 }
 .image-tools-dimensions {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .image-tools-dimensions label {
   flex: 1;
@@ -73,11 +77,11 @@
 }
 .image-tools-crop-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--gap-small);
   flex-wrap: wrap;
 }
 .image-tools-dialog > footer {
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 @media (max-width: 720px) {
   .image-tools-body {

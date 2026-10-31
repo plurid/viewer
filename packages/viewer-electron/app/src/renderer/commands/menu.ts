@@ -1,6 +1,7 @@
 import type { ResolvedCommand } from './registry';
 import type { Suggestion } from './suggestions';
 import type { IconName } from '../ui/Icon';
+import type { HeaderLead } from '../workspace/header-overflow';
 
 export interface MenuSection {
   label?: string;
@@ -29,7 +30,7 @@ const icons: Record<string, IconName> = {
   Git: 'side-by-side',
   Actions: 'command',
   Plane: 'link',
-  Layout: 'resize',
+  Layout: 'arrange',
   Width: 'side-by-side',
   Height: 'stacked',
   Position: 'move',
@@ -155,12 +156,61 @@ function actionSections(commands: ResolvedCommand[], depth = 0, parent = ''): Me
   ].filter((section) => section.entries.length);
 }
 
+/** A group's submenu, its rows arranged as the group's own are. */
+function groupEntry(label: string, rows: ResolvedCommand[]): MenuEntry {
+  if (label === 'View') return branch(label, viewSections(rows));
+  if (label === 'Layout') return branch(label, layoutSections(rows));
+  if (label === 'Actions') return branch(label, actionSections(rows));
+  if (label === 'Git')
+    return branch(label, [
+      section(
+        rows.filter((item) =>
+          [
+            'git-worktrees',
+            'git-changes',
+            'git-diff',
+            'git-action.status',
+            'git-action.log',
+          ].includes(item.id),
+        ),
+      ),
+      section(
+        rows.filter((item) =>
+          ['git-action.stage-selected', 'git-action.stage-all', 'git-action.commit'].includes(
+            item.id,
+          ),
+        ),
+      ),
+      section(rows.filter((item) => ['git-action.pull', 'git-action.push'].includes(item.id))),
+    ]);
+  if (label === 'Files') {
+    const open = rows.filter((item) =>
+      ['open-default', 'linked', 'another-plane', 'reveal'].includes(item.id),
+    );
+    const organize = rows.filter((item) =>
+      ['cut', 'copy-to', 'move-to', 'duplicate'].includes(item.id),
+    );
+    const used = new Set([...open, ...organize].map((item) => item.id));
+    return branch(label, [
+      section(open, 'Open'),
+      section(organize, 'Organize'),
+      section(
+        rows.filter((item) => !used.has(item.id)),
+        'Information',
+      ),
+    ]);
+  }
+  return branch(label, [section(rows)]);
+}
+
 /** Keep frequent actions visible; every other applicable command remains in a named submenu. */
 export function contextMenuSections(
   commands: readonly ResolvedCommand[],
   recent: readonly string[],
   focused = false,
   suggested: readonly Suggestion[] = [],
+  /** What the plane header could not show, which leads (workspace/header-overflow.ts). */
+  lead: HeaderLead = [],
 ): MenuSection[] {
   const remaining = new Map(commands.map((item) => [item.id, item]));
   const take = (ids: readonly string[]) => {
@@ -174,6 +224,20 @@ export function contextMenuSections(
     return items;
   };
   const sections: MenuSection[] = [];
+  if (!focused) {
+    // in the header's order: a control of one command as its row, one of several, such as the
+    // View menu, as its group's submenu
+    const leading: MenuEntry[] = [];
+    for (const ids of lead) {
+      const rows = ids.flatMap((id) => remaining.get(id) ?? []);
+      if (rows.length === 1 && ids.length === 1) leading.push(leaf(take(ids)[0]!));
+      else if (rows.length) {
+        const group = [...remaining.values()].filter((item) => item.group === rows[0]!.group);
+        leading.push(groupEntry(rows[0]!.group, take(group.map((item) => item.id))));
+      }
+    }
+    sections.push({ entries: leading });
+  }
   const applicableRecent = [...new Set(recent)].filter((id) => remaining.has(id)).slice(0, 2);
   if (applicableRecent.length)
     sections.push({
@@ -215,6 +279,8 @@ export function contextMenuSections(
     return sections.filter((item) => item.entries.length);
   }
   for (const ids of direct) sections.push(section(take(ids)));
+  // the way to everything else is the last row, not a Help submenu of one
+  const discover = take(['capabilities']);
 
   const grouped = groupCommands([...remaining.values()]);
   const names = [...grouped.keys()].sort((a, b) => {
@@ -222,52 +288,8 @@ export function contextMenuSections(
     const bIndex = order.indexOf(b);
     return (aIndex < 0 ? order.length : aIndex) - (bIndex < 0 ? order.length : bIndex);
   });
-  const entries = names.map((label) => {
-    const rows = grouped.get(label)!;
-    if (label === 'View') return branch(label, viewSections(rows));
-    if (label === 'Layout') return branch(label, layoutSections(rows));
-    if (label === 'Actions') return branch(label, actionSections(rows));
-    if (label === 'Git')
-      return branch(label, [
-        section(
-          rows.filter((item) =>
-            [
-              'git-worktrees',
-              'git-changes',
-              'git-diff',
-              'git-action.status',
-              'git-action.log',
-            ].includes(item.id),
-          ),
-        ),
-        section(
-          rows.filter((item) =>
-            ['git-action.stage-selected', 'git-action.stage-all', 'git-action.commit'].includes(
-              item.id,
-            ),
-          ),
-        ),
-        section(rows.filter((item) => ['git-action.pull', 'git-action.push'].includes(item.id))),
-      ]);
-    if (label === 'Files') {
-      const open = rows.filter((item) =>
-        ['open-default', 'linked', 'another-plane', 'reveal'].includes(item.id),
-      );
-      const organize = rows.filter((item) =>
-        ['cut', 'copy-to', 'move-to', 'duplicate'].includes(item.id),
-      );
-      const used = new Set([...open, ...organize].map((item) => item.id));
-      return branch(label, [
-        section(open, 'Open'),
-        section(organize, 'Organize'),
-        section(
-          rows.filter((item) => !used.has(item.id)),
-          'Information',
-        ),
-      ]);
-    }
-    return branch(label, [section(rows)]);
-  });
+  const entries = names.map((label) => groupEntry(label, grouped.get(label)!));
   if (entries.length) sections.push({ entries });
+  sections.push(section(discover));
   return sections.filter((item) => item.entries.length);
 }

@@ -59,7 +59,12 @@ export function Composer({
           {hint ?? 'Command or Control + Enter to send.'}
         </p>
         {running ? (
-          <button type="button" className="chat-stop" disabled={busy} onClick={onStop}>
+          <button
+            type="button"
+            className="button-secondary chat-stop"
+            disabled={busy}
+            onClick={onStop}
+          >
             Stop
           </button>
         ) : (

@@ -1,12 +1,24 @@
+import type { ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import type { FileEntry } from '../../domain/contracts';
+import { firstRunStepsLeft } from '../../domain/preferences/first-run';
+import { keyGlyphs } from '../../domain/preferences/keymap';
+import { defaultShortcuts } from '../../domain/preferences/shortcuts';
 import {
   folderInsights,
   insightLimit,
   type FolderInsight,
   type InsightID,
 } from '../../domain/suggestions/insights';
-import { dismissInsight, report, setActivePane, useViewer } from '../state/store';
+import {
+  activeWorkspace,
+  dismissFirstRunHint,
+  dismissInsight,
+  report,
+  setActivePane,
+  useViewer,
+} from '../state/store';
+import { effectiveWindowUI } from '../state/effective-ui';
 import { useCommandRevision, useCommands } from '../commands/context';
 import type { CommandRegistry, ResolvedCommand } from '../commands/registry';
 import { Icon, type IconName } from '../ui/Icon';
@@ -55,9 +67,58 @@ function applicable(
 }
 
 /**
+ * A new profile's first-run tips, in its workspace's first folder plane: the steps not used yet,
+ * with the keys the palette answers to, and title dragging while planes move by their title.
+ */
+function useFirstRunTips(paneID: string): ReactNode {
+  const hint = useViewer((state) => state.saved.ui.firstRunHint);
+  const first = useViewer(
+    (state) => activeWorkspace(state).panes.find((pane) => pane.type === 'folder')?.id === paneID,
+  );
+  // a cleared shortcut leaves no key to name
+  const palette = useViewer(
+    (state) => state.settings.settings.shortcuts.palette ?? defaultShortcuts.palette,
+  );
+  const dragging = useViewer((state) => {
+    const { space } = effectiveWindowUI(state);
+    return space.planeHeaders && space.dragging;
+  });
+  const steps = useMemo(() => (first ? firstRunStepsLeft(hint) : []), [first, hint]);
+  const tips = steps.flatMap((step) =>
+    step === 'quick-preview' ? (
+      <li key={step}>
+        <kbd>Space</kbd> previews the selected file
+      </li>
+    ) : palette ? (
+      <li key={step}>
+        <kbd>{keyGlyphs(palette)}</kbd> finds any action
+      </li>
+    ) : (
+      []
+    ),
+  );
+  if (!tips.length) return null;
+  return (
+    <article className="folder-insight folder-tips" aria-label="Tips">
+      <Icon name="info" size={16} />
+      <ul className="folder-insight-text">
+        {tips}
+        {dragging && <li>Drag a plane’s title to move it</li>}
+      </ul>
+      <IconButton
+        icon="close"
+        label="Dismiss tips"
+        className="folder-insight-dismiss"
+        onClick={dismissFirstRunHint}
+      />
+    </article>
+  );
+}
+
+/**
  * A few cards above a folder's files, each pointing at something that may need attention. A card's
  * action selects the files concerned and runs the command a person would pick from the menu; a
- * card whose command does not apply to them is not shown.
+ * card whose command does not apply to them is not shown. A new profile's tips lead them.
  */
 export const FolderInsights = memo(function FolderInsights({
   paneID,
@@ -73,6 +134,7 @@ export const FolderInsights = memo(function FolderInsights({
 }) {
   const registry = useCommands();
   const revision = useCommandRevision(paneID);
+  const tips = useFirstRunTips(paneID);
   const enabled = useViewer((state) => state.settings.settings.browsing.insights);
   const home = useViewer((state) => state.bootstrap.home);
   const dismissed = useViewer((state) => state.saved.ui.insightsDismissed?.[folder]) ?? none;
@@ -99,14 +161,15 @@ export const FolderInsights = memo(function FolderInsights({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [registry, revision, insights, entries, paneID, folder],
   );
-  if (!cards.length) return null;
   const run = ({ files, command }: InsightCard) => {
     setActivePane(paneID);
     select(files);
     void registry.run(command).catch(report);
   };
+  if (!cards.length && !tips) return null;
   return (
     <section className="folder-insights" aria-label="Insights">
+      {tips}
       {cards.map((card) => (
         <article key={card.insight.id} className="folder-insight" data-insight={card.insight.id}>
           <Icon name={icons[card.insight.id]} size={16} />

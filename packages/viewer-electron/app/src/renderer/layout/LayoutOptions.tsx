@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import type { Choice } from '../ui/ChoiceMenu';
+import { Row } from '../ui/primitives';
 import { toMillimetres, millimetres } from '../../domain/layout/plan';
 import { collageStyleAvailable, collageStyles } from '../../domain/layout/collage';
 import { collageStyleLabel, itemLabel } from '../../domain/layout/candidates';
@@ -29,30 +30,29 @@ function Segmented<Value extends string>({
   onChoose(value: Value): void;
 }) {
   return (
-    <div className="layout-field">
-      <span>{label}</span>
-      <div className="layout-segmented" role="group" aria-label={label}>
-        {choices.map((choice) => (
-          <button
-            key={choice.value}
-            type="button"
-            aria-pressed={choice.value === value}
-            onClick={() => onChoose(choice.value)}
-          >
-            {choice.label}
-          </button>
-        ))}
-      </div>
-    </div>
+    <Row
+      as="div"
+      compact
+      label={label}
+      control={
+        <div className="layout-segmented" role="group" aria-label={label}>
+          {choices.map((choice) => (
+            <button
+              key={choice.value}
+              type="button"
+              aria-pressed={choice.value === value}
+              onClick={() => onChoose(choice.value)}
+            >
+              {choice.label}
+            </button>
+          ))}
+        </div>
+      }
+    />
   );
 }
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="layout-field">
-      <span>{label}</span>
-      {children}
-    </label>
-  );
+  return <Row compact label={label} control={children} />;
 }
 function Toggle({
   label,
@@ -64,14 +64,17 @@ function Toggle({
   onChange(checked: boolean): void;
 }) {
   return (
-    <label className="layout-toggle">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      {label}
-    </label>
+    <Row
+      compact
+      label={label}
+      control={
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+      }
+    />
   );
 }
 /** A length kept in points, shown in millimetres, or in pixels on a screen-sized page. */
@@ -558,36 +561,40 @@ function PageOptions({
         )}
       </div>
       {(mode === 'collage' || mode === 'contact-sheet') && (
-        <div className="layout-field">
-          <span>Background</span>
-          <div className="layout-swatches" role="group" aria-label="Background">
-            {backgrounds.map((item) => (
+        <Row
+          as="div"
+          compact
+          label="Background"
+          control={
+            <div className="layout-swatches" role="group" aria-label="Background">
+              {backgrounds.map((item) => (
+                <button
+                  key={item.color}
+                  type="button"
+                  className="layout-swatch"
+                  aria-label={item.label}
+                  aria-pressed={page.background.toLowerCase() === item.color}
+                  style={{ background: item.color }}
+                  onClick={() => set({ background: item.color })}
+                />
+              ))}
               <button
-                key={item.color}
                 type="button"
-                className="layout-swatch"
-                aria-label={item.label}
-                aria-pressed={page.background.toLowerCase() === item.color}
-                style={{ background: item.color }}
-                onClick={() => set({ background: item.color })}
+                className="layout-swatch is-transparent"
+                aria-label="Transparent"
+                title="Transparent in a PNG; white on paper"
+                aria-pressed={!page.background}
+                onClick={() => set({ background: '' })}
               />
-            ))}
-            <button
-              type="button"
-              className="layout-swatch is-transparent"
-              aria-label="Transparent"
-              title="Transparent in a PNG; white on paper"
-              aria-pressed={!page.background}
-              onClick={() => set({ background: '' })}
-            />
-            <input
-              type="color"
-              aria-label="Background colour"
-              value={page.background || '#ffffff'}
-              onChange={(event) => set({ background: event.target.value.toLowerCase() })}
-            />
-          </div>
-        </div>
+              <input
+                type="color"
+                aria-label="Background colour"
+                value={page.background || '#ffffff'}
+                onChange={(event) => set({ background: event.target.value.toLowerCase() })}
+              />
+            </div>
+          }
+        />
       )}
     </>
   );

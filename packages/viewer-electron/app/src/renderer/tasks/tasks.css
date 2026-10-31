@@ -24,7 +24,7 @@
   overflow: hidden;
 }
 .dialog.task-request-dialog form footer {
-  padding: 16px 20px;
+  padding: var(--gap-panel) 20px;
   border-top: 1px solid var(--line);
 }
 .task-request-fields {
@@ -46,7 +46,7 @@
   max-width: none;
 }
 .task-request-recovery p {
-  margin-top: 8px;
+  margin-top: var(--gap-inline);
   overflow-wrap: anywhere;
 }
 .task-request-progress {
@@ -56,7 +56,7 @@
   right: 24px;
   margin: 0 auto;
   max-width: 580px;
-  padding: 12px 16px;
+  padding: var(--gap-content) var(--gap-panel);
   background: var(--raised);
   color: var(--ink);
   border: 1px solid var(--line);
@@ -65,29 +65,29 @@
 }
 .task-area-summary {
   flex: 0 0 auto;
-  padding: 20px 24px 16px;
+  padding: 20px 24px var(--gap-panel);
   border-bottom: 1px solid var(--line);
   background: var(--raised);
 }
 .task-area-summary > input {
   width: 100%;
-  font-size: 18px;
+  font-size: var(--text-title);
   font-weight: 600;
 }
-.task-area-summary p {
+.task-area-summary :is(p, .path-field) {
   margin: 10px 0 0;
 }
 .task-checkout-path {
   overflow-wrap: anywhere;
 }
 .task-area-summary .muted {
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .task-actions,
 .task-add-tools {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .task-actions {
   margin-top: 14px;
@@ -96,17 +96,17 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 16px 24px 24px;
+  padding: var(--gap-panel) 24px 24px;
 }
 .task-tool-list {
-  margin-top: 16px;
+  margin-top: var(--gap-panel);
   border-top: 1px solid var(--line);
 }
 .task-tool-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 0;
+  gap: var(--gap-panel);
+  padding: var(--gap-content) 0;
   border-bottom: 1px solid var(--line);
 }
 .task-tool-row > div {
@@ -126,27 +126,27 @@
 .task-tool-kind {
   margin-top: 5px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .task-retention-note {
   color: var(--muted);
   line-height: 1.6;
   margin: 20px 0 0;
-  font-size: 12px;
+  font-size: var(--text-compact);
   max-width: 80ch;
 }
 .task-attach-form {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 8px;
+  gap: var(--gap-inline);
   margin-top: 14px;
 }
 .task-attach-form label {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--gap-small);
   min-width: 160px;
 }
 .task-attach-form input {
@@ -158,7 +158,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  padding: 12px 18px;
+  padding: var(--gap-content) var(--gap-dialog);
   border-bottom: 1px solid var(--line);
 }
 .receipt-scroll {
@@ -169,8 +169,8 @@
 .receipt-scroll dl {
   display: grid;
   grid-template-columns: 130px minmax(0, 1fr);
-  gap: 8px 16px;
-  margin: 0 0 16px;
+  gap: var(--gap-inline) var(--gap-panel);
+  margin: 0 0 var(--gap-panel);
 }
 .receipt-scroll dd {
   margin: 0;
@@ -179,17 +179,17 @@
 .receipt-scroll dt,
 .receipt-scroll .muted {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
   line-height: 1.5;
 }
 .receipt-scroll h2 {
   margin: 24px 0 10px;
-  font-size: 14px;
+  font-size: var(--text-section);
 }
 .receipt-scroll pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--text-compact);
   line-height: 1.6;
   margin: 0;
   font-family: var(--editor-font, ui-monospace), ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -199,7 +199,7 @@
   width: min(760px, 94vw);
 }
 .tasks-dialog-body {
-  padding: 18px;
+  padding: var(--gap-dialog);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -208,7 +208,7 @@
 }
 .tasks-dialog-tabs {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .tasks-search {
   width: 100%;
@@ -223,12 +223,12 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: var(--gap-small);
   text-align: left;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
-  padding: 12px 8px;
+  padding: var(--gap-content) var(--gap-inline);
   background: transparent;
 }
 .tasks-list small {
@@ -239,29 +239,29 @@
   border-top: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap-content);
 }
 .task-create-form label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--gap-small);
 }
 .task-create-form .task-create-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-inline);
   justify-content: flex-end;
 }
 @media (max-width: 600px) {
   .task-area-summary {
-    padding: 16px;
+    padding: var(--gap-panel);
   }
   .task-body,
   .receipt-scroll {
-    padding: 16px;
+    padding: var(--gap-panel);
   }
   .receipt-scroll dl {
     grid-template-columns: 1fr;
-    gap: 4px;
+    gap: var(--gap-tight);
   }
   .receipt-scroll dd {
     margin-bottom: 10px;

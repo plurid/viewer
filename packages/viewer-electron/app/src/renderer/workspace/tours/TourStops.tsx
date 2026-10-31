@@ -2,7 +2,9 @@ import { useState, useSyncExternalStore } from 'react';
 import { describeAnchor, fileName, tourFileName } from '../../../domain/tours/tour';
 import { activeWorkspace, report, useViewer } from '../../state/store';
 import { DictationButton } from '../../speech/DictationButton';
-import { IconButton } from '../../ui/primitives';
+import { countText } from '../../../domain/layout/nesting/format';
+import { Panel } from '../../ui/Panel';
+import { Button, IconButton, Row } from '../../ui/primitives';
 import { useWorkspace } from '../context';
 import { playTour } from '../tour';
 import {
@@ -57,19 +59,62 @@ export function TourStops() {
       ? `Saves ${fileName(file)} in “${fileName(folder)}”, beside its files`
       : 'Add file planes as stops; the tour saves in the folder that holds them.';
   return (
-    <aside className="tour-stops" aria-label="Tour stops">
-      <header>
-        <input
-          aria-label="Tour name"
-          placeholder={folder ? fileName(folder) : 'Tour name'}
-          value={draft.name}
-          disabled={!!draft.file}
-          title={draft.file ? 'A saved tour keeps its file name.' : undefined}
-          maxLength={100}
-          onChange={(event) => changeDraft((current) => ({ ...current, name: event.target.value }))}
-        />
-        <IconButton icon="close" label="Close tour stops" onClick={closeDraft} />
-      </header>
+    <Panel
+      className="tour-stops"
+      label="Tour stops"
+      title="Tour stops"
+      status={countText(draft.stops.length, 'stop')}
+      onClose={closeDraft}
+      closeLabel="Close tour stops"
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            disabled={busy || !activeFile || draft.stops.length >= 200}
+            title={activeFile ? activeFile : 'Click a file’s plane to add it as a stop.'}
+            onClick={() => run(() => recordStop(workspace))}
+          >
+            {activeFile ? `Add “${fileName(activeFile)}”` : 'Add a file plane'}
+          </Button>
+          <span className="tour-stops-destination muted">{destination}</span>
+          <Button
+            variant="secondary"
+            disabled={busy || !draft.stops.length}
+            onClick={() =>
+              run(async () => {
+                playTour(workspace, draftTour(draft));
+              })
+            }
+          >
+            Play
+          </Button>
+          <Button
+            variant="primary"
+            disabled={busy || !draft.stops.length || !file}
+            onClick={() => run(saveDraft)}
+          >
+            {draft.file ? `Save ${tourFileName(draft.file)}` : 'Save tour'}
+          </Button>
+        </>
+      }
+    >
+      <Row
+        compact
+        label="Name"
+        control={
+          <input
+            aria-label="Tour name"
+            placeholder={folder ? fileName(folder) : 'Tour name'}
+            value={draft.name}
+            disabled={!!draft.file}
+            title={draft.file ? 'A saved tour keeps its file name.' : undefined}
+            maxLength={100}
+            onChange={(event) =>
+              changeDraft((current) => ({ ...current, name: event.target.value }))
+            }
+          />
+        }
+      />
       {draft.stops.length ? (
         <ol className="tour-stop-list">
           {draft.stops.map((stop, index) => (
@@ -120,33 +165,6 @@ export function TourStops() {
           choose Add.
         </p>
       )}
-      <footer>
-        <button
-          disabled={busy || !activeFile || draft.stops.length >= 200}
-          title={activeFile ? activeFile : 'Click a file’s plane to add it as a stop.'}
-          onClick={() => run(() => recordStop(workspace))}
-        >
-          {activeFile ? `Add “${fileName(activeFile)}”` : 'Add a file plane'}
-        </button>
-        <span className="tour-stops-destination muted">{destination}</span>
-        <button
-          disabled={busy || !draft.stops.length}
-          onClick={() =>
-            run(async () => {
-              playTour(workspace, draftTour(draft));
-            })
-          }
-        >
-          Play
-        </button>
-        <button
-          className="primary"
-          disabled={busy || !draft.stops.length || !file}
-          onClick={() => run(saveDraft)}
-        >
-          {draft.file ? `Save ${tourFileName(draft.file)}` : 'Save tour'}
-        </button>
-      </footer>
-    </aside>
+    </Panel>
   );
 }

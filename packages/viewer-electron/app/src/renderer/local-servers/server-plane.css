@@ -6,7 +6,7 @@
   overflow: hidden;
   background: var(--surface);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 
 .server-summary,
@@ -15,8 +15,8 @@
 .server-log-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--gap-inline);
+  padding: var(--gap-inline) var(--gap-content);
   flex: none;
 }
 
@@ -77,7 +77,7 @@
 .server-error {
   flex: none;
   margin: 0;
-  padding: 8px 12px;
+  padding: var(--gap-inline) var(--gap-content);
   color: var(--danger);
   border-bottom: 1px solid var(--line);
 }
@@ -132,7 +132,7 @@
 }
 
 .server-log-empty {
-  padding: 24px 12px;
+  padding: 24px var(--gap-content);
   color: var(--muted);
   text-align: center;
 }
@@ -142,7 +142,7 @@
   flex-wrap: wrap;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-label);
 }
 .server-list {
   padding: 0 20px 20px;
@@ -151,7 +151,7 @@
 }
 .server-list-row {
   display: flex;
-  gap: 12px;
+  gap: var(--gap-content);
   align-items: center;
   border-top: 1px solid var(--line);
   padding-block: 14px;

@@ -24,6 +24,7 @@ exports[`set > names settings that exist, each by one path, frozen 1`] = `
   "imagepixels",
   "lineheight",
   "minimap",
+  "minimapauto",
   "modelmb",
   "newfile",
   "newplanes",

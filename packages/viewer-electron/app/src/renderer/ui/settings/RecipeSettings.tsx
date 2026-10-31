@@ -5,7 +5,7 @@ import { builtInRecipes } from '../../../domain/services';
 import { Field } from './SettingField';
 import { ReferencedRemove } from './AutomationSettings';
 import { referencesTo } from '../../../domain/automation/references';
-import { Icon } from '../Icon';
+import { Disclosure } from '../Disclosure';
 import { ChoiceButton } from '../ChoiceMenu';
 import type { SettingsEditor } from './editor';
 
@@ -29,12 +29,13 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
         Recipes appear in Commands and file actions. Every file-change proposal opens for review.
       </p>
       {settings.recipes.map((recipe) => (
-        <details className="settings-recipe" key={recipe.id}>
-          <summary>
-            <Icon name="right" size={12} />
-            <span>{recipe.name}</span>
-            <small>{recipe.kind}</small>
-          </summary>
+        <Disclosure
+          variant="row"
+          className="settings-recipe"
+          key={recipe.id}
+          summary={recipe.name}
+          meta={recipe.kind}
+        >
           <div className="settings-editor">
             <label>
               Name
@@ -172,7 +173,7 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
               )}
             </div>
           </div>
-        </details>
+        </Disclosure>
       ))}
       <div className="settings-actions">
         <button

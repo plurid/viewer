@@ -104,7 +104,6 @@ import { isActiveJob } from '../domain/operations/jobs';
 import { invalidateThumbnails } from './explorer/thumbnail-cache';
 import { previewsAsFile } from '../domain/previews/documents/embedded';
 import { SpaceOverlay } from './workspace/tours/TourBar';
-import { TourStops } from './workspace/tours/TourStops';
 import { CheckPanel } from './fabrication/CheckPanel';
 import { subscribeJobContents } from './fabrication/contents';
 
@@ -886,7 +885,6 @@ function AppWindow() {
                 }}
               />
             </ErrorBoundary>
-            <TourStops />
             <SpaceOverlay>
               <CheckPanel />
               <SpeechControls onEdit={(text) => openPalette('prompt', text)} />
@@ -917,7 +915,7 @@ function AppWindow() {
         )}
         {notice && (
           <div
-            className={`notice ${noticeKind === 'info' ? 'is-info' : ''}`}
+            className={`bar notice ${noticeKind === 'info' ? 'is-info' : ''}`}
             role={noticeKind === 'info' ? 'status' : 'alert'}
           >
             <Icon name={noticeKind === 'info' ? 'info' : 'warning'} />
@@ -926,7 +924,7 @@ function AppWindow() {
           </div>
         )}
         {deleted && showWorkspaceUndo && (
-          <div className="workspace-recovery" role="status">
+          <div className="bar bar-floating workspace-recovery" role="status">
             <span>Deleted “{deleted.workspace.name}” workspace</span>
             <button
               onClick={() => {

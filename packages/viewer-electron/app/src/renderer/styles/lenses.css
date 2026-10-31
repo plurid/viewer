@@ -2,7 +2,7 @@
 .file-group-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-small);
   height: 100%;
   min-height: 26px;
   box-sizing: border-box;
@@ -11,7 +11,7 @@
 .file-group-label.is-lens {
   border-bottom: 1px solid var(--line);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .file-group-label.is-drop-target {
   background: var(--selection);
@@ -46,11 +46,11 @@
   top: 2px;
   left: 4px;
   max-width: calc(100% - 8px);
-  padding: 1px 6px;
+  padding: 1px var(--gap-small);
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-label);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -104,11 +104,11 @@
 .map-region-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-small);
   height: 32px;
-  padding-inline: 12px;
+  padding-inline: var(--gap-content);
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--text-compact);
   font-weight: 600;
   cursor: grab;
   user-select: none;
@@ -165,7 +165,7 @@
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  padding: 4px;
+  padding: var(--gap-tight);
   border-radius: var(--radius-control);
   user-select: none;
 }
@@ -203,7 +203,7 @@
 }
 .map-tile-name {
   width: 100%;
-  font-size: 11px;
+  font-size: var(--text-label);
   line-height: 1.25;
   text-align: center;
   overflow: hidden;
@@ -227,7 +227,7 @@
 }
 .map-zoom-value {
   min-width: 48px;
-  padding: 2px 6px;
+  padding: 2px var(--gap-small);
   border: 0;
   background: none;
   font-variant-numeric: tabular-nums;
@@ -237,11 +237,11 @@
   left: 12px;
   bottom: 12px;
   margin: 0;
-  padding: 4px 8px;
+  padding: var(--gap-tight) var(--gap-inline);
   border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 .visually-hidden {
   position: absolute;
@@ -258,13 +258,13 @@
   flex-direction: column;
   max-height: 320px;
   overflow: auto;
-  padding: 4px 8px 12px;
+  padding: var(--gap-tight) var(--gap-inline) var(--gap-content);
 }
 .lens-group-choices button {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-block: 6px;
+  gap: var(--gap-inline);
+  padding-block: var(--gap-small);
   border: 0;
   border-radius: var(--radius-control);
   background: none;
@@ -277,15 +277,15 @@
 .lens-rules {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-inline);
   margin: 0;
-  padding: 0 16px 12px;
+  padding: 0 var(--gap-panel) var(--gap-content);
   list-style: none;
 }
 .lens-rules li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .lens-rules input:not([type='date']) {
   flex: 1;
@@ -295,7 +295,7 @@
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-small);
   color: var(--muted);
 }
 .lens-rule-dates input[aria-label='Year'] {
@@ -304,8 +304,8 @@
 .lens-rule-match {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px 12px;
+  gap: var(--gap-inline);
+  padding: 0 var(--gap-panel) var(--gap-content);
   color: var(--muted);
 }
 .lens-rules-dialog footer > button:first-child {
@@ -314,12 +314,12 @@
 .plane-lens-button {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   max-width: 160px;
 }
 .plane-lens-button span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }

@@ -19,6 +19,7 @@ import type { TableControls } from '../DataTable';
 import { usePreviewState } from '../state';
 import { useSQLite } from '../useSQLite';
 import { Empty, Loading } from '../../ui/primitives';
+import { Disclosure } from '../../ui/Disclosure';
 import { report } from '../../state/store';
 import './sqlite.css';
 
@@ -505,10 +506,9 @@ function SchemaView({ context, object }: { context: PreviewContext; object: SQLi
         <p className="sqlite-note muted">No columns could be read.</p>
       )}
       {object.definition && (
-        <details className="sqlite-definition">
-          <summary>Definition</summary>
+        <Disclosure variant="compact" className="sqlite-definition" summary="Definition">
           <pre>{object.definition}</pre>
-        </details>
+        </Disclosure>
       )}
     </>
   );

@@ -145,6 +145,7 @@ the override.
 | `grid`            | `ui.space.grid`                            |
 | `toolbar`         | `ui.space.toolbar`                         |
 | `minimap`         | `ui.space.minimap`                         |
+| `minimapauto`     | `ui.space.minimapAuto`                     |
 | `viewcube`        | `ui.space.viewcube`                        |
 | `headers`         | `ui.space.planeHeaders`                    |
 | `dragging`        | `ui.space.dragging`                        |

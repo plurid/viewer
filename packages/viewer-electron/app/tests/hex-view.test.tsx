@@ -11,6 +11,7 @@ import type { FileEntry, Resource } from '../src/domain/contracts';
 import type { PreviewContext, PreviewModule } from '../src/renderer/previews/contracts';
 import type * as Registry from '../src/renderer/previews/registry';
 import { hexPage } from '../src/domain/files/hex';
+import { changeWorkspace } from '../src/renderer/state/core';
 import { initialize } from '../src/renderer/state/store';
 import { mockElementBox } from './support/layout';
 import { inspectionSamples, noise } from '../tools/playground/samples/inspection';
@@ -242,6 +243,11 @@ describe('Show as hex', () => {
   const host = (module: PreviewModule) => {
     probe.module = module;
     Object.assign(window, { viewer });
+    // the plane its commands are valid for
+    changeWorkspace((space) => ({
+      ...space,
+      panes: [{ id: 'plane', type: 'preview', path: resource().entry.path }],
+    }));
     const registry = new CommandRegistry();
     const view = render(
       createElement(
@@ -252,7 +258,9 @@ describe('Show as hex', () => {
     );
     const labels = () =>
       registry.list({ sources: ['preview:plane'] }).map((command) => command.label);
-    return { view, labels };
+    // the plane's "…" and the palette run it; its footer has no Hex button
+    const toggle = () => act(() => registry.invoke('preview.hex', { sources: ['preview:plane'] }));
+    return { view, labels, toggle };
   };
   const module = (hex?: 'own'): PreviewModule => ({
     id: 'probe',
@@ -264,14 +272,15 @@ describe('Show as hex', () => {
   });
 
   it('shows any file’s bytes in place of its preview, and offers the preview back', async () => {
-    const { view, labels } = host(module());
+    const { view, labels, toggle } = host(module());
     await view.findByText('Probe content');
     await waitFor(() => expect(labels()).toEqual(['Probe command', 'Show as hex']));
-    fireEvent.click(view.getByRole('button', { name: 'Hex' }));
+    expect(view.queryByRole('button', { name: 'Hex' })).toBeNull();
+    await toggle();
     expect(await view.findByRole('grid', { name: 'File bytes' })).toBeTruthy();
     expect(view.queryByText('Probe content')).toBeNull();
     await waitFor(() => expect(labels()).toEqual(['Go to offset', 'Show preview']));
-    fireEvent.click(view.getByRole('button', { name: 'Hex' }));
+    await toggle();
     expect(await view.findByText('Probe content')).toBeTruthy();
   });
 
@@ -279,9 +288,8 @@ describe('Show as hex', () => {
     const { view, labels } = host(module('own'));
     await view.findByText('Probe content');
     await waitFor(() => expect(labels()).toEqual(['Probe command']));
-    expect(view.queryByRole('button', { name: 'Hex' })).toBeNull();
     fireEvent.click(view.getByText('Probe content'));
     expect(await view.findByRole('grid', { name: 'File bytes' })).toBeTruthy();
-    expect(view.getByRole('button', { name: 'Hex' })).toBeTruthy();
+    await waitFor(() => expect(labels()).toEqual(['Go to offset', 'Show preview']));
   });
 });

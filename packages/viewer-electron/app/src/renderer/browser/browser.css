@@ -7,9 +7,9 @@
 }
 .browser-navigation {
   display: flex;
-  gap: 6px;
+  gap: var(--gap-small);
   align-items: center;
-  padding: 8px 10px;
+  padding: var(--gap-inline) 10px;
   border-bottom: 1px solid var(--line);
 }
 .browser-navigation input {
@@ -43,11 +43,11 @@
 }
 .browser-status {
   display: flex;
-  gap: 12px;
+  gap: var(--gap-content);
   align-items: center;
-  padding: 4px 10px;
+  padding: var(--gap-tight) 10px;
   border-top: 1px solid var(--line);
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--muted);
 }
 .browser-status > span {
@@ -60,7 +60,7 @@
 .browser-status button {
   flex-shrink: 0;
   font-size: inherit;
-  padding: 2px 6px;
+  padding: 2px var(--gap-small);
 }
 .browser-error {
   padding: 10px;

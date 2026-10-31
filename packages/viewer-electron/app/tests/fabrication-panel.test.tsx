@@ -728,7 +728,7 @@ it('keeps a finished check when its panel closes, and shows it again at once whi
   expect(
     (screen.getByRole('button', { name: 'Play the tour' }) as HTMLButtonElement).disabled,
   ).toBe(false);
-  expect(screen.queryByText('What is sent')).toBeNull();
+  expect(screen.queryByText('Sent to the model')).toBeNull();
   // one Run again, beside when it was checked, runs the same check
   expect(screen.getAllByRole('button', { name: 'Run again' })).toHaveLength(1);
   changes = [];
@@ -880,12 +880,12 @@ it('collapses to its title bar and a short status, from the title, and keeps tha
   expect(toggle().tabIndex).toBe(0);
   expect(expanded()).toBe('true');
   expect(screen.getByRole('heading', { name: 'Check Job 1042' })).toBeTruthy();
-  expect(screen.getByRole('region', { name: 'What is sent' })).toBeTruthy();
+  expect(screen.getByRole('region', { name: 'Sent to the model' })).toBeTruthy();
 
   fireEvent.click(toggle());
   expect(expanded()).toBe('false');
   expect(screen.getByRole('heading').textContent).toBe('Check Job 1042 · Ready to check 4 files');
-  expect(screen.queryByRole('region', { name: 'What is sent' })).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Sent to the model' })).toBeNull();
   expect(document.getElementById(toggle().getAttribute('aria-controls')!)!.hidden).toBe(true);
 
   // the run goes on while the panel is down: its step and seconds show in the title bar

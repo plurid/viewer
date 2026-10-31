@@ -1,0 +1,40 @@
+/* Disclosure variants (Disclosure.tsx). The summary's look and chevron are base.css's; these set
+   where it sits, at zero specificity so a caller's own class still decides its spacing. */
+:where(.disclosure) > summary {
+  overflow-wrap: anywhere;
+}
+:where(.disclosure-meta) {
+  color: var(--muted);
+  font-size: var(--text-compact);
+  font-weight: 400;
+}
+/* A row: the chevron, the summary and its detail at the far end, a line under each, at the
+   height and padding of a settings row (base.css `.row`, settings.css `.settings-row`). */
+:where(.disclosure-row) {
+  border-bottom: 1px solid var(--line);
+}
+:where(.disclosure-row) > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline);
+  min-height: calc(40px * var(--density-scale, 1));
+  padding-block: calc(var(--gap-content) * var(--density-scale, 1));
+}
+:where(.disclosure-row) > summary::before {
+  margin-inline-end: 0;
+}
+:where(.disclosure-row .disclosure-meta) {
+  flex: none;
+  margin-inline-start: auto;
+}
+/* A secondary part of a form or dialog: only its words take the click. */
+:where(.disclosure-compact, .disclosure-inline) > summary {
+  width: fit-content;
+  max-width: 100%;
+}
+:where(.disclosure-compact) > summary {
+  padding-block: var(--gap-tight);
+}
+:where(.disclosure-compact, .disclosure-inline) :where(.disclosure-meta) {
+  margin-inline-start: var(--gap-small);
+}

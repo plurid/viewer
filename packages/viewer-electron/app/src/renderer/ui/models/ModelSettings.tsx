@@ -16,7 +16,7 @@ import { ChoiceButton } from '../ChoiceMenu';
 import { referencesTo } from '../../../domain/automation/references';
 import { ProviderDataPermission } from './ModelDataPermission';
 import { ProviderCheck } from './ProviderCheck';
-import { Icon } from '../Icon';
+import { Disclosure } from '../Disclosure';
 
 interface ConnectionResult {
   identity: string;
@@ -187,34 +187,36 @@ export function ModelSettings({
                   ? 'API key needed'
                   : 'Configured · connection not checked'));
         return (
-          <details
+          <Disclosure
+            variant="row"
             className="settings-editor settings-provider"
+            summaryClassName="model-summary"
             key={provider.id}
             data-provider-kind={provider.kind}
             open={expanded === provider.id}
-            onToggle={(event) => {
-              const open = event.currentTarget.open;
+            onOpenChange={(open) =>
               setExpanded((current) =>
                 open ? provider.id : current === provider.id ? null : current,
-              );
-            }}
+              )
+            }
+            summary={
+              <>
+                <span className="model-identity">
+                  <strong>{provider.name}</strong>
+                  <span>{provider.model || 'No model selected'}</span>
+                </span>
+                <span
+                  className="model-status"
+                  data-connected={currentConnection?.connected || undefined}
+                >
+                  {status}
+                </span>
+                {selectedDefault?.id === provider.id && (
+                  <span className="model-default">Default for Ask</span>
+                )}
+              </>
+            }
           >
-            <summary className="model-summary">
-              <Icon name="right" size={12} />
-              <span className="model-identity">
-                <strong>{provider.name}</strong>
-                <span>{provider.model || 'No model selected'}</span>
-              </span>
-              <span
-                className="model-status"
-                data-connected={currentConnection?.connected || undefined}
-              >
-                {status}
-              </span>
-              {selectedDefault?.id === provider.id && (
-                <span className="model-default">Default for Ask</span>
-              )}
-            </summary>
             <div className="model-editor-body">
               <div className="settings-editor-heading">
                 <h2>Model setup</h2>
@@ -245,8 +247,7 @@ export function ModelSettings({
                   save={(name) => patch(provider.id, { name })}
                 />
               </label>
-              <details className="model-advanced">
-                <summary>Provider address</summary>
+              <Disclosure variant="compact" className="model-advanced" summary="Provider address">
                 <label className="model-address-field">
                   Endpoint
                   <Field
@@ -257,7 +258,7 @@ export function ModelSettings({
                     save={(endpoint) => patch(provider.id, { endpoint })}
                   />
                 </label>
-              </details>
+              </Disclosure>
               <label>
                 API key
                 <input
@@ -409,14 +410,17 @@ export function ModelSettings({
                 </p>
               ) : null}
               {provider.kind === 'gemini' && (
-                <details className="model-advanced">
-                  <summary>Test model compatibility</summary>
+                <Disclosure
+                  variant="compact"
+                  className="model-advanced"
+                  summary="Test model compatibility"
+                >
                   <ProviderCheck
                     key={JSON.stringify([provider.id, provider.endpoint, provider.model])}
                     providerID={provider.id}
                     onError={error}
                   />
-                </details>
+                </Disclosure>
               )}
               <ProviderDataPermission
                 key={provider.id + provider.endpoint}
@@ -424,7 +428,7 @@ export function ModelSettings({
                 error={error}
               />
             </div>
-          </details>
+          </Disclosure>
         );
       })}
     </>

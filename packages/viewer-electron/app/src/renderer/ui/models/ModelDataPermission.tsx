@@ -7,6 +7,7 @@ import {
   type ModelDataPermission,
 } from '../../../domain/models/permissions';
 import { ChoiceButton } from '../ChoiceMenu';
+import { Disclosure } from '../Disclosure';
 import { errorMessage } from '../../../domain/errors';
 
 export function useModelPermission(provider?: ModelProvider) {
@@ -71,14 +72,17 @@ export function ProviderDataPermission({
     }
   };
   return (
-    <details className="model-data-permission">
-      <summary>
-        Data access
-        <span>
+    <Disclosure
+      variant="compact"
+      className="model-data-permission"
+      summary="Data access"
+      meta={
+        <>
           {loading ? 'Checking…' : permission ? modelDataLabels[permission.level] : 'Not allowed'}
           {permission && ` · Agent actions ${permission.agents ? 'allowed' : 'off'}`}
-        </span>
-      </summary>
+        </>
+      }
+    >
       <p className="settings-note">
         Choose what this provider may receive. Access is granted only after your approval.
       </p>
@@ -139,6 +143,6 @@ export function ProviderDataPermission({
       <p className="settings-note">
         Changing the endpoint or clearing the key revokes access and stops running requests.
       </p>
-    </details>
+    </Disclosure>
   );
 }

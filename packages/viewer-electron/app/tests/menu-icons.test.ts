@@ -60,3 +60,37 @@ it('gives every top-level group an icon of its own', () => {
     seen.set(icon!, label);
   }
 });
+
+it('ends with “What can I do here?” as its own row, never a Help submenu of one', () => {
+  const discover = { ...command('Help', 1), id: 'capabilities', label: 'What can I do here?' };
+  const sections = contextMenuSections(
+    [discover, ...groups.flatMap((group) => [command(group, 1)])],
+    [],
+  );
+  expect(submenus(sections).map((entry) => entry.label)).not.toContain('Help');
+  expect(sections.at(-1)!.entries).toEqual([
+    { kind: 'command', id: 'capabilities', command: discover },
+  ]);
+  // a scoped picker has no place for it
+  expect(
+    contextMenuSections([discover, command('View', 1)], [], true).flatMap((section) =>
+      section.entries.map((entry) => entry.id),
+    ),
+  ).toContain('capabilities');
+});
+
+it('shows Fit and Frame, and the Layout menu, with icons of their own', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = (file: string) =>
+    readFile(new URL('../src/renderer/' + file, import.meta.url), 'utf8');
+  for (const file of [
+    'previews/modules/DXFPreview.tsx',
+    'previews/modules/ImagePreview.tsx',
+    'previews/modules/ModelPreview.tsx',
+    'explorer/map/MapView.tsx',
+  ])
+    expect(await source(file), file).not.toMatch(/icon="frame"/);
+  const header = await source('workspace/PlaneHeader.tsx');
+  expect(header).toMatch(/icon="frame" label="Frame plane"/);
+  expect(header).toMatch(/icon="arrange"/);
+});

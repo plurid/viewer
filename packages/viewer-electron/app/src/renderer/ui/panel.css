@@ -1,0 +1,129 @@
+/* A panel (ui/Panel.tsx): a title bar, a body that scrolls, an optional footer. What holds it
+   places it and gives it a width; the panel is the size container its rows and sections query.
+   Without specificity, so the holder's own class sets its size wherever its stylesheet loads. */
+:where(.panel) {
+  container: panel / inline-size;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline);
+  padding: var(--gap-inline) var(--gap-inline) var(--gap-inline) var(--gap-content);
+  border-bottom: 1px solid var(--line);
+}
+/* Collapsed, the title bar is all there is: no line under it. */
+.panel[data-collapsed] > .panel-header {
+  border-bottom: 0;
+}
+.panel-heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+  margin: 0;
+  font-size: var(--text-section);
+  font-weight: 600;
+}
+/* The title opens and collapses the panel; collapsed, a short status follows it. */
+.panel-toggle {
+  width: calc(100% + var(--gap-small));
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+  margin-left: calc(-1 * var(--gap-small));
+  padding: var(--gap-tight) var(--gap-small);
+  border: 0;
+  color: inherit;
+  text-align: left;
+}
+.panel-toggle svg {
+  flex: none;
+  color: var(--muted);
+}
+/* The status gives way before the title does. */
+.panel-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-status {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-weight: 400;
+}
+.panel-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--gap-content);
+}
+.panel-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--gap-inline);
+  padding: 0 var(--gap-content) var(--gap-content);
+}
+.panel-section {
+  padding: var(--gap-content) 0;
+  border-bottom: 1px solid var(--line);
+}
+/* A section that starts what holds it needs no room above. */
+.panel-section:first-child {
+  padding-top: 0;
+}
+.panel-section:last-of-type {
+  border-bottom: 0;
+}
+.panel-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-inline);
+  margin-bottom: var(--gap-small);
+  color: var(--muted);
+}
+.panel-section-heading h3 {
+  margin: 0;
+  font-size: var(--text-compact);
+  font-weight: 600;
+}
+.panel-section-meta {
+  font-size: var(--text-compact);
+}
+.panel-section > button {
+  margin-top: var(--gap-inline);
+}
+/* A narrow panel lets its title bar's controls go under the title. */
+@container panel (max-width: 300px) {
+  .panel-header {
+    flex-wrap: wrap;
+  }
+  .panel-actions {
+    order: 1;
+    flex-basis: 100%;
+  }
+}

@@ -6,16 +6,16 @@
   overflow: auto;
   background: var(--surface);
   color: var(--ink);
-  font-size: 0.923rem;
+  font-size: var(--text-compact);
 }
 
 .overview-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--gap-inline);
   flex: none;
-  padding: 8px 12px;
+  padding: var(--gap-inline) var(--gap-content);
   border-bottom: 1px solid var(--line);
 }
 
@@ -26,16 +26,16 @@
 .overview-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 8px;
-  padding: 12px;
+  gap: var(--gap-inline);
+  padding: var(--gap-content);
 }
 
 .overview-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--gap-small);
   min-width: 0;
-  padding: 10px 12px;
+  padding: 10px var(--gap-content);
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
   background: var(--field);
@@ -49,7 +49,7 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 
 .overview-card strong {
@@ -64,7 +64,7 @@
 
 .overview-card p {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-compact);
   line-height: 1.4;
 }
 
@@ -80,9 +80,9 @@
 .overview-files li {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-inline);
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--text-compact);
 }
 
 .overview-files button {
@@ -110,18 +110,17 @@
 .overview-card > footer {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--gap-small);
   margin-top: auto;
 }
 
 .overview-card > footer button {
-  padding: 4px 8px;
-  border-color: var(--line);
-  font-size: 12px;
+  padding: var(--gap-tight) var(--gap-inline);
+  font-size: var(--text-compact);
 }
 
 .overview-clear {
   margin: 0;
-  padding: 0 12px 12px;
-  font-size: 12px;
+  padding: 0 var(--gap-content) var(--gap-content);
+  font-size: var(--text-compact);
 }

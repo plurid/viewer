@@ -1,16 +1,51 @@
 import { useId, useState } from 'react';
+import type { Pane } from '../../domain/contracts';
 import type { CommandRequest, DiscoverableCommand } from './registry';
 import { commandScore, normalize } from './registry';
-import { moveToolbarCommand, toolbarCommands } from '../../domain/preferences/toolbars';
+import {
+  defaultToolbar,
+  moveToolbarCommand,
+  toolbarCommands,
+} from '../../domain/preferences/toolbars';
 import { activeWorkspace, useViewer } from '../state/store';
 import { errorMessage } from '../../domain/errors';
 import { useCommands, useCommandRevision } from './context';
 import { toolbarKind, saveToolbar } from './toolbar';
-import { Dialog, IconButton } from '../ui/primitives';
+import { Dialog, IconButton, PathField } from '../ui/primitives';
+import { Disclosure } from '../ui/Disclosure';
 import { Icon } from '../ui/Icon';
 import { showKeymapHelp } from '../keys/sequences';
 import { baseName, paneTitle } from '../../domain/workspaces/planes';
+import { previewModules } from '../previews/registry';
 import './capabilities.css';
+
+/** Each kind of plane has a toolbar of its own, named in words. */
+const planeNames: Record<Pane['type'], string> = {
+  task: 'Task',
+  receipt: 'Command receipt',
+  folder: 'Folder',
+  preview: 'Preview',
+  search: 'Search results',
+  terminal: 'Terminal',
+  collection: 'Collection',
+  scratch: 'Scratch text',
+  note: 'Note',
+  diff: 'Diff',
+  'git-changes': 'Git changes',
+  chat: 'Conversation',
+  server: 'Local server',
+  browser: 'Browser',
+  media: 'Media editor',
+  layout: 'Layout',
+  journal: 'Journal',
+  overview: 'Overview',
+};
+/** "PDF document", "Folder": a toolbar kind (toolbar.ts `toolbarKind`) as people say it. */
+function toolbarName(kind: string): string {
+  if (!kind.startsWith('preview:')) return planeNames[kind as Pane['type']] ?? kind;
+  const id = kind.slice('preview:'.length);
+  return previewModules.find((module) => module.id === id)?.label ?? 'Other files';
+}
 
 /** Inspect, invoke and pin the existing command catalog, all against the captured selection. */
 export function CapabilitiesDialog({
@@ -26,16 +61,18 @@ export function CapabilitiesDialog({
     [onlyAvailable, setOnlyAvailable] = useState(true);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  const [toolsOpen, setToolsOpen] = useState(false),
-    [pathOpen, setPathOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
   const pinLimitID = useId();
+  // pinned tools and keyboard help: opening one closes the other (DESIGN.md Discovery Space Rule)
+  const sections = useId();
   const settings = useViewer((state) => state.settings.settings);
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((pane) => pane.id === request.paneID),
   );
   const kind = toolbarKind(pane);
   const pinned = kind ? toolbarCommands(settings.toolbars, kind) : [];
+  // saved pins, even none, are the person's; a reset brings back the kind's defaults, if any
+  const customized = !!kind && Object.hasOwn(settings.toolbars, kind);
+  const defaults = (kind && defaultToolbar[kind]) || [];
   const commands = registry
     .discover(request)
     .filter((command) => !command.setting && command.id !== 'capabilities');
@@ -88,33 +125,12 @@ export function CapabilitiesDialog({
         ? baseName(capturedPath)
         : 'Workspace';
   return (
-    <Dialog
-      title="What can I do here?"
-      wide
-      className="capabilities-dialog"
-      onClose={onClose}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && (toolsOpen || pathOpen || helpOpen)) {
-          event.preventDefault();
-          event.stopPropagation();
-          setToolsOpen(false);
-          setPathOpen(false);
-          setHelpOpen(false);
-        }
-      }}
-    >
+    <Dialog title="What can I do here?" wide className="capabilities-dialog" onClose={onClose}>
       <div className="dialog-body capabilities-body">
         <div className="capabilities-context">
           <strong>{targetName}</strong>
           {capturedPath && (
-            <details
-              className="capabilities-path"
-              open={pathOpen}
-              onToggle={(event) => setPathOpen(event.currentTarget.open)}
-            >
-              <summary>Captured path</summary>
-              <div>{capturedPath}</div>
-            </details>
+            <PathField className="capabilities-path" path={capturedPath} layout="line" />
           )}
         </div>
         <div className="capabilities-search">
@@ -135,29 +151,33 @@ export function CapabilitiesDialog({
           </label>
         </div>
         {kind && (
-          <details
+          <Disclosure
+            variant="compact"
             aria-label="Pinned tools"
             className="capabilities-pins"
-            open={toolsOpen}
-            onToggle={(event) => {
-              setToolsOpen(event.currentTarget.open);
-              if (event.currentTarget.open) setHelpOpen(false);
-            }}
+            group={sections}
+            closeOnEscape
+            summary="Pinned to this toolbar"
+            meta={
+              <>
+                · {effectivePinned.length} of 8
+                {effectivePinned.length >= 8 && (
+                  <small id={pinLimitID}>Unpin a tool to add another.</small>
+                )}
+              </>
+            }
           >
-            <summary>
-              Pinned tools <span>{effectivePinned.length}/8</span>
-              {effectivePinned.length >= 8 && (
-                <small id={pinLimitID}>Unpin a tool to add another.</small>
-              )}
-            </summary>
             <div className="capabilities-section-heading">
-              <h3>{kind.replace('preview:', '')}</h3>
-              <button disabled={busy} onClick={() => void save(undefined)}>
-                Use defaults
+              <h3>{toolbarName(kind)}</h3>
+              <button disabled={busy || !customized} onClick={() => void save(undefined)}>
+                Reset to defaults
               </button>
             </div>
             {effectivePinned.length === 0 && (
-              <p>No pinned tools. Pin an action below, or use the defaults.</p>
+              <p>
+                No pinned tools. Pin an action below
+                {customized && defaults.length ? ', or reset to the defaults.' : '.'}
+              </p>
             )}
             <ol>
               {effectivePinned.map((id, index) => {
@@ -196,7 +216,7 @@ export function CapabilitiesDialog({
                 );
               })}
             </ol>
-          </details>
+          </Disclosure>
         )}
         {error && (
           <p role="alert" className="error">
@@ -268,15 +288,13 @@ export function CapabilitiesDialog({
             </ul>
           </div>
         </div>
-        <details
+        <Disclosure
+          variant="compact"
           className="capabilities-help"
-          open={helpOpen}
-          onToggle={(event) => {
-            setHelpOpen(event.currentTarget.open);
-            if (event.currentTarget.open) setToolsOpen(false);
-          }}
+          group={sections}
+          closeOnEscape
+          summary="Keyboard and mouse"
         >
-          <summary>Keyboard and pointer help</summary>
           <dl>
             <dt>Tab · Shift+Tab</dt>
             <dd>Move between controls. Text fields keep their editing keys.</dd>
@@ -296,7 +314,7 @@ export function CapabilitiesDialog({
           >
             Show configured key sequences
           </button>
-        </details>
+        </Disclosure>
       </div>
       <footer>
         <button onClick={onClose}>Done</button>

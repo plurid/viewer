@@ -74,7 +74,7 @@ export function profileCommands({
       id: 'focus-mode',
       label: active?.id === 'focus' ? 'Leave focus mode' : 'Focus mode',
       group: 'View',
-      icon: 'frame',
+      icon: 'eye',
       shortcut: '⇧⌘F',
       aliases: ['focus', 'zen', 'distraction free', 'hide chrome'],
       when: windowScope,

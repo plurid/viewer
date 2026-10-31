@@ -23,6 +23,7 @@ import { modelSurfaceAppearance } from '../model/surface-appearance';
 import { ShadingControls } from '../model/ShadingControls';
 import { pickModelSurface } from '../model/pick-surface';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
 import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
@@ -690,12 +691,14 @@ export default function ModelPreview(context: PreviewContext) {
     <div className="model-viewer">
       <PreviewToolbar context={context}>
         <IconButton
-          icon="frame"
+          {...headerItem('fit', 3, ['preview.model-frame'])}
+          icon="fit"
           label="Frame model"
           disabled={loading || !!error}
           onClick={() => session.current?.frame()}
         />
         <button
+          {...headerItem('measure', 4, ['preview.model-measure'])}
           className={measure ? 'selected' : ''}
           aria-pressed={measure}
           disabled={loading || !!error}
@@ -703,15 +706,20 @@ export default function ModelPreview(context: PreviewContext) {
         >
           Measure
         </button>
+        {/* Essential leaves Wireframe to "…" */}
+        {context.toolbar !== 'essential' && (
+          <button
+            {...headerItem('wireframe', 7, ['preview.model-wireframe'])}
+            className={wire ? 'selected' : ''}
+            aria-pressed={wire}
+            disabled={loading || !!error}
+            onClick={() => setWire(!wire)}
+          >
+            Wireframe
+          </button>
+        )}
         <button
-          className={wire ? 'selected' : ''}
-          aria-pressed={wire}
-          disabled={loading || !!error}
-          onClick={() => setWire(!wire)}
-        >
-          Wireframe
-        </button>
-        <button
+          {...headerItem('shading', 6, ['preview.model-shading'])}
           ref={shadingButton}
           className={shadingOpen ? 'selected' : ''}
           aria-expanded={shadingOpen}
@@ -730,6 +738,7 @@ export default function ModelPreview(context: PreviewContext) {
               onChoose={(value) => setAnimation(Number(value))}
             />
             <IconButton
+              {...headerItem('playback', 5, ['preview.model-playback'])}
               icon={playing ? 'pause' : 'play'}
               label={playing ? 'Pause animation' : 'Play animation'}
               onClick={() => setPlaying(!playing)}
@@ -754,7 +763,9 @@ export default function ModelPreview(context: PreviewContext) {
             />
           </span>
         )}
-        <span className="muted">{resource.entry.extension.toUpperCase()}</span>
+        <span className="muted" {...headerItem('format', 9, 'detail')}>
+          {resource.entry.extension.toUpperCase()}
+        </span>
       </PreviewToolbar>
       <div className="model-stage" ref={stage}>
         {shadingOpen && !loading && !error && (

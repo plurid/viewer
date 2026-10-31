@@ -27,7 +27,7 @@ export function toolsCommands({
       id: 'capabilities',
       label: 'What can I do here?',
       group: 'Help',
-      icon: 'info',
+      icon: 'help',
       aliases: ['help', 'discover', 'pin', 'customize toolbar', 'available actions'],
       detail: 'Find actions, shortcuts and pinned tools for the current selection.',
       when: () => !!actions.capabilities,
