@@ -168,3 +168,38 @@
 .check-panel section > button {
   margin-top: 8px;
 }
+/* Its actions stand out as a dialog's do: a ghost button here reads as a line of text. */
+.check-panel button:not(.primary, .icon-button, .choice-button) {
+  border-color: var(--line);
+  background: var(--field);
+}
+.check-panel button:not(.primary, .icon-button, .choice-button):hover:not(:disabled) {
+  background: var(--raised);
+}
+/* A result shown again: when it was checked, or what changed in the job since. */
+.check-since {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 10px;
+}
+.check-stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--raised);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.check-stale p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* A result from before the job changed reads as past: only Run again stays at full strength. */
+.check-panel-body[data-stale] > section {
+  opacity: 0.6;
+}

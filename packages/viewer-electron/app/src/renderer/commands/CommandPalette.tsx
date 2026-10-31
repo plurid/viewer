@@ -43,12 +43,18 @@ import { suggestionsFor } from './suggestions';
 /**
  * A command chosen in the palette acts on the workspace, so focus returns there, not to the title
  * bar button that opened the palette. A command that moved focus itself keeps it.
+ *
+ * Both are read a frame after the command returns. A command can activate its plane then: Open in
+ * another plane reveals the file before it opens the plane. Focusing the plane that was active
+ * before made it active again, because a plane's explorer takes the active plane when focused.
  */
 function returnToWorkspace(): void {
-  const active = document.activeElement;
-  if (active && active !== document.body && !active.closest('.app-titlebar')) return;
-  const pane = getState().activePane;
-  if (pane) focusPlane(pane);
+  requestAnimationFrame(() => {
+    const active = document.activeElement;
+    if (active && active !== document.body && !active.closest('.app-titlebar')) return;
+    const pane = getState().activePane;
+    if (pane) focusPlane(pane);
+  });
 }
 
 export function CommandPalette({

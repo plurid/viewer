@@ -7,7 +7,14 @@ import { CommandsContext } from '../src/renderer/commands/context';
 import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
 import type { LineHost } from '../src/renderer/command-line/host';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
-import { activeWorkspace, flushState, getState, initialize } from '../src/renderer/state/store';
+import {
+  activeWorkspace,
+  addPane,
+  flushState,
+  getState,
+  initialize,
+  setActivePane,
+} from '../src/renderer/state/store';
 import { flushPreferences, resetPreferences } from '../src/renderer/state/preferences';
 
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
@@ -36,23 +43,30 @@ afterEach(async () => {
   resetPreferences();
 });
 
+/** A pane's plane on the page: its explorer, which takes the active plane when focused, and a field. */
+function plane(id: string) {
+  const plane = document.createElement('section');
+  plane.dataset.pluridPlane = `engine-${id}`;
+  const marker = document.createElement('div');
+  marker.dataset.viewerPane = id;
+  const explorer = document.createElement('div');
+  explorer.className = 'folder-explorer';
+  explorer.tabIndex = -1;
+  explorer.addEventListener('focus', () => setActivePane(id));
+  const field = document.createElement('input');
+  marker.append(explorer, field);
+  plane.append(marker);
+  document.body.append(plane);
+  return { explorer, field };
+}
 /** The title bar's ⌘K button, focused as a click leaves it, and the active plane's content. */
 function layout() {
   const bar = document.createElement('header');
   bar.className = 'app-titlebar';
   const button = document.createElement('button');
   bar.append(button);
-  const plane = document.createElement('section');
-  plane.dataset.pluridPlane = 'engine-plane';
-  const marker = document.createElement('div');
-  marker.dataset.viewerPane = getState().activePane;
-  const explorer = document.createElement('div');
-  explorer.className = 'folder-explorer';
-  explorer.tabIndex = -1;
-  const field = document.createElement('input');
-  marker.append(explorer, field);
-  plane.append(marker);
-  document.body.append(bar, plane);
+  document.body.append(bar);
+  const { explorer, field } = plane(getState().activePane);
   button.focus();
   return { button, explorer, field };
 }
@@ -129,5 +143,21 @@ describe('focus after a palette command', () => {
     await waitFor(() => expect(document.activeElement).toBe(field));
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     expect(document.activeElement).toBe(field);
+  });
+
+  it('follows a plane the command activates a frame after it returns', async () => {
+    // Open in another plane activates its plane once the file is revealed, a frame after the
+    // command returns. Focus went to the plane active before, whose explorer took the active
+    // plane back, so Close plane then closed that plane and the planes opened from it.
+    const previous = getState().activePane;
+    layout();
+    const opened = addPane('/fixture/Models/Triangle.glb', 'preview', true, { remember: false });
+    setActivePane(previous);
+    const { explorer } = plane(opened.id);
+    await choose(() => {
+      requestAnimationFrame(() => setActivePane(opened.id));
+    });
+    await waitFor(() => expect(document.activeElement).toBe(explorer));
+    expect(getState().activePane).toBe(opened.id);
   });
 });

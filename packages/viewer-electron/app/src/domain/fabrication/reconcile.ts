@@ -21,26 +21,17 @@ import { readJobName, thicknessText } from './names';
 
 /** Where a value comes from, in the order Viewer takes it. */
 export type ValueSource = 'request' | 'drawing' | 'name';
-export const valueSourceLabels: Record<ValueSource, string> = {
-  request: 'from the request',
-  drawing: 'from the drawing',
-  name: 'from the file name',
-};
 export interface PartQuantity {
   /** Sets of what the drawing holds, as nesting counts them. */
   sets: number;
   /** Pieces cut: the sets times the separate pieces the drawing holds. */
   pieces: number;
   source: ValueSource;
-  /** "4, from the request", or "4 sets × 2 pieces = 8 pieces, from the file name". */
-  text: string;
   quote?: string;
 }
 export interface PartThickness {
   value: number;
   source: ValueSource;
-  /** "6 mm, from the request". */
-  text: string;
   quote?: string;
 }
 /** A DXF part as the job asks for it. */
@@ -244,41 +235,30 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
       }
       const chosen = request ?? drawing ?? named;
       if (!chosen) continue;
-      const from = valueSourceLabels[chosen.source];
       const quote = chosen.quote ?? undefined;
       if (kind === 'thickness') {
         plan.thickness = {
           value: chosen.value,
           source: chosen.source,
-          text: `${thicknessText(chosen.value)}, ${from}`,
           ...(quote ? { quote } : {}),
         };
         continue;
       }
       if (chosen.source === 'name') {
-        // Only a name gives it: its count is taken as sets, and said to be so.
+        // Only a name gives it: its count is taken as sets, and said to be so (part-values.ts).
         plan.quantity = {
           sets: chosen.value,
           pieces: chosen.value * pieces,
           source: 'name',
-          text:
-            pieces === 1
-              ? `${chosen.value}, ${from} (“${chosen.quote}”)`
-              : `${chosen.value} sets × ${pieces} pieces = ${chosen.value * pieces} pieces, ${from} (“${chosen.quote}”); nothing else in the job says whether it counts sets or pieces`,
           ...(quote ? { quote } : {}),
         };
         continue;
       }
       if (chosen.value % pieces === 0) {
-        const sets = chosen.value / pieces;
         plan.quantity = {
-          sets,
+          sets: chosen.value / pieces,
           pieces: chosen.value,
           source: chosen.source,
-          text:
-            pieces === 1
-              ? `${chosen.value}, ${from}`
-              : `${sets} sets × ${pieces} pieces = ${chosen.value} pieces, ${from}`,
           ...(quote ? { quote } : {}),
         };
         continue;

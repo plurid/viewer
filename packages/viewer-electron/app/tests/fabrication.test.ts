@@ -8,6 +8,7 @@ import {
   buildInventory,
   fabricationAnswerSchema,
   modelInventory,
+  namedRefs,
 } from '../src/domain/fabrication/answer';
 import { correctDrawing, correctionFor } from '../src/domain/fabrication/correction';
 import { pageText } from '../src/domain/fabrication/prompt';
@@ -458,6 +459,40 @@ describe('answer schema', () => {
       'Tour stop 1 has a box whose sides are the wrong way round.',
       'Tour stop 2 names F7, which is not a finding.',
     ]);
+  });
+
+  it('writes the job’s refs in the model’s prose as the files’ names', () => {
+    const sources = [
+      { ref: 'S2', name: 'Job 1042 drawing.pdf' },
+      { ref: 'S7', name: 'g6-PL60-B2-2buc.dxf' },
+    ];
+    expect(namedRefs('Pitch 50 mm on drawing S2 versus 48 mm in DXF S7.', sources)).toBe(
+      'Pitch 50 mm on drawing Job 1042 drawing.pdf versus 48 mm in DXF g6-PL60-B2-2buc.dxf.',
+    );
+    // only a whole ref the job has: not S20, S9, a number's start or a word holding one
+    expect(namedRefs('S20, S9, S2.5 mm, S2’s outline, AS2, (S7)', sources)).toBe(
+      'S20, S9, S2.5 mm, Job 1042 drawing.pdf’s outline, AS2, (g6-PL60-B2-2buc.dxf)',
+    );
+    // a tour's captions name them so too
+    const parsed = fabricationAnswerSchema.parse({
+      ...answer,
+      tour: [{ ...answer.tour[1]!, caption: 'S4 puts them 48 mm apart; S2 gives 50 mm.' }],
+    });
+    const { stops } = checkTour({
+      answer: parsed,
+      sources: buildInventory([
+        { path: '/jobs/1042/Job 1042 request.eml', kind: 'request', version },
+        { path: '/jobs/1042/Job 1042 drawing.pdf', kind: 'drawing', version, pages: 1 },
+        { path: '/jobs/1042/Plate.jpg', kind: 'photo', version },
+        { path: '/jobs/1042/g6-PL60-B2-2buc.dxf', kind: 'dxf', version },
+      ]),
+      grades: [gradeFinding(parsed.findings[0]!, job)],
+      folder: '/jobs/1042',
+      measurement: (ref) => (ref === 'S4' ? plateMeasure : undefined),
+    });
+    expect(stops[0]!.caption).toBe(
+      'g6-PL60-B2-2buc.dxf puts them 48 mm apart; Job 1042 drawing.pdf gives 50 mm.',
+    );
   });
 
   it('turns its tour into stops a tour plays, with grades and the pitch Viewer measured', () => {

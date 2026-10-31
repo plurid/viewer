@@ -2,9 +2,11 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { OperationJob } from '../../domain/contracts';
 import type { CheckFinding, CheckOutline, CheckSource } from '../../domain/fabrication/check';
 import type { ModelProvider } from '../../domain/services';
-import type { CheckSession } from './check';
+import type { CheckPhase, CheckSession } from './check';
 import { checkSendingLabels } from '../../domain/fabrication/check';
-import { savedPitches } from '../../domain/fabrication/plan';
+import { correctionProposal, savedPitches } from '../../domain/fabrication/plan';
+import { namedRefs } from '../../domain/fabrication/answer';
+import { partValuesText } from '../../domain/fabrication/part-values';
 import { countText } from '../../domain/layout/nesting/format';
 import {
   modelDataLabels,
@@ -23,6 +25,7 @@ import {
   cancelCheck,
   checkSession,
   chooseCheckProvider,
+  clockText,
   closeCheck,
   correctedCopies,
   cutSheets,
@@ -56,21 +59,38 @@ export function CheckPanel() {
   return <CheckPanelBody current={current} />;
 }
 
+/** The phases that show what is sent and the model, before and around a run. */
+const listingPhases: readonly CheckPhase[] = ['ready', 'drawing', 'asking', 'failed'];
+
 function CheckPanelBody({ current }: { current: CheckSession }) {
   const opening = current.opening;
+  const job = opening?.job ?? current.nothing?.job;
   return (
-    <aside className="check-panel" aria-label={`Check ${opening?.job ?? 'laser job'}`}>
+    <aside className="check-panel" aria-label={`Check ${job ?? 'laser job'}`}>
       <header>
-        <h2>{opening ? `Check ${opening.job}` : 'Check laser job'}</h2>
+        <h2>{job ? `Check ${job}` : 'Check laser job'}</h2>
         <IconButton icon="close" label="Close the check" onClick={closeCheck} />
       </header>
-      <div className="check-panel-body">
+      <div
+        className="check-panel-body"
+        data-stale={current.phase === 'checked' && current.stale ? true : undefined}
+      >
         {current.phase === 'opening' && (
           <p className="muted" role="status">
             Listing the job’s files…
           </p>
         )}
-        {opening && current.phase !== 'checked' && <Inventory current={current} />}
+        {current.phase === 'comparing' && (
+          <p className="muted" role="status">
+            Comparing {job}’s files with the check at {clockText(current.checked ?? Date.now())}…
+          </p>
+        )}
+        {current.phase === 'empty' && (
+          <p className="check-summary" role="status">
+            {current.nothing?.text}
+          </p>
+        )}
+        {opening && listingPhases.includes(current.phase) && <Inventory current={current} />}
         {(current.phase === 'drawing' || current.phase === 'asking') && (
           <div className="check-progress" role="status">
             <span>
@@ -106,13 +126,21 @@ function Elapsed({ since }: { since?: number }) {
   return <span className="tabular"> · {Math.max(0, Math.floor((now - since) / 1000))} s</span>;
 }
 
-/** "Text “60”: the text on the drawing", "Feature: outline from SAM 3.1, confidence 87%". */
+/**
+ * "“60” marked on the drawing", "“60” in a box from Muse Spark", "Feature: outline from SAM 3.1,
+ * confidence 87%".
+ */
 function outlineText(outline: CheckOutline): string {
+  const quoted = outline.quote ? `“${outline.quote}”` : 'The text';
   const what =
-    outline.kind === 'text' ? `Text${outline.quote ? ` “${outline.quote}”` : ''}` : 'Feature';
+    outline.kind !== 'text'
+      ? `Feature: ${outline.label}`
+      : outline.source === 'page-text'
+        ? `${quoted} marked on the drawing`
+        : `${quoted} in a ${outline.label}`;
   const confidence =
     outline.confidence === undefined ? '' : `, confidence ${Math.round(outline.confidence * 100)}%`;
-  return `${what}: ${outline.label}${confidence}${outline.note ? `. ${outline.note}` : ''}`;
+  return `${what}${confidence}${outline.note ? `. ${outline.note}` : ''}`;
 }
 
 function sendingOf(source: CheckSource) {
@@ -239,16 +267,46 @@ function Permission({
   );
 }
 
+/**
+ * When a result shown again was checked, "Checked at 22:14 · Run again", or what changed in the
+ * job since, which makes it out of date: then nothing below is acted on until it runs again.
+ */
+function Since({ current }: { current: CheckSession }) {
+  const at = clockText(current.checked ?? Date.now());
+  const again = (
+    <button type="button" onClick={() => void runCheck()}>
+      Run again
+    </button>
+  );
+  return current.stale ? (
+    <div className="check-stale" role="status">
+      <p>{current.stale} The findings below are from before.</p>
+      {again}
+    </div>
+  ) : (
+    <p className="muted check-note check-since">
+      Checked at {at} · {again}
+    </p>
+  );
+}
+
 function Result({ current }: { current: CheckSession }) {
   const result = current.result!;
   const jobs = useViewer((state) => state.jobs);
   const workspace = useWorkspace();
   const confirmed = result.findings.filter((item) => item.grade.status === 'confirmed').length;
   const notSent = [...current.problems, ...result.notSent];
+  const stale = !!current.stale;
+  const shownAgain = current.kept || stale;
   return (
     <>
+      {shownAgain && <Since current={current} />}
       <section aria-label="Summary">
-        <p className="check-summary">{result.summary || 'The model gave no summary.'}</p>
+        <p className="check-summary">
+          {result.summary
+            ? namedRefs(result.summary, current.opening!.sources)
+            : 'The model gave no summary.'}
+        </p>
         <p className="muted check-note">
           {result.provider.name} · {result.provider.model} · {result.seconds} s ·{' '}
           {result.findings.length
@@ -259,7 +317,9 @@ function Result({ current }: { current: CheckSession }) {
       </section>
       {result.findings.length > 0 && (
         <section aria-label="Findings">
-          <h3>Findings</h3>
+          <h3>
+            {stale ? `Findings from ${clockText(current.checked ?? Date.now())}` : 'Findings'}
+          </h3>
           <ol className="check-findings">
             {result.findings.map((item) => (
               <Finding key={item.finding.id} item={item} current={current} jobs={jobs} />
@@ -287,7 +347,7 @@ function Result({ current }: { current: CheckSession }) {
         </p>
         <button
           type="button"
-          disabled={!result.tour.stops.length}
+          disabled={stale || !result.tour.stops.length}
           onClick={() => playCheckTour(workspace)}
         >
           Play the tour
@@ -295,11 +355,13 @@ function Result({ current }: { current: CheckSession }) {
       </section>
       <CutSheets current={current} jobs={jobs} />
       <Handoff current={current} jobs={jobs} />
-      <footer className="check-actions">
-        <button type="button" onClick={() => void runCheck()}>
-          Run again
-        </button>
-      </footer>
+      {!shownAgain && (
+        <footer className="check-actions">
+          <button type="button" onClick={() => void runCheck()}>
+            Run again
+          </button>
+        </footer>
+      )}
     </>
   );
 }
@@ -328,7 +390,9 @@ function Finding({
         <span className="tour-grade" data-grade={grade.status}>
           {item.question ? 'Question' : findingGradeLabels[grade.status]}
         </span>
-        <span className="check-finding-summary">{finding.summary}</span>
+        <span className="check-finding-summary">
+          {namedRefs(finding.summary, current.opening!.sources)}
+        </span>
       </div>
       {item.readings ? (
         <ul className="check-readings" aria-label={`Readings of ${finding.id}`}>
@@ -363,9 +427,8 @@ function Finding({
       {correction && (
         <div className="check-correction" aria-label={`Correction for ${finding.id}`}>
           <p>
-            <strong>Proposed:</strong> {correction.description.slice(1).join(', ')}.
+            <strong>Proposed:</strong> {correctionProposal(correction.plan, correction.name)}.
           </p>
-          <p className="muted check-note">Saves {correction.name}; the original is only read.</p>
           {current.corrections[finding.id] ? (
             <p className="check-note" role="status">
               {jobStatus(job, (done) => {
@@ -378,6 +441,7 @@ function Finding({
           ) : (
             <button
               type="button"
+              disabled={!!current.stale}
               onClick={() =>
                 void saveCorrection(item).catch((value: unknown) => setError(errorMessage(value)))
               }
@@ -410,13 +474,17 @@ function CutSheets({ current, jobs }: { current: CheckSession; jobs: readonly Op
             </span>
             <span className="muted">
               {part.question ??
-                ([part.quantity?.text, part.thickness?.text].filter(Boolean).join(' · ') ||
-                  'Nothing in the job gives its quantity or thickness.')}
+                partValuesText(part) ??
+                'Nothing in the job gives its quantity or thickness.'}
             </span>
           </li>
         ))}
       </ul>
-      <button type="button" disabled={!parts.length} onClick={() => prepareCutSheets(workspace)}>
+      <button
+        type="button"
+        disabled={!!current.stale || !parts.length}
+        onClick={() => prepareCutSheets(workspace)}
+      >
         Prepare cut sheets
       </button>
     </section>
@@ -452,7 +520,7 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
           })}
         </p>
       ) : (
-        <button type="button" onClick={() => void exportHandoff()}>
+        <button type="button" disabled={!!current.stale} onClick={() => void exportHandoff()}>
           Export handoff
         </button>
       )}

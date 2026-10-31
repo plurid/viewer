@@ -3,8 +3,17 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
-vi.mock('electron', () => ({ utilityProcess: {} }));
-const { UtilityClient } = await import('../src/desktop/workers/utility-client');
+const forked = vi.hoisted(() => [] as { worker: string; args: string[] }[]);
+vi.mock('electron', () => ({
+  utilityProcess: {
+    fork: (worker: string, args: string[]) => {
+      forked.push({ worker, args });
+      return { stderr: null, on: () => {}, once: () => {}, postMessage: () => {} };
+    },
+  },
+}));
+const { UtilityClient, launchWorker } = await import('../src/desktop/workers/utility-client');
+const { setAssetRoot } = await import('../src/desktop/native/assets');
 
 let root: string;
 beforeEach(async () => {
@@ -41,5 +50,34 @@ describe('background worker client', () => {
     } finally {
       await client.close();
     }
+  });
+});
+
+// A worker that answers with the arguments it was launched with.
+const echo = `
+const { parentPort } = require('node:worker_threads');
+parentPort.on('message', (request) => parentPort.postMessage({ id: request.id, value: process.argv }));
+`;
+
+describe('launching a worker', () => {
+  afterEach(() => setAssetRoot(true, '/Source/app'));
+  it('tells it the source tree’s assets in development, and nothing when packaged', async () => {
+    const file = path.join(root, 'echo.cjs');
+    await writeFile(file, echo);
+    setAssetRoot(false, '/Source/app');
+    launchWorker(file, 'Viewer test worker');
+    expect(forked.at(-1)).toEqual({
+      worker: file,
+      args: ['--viewer-asset-root=/Source/app/assets'],
+    });
+    const client = new UtilityClient(file, { name: 'Viewer test worker', backend: 'thread' });
+    try {
+      expect(await client.call('argv')).toContain('--viewer-asset-root=/Source/app/assets');
+    } finally {
+      await client.close();
+    }
+    setAssetRoot(true, '/Source/app');
+    launchWorker(file, 'Viewer test worker');
+    expect(forked.at(-1)!.args).toEqual([]);
   });
 });

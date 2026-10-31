@@ -2,8 +2,10 @@
  * THE FABRICATION CHECK on Job 1042, the model stubbed with a prepared answer: the inventory and
  * what is sent, the answer graded against Viewer's own measurement, the tour, the correction, the
  * request's quantities, the quoted text's box and SAM's outline of the feature, the evidence
- * record, the steps a window is told of, the time limit, and the refusals.
+ * record, the steps a window is told of, the time limit, and the refusals. Then a job's files: its
+ * folders read one level down, what has nothing to check, and what changed since a check.
  */
+import { appendFile, copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
@@ -154,12 +156,6 @@ describe('fabrication check', () => {
         source: path.join(folder, 'g6-PL60-B2-2buc.dxf'),
         name: 'g6-PL60-B2-2buc (corrected).dxf',
         plan: { kind: 'dxf-correction', from: '8', to: '9', axis: 'x', target: 50, measured: 48 },
-        description: [
-          'DXF correction',
-          'pitch along x from 48.00 mm to 50.00 mm',
-          'moves 2 holes',
-          'a new DXF beside the original, which is kept',
-        ],
       },
     });
     expect(result.findings).toHaveLength(1);
@@ -174,8 +170,8 @@ describe('fabrication check', () => {
     // the request decides each part's quantity and thickness, and says so
     expect(result.parts.find((part) => part.name === 'g6-PL60-B2-2buc.dxf')).toMatchObject({
       pieces: 1,
-      quantity: { sets: 2, pieces: 2, source: 'request', text: '2, from the request' },
-      thickness: { value: 6, source: 'request', text: '6 mm, from the request' },
+      quantity: { sets: 2, pieces: 2, source: 'request' },
+      thickness: { value: 6, source: 'request' },
     });
   });
 
@@ -404,6 +400,132 @@ describe('fabrication check', () => {
       ),
     ).rejects.toThrow(
       'Meta’s answer does not fit the check’s form at tour, so nothing was graded.',
+    );
+  });
+});
+
+describe('a job’s files', () => {
+  /** A folder holding `files`: each copied from Job 1042, or a few bytes when it is not there. */
+  async function job(name: string, files: readonly string[]): Promise<string> {
+    const made = path.join(root, name);
+    for (const file of files) {
+      const target = path.join(made, file);
+      await mkdir(path.dirname(target), { recursive: true });
+      await copyFile(path.join(folder, path.basename(file)), target).catch(() =>
+        writeFile(target, 'not a drawing'),
+      );
+    }
+    return made;
+  }
+  const open = (paths: string[], owner = 1) => checks.request({ kind: 'open', paths }, owner);
+
+  it('reads the folders in a job one level down, but not its handoff or a deeper folder', async () => {
+    const parts = await job('Job 2001', [
+      'Job 1042 request.eml',
+      'Job 1042 drawing.pdf',
+      'DXF/g6-PL60-B2-2buc.dxf',
+      'DXF/g3-CV25-E1-10buc.dxf',
+      'DXF/Bracket.dwg',
+      'DXF/Old/g6-PL60-B2-2buc.dxf',
+      'Job 2001 handoff/Check record.json',
+    ]);
+    const reply = await open([parts]);
+    if (reply.kind !== 'opened') throw new Error('Expected an inventory.');
+    expect(reply.sources.map((source) => [source.ref, source.name, source.path])).toEqual([
+      ['S1', 'Job 1042 request.eml', path.join(parts, 'Job 1042 request.eml')],
+      ['S2', 'Job 1042 drawing.pdf', path.join(parts, 'Job 1042 drawing.pdf')],
+      ['S3', 'g3-CV25-E1-10buc.dxf', path.join(parts, 'DXF', 'g3-CV25-E1-10buc.dxf')],
+      ['S4', 'g6-PL60-B2-2buc.dxf', path.join(parts, 'DXF', 'g6-PL60-B2-2buc.dxf')],
+    ]);
+    expect(reply.skipped).toEqual(
+      expect.arrayContaining([
+        { name: 'Job 2001 handoff', reason: 'a handoff a check saved' },
+        { name: 'DXF/Bracket.dwg', reason: 'a DWG; Viewer measures DXF only' },
+        { name: 'DXF/Old', reason: 'a folder in a folder; the check looks one level down' },
+      ]),
+    );
+    expect(reply.skipped).toHaveLength(3);
+  });
+
+  it('checks DXF parts without a request or drawing by their names and measurements', async () => {
+    const parts = await job('Parts', ['g6-PL60-B2-2buc.dxf', 'g3-CV25-E1-10buc.dxf']);
+    const reply = await open([parts]);
+    if (reply.kind !== 'opened') throw new Error('Expected an inventory.');
+    expect(reply.sources.map((source) => [source.kind, source.sending])).toEqual([
+      ['dxf', 'measurement'],
+      ['dxf', 'measurement'],
+    ]);
+    generate.mockResolvedValue({
+      summary: 'Both parts agree.',
+      request: [],
+      findings: [],
+      tour: [],
+    });
+    const result = await checks.request(
+      { kind: 'run', id: reply.id, providerID: meta.id, pages: [] },
+      1,
+    );
+    expect(result).toMatchObject({ kind: 'result', findings: [], summary: 'Both parts agree.' });
+  });
+
+  it('says plainly when a folder has nothing to check, naming it', async () => {
+    const pictures = await job('Pictures', ['Plate.jpg', 'Album/Plate.jpg']);
+    expect(await open([pictures])).toEqual({
+      kind: 'nothing',
+      folder: pictures,
+      job: 'Pictures',
+      text: 'Pictures and its folder hold no DXF or DWG file, so there is nothing to check.',
+    });
+    const drawings = await job('Drawings', ['Bracket.dwg', 'Plate.dwg']);
+    expect(await open([drawings])).toMatchObject({
+      kind: 'nothing',
+      text: 'Drawings holds 2 DWG files and no DXF. Viewer measures DXF only: save them as DXF from the CAD app, then check again.',
+    });
+    const clients = await job('Clients', [
+      'Job A/Job 1042 request.eml',
+      'Job A/g6-PL60-B2-2buc.dxf',
+      'Job B/Job 1042 request.eml',
+      'Job B/g3-CV25-E1-10buc.dxf',
+    ]);
+    expect(await open([clients])).toMatchObject({
+      kind: 'nothing',
+      text: 'Clients holds 2 jobs: Job A and Job B. Check one of them.',
+    });
+  });
+
+  it('says what changed in the job since the check listed it, but not the copy a correction saved', async () => {
+    const opening = await opened();
+    const changes = () => checks.request({ kind: 'changes', id: opening.id }, 1);
+    expect(await changes()).toEqual({ kind: 'changes', id: opening.id, changes: [] });
+    await writeFile(path.join(folder, 'g6-PL60-B2-2buc (corrected).dxf'), 'corrected');
+    expect(await changes()).toMatchObject({ changes: [] });
+    await appendFile(path.join(folder, 'g6-PL60-B2-2buc.dxf'), '\n');
+    await copyFile(
+      path.join(folder, 'g6-MB20-A1-4buc.dxf'),
+      path.join(folder, 'g6-MB20-A2-4buc.dxf'),
+    );
+    expect(await changes()).toMatchObject({
+      changes: [
+        { name: 'g6-PL60-B2-2buc.dxf', change: 'changed' },
+        { name: 'g6-MB20-A2-4buc.dxf', change: 'added' },
+      ],
+    });
+    await expect(checks.request({ kind: 'changes', id: opening.id }, 2)).rejects.toThrow(
+      'This check was closed.',
+    );
+  });
+
+  it('keeps a window’s last eight checks, closing its oldest past them', async () => {
+    const first = await opened();
+    for (let count = 0; count < 7; count++) await opened();
+    await expect(checks.request({ kind: 'changes', id: first.id }, 1)).resolves.toMatchObject({
+      kind: 'changes',
+    });
+    // another window's checks do not count
+    await open([folder], 2);
+    await opened();
+    await expect(checks.request({ kind: 'changes', id: first.id }, 1)).rejects.toThrow(
+      'This check was closed.',
     );
   });
 });

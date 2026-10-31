@@ -16,6 +16,11 @@ export interface StageMotion {
   reduced: boolean;
 }
 /**
+ * How a travel ended: at rest at the destination; its plane closed, its view removed or the travel
+ * aborted; or its plane, still open, never reached the space.
+ */
+export type StageArrival = 'arrived' | 'gone' | 'unplaced';
+/**
  * Moves the camera to a stop and reports when it is at rest there. The player opens the stop's
  * file first; the stage only travels, so it never opens, edits or runs anything itself.
  *
@@ -27,8 +32,11 @@ export interface StageMotion {
 export interface TourStage {
   /** Whether the stage moves the camera to a plane itself, so opening its file must not frame. */
   readonly frames: boolean;
-  /** Resolves `true` at rest at the destination, `false` when it is not there any more. */
-  travel(destination: StageDestination, motion: StageMotion, signal: AbortSignal): Promise<boolean>;
+  travel(
+    destination: StageDestination,
+    motion: StageMotion,
+    signal: AbortSignal,
+  ): Promise<StageArrival>;
 }
 export type StageWorkspace = Pick<
   WorkspaceController,
@@ -36,6 +44,8 @@ export type StageWorkspace = Pick<
 >;
 /** How long a stage waits for the camera to come to rest before it goes on regardless. */
 export const stageRestLimit = 6000;
+/** How long a stage waits for a plane just opened to reach the engine's tree. */
+export const stagePlaneLimit = 4000;
 
 /** Resolves when `rest` settles or `signal` aborts, keeping no listener after. */
 function settled(rest: Promise<unknown>, signal: AbortSignal): Promise<void> {
@@ -58,7 +68,7 @@ export function workspaceStage(
   return {
     frames: false,
     async travel(destination, motion, signal) {
-      if (signal.aborted) return false;
+      if (signal.aborted) return 'gone';
       if (destination.kind === 'view') {
         let landed!: () => void;
         const flight = new Promise<void>((resolve) => (landed = resolve));
@@ -67,14 +77,15 @@ export function workspaceStage(
           onSettle: landed,
           onInterrupt: landed,
         });
-        if (!flown) return false;
+        if (!flown) return 'gone';
         // a flight cut short may never settle: the camera at rest ends the wait as well
         await settled(Promise.race([flight, workspace.whenAtRest(signal)]), signal);
-        return !signal.aborted;
+        return signal.aborted ? 'gone' : 'arrived';
       }
       const { paneID, pose } = destination;
+      const there = () => !signal.aborted && isOpen(paneID);
       await workspace.whenAtRest(signal);
-      if (signal.aborted || !isOpen(paneID)) return false;
+      if (!there()) return 'gone';
       const docked = workspace.isDocked();
       if (pose === 'dock' && !docked) {
         workspace.dock(paneID);
@@ -83,11 +94,11 @@ export function workspaceStage(
         // `dock` in a docked space reveals the space; the plane is then framed in it
         workspace.dock(paneID);
         await workspace.whenAtRest(signal);
-        if (signal.aborted || !isOpen(paneID)) return false;
+        if (!there()) return 'gone';
         workspace.focusPane(paneID);
         await workspace.whenAtRest(signal);
       }
-      return !signal.aborted && isOpen(paneID);
+      return there() ? 'arrived' : 'gone';
     },
   };
 }
@@ -103,6 +114,8 @@ export interface AnchorCamera {
   };
   bookmarks: { go(name: string, options?: { animate?: boolean; duration?: number }): void };
   whenAtRest(options?: { timeout?: number; frames?: number }): Promise<boolean>;
+  /** Tells of every change to the engine's state, its tree among them. */
+  store: { subscribe(listener: () => void): () => void };
 }
 /** Whether the engine has the anchors and rest a `pluridStage` uses: Plurid 0.0.0-43 and later. */
 export function hasAnchorCamera(api: unknown): api is AnchorCamera {
@@ -110,36 +123,82 @@ export function hasAnchorCamera(api: unknown): api is AnchorCamera {
   return (
     typeof handle?.camera?.anchor === 'function' &&
     typeof handle.whenAtRest === 'function' &&
-    typeof handle.bookmarks?.go === 'function'
+    typeof handle.bookmarks?.go === 'function' &&
+    typeof handle.store?.subscribe === 'function'
   );
+}
+/** The panes a `pluridStage` shows: which are open, and the engine route of each one's plane. */
+export interface StagePanes {
+  isOpen(paneID: string): boolean;
+  /** The route of the plane showing the pane, undefined while the engine's tree does not hold it. */
+  routeOf(paneID: string): string | undefined;
+}
+/** How a wait for a plane just opened ends: in the engine's tree, or why it is not. */
+type Placement = 'placed' | Exclude<StageArrival, 'arrived'>;
+/** The route of the plane showing a pane while the pane is open. */
+const openRoute = (panes: StagePanes, paneID: string) =>
+  panes.isOpen(paneID) ? panes.routeOf(paneID) : undefined;
+/**
+ * Waits for the engine's tree to hold the pane's plane. A file a stop opens as a new root reaches
+ * the tree only when the workspace surface next renders its roots, after the player has opened it;
+ * the engine's store tells of that change, with or without frames.
+ */
+function placed(
+  handle: AnchorCamera,
+  panes: StagePanes,
+  paneID: string,
+  signal: AbortSignal,
+): Promise<Placement> {
+  return new Promise((resolve) => {
+    const finish = (placement: Placement) => {
+      clearTimeout(timer);
+      unsubscribe();
+      signal.removeEventListener('abort', aborted);
+      resolve(placement);
+    };
+    const aborted = () => finish('gone');
+    const check = () => {
+      if (!panes.isOpen(paneID)) finish('gone');
+      else if (panes.routeOf(paneID)) finish('placed');
+    };
+    const timer = setTimeout(() => finish('unplaced'), stagePlaneLimit);
+    signal.addEventListener('abort', aborted, { once: true });
+    const unsubscribe = handle.store.subscribe(check);
+    check();
+  });
 }
 /**
  * The stage on the engine's anchors: one exclusive move to the plane at the stop's pose, which the
- * engine computes from the plane as it is now, then the engine's rest. `routeOf` names the plane
- * showing a pane, undefined once it is closed. The tour file's own plane path and occurrence are
- * never used: they name planes of the session that recorded it.
+ * engine computes from the plane as it is now, then the engine's rest. A plane just opened is
+ * waited for, and its first measure and the roots' relayout settle before the move, so the pose is
+ * computed from where the plane stays. The tour file's own plane path and occurrence are never
+ * used: they name planes of the session that recorded it.
  */
-export function pluridStage(
-  handle: AnchorCamera,
-  routeOf: (paneID: string) => string | undefined,
-): TourStage {
+export function pluridStage(handle: AnchorCamera, panes: StagePanes): TourStage {
+  const rest = (signal: AbortSignal) =>
+    settled(handle.whenAtRest({ timeout: stageRestLimit }), signal);
   return {
     frames: true,
     async travel(destination, motion, signal) {
-      if (signal.aborted) return false;
+      if (signal.aborted) return 'gone';
       const options = { animate: !motion.reduced, duration: motion.reduced ? 0 : motion.duration };
-      if (destination.kind === 'view') handle.bookmarks.go(destination.bookmark, options);
-      else {
-        const path = routeOf(destination.paneID);
-        if (!path) return false;
-        const anchor = { path, pose: destination.pose ?? 'frame' };
-        if (!handle.camera.anchor(anchor, options).ok) return false;
+      if (destination.kind === 'view') {
+        handle.bookmarks.go(destination.bookmark, options);
+        await rest(signal);
+        return signal.aborted ? 'gone' : 'arrived';
       }
-      await settled(handle.whenAtRest({ timeout: stageRestLimit }), signal);
-      return (
-        !signal.aborted &&
-        (destination.kind === 'view' || routeOf(destination.paneID) !== undefined)
-      );
+      const { paneID } = destination;
+      if (!openRoute(panes, paneID)) {
+        const placement = await placed(handle, panes, paneID, signal);
+        if (placement !== 'placed') return placement;
+        await rest(signal);
+      }
+      const path = openRoute(panes, paneID);
+      if (signal.aborted || !path) return 'gone';
+      const anchor = { path, pose: destination.pose ?? 'frame' };
+      if (!handle.camera.anchor(anchor, options).ok) return 'gone';
+      await rest(signal);
+      return !signal.aborted && openRoute(panes, paneID) ? 'arrived' : 'gone';
     },
   };
 }

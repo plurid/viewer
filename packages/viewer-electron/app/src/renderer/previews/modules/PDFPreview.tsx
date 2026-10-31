@@ -65,6 +65,8 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
   const [matches, setMatches] = useState<number[]>([]);
   const [searching, setSearching] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
+  /** The last draw on the canvas, settled or cancelled: pdf.js holds the canvas until it settles. */
+  const drawing = useRef<Promise<unknown>>(Promise.resolve());
   const text = useRef<HTMLDivElement>(null);
   const scroll = useRef<HTMLDivElement>(null);
   const [laidOut, setLaidOut] = useState('');
@@ -204,6 +206,10 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
       .getPage(page)
       .then(async (sheet) => {
         if (cancelled) return;
+        // a zoom or resize mid-draw cancels it, and pdf.js lets go of the canvas only once the
+        // cancelled draw settles; drawing before then fails
+        await drawing.current;
+        if (cancelled) return;
         const initial = sheet.getViewport({ scale: PixelsPerInch.PDF_TO_CSS_UNITS });
         const nextScale = pdfScale(initial, available, zoom);
         const viewport = sheet.getViewport({
@@ -227,6 +233,7 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
         // so can restoring in a later task than the one that sized the page.
         flushSync(() => setLaidOut(`${page}:${zoom}`));
         render = sheet.render({ canvas: target, viewport, transform: [ratio, 0, 0, ratio, 0, 0] });
+        drawing.current = render.promise.catch(() => {});
         await render.promise;
         if (cancelled) return;
         painted();

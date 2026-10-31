@@ -216,7 +216,8 @@ export class TourPlayer {
     if (target.kind === 'view') {
       this.ports.leave();
       const state = stopState(stop, { views: this.ports.views() });
-      if (state === 'ready' && (await this.stage.travel(target, motion, signal))) return { state };
+      if (state === 'ready' && (await this.stage.travel(target, motion, signal)) === 'arrived')
+        return { state };
       return { state: 'missing', text: stopNotice(stop, 'missing') };
     }
     if (!tour.root) return { state: 'missing', text: stopNotice(stop, 'missing') };
@@ -245,7 +246,13 @@ export class TourPlayer {
         text: `The space was not ready to show ${target.path}. Skipping this stop.`,
       };
     const destination = { kind: 'plane' as const, paneID, pose: stop.view?.pose };
-    if (!(await this.stage.travel(destination, motion, signal)))
+    const arrival = await this.stage.travel(destination, motion, signal);
+    if (arrival === 'unplaced')
+      return {
+        state: 'missing',
+        text: `The space did not show ${target.path} in time. Skipping this stop.`,
+      };
+    if (arrival === 'gone')
       return {
         state: 'missing',
         text: `${target.path} was closed before it was shown. Skipping this stop.`,

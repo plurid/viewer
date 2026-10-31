@@ -32,6 +32,15 @@ const routeKinds: Record<Pane['type'], string> = {
 export function paneRoute(type: Pane['type'], id: string): string {
   return `/${routeKinds[type]}/${id}`;
 }
+/**
+ * The roots the workspace surface hands the engine, a route a line: a stable string, so the engine's
+ * `view` is rebuilt only when a route changes. A project layout lists every plane.
+ */
+export function surfaceRoutes(space: Pick<Workspace, 'layout' | 'panes' | 'roots'>): string {
+  return (space.layout ? space.panes.map((pane) => pane.id) : space.roots)
+    .map((id) => paneRoute(space.panes.find((item) => item.id === id)?.type ?? 'preview', id))
+    .join('\n');
+}
 export function parentPaneID(tree: readonly TreePlane[], id: string): string | undefined {
   for (const node of tree) {
     if (node.children?.some((child) => hostID(child) === id)) return hostID(node);

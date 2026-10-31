@@ -379,6 +379,55 @@ describe('authoritative JSONC configuration', () => {
       ]),
     ).toThrow();
   });
+  it('sets an optional key the file does not hold yet, and still refuses one the schema lacks', async () => {
+    await create().load();
+    // a config.jsonc written before the remembered suggestions and dismissed insights
+    const written = await read();
+    delete written.ui.suggestionHistory;
+    delete written.ui.insightsDismissed;
+    await fs.writeFile(file(), JSON.stringify(written, null, 2));
+    const service = create();
+    await service.load();
+    expect(service.snapshot().ui).not.toHaveProperty('suggestionHistory');
+    const folder = path.join(root, 'Jobs');
+    expect(
+      service.preview([{ path: 'ui.suggestionHistory', value: { selection: ['rename'] } }]),
+    ).toMatchObject({ valid: true, changes: ['ui.suggestionHistory'] });
+    // as the workspace window remembers a ⌘K command run on a selection
+    await service.patch(
+      [
+        { path: 'ui.suggestionHistory', value: { selection: ['rename'] } },
+        { path: 'ui.insightsDismissed', value: { [folder]: ['large-files'] } },
+      ],
+      service.snapshot().revision,
+      'workspace',
+    );
+    expect((await read()).ui).toMatchObject({
+      suggestionHistory: { selection: ['rename'] },
+      insightsDismissed: { [folder]: ['large-files'] },
+    });
+    // a key no schema has, at either root and deeper
+    for (const keys of [
+      ['ui', 'suggestionHistroy'],
+      ['settings', 'browsing', 'colour'],
+      ['ui', 'sidebar', 'shade'],
+    ]) {
+      await expect(
+        service.patch([{ path: keys.join('.'), value: true }], service.snapshot().revision),
+      ).rejects.toThrow('Unknown setting.');
+      expect(() => service.preview([{ path: keys.join('.'), value: true }])).toThrow(
+        'Unknown setting.',
+      );
+    }
+    // nor is an absent key removed, nor a key added through the prototype
+    expect(() => service.preview([{ path: 'ui.suggestionHistroy', value: undefined }])).toThrow(
+      'Unknown setting.',
+    );
+    expect(() => service.preview([{ path: 'ui.constructor', value: {} }])).toThrow(
+      'Unknown setting.',
+    );
+    expect((await read()).ui).not.toHaveProperty('suggestionHistroy');
+  });
   it('exports and imports through validation and emits editor schema metadata', async () => {
     const service = create();
     await service.load();

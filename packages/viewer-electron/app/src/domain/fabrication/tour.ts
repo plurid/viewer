@@ -16,6 +16,7 @@ import type { Hole, Measurement, PitchAxis } from './measure';
 import type { TourStop } from '../tours/tour';
 import { boxRegion } from '../files/regions';
 import { tourPath } from '../tours/tour';
+import { namedRefs } from './answer';
 import { alignedAxis, holeOf } from './measure';
 import { quotePassages, runsBox } from './quotes';
 
@@ -164,11 +165,12 @@ export function checkTour(input: CheckTourInput): CheckTour {
     for (const mark of placed?.marks ?? [])
       marks.push({ ...mark, stop: id, ...(group.lead ? { finding: group.lead } : {}) });
     const digest = input.sha256?.(stop.ref);
-    const note = grade?.reason ?? stop.note;
+    // the model writes the job's refs; a person reads the tour by the files' names
+    const note = grade?.reason ?? (stop.note && namedRefs(stop.note, input.sources));
     const captions = [...new Set(group.stops.map((item) => item.caption))];
     stops.push({
       id,
-      caption: captions.join(' ').slice(0, 500),
+      caption: namedRefs(captions.join(' '), input.sources).slice(0, 500),
       ...(note ? { note } : {}),
       source: 'model',
       ...(group.lead && findings.has(group.lead)

@@ -12,6 +12,7 @@ import type {
 } from '../src/domain/fabrication/answer';
 import type { GradeJob } from '../src/domain/fabrication/grade';
 import { reconcileJob } from '../src/domain/fabrication/reconcile';
+import { partValuesText } from '../src/domain/fabrication/part-values';
 
 const version = { identity: '1:2', modified: 1, size: 1 };
 const sources: InventorySource[] = [
@@ -105,10 +106,10 @@ describe('values the request and the name disagree on', () => {
       sets: 4,
       pieces: 4,
       source: 'request',
-      text: '4, from the request',
       quote: 'PL60-B2 base plate, 6 mm, 4 pieces',
     });
-    expect(parts[0]!.thickness).toMatchObject({ value: 6, text: '6 mm, from the request' });
+    expect(parts[0]!.thickness).toMatchObject({ value: 6, source: 'request' });
+    expect(partValuesText(parts[0]!)).toBe('4 pieces · 6 mm, both from the request');
   });
 
   it('sets the request against the drawing’s title block, with both quotes', () => {
@@ -195,9 +196,12 @@ describe('values the request and the name disagree on', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject(unreadPlate);
     expect(parts[0]).toMatchObject({
-      quantity: { sets: 2, pieces: 2, source: 'name', text: '2, from the file name (“2buc”)' },
-      thickness: { value: 6, source: 'name', text: '6 mm, from the file name' },
+      quantity: { sets: 2, pieces: 2, source: 'name' },
+      thickness: { value: 6, source: 'name' },
     });
+    expect(partValuesText(parts[0]!)).toBe(
+      '2 pieces · 6 mm, both from the file name (“2buc”, “g6”)',
+    );
   });
 });
 
@@ -210,9 +214,11 @@ describe('a drawing of several separate pieces', () => {
       sets: 2,
       pieces: 4,
       source: 'name',
-      text: '2 sets × 2 pieces = 4 pieces, from the file name (“2buc”); nothing else in the job says whether it counts sets or pieces',
       quote: '2buc',
     });
+    expect(partValuesText(parts[0]!)).toBe(
+      '2 sets × 2 pieces = 4 pieces, from the file name (“2buc”); nothing else in the job says whether it counts sets or pieces · 6 mm, from the request',
+    );
   });
 
   it('lets the request’s count decide between sets and pieces', () => {
@@ -223,8 +229,10 @@ describe('a drawing of several separate pieces', () => {
       sets: 2,
       pieces: 4,
       source: 'request',
-      text: '2 sets × 2 pieces = 4 pieces, from the request',
     });
+    expect(partValuesText(sets.parts[0]!)).toBe(
+      '2 sets × 2 pieces = 4 pieces · 6 mm, both from the request',
+    );
     // 2 pieces of a drawing of 2: the name counted pieces
     const pieces = reconcile(
       [part({ quantity: 2, quote: 'PL60-B2 base plate, 6 mm, 4 pieces' })],

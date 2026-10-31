@@ -130,9 +130,15 @@ then measure every DXF part itself and say where the job disagrees with itself: 
 48 mm where the drawing gives 50 mm, a quantity the request and a file name give differently.
 
 1. Select the job's folder, or its files with at least one DXF part, press **⌘K** and choose **Check
-   laser job…**. The check panel lists **What is sent**: each file with its ref, such as `S2`, and
-   how it goes. A request goes as its text, a drawing as its pages with their text, a photo as a
-   picture without location or camera details, and a DXF only as Viewer's measurement.
+   laser job…**. The command appears only where there are parts to cut, and says what the check
+   compares there, such as "Compare Job 1042’s request email and 1 drawing with its 5 DXF parts".
+   Parts kept in a folder inside the job, such as `DXF/`, are read too. The check panel lists **What
+   is sent**: each file with its ref, such as `S2`, and how it goes. A request goes as its text, a
+   drawing as its pages with their text, a photo as a picture without location or camera details,
+   and a DXF only as Viewer's measurement.
+   - Without a request or a drawing, the check reads the parts' names and measurements, and any
+     photos.
+   - A DWG part is left out: save it as DXF from the CAD app first, as Viewer measures DXF only.
 2. Under **Model**, choose the model in **Model to check with**: Meta's Muse Spark, Gemini,
    OpenRouter or another that takes pictures. The check sends pictures, so a model allowed only text
    asks first: choose **Allow pictures for Meta** and confirm.
@@ -156,13 +162,19 @@ then measure every DXF part itself and say where the job disagrees with itself: 
 6. Choose **Play the tour** to be shown each finding: the request's line, the drawing with the
    quoted dimension boxed and the hole it is about outlined, the DXF holes with the pitch Viewer
    measured. **Esc** stops it.
-7. Under **Cut sheets**, read each part's quantity and thickness and where it comes from, such as
-   "2, from the request · 6 mm, from the request", then choose **Prepare cut sheets**. The Nesting
-   plane opens on the job's parts, the corrected copy in place of its original, a tab per thickness.
-   Wait for **Checked** on each tab.
+7. Under **Cut sheets**, read each part's quantity and thickness and where it comes from, such as "2
+   pieces · 6 mm, both from the request", then choose **Prepare cut sheets**. The Nesting plane
+   opens on the job's parts, the corrected copy in place of its original, a tab per thickness. Wait
+   for **Checked** on each tab.
 8. Choose **Export handoff**. A folder such as "Job 1042 handoff" appears in the job's folder,
    holding `Cut sheets/`, `Evidence/` copies of the job's files, `Job.viewer-tour.jsonc`, which
    plays from those copies, and `Check record.json`. **File operations** offers Undo.
+
+Closing the panel keeps the check while the window is open, for its last 5 jobs. Choose **Check
+laser job…** on the job again and the panel shows it at once, with "Checked at 22:14 · Run again",
+its saved corrections and its handoff. If a file changed since, the panel names it, such as
+"g6-PL60-B2-2buc.dxf changed since the check at 22:14", dims the findings as from before, and **Run
+again** checks the job as it is now.
 
 Without a check, nesting reads each part's thickness and quantity from its name when it follows a
 convention Viewer reads, such as `g6-MB20-A1-4buc.dxf`: 6 mm, part MB20-A1, 4 pieces. Select every

@@ -42,6 +42,12 @@ export function listedEntries(path: string): readonly FileEntry[] | undefined {
   const state = datasets.get(path)?.state;
   return state && !state.loading && !state.unavailable ? state.entries : undefined;
 }
+/** A folder's entries while a view shows it, so that its watch keeps them current; nothing is read
+ * for the asking. A listing kept from before may be out of date. */
+export function shownEntries(path: string): readonly FileEntry[] | undefined {
+  const value = datasets.get(path);
+  return value?.listeners.size ? listedEntries(path) : undefined;
+}
 function notify(value: Subscription) {
   value.listeners.forEach((listener) => listener());
 }

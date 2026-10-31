@@ -10,8 +10,9 @@ trusted: a finding stands only when Viewer measures it, or finds its quote on th
 
 ## What a check reads
 
-**Check laser job…** reads a job folder's own files, not those in folders inside it, or the selected
-files when one of them is a DXF. With nothing selected, it reads the folder shown.
+**Check laser job…** reads the selected files when one of them is a DXF or DWG file. Otherwise it
+reads a job folder: the one selected, or the folder shown when nothing is selected. A job folder is
+read with the files of the folders in it, one level down, so parts kept in `DXF/` are read.
 
 | Kind    | Extensions                                                                   |
 | ------- | ---------------------------------------------------------------------------- |
@@ -20,10 +21,45 @@ files when one of them is a DXF. With nothing selected, it reads the folder show
 | Photo   | `.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, `.heif`, `.tif`, `.tiff`, `.avif` |
 | DXF     | `.dxf`                                                                       |
 
-Other files, links and folders are listed under **Left out**, with why. A check needs at least one
-DXF, and a request or a drawing to compare it with: "A check compares the request and drawings with
-the DXF parts, and this job has no DXF." Each file gets a ref, `S1`, `S2` and on, requests first,
-then drawings, photos and DXF parts, each by name.
+- **One level down.** A folder inside a job's folder, such as `DXF/` or `Photos/`, is read whole. A
+  folder inside that one is left out, and so is a handoff a check saved, such as "Job 1042 handoff".
+  A folder holding more than 8 folders is read without them.
+- **A folder of jobs.** A folder without a request of its own, holding two or more folders that each
+  have a request and parts, is a folder of jobs. It is not checked as one job.
+- **DWG.** A `.dwg` file is cutting work, so the command is offered for it, but Viewer measures DXF
+  only. It is left out with "a DWG; Viewer measures DXF only".
+
+Other files, links and folders are listed under **Left out**, with why. Each file gets a ref, `S1`,
+`S2` and on, requests first, then drawings, photos and DXF parts, each by name. A check needs at
+least one DXF part. Without a request or a drawing, it checks the parts' names and measurements, and
+the photos when there are some. When the panel finds nothing to check, it says so, naming the
+folder, and offers nothing to run:
+
+| The folder holds   | The panel says                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| No DXF or DWG file | "Pictures holds no DXF or DWG file, so there is nothing to check."                                                      |
+| DWG files only     | "Drawings holds 2 DWG files and no DXF. Viewer measures DXF only: save them as DXF from the CAD app, then check again." |
+| Several jobs       | "Clients holds 2 jobs: Job A and Job B. Check one of them."                                                             |
+
+### Where the command is offered
+
+The command is offered only where there are parts to cut: when the selection holds a DXF or DWG
+file, or the job folder it would read holds one, directly or one level down. It is not offered for a
+folder of jobs. Its line in the palette says what the check compares there:
+
+| Where                                  | The palette says                                                                       |
+| -------------------------------------- | -------------------------------------------------------------------------------------- |
+| A job folder a plane shows             | "Compare Job 1042’s request email and 1 drawing with its 5 DXF parts"                  |
+| Its parts in one folder inside it      | "Compare Job 1042’s request email and 1 drawing with its 5 DXF parts in DXF"           |
+| DXF parts without a request or drawing | "5 DXF parts in Parts, with no request or drawing: checks names and measurements only" |
+| A selected folder no plane shows       | "Check the 5 DXF parts in Job 1042"                                                    |
+| DWG files without a DXF                | "2 DWG files in Drawings and no DXF: save them as DXF to check them"                   |
+| A job this window has checked and kept | "Show the check from 22:14: 3 findings, 2 confirmed by Viewer"                         |
+
+Viewer counts a folder from the listing a plane shows. A folder no plane shows, such as a selected
+one or a folder inside the job, is listed once through the folder listing, one at a time, and again
+when its date changes or after a minute. Opening the palette never waits for it: the command appears
+once the count arrives, or at the next **⌘K**.
 
 | Limit                   | Value                               |
 | ----------------------- | ----------------------------------- |
@@ -103,8 +139,9 @@ them itself and never picks one silently.
 - **Agree.** Thicknesses agree within 0.05 mm. Quantities agree when they are the same count, or one
   is the other times the separate pieces the drawing holds.
 - **Used.** **Prepare cut sheets** takes the request's value, else the drawing's, else the name's,
-  and says which: "4, from the request", "6 mm, from the file name". Parts the request lists apart
-  that are one drawing, such as a left and a right, add up.
+  and says which: "4 pieces · 6 mm, both from the request", or "4 pieces, from the request · 6 mm,
+  from the file name (“g6”)" when they differ. Parts the request lists apart that are one drawing,
+  such as a left and a right, add up.
 
 **Unread.** When the job has a request, what the answer leaves unread in it is a finding of its own,
 one for each part, **Unverified** and without a number of Viewer's:
@@ -133,9 +170,9 @@ A stop about a finding on a drawing page marks the text its value is read from a
 part the value is about. The page opens fitted to both: the feature outlined, the text's box dashed.
 
 - **Text.** On a page with text runs, the quote is marked by the box of the runs it is read from,
-  labelled **the text on the drawing**; a quote on the page more than once is marked where it is
+  shown as **“50” marked on the drawing**; a quote on the page more than once is marked where it is
   nearest the model's box. On a page without text, such as a scan, or for a quote not on it, the
-  model's `box` stands in, labelled **box from Muse Spark**. Text is never sent to SAM.
+  model's `box` stands in, shown as **“50” in a box from Muse Spark**. Text is never sent to SAM.
 - **Feature.** The finding's `feature` box goes to SAM 3.1 as an object prompt in whole pixels of
   the picture the model read. The mask SAM returns, laid over the box SAM found, is traced around
   its largest region and labelled **outline from SAM 3.1**, with SAM's confidence. When SAM gives
@@ -148,8 +185,9 @@ part the value is about. The page opens fitted to both: the feature outlined, th
 
 ## The check record
 
-A check keeps its record in memory; it is written only when its [handoff](#handoff) is exported, as
-`Check record.json`. It names files, never their folders.
+A check keeps its record in memory, also while it is [kept](#closing-and-reopening) after its panel
+closes; it is written only when its [handoff](#handoff) is exported, as `Check record.json`. It
+names files, never their folders.
 
 | Field                    | Holds                                                                                                                                                                   |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -179,10 +217,30 @@ A check keeps its record in memory; it is written only when its [handoff](#hando
   an original. One of a drawing since corrected is left out: "“Nesting of 3 parts, 6 mm” nests
   g6-PL60-B2-2buc.dxf, not its corrected copy: prepare the cut sheets again." A thickness no nesting
   covers is said: "6 mm is not nested yet: open its tab in the Layout plane and wait for Checked."
-- Every file's version is checked again when the operation starts. A check closed since, or not
+- Every file's version is checked again when the operation starts. A check no longer kept, or not
   finished, is refused: "This check is no longer open. Check the job again, then export its
   handoff."
 - Agents cannot export a handoff, as they cannot save a correction.
+
+## Closing and reopening
+
+Closing the panel keeps a finished check, so a paid answer is not thrown away. The window keeps its
+last 5 checks in memory and forgets them when it closes; the desktop keeps each one's record for its
+handoff. Nothing is written to disk.
+
+**Check laser job…** on the same folder or files compares the job with what the check read, each
+file by its size, date and identity, then shows the kept check at once:
+
+| The job   | The panel shows                                                                                                                                                                                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Unchanged | The findings, tour, cut sheets, handoff and each saved correction, under "Checked at 22:14 · Run again". **Run again** asks the model again                                                                                                                              |
+| Changed   | "g6-PL60-B2-2buc.dxf changed since the check at 22:14. The findings below are from before." The result is dimmed under **Findings from 22:14**, and its tour, corrections, cut sheets and handoff wait for **Run again**, which lists the job as it is now and checks it |
+
+- **What counts.** A file changed, one added that the check would read, and one gone. A corrected
+  copy the check saved is not a change.
+- **Before a result.** A check closed while it runs is cancelled. One closed before a result, or
+  after its run failed, ends.
+- **Past 5.** Closing a sixth check ends the oldest kept one: its job is listed and checked afresh.
 
 ## Part names
 
@@ -281,6 +339,10 @@ Entities are the numbers of the DXF summary. Every field is required; an absent 
 A box is left, top, right and bottom, as fractions of the page or photo. Refs that are not in the
 inventory or are of the wrong kind, pages past the last, boxes and feature boxes the wrong way round
 and tour stops naming a missing finding are reported as issues.
+
+The panel shows the summary and each finding's summary with the job's refs written as file names,
+and the tour's captions and notes are saved so: "drawing S2" reads "drawing Job 1042 drawing.pdf". A
+ref the job does not have stays as written. The check record keeps the answer as the model gave it.
 
 Each finding is graded against Viewer's own value:
 

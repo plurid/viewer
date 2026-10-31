@@ -4,7 +4,9 @@
  * pictures and Viewer's measurement of each DXF, then the answer checked: refs and pages validated,
  * every finding graded against Viewer's own measurement and page text, the tour built and confirmed
  * pitch findings turned into reviewed corrections. Its record stays in memory until a handoff
- * writes it. A check belongs to the window that opened it (docs/reference/fabrication.md).
+ * writes it, also while the window keeps the check after its panel closes; `changes` says what
+ * changed in the job since. A check belongs to the window that opened it and ends with it
+ * (docs/reference/fabrication.md).
  */
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -13,11 +15,18 @@ import type { FileEntry } from '../../domain/contracts';
 import type { ModelDataPermission } from '../../domain/models/permissions';
 import type { ModelImage } from '../../domain/models/images';
 import type { SegmentationPicture } from '../../domain/models/segmentation';
-import type { InventorySource, FabricationAnswer } from '../../domain/fabrication/answer';
+import type {
+  InventoryFile,
+  InventorySource,
+  FabricationAnswer,
+} from '../../domain/fabrication/answer';
 import type { GradeJob } from '../../domain/fabrication/grade';
 import type { MeasureOutcome, Measurement } from '../../domain/fabrication/measure';
+import type { CheckChange, JobContents, JobFolder } from '../../domain/fabrication/job-files';
 import type {
+  CheckChanges,
   CheckFinding,
+  CheckNothing,
   CheckOpening,
   CheckOutline,
   CheckProgress,
@@ -59,8 +68,18 @@ import {
   checkInstructions,
   pageText,
 } from '../../domain/fabrication/prompt';
-import { correctedName, correctionDescription, listText } from '../../domain/fabrication/plan';
+import { correctedName, listText } from '../../domain/fabrication/plan';
 import { readJobName } from '../../domain/fabrication/names';
+import {
+  correctedCopy,
+  folderContents,
+  isHandoff,
+  jobContents,
+  jobFileKind,
+  jobFolders,
+  jobLimits,
+  nothingText,
+} from '../../domain/fabrication/job-files';
 import { modelImageLimits } from '../../domain/models/images';
 import {
   modelDataLabels,
@@ -107,6 +126,8 @@ export interface FabricationPorts {
 interface Check {
   id: string;
   owner: number;
+  /** The folder or files it was opened on, to list the job again. */
+  paths: string[];
   folder: string;
   job: string;
   sources: InventorySource[];
@@ -131,6 +152,15 @@ interface Prepared {
   inputs: RecordInput[];
   notSent: string[];
 }
+/** A job as it is now: the files its check reads, those it leaves out with why, and why there is
+ * nothing to check when there is not. */
+interface JobListing {
+  folder: string;
+  job: string;
+  listed: InventoryFile[];
+  skipped: CheckOpening['skipped'];
+  nothing?: string;
+}
 
 const sendings: Record<InventorySource['kind'], CheckSending> = {
   request: 'text',
@@ -138,8 +168,10 @@ const sendings: Record<InventorySource['kind'], CheckSending> = {
   photo: 'picture',
   dxf: 'measurement',
 };
-/** Open checks, oldest closed first past this. */
-const openLimit = 16;
+/** A window's checks: the one open and the five its session keeps, with room for one opening while
+ * another closes. Past this, its oldest is closed. */
+const ownerLimit = 8;
+const visible = (entries: readonly FileEntry[]) => entries.filter((file) => !file.hidden);
 const seconds = (milliseconds: number) => Math.round(milliseconds / 100) / 10;
 /** Who reads a job with a provider: "Muse Spark", else the provider's name. */
 const readerOf = (provider: ModelProvider) =>
@@ -184,6 +216,8 @@ export class FabricationChecks {
       case 'cancel':
         this.own(request.id, owner).running?.abort();
         return { kind: 'done' };
+      case 'changes':
+        return this.changes(request.id, owner);
       case 'close': {
         const check = this.checks.get(request.id);
         if (check?.owner === owner) {
@@ -222,8 +256,11 @@ export class FabricationChecks {
     return check;
   }
 
-  /** The inventory of a job folder or selection, and the providers that could read it. */
-  private async open(paths: readonly string[], owner: number): Promise<CheckOpening> {
+  /**
+   * A job folder or selection as it is now. A folder is read with the files of the folders in it,
+   * one level down, as a job keeps its parts in `DXF/`; a selection is read as it is.
+   */
+  private async listJob(paths: readonly string[]): Promise<JobListing> {
     const chosen: FileEntry[] = [];
     for (const file of paths) {
       const normalized = absolute(file);
@@ -235,22 +272,76 @@ export class FabricationChecks {
     const folder = fromFolder
       ? only!.path
       : (commonFolder(chosen.map((file) => file.path)) ?? path.dirname(only!.path));
-    const files = fromFolder
-      ? (await list(folder)).entries.filter((file) => !file.hidden && !file.directory)
-      : chosen;
+    const job = path.basename(folder) || folder;
     const skipped: CheckOpening['skipped'] = [];
-    const listed: Parameters<typeof buildInventory>[0][number][] = [];
+    /** Each file, by the name a person reads it under: "DXF/g6-PL60-B2-2buc.dxf" in a folder. */
+    let files: { file: FileEntry; name: string }[];
+    let contents: JobContents;
+    if (fromFolder) {
+      const own = visible((await list(folder)).entries);
+      const ownContents = folderContents(own);
+      const read: { folder: JobFolder; entries: FileEntry[] }[] = [];
+      for (const inside of jobFolders(job, ownContents))
+        try {
+          read.push({ folder: inside, entries: visible((await list(inside.path)).entries) });
+        } catch (error) {
+          skipped.push({
+            name: inside.name,
+            reason: `a folder Viewer could not read: ${errorMessage(error)}`,
+          });
+        }
+      contents = jobContents(
+        job,
+        ownContents,
+        read.map(({ folder, entries }) => ({
+          name: folder.name,
+          contents: folderContents(entries),
+        })),
+      );
+      // a folder of jobs is not read: nothing is checked, and why says which jobs it holds
+      const opened = contents.jobs.length ? [] : read;
+      if (ownContents.folders.length > jobLimits.folders)
+        skipped.push({
+          name: countText(ownContents.folders.length, 'folder'),
+          reason: `more than ${jobLimits.folders}, so the check reads none of them`,
+        });
+      else
+        for (const item of ownContents.folders.filter(({ name }) => isHandoff(job, name)))
+          skipped.push({ name: item.name, reason: 'a handoff a check saved' });
+      files = [
+        ...own.filter((file) => !file.directory).map((file) => ({ file, name: file.name })),
+        ...opened.flatMap(({ folder, entries }) =>
+          entries.map((file) => ({ file, name: `${folder.name}/${file.name}` })),
+        ),
+      ];
+    } else {
+      contents = jobContents(job, folderContents(chosen), []);
+      files = chosen.map((file) => ({ file, name: file.name }));
+    }
+    const listed: InventoryFile[] = [];
     let photos = 0;
-    for (const file of files) {
+    for (const { file, name } of files) {
       const kind = checkFileKind(file.name);
       if (file.directory)
-        skipped.push({ name: file.name, reason: 'a folder; the check reads files' });
+        skipped.push({
+          name,
+          reason:
+            name === file.name
+              ? 'a folder; the check reads files'
+              : 'a folder in a folder; the check looks one level down',
+        });
       else if (!kind)
-        skipped.push({ name: file.name, reason: 'not a request, drawing, photo or DXF' });
-      else if (file.kind !== 'file') skipped.push({ name: file.name, reason: 'a link' });
+        skipped.push({
+          name,
+          reason:
+            jobFileKind(file.name) === 'dwg'
+              ? 'a DWG; Viewer measures DXF only'
+              : 'not a request, drawing, photo or DXF',
+        });
+      else if (file.kind !== 'file') skipped.push({ name, reason: 'a link' });
       else if (kind === 'photo' && ++photos > checkLimits.photos)
         skipped.push({
-          name: file.name,
+          name,
           reason: `the check sends at most ${checkLimits.photos} photos`,
         });
       else
@@ -261,23 +352,26 @@ export class FabricationChecks {
           ...(kind === 'request' ? { pages: 1 } : {}),
         });
     }
+    const nothing = nothingText(contents, fromFolder);
+    return { folder, job, listed, skipped, ...(nothing ? { nothing } : {}) };
+  }
+
+  /** The inventory of a job folder or selection and the providers that could read it, or why
+   * there is nothing to check. Without a request or drawing, it checks names and measurements. */
+  private async open(
+    paths: readonly string[],
+    owner: number,
+  ): Promise<CheckOpening | CheckNothing> {
+    const { folder, job, listed, skipped, nothing } = await this.listJob(paths);
+    if (nothing) return { kind: 'nothing', folder, job, text: nothing };
     const sources = buildInventory(listed);
-    if (!sources.some((source) => source.kind === 'dxf'))
-      throw new Error(
-        'A check compares the request and drawings with the DXF parts, and this job has no DXF.',
-      );
-    if (!sources.some((source) => source.kind === 'request' || source.kind === 'drawing'))
-      throw new Error(
-        'A check compares the DXF parts with a request or drawing, and this job has neither.',
-      );
     const id = randomUUID();
-    const job = path.basename(folder) || folder;
-    if (this.checks.size >= openLimit) {
-      const [oldest] = this.checks.values();
-      oldest!.running?.abort();
-      this.checks.delete(oldest!.id);
+    const owned = [...this.checks.values()].filter((check) => check.owner === owner);
+    for (const oldest of owned.slice(0, Math.max(0, owned.length + 1 - ownerLimit))) {
+      oldest.running?.abort();
+      this.checks.delete(oldest.id);
     }
-    this.checks.set(id, { id, owner, folder, job, sources });
+    this.checks.set(id, { id, owner, paths: [...paths], folder, job, sources });
     const providers = await this.providers();
     const providerID = defaultProvider(providers, this.ports.settings());
     return {
@@ -311,6 +405,33 @@ export class FabricationChecks {
       });
     }
     return listed;
+  }
+
+  /**
+   * What changed in a check's job since it listed the job, by size, date and identity: files
+   * changed, new or gone. A corrected copy its correction saved is not a change.
+   */
+  private async changes(id: string, owner: number): Promise<CheckChanges> {
+    const check = this.own(id, owner);
+    const now = await this.listJob(check.paths);
+    const listed = new Map(now.listed.map((file) => [file.path, file]));
+    const changes: CheckChange[] = [];
+    for (const source of check.sources) {
+      const file = listed.get(source.path);
+      if (!file) changes.push({ name: source.name, change: 'removed' });
+      else if (!sameSourceVersion(file.version, source.version))
+        changes.push({ name: source.name, change: 'changed' });
+    }
+    const known = new Set(check.sources.map((source) => source.path));
+    const parts = check.sources
+      .filter((source) => source.kind === 'dxf')
+      .map((source) => source.name);
+    for (const file of now.listed) {
+      const name = path.basename(file.path);
+      if (!known.has(file.path) && !correctedCopy(name, parts))
+        changes.push({ name, change: 'added' });
+    }
+    return { kind: 'changes', id, changes };
   }
 
   private async run(
@@ -764,7 +885,6 @@ export class FabricationChecks {
                 source: dxf.path,
                 version: dxf.version,
                 name: correctedName(dxf.name),
-                description: correctionDescription(plan),
               },
             }
           : {}),

@@ -16,6 +16,19 @@ export const inventoryRefSchema = z
   .regex(/^S[1-9]\d{0,2}$/)
   .describe('A ref from the inventory, such as S2.');
 export type InventoryRef = z.infer<typeof inventoryRefSchema>;
+/** A ref as the model writes it in prose: a whole word, and not the start of a number ("S2.5"). */
+const proseRef = /\bS[1-9]\d{0,2}\b(?![.,]\d)/g;
+/**
+ * The model's prose with each ref of the job written as its file's name: the model reads the job
+ * by refs, a person by names. A ref the job does not have stays as written.
+ */
+export function namedRefs(
+  text: string,
+  sources: readonly Pick<InventoryItem, 'ref' | 'name'>[],
+): string {
+  const names = new Map(sources.map((source) => [source.ref, source.name]));
+  return text.replace(proseRef, (ref) => names.get(ref) ?? ref);
+}
 /** One file of the job as the model reads it. */
 export interface InventoryItem {
   ref: InventoryRef;

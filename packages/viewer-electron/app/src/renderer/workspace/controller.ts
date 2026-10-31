@@ -1190,14 +1190,14 @@ export function useWorkspaceController({
         const isOpen = (id: string) => activeWorkspace().panes.some((pane) => pane.id === id);
         const api = engine.current;
         if (!hasAnchorCamera(api)) return workspaceStage(controller, isOpen);
-        // the engine names a plane by its route: the one showing the pane now, while it is open
-        return pluridStage(api, (id) => {
-          const live = engine.current;
-          const node =
-            isOpen(id) && live
-              ? flattenTree(live.tree.get()).find((item) => hostID(item) === id)
-              : undefined;
-          return node?.route;
+        // the engine names a plane by its route: the one showing the pane now
+        return pluridStage(api, {
+          isOpen,
+          routeOf(id) {
+            const live = engine.current;
+            if (!live) return undefined;
+            return flattenTree(live.tree.get()).find((item) => hostID(item) === id)?.route;
+          },
         });
       },
       undo: () => {

@@ -106,6 +106,7 @@ import { previewsAsFile } from '../domain/previews/documents/embedded';
 import { TourBar } from './workspace/tours/TourBar';
 import { TourStops } from './workspace/tours/TourStops';
 import { CheckPanel } from './fabrication/CheckPanel';
+import { subscribeJobContents } from './fabrication/contents';
 
 export function App() {
   const registry = useMemo(
@@ -363,6 +364,8 @@ function AppWindow() {
   useAgentCatalog({ registry, controller, context: windowContext });
   // a plane that starts or stops editing changes which text commands apply
   useEffect(() => subscribeEditingPlanes(() => registry.touch()), [registry]);
+  // a folder's DXF parts, counted once asked for, decide whether its laser-job check is offered
+  useEffect(() => subscribeJobContents(() => registry.touch()), [registry]);
   useEffect(() => {
     if (!ready) return;
     let previous = '';

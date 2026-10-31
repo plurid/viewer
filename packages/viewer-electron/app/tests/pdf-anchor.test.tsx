@@ -28,7 +28,12 @@ vi.mock('../src/renderer/previews/controls', () => ({
 }));
 vi.mock('../src/renderer/ui/primitives', () => ({
   IconButton: () => null,
-  Empty: ({ children }: PropsWithChildren) => <div>{children}</div>,
+  Empty: ({ title, detail, children }: PropsWithChildren<{ title?: string; detail?: string }>) => (
+    <div>
+      {title} {detail}
+      {children}
+    </div>
+  ),
   Loading: () => <div>Opening PDF</div>,
 }));
 vi.mock('../src/renderer/ui/ChoiceMenu', () => ({ ChoiceButton: () => null }));
@@ -153,4 +158,68 @@ it('outlines a region on its page and enlarges the page around it', async () => 
   );
   // a region a fifth of the page wide fills about 60% of the 800 px view
   await waitFor(() => expect(values.get('pdf.view')).toBe(2.94));
+});
+
+it('draws again only once a cancelled draw has let go of the canvas', async () => {
+  // pdf.js holds a canvas until a draw settles; a cancelled draw settles a little later
+  const busy = new WeakSet<object>();
+  let draws = 0;
+  const draw = ({ canvas }: { canvas: object }) => {
+    if (busy.has(canvas))
+      throw new Error('Cannot use the same canvas during multiple render() operations.');
+    busy.add(canvas);
+    draws += 1;
+    let settle!: (error?: Error) => void;
+    const promise = new Promise<void>((resolve, reject) => {
+      settle = (error) => {
+        busy.delete(canvas);
+        if (error) reject(error);
+        else resolve();
+      };
+    });
+    const done = setTimeout(() => settle(), 40);
+    return {
+      promise,
+      cancel() {
+        clearTimeout(done);
+        const cancelled = Object.assign(new Error('Rendering cancelled'), {
+          name: 'RenderingCancelledException',
+        });
+        setTimeout(() => settle(cancelled), 10);
+      },
+    };
+  };
+  pdf.getDocument.mockReturnValue({
+    promise: Promise.resolve({
+      numPages: pages.length,
+      getPage: async () => ({
+        getViewport: ({ scale }: { scale: number }) => ({
+          width: 612 * scale,
+          height: 792 * scale,
+          scale,
+        }),
+        render: draw,
+        getTextContent: async () => ({ items: [] }),
+        cleanup() {},
+      }),
+    }),
+    async destroy() {},
+  });
+  // a tour's region enlarges the page while its first draw is still running
+  const { view, values } = open({
+    kind: 'pdf',
+    page: 3,
+    search: false,
+    region: [
+      [0.6, 0.7],
+      [0.8, 0.7],
+      [0.8, 0.8],
+      [0.6, 0.8],
+    ],
+  });
+  await waitFor(() => expect(values.get('pdf.view')).toBe(2.94));
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  expect(view.container.textContent).not.toContain('PDF could not be displayed');
+  expect(view.container.textContent).not.toContain('Cannot use the same canvas');
+  expect(draws).toBeGreaterThan(1);
 });

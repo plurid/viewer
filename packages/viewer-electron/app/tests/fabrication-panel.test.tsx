@@ -3,17 +3,21 @@
  * THE CHECK PANEL: what is sent and at which level, the permission pictures need, Run and each
  * step with its time, the graded findings with Viewer's reasons and a shared cause's readings, a
  * correction saved only on approval, the tour, the cut sheets with the request's quantities and
- * the corrected copy, and the handoff.
+ * the corrected copy, and the handoff. A finished check kept when its panel closes: shown again at
+ * once while its job is unchanged, marked as before when the job changed, the last five kept.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { DesktopEvent, OperationJob } from '../src/domain/contracts';
 import type { CheckOpening, CheckProgress, CheckResult } from '../src/domain/fabrication/check';
+import type { CheckChange } from '../src/domain/fabrication/job-files';
 import type { ModelDataLevel } from '../src/domain/models/permissions';
 import type { ModelProvider } from '../src/domain/services';
+import type { CommandContext } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { CheckPanel } from '../src/renderer/fabrication/CheckPanel';
-import { closeCheck, openCheck } from '../src/renderer/fabrication/check';
+import { closeCheck, forgetChecks, openCheck, runCheck } from '../src/renderer/fabrication/check';
+import { checkCommands } from '../src/renderer/fabrication/commands';
 import { WorkspaceContext } from '../src/renderer/workspace/context';
 import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
 import { update } from '../src/renderer/state/core';
@@ -76,7 +80,9 @@ const result: CheckResult = {
   kind: 'result',
   id: opening.id,
   provider: { name: 'Meta', model: 'muse-spark-1.3' },
-  summary: 'The base plate’s DXF puts its right holes 48 mm from the left ones.',
+  // the model writes the job's refs: the panel shows the files' names
+  summary:
+    'The base plate’s DXF S4 puts its right holes 48 mm from the left ones; drawing S2 gives 50 mm.',
   request: [],
   findings: [
     {
@@ -84,7 +90,7 @@ const result: CheckResult = {
       finding: {
         id: 'F1',
         kind: 'pitch',
-        summary: 'The bottom holes are 48 mm apart in the DXF; the drawing gives 50 mm.',
+        summary: 'The bottom holes are 48 mm apart in S4; S2 gives 50 mm.',
         drawing: { ref: 'S2', page: 1, value: 50, quote: '50 mm pitch', box: null, feature: null },
         dxf: { ref: 'S4', value: 48, axis: 'x', entities: ['8', '9'] },
         photo: null,
@@ -104,12 +110,6 @@ const result: CheckResult = {
         source: plate,
         version,
         name: 'g6-PL60-B2-2buc (corrected).dxf',
-        description: [
-          'DXF correction',
-          'pitch along x from 48.00 mm to 50.00 mm',
-          'moves 2 holes',
-          'a new DXF beside the original, which is kept',
-        ],
       },
       outlines: [
         {
@@ -191,7 +191,7 @@ const result: CheckResult = {
       path: `${folder}/g6-MB20-A1-4buc.dxf`,
       name: 'g6-MB20-A1-4buc.dxf',
       pieces: 2,
-      thickness: { value: 6, source: 'request', text: '6 mm, from the request' },
+      thickness: { value: 6, source: 'request' },
       question:
         'g6-MB20-A1-4buc.dxf holds 2 separate pieces, and the request asks for 5, which is not a whole number of sets. How many sets should be cut?',
     },
@@ -200,8 +200,8 @@ const result: CheckResult = {
       path: plate,
       name: 'g6-PL60-B2-2buc.dxf',
       pieces: 1,
-      quantity: { sets: 2, pieces: 2, source: 'request', text: '2, from the request' },
-      thickness: { value: 6, source: 'request', text: '6 mm, from the request' },
+      quantity: { sets: 2, pieces: 2, source: 'request' },
+      thickness: { value: 6, source: 'request' },
     },
   ],
   notSent: [],
@@ -255,10 +255,30 @@ beforeEach(() => {
     }),
     openSettings: async () => {},
     save: async () => {},
+    // the job's folder as a probe lists it, for the palette's command
+    list: async (path: string) => ({
+      path,
+      parent: '/Jobs',
+      entries: opening.sources.map((source) => ({
+        path: source.path,
+        parent: path,
+        name: source.name,
+        extension: '',
+        kind: 'file',
+        directory: false,
+        size: 1000,
+        modified: 1,
+        created: 1,
+        hidden: false,
+        mime: '',
+        identity: source.path,
+      })),
+    }),
   });
 });
 afterEach(() => {
   closeCheck();
+  forgetChecks();
   cleanup();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
@@ -310,7 +330,14 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
   );
 
   fireEvent.click(screen.getByRole('button', { name: 'Check 4 files' }));
-  await screen.findByText(result.findings[0]!.finding.summary);
+  await screen.findByText(
+    'The bottom holes are 48 mm apart in g6-PL60-B2-2buc.dxf; Job 1042 drawing.pdf gives 50 mm.',
+  );
+  expect(
+    screen.getByText(
+      'The base plate’s DXF g6-PL60-B2-2buc.dxf puts its right holes 48 mm from the left ones; drawing Job 1042 drawing.pdf gives 50 mm.',
+    ),
+  ).toBeTruthy();
   expect(fabrication).toHaveBeenCalledWith({
     kind: 'run',
     id: opening.id,
@@ -324,10 +351,13 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
       /Viewer measured 48\.00 mm between holes 4 and 5 along x; the drawing gives 50 mm\./,
     ),
   ).toBeTruthy();
-  expect(screen.getByText('Text “50 mm pitch”: the text on the drawing')).toBeTruthy();
+  expect(screen.getByText('“50 mm pitch” marked on the drawing')).toBeTruthy();
   expect(screen.getByText('Feature: outline from SAM 3.1, confidence 89%')).toBeTruthy();
-  expect(screen.getByText(/pitch along x from 48\.00 mm to 50\.00 mm, moves 2 holes/)).toBeTruthy();
-  expect(screen.getByText('2, from the request · 6 mm, from the request')).toBeTruthy();
+  // the proposal in one line: what changes, and the copy that holds it
+  expect(document.querySelector('.check-correction')!.textContent).toBe(
+    'Proposed: pitch along x from 48.00 mm to 50.00 mm, moving 2 holes, saved as g6-PL60-B2-2buc (corrected).dxf beside the original, which is kept.Save g6-PL60-B2-2buc (corrected).dxf',
+  );
+  expect(screen.getByText('2 pieces · 6 mm, both from the request')).toBeTruthy();
   expect(operate).not.toHaveBeenCalled();
 
   // the correction is saved only on approval, and its measured result is shown
@@ -545,4 +575,228 @@ it('shows each step of a running check with its time, a cause’s readings and w
     screen.getByText('Raised by Viewer, from what the answer leaves out of the request.'),
   ).toBeTruthy();
   expect(screen.getByText('Unverified')).toBeTruthy();
+});
+
+/** 22:14 on the day of the check, by this machine's clock. */
+const evening = new Date(2026, 9, 30, 22, 14).getTime();
+const panel = () =>
+  render(
+    <WorkspaceContext.Provider value={workspace}>
+      <CheckPanel />
+    </WorkspaceContext.Provider>,
+  );
+/** The job opened, checked at 22:14 and its correction saved, as a person leaves it. */
+async function checkedAndSaved(): Promise<void> {
+  await act(() => openCheck([folder], activeWorkspace().id));
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Check 4 files' }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(evening);
+  fireEvent.click(screen.getByRole('button', { name: 'Check 4 files' }));
+  await screen.findByText(
+    'The bottom holes are 48 mm apart in g6-PL60-B2-2buc.dxf; Job 1042 drawing.pdf gives 50 mm.',
+  );
+  clock.mockRestore();
+  fireEvent.click(screen.getByRole('button', { name: 'Save g6-PL60-B2-2buc (corrected).dxf' }));
+  await waitFor(() => expect(operate).toHaveBeenCalled());
+  finish({
+    id: 'job-correction',
+    completed: [
+      {
+        source: plate,
+        destination: corrected,
+        correction: {
+          axis: 'x',
+          target: 50,
+          before: 48,
+          after: 50,
+          shift: { x: 2, y: 0 },
+          moved: [],
+          web: 10,
+          notes: [],
+        },
+      },
+    ],
+  });
+  await screen.findByText('Saved: pitch 48.00 mm → 50.00 mm, measured again.');
+}
+const kinds = () => fabrication.mock.calls.map(([request]) => (request as { kind: string }).kind);
+
+it('keeps a finished check when its panel closes, and shows it again at once while the job is unchanged', async () => {
+  level = 'images';
+  let changes: CheckChange[] = [];
+  fabrication.mockImplementation(async (request: { kind: string }) =>
+    request.kind === 'open'
+      ? opening
+      : request.kind === 'run'
+        ? result
+        : request.kind === 'changes'
+          ? { kind: 'changes', id: opening.id, changes }
+          : { kind: 'done' },
+  );
+  panel();
+  await checkedAndSaved();
+  act(() => closeCheck());
+  expect(screen.queryByRole('heading', { name: 'Check Job 1042' })).toBeNull();
+  // the desktop keeps the record: nothing is closed
+  expect(kinds()).toEqual(['open', 'run']);
+
+  // the palette names the check it would show
+  const [command] = checkCommands() as [ReturnType<typeof checkCommands>[number]];
+  const here: CommandContext = {
+    scope: 'folder',
+    workspaceID: activeWorkspace().id,
+    directory: folder,
+    selection: [],
+    clipboard: null,
+    jobs: [],
+  };
+  await waitFor(() => expect(command.when(here)).toBe(true));
+  expect(typeof command.detail === 'function' && command.detail(here)).toBe(
+    'Show the check from 22:14: 2 findings, 1 confirmed by Viewer',
+  );
+
+  await act(() => openCheck([folder], activeWorkspace().id));
+  expect(kinds()).toEqual(['open', 'run', 'changes']);
+  expect(screen.getByRole('heading', { name: 'Check Job 1042' })).toBeTruthy();
+  expect(document.querySelector('.check-since')!.textContent).toBe('Checked at 22:14 · Run again');
+  expect(
+    screen.getByText(
+      'The bottom holes are 48 mm apart in g6-PL60-B2-2buc.dxf; Job 1042 drawing.pdf gives 50 mm.',
+    ),
+  ).toBeTruthy();
+  // the correction saved shows as saved, and the cut sheets nest its copy
+  expect(screen.getByText('Saved: pitch 48.00 mm → 50.00 mm, measured again.')).toBeTruthy();
+  expect(screen.getByText('g6-PL60-B2-2buc.dxf, corrected copy')).toBeTruthy();
+  expect(
+    (screen.getByRole('button', { name: 'Play the tour' }) as HTMLButtonElement).disabled,
+  ).toBe(false);
+  expect(screen.queryByText('What is sent')).toBeNull();
+  // one Run again, beside when it was checked, runs the same check
+  expect(screen.getAllByRole('button', { name: 'Run again' })).toHaveLength(1);
+  changes = [];
+  fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
+  await waitFor(() => expect(kinds()).toEqual(['open', 'run', 'changes', 'run']));
+  expect(fabrication).toHaveBeenLastCalledWith({
+    kind: 'run',
+    id: opening.id,
+    providerID: 'meta',
+    pages: [],
+  });
+});
+
+it('says what changed since a kept check, marks its result as before, and checks the job as it is now', async () => {
+  level = 'images';
+  const fresh: CheckOpening = { ...opening, id: '9d2e4b1a-7c3f-4a5e-9b8d-1f2a3b4c5d6e' };
+  let opens = 0;
+  fabrication.mockImplementation(async (request: { kind: string }) =>
+    request.kind === 'open'
+      ? opens++
+        ? fresh
+        : opening
+      : request.kind === 'run'
+        ? result
+        : request.kind === 'changes'
+          ? {
+              kind: 'changes',
+              id: opening.id,
+              changes: [{ name: 'g6-PL60-B2-2buc.dxf', change: 'changed' }],
+            }
+          : { kind: 'done' },
+  );
+  panel();
+  await checkedAndSaved();
+  act(() => closeCheck());
+  await act(() => openCheck([folder], activeWorkspace().id));
+  expect(document.querySelector('.check-stale p')!.textContent).toBe(
+    'g6-PL60-B2-2buc.dxf changed since the check at 22:14. The findings below are from before.',
+  );
+  expect(screen.getByRole('heading', { name: 'Findings from 22:14' })).toBeTruthy();
+  expect(document.querySelector('.check-since')).toBeNull();
+  // nothing of the old result is acted on: only Run again
+  for (const name of ['Play the tour', 'Prepare cut sheets', 'Export handoff'])
+    expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+  // closed again, the palette does not give its grades as current
+  act(() => closeCheck());
+  const [command] = checkCommands() as [ReturnType<typeof checkCommands>[number]];
+  const here: CommandContext = {
+    scope: 'folder',
+    workspaceID: activeWorkspace().id,
+    directory: folder,
+    selection: [],
+    clipboard: null,
+    jobs: [],
+  };
+  await waitFor(() => expect(command.when(here)).toBe(true));
+  expect(typeof command.detail === 'function' && command.detail(here)).toBe(
+    'Show the check from 22:14, before the job changed',
+  );
+  await act(() => openCheck([folder], activeWorkspace().id));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
+  await waitFor(() =>
+    expect(fabrication).toHaveBeenLastCalledWith({
+      kind: 'run',
+      id: fresh.id,
+      providerID: 'meta',
+      pages: [],
+    }),
+  );
+  expect(kinds()).toEqual(['open', 'run', 'changes', 'changes', 'close', 'open', 'run']);
+  expect(fabrication).toHaveBeenCalledWith({ kind: 'close', id: opening.id });
+  await waitFor(() => expect(document.querySelector('.check-stale')).toBeNull());
+  expect(screen.getByRole('heading', { name: 'Findings' })).toBeTruthy();
+});
+
+it('keeps the last five checks, and ends the oldest past them', async () => {
+  level = 'images';
+  const job = (index: number) => `/Jobs/Job ${index}`;
+  const id = (index: number) => `6f1c2a9e-3b4d-4e5f-8a7b-9c0d1e2f3a4${index}`;
+  fabrication.mockImplementation(async (request: { kind: string; paths?: string[] }) => {
+    if (request.kind === 'open') {
+      const index = Number(request.paths![0]!.split(' ').pop());
+      return { ...opening, id: id(index), folder: job(index), job: `Job ${index}` };
+    }
+    if (request.kind === 'run') return result;
+    if (request.kind === 'changes') return { kind: 'changes', id: id(2), changes: [] };
+    return { kind: 'done' };
+  });
+  for (let index = 1; index <= 6; index++) {
+    await openCheck([job(index)], activeWorkspace().id);
+    await runCheck();
+  }
+  closeCheck();
+  expect(fabrication).toHaveBeenCalledWith({ kind: 'close', id: id(1) });
+  expect(kinds().filter((kind) => kind === 'close')).toHaveLength(1);
+  // the oldest is listed afresh; the next is shown again
+  fabrication.mockClear();
+  await openCheck([job(1)], activeWorkspace().id);
+  expect(kinds()).toEqual(['open']);
+  fabrication.mockClear();
+  await openCheck([job(2)], activeWorkspace().id);
+  // job 1, listed afresh and not checked, ends as job 2 opens
+  expect(kinds()).toEqual(['close', 'changes']);
+});
+
+it('says plainly when the folder has nothing to check, and offers nothing to run', async () => {
+  fabrication.mockImplementation(async () => ({
+    kind: 'nothing',
+    folder: '/Jobs/Pictures',
+    job: 'Pictures',
+    text: 'Pictures holds no DXF or DWG file, so there is nothing to check.',
+  }));
+  panel();
+  await act(() => openCheck(['/Jobs/Pictures'], activeWorkspace().id));
+  expect(screen.getByRole('heading', { name: 'Check Pictures' })).toBeTruthy();
+  expect(screen.getByRole('status').textContent).toBe(
+    'Pictures holds no DXF or DWG file, so there is nothing to check.',
+  );
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+    'Close the check',
+  ]);
+  act(() => closeCheck());
+  expect(kinds()).toEqual(['open']);
 });

@@ -31,6 +31,80 @@ const configSchema = z
     ui: preferencesSchema,
   })
   .strict();
+type Configuration = z.infer<typeof configSchema>;
+/** The keys a patch names, under `settings` or `ui` and never through an object's prototype. */
+function patchKeys(patch: SettingsPatch): string[] {
+  const keys = patch.keys || patch.path.split('.');
+  if (
+    !['settings', 'ui'].includes(keys[0] ?? '') ||
+    keys.some((key) => ['__proto__', 'prototype', 'constructor'].includes(key))
+  )
+    throw new Error('Unknown setting.');
+  return keys;
+}
+/**
+ * Applies a patch to `document`, a copy. Returns `true` when it sets a key the document does not
+ * hold yet, such as an optional one a config.jsonc written before it lacks: `validated` decides
+ * whether the schema knows it. A key that is not there cannot be removed.
+ */
+function applyPatch(
+  document: Record<string, unknown>,
+  keys: readonly string[],
+  value: unknown,
+): boolean {
+  const folders = keys[1] === 'folders';
+  let object = document;
+  for (const key of keys.slice(0, -1)) {
+    if (!object[key] && folders) object[key] = {};
+    if (!object[key] || typeof object[key] !== 'object' || Array.isArray(object[key]))
+      throw new Error('Unknown setting.');
+    object = object[key] as Record<string, unknown>;
+  }
+  const key = keys.at(-1)!;
+  const absent = !Object.hasOwn(object, key) && !folders;
+  if (value === undefined || (value === null && folders)) {
+    if (absent) throw new Error('Unknown setting.');
+    delete object[key];
+    return false;
+  }
+  object[key] = value;
+  return absent;
+}
+/** Whether `document` holds a value at `keys`. */
+function holds(document: unknown, keys: readonly string[]): boolean {
+  let value = document;
+  for (const key of keys) {
+    if (!value || typeof value !== 'object' || !Object.hasOwn(value, key)) return false;
+    value = (value as Record<string, unknown>)[key];
+  }
+  return true;
+}
+/**
+ * The patched configuration, validated. A key a patch set where the document held none is one the
+ * schema knows only if it survives: a strict object refuses any other, and any other drops it.
+ */
+function validated(config: unknown, absent: readonly (readonly string[])[]): Configuration {
+  const named = (path: readonly PropertyKey[], key: PropertyKey) =>
+    absent.some(
+      (keys) => keys.at(-1) === key && keys.slice(0, -1).join('\0') === path.map(String).join('\0'),
+    );
+  let result: Configuration;
+  try {
+    result = configSchema.parse(config);
+  } catch (error) {
+    if (
+      error instanceof z.ZodError &&
+      error.issues.some(
+        (issue) =>
+          issue.code === 'unrecognized_keys' && issue.keys.some((key) => named(issue.path, key)),
+      )
+    )
+      throw new Error('Unknown setting.');
+    throw error;
+  }
+  if (absent.some((keys) => !holds(result, keys))) throw new Error('Unknown setting.');
+  return result;
+}
 export class SettingsService {
   private document: z.infer<typeof configSchema> & { revision: number };
   private fields = new Map<string, number>();
@@ -232,13 +306,9 @@ export class SettingsService {
         await this.readChanges();
         if (this.store.diagnostics.length) throw new Error(this.store.diagnostics[0]);
         const next = structuredClone(this.document);
+        const absent: string[][] = [];
         for (const patch of patches) {
-          const keys = patch.keys || patch.path.split('.');
-          if (
-            !['settings', 'ui'].includes(keys[0] ?? '') ||
-            keys.some((key) => ['__proto__', 'prototype', 'constructor'].includes(key))
-          )
-            throw new Error('Unknown setting.');
+          const keys = patchKeys(patch);
           // Record macro saves a command sequence from the workspace: checked once the result is known
           const macros = keys[0] === 'settings' && keys[1] === 'customActions';
           if (scope === 'workspace' && !workspaceMayPatch(keys) && !macros)
@@ -251,36 +321,25 @@ export class SettingsService {
             throw new Error(
               'This setting changed in another window or config.jsonc. Review its current value.',
             );
-          let object = next as unknown as Record<string, unknown>;
-          for (const key of keys.slice(0, -1)) {
-            if (!object[key] && keys[1] === 'folders') object[key] = {};
-            if (!object[key] || typeof object[key] !== 'object' || Array.isArray(object[key]))
-              throw new Error('Unknown setting.');
-            object = object[key] as Record<string, unknown>;
-          }
-          const key = keys.at(-1)!;
-          if (!Object.hasOwn(object, key) && keys[1] !== 'folders')
-            throw new Error('Unknown setting.');
-          if (patch.value === undefined || (patch.value === null && keys[1] === 'folders'))
-            delete object[key];
-          else object[key] = patch.value;
+          if (applyPatch(next as unknown as Record<string, unknown>, keys, patch.value))
+            absent.push(keys);
         }
         const { revision: _revision, ...config } = next;
-        const validated = configSchema.parse(config);
-        validateCustomProfiles(validated.settings.profiles, this.document.settings.profiles);
+        const parsed = validated(config, absent);
+        validateCustomProfiles(parsed.settings.profiles, this.document.settings.profiles);
         if (
           scope === 'workspace' &&
-          !sequencesOnly(this.document.settings.customActions, validated.settings.customActions)
+          !sequencesOnly(this.document.settings.customActions, parsed.settings.customActions)
         )
           throw new Error('Change this setting in Settings.');
         // a whole browsing section from the workspace keeps the person's Trash confirmation
         if (
           scope === 'workspace' &&
-          validated.settings.browsing.confirmTrash !== this.document.settings.browsing.confirmTrash
+          parsed.settings.browsing.confirmTrash !== this.document.settings.browsing.confirmTrash
         )
           throw new Error('Change this setting in Settings.');
-        await this.store.write(validated);
-        this.document = { ...validated, revision: this.document.revision + 1 };
+        await this.store.write(parsed);
+        this.document = { ...parsed, revision: this.document.revision + 1 };
         for (const patch of patches)
           this.fields.set(
             JSON.stringify(patch.keys || patch.path.split('.')),
@@ -298,28 +357,13 @@ export class SettingsService {
   }
   preview(patches: SettingsPatch[]): { valid: true; changes: string[] } {
     const next = structuredClone(this.document) as unknown as Record<string, unknown>;
+    const absent: string[][] = [];
     for (const patch of patches) {
-      const keys = patch.keys || patch.path.split('.');
-      if (
-        !['settings', 'ui'].includes(keys[0] ?? '') ||
-        keys.some((key) => ['__proto__', 'prototype', 'constructor'].includes(key))
-      )
-        throw new Error('Unknown setting.');
-      let object = next;
-      for (const key of keys.slice(0, -1)) {
-        if (!object[key] && keys[1] === 'folders') object[key] = {};
-        if (!object[key] || typeof object[key] !== 'object' || Array.isArray(object[key]))
-          throw new Error('Unknown setting.');
-        object = object[key] as Record<string, unknown>;
-      }
-      const key = keys.at(-1)!;
-      if (!Object.hasOwn(object, key) && keys[1] !== 'folders') throw new Error('Unknown setting.');
-      if (patch.value === undefined || (patch.value === null && keys[1] === 'folders'))
-        delete object[key];
-      else object[key] = patch.value;
+      const keys = patchKeys(patch);
+      if (applyPatch(next, keys, patch.value)) absent.push(keys);
     }
     const { revision: _revision, ...config } = next;
-    const parsed = configSchema.parse(config);
+    const parsed = validated(config, absent);
     validateCustomProfiles(parsed.settings.profiles, this.document.settings.profiles);
     // An agent edits a recipe, not what binds it to the person: its shortcut, its model provider,
     // or more data than it sent. A whole-recipes patch carried them.

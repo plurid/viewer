@@ -1,6 +1,7 @@
 import { utilityProcess, type UtilityProcess } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
+import { assetRootArguments } from '../native/assets';
 
 /** Where a worker runs: a utility process, or a thread for tests that cannot spawn one. */
 export type WorkerBackend = 'process' | 'thread';
@@ -54,7 +55,12 @@ export function launchWorker<Message = Reply>(
   backend?: WorkerBackend,
 ): OwnedWorker<Message> {
   if (backend === 'thread') {
-    const child = new Worker(worker, { name, stdout: true, stderr: true });
+    const child = new Worker(worker, {
+      name,
+      stdout: true,
+      stderr: true,
+      argv: assetRootArguments(),
+    });
     if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
     const output = diagnostics?.output(name);
     if (output) child.stderr?.on('data', output);
@@ -68,7 +74,10 @@ export function launchWorker<Message = Reply>(
       },
     };
   }
-  const child = utilityProcess.fork(worker, [], { serviceName: name, stdio: 'pipe' });
+  const child = utilityProcess.fork(worker, assetRootArguments(), {
+    serviceName: name,
+    stdio: 'pipe',
+  });
   if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
   const output = diagnostics?.output(name);
   if (output) child.stderr?.on('data', output);

@@ -12,6 +12,7 @@ import type { DXFCorrection } from './plan';
 import type { Finding, InventoryKind, RequestPart } from './answer';
 import type { Grade } from './grade';
 import type { PartPlan } from './reconcile';
+import type { CheckChange } from './job-files';
 import type { SegmentationSource } from '../models/segmentation';
 import { sourceVersionSchema } from '../files/inspection';
 import { inventoryLimit, inventoryRefSchema } from './answer';
@@ -107,6 +108,8 @@ export const fabricationRequestSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   z.object({ kind: z.literal('cancel'), id: checkID }).strict(),
+  /** What changed in a kept check's job since it listed the job. */
+  z.object({ kind: z.literal('changes'), id: checkID }).strict(),
   z.object({ kind: z.literal('close'), id: checkID }).strict(),
 ]);
 export type FabricationRequest = z.infer<typeof fabricationRequestSchema>;
@@ -153,6 +156,20 @@ export interface CheckOpening {
   /** The provider the check asks unless another is chosen. */
   providerID?: string;
 }
+/** A folder or selection with nothing to check: no DXF part, or several jobs. */
+export interface CheckNothing {
+  kind: 'nothing';
+  folder: string;
+  job: string;
+  /** Why, naming the folder: "Pictures holds no DXF or DWG file, so there is nothing to check." */
+  text: string;
+}
+/** What changed in a check's job since it listed the job; none when the check is current. */
+export interface CheckChanges {
+  kind: 'changes';
+  id: string;
+  changes: CheckChange[];
+}
 
 /** A confirmed pitch finding's correction, for the person to review and save. */
 export interface CheckCorrection {
@@ -162,8 +179,6 @@ export interface CheckCorrection {
   version: SourceVersion;
   /** `<name> (corrected).dxf`, beside the original. */
   name: string;
-  /** The plan in words (`correctionDescription`). */
-  description: string[];
 }
 /** Who drew an outline: SAM, the box the model gave, or the box of the quoted text's own runs. */
 export type CheckOutlineSource = SegmentationSource | 'page-text';
@@ -238,7 +253,8 @@ export interface CheckResult {
   notSent: string[];
   seconds: number;
 }
-export type FabricationReply = CheckOpening | CheckResult | { kind: 'done' };
+export type FabricationReply =
+  CheckOpening | CheckNothing | CheckChanges | CheckResult | { kind: 'done' };
 
 /** What a running check does now: reads the job with the model, or outlines features with SAM. */
 export type CheckStep = 'reading' | 'outlining';

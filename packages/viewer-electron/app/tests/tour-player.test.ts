@@ -105,7 +105,7 @@ describe('the tour player, with a fake stage', () => {
     frames: false,
     travel: async (destination) => {
       travelled.push(destination);
-      return true;
+      return 'arrived';
     },
   };
   const opened: { path: string; evidence: unknown }[] = [];
@@ -255,7 +255,7 @@ describe('the tour player, with a fake stage', () => {
     expect(player.playback).toMatchObject({ index: 1, status: 'showing' });
     // a stage that finds the plane gone at rest skips the stop
     const closing = new TourPlayer(
-      { frames: false, travel: async () => false },
+      { frames: false, travel: async () => 'gone' },
       ports,
       { ...tour, stops: [tour.stops[0]!, tour.stops[2]!] },
       () => {},
@@ -265,6 +265,19 @@ describe('the tour player, with a fake stage', () => {
     expect(closing.playback).toMatchObject({
       status: 'skipping',
       notice: { text: 'Bracket.pdf was closed before it was shown. Skipping this stop.' },
+    });
+    // one the space never placed, while it stayed open, says so
+    const unplaced = new TourPlayer(
+      { frames: false, travel: async () => 'unplaced' },
+      ports,
+      { ...tour, stops: [tour.stops[0]!, tour.stops[2]!] },
+      () => {},
+    );
+    unplaced.play();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(unplaced.playback).toMatchObject({
+      status: 'skipping',
+      notice: { text: 'The space did not show Bracket.pdf in time. Skipping this stop.' },
     });
   });
   it('opens nothing for a stop it has left, nor after Stop', async () => {

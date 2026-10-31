@@ -44,7 +44,7 @@ import { routeFileKeyboard } from '../explorer/selection';
 
 import { flattenTree, hostID } from './tree';
 import { allowTerminalStart, terminalStartDeferred } from '../terminals/sessions';
-import { paneRoute } from './tree';
+import { surfaceRoutes } from './tree';
 export { frameWorkspace } from './framing';
 export { flattenTree, hostID } from './tree';
 const FolderScene = memo(function FolderScene({ id }: { id: string }) {
@@ -444,9 +444,7 @@ export function WorkspaceSurface({
     if (tiled) applyTiling(engine, surface);
   }, [tiled, engine, surface]);
   // The engine needs a stable `view` array: rebuild it only when a route changes.
-  const routes = (space.layout ? space.panes.map((pane) => pane.id) : space.roots)
-    .map((id) => paneRoute(space.panes.find((item) => item.id === id)?.type ?? 'preview', id))
-    .join('\n');
+  const routes = surfaceRoutes(space);
   const view = useMemo(() => (routes ? routes.split('\n') : []), [routes]);
   // A new epoch (workspace reset) needs a fresh adapter for the same workspace ID.
   // eslint-disable-next-line react-hooks/exhaustive-deps

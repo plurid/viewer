@@ -14,6 +14,7 @@ import type { CheckProgress, CheckRecord, CheckResult } from '../src/domain/fabr
 import { FabricationChecks } from '../src/desktop/fabrication/service';
 import { samSegmenter } from '../src/desktop/models/segmentation';
 import { correctDrawing } from '../src/domain/fabrication/correction';
+import { correctionProposal } from '../src/domain/fabrication/plan';
 import { defaultSettings } from '../src/domain/services';
 import { drawPagesInNode } from '../tools/fabrication/live-pages';
 import { liveJobs } from '../tools/playground/samples/fabrication-jobs';
@@ -286,8 +287,8 @@ describe('one cause, one finding', () => {
       move: ['9'],
       also: [{ from: '12', to: '11', axis: 'x', target: 28, measured: 30 }],
     });
-    expect(correction!.description[1]).toBe(
-      'pitches along x from 58.00 mm to 60.00 mm and from 30.00 mm to 28.00 mm',
+    expect(correctionProposal(correction!.plan, correction!.name)).toBe(
+      'pitches along x from 58.00 mm to 60.00 mm and from 30.00 mm to 28.00 mm, moving 2 holes, saved as g5-TP40-A1-4buc (corrected).dxf beside the original, which is kept',
     );
     const corrected = correctDrawing(
       await readFile(correction!.source, 'utf8'),

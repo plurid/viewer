@@ -33,6 +33,7 @@ import type {
   TokenUsage,
 } from './live-score';
 import { fabricationAnswerSchema } from '../../src/domain/fabrication/answer';
+import { correctionDescription } from '../../src/domain/fabrication/plan';
 import { checkInstructions, pageText } from '../../src/domain/fabrication/prompt';
 import { modelEndpoint, modelPermissionCovers } from '../../src/domain/models/permissions';
 import { providerPresets } from '../../src/domain/models/providers';
@@ -422,7 +423,7 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
                         correction: {
                           plan: correction.plan,
                           name: correction.name,
-                          description: correction.description,
+                          description: correctionDescription(correction.plan),
                         },
                       }
                     : {}),

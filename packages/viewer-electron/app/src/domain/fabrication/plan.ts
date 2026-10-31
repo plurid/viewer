@@ -117,13 +117,22 @@ export function savedPitches(report: Pick<CorrectionReport, 'before' | 'after' |
   return `${pitches.length === 1 ? 'Pitch' : 'Pitches'} ${listText(pitches.map((pitch) => `${millimetreText(pitch.before)} → ${millimetreText(pitch.after)}`))}`;
 }
 
+/** "1 hole", "2 holes": the hole the plan moves and those that move with it. */
+const holesText = (plan: DXFCorrection) => {
+  const holes = 1 + plan.move.length;
+  return holes === 1 ? '1 hole' : `${holes} holes`;
+};
 /** The plan in words, for its review. */
 export function correctionDescription(plan: DXFCorrection): string[] {
-  const holes = 1 + plan.move.length;
   return [
     'DXF correction',
     pitchesText([plan, ...(plan.also ?? [])]),
-    `moves ${holes === 1 ? '1 hole' : `${holes} holes`}`,
+    `moves ${holesText(plan)}`,
     'a new DXF beside the original, which is kept',
   ];
+}
+/** The plan as a check proposes it, in one line: what changes, and the copy that holds it. */
+export function correctionProposal(plan: DXFCorrection, name: string): string {
+  const pitches = pitchesText([plan, ...(plan.also ?? [])]);
+  return `${pitches}, moving ${holesText(plan)}, saved as ${name} beside the original, which is kept`;
 }
