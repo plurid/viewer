@@ -178,6 +178,7 @@ export function Dialog({
           onClose();
       }}
       aria-label={title}
+      data-plurid-overlay="dialog"
       onKeyDown={onKeyDown}
     >
       <header>
@@ -296,7 +297,7 @@ function reportCopyFailure(error: unknown): void {
   if (getState()) report(error);
 }
 /**
- * Copies paths through the desktop pasteboard and text through the clipboard, then says Copied
+ * Copies paths and text through the desktop pasteboard, then says Copied
  * for a moment, announced politely. A failure says Not copied, with its reason, and is reported.
  */
 export function CopyButton({

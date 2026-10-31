@@ -59,6 +59,7 @@ describe('staged Git commit message dialog', () => {
       replace = () => setDialog(replacement);
       return createElement(WindowDialogs, {
         dialog,
+        onChange: setDialog,
         workspace,
         transitionWorkspace: (change) => change(),
         onClose: (expected) => {
@@ -109,6 +110,7 @@ describe('staged Git commit message dialog', () => {
       createElement(WindowDialogs, {
         dialog: { type: 'git-commit', id, target: { ...target, directory } } satisfies WindowDialog,
         onClose,
+        onChange: vi.fn(),
         workspace,
         transitionWorkspace: (change) => change(),
       });

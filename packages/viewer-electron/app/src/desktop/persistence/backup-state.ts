@@ -190,6 +190,11 @@ export function restoreBackupState(
       },
     },
     activeWorkspace: id(state.activeWorkspace),
+    workspaceVisits:
+      state.workspaceVisits &&
+      Object.fromEntries(
+        Object.entries(state.workspaceVisits).map(([owner, last]) => [id(owner), last]),
+      ),
     favorites: state.favorites.map((item) => ({ ...item, path: map(item.path) })),
     recents: state.recents.map(map),
     visits:

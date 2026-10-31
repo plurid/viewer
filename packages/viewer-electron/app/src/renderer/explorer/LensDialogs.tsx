@@ -461,7 +461,7 @@ function TrashLensDialog({
     onClose();
   };
   return (
-    <Dialog title="Move Lens to Trash?" onClose={onClose} className="trash-dialog">
+    <Dialog title="Move Lens to Trash?" onClose={onClose} className="trash-confirmation">
       <p className="dialog-copy">
         Move the lens “{prompt.document.lens.name}” to the system Trash? Its groups and places go
         with it; the items in this folder stay where they are.

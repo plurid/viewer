@@ -29,9 +29,11 @@ export function OperationsPanel() {
   const jobs = useViewer((state) => state.jobs);
   const open = useViewer((state) => state.operationsOpen);
   const history = useViewer((state) => state.operationsHistory);
-  const visibleJobs = (
-    history ? jobs : jobs.filter((job) => isActiveJob(job) || job.status === 'failed')
-  ).toSorted((a, b) => Number(b.status === 'collision') - Number(a.status === 'collision'));
+  const visibleJobs = jobs
+    .filter((job) => isActiveJob(job) || (!job.dismissed && (history || job.status === 'failed')))
+    .toSorted((a, b) => Number(b.status === 'collision') - Number(a.status === 'collision'));
+  const finished = jobs.filter((job) => !job.dismissed && !isActiveJob(job));
+  const [clearing, setClearing] = useState(false);
   const [all, setAll] = useState<Record<string, boolean>>({});
   const [replace, setReplace] = useState<{ id: string; path: string; applyAll: boolean } | null>(
     null,
@@ -63,6 +65,21 @@ export function OperationsPanel() {
       label="File operations"
       role="dialog"
       title="File operations"
+      actions={
+        <button
+          disabled={clearing || !finished.length}
+          title="Clear finished operations from this list"
+          onClick={() => {
+            setClearing(true);
+            void window.viewer
+              .dismissJobs(finished.map((job) => job.id))
+              .catch(report)
+              .finally(() => setClearing(false));
+          }}
+        >
+          Clear all
+        </button>
+      }
       onClose={() => setOperationsOpen(false)}
       closeLabel="Close operations"
       onKeyDown={(event) => {

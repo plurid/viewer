@@ -1,3 +1,4 @@
+import { maximumWorkspaces } from '../../../domain/workspaces/catalog';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
@@ -9,6 +10,15 @@ export function workspacesCommands({
   workspaceScope,
 }: WindowScopes): CommandDefinition[] {
   const commands: CommandDefinition[] = [
+    {
+      id: 'manage-workspaces',
+      label: 'Manage workspaces…',
+      group: 'Workspaces',
+      icon: 'grid',
+      aliases: ['all workspaces', 'browse workspaces'],
+      when: workspaceScope,
+      run: () => actions.workspaceDialog('manage'),
+    },
     {
       id: 'change-workspace',
       label: 'Change workspace…',
@@ -25,7 +35,8 @@ export function workspacesCommands({
       group: 'Workspaces',
       icon: 'plus',
       aliases: ['nw'],
-      when: (context) => workspaceScope(context) && state.saved.workspaces.length < 30,
+      when: (context) =>
+        workspaceScope(context) && state.saved.workspaces.length < maximumWorkspaces,
       run: () => actions.workspaceDialog('new'),
     },
     {

@@ -1,3 +1,4 @@
+import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
 import { randomUUID } from 'node:crypto';
 import { boundPreviewHistory } from '../../domain/previews/history';
 import { CURRENT_STATE_VERSION, type SavedState, type Workspace } from '../../domain/contracts';
@@ -14,6 +15,8 @@ const shared = (state: SavedState) => ({
   favorites: state.favorites,
   recents: state.recents,
   lineHistory: state.lineHistory,
+  workspaceVisits: state.workspaceVisits,
+  openWindows: state.openWindows,
 });
 /** Whether the merged state holds anything the saving window did not send. */
 export function mergeChanged(sent: SavedState, merged: SavedState): boolean {
@@ -76,8 +79,8 @@ export class WorkspaceSessions {
   }
 
   create(home: string, name = 'Workspace'): string {
-    if ((this.current?.workspaces.length ?? 0) >= 30)
-      throw new Error('The maximum of 30 workspaces has been reached.');
+    if ((this.current?.workspaces.length ?? 0) >= maximumWorkspaces)
+      throw new Error(`The maximum of ${maximumWorkspaces} workspaces has been reached.`);
     const paneID = randomUUID();
     const workspace: Workspace = {
       id: randomUUID(),
@@ -121,6 +124,7 @@ export class WorkspaceSessions {
         this.create(home);
     if (!this.current!.workspaces.some((space) => space.id === workspaceID))
       throw new Error('This workspace is no longer available.');
+    this.current!.workspaceVisits = { ...this.current!.workspaceVisits, [workspaceID]: Date.now() };
     const snapshot = {
       ...structuredClone(this.current!),
       activeWorkspace: workspaceID,
@@ -147,7 +151,13 @@ export class WorkspaceSessions {
 
   focus(owner: number): void {
     const session = this.sessions.get(owner);
-    if (session && this.current) this.current.activeWorkspace = session.workspaceID;
+    if (session && this.current) {
+      this.current.activeWorkspace = session.workspaceID;
+      this.current.workspaceVisits = {
+        ...this.current.workspaceVisits,
+        [session.workspaceID]: Date.now(),
+      };
+    }
   }
 
   close(owner: number): void {
@@ -217,6 +227,13 @@ export class WorkspaceSessions {
       version: CURRENT_STATE_VERSION,
       workspaces: [...next.values()],
     };
+    if (merged.workspaces.length > maximumWorkspaces)
+      throw new Error(`The maximum of ${maximumWorkspaces} workspaces has been reached.`);
+    merged.workspaceVisits = mergeWorkspaceVisits(
+      merged.workspaces,
+      merged.workspaceVisits,
+      input.workspaceVisits,
+    );
     // Shared lists merge only this window's changes, retaining unrelated additions and removals.
     for (const key of ['favorites', 'recents', 'lineHistory'] as const) {
       if (sameJSON(input[key], baseline[key])) continue;

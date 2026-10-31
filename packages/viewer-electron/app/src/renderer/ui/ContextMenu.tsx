@@ -8,6 +8,7 @@ import { layerContainer, useAnchoredLayer } from './Popover';
 import { suggestionsFor } from '../commands/suggestions';
 import { toolFiles } from '../commands/target';
 import type { HeaderLead } from '../workspace/header-overflow';
+import { recentWorkspaceIDs } from '../../domain/workspaces/catalog';
 
 /** Outside transformed planes, with a fixed target and keyboard-first search. */
 export function ContextMenu({
@@ -17,6 +18,7 @@ export function ContextMenu({
   label = 'Actions',
   anchor,
   lead,
+  workspaceSwitcher = false,
 }: {
   position: { x: number; y: number };
   request: CommandRequest;
@@ -25,15 +27,17 @@ export function ContextMenu({
   anchor?: HTMLElement;
   /** The commands of what the plane header could not show: first, in the header's order. */
   lead?: HeaderLead;
+  workspaceSwitcher?: boolean;
 }) {
   const registry = useCommands();
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
-  // at the pointer, inside the window and at most 540 px tall; focus goes back to what had it
+  const saved = useViewer((state) => state.saved);
+  // The workspace menu has room for recent workspaces and the full action groups.
   const menu = useAnchoredLayer({
     anchor,
     point: position,
-    fit: 540,
+    fit: workspaceSwitcher ? 760 : 540,
     select: (root) => root.querySelector<HTMLElement>('.context-menu'),
     onClose,
   });
@@ -81,6 +85,7 @@ export function ContextMenu({
         focused={!!request.ids}
         suggested={suggested}
         lead={lead}
+        workspaceIDs={workspaceSwitcher ? recentWorkspaceIDs(saved) : undefined}
       />
     </div>,
     container,

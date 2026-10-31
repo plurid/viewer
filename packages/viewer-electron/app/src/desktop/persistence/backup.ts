@@ -1,3 +1,4 @@
+import { maximumWorkspaces } from '../../domain/workspaces/catalog';
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, open, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -369,9 +370,9 @@ export class PersonalBackups {
     await this.host.flush();
     this.requireOwner(owner);
     const current = await this.host.state();
-    if ((current?.workspaces.length ?? 0) + item.backup.state.workspaces.length > 30)
+    if ((current?.workspaces.length ?? 0) + item.backup.state.workspaces.length > maximumWorkspaces)
       throw new Error(
-        'Restoring these workspaces would exceed the limit of 30. Export smaller groups first.',
+        `Restoring these workspaces would exceed the limit of ${maximumWorkspaces}. Export smaller groups first.`,
       );
     const ids = backupIdentityMap(
       item.backup.state,

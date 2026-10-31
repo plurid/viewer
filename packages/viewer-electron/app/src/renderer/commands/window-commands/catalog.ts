@@ -1,6 +1,7 @@
 import type { CommandDefinition } from '../registry';
 import { baseName, paneTitle } from '../../../domain/workspaces/planes';
 import type { WindowScopes } from './scope';
+import { orderedWorkspaces } from '../../../domain/workspaces/catalog';
 
 /** Dynamic entries: workspaces, open planes, places and saved searches. */
 export function catalogCommands({
@@ -11,7 +12,7 @@ export function catalogCommands({
   workspaceScope,
 }: WindowScopes): CommandDefinition[] {
   const commands: CommandDefinition[] = [];
-  for (const entry of state.saved.workspaces)
+  for (const entry of orderedWorkspaces(state.saved))
     commands.push({
       id: `workspace:${entry.id}`,
       label: entry.name,

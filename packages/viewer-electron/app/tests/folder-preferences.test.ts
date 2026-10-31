@@ -290,7 +290,12 @@ describe('folder appearance and independent explorer sessions', () => {
     expect(returned).toBe(session);
     expect(returned.expanded).toEqual(['/fixtures/new/child']);
     remapSessions([{ source: '/fixtures/new', destination: '/fixtures/final' }]);
-    expect(returned.columnTrail).toEqual(['/fixtures/final/child']);
+    expect(returned.columnTrail).toEqual([
+      '/',
+      '/fixtures',
+      '/fixtures/final',
+      '/fixtures/final/child',
+    ]);
   });
   it('merges pending list edits with incoming Settings and clamps browser width at its declared limits', () => {
     updateFolderPresentation('/fixtures', { list: { visible: { kind: false } } });

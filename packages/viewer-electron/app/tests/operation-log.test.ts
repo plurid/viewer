@@ -50,6 +50,66 @@ const receipt = (overrides: Partial<OperationJob> = {}): OperationReceipt => {
 const logFile = (id: string) => path.join(data, 'operation-journal-v2', id + '.jsonl');
 
 describe('append-only operation log', () => {
+  it('clears finished notifications durably while preserving receipts and Undo', async () => {
+    const log = new OperationLog(data);
+    await log.load();
+    const value = receipt({ status: 'completed', undoable: true });
+    delete value.intent;
+    value.undo = [
+      {
+        from: path.join(root, 'out', 'a'),
+        to: path.join(root, 'a'),
+        identity: '1:1',
+        size: 0,
+        modified: 0,
+      },
+    ];
+    await log.record(value);
+    const operations = new Operations(
+      async () => {
+        throw new Error('No file removal');
+      },
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      data,
+    );
+    try {
+      await operations.load();
+      await operations.dismiss([value.job.id]);
+      expect(operations.all()[0]).toMatchObject({
+        dismissed: true,
+        undoable: true,
+        status: 'completed',
+      });
+      const restored = (await new OperationLog(data).load()).receipts[0];
+      expect(restored.job).toMatchObject({ dismissed: true, undoable: true });
+      expect(restored.undo).toEqual(value.undo);
+      expect(restored.request).toEqual(value.request);
+      restored.intent = { source: path.join(root, 'out', 'a'), destination: path.join(root, 'a') };
+      const interrupted = new OperationLog(data);
+      await interrupted.load();
+      await interrupted.record(restored);
+      const restarted = new Operations(
+        async () => {},
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        data,
+      );
+      try {
+        await restarted.load();
+        expect(restarted.all()[0]).toMatchObject({ status: 'failed', undoable: false });
+        expect(restarted.all()[0].dismissed).toBeUndefined();
+      } finally {
+        await restarted.close();
+      }
+    } finally {
+      await operations.close();
+    }
+  });
   it('appends only changes, so a long job writes linearly, and compacts when finished', async () => {
     const files = Array.from({ length: 150 }, (_, index) => path.join(root, `file-${index}.txt`));
     await Promise.all(files.map((file) => writeFile(file, 'contents')));

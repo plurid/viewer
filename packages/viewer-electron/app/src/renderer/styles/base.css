@@ -114,7 +114,7 @@ button:hover {
   background: var(--raised);
 }
 button:active {
-  background: var(--selection);
+  background: var(--raised);
 }
 button:disabled {
   cursor: default;
@@ -543,8 +543,13 @@ select {
   cursor: col-resize;
   touch-action: none;
 }
-.sidebar-resizer:hover,
-.sidebar-resizer:focus-visible {
+.sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+}
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after {
   background: var(--accent);
 }
 .count-badge {

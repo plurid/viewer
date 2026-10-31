@@ -87,6 +87,7 @@ const job = z
       .object({ source: file, destination: file, replaceable: z.boolean().optional() })
       .optional(),
     undoable: z.boolean(),
+    dismissed: z.boolean().optional(),
     redoable: z.boolean().optional(),
     recovery: z
       .object({

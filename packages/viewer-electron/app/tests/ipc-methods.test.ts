@@ -7,8 +7,28 @@ import {
 } from '../src/desktop/ipc/schemas';
 import { Desktop } from '../src/desktop/bridge';
 import { paneTypes } from '../src/domain/contracts';
+import { createPasteboardHandlers } from '../src/desktop/ipc/pasteboard-handlers';
 
 describe('IPC method table', () => {
+  it('copies plain text through the desktop without treating output as file paths', async () => {
+    const writeText = vi.fn(async () => {});
+    const requireAccess = vi.fn();
+    const handlers = createPasteboardHandlers({
+      pasteboard: { writeText, write: vi.fn(), read: vi.fn(), dropped: vi.fn(), copyText: vi.fn() },
+      fileAccess: { require: requireAccess },
+      window: () => undefined,
+    });
+    const text = 'Applications\nModel α: completed\n';
+    await handlers.clipboardWriteText(schemas.clipboardWriteText.parse([text]), 1);
+    expect(writeText).toHaveBeenCalledWith(text);
+    expect(requireAccess).not.toHaveBeenCalled();
+    expect(methodWindows.clipboardWriteText).toBe('both');
+    expect(schemas.clipboardWriteText.safeParse(['']).success).toBe(true);
+    expect(schemas.clipboardWriteText.safeParse([{}]).success).toBe(false);
+    expect(schemas.clipboardWriteText.safeParse(['x'.repeat(16 * 1024 * 1024 + 1)]).success).toBe(
+      false,
+    );
+  });
   it('bounds worksheet pages and cancellation to existing viewer resources', () => {
     expect(schemas.document.safeParse(['resource']).success).toBe(true);
     expect(

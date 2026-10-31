@@ -2,6 +2,7 @@ import type { ResolvedCommand } from './registry';
 import type { Suggestion } from './suggestions';
 import type { IconName } from '../ui/Icon';
 import type { HeaderLead } from '../workspace/header-overflow';
+import { recentWorkspaceLimit } from '../../domain/workspaces/catalog';
 
 export interface MenuSection {
   label?: string;
@@ -211,6 +212,7 @@ export function contextMenuSections(
   suggested: readonly Suggestion[] = [],
   /** What the plane header could not show, which leads (workspace/header-overflow.ts). */
   lead: HeaderLead = [],
+  workspaceIDs?: readonly string[],
 ): MenuSection[] {
   const remaining = new Map(commands.map((item) => [item.id, item]));
   const take = (ids: readonly string[]) => {
@@ -224,6 +226,20 @@ export function contextMenuSections(
     return items;
   };
   const sections: MenuSection[] = [];
+  if (!focused) {
+    if (workspaceIDs) {
+      sections.push(
+        section(take(workspaceIDs.slice(0, recentWorkspaceLimit)), 'Recent workspaces'),
+      );
+      sections.push(section(take(['manage-workspaces'])));
+    }
+    // The complete catalog remains searchable without becoming an unbounded flyout.
+    take(
+      commands
+        .filter((command) => command.id.startsWith('workspace:'))
+        .map((command) => command.id),
+    );
+  }
   if (!focused) {
     // in the header's order: a control of one command as its row, one of several, such as the
     // View menu, as its group's submenu

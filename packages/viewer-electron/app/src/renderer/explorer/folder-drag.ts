@@ -47,13 +47,13 @@ export function folderDragNavigation(id: string) {
       }
     },
     open: (entry, before) => {
-      if (entry.path === before.pane.path) return before;
+      if (entry.path === (before.pane.mode === 'columns' ? before.directory : before.pane.path))
+        return before;
       if (before.pane.mode === 'columns') {
-        const depth =
-          entry.parent === before.pane.path ? 0 : before.trail.indexOf(entry.parent) + 1;
-        if (entry.parent !== before.pane.path && !depth) return before;
+        const depth = before.trail.indexOf(entry.parent);
+        if (depth < 0) return before;
         updateBrowseSession(id, before.pane.path, {
-          columnTrail: [...before.trail.slice(0, depth), entry.path],
+          columnTrail: [...before.trail.slice(0, depth + 1), entry.path],
           columnScope: entry.path,
           columnDirectory: entry.path,
         });

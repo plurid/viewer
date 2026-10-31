@@ -56,10 +56,32 @@
   font-size: var(--text-label);
   color: var(--muted);
 }
-.trash-dialog .dialog-copy {
-  overflow-wrap: anywhere;
+.trash-confirmation {
+  max-height: calc(100vh - 60px);
 }
-.trash-dialog footer {
+.trash-confirmation[open] {
+  display: flex;
+  flex-direction: column;
+}
+.trash-confirmation > header,
+.trash-confirmation > footer {
+  flex: none;
+}
+.trash-confirmation-copy {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gap-dialog);
+  display: grid;
+  gap: var(--gap-content);
+}
+.trash-confirmation .dialog-copy {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.trash-confirmation-copy .dialog-copy {
+  padding: 0;
+}
+.trash-confirmation footer {
   flex-wrap: wrap;
 }
 .dialog-copy {

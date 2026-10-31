@@ -242,6 +242,7 @@ export class Operations {
       const interruptedUndo =
         !!receipt.intent && ['completed', 'failed', 'cancelled'].includes(job.status);
       if (receipt.intent || isActiveJob(job)) {
+        delete job.dismissed;
         job.status = 'failed';
         job.collision = undefined;
         job.current = undefined;
@@ -301,6 +302,17 @@ export class Operations {
   }
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
+  }
+  /** Clearing finished notifications preserves receipts, recovery paths and Undo. */
+  async dismiss(ids: readonly string[]): Promise<void> {
+    await this.load();
+    for (const id of new Set(ids)) {
+      const task = this.tasks.get(id);
+      if (!task || isActiveJob(task.job) || task.job.dismissed || this.undoing.has(id)) continue;
+      task.job.dismissed = true;
+      this.emit(task);
+    }
+    await this.checkpoint();
   }
   /** Exact native Trash receipts only; a filename alone never proves an origin. */
   async trashOrigins(): Promise<TrashOrigin[]> {
@@ -1113,6 +1125,7 @@ export class Operations {
     return task;
   }
   private emit(task: Task): void {
+    if (isActiveJob(task.job)) delete task.job.dismissed;
     this.dirty.add(task);
     task.job.revision++;
     task.job.errorCount = task.job.errors.length;

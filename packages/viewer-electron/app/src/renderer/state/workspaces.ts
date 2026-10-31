@@ -1,3 +1,4 @@
+import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
 import { presentationValue } from '../../domain/preferences/presentation/profile-fields';
 // Workspace lifecycle: startup, switching, creation, deletion and restoring.
 import { overridable, type WorkspaceOverrides } from '../../domain/preferences/overrides';
@@ -100,12 +101,15 @@ export function initialize(bootstrap: Bootstrap): void {
       );
     });
     if (pristine) saved.activeWorkspace = pristine.id;
-    else if (saved.workspaces.length < 30) {
+    else if (saved.workspaces.length < maximumWorkspaces) {
       saved.workspaces = [...saved.workspaces, workspace];
       saved.activeWorkspace = workspace.id;
     }
   }
   const active = activeWorkspace({ saved } as ViewerState);
+  saved.workspaceVisits = mergeWorkspaceVisits(saved.workspaces, saved.workspaceVisits, {
+    [active.id]: Date.now(),
+  });
   replaceState({
     bootstrap,
     settings,
@@ -130,7 +134,11 @@ export async function switchWorkspace(id: string): Promise<void> {
   await flushState();
   if (window.viewer.workspaceClaim && !(await window.viewer.workspaceClaim(id))) return;
   stopTour();
-  savePatch({ activeWorkspace: id, profile: undefined });
+  savePatch({
+    activeWorkspace: id,
+    profile: undefined,
+    workspaceVisits: { ...getState().saved.workspaceVisits, [id]: Date.now() },
+  });
   update({
     ...getState(),
     activePane: activeWorkspace().activePane || activeWorkspace().panes[0]?.id || '',
@@ -145,14 +153,28 @@ export function receiveWorkspaces(saved: SavedState): void {
   const active = activeWorkspace();
   const workspaces = saved.workspaces.map((space) => (space.id === active.id ? active : space));
   if (!workspaces.some((space) => space.id === active.id)) workspaces.push(active);
+  const workspaceVisits = mergeWorkspaceVisits(
+    workspaces,
+    current.saved.workspaceVisits,
+    saved.workspaceVisits,
+  );
   // An unchanged state would still replace `saved` and re-render everything that reads it.
   const unchanged =
-    JSON.stringify([workspaces, saved.favorites, saved.recents, saved.lineHistory]) ===
+    JSON.stringify([
+      workspaces,
+      saved.favorites,
+      saved.recents,
+      saved.lineHistory,
+      workspaceVisits,
+      saved.openWindows,
+    ]) ===
     JSON.stringify([
       current.saved.workspaces,
       current.saved.favorites,
       current.saved.recents,
       current.saved.lineHistory,
+      current.saved.workspaceVisits,
+      current.saved.openWindows,
     ]);
   if (unchanged) return;
   for (const space of workspaces) {
@@ -163,6 +185,8 @@ export function receiveWorkspaces(saved: SavedState): void {
     saved: {
       ...current.saved,
       workspaces,
+      workspaceVisits,
+      openWindows: saved.openWindows,
       favorites: saved.favorites,
       recents: saved.recents,
       lineHistory: saved.lineHistory,
@@ -170,8 +194,8 @@ export function receiveWorkspaces(saved: SavedState): void {
   });
 }
 export async function newWorkspace(name: string): Promise<void> {
-  if (getState().saved.workspaces.length >= 30)
-    throw new Error('The maximum of 30 workspaces has been reached.');
+  if (getState().saved.workspaces.length >= maximumWorkspaces)
+    throw new Error(`The maximum of ${maximumWorkspaces} workspaces has been reached.`);
   await flushState();
   stopTour();
   const pane = folderPane(getState().bootstrap.home, {
@@ -191,6 +215,7 @@ export async function newWorkspace(name: string): Promise<void> {
     workspaces: [...getState().saved.workspaces, workspace],
     activeWorkspace: workspace.id,
     profile: undefined,
+    workspaceVisits: { ...getState().saved.workspaceVisits, [workspace.id]: Date.now() },
   });
   update({ ...getState(), activePane: pane.id });
   await flushState(false);
@@ -199,9 +224,9 @@ export async function newWorkspace(name: string): Promise<void> {
 export async function appendRestoredWorkspaces(imported: SavedState): Promise<void> {
   await flushState();
   const current = getState().saved;
-  if (current.workspaces.length + imported.workspaces.length > 30)
+  if (current.workspaces.length + imported.workspaces.length > maximumWorkspaces)
     throw new Error(
-      'There is room for at most 30 workspaces. The restored documents were preserved.',
+      `There is room for at most ${maximumWorkspaces} workspaces. The restored documents were preserved.`,
     );
   if (imported.workspaces.some((space) => current.workspaces.some((item) => item.id === space.id)))
     throw new Error('A restored workspace identity is already open.');
@@ -212,6 +237,7 @@ export async function appendRestoredWorkspaces(imported: SavedState): Promise<vo
     if (!favorites.some((existing) => existing.path === item.path)) favorites.push(item);
   savePatch({
     workspaces: [...current.workspaces, ...imported.workspaces],
+    workspaceVisits: { ...current.workspaceVisits, ...imported.workspaceVisits },
     previewStates: { ...current.previewStates, ...imported.previewStates },
     previewHistory: { ...current.previewHistory, ...imported.previewHistory },
     favorites: favorites.slice(0, 200),
@@ -220,8 +246,18 @@ export async function appendRestoredWorkspaces(imported: SavedState): Promise<vo
   await flushState(false);
   await switchWorkspace(imported.activeWorkspace);
 }
-export function renameWorkspace(name: string): void {
-  changeWorkspace((space) => ({ ...space, name }));
+export function renameWorkspace(name: string, id = activeWorkspace().id): void {
+  if (id === activeWorkspace().id) {
+    changeWorkspace((space) => ({ ...space, name }));
+    return;
+  }
+  if (getState().saved.openWindows?.includes(id))
+    throw new Error('Switch to this workspace’s window to rename it.');
+  savePatch({
+    workspaces: getState().saved.workspaces.map((space) =>
+      space.id === id ? { ...space, name } : space,
+    ),
+  });
 }
 /** A setting of the active workspace's own; undefined goes back to the general one. */
 export function setWorkspaceOverride(path: string, value: unknown): void {
@@ -259,6 +295,8 @@ export function setWorkspaceSpaceColor(color: string): void {
 }
 /** Removes only saved Viewer layout. No filesystem service is involved. */
 export async function deleteWorkspace(id: string): Promise<void> {
+  if (id !== activeWorkspace().id && getState().saved.openWindows?.includes(id))
+    throw new Error('Switch to this workspace’s window to delete it.');
   const index = getState().saved.workspaces.findIndex((space) => space.id === id);
   if (index < 0) return;
   await flushState();
@@ -279,7 +317,14 @@ export async function deleteWorkspace(id: string): Promise<void> {
   update(
     {
       ...getState(),
-      saved: { ...getState().saved, workspaces, activeWorkspace: active.id },
+      saved: {
+        ...getState().saved,
+        workspaces,
+        activeWorkspace: active.id,
+        workspaceVisits: mergeWorkspaceVisits(workspaces, getState().saved.workspaceVisits, {
+          [active.id]: Date.now(),
+        }),
+      },
       activePane: active.activePane || active.panes[0]?.id || '',
       quickPreview: null,
       deletedWorkspace: { workspace, index, replacement },
@@ -304,13 +349,21 @@ export async function restoreWorkspace(): Promise<void> {
   const workspaces = getState().saved.workspaces.filter(
     (space) => !(space.id === deleted.replacement && !space.panes.length),
   );
-  if (workspaces.length >= 30) throw new Error('Close a workspace before restoring this one.');
+  if (workspaces.length >= maximumWorkspaces)
+    throw new Error('Close a workspace before restoring this one.');
   workspaces.splice(Math.min(deleted.index, workspaces.length), 0, deleted.workspace);
   adapters.set(deleted.workspace.id, new Map(Object.entries(deleted.workspace.arrangement)));
   update(
     {
       ...getState(),
-      saved: { ...getState().saved, workspaces, activeWorkspace: deleted.workspace.id },
+      saved: {
+        ...getState().saved,
+        workspaces,
+        activeWorkspace: deleted.workspace.id,
+        workspaceVisits: mergeWorkspaceVisits(workspaces, getState().saved.workspaceVisits, {
+          [deleted.workspace.id]: Date.now(),
+        }),
+      },
       activePane: deleted.workspace.activePane || deleted.workspace.panes[0]?.id || '',
       deletedWorkspace: null,
     },

@@ -92,7 +92,7 @@ function TrashConfirmation({ context, onClose }: { context: CommandContext; onCl
     <Dialog
       title="Move to Trash?"
       onClose={onClose}
-      className="trash-dialog"
+      className="trash-confirmation"
       onKeyDown={(event) => {
         if (
           event.key !== 'Enter' ||
@@ -109,14 +109,16 @@ function TrashConfirmation({ context, onClose }: { context: CommandContext; onCl
         confirm();
       }}
     >
-      <p className="dialog-copy">
-        Move{' '}
-        {context.selection.length === 1
-          ? `“${context.selection[0]?.name}”`
-          : `${context.selection.length} items`}{' '}
-        to the system Trash?
-      </p>
-      <TrashContents context={context} />
+      <div className="trash-confirmation-copy">
+        <p className="dialog-copy">
+          Move{' '}
+          {context.selection.length === 1
+            ? `“${context.selection[0]?.name}”`
+            : `${context.selection.length} items`}{' '}
+          to the system Trash?
+        </p>
+        <TrashContents context={context} />
+      </div>
       <footer>
         <button
           className="dialog-keyboard-action"

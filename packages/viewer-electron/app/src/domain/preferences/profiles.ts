@@ -16,6 +16,11 @@ export interface SettingProfile {
 /** What a profile saved from the current state holds: the window's chrome and the space's look. */
 export const profilePaths = [
   'ui.titlebar.visible',
+  'ui.titlebar.navigation',
+  'ui.titlebar.newPlane',
+  'ui.titlebar.operations',
+  'ui.titlebar.voice',
+  'ui.titlebar.commands',
   'ui.sidebar.visible',
   'ui.space.toolbar',
   'ui.space.minimap',

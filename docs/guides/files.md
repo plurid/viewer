@@ -23,6 +23,10 @@ The **View mode** button in the folder's header switches views too. To group ite
 empty space and choose **View → Group by**, then **Group by kind** or **Group by date modified**.
 **⌘⇧.** shows or hides hidden files.
 
+**Columns** shows the path from the filesystem root to the current folder and scrolls that folder
+into view. Scroll left to reach its ancestors, or use the left and right arrow keys to follow the
+folder trail.
+
 Sizes use decimal units, as Finder shows them: 1 KB is 1,000 bytes and 1 MB is 1,000,000 bytes.
 
 ## Select
@@ -53,13 +57,18 @@ original's storage until either one changes. Copies to another disk read and wri
 
 When a name already exists at the destination, Viewer asks whether to **Skip**, **Keep both** or
 **Replace**. The **File operations** button in the title bar shows each operation as a
-[job](../reference/terms.md#changes-and-recovery), with its progress and failures.
+[job](../reference/terms.md#changes-and-recovery), with its progress and failures. Choose **Clear
+all** in that panel to dismiss finished operations, including failures. Running and queued
+operations stay visible. Undo and recovery receipts remain available.
 
 **⌘Z** undoes the last file operation, and **⇧⌘Z** redoes it. An operation offers **Undo** for the
 items it finished, even when another item failed. Undo first checks that the files are still as the
 operation left them.
 
 ## Let Viewer suggest
+
+Right-click a shortcut in **Favorites** for **Suggested → Remove from Favorites**. This removes the
+saved shortcut; the folder and its contents stay in place.
 
 Right-click a file. Under **Suggested**, Viewer offers up to three actions that fit it, each with
 its reason:
@@ -116,7 +125,8 @@ and publisher.
 5. **Open results** keeps the matches in a search plane. **Save search…** keeps the query.
 
 To filter the folder you are in as you type, choose **Search this folder** (the magnifier) in the
-plane's header. **Search contents** there opens the words you typed as a document text search.
+plane's header. **Subfolders** includes names in nested folders. For document text, use the search
+panel's **Document text** option.
 
 A content result opens its passage in the document. [Search](../reference/search.md) lists every
 filter and how to save a search.

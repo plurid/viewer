@@ -800,14 +800,16 @@ function AppWindow() {
           onPointerLeave={titlebar.state === 'shown' ? undefined : titlebar.conceal}
         >
           <div className="traffic-space" />
-          <IconButton
-            icon="sidebar"
-            label={windowUI.sidebar.visible ? 'Hide window navigation' : 'Show window navigation'}
-            aria-pressed={windowUI.sidebar.visible}
-            onClick={() => {
-              void registry.invoke('toggle-sidebar', { sources: ['window'] }).catch(report);
-            }}
-          />
+          {windowUI.titlebar.navigation && (
+            <IconButton
+              icon="sidebar"
+              label={windowUI.sidebar.visible ? 'Hide window navigation' : 'Show window navigation'}
+              aria-pressed={windowUI.sidebar.visible}
+              onClick={() => {
+                void registry.invoke('toggle-sidebar', { sources: ['window'] }).catch(report);
+              }}
+            />
+          )}
           <button
             className="workspace-switcher"
             aria-label="Workspace"
@@ -831,17 +833,19 @@ function AppWindow() {
               Recording macro · {recordingMacro.length}
             </button>
           )}
-          <IconButton
-            icon="plus"
-            label="New folder plane (⌘N)"
-            disabled={!ready || space.panes.length >= 200}
-            onClick={() => {
-              void invoke('new-root-folder').catch(report);
-            }}
-          />
+          {windowUI.titlebar.newPlane && (
+            <IconButton
+              icon="plus"
+              label="New folder plane (⌘N)"
+              disabled={!ready || space.panes.length >= 200}
+              onClick={() => {
+                void invoke('new-root-folder').catch(report);
+              }}
+            />
+          )}
           <span className="toolbar-spacer" />
           <ActionHub />
-          {showOperations && (
+          {windowUI.titlebar.operations && showOperations && (
             <button
               className="operations-button"
               aria-label="File operations"
@@ -852,20 +856,24 @@ function AppWindow() {
               {inProgress > 0 && <span className="count-badge">{inProgress}</span>}
             </button>
           )}
-          <IconButton
-            icon="microphone"
-            label="Ask Viewer by voice"
-            onClick={() => {
-              void invoke('dictate').catch(report);
-            }}
-          />
-          <IconButton
-            icon="command"
-            label="Commands (⌘K)"
-            onClick={() => {
-              void invoke('palette').catch(report);
-            }}
-          />
+          {windowUI.titlebar.voice && (
+            <IconButton
+              icon="microphone"
+              label="Ask Viewer by voice"
+              onClick={() => {
+                void invoke('dictate').catch(report);
+              }}
+            />
+          )}
+          {windowUI.titlebar.commands && (
+            <IconButton
+              icon="command"
+              label="Commands (⌘K)"
+              onClick={() => {
+                void invoke('palette').catch(report);
+              }}
+            />
+          )}
         </header>
         <ProjectFileNotice />
         <div className="app-main">
@@ -898,7 +906,11 @@ function AppWindow() {
         {workspaceMenu && (
           <ContextMenu
             position={workspaceMenu}
-            request={{ sources: ['window'], scope: 'workspace' }}
+            request={{
+              sources: ['window'],
+              scope: 'workspace',
+            }}
+            workspaceSwitcher
             label="Workspaces"
             onClose={() => setWorkspaceMenu(null)}
           />
@@ -954,8 +966,14 @@ function AppWindow() {
         )}
         <WindowDialogs
           dialog={windowDialog}
+          onChange={setWindowDialog}
           onClose={(request) =>
-            setWindowDialog((current) => (current === request ? undefined : current))
+            setWindowDialog((current) => {
+              if (current !== request) return current;
+              return request?.type === 'workspace' && request.returnToManager
+                ? { type: 'workspace', kind: 'manage', id: activeWorkspace().id }
+                : undefined;
+            })
           }
           workspace={controller}
           transitionWorkspace={transitionWorkspace}

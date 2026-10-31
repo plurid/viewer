@@ -52,6 +52,15 @@ viewcube (**Show space toolbar**, **Show viewcube**).
 **⌥⌘Z** only undoes arrangement. File changes have their own **⌘Z**; see
 [Browse and organize](files.md#copy-move-and-rename).
 
+## Choose the title bar icons
+
+Open **Settings → Space → Title bar icons**. Toggle **Window navigation**, **New folder plane**,
+**File operations**, **Microphone** and **Commands** individually. The microphone starts hidden.
+Their commands and keyboard shortcuts remain available when an icon is hidden.
+
+Click the workspace name in the title bar to choose another workspace directly. **New workspace…**,
+**Rename workspace…**, **Workspace look…** and **Delete workspace…** follow the workspace list.
+
 ## Choose a plane's header buttons
 
 A plane's header starts with its everyday buttons: back and forward, the view, search, **Frame
@@ -136,9 +145,14 @@ exact format.
 
 ## Use several workspaces
 
-Choose the workspace's name at the top left of the window to switch workspaces, or to create, rename
-or delete one. **Workspace → New Workspace…** in the menu bar does the same. Give each kind of work
-its own: a writing workspace with a folder, a PDF and notes; a project workspace with an editor, a
+Choose the workspace's name at the top left of the window. Up to five recent workspaces appear above
+the full action menu, with a check beside the current workspace. **Manage workspaces…** opens the
+complete list: search by name, sort by recent use or name, and browse 25 at a time. Open, rename or
+delete a workspace from its row, or choose **New workspace…**. A workspace open in another window is
+managed from that window. Viewer remembers recent use across restarts.
+
+**Workspace → New Workspace…** in the menu bar also creates a workspace. Give each kind of work its
+own: a writing workspace with a folder, a PDF and notes; a project workspace with an editor, a
 terminal and a browser. Choose where new folder planes open in **Settings → Browsing → New folder
 planes start in**.
 

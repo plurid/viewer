@@ -1,3 +1,4 @@
+import { maximumWorkspaces } from '../../domain/workspaces/catalog';
 /** Argument schemas for every IPC method. The bridge validates each call against these
  * before it reaches a handler, and `ApiCall` carries the inferred argument types. */
 import { z } from 'zod';
@@ -62,7 +63,7 @@ const promptRequestSchema = z
         folder: localPath.optional(),
         selection: z.array(z.string().max(255)).max(50),
         workspace: z.string().max(100),
-        workspaces: z.array(z.string().max(100)).max(30),
+        workspaces: z.array(z.string().max(100)).max(maximumWorkspaces),
         commands: z
           .array(z.object({ id: z.string().max(200), label: z.string().max(200) }).strict())
           .max(600),
@@ -176,7 +177,7 @@ const workspaceSnapshotSchema = z.object({
       }),
     )
     .min(1)
-    .max(30),
+    .max(maximumWorkspaces),
 });
 const contextSchema = z.object({
   workspaceID: id,
@@ -748,6 +749,7 @@ export const schemas = {
     }),
   ]),
   jobs: z.tuple([]),
+  dismissJobs: z.tuple([z.array(id).max(100)]),
   cancelJob: z.tuple([id]),
   resolveCollision: z.tuple([id, z.enum(['skip', 'keep-both', 'replace', 'cancel']), z.boolean()]),
   undo: z.tuple([id]),
@@ -781,6 +783,7 @@ export const schemas = {
   save: z.tuple([stateSchema]),
   flushed: z.tuple([id, flushResultSchema.optional()]),
   clipboardWrite: z.tuple([z.array(localPath).max(10000), z.boolean()]),
+  clipboardWriteText: z.tuple([z.string().max(16 * 1024 * 1024)]),
   copyPaths: z.tuple([z.array(localPath).min(1).max(10000)]),
   clipboardRead: z.tuple([]),
   fileDropPaths: z.tuple([z.array(localPath).max(10000)]),
@@ -979,6 +982,7 @@ export const methodWindows = {
   cancelSearch: 'viewer',
   operate: 'viewer',
   jobs: 'viewer',
+  dismissJobs: 'viewer',
   cancelJob: 'viewer',
   resolveCollision: 'viewer',
   undo: 'viewer',
@@ -998,6 +1002,7 @@ export const methodWindows = {
   save: 'viewer',
   flushed: 'both',
   clipboardWrite: 'viewer',
+  clipboardWriteText: 'both',
   copyPaths: 'viewer',
   clipboardRead: 'viewer',
   fileDropPaths: 'viewer',

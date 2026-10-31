@@ -13,7 +13,6 @@ import { captureProfile, saveProfile } from '../commands/window-commands/profile
 import { commandName } from '../command-line/names';
 import { userCommands } from '../command-line/run';
 import {
-  activeWorkspace,
   announce,
   deleteWorkspace,
   getState,
@@ -23,6 +22,7 @@ import {
   renameWorkspace,
   report,
   saveCollection,
+  switchWorkspace,
   useViewer,
 } from '../state/store';
 import { slugID } from '../../domain/ids';
@@ -72,6 +72,9 @@ const WorkspaceBackgroundDialog = lazyComponent(() =>
 const ViewsDialog = lazyComponent(() =>
   import('../ui/workspace/ViewsDialog').then((module) => module.ViewsDialog),
 );
+const WorkspacesDialog = lazyComponent(() =>
+  import('../ui/workspace/WorkspacesDialog').then((module) => module.WorkspacesDialog),
+);
 const TasksDialog = lazyComponent(() =>
   import('../tasks/TasksDialog').then((module) => module.TasksDialog),
 );
@@ -88,7 +91,12 @@ export type WindowDialog =
   | { type: 'image-tools'; files: FileEntry[]; paneID?: string; preset?: ImageExportPreset }
   | { type: 'optimize'; files: FileEntry[]; paneID?: string; preset?: PDFExportPreset }
   | { type: 'pdf-tools'; files: FileEntry[]; paneID?: string }
-  | { type: 'workspace'; kind: 'new' | 'rename' | 'delete' | 'background'; id: string }
+  | {
+      type: 'workspace';
+      kind: 'new' | 'rename' | 'delete' | 'background' | 'manage';
+      id: string;
+      returnToManager?: boolean;
+    }
   | { type: 'view'; kind: 'save' | 'manage' }
   | { type: 'profile' | 'template' | 'go-to' | 'connect' | 'tag' }
   | { type: 'macro'; commands: string[] }
@@ -100,11 +108,13 @@ export type WindowDialog =
 /** Window-level dialogs have one owner; opening another replaces the previous request. */
 export function WindowDialogs({
   dialog,
+  onChange,
   onClose: closeRequest,
   workspace: controller,
   transitionWorkspace,
 }: {
   dialog: WindowDialog | undefined;
+  onChange(request: WindowDialog): void;
   onClose(request: WindowDialog | undefined): void;
   workspace: WorkspaceController;
   transitionWorkspace(change: () => Promise<void>): Promise<void>;
@@ -213,8 +223,18 @@ export function WindowDialogs({
         {workspaceDialog?.kind === 'background' && (
           <WorkspaceBackgroundDialog onClose={() => onClose()} />
         )}
+        {workspaceDialog?.kind === 'manage' && (
+          <WorkspacesDialog
+            onClose={onClose}
+            onOpen={(id) => transitionWorkspace(() => switchWorkspace(id))}
+            onAction={(kind, id) =>
+              onChange({ type: 'workspace', kind, id, returnToManager: true })
+            }
+          />
+        )}
         {workspaceDialog &&
           workspaceDialog.kind !== 'delete' &&
+          workspaceDialog.kind !== 'manage' &&
           workspaceDialog.kind !== 'background' && (
             <NameDialog
               title={workspaceDialog.kind === 'new' ? 'New workspace' : 'Rename workspace'}
@@ -227,7 +247,7 @@ export function WindowDialogs({
                 if (!name) throw new Error('Enter a workspace name.');
                 if (workspaceDialog.kind === 'new') {
                   await transitionWorkspace(() => newWorkspace(name));
-                } else if (targetWorkspace?.id === activeWorkspace().id) renameWorkspace(name);
+                } else if (targetWorkspace) renameWorkspace(name, targetWorkspace.id);
               }}
             />
           )}

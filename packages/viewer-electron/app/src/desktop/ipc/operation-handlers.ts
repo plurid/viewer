@@ -7,6 +7,7 @@ type OperationHandlers = Pick<
   ApiHandlers,
   | 'operate'
   | 'jobs'
+  | 'dismissJobs'
   | 'cancelJob'
   | 'resolveCollision'
   | 'undo'
@@ -15,7 +16,10 @@ type OperationHandlers = Pick<
   | 'checkpoints'
 >;
 interface OperationPorts {
-  operations: Pick<Operations, 'start' | 'load' | 'all' | 'cancel' | 'resolve' | 'undo' | 'redo'>;
+  operations: Pick<
+    Operations,
+    'start' | 'load' | 'all' | 'dismiss' | 'cancel' | 'resolve' | 'undo' | 'redo'
+  >;
   plans: Pick<OperationPlans, 'request'>;
   checkpoints: Pick<Checkpoints, 'list' | 'estimate' | 'remove' | 'restore'>;
   /** The window is carrying out an agent's command: what it starts is the agent's. */
@@ -33,6 +37,7 @@ export function createOperationHandlers(ports: OperationPorts): OperationHandler
       await ports.operations.load();
       return ports.operations.all();
     },
+    dismissJobs: ([ids]) => ports.operations.dismiss(ids),
     cancelJob: ([id]) => ports.operations.cancel(id),
     resolveCollision: ([id, decision, applyAll]) =>
       ports.operations.resolve(id, decision, applyAll),

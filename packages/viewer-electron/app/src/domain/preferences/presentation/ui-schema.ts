@@ -27,7 +27,17 @@ export const preferencesSchema = z
         labels: z.record(localPath, z.string().min(1).max(200)),
       })
       .strict(),
-    titlebar: z.object({ visible: boolean }).strict().default({ visible: true }),
+    titlebar: z
+      .object({
+        visible: boolean.default(true),
+        navigation: boolean.default(true),
+        newPlane: boolean.default(true),
+        operations: boolean.default(true),
+        voice: boolean.default(false),
+        commands: boolean.default(true),
+      })
+      .strict()
+      .prefault({}),
     space: z
       .object({
         toolbar: boolean,

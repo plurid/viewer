@@ -40,7 +40,7 @@ it('keeps independent selections and filters across detachment and an owned dire
   expect(one.query).toBe('Fire');
   expect(one.scroll).toEqual({ list: 170 });
   expect(one.columnScroll.get('/Library/Chapter')).toBe(50);
-  expect(one.columnTrail).toEqual(['/Library/Chapter']);
+  expect(one.columnTrail).toEqual(['/', '/Library', '/Library/Chapter']);
   expect(one.columnScope).toBe('/Library/Chapter');
   expect(one.columnDirectory).toBe('/Library/Chapter');
   expect(selectedFiles('one')[0]).toMatchObject({ path: '/Library/A.epub', parent: '/Library' });

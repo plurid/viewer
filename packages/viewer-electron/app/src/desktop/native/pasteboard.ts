@@ -96,8 +96,11 @@ export class Pasteboard {
     return paths;
   }
   async copyText(paths: string[]): Promise<void> {
-    await clipboard.writeText(paths.join('\n'));
-    // Plain-text paths must not retain a previous cut/copy file operation.
+    await this.writeText(paths.join('\n'));
+  }
+  async writeText(text: string): Promise<void> {
+    await clipboard.writeText(text);
+    // Plain text must not retain a previous cut/copy file operation.
     this.clipboard = null;
     return;
   }

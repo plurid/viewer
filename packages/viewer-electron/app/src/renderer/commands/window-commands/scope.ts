@@ -13,7 +13,7 @@ export interface WindowActions {
   settings(): void;
   backup?(): void;
   capabilities?(context: CommandContext): void;
-  workspaceDialog(kind: 'new' | 'rename' | 'delete' | 'background'): void;
+  workspaceDialog(kind: 'new' | 'rename' | 'delete' | 'background' | 'manage'): void;
   renameShortcut(path: string, name: string): void;
   switchWorkspace(id: string): Promise<void>;
   restoreWorkspace(): Promise<void>;

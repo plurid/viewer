@@ -24,11 +24,11 @@ export function useColumnNavigation(
   const pending = useMemo(() => ({ current: undefined as string | undefined }), [id, path]);
   const reveal = useCallback(
     (entry: FileEntry) => {
-      const depth = entry.parent === path ? 0 : session.columnTrail.indexOf(entry.parent) + 1;
-      if (depth < 0 || (entry.parent !== path && !depth)) return;
+      const depth = session.columnTrail.indexOf(entry.parent);
+      if (depth < 0) return;
       setTrail((value) => {
         // an application shows its preview, not a column of its bundle, as in Finder
-        const next = [...value.slice(0, depth), ...(browsable(entry) ? [entry.path] : [])];
+        const next = [...value.slice(0, depth + 1), ...(browsable(entry) ? [entry.path] : [])];
         return next.length === value.length && next.every((part, index) => value[index] === part)
           ? value
           : next;
@@ -36,7 +36,7 @@ export function useColumnNavigation(
       session.columnScope = entry.parent;
       setDirectory(browsable(entry) ? entry.path : entry.parent);
     },
-    [path, session, setTrail, setDirectory],
+    [session, setTrail, setDirectory],
   );
   const choose = useCallback(
     (entry: FileEntry, modifiers: FileModifiers, scope: FileEntry[]) => {
@@ -47,14 +47,14 @@ export function useColumnNavigation(
     [selecting, reveal, pending],
   );
   const register = useCallback(
-    (directory: string, scope: FileEntry[]) => {
-      const depth = directory === path ? 0 : session.columnTrail.indexOf(directory) + 1;
-      if (directory !== path && !depth) return;
+    (directory: string, scope: FileEntry[], listing = scope) => {
+      const depth = session.columnTrail.indexOf(directory);
+      if (depth < 0) return;
       scopes.set(directory, scope);
-      const child = session.columnTrail[depth];
-      if (child && !scope.some((entry) => browsable(entry) && entry.path === child)) {
+      const child = session.columnTrail[depth + 1];
+      if (child && !listing.some((entry) => entry.directory && entry.path === child)) {
         selecting.removeBranch(child);
-        setTrail((value) => value.slice(0, depth));
+        setTrail((value) => value.slice(0, depth + 1));
         if (!scopes.has(session.columnScope) || pathContains(child, session.columnScope))
           session.columnScope = directory;
         setDirectory(directory);
@@ -72,7 +72,7 @@ export function useColumnNavigation(
         if (scope[0]) choose(scope[0], plain, scope);
       }
     },
-    [path, session, selecting, setTrail, setDirectory, choose, scopes, pending],
+    [session, selecting, setTrail, setDirectory, choose, scopes, pending],
   );
   useEffect(() => {
     if (ready) register(path, entries);
@@ -116,12 +116,7 @@ export function useColumnNavigation(
     left(): boolean {
       const current = scope().find((item) => item.path === session.cursor);
       const directory = current?.parent || session.columnScope;
-      const parent =
-        directory === path
-          ? undefined
-          : [path, ...session.columnTrail].find((parent) =>
-              scopes.get(parent)?.some((entry) => entry.path === directory),
-            );
+      const parent = session.columnTrail[session.columnTrail.indexOf(directory) - 1];
       const entries = parent ? scopes.get(parent) : undefined;
       const entry = entries?.find((entry) => entry.path === directory);
       if (!entry || !entries) return false;

@@ -1,3 +1,4 @@
+import { maximumWorkspaces } from '../../domain/workspaces/catalog';
 // Project files installed as workspaces.
 import type { Pane, Workspace } from '../../domain/contracts';
 import {
@@ -27,7 +28,7 @@ export async function installProject(
     (space) => space.project?.file === document.file,
   );
   bindings ??= existing?.project?.bindings ?? {};
-  if (!existing && getState().saved.workspaces.length >= 30)
+  if (!existing && getState().saved.workspaces.length >= maximumWorkspaces)
     throw new Error('Close a workspace before opening another project.');
   const folders: Record<string, FolderOverride> = {};
   for (const item of document.definition.folders) {

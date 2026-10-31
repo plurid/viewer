@@ -112,13 +112,30 @@ describe('spring-loaded folder ownership', () => {
     await drag.open('/home/Nested', () => true);
     await drag.open('/home/Nested/Deeper', () => true);
     expect(activeWorkspace().panes[0]).toBe(pane);
-    expect(session.columnTrail).toEqual(['/home/Nested', '/home/Nested/Deeper']);
+    expect(session.columnTrail).toEqual(['/', '/home', '/home/Nested', '/home/Nested/Deeper']);
     expect(session.columnDirectory).toBe('/home/Nested/Deeper');
     expect(session.selection).toEqual(['/home/source.txt']);
     drag.finish();
-    expect(session.columnTrail).toEqual([]);
+    expect(session.columnTrail).toEqual(['/', '/home']);
     expect(session.columnDirectory).toBe('/home');
     expect(session.columnScope).toBe('/home');
+  });
+  it('can spring back to the original folder through an ancestor column', async () => {
+    const id = activeWorkspace().panes[0].id;
+    updatePane(id, {
+      path: '/home/Models',
+      mode: 'columns',
+      history: ['/home/Models'],
+      historyIndex: 0,
+    });
+    const session = browseSession(id, '/home/Models');
+    const drag = folderDragNavigation(id);
+    await drag.open('/home/Other', () => true);
+    expect(session.columnTrail).toEqual(['/', '/home', '/home/Other']);
+    await drag.open('/home/Models', () => true);
+    expect(session.columnTrail).toEqual(['/', '/home', '/home/Models']);
+    expect(session.columnDirectory).toBe('/home/Models');
+    drag.finish();
   });
   it('does not open denied folders, links or non-folders, or ask for a picker on hover', async () => {
     const initial = activeWorkspace().panes[0];

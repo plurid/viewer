@@ -322,6 +322,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'ui.titlebar': [
     'Viewer’s title bar. visible false hides it (⌥⌘T); it comes back while the pointer is at the window’s top edge.',
+    'navigation, newPlane, operations, voice and commands control its icons. voice defaults to false; keyboard commands remain available.',
   ],
   'ui.space.color': [
     'The space’s colour as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace look…, under its name in the title bar).',

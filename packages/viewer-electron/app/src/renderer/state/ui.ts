@@ -61,6 +61,6 @@ export async function copyPaths(paths: readonly string[]): Promise<void> {
   await afterTextCopy();
 }
 export async function copyText(text: string): Promise<void> {
-  await navigator.clipboard.writeText(text);
+  await window.viewer.clipboardWriteText(text);
   await afterTextCopy();
 }

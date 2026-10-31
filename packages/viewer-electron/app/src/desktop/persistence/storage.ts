@@ -1,3 +1,4 @@
+import { maximumWorkspaces } from '../../domain/workspaces/catalog';
 import { syncParentDirectory } from './directory-sync';
 import {
   compilePresentationValues,
@@ -275,8 +276,12 @@ const savedStateSchema = z
         }),
       )
       .min(1)
-      .max(30),
+      .max(maximumWorkspaces),
     activeWorkspace: id,
+    workspaceVisits: z
+      .record(id, z.number().finite().nonnegative())
+      .refine((visits) => Object.keys(visits).length <= maximumWorkspaces)
+      .optional(),
     favorites: z.array(z.object({ name: z.string().max(200), path: localPath })).max(200),
     recents: z.array(localPath).max(50),
     profile: z
@@ -296,7 +301,7 @@ const savedStateSchema = z
           })
           .strict(),
       )
-      .refine((profiles) => Object.keys(profiles).length <= 30)
+      .refine((profiles) => Object.keys(profiles).length <= maximumWorkspaces)
       .optional(),
     visits: z
       .record(

@@ -146,7 +146,14 @@ export function normalizePreferences(value?: unknown): UIPreferences {
       hidden: paths(sidebar.hidden),
       labels: labels as Record<string, string>,
     },
-    titlebar: { visible: boolean(object(ui.titlebar).visible, true) },
+    titlebar: {
+      visible: boolean(object(ui.titlebar).visible, true),
+      navigation: boolean(object(ui.titlebar).navigation, true),
+      newPlane: boolean(object(ui.titlebar).newPlane, true),
+      operations: boolean(object(ui.titlebar).operations, true),
+      voice: boolean(object(ui.titlebar).voice, false),
+      commands: boolean(object(ui.titlebar).commands, true),
+    },
     space: {
       toolbar: fresh ? false : aidsChosen ? boolean(space.toolbar, true) : true,
       minimap: aidsChosen ? boolean(space.minimap, true) : true,

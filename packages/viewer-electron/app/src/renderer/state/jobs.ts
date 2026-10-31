@@ -22,7 +22,8 @@ export function setOperationsOpen(open: boolean, history = false): void {
   update({
     ...getState(),
     operationsOpen: open,
-    operationsHistory: history || getState().jobs.some((job) => job.status === 'failed'),
+    operationsHistory:
+      history || getState().jobs.some((job) => !job.dismissed && job.status === 'failed'),
     acknowledgedJobs: open
       ? [
           ...new Set([
@@ -38,7 +39,8 @@ export function setOperationsOpen(open: boolean, history = false): void {
 export function needsOperations(state = getState()): boolean {
   return state.jobs.some(
     (job) =>
-      isActiveJob(job) || (job.status === 'failed' && !state.acknowledgedJobs.includes(job.id)),
+      isActiveJob(job) ||
+      (!job.dismissed && job.status === 'failed' && !state.acknowledgedJobs.includes(job.id)),
   );
 }
 /** The jobs Undo and Redo can reach, as a string: unchanged while a job only makes progress. */
@@ -93,7 +95,7 @@ export function receiveJob(job: OperationJob): void {
       needsDecision ||
       (getState().operationsOpen &&
         (getState().operationsHistory ||
-          jobs.some((job) => isActiveJob(job) || job.status === 'failed'))),
+          jobs.some((job) => isActiveJob(job) || (!job.dismissed && job.status === 'failed')))),
     acknowledgedJobs:
       getState().operationsOpen && job.status === 'failed'
         ? [...new Set([...getState().acknowledgedJobs, job.id])]

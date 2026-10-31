@@ -605,15 +605,18 @@ function Column({
 }) {
   const listing = useFolder(path);
   const presentation = useFolderPresentation(path);
+  const ancestorPath = navigation.trail[navigation.trail.indexOf(path) + 1];
   const sorted = useMemo(
     () =>
       sortEntries(
-        listing.entries.filter((entry) => presentation.showHidden || !entry.hidden),
+        listing.entries.filter(
+          (entry) => presentation.showHidden || !entry.hidden || entry.path === ancestorPath,
+        ),
         presentation.sort,
         presentation.descending,
         presentation.foldersFirst,
       ),
-    [listing.entries, presentation],
+    [listing.entries, presentation, ancestorPath],
   );
   // Each column follows its own folder's grouping, including its own lens.
   const lens = useLensGrouping(path, listing.entries, sorted, presentation, false);
@@ -631,7 +634,7 @@ function Column({
   );
   const columnProps = {
     ...props,
-    ancestorPath: navigation.trail[navigation.trail.indexOf(path) + 1],
+    ancestorPath,
     entries: filtered,
     presentation,
     sections,
@@ -641,9 +644,9 @@ function Column({
   };
   const { register, unregister } = navigation;
   useEffect(() => {
-    if (!listing.loading && !listing.unavailable) register(path, filtered);
+    if (!listing.loading && !listing.unavailable) register(path, filtered, listing.entries);
     return () => unregister(path);
-  }, [path, filtered, listing.loading, listing.unavailable, register, unregister]);
+  }, [path, filtered, listing.entries, listing.loading, listing.unavailable, register, unregister]);
   return (
     <BrowserColumn
       path={path}
@@ -697,9 +700,11 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
     virtual.scrollToIndex(rowOf.get(index) ?? index, { align: 'auto' }),
   );
   useEffect(() => {
-    const index = props.entries.findIndex((entry) => entry.path === props.cursor);
+    const index = props.entries.findIndex(
+      (entry) => entry.path === (props.ancestorPath || props.cursor),
+    );
     if (index >= 0) virtual.scrollToIndex(rowOf.get(index) ?? index, { align: 'auto' });
-  }, [props.cursor, props.entries, rowOf, virtual]);
+  }, [props.cursor, props.ancestorPath, props.entries, rowOf, virtual]);
   return (
     <div ref={scroll} className="file-scroll" role="listbox" aria-label="Column files">
       <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
@@ -745,27 +750,37 @@ export function ColumnsView({
           .scope()
           .find((entry) => entry.path === props.selection[0] && previewsAsFile(entry))
       : undefined;
+  const directory = navigation.directory();
   useEffect(() => {
-    const last = scroll.current?.lastElementChild as HTMLElement | undefined;
+    const columns = [...(scroll.current?.children ?? [])] as HTMLElement[];
+    const last = selected
+      ? columns.at(-1)
+      : columns.find((column) => column.dataset.folderPath === directory);
     if (last && scroll.current) {
       const right = last.offsetLeft + last.offsetWidth;
       if (right > scroll.current.scrollLeft + scroll.current.clientWidth)
         scroll.current.scrollLeft = right - scroll.current.clientWidth;
+      else if (last.offsetLeft < scroll.current.scrollLeft)
+        scroll.current.scrollLeft = last.offsetLeft;
     }
-  }, [navigation.trail, selected?.path]);
+  }, [navigation.trail, selected, directory]);
   return (
     <div className="columns-view" ref={scroll}>
-      <BrowserColumn
-        path={path}
-        entries={props.entries}
-        active={navigation.activeDirectory() === path}
-        onActivate={() => navigation.activate(path)}
-      >
-        <ListViewCompact props={{ ...props, ancestorPath: navigation.trail[0] }} />
-      </BrowserColumn>
-      {navigation.trail.map((folder) => (
-        <Column key={folder} path={folder} props={props} navigation={navigation} />
-      ))}
+      {navigation.trail.map((folder, index) =>
+        folder === path ? (
+          <BrowserColumn
+            key={folder}
+            path={path}
+            entries={props.entries}
+            active={navigation.activeDirectory() === path}
+            onActivate={() => navigation.activate(path)}
+          >
+            <ListViewCompact props={{ ...props, ancestorPath: navigation.trail[index + 1] }} />
+          </BrowserColumn>
+        ) : (
+          <Column key={folder} path={folder} props={props} navigation={navigation} />
+        ),
+      )}
       {selected && (
         <div
           className="column-preview"

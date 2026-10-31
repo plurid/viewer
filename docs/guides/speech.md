@@ -48,7 +48,8 @@ or another model that lists it; Meta's does not. **Revoke audio access** stops s
 1. Show the folder you want to work on, or select its files. For a laser job, show or select the
    job's folder, such as Job 1042.
 2. Hold **⌃⇧Space**, say what you want, such as "Check this job and prepare the cut sheets", and
-   release. Or choose the microphone in the title bar, speak, then choose **Finish and transcribe**.
+   release. Or enable **Settings → Space → Title bar icons → Microphone**, choose the microphone,
+   speak, then choose **Finish and transcribe**.
 3. The **Ask Viewer** panel shows your words as soon as they arrive, then the plan: "Check Job 1042,
    then prepare its cut sheets."
 4. Steps that change no file run at once, one after another. The check runs, and once it is graded

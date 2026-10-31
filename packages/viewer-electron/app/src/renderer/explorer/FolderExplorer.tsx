@@ -665,14 +665,6 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
             Subfolders
           </button>
           <IconButton icon="close" label="Close search" onClick={closeSearch} />
-          <button
-            disabled={!query.trim()}
-            onClick={() => {
-              workspace.newSearch(query, query, path, subtree, true);
-            }}
-          >
-            Search contents
-          </button>
           {search.running && (
             <IconButton icon="stop" label="Cancel search" onClick={search.cancel} />
           )}
@@ -738,6 +730,8 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
               }
               detail="Use the controls above to reopen this folder."
             />
+          ) : pane.mode === 'columns' ? (
+            <ColumnsView path={path} navigation={columns} {...viewProps} />
           ) : !entries.length ? (
             <Empty
               icon={query ? 'search' : 'folder'}
@@ -758,8 +752,6 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
             />
           ) : pane.mode === 'grid' ? (
             <GridView {...viewProps} />
-          ) : pane.mode === 'columns' ? (
-            <ColumnsView path={path} navigation={columns} {...viewProps} />
           ) : pane.mode === 'gallery' ? (
             <GalleryView {...viewProps} />
           ) : pane.mode === 'map' ? (

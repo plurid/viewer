@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 
 describe('native workspace ownership', () => {
+  it('merges recent workspace use across windows without rewinding newer visits', () => {
+    const sessions = new WorkspaceSessions();
+    const first = sessions.create('/fixtures', 'First');
+    const second = sessions.create('/fixtures', 'Second');
+    const a = sessions.open(1, '/fixtures', first);
+    const b = sessions.open(2, '/fixtures', second);
+    const latest = Date.now() + 1000;
+    a.workspaceVisits = { [first]: latest, [second]: 1 };
+    sessions.save(1, a);
+    b.workspaceVisits = { [first]: 1, [second]: latest + 1 };
+    sessions.save(2, b);
+    expect(sessions.snapshot()?.workspaceVisits).toEqual({ [first]: latest, [second]: latest + 1 });
+  });
   it('keeps file recall private to its owning workspace across overlapping saves', () => {
     const sessions = new WorkspaceSessions();
     const first = sessions.create('/fixtures', 'First');

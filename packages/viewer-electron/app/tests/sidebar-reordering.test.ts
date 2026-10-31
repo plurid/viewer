@@ -12,6 +12,8 @@ import { activeWorkspace, flushState, getState, initialize } from '../src/render
 import { replaceState } from '../src/renderer/state/core';
 import { effectiveWindowUI } from '../src/renderer/state/effective-ui';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
+import { CommandsContext } from '../src/renderer/commands/context';
+import { suggestionsFor } from '../src/renderer/commands/suggestions';
 
 const home = '/fixture/Home';
 const hidden = '/fixture/Hidden';
@@ -68,8 +70,13 @@ function withProfile() {
 }
 
 function mount() {
+  const { registry } = commands();
   const view = render(
-    createElement(WorkspaceContext.Provider, { value: workspace }, createElement(Sidebar)),
+    createElement(
+      CommandsContext.Provider,
+      { value: registry },
+      createElement(WorkspaceContext.Provider, { value: workspace }, createElement(Sidebar)),
+    ),
   );
   const order = () =>
     Array.from(
@@ -167,4 +174,58 @@ describe('displayed sidebar location moves', () => {
       expect(view.order()).toEqual([home, applications, downloads, trashLocation]);
     },
   );
+});
+
+it('offers Remove from Favorites directly and removes only the clicked shortcut', async () => {
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  const state = getState();
+  replaceState({
+    ...state,
+    saved: {
+      ...state.saved,
+      favorites: [
+        { path: home, name: 'Favorite Home' },
+        { path: downloads, name: 'Favorite Downloads' },
+      ],
+      ui: { ...state.saved.ui, sidebar: { ...state.saved.ui.sidebar, collapsed: [] } },
+    },
+  });
+  const view = mount();
+  fireEvent.contextMenu(view.getByRole('button', { name: 'Favorite Downloads' }));
+  const suggested = await view.findByRole('menuitem', { name: /Remove from Favorites/ });
+  expect(view.getByText('Suggested')).toBeTruthy();
+  fireEvent.click(suggested);
+  await waitFor(() =>
+    expect(getState().saved.favorites).toEqual([{ path: home, name: 'Favorite Home' }]),
+  );
+});
+
+it('suggests removal only for a favorite item and respects disabled suggestions', () => {
+  const { registry, context } = commands();
+  for (const sidebar of [
+    { section: 'favorites' as const },
+    { section: 'locations' as const, path: home },
+  ]) {
+    expect(suggestionsFor(registry.list({ context: { ...context, sidebar } }), [])).toEqual([]);
+  }
+  const available = registry.list({
+    context: { ...context, sidebar: { section: 'favorites', path: home } },
+  });
+  expect(suggestionsFor(available, []).map((item) => item.command.id)).toEqual(['shortcut-remove']);
+  const state = getState();
+  replaceState({
+    ...state,
+    settings: {
+      ...state.settings,
+      settings: {
+        ...state.settings.settings,
+        browsing: { ...state.settings.settings.browsing, suggestions: false },
+      },
+    },
+  });
+  expect(suggestionsFor(available, [])).toEqual([]);
 });

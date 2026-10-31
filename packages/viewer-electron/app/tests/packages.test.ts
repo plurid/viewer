@@ -108,12 +108,12 @@ describe('an application is one item', () => {
     act(() =>
       result.current.choose(app, { shiftKey: false, metaKey: false, ctrlKey: false }, entries),
     );
-    expect(result.current.trail).toEqual([]);
+    expect(result.current.trail).toEqual(['/', '/fixtures']);
     expect(result.current.directory()).toBe('/fixtures');
     act(() =>
       result.current.choose(folder, { shiftKey: false, metaKey: false, ctrlKey: false }, entries),
     );
-    expect(result.current.trail).toEqual([folder.path]);
+    expect(result.current.trail).toEqual(['/', '/fixtures', folder.path]);
   });
 });
 

@@ -83,7 +83,16 @@ export function suggestionsFor(
 ): Suggestion[] {
   const state = getState();
   const settings = state.settings.settings;
-  if (!settings.browsing.suggestions || !selection.length) return [];
+  if (!settings.browsing.suggestions || limit <= 0) return [];
+  const removeFavorite = applicable.find(
+    (command) =>
+      command.id === 'shortcut-remove' &&
+      command.context.scope === 'sidebar' &&
+      command.context.sidebar?.section === 'favorites' &&
+      command.context.sidebar.path,
+  );
+  if (removeFavorite) return [{ command: removeFavorite, reason: 'Favorite shortcut' }];
+  if (!selection.length) return [];
   // suggestions decorate a menu: a rule that fails on an unusual entry leaves the menu as it was
   try {
     return suggest(applicable, selection, limit);

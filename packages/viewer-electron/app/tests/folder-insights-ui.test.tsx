@@ -215,7 +215,7 @@ describe('the insight strip', () => {
     expect(strip()).toBeTruthy();
   });
 
-  it('selects the installers and asks before moving exactly them to the Trash', async () => {
+  it.each(['click', 'Enter'])('confirms exactly the selected installers with %s', async (input) => {
     const { paneID } = mount();
     await waitFor(() => expect(strip()).toBeTruthy());
     const card = within(strip()).getAllByRole('article')[0]!;
@@ -224,7 +224,10 @@ describe('the insight strip', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Move to Trash?' });
     expect(dialog.textContent).toContain('2 items');
     expect(operate).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Move to Trash' }));
+    const confirm = within(dialog).getByRole('button', { name: 'Move to Trash' });
+    expect(document.activeElement).toBe(confirm);
+    if (input === 'Enter') fireEvent.keyDown(confirm, { key: 'Enter', code: 'Enter' });
+    else fireEvent.click(confirm);
     await waitFor(() => expect(operate).toHaveBeenCalledOnce());
     expect(operate).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -20,6 +20,7 @@ import type { WindowActions } from '../src/renderer/commands/window-commands/sco
 import type { CommandContext } from '../src/renderer/commands/registry';
 import { useTitlebar } from '../src/renderer/ui/titlebar';
 import { ColorField } from '../src/renderer/ui/ColorField';
+import { settingCatalog } from '../src/domain/preferences/catalog';
 
 const windowButtons = vi.fn(async () => {});
 beforeEach(() => {
@@ -33,9 +34,43 @@ afterEach(() => {
 });
 
 describe('the preferences', () => {
+  it('saves each title bar icon independently and exposes it in Settings', () => {
+    const titlebar = {
+      visible: true,
+      navigation: false,
+      newPlane: false,
+      operations: false,
+      voice: true,
+      commands: false,
+    };
+    const ui = normalizePreferences({ titlebar } as never);
+    expect(ui.titlebar).toEqual(titlebar);
+    expect(preferencesSchema.parse(ui).titlebar).toEqual(titlebar);
+    expect(
+      settingCatalog
+        .filter((setting) => setting.section === 'Title bar icons')
+        .map((setting) => setting.path),
+    ).toEqual([
+      'ui.titlebar.navigation',
+      'ui.titlebar.newPlane',
+      'ui.titlebar.operations',
+      'ui.titlebar.voice',
+      'ui.titlebar.commands',
+    ]);
+    expect(preferencesSchema.parse({ ...ui, titlebar: { visible: false } }).titlebar).toMatchObject(
+      { visible: false, voice: false, commands: true },
+    );
+  });
   it('show the title bar and the grid, and follow the appearance, by default', () => {
     const ui = normalizePreferences();
-    expect(ui.titlebar).toEqual({ visible: true });
+    expect(ui.titlebar).toEqual({
+      visible: true,
+      navigation: true,
+      newPlane: true,
+      operations: true,
+      voice: false,
+      commands: true,
+    });
     expect(ui.space).toMatchObject({ grid: true, color: '' });
   });
   it('keep a colour only as a #rrggbb colour', () => {
@@ -45,7 +80,7 @@ describe('the preferences', () => {
     for (const color of ['red', '#123', 'url(x)', 12]) expect(space({ color }).color).toBe('');
     expect(
       normalizePreferences({ version: 3, titlebar: { visible: false } } as never).titlebar,
-    ).toEqual({ visible: false });
+    ).toMatchObject({ visible: false, voice: false });
   });
   it('are checked in config.jsonc', () => {
     const ui = normalizePreferences();

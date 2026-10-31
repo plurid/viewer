@@ -575,6 +575,25 @@ export const settingCatalog: SettingDefinition[] = [
     min: 0,
     max: 100,
   },
+  ...(
+    [
+      ['navigation', 'Window navigation'],
+      ['newPlane', 'New folder plane'],
+      ['operations', 'File operations'],
+      ['voice', 'Microphone'],
+      ['commands', 'Commands'],
+    ] as const
+  ).map(([key, label]): SettingDefinition => ({
+    path: `ui.titlebar.${key}`,
+    category: 'Space',
+    section: 'Title bar icons',
+    label,
+    detail:
+      key === 'voice'
+        ? 'Show Ask Viewer by voice in the title bar. Dictate remains available in Commands.'
+        : undefined,
+    kind: 'boolean',
+  })),
   {
     path: 'settings.tiling.splitWith',
     category: 'Space',

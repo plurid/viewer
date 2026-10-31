@@ -6,12 +6,15 @@ import { CopyButton, PathField, copyFeedbackDuration } from '../src/renderer/ui/
 
 const path = '/fixtures/Job 1042/drawing (final).pdf';
 const copyPaths = vi.fn<ViewerAPI['copyPaths']>(async () => {});
-const writeText = vi.fn(async (_text: string) => {});
+const writeText = vi.fn<ViewerAPI['clipboardWriteText']>(async () => {});
+const browserWrite = vi.fn(async () => {
+  throw new Error('Write permission denied.');
+});
 
 beforeEach(() => {
   vi.useFakeTimers();
-  window.viewer = { copyPaths } as unknown as ViewerAPI;
-  Object.assign(navigator, { clipboard: { writeText } });
+  window.viewer = { copyPaths, clipboardWriteText: writeText } as unknown as ViewerAPI;
+  Object.assign(navigator, { clipboard: { writeText: browserWrite } });
 });
 afterEach(() => {
   cleanup();
@@ -68,11 +71,12 @@ it('reports a failed copy and says why', async () => {
   expect(button.title).toBe('Copy path');
 });
 
-it('copies text through the clipboard, its label saying Copied', async () => {
+it('copies text through the desktop when browser clipboard writes are denied', async () => {
   render(<CopyButton appearance="text" label="Copy output" copy={{ text: 'exit 0' }} />);
   const button = screen.getByRole('button', { name: 'Copy output' });
   await press(button);
   expect(writeText).toHaveBeenCalledWith('exit 0');
+  expect(browserWrite).not.toHaveBeenCalled();
   expect(copyPaths).not.toHaveBeenCalled();
   expect(button.textContent).toBe('Copied');
   // a second copy restarts the moment rather than ending with the first one's timer

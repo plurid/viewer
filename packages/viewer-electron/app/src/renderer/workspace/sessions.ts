@@ -2,6 +2,7 @@ import { pathMapper, type FileChange } from '../../domain/files/changes';
 import { useCallback, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
 import type { FileEntry, FolderPane } from '../../domain/contracts';
 import { dialogOpen } from '../ui/modal';
+import { pathAncestry } from '../../domain/files/paths';
 
 /** Lightweight view state outlives Plurid's detached components. Keys are host IDs. */
 export interface BrowseSession {
@@ -51,7 +52,7 @@ export function browseSession(id: string, path: string): BrowseSession {
       columnScroll: new Map(),
       expanded: [],
       listChildren: new Map(),
-      columnTrail: [],
+      columnTrail: pathAncestry(path),
       columnScope: path,
       columnDirectory: path,
       cache: new Map(),
@@ -187,6 +188,7 @@ export function remapSessions(changes: readonly FileChange[]): void {
       state.cursor = map(state.cursor);
       state.expanded = state.expanded.map((path) => map(path)).filter(Boolean);
       state.columnTrail = state.columnTrail.map((path) => map(path)).filter(Boolean);
+      if (state.columnTrail.length) state.columnTrail = pathAncestry(state.columnTrail.at(-1)!);
       state.columnScope = map(state.columnScope);
       state.columnDirectory = map(state.columnDirectory);
       state.columnScroll = new Map(

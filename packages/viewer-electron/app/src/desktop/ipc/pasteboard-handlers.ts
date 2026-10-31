@@ -5,10 +5,15 @@ import type { Pasteboard } from '../native/pasteboard';
 
 type PasteboardHandlers = Pick<
   ApiHandlers,
-  'clipboardWrite' | 'clipboardRead' | 'fileDropPaths' | 'copyPaths' | 'fileDragStart'
+  | 'clipboardWrite'
+  | 'clipboardWriteText'
+  | 'clipboardRead'
+  | 'fileDropPaths'
+  | 'copyPaths'
+  | 'fileDragStart'
 >;
 interface PasteboardPorts {
-  pasteboard: Pick<Pasteboard, 'write' | 'read' | 'dropped' | 'copyText'>;
+  pasteboard: Pick<Pasteboard, 'write' | 'writeText' | 'read' | 'dropped' | 'copyText'>;
   fileAccess: Pick<FileAccess, 'require'>;
   window(owner: number): BrowserWindow | undefined;
 }
@@ -17,6 +22,7 @@ interface PasteboardPorts {
 export function createPasteboardHandlers(ports: PasteboardPorts): PasteboardHandlers {
   return {
     clipboardWrite: ([paths, cut]) => ports.pasteboard.write(paths, cut),
+    clipboardWriteText: ([text]) => ports.pasteboard.writeText(text),
     clipboardRead: () => ports.pasteboard.read(),
     fileDropPaths: ([paths]) => ports.pasteboard.dropped(paths),
     copyPaths: ([paths]) => ports.pasteboard.copyText(paths),

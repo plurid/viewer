@@ -384,6 +384,8 @@ export interface SavedState {
   preferencesRevision?: number;
   workspaces: Workspace[];
   activeWorkspace: string;
+  /** Last use of each workspace, shared by all windows. */
+  workspaceVisits?: Record<string, number>;
   openWindows?: string[];
   favorites: { name: string; path: string }[];
   recents: string[];
@@ -417,6 +419,11 @@ export interface UIPreferences {
   /** Viewer's title bar: hidden, it comes back while the pointer is at the window's top. */
   titlebar: {
     visible: boolean;
+    navigation: boolean;
+    newPlane: boolean;
+    operations: boolean;
+    voice: boolean;
+    commands: boolean;
   };
   space: {
     toolbar: boolean;
@@ -551,6 +558,8 @@ export interface Collision {
   replaceable?: boolean;
 }
 export interface OperationJob {
+  /** Hidden from the operations panel; its receipt and Undo remain available. */
+  dismissed?: boolean;
   progress?: number;
   detail?: string;
   id: string;
@@ -873,6 +882,7 @@ export interface ViewerAPI {
   cancelSearch(id: string): Promise<void>;
   operate(request: RendererOperationRequest): Promise<string>;
   jobs(): Promise<OperationJob[]>;
+  dismissJobs(ids: string[]): Promise<void>;
   cancelJob(id: string): Promise<void>;
   resolveCollision(id: string, decision: CollisionDecision, applyAll: boolean): Promise<void>;
   undo(id: string): Promise<void>;
@@ -897,6 +907,7 @@ export interface ViewerAPI {
   save(state: SavedState): Promise<void>;
   flushed(token: string, result?: FlushResult): Promise<void>;
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;
+  clipboardWriteText(text: string): Promise<void>;
   copyPaths(paths: string[]): Promise<void>;
   clipboardRead(): Promise<{ paths: string[]; cut: boolean } | null>;
   fileDropPaths(files: File[]): Promise<string[]>;
