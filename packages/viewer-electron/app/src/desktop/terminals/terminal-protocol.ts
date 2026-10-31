@@ -10,6 +10,7 @@ export type TerminalWorkerRequest =
       outputLimit?: number;
       timeoutMs?: number;
       readOnly?: boolean;
+      input?: boolean;
     })
   | { kind: 'write'; id: string; data: string }
   | { kind: 'resize'; id: string; cols: number; rows: number }

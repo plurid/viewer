@@ -575,6 +575,7 @@ export class Desktop {
       (action) => confirmations.require(action),
       (profile) => confirmations.requireTerminal(profile),
       (owner, target) => validateManualTarget(target, this.gitWindow(owner), this.home),
+      this.terminals.runCommand,
     );
     this.credentials = new Credentials(
       dataPath,

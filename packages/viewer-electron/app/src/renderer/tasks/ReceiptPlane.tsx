@@ -111,13 +111,7 @@ export default function ReceiptPlane({ pane, active }: { pane: Record; active: b
               onError={(value) => setError(errorMessage(value))}
             />
           </dd>
-          <dt>Observed folder</dt>
-          <dd>{receipt.folderIdentity ?? 'Identity unavailable'} · before launch</dd>
         </dl>
-        <p className="muted">
-          Stored privately. This records the process outcome; file contents and test results are not
-          inferred.
-        </p>
         <h2>Command</h2>
         <pre>{receipt.command}</pre>
         <h2>Output</h2>

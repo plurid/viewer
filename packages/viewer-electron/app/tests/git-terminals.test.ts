@@ -66,6 +66,35 @@ afterEach(async () => {
 });
 
 describe('human Git terminal ownership', () => {
+  it('shares its worker with command output without exposing command input or agent reads', async () => {
+    await terminals.startGit(program('git'), 7);
+    const output = vi.fn();
+    const done = terminals.runCommand(
+      {
+        id: 'command',
+        owner: 7,
+        workspaceID: 'workspace',
+        rootID: 'folder',
+        cwd: root,
+        executable: '/bin/zsh',
+        args: ['-lic', 'll'],
+        env: {},
+      },
+      new AbortController().signal,
+      output,
+    );
+    expect(fake.launch).toHaveBeenCalledOnce();
+    expect(() => terminals.write('command', 'input', 7)).toThrow('no longer available');
+    expect(() => terminals.agentRead('command')).toThrow('no longer available');
+    await expect(
+      terminals.start({ ...program('command').request, profileID: 'login' }, 7),
+    ).rejects.toThrow('command output');
+    fake.receive?.({ type: 'data', id: 'command', data: '\x1b[32mhello\x1b[0m' });
+    expect(output).toHaveBeenCalledWith('hello');
+    expect(emit).not.toHaveBeenCalled();
+    fake.receive?.({ type: 'exit', id: 'command', code: 0 });
+    await expect(done).resolves.toBe(0);
+  });
   it('never loads Git from an editable terminal profile', async () => {
     await expect(terminals.start(program('job').request, 7)).rejects.toThrow('reviewed command');
     expect(fake.launch).not.toHaveBeenCalled();

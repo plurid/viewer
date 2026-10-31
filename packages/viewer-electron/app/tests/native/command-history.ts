@@ -19,7 +19,11 @@ const root = await temporaryRoot('viewer-command-history-');
 const profile = path.join(root, 'Profile'),
   folder = path.join(root, 'Files');
 await Promise.all([mkdir(profile), mkdir(folder)]);
-await writeFile(path.join(root, '.zshrc'), "alias ll='printf alias-from-zshrc'\n", { flag: 'wx' });
+await writeFile(
+  path.join(root, '.zshrc'),
+  "setopt monitor zle\n[[ -t 0 && -t 1 && -t 2 ]] || print terminal-missing\nalias ll='printf alias-from-zshrc'\n",
+  { flag: 'wx' },
+);
 const ui = normalizePreferences(),
   settings = defaultSettings(folder);
 settings.hotkey.enabled = false;
@@ -131,6 +135,21 @@ try {
   await preferenceActions.capture(path.join(app.evidenceDirectory, 'command-startup-setting.png'));
   await command('Target.closeTarget', { targetId: preferences.targetID });
 
+  const changeCommandStartup = async (value: 'profile' | 'interactive', label: string) => {
+    await evaluate(pageCall(() => window.viewer.openSettings()));
+    const settings = await app.connect(true);
+    const settingsActions = new NativeInteractions({ ...settings, until });
+    await settingsActions.field('Search settings', 'Command startup');
+    await settingsActions.click('.choice-button[aria-label="Command startup"]');
+    await settingsActions.click(`.choice-menu [data-menu-id="choice:${value}"]`);
+    await until(
+      () => settings.evaluate(textOf('.choice-button[aria-label="Command startup"]')),
+      (text) => text === label,
+      'Updated command startup',
+    );
+    await command('Target.closeTarget', { targetId: settings.targetID });
+  };
+
   await actions.click('[aria-label="Commands (⌘K)"]');
   await actions.field('Search commands', '! ');
   await actions.field('Shell command', 'll');
@@ -142,6 +161,61 @@ try {
   );
   assert.equal(await evaluate(textOf('.quick-command-output pre')), 'alias-from-zshrc');
   await actions.capture(path.join(app.evidenceDirectory, 'shell-alias.png'));
+
+  await changeCommandStartup('profile', 'Use profile arguments only');
+  await actions.field('Shell command', 'll');
+  await actions.key('Enter', 'Enter');
+  await until(
+    () => evaluate(textOf('.quick-command-output [role=status]')),
+    (text) => text === 'failed · exit 127',
+    'Profile-only startup',
+  );
+  assert.match(await evaluate(textOf('.quick-command-output pre')), /command not found: ll/);
+  await changeCommandStartup('interactive', 'Load shell configuration');
+  await actions.field('Shell command', "printf '\\033[31mred\\033[0m\\n'; printf warning >&2");
+  await actions.key('Enter', 'Enter');
+  await until(
+    () => evaluate(textOf('.quick-command-output [role=status]')),
+    (text) => text === 'completed · exit 0',
+    'Terminal output decoding',
+  );
+  assert.equal(await evaluate(textOf('.quick-command-output pre')), 'red\nwarning');
+
+  await actions.field('Shell command', 'kill -KILL $$');
+  await actions.key('Enter', 'Enter');
+  await until(
+    () => evaluate(textOf('.quick-command-output [role=status]')),
+    (text) => text === 'failed',
+    'Signal exit is a failure',
+  );
+  assert.match(await evaluate(textOf('.quick-command-output')), /signal 9/);
+
+  await actions.field('Shell command', 'sleep 30 & printf \'child:%s\\n\' "$!"; wait');
+  await actions.key('Enter', 'Enter');
+  const running = await until(
+    () => evaluate(textOf('.quick-command-output pre')),
+    (text) => /child:\d+/.test(text),
+    'Terminal child started',
+  );
+  const child = Number(/child:(\d+)/.exec(running)![1]);
+  await actions.button('Stop', '.quick-command');
+  await until(
+    () => evaluate(textOf('.quick-command-output [role=status]')),
+    (text) => text.startsWith('cancelled'),
+    'Terminal command cancelled',
+  );
+  await until(
+    async () => {
+      try {
+        process.kill(child, 0);
+        return false;
+      } catch (error) {
+        return (error as NodeJS.ErrnoException).code === 'ESRCH';
+      }
+    },
+    Boolean,
+    'Terminal child stopped',
+  );
 
   await actions.field('Shell command', "printf 'receipt-spacing-check'; exit 7");
   await actions.key('Enter', 'Enter');
@@ -157,6 +231,20 @@ try {
     'Receipt error notice',
   );
   await actions.capture(path.join(app.evidenceDirectory, 'receipt-spacing.png'));
+  const receipt = await evaluate(
+    pageCall(() => {
+      const root = document.querySelector<HTMLElement>('.receipt-scroll')!;
+      const copy = root.querySelector('.copy-button')!.getBoundingClientRect();
+      const path = root.querySelector('.path-text')!.getBoundingClientRect();
+      return {
+        text: root.innerText,
+        copyBeforePath: copy.right <= path.left,
+        copyGap: path.left - copy.right,
+      };
+    }),
+  );
+  assert.ok(receipt.copyBeforePath && receipt.copyGap < 12, 'Copy is immediately before the path');
+  assert.doesNotMatch(receipt.text, /Observed folder|Stored privately|before launch/);
   const spacing = await evaluate(
     pageCall(() => {
       const warning = document.querySelector<HTMLElement>('.receipt-scroll > .inline-warning')!;
@@ -184,7 +272,15 @@ try {
           'finished-operation-history',
           'command-startup-setting',
           'shell-alias',
+          'terminal-startup-features',
+          'profile-only-startup',
+          'terminal-output-decoding',
+          'terminal-signal-outcome',
+          'terminal-command-stop',
+          'terminal-child-cleanup',
           'receipt-spacing',
+          'receipt-path-copy-position',
+          'receipt-content',
         ],
         spacing,
       },

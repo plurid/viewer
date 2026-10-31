@@ -180,6 +180,9 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+.receipt-scroll .path-field > .copy-button {
+  order: -1;
+}
 .receipt-scroll dt,
 .receipt-scroll .muted {
   color: var(--muted);

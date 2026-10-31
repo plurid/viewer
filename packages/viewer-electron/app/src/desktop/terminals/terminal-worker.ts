@@ -11,6 +11,7 @@ interface Session {
   timer?: ReturnType<typeof setTimeout>;
   deadline?: ReturnType<typeof setTimeout>;
   readOnly: boolean;
+  input: boolean;
   stopped: boolean;
   budget: TerminalOutputBudget;
 }
@@ -53,6 +54,7 @@ port.on('message', (message) => {
         pending: 0,
         chunks: [],
         readOnly: request.readOnly === true,
+        input: request.input !== false,
         stopped: false,
         budget: new TerminalOutputBudget(request.outputLimit, request.readOnly),
       };
@@ -86,11 +88,11 @@ port.on('message', (message) => {
           drain(request.id, value);
         else value.timer ??= setTimeout(() => drain(request.id, value), 12);
       });
-      process.onExit(({ exitCode }) => {
+      process.onExit(({ exitCode, signal }) => {
         clearTimeout(value.deadline);
         drain(request.id, value);
         sessions.delete(request.id);
-        emit({ type: 'exit', id: request.id, code: exitCode });
+        emit({ type: 'exit', id: request.id, code: exitCode, ...(signal ? { signal } : {}) });
       });
     } else {
       const value = sessions.get(request.id);
@@ -100,6 +102,7 @@ port.on('message', (message) => {
         return;
       }
       if (request.kind === 'write') {
+        if (!value.input) throw new Error('Command output does not accept terminal input.');
         if (value.readOnly) throw new Error('Read-only Git output does not accept terminal input.');
         if (!value.stopped) value.process.write(request.data);
       } else if (request.kind === 'resize') value.process.resize(request.cols, request.rows);

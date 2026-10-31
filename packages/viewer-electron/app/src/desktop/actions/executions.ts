@@ -16,31 +16,38 @@ import { executablePath } from '../terminals/terminal-launch';
 import { childEnvironment } from '../terminals/process-environment';
 import { errorMessage } from '../../domain/errors';
 import { containsPath } from '../files/containment';
+import type { RunTerminalCommand } from '../terminals/terminal-commands';
 /** Commands running or starting at once. */
 const commandLimit = 20;
 const configuredShells = new Set(['zsh', 'bash', 'fish']);
 
-/** Pipes do not make a shell interactive as a terminal does. Keep its own startup-file rules. */
+/** Startup follows the selected shell; interactive startup also needs a controlling terminal. */
 function commandArguments(
   executable: string,
   profile: TerminalProfile,
   script: string,
   startup: ApplicationSettings['terminals']['commandStartup'],
-): string[] {
-  const explicitMode = profile.args.some(
-    (arg) => arg === '--interactive' || /^[+-][a-zA-Z]*i[a-zA-Z]*$/.test(arg),
-  );
+): { args: string[]; terminal: boolean } {
+  let explicitMode: boolean | undefined;
+  for (const arg of profile.args) {
+    if (arg === '--interactive') explicitMode = true;
+    else if (/^[+-][a-zA-Z]*i[a-zA-Z]*$/.test(arg)) explicitMode = arg.startsWith('-');
+  }
   const interactive =
     startup !== 'profile' &&
     configuredShells.has(path.basename(executable).replace(/\.exe$/i, '')) &&
-    !explicitMode;
-  return [...profile.args, ...(interactive ? ['-i'] : []), '-c', script, 'viewer-command'];
+    explicitMode === undefined;
+  return {
+    args: [...profile.args, ...(interactive ? ['-i'] : []), '-c', script, 'viewer-command'],
+    terminal: interactive || explicitMode === true,
+  };
 }
 
 /** User-authored executables are subprocesses. Only the explicit shell executor interprets code. */
 export class Executions {
   private tasks = new Map<string, ExecutionTask>();
   private children = new Map<string, ChildProcess>();
+  private terminalControllers = new Map<string, AbortController>();
   private work = new Map<string, Promise<void>>();
   private targets = new Map<string, CapturedTarget>();
   private killTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -68,6 +75,7 @@ export class Executions {
       owner: number,
       target: CapturedTarget,
     ) => Promise<void> = async () => {},
+    private runTerminal?: RunTerminalCommand,
   ) {}
   list(owner?: number): ExecutionTask[] {
     return [...this.tasks.values()].filter(
@@ -213,7 +221,7 @@ export class Executions {
             ...(item ? [item.path] : target.selection.map((file) => file.path)),
           ]);
           if (isCancelled()) break;
-          const args =
+          const launch =
             manual && profile
               ? commandArguments(
                   executable,
@@ -221,59 +229,92 @@ export class Executions {
                   manual.script,
                   settings.terminals.commandStartup,
                 )
-              : executor.kind === 'executable'
-                ? actionArguments(executor.args, target, item, values)
-                : [
-                    '-c',
-                    executor.script,
-                    'viewer-action',
-                    ...actionArguments(['{directory}', '{paths}'], target, item),
-                  ];
-          await new Promise<void>((resolve, reject) => {
-            const child = spawn(executable, args, {
-              cwd,
-              env: childEnvironment({
-                ...profile?.env,
-                ...Object.fromEntries(
-                  Object.entries(values).map(([name, value]) => [
-                    'VIEWER_INPUT_' + name.toUpperCase(),
-                    value,
-                  ]),
-                ),
-              }),
-              shell: false,
-              detached: process.platform !== 'win32',
-              stdio: ['ignore', 'pipe', 'pipe'],
-            });
-            this.children.set(task.id, child);
-            let timer: ReturnType<typeof setTimeout> | undefined;
-            const output = (data: Buffer) => {
-              const bytes = Buffer.from(task.output + data.toString());
-              task.truncated ||= bytes.length > 256 * 1024;
-              task.output = bytes.subarray(-256 * 1024).toString('utf8');
-              timer ??= setTimeout(() => {
-                timer = undefined;
-                this.emit({ ...task }, owner);
-              }, 80);
-            };
-            child.stdout?.on('data', output);
-            child.stderr?.on('data', output);
-            child.on('error', reject);
-            child.on('close', (code, signal) => {
-              clearTimeout(timer);
-              clearTimeout(this.killTimers.get(task.id));
-              this.killTimers.delete(task.id);
-              this.children.delete(task.id);
-              task.exitCode = code ?? undefined;
-              if ((code !== 0 || signal) && task.status !== 'cancelled')
-                reject(
-                  new Error(
-                    `Command exited with ${signal ? `signal ${signal}` : `status ${code}`}.`,
-                  ),
-                );
-              else resolve();
-            });
+              : undefined;
+          const args =
+            launch?.args ??
+            (executor.kind === 'executable'
+              ? actionArguments(executor.args, target, item, values)
+              : [
+                  '-c',
+                  executor.script,
+                  'viewer-action',
+                  ...actionArguments(['{directory}', '{paths}'], target, item),
+                ]);
+          const env = childEnvironment({
+            ...profile?.env,
+            ...Object.fromEntries(
+              Object.entries(values).map(([name, value]) => [
+                'VIEWER_INPUT_' + name.toUpperCase(),
+                value,
+              ]),
+            ),
           });
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const output = (data: string) => {
+            const bytes = Buffer.from(task.output + data);
+            task.truncated ||= bytes.length > 256 * 1024;
+            task.output = bytes.subarray(-256 * 1024).toString('utf8');
+            timer ??= setTimeout(() => {
+              timer = undefined;
+              this.emit({ ...task }, owner);
+            }, 80);
+          };
+          try {
+            if (launch?.terminal) {
+              if (!this.runTerminal || owner === undefined)
+                throw new Error('Command terminal is unavailable.');
+              const controller = new AbortController();
+              this.terminalControllers.set(task.id, controller);
+              try {
+                task.exitCode = await this.runTerminal(
+                  {
+                    id: task.id,
+                    owner,
+                    workspaceID: target.workspaceID,
+                    rootID: target.rootID,
+                    executable,
+                    args,
+                    env,
+                    cwd,
+                  },
+                  controller.signal,
+                  output,
+                );
+                if (task.exitCode !== 0 && task.status !== 'cancelled')
+                  throw new Error(`Command exited with status ${task.exitCode}.`);
+              } finally {
+                this.terminalControllers.delete(task.id);
+              }
+            } else
+              await new Promise<void>((resolve, reject) => {
+                const child = spawn(executable, args, {
+                  cwd,
+                  env,
+                  shell: false,
+                  detached: process.platform !== 'win32',
+                  stdio: ['ignore', 'pipe', 'pipe'],
+                });
+                this.children.set(task.id, child);
+                child.stdout?.on('data', (data: Buffer) => output(data.toString()));
+                child.stderr?.on('data', (data: Buffer) => output(data.toString()));
+                child.on('error', reject);
+                child.on('close', (code, signal) => {
+                  clearTimeout(this.killTimers.get(task.id));
+                  this.killTimers.delete(task.id);
+                  this.children.delete(task.id);
+                  task.exitCode = code ?? undefined;
+                  if ((code !== 0 || signal) && task.status !== 'cancelled')
+                    reject(
+                      new Error(
+                        `Command exited with ${signal ? `signal ${signal}` : `status ${code}`}.`,
+                      ),
+                    );
+                  else resolve();
+                });
+              });
+          } finally {
+            clearTimeout(timer);
+          }
         }
         if (task.status !== 'cancelled') task.status = 'completed';
       } catch (error) {
@@ -297,6 +338,12 @@ export class Executions {
     const task = this.tasks.get(id);
     if (!task || task.status !== 'running') return;
     task.status = 'cancelled';
+    const terminal = this.terminalControllers.get(id);
+    if (terminal) {
+      terminal.abort();
+      this.emit({ ...task }, this.owners.get(id));
+      return;
+    }
     const child = this.children.get(id);
     try {
       if (

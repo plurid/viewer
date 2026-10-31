@@ -139,7 +139,7 @@ export interface ExecutionTask {
 }
 export type TerminalEvent =
   | { type: 'data'; id: string; data: string }
-  | { type: 'exit'; id: string; code: number }
+  | { type: 'exit'; id: string; code: number; signal?: number }
   | { type: 'error'; id: string; message: string };
 export interface TerminalStart {
   id: string;

@@ -45,7 +45,9 @@ function processStub() {
 function send(request: TerminalWorkerRequest) {
   fake.receive?.({ data: request });
 }
-function start(options: { readOnly?: boolean; outputLimit?: number; timeoutMs?: number } = {}) {
+function start(
+  options: { readOnly?: boolean; input?: boolean; outputLimit?: number; timeoutMs?: number } = {},
+) {
   const id = `git-worker-${++nextID}`;
   send({
     kind: 'start',
@@ -80,6 +82,24 @@ afterEach(() => {
 });
 
 describe('private Git PTY worker limits', () => {
+  it('denies input to a captured command without escaping its terminal output', () => {
+    const { id, process } = start({ input: false });
+    process.data('\x1b[32mready\x1b[0m');
+    vi.advanceTimersByTime(12);
+    expect(fake.postMessage).toHaveBeenCalledWith({
+      type: 'data',
+      id,
+      data: '\x1b[32mready\x1b[0m',
+    });
+    send({ kind: 'write', id, data: 'input\n' });
+    expect(process.write).not.toHaveBeenCalled();
+    expect(fake.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        message: expect.stringContaining('does not accept'),
+      }),
+    );
+  });
   it('bounds output before renderer acknowledgement and drains only the accepted text', () => {
     const { id, process } = start({ outputLimit: 8, readOnly: true });
     process.data('1234');

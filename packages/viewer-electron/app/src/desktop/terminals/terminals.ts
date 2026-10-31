@@ -20,6 +20,7 @@ import {
 import type { GitTerminalLaunch } from '../comparison/git-actions';
 import type { TerminalWorkerReply, TerminalWorkerRequest } from './terminal-protocol';
 import { containsPath } from '../files/containment';
+import { TerminalCommands, type RunTerminalCommand } from './terminal-commands';
 
 interface PendingTerminal {
   owner: number;
@@ -38,6 +39,11 @@ interface TerminalSession {
 }
 
 export class Terminals {
+  private commands = new TerminalCommands((message) => {
+    const worker = message.kind === 'start' ? this.ensureWorker() : this.worker;
+    if (!worker) throw new Error('Command terminal worker is unavailable.');
+    worker.postMessage(message);
+  });
   private closed = false;
   private worker?: OwnedWorker<TerminalWorkerReply>;
   private groups = new Map<string, number>();
@@ -66,6 +72,8 @@ export class Terminals {
     private confirm: (profile: TerminalProfile) => Promise<void> = async () => {},
   ) {}
   start(request: TerminalStart, owner: number): Promise<void> {
+    if (this.commands.has(request.id))
+      return Promise.reject(new Error('This ID belongs to command output.'));
     if (request.profileID === gitTerminalProfileID)
       return Promise.reject(new Error('Git actions start only through their reviewed command.'));
     if (this.closed) return Promise.reject(new Error('Terminals have closed.'));
@@ -100,6 +108,8 @@ export class Terminals {
   /** Called only by GitActions after compiling a fixed operation and reviewing mutations. */
   startGit(program: GitTerminalLaunch, owner: number): Promise<void> {
     const { request } = program;
+    if (this.commands.has(request.id))
+      return Promise.reject(new Error('This ID belongs to command output.'));
     if (process.mas)
       return Promise.reject(new Error('Git actions are available in the direct build only.'));
     if (this.closed) return Promise.reject(new Error('Terminals have closed.'));
@@ -152,8 +162,22 @@ export class Terminals {
 
   /** 100 terminals run or start at once: the one asking is already among the pending. */
   private full(): boolean {
-    return this.sessions.size + this.pending.size > 100;
+    return this.sessions.size + this.pending.size + this.commands.size > 100;
   }
+
+  /** Desktop-only: the manual execution service has already checked the profile and target. */
+  runCommand: RunTerminalCommand = (program, signal, output) => {
+    if (this.closed) return Promise.reject(new Error('Terminals have closed.'));
+    if (this.sessions.size + this.pending.size + this.commands.size >= 100)
+      return Promise.reject(new Error('Close a terminal before starting another command.'));
+    if (
+      this.sessions.has(program.id) ||
+      this.pending.has(program.id) ||
+      this.stopping.has(program.id)
+    )
+      return Promise.reject(new Error('This ID belongs to another terminal.'));
+    return this.commands.run(program, signal, output);
+  };
 
   private async prepareGit(program: GitTerminalLaunch, ticket: PendingTerminal): Promise<void> {
     const check = () => {
@@ -279,6 +303,7 @@ export class Terminals {
     if (worker.thread) worker.thread.stderr?.on('data', capture);
     else worker.process?.stderr?.on('data', capture);
     worker.message((event) => {
+      if (this.commands.receive(event)) return;
       if (event.type === 'started') {
         if (Number.isSafeInteger(event.pid) && event.pid > 1) this.groups.set(event.id, event.pid);
         return;
@@ -297,6 +322,7 @@ export class Terminals {
     worker.exit(() => {
       if (this.worker !== worker) return;
       this.worker = undefined;
+      this.commands.failed('Command terminal process stopped before reporting its outcome.');
       for (const [id, session] of this.sessions) {
         this.emit(session.owner, {
           type: 'error',
@@ -385,6 +411,7 @@ export class Terminals {
     }
   }
   async quiesce(root: string): Promise<void> {
+    await this.commands.quiesce(root);
     const related = (file: string) => containsPath(root, file);
     const work: Promise<void>[] = [];
     for (const pending of this.pending.values())
@@ -416,12 +443,14 @@ export class Terminals {
     return { cwd: session.cwd, output: session.output };
   }
   stopOwner(owner: number): void {
+    this.commands.stopOwner(owner);
     for (const pending of this.pending.values())
       if (pending.owner === owner) pending.cancelled = true;
     for (const [id, session] of this.sessions) if (session.owner === owner) this.stop(id, owner);
   }
   async close(): Promise<void> {
     this.closed = true;
+    await this.commands.close();
     for (const pending of this.pending.values()) pending.cancelled = true;
     for (const [id, session] of this.sessions) this.stop(id, session.owner);
     await Promise.allSettled([...this.pending.values()].map((pending) => pending.promise));

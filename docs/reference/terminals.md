@@ -41,8 +41,10 @@ explicit interactive-mode argument in a profile takes precedence. Other shells u
 profile arguments. This setting applies to quick commands and **Run command…**, and leaves saved
 custom actions unchanged.
 
-The command has no input; stdout and stderr are combined. Viewer checks the folder is the same one
-before launch and refuses if it changed.
+Interactive shell startup runs in a pseudoterminal, so shell plugins can initialize job control and
+terminal features. Its output is captured as plain text, with terminal control sequences removed and
+line endings normalized. The command panel accepts no terminal input; stdout and stderr are
+combined. Viewer checks the folder is the same one before launch and refuses if it changed.
 
 **Command progress** shows each command's status, exit code, elapsed seconds and output, with
 **Stop**, **Open receipt** and **Copy output**. Hiding the panel leaves commands running.
@@ -51,7 +53,7 @@ before launch and refuses if it changed.
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Output    | The last 256 KiB is kept; **Showing the last 256 KiB of output.** marks a cut.                                                             |
 | Exit      | A non-zero exit or a signal is a failure: `Command exited with status N.` or `with signal NAME.`                                           |
-| **Stop**  | Sends `SIGTERM` to the command's process group, then `SIGKILL` after 1.5 seconds.                                                          |
+| **Stop**  | Sends `SIGHUP` to a terminal shell, or `SIGTERM` to a piped command's process group; escalates to `SIGKILL` after 1.5 seconds.             |
 | Time      | No time limit.                                                                                                                             |
 | At once   | 20 commands and custom actions, running or starting. Another shows **Wait for an action to finish or cancel one before starting another.** |
 | Ends with | Closing its window, quitting Viewer, or losing access to its folder stops the command.                                                     |
@@ -68,7 +70,7 @@ Each quick command and **Run command…** run writes a private receipt in Viewer
 | ------- | --------------------------------------------------------------------------------------------- |
 | Outcome | **Running**, **Finished**, **Exited N**, **Stopped**, **Failed to finish** or **Interrupted** |
 | Times   | Start and end                                                                                 |
-| Folder  | The folder and its observed identity                                                          |
+| Folder  | The command's working folder, with **Copy path** before it                                    |
 | Command | The literal text run                                                                          |
 | Output  | The last 256 KiB                                                                              |
 
