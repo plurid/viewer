@@ -6,6 +6,7 @@ import {
   newModelProvider,
   providerKinds,
   providerPresets,
+  providerSegmentation,
   validProviderEndpoint,
 } from '../src/domain/models/providers';
 import { SettingsService } from '../src/desktop/preferences/settings';
@@ -664,5 +665,94 @@ describe('Meta and pictures', () => {
         new AbortController().signal,
       ),
     ).rejects.toThrow('Gemini has no segmentation model.');
+  });
+
+  it('outlines with Meta’s SAM, or the one a local server names, and keeps Meta at its endpoint', () => {
+    expect(providerSegmentation(metaProvider())).toBe('sam-3.1');
+    // Meta's own model, whatever a profile adds
+    expect(providerSegmentation({ ...metaProvider(), segmentation: 'other' })).toBe('sam-3.1');
+    expect(providerSegmentation({ kind: 'local', segmentation: ' sam-3.1 ' })).toBe('sam-3.1');
+    expect(providerSegmentation({ kind: 'local' })).toBeUndefined();
+    expect(providerSegmentation({ kind: 'local', segmentation: ' ' })).toBeUndefined();
+    expect(providerSegmentation({ kind: 'gemini', segmentation: 'sam-3.1' })).toBeUndefined();
+    // a server that outlines is a local provider of its own: Meta's endpoint stays Meta's
+    expect(validProviderEndpoint('meta', 'https://api.meta.ai/v1')).toBe(true);
+    expect(validProviderEndpoint('meta', 'http://127.0.0.1:8080/v1')).toBe(false);
+    expect(validProviderEndpoint('meta', 'https://sam.example.invalid/v1')).toBe(false);
+    expect(validProviderEndpoint('local', 'http://127.0.0.1:8080/v1')).toBe(true);
+  });
+
+  it('asks SAM on a local server that names it, at its own endpoint and picture approval', async () => {
+    const provider: ModelProvider = {
+      ...newModelProvider('local', 'workshop'),
+      endpoint: 'http://127.0.0.1:8080/v1',
+      model: 'muse-spark-1.3',
+      segmentation: 'sam-3.1',
+    };
+    const request = reply({
+      output: [{ content: [{ type: 'output_text', text: '<0f>0<|box;…|>' }] }],
+    });
+    const asked = (allowed: Providers, outlined = provider) =>
+      allowed.segment(
+        outlined,
+        { image: picture, width: 64, height: 64 },
+        '<0f>0<|box;x1=16;y1=16;x2=47;y2=47;w=64;h=64|>',
+        new AbortController().signal,
+      );
+    await expect(asked(await allowedAt(provider, request, 'images'))).resolves.toBe(
+      '<0f>0<|box;…|>',
+    );
+    const [url, options] = request.mock.calls[0]!;
+    expect(url).toBe('http://127.0.0.1:8080/v1/responses');
+    // a local server may take no key, so none is sent
+    expect(options!.headers).not.toHaveProperty('authorization');
+    expect(JSON.parse(String(options!.body))).toMatchObject({
+      model: 'sam-3.1',
+      metadata: { mask_encoding: 'one_bit', include_confidence: 'true' },
+    });
+    // the picture needs the images level, as the reading model's pictures do
+    await expect(asked(await allowedAt(provider, request, 'full-text'))).rejects.toThrow(
+      'Allow this provider to receive the selected data',
+    );
+    // without a SAM model the server is not asked
+    const { segmentation: _segmentation, ...plain } = provider;
+    await expect(asked(await allowedAt(plain, request, 'images'), plain)).rejects.toThrow(
+      'Local endpoint has no segmentation model.',
+    );
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a SAM model only for a local provider, in config.jsonc', async () => {
+    const service = new SettingsService(
+      root,
+      root,
+      () => false,
+      () => {},
+    );
+    await service.load();
+    const local: ModelProvider = {
+      ...newModelProvider('local', 'local'),
+      model: 'muse-spark-1.3',
+      segmentation: 'sam-3.1',
+    };
+    await service.patch(
+      [{ path: 'settings.providers', value: [local] }],
+      service.snapshot().revision,
+    );
+    expect(service.snapshot().settings.providers).toEqual([local]);
+    for (const kind of ['meta', 'gemini'] as const)
+      await expect(
+        service.patch(
+          [
+            {
+              path: 'settings.providers',
+              value: [{ ...newModelProvider(kind, kind), segmentation: 'sam-3.1' }],
+            },
+          ],
+          service.snapshot().revision,
+        ),
+        kind,
+      ).rejects.toThrow();
+    await service.close();
   });
 });

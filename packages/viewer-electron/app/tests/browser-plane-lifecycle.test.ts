@@ -9,6 +9,8 @@ const fixture = vi.hoisted(() => ({
       crashed: boolean;
       forcefullyCrashRenderer: ReturnType<typeof vi.fn>;
       reload: ReturnType<typeof vi.fn>;
+      getZoomFactor(): number;
+      debugger: { sendCommand: ReturnType<typeof vi.fn> };
     };
     destroy(): void;
     gone: boolean;
@@ -17,6 +19,7 @@ const fixture = vi.hoisted(() => ({
     close: ReturnType<typeof vi.fn>;
   }[],
   flush: vi.fn(async () => {}),
+  userAgent: vi.fn(),
 }));
 vi.mock('electron', () => ({
   BrowserWindow: class extends EventEmitter {
@@ -69,8 +72,11 @@ vi.mock('electron', () => ({
       this.emit('closed');
     }
   },
+  app: { getName: () => 'Viewer' },
   session: {
     fromPartition: () => ({
+      getUserAgent: () => 'Mozilla/5.0 Viewer/1.0.0 Chrome/142.0.0.0 Electron/45.1.0',
+      setUserAgent: fixture.userAgent,
       setPermissionRequestHandler: vi.fn(),
       setPermissionCheckHandler: vi.fn(),
       on: vi.fn(),
@@ -118,6 +124,8 @@ it('opens a bounded normal page window without preload or Node authority, and re
     webSecurity: true,
   });
   expect(native.options.webPreferences?.preload).toBeUndefined();
+  // pages see Chromium's identity, which sites such as WhatsApp Web require
+  expect(fixture.userAgent).toHaveBeenCalledWith('Mozilla/5.0 Chrome/142.0.0.0');
   expect(native.options.webPreferences?.offscreen).toBeUndefined();
   expect(native.show).not.toHaveBeenCalled();
   const prevented = vi.fn();
@@ -179,6 +187,21 @@ it('reports a hung page in its plane and ends its process before reloading it', 
   guest.webContents.emit('responsive');
   await browsers.request(1, { kind: 'action', id: 'page', action: 'reload' });
   expect(guest.webContents.forcefullyCrashRenderer).toHaveBeenCalledOnce();
+  await browsers.closeAll();
+});
+
+it('places mouse input in the zoomed page’s CSS pixels, and keeps wheel deltas in window pixels', async () => {
+  const { browsers, guest } = await opened();
+  guest.webContents.getZoomFactor = () => 1.5;
+  await browsers.request(1, {
+    kind: 'input',
+    id: 'page',
+    event: { type: 'mouseWheel', x: 300, y: 150, deltaX: 0, deltaY: 100, modifiers: 0 },
+  });
+  expect(guest.webContents.debugger.sendCommand).toHaveBeenLastCalledWith(
+    'Input.dispatchMouseEvent',
+    { type: 'mouseWheel', x: 200, y: 100, deltaX: 0, deltaY: 100, modifiers: 0 },
+  );
   await browsers.closeAll();
 });
 

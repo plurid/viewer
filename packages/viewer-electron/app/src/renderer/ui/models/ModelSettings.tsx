@@ -68,6 +68,18 @@ export function ModelSettings({
         }),
       },
     ]);
+  /** Sets the SAM model a local server also answers, or leaves it out: then it does not outline. */
+  const setSegmentation = (id: string, model: string) =>
+    save((current) => [
+      {
+        path: 'settings.providers',
+        value: current.settings.providers.map((provider) => {
+          if (provider.id !== id) return provider;
+          const { segmentation: _segmentation, ...rest } = provider;
+          return model.trim() ? { ...rest, segmentation: model.trim() } : rest;
+        }),
+      },
+    ]);
   const credential = (id: string, key: string) => {
     requests.current.set(id, (requests.current.get(id) ?? 0) + 1);
     setConnections((previous) =>
@@ -283,6 +295,17 @@ export function ModelSettings({
                   ))}
                 </datalist>
               </label>
+              {provider.kind === 'local' && (
+                <label>
+                  Outlines with SAM
+                  <Field
+                    label="Outlines with SAM"
+                    value={provider.segmentation ?? ''}
+                    placeholder="sam-3.1, when this server also runs SAM"
+                    save={(model) => setSegmentation(provider.id, model)}
+                  />
+                </label>
+              )}
               {preset.efforts && (
                 <label>
                   Reasoning effort

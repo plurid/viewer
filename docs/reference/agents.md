@@ -320,7 +320,7 @@ fails the proposal; it never retargets a new selection.
   outside every file tool.
 - **Grant itself access.** Editing config.jsonc, imported configuration, custom-action aliases and
   saved grants cannot add folders, capabilities or execution.
-- **Use the browser's signed-in sessions, start a local server or dictate.**
+- **Use the browser's signed-in sessions, start a local server, dictate or speak a request.**
 
 ### Commands an agent may propose
 
@@ -494,12 +494,13 @@ steps.
 | Label                                                 | What it does                                                                                             |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | **Add model**, then **Set up model**                  | Adds a provider: OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter, Meta or **Local endpoint** |
-| **Default for Ask Viewer**                            | The model that answers requests in words                                                                 |
+| **Default for Ask Viewer**                            | The model that answers requests in words and reads spoken requests into plans                            |
 | **Data access**                                       | What the provider may receive                                                                            |
 | **Allow selected data**                               | Approves the chosen level                                                                                |
 | **Revoke access**                                     | Withdraws it                                                                                             |
 | **Allow agent-started actions to send the same data** | Lets `ask_in_words`, agent recipes and agent workflows use the model                                     |
 | **Reasoning effort**                                  | How long the model reasons before it answers; shown only for a provider that takes it, such as Meta      |
+| **Outlines with SAM**                                 | The SAM model a local server also answers, such as `sam-3.1`; shown only for **Local endpoint**          |
 
 | Level       | Label in **Data access**                                                                |
 | ----------- | --------------------------------------------------------------------------------------- |
@@ -534,10 +535,48 @@ It is saved as the provider's `effort` in [config.jsonc](configuration.md#models
 value its kind does not take is refused. A request waits 120 seconds for an answer; a
 [laser-job check](fabrication.md#what-is-sent) waits 240.
 
+A **Local endpoint** that also serves SAM names its model in **Outlines with SAM**, saved as the
+provider's `segmentation`. A [laser-job check](fabrication.md#outlines) read by that provider then
+asks its `/responses` route to outline features as Meta's SAM 3.1 does, with the provider's own key,
+if it has one, and under its own `images` approval. Only a local provider takes `segmentation`;
+Meta's endpoint stays `https://api.meta.ai/v1`.
+
 A named cloud provider uses its own endpoint; Qwen accepts its regional and workspace endpoints.
 **Local endpoint** accepts HTTPS, or HTTP to `localhost`, `127.0.0.1` or `[::1]`. Changing the
 endpoint or clearing the key revokes data access and stops running requests. The model's data
 permission, an agent's capabilities and macOS folder access are three separate approvals.
+
+### Ask Viewer by voice
+
+A spoken request ([the steps](../guides/speech.md#ask-viewer-by-voice)) becomes a plan of commands
+where the person spoke. Its transcript is data, as a document is: it can only pick commands offered
+there.
+
+| Stage    | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reading  | With the **Default for Ask Viewer** model allowed `names`, the model receives the words, up to 2,000 characters, the folder's path, up to 50 selected names and up to 600 commands there: each ID, label, what it acts on, such as "Job 1042", and the command it follows. The answer is held to `spokenAnswerSchema` with a strict `json_schema`. Without that model or its permission, or when it does not answer, Viewer matches the words to command labels and aliases itself, and says so |
+| Checking | Each step is a command offered there, or one that follows an earlier step, such as **Prepare cut sheets** after **Check laser job…**: at most 6, each once, in order. A step naming a target its command does not act on, such as "Job 1043" where Job 1042 is shown, or a part of the request no command does, makes the plan wait for the person's press                                                                                                                                      |
+| Running  | Steps run one after another on the folder and selection captured when the recording began, each once the one before is done: a check once it is graded                                                                                                                                                                                                                                                                                                                                          |
+
+| Runs                  | Commands                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| At once               | `check-laser-job`, `check-cut-sheets`, `check-tour`, `quick-preview`, `native-quick-look`, `info`, `inspect-file`, `related-files`, `calculate-size`, `select-all`, `invert-selection`, `refresh`, `hidden`, `back`, `forward`, `parent`, `linked`, `another-plane`, `frame-plane`, `frame-all`, `dock`, `arrange-horizontal`, `arrange-vertical`, `toggle-sidebar`, `plane-sidebar`, `focus-mode`, `wrap-file-names`, and `view-…`, `sort.…`, `group.…` and `column.…` |
+| On the person's press | Every other command offered there, such as `check-corrections`, `check-handoff`, `rename` and `trash`, and any command added later                                                                                                                                                                                                                                                                                                                                      |
+| Never                 | What a model may not put in a line: terminals, other apps, Git actions, emptying the Trash, file Undo, pasting, and custom actions that run programs                                                                                                                                                                                                                                                                                                                    |
+
+A plan that cannot run says why, and nothing runs:
+
+| The plan                  | The panel says                                                             |
+| ------------------------- | -------------------------------------------------------------------------- |
+| Names a command not there | "The plan names “empty-trash”, which is not a command here."               |
+| Has more than 6 steps     | "That is more than 6 steps. Ask for fewer at a time."                      |
+| Names what may never run  | "Open in Terminal does not run from a spoken request: it uses a terminal." |
+| Follows a check not in it | "Check a laser job first: this follows its check."                         |
+
+A check runs at once only when its model may already receive pictures (`images`); see
+[fabrication checks](fabrication.md#by-voice). A spoken request never changes data permission, audio
+consent or agent grants. Agents cannot start one, and the check's next steps are not among the
+[commands an agent may propose](#commands-an-agent-may-propose).
 
 ## For an agent reading this
 

@@ -21,6 +21,7 @@
     "test:browser": "pnpm --filter viewer-electron test:browser",
     "test:desktop": "pnpm --filter viewer-electron test:desktop",
     "test:mas": "pnpm --filter viewer-electron test:mas",
+    "test:fabrication-native": "pnpm --filter viewer-electron test:fabrication-native",
     "qualify": "pnpm --filter viewer-electron qualify",
     "direct:release": "pnpm --filter viewer-electron direct:release",
     "updates:keys": "pnpm --filter viewer-electron updates:keys",

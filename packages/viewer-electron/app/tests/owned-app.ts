@@ -35,14 +35,19 @@ function sampleProcess(pid: number, file: string): Promise<string | undefined> {
 export async function ownedApp(
   binary: string,
   profile: string,
-  options: { mode?: NativeWindowMode; environment?: NodeJS.ProcessEnv } = {},
+  options: {
+    mode?: NativeWindowMode;
+    environment?: NodeJS.ProcessEnv;
+    /** Names the run's evidence folder: lowercase letters, numbers and hyphens. */
+    label?: string;
+  } = {},
 ) {
   const owned = await adoptGeneratedProfile({
     binary,
     profile,
     mode: options.mode ?? 'hidden',
     environment: options.environment,
-    label: 'native-supplemental',
+    label: options.label ?? 'native-supplemental',
     evidenceRoot: path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
       '../out/native-evidence',

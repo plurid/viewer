@@ -1,4 +1,5 @@
 import { categories } from '../../domain/preferences/catalog';
+import type { DiscoverableCommand } from './registry';
 import { commandScore, normalize, rankCommands, type ResolvedCommand } from './registry';
 import type { Suggestion } from './suggestions';
 
@@ -214,6 +215,37 @@ export function paletteRows(
     rows: first ? [...shown, ...more, ...plain] : [...plain, ...shown, ...more],
     headings,
   };
+}
+/** The most unavailable commands the palette shows under the ones it can run. */
+const unavailableLimit = 3;
+/**
+ * The commands not available here that what is typed names, with why, for the palette to show
+ * greyed out: each word typed starts a word of the label or of one alias, as "laser" names "Check
+ * laser job…". Only a command whose definition says why is shown, never a setting or a row the
+ * palette already lists, and those named by label come first.
+ */
+export function unavailableRows(
+  commands: readonly DiscoverableCommand[],
+  query: string,
+  shown: readonly ResolvedCommand[],
+): DiscoverableCommand[] {
+  const typed = words(query);
+  // a letter or two names nearly everything
+  if (typed.join('').length < 3) return [];
+  const listed = new Set(shown.map((row) => row.id));
+  const names = (text: string) => {
+    const own = words(text);
+    return typed.every((word) => own.some((part) => part.startsWith(word)));
+  };
+  const candidates = commands.filter(
+    (command) =>
+      !command.available && !!command.reason && !command.setting && !listed.has(command.id),
+  );
+  const byLabel = candidates.filter((command) => names(command.label));
+  const byAlias = candidates.filter(
+    (command) => !byLabel.includes(command) && command.aliases.some(names),
+  );
+  return [...byLabel, ...byAlias].slice(0, unavailableLimit);
 }
 /** An on/off setting by its name beside its switch: "Sort folders first", not "Turn off: …". */
 const byName = (row: ResolvedCommand): ResolvedCommand =>

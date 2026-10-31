@@ -177,3 +177,40 @@ it('offers a reasoning effort only for a provider that takes one, and leaves it 
   const [cleared] = save.mock.calls[1]![0](snapshot)[0]!.value as (typeof meta)[];
   expect(cleared).not.toHaveProperty('effort');
 });
+
+it('names the SAM model only for a local server, and leaves it out when cleared', () => {
+  const settings = defaultSettings('/fixtures');
+  const local = { ...newModelProvider('local', 'local'), model: 'muse-spark-1.3' };
+  settings.providers = [local, { ...newModelProvider('meta', 'meta') }];
+  const snapshot: SettingsSnapshot = {
+    revision: 1,
+    settings,
+    ui: normalizePreferences(),
+    look: 'dark',
+    credentials: [],
+  };
+  Object.assign(window, {
+    viewer: {
+      providerPermissionGet: vi.fn(async () => null),
+      onEvent: () => () => {},
+    },
+  });
+  const save = vi.fn<(change: SettingsChange) => void>();
+  const view = render(<ModelSettings snapshot={snapshot} save={save} error={vi.fn()} />);
+  // only the local provider's editor asks; Meta outlines with SAM 3.1 itself
+  const fields = screen.getAllByLabelText('Outlines with SAM');
+  expect(fields).toHaveLength(1);
+  const field = fields[0] as HTMLInputElement;
+  expect(field.value).toBe('');
+  fireEvent.change(field, { target: { value: ' sam-3.1 ' } });
+  fireEvent.blur(field);
+  const [named] = save.mock.calls[0]![0](snapshot)[0]!.value as (typeof local)[];
+  expect(named).toEqual({ ...local, segmentation: 'sam-3.1' });
+  const saved = { ...snapshot, settings: { ...settings, providers: [named!] } };
+  view.rerender(<ModelSettings snapshot={saved} save={save} error={vi.fn()} />);
+  expect(field.value).toBe('sam-3.1');
+  fireEvent.change(field, { target: { value: '' } });
+  fireEvent.blur(field);
+  const [cleared] = save.mock.calls[1]![0](saved)[0]!.value as (typeof local)[];
+  expect(cleared).not.toHaveProperty('segmentation');
+});

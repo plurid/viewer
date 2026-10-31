@@ -14,7 +14,9 @@ feature. Follow a feature's guide to learn it; open its reference for exact limi
   [agents](agents.md) name commands by the same id. `<…>` stands for a part that varies.
 - **Menu** is the menu bar path, or **Right-click →** and the submenu of the file menu.
 - A command appears only where it applies. A condition in the row, such as _PDFs selected_, says
-  when.
+  when. Typed in **⌘K**, a command that says why it does not apply here is listed greyed out under
+  the others, with its reason: "laser" shows **Check laser job…** with "fabrication holds Job 1042
+  and Evaluation: select one to check it." It does not run from there.
 
 Right-click a file, a folder or empty space in a folder for the file menu. It starts with **Recent**
 and **Suggested**, then the common actions, such as **Open**, **Quick preview**, **Rename…**,
@@ -207,12 +209,15 @@ Every tool writes new files and leaves the originals as they were.
 
 ## Layout and nesting
 
-| Feature                                                                          | Key | ⌘K command                         | Menu                                                                     | Learn                                                  |
-| -------------------------------------------------------------------------------- | --- | ---------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------ |
-| Collages, contact sheets, N-up, booklets, cards and posters, from photos or PDFs |     | **Lay out…** `lay-out`             | Right-click → **More file actions**, or **Suggested** for several photos | [Lay out](../guides/layout.md) · [Layout](layout.md)   |
-| Nest DXF parts on stock sheets for cutting                                       |     | **Nest for cutting…** `nest-parts` | Right-click → **More file actions**, or **Suggested**                    | [Lay out](../guides/layout.md) · [Nesting](nesting.md) |
+| Feature                                                                          | Key | ⌘K command                                                                                                                                                              | Menu                                                                     | Learn                                                                                      |
+| -------------------------------------------------------------------------------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Collages, contact sheets, N-up, booklets, cards and posters, from photos or PDFs |     | **Lay out…** `lay-out`                                                                                                                                                  | Right-click → **More file actions**, or **Suggested** for several photos | [Lay out](../guides/layout.md) · [Layout](layout.md)                                       |
+| Nest DXF parts on stock sheets for cutting                                       |     | **Nest for cutting…** `nest-parts`                                                                                                                                      | Right-click → **More file actions**, or **Suggested**                    | [Lay out](../guides/layout.md) · [Nesting](nesting.md)                                     |
+| Check a laser job against its request, drawings and photos                       |     | **Check laser job…** `check-laser-job`                                                                                                                                  |                                                                          | [Check a laser job](../guides/layout.md#check-a-laser-job) · [Fabrication](fabrication.md) |
+| A graded check's cut sheets, tour, corrected copies and handoff                  |     | **Prepare cut sheets** `check-cut-sheets` · **Play the check’s tour** `check-tour` · **Save corrected copies** `check-corrections` · **Export handoff** `check-handoff` | The check panel                                                          | [After the check](fabrication.md#after-the-check)                                          |
 
-Both open a Layout plane. Its modes, styles and **Save** are in the plane itself.
+**Lay out…**, **Nest for cutting…** and **Prepare cut sheets** open a Layout plane. Its modes,
+styles and **Save** are in the plane itself.
 
 ## Workspaces and planes
 
@@ -357,11 +362,11 @@ each proposal waits for your review.
 
 ## Speech
 
-| Feature                                    | Key              | ⌘K command                                   | Menu                                       | Learn                                                |
-| ------------------------------------------ | ---------------- | -------------------------------------------- | ------------------------------------------ | ---------------------------------------------------- |
-| Set up local or hosted speech              |                  |                                              | **Settings → Speech**                      | [Dictate](../guides/speech.md) · [Speech](speech.md) |
-| Dictate an Ask Viewer request              | Hold **⌃⇧Space** | **Dictate an Ask Viewer request…** `dictate` |                                            | [Dictate](../guides/speech.md) · [Speech](speech.md) |
-| Dictate into a note, a checklist or a chat |                  |                                              | **Dictate** in the note, checklist or chat | [Dictate](../guides/speech.md)                       |
+| Feature                                    | Key              | ⌘K command                         | Menu                                       | Learn                                                                    |
+| ------------------------------------------ | ---------------- | ---------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------ |
+| Set up local or hosted speech              |                  |                                    | **Settings → Speech**                      | [Dictate](../guides/speech.md) · [Speech](speech.md)                     |
+| Ask Viewer by voice                        | Hold **⌃⇧Space** | **Ask Viewer by voice…** `dictate` | The microphone in the title bar            | [Dictate](../guides/speech.md#ask-viewer-by-voice) · [Speech](speech.md) |
+| Dictate into a note, a checklist or a chat |                  |                                    | **Dictate** in the note, checklist or chat | [Dictate](../guides/speech.md)                                           |
 
 ## Safety and recovery
 

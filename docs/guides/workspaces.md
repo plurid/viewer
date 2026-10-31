@@ -24,6 +24,12 @@ folders, files and tools are there when you come back. Your files stay in their 
 
 Opening a file that already has a plane in the same branch shows that plane again.
 
+A [root plane](../reference/terms.md#planes-and-the-space), such as one from **Open in another
+plane**, **New folder plane** or a tour's stop, opens beside the plane you are working in. It faces
+the same way, to the right when there is room there, otherwise to the left, below or above. The
+planes already open stay where they are, and closing a plane leaves the rest in place. Root planes
+then keep their size when the window changes; **⌘0** frames them all again.
+
 ## Move between planes
 
 | To                                   | Do                                                |

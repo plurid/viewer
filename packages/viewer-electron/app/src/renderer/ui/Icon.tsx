@@ -24,6 +24,7 @@ const paths = {
   data: 'M3 4h18v16H3V4Zm0 5h18M9 4v16m6-16v16m-12-6h18',
   audio:
     'M9 18V5l11-2v13M9 5l11-2M6 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm11-2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+  microphone: 'M9 6a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0V6Zm-4 5a7 7 0 0 0 14 0m-7 7v3m-4 0h8',
   video: 'M3 5h18v14H3V5Zm7 4 5 3-5 3V9Z',
   mail: 'M3 5h18v14H3V5Zm0 0 9 8 9-8',
   list: 'M8 5h13M8 12h13M8 19h13M3 5h.01M3 12h.01M3 19h.01',

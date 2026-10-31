@@ -65,7 +65,9 @@ function jobStatus(job: OperationJob | undefined, done: (job: OperationJob) => s
 export function CheckPanel() {
   const current = useSyncExternalStore(subscribeCheck, checkSession);
   const collapsed = useSyncExternalStore(subscribeCheck, checkCollapsed);
-  if (!current) return null;
+  // the check belongs to the workspace it was opened in: in another, it waits as it was left
+  const workspace = useViewer((state) => state.saved.activeWorkspace);
+  if (!current || current.workspaceID !== workspace) return null;
   return <CheckPanelBody current={current} collapsed={collapsed} />;
 }
 

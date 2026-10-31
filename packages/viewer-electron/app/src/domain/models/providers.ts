@@ -132,6 +132,18 @@ export const providerTakesEffort = (kind: ProviderKind, effort: ReasoningEffort)
 export const providerTakesImages = (kind: ProviderKind) =>
   providerPresets[kind].protocol === 'chat/completions';
 
+/**
+ * The SAM model a provider outlines features with on its own Responses route: Meta's, or the one a
+ * local server says it also answers, as SAM 3.1's weights are open. Any other kind has none.
+ */
+export function providerSegmentation(
+  provider: Pick<ModelProvider, 'kind' | 'segmentation'>,
+): string | undefined {
+  const own = providerPresets[provider.kind].segmentation;
+  if (own) return own;
+  return provider.kind === 'local' ? provider.segmentation?.trim() || undefined : undefined;
+}
+
 export const qwenEndpoints = [
   { label: 'Singapore', endpoint: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
   { label: 'US (Virginia)', endpoint: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1' },

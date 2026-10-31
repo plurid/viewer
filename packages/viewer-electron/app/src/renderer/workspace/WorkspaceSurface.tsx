@@ -40,6 +40,7 @@ import { focusFiles } from './sessions';
 import { applyTiling } from './tiling';
 import { useWorkspace } from './context';
 import { surfaceConfiguration } from './surface-configuration';
+import { placeRoots } from './root-placement';
 import { routeFileKeyboard } from '../explorer/selection';
 
 import { flattenTree, hostID } from './tree';
@@ -413,6 +414,10 @@ export function WorkspaceSurface({
   });
   useEffect(() => onOverviewChange?.(overview), [overview, onOverviewChange]);
   useEffect(() => () => onOverviewChange?.(undefined), [onOverviewChange]);
+  // each engine, once ready: new roots open beside the plane in use, and no root moves
+  useEffect(() => {
+    if (api && engine.current) return placeRoots(engine.current);
+  }, [api, engine]);
   useEffect(() => {
     let retiling: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(([entry]) => {

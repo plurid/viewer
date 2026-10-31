@@ -185,8 +185,9 @@ describe('fabrication check', () => {
     // only features go to SAM: the hole on the drawing and the photo's region, never the text
     expect(samRequest).toHaveBeenCalledTimes(2);
     const [prompt] = samRequest.mock.calls[0]!.slice(1) as [string];
-    // the feature, 0.55 to 0.6 of 2048 px and 0.42 to 0.5 of 1448 px; right and bottom inclusive
-    expect(prompt).toBe('<0f>0<|box;x1=1126;y1=608;x2=1228;y2=723;w=2048;h=1448|>');
+    // the moving hole, 0.407 to 0.443 of 2048 px and 0.519 to 0.57 of 1448 px; right and bottom
+    // inclusive
+    expect(prompt).toBe('<0f>0<|box;x1=833;y1=751;x2=907;y2=825;w=2048;h=1448|>');
     const sam: [number, number][] = [
       [0.25, 0.25],
       [0.75, 0.25],
@@ -211,7 +212,7 @@ describe('fabrication check', () => {
         source: 'segmentation',
         label: 'outline from SAM 3.1',
         region: sam,
-        box: [0.55, 0.42, 0.6, 0.5],
+        box: [0.407, 0.519, 0.443, 0.57],
         confidence: 0.8904109597206116,
       },
       {

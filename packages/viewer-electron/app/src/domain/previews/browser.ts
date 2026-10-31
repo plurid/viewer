@@ -15,6 +15,15 @@ export function browserAddress(input: string): string {
     throw new Error('Enter an HTTP or HTTPS address without embedded credentials.');
   return url.href;
 }
+/** The identity a page sees: Chromium's own, without the app's and Electron's tokens, which some
+ * sites refuse ("WhatsApp works with Google Chrome 100+"). */
+export function chromeUserAgent(agent: string, appName: string): string {
+  const app = appName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return agent
+    .replace(new RegExp(` (?:Electron|${app})/\\S+`, 'gi'), '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 const id = z.string().min(1).max(200);
 const coordinate = z.number().finite().min(-100_000).max(100_000);
 const size = z.number().int().min(160).max(2048);

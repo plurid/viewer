@@ -30,6 +30,9 @@ export interface ModelProvider {
   allowContent: boolean;
   /** How long its model reasons, for a kind that accepts it; the API's own unless set. */
   effort?: ReasoningEffort;
+  /** A local server's SAM model, such as `sam-3.1`, which it also answers on its Responses route:
+   * a check's features are outlined there. Only a `local` provider names one; Meta has its own. */
+  segmentation?: string;
 }
 export type RecipeKind = 'batch-rename' | 'book-name' | 'rename' | 'organize' | 'summarize';
 export interface ActionRecipe {

@@ -48,6 +48,9 @@ zooms in, **⌘-** zooms out and **⌘0** resets. Zoom runs from 50% to 300% in 
 The page is drawn into the plane, so it stays interactive under the space's perspective. Whether a
 site works or keeps a sign-in depends on the site.
 
+Click the page to scroll it and type into it, as in any plane. Until then, scrolling over it moves
+the space. A pinch zooms the space, not the page.
+
 **Open page in window** opens a 1000 × 740 window with the page's own keyboard focus and
 accessibility tree, for a screen reader. It uses the same browser profile, so sign-ins carry over;
 form values and scroll position do not. The plane stays open. Up to 8 page windows are open at once,

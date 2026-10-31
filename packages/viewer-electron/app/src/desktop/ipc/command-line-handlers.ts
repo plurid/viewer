@@ -9,11 +9,12 @@ import {
 import type { ApiHandlers } from './schemas';
 import type { SettingsService } from '../preferences/settings';
 import type { Credentials, Providers } from '../models/providers';
-import { answerPrompt, suggestWithModel } from '../models/prompts';
+import { answerPrompt, answerSpoken, suggestWithModel } from '../models/prompts';
 
 type CommandLineHandlers = Pick<
   ApiHandlers,
   | 'promptLine'
+  | 'promptPlan'
   | 'promptCancel'
   | 'modelSuggestions'
   | 'sessionKeys'
@@ -33,6 +34,17 @@ interface CommandLinePorts {
 /** Session keys stay in memory until kept or quit; a prompt request replaces the last of its ID. */
 export function createCommandLineHandlers(ports: CommandLinePorts): CommandLineHandlers {
   const prompts = new Map<string, AbortController>();
+  /** Runs one request of an ID, cancelled by `promptCancel` or a later request of the same ID. */
+  const asking = async <T>(id: string, ask: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+    const controller = new AbortController();
+    prompts.get(id)?.abort();
+    prompts.set(id, controller);
+    try {
+      return await ask(controller.signal);
+    } finally {
+      if (prompts.get(id) === controller) prompts.delete(id);
+    }
+  };
   const replaceKeys = (keys: SessionKeys) => {
     ports.setSessionKeys(keys);
     ports.emit({ type: 'session-keys', session: keys });
@@ -40,22 +52,26 @@ export function createCommandLineHandlers(ports: CommandLinePorts): CommandLineH
   };
   return {
     // `>` in the palette: a request in words answered with a line to review
-    promptLine: async ([request]) => {
-      const controller = new AbortController();
-      prompts.get(request.id)?.abort();
-      prompts.set(request.id, controller);
-      try {
-        return await answerPrompt(
+    promptLine: ([request]) =>
+      asking(request.id, (signal) =>
+        answerPrompt(
           request,
           ports.settings.snapshot().settings,
           (...generate) => ports.providers.generate(...generate),
-          controller.signal,
+          signal,
           namedLines(ports.settings.snapshot().settings.customActions, ports.sessionKeys().aliases),
-        );
-      } finally {
-        if (prompts.get(request.id) === controller) prompts.delete(request.id);
-      }
-    },
+        ),
+      ),
+    // a spoken request: a plan of command IDs, which the window checks before any runs
+    promptPlan: ([request]) =>
+      asking(request.id, (signal) =>
+        answerSpoken(
+          request,
+          ports.settings.snapshot().settings,
+          (...generate) => ports.providers.generate(...generate),
+          signal,
+        ),
+      ),
     promptCancel: ([id]) => {
       prompts.get(id)?.abort();
     },

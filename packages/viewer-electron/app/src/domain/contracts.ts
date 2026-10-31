@@ -1,4 +1,5 @@
 import type { PromptAnswer, PromptRequest, PromptHistoryEntry } from './command-line/prompt';
+import type { SpokenAnswer, SpokenRequest } from './command-line/spoken';
 import type { ModelSuggestionRequest, ModelSuggestions } from './suggestions/model';
 import type { FileGuess } from './files/file-guess';
 import type { FileIdentity } from './files/signatures';
@@ -797,6 +798,9 @@ export interface ViewerAPI {
   settingsPatch(patches: SettingsPatch[], revision: number): Promise<SettingsSnapshot>;
   /** `>` in the palette: a request in words, answered with a line to review. */
   promptLine(request: PromptRequest): Promise<PromptAnswer>;
+  /** A spoken request, answered with a plan of command IDs the window checks before any runs. */
+  promptPlan(request: SpokenRequest): Promise<SpokenAnswer>;
+  /** Cancels a request in words or a spoken one. */
   promptCancel(id: string): Promise<void>;
   /** The prompt model's picks for a folder's kinds of file, when Settings allows it. */
   modelSuggestions(request: ModelSuggestionRequest): Promise<ModelSuggestions>;

@@ -23,7 +23,9 @@ desktop services and can be revoked.
 
 A **plane** is a view record. Its engine route, framing and geometry belong to
 `src/renderer/workspace/controller.ts`. A **root** is an independent spatial branch: preview reuse
-is scoped to that root. Keep engine IDs inside the adapter.
+is scoped to that root. Keep engine IDs inside the adapter. Where a new root opens, beside the
+active plane, and that no root moves as others open and close, belong to
+`renderer/workspace/root-placement.ts`, which the workspace surface installs on each engine.
 
 Content-plane opening and reuse live in `src/renderer/workspace/content-planes.ts`; asynchronous
 results keep their originating workspace. IPC dispatch lives in feature groups,
@@ -80,9 +82,12 @@ input, commands, agents or server starts.
 A **captured target** freezes workspace, root, plane, directory and selection before asynchronous
 work. Contextual commands, recipes and custom actions use it instead of reading a later selection.
 
-A **command** is a contextual registry action. A **custom action** is a declarative executor. A
-**recipe** prepares a reviewed file proposal. A **workflow** composes typed inspection and
-proposals; a **watch rule** can prepare a review, not apply it.
+A **command** is a contextual registry action. A **spoken request** is Ask Viewer by voice: its
+transcript becomes a plan of registry commands, checked against the captured target
+(`domain/command-line/spoken.ts`) and run through the registry (`renderer/command-line/spoken.ts`),
+never a second executor; a command's `spoken` says how a plan names and awaits it. A **custom
+action** is a declarative executor. A **recipe** prepares a reviewed file proposal. A **workflow**
+composes typed inspection and proposals; a **watch rule** can prepare a review, not apply it.
 
 The terminal **CLI** (`domain/cli`, `desktop/cli`) binds argument parsing and scripting output to
 the existing scoped MCP transport. `desktop/agents/service-tools.ts` adapts shared feature owners;

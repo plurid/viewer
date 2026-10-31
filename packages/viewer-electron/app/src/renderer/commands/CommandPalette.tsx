@@ -33,6 +33,7 @@ import {
   paletteRows,
   paletteSuggestions,
   settingRows,
+  unavailableRows,
   withSuggested,
 } from './palette-sections';
 import { palettePrefixes, type PaletteMode } from './palette-modes';
@@ -215,6 +216,21 @@ function CommandFinder({
     query,
   );
   const rows = folderView.rows;
+  // what typing names that cannot run here, greyed out with why; asking every command why waits
+  // for a query
+  const typed = mode === 'commands' && !folder.length && !!query.trim();
+  const discovered = useMemo(
+    () =>
+      typed
+        ? registry
+            .discover({ paneID: active, scope: 'window', context })
+            .filter((command) => !command.id.startsWith('smart:'))
+        : [],
+    // `context` is a new object each render, read afresh whenever the revision changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [registry, active, scoped, typed],
+  );
+  const unavailable = typed ? unavailableRows(discovered, query, rows) : [];
   const back = () => {
     setFolder(folder.slice(0, -1));
     setQuery('');
@@ -233,6 +249,7 @@ function CommandFinder({
           else setQuery(text);
         }}
         rows={rows}
+        unavailable={unavailable}
         headings={view.headings}
         hint={workspaces ? undefined : lineHint}
         onClose={folder.length ? back : nested ? onCommands : onClose}

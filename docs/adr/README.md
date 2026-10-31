@@ -13,3 +13,4 @@ These records explain decisions that still shape the application. Feature usage 
 - [Scoped terminal CLI](0008-scoped-terminal-cli.md)
 
 - [Window-owned speech](0009-window-owned-speech.md)
+- [Spoken requests](0010-spoken-requests.md)

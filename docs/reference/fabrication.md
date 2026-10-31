@@ -71,6 +71,38 @@ once the count arrives, or at the next **⌘K**.
 | Drawing pages           | 12 across the job                   |
 | Pictures in one request | 16, each up to 4 MB, 16 MB together |
 
+### After the check
+
+Once a check is graded, **⌘K** also offers what its panel does next, for the open check's current
+result. A job changed since its check offers none of them: "Job 1042 changed since its check. Run
+the check again first."
+
+| Command                   | ID                  | Does                                                              |
+| ------------------------- | ------------------- | ----------------------------------------------------------------- |
+| **Prepare cut sheets**    | `check-cut-sheets`  | Opens the Nesting plane on the job's parts, as the panel's button |
+| **Play the check’s tour** | `check-tour`        | Plays the tour, as **Play the tour**                              |
+| **Save corrected copies** | `check-corrections` | Saves each proposed [correction](#correction) not saved yet       |
+| **Export handoff**        | `check-handoff`     | Exports the [handoff](#handoff), nesting first what is not nested |
+
+### By voice
+
+Said over Job 1042, "Check this job and prepare the cut sheets" checks it, then opens its cut sheets
+once it is graded ([Ask Viewer by voice](../guides/speech.md#ask-viewer-by-voice)).
+
+- **The check.** The panel opens as **Check laser job…** opens it, and the check runs at once when
+  its model may already receive pictures. Otherwise the step says "Meta may not receive pictures
+  yet. Choose Allow pictures for Meta in the check panel, then Check 7 files." and waits for that
+  check.
+- **No answer paid twice.** A check of the job already open, running or graded, is waited for, not
+  started again. A kept check unchanged since is graded already; one changed since runs again.
+- **What follows.** **Prepare cut sheets** and **Play the check’s tour** run once the check is
+  graded. **Save corrected copies** and **Export handoff** save files, so they wait for the person's
+  press.
+- **Another job.** "Check job 1043" over Job 1042 runs nothing until the person chooses the job that
+  is there: "Job 1043 is not here. Job 1042 is."
+- **Stops.** A check that fails, finds nothing to check or closes stops the plan with its reason;
+  **Stop** in the voice panel leaves the check running in its own panel.
+
 ## What is sent
 
 One request goes to the model, with the instructions, the input as text, then the pictures in the
@@ -181,6 +213,11 @@ part the value is about. The page opens fitted to both: the feature outlined, th
   its largest region and labelled **outline from SAM 3.1**, with SAM's confidence. When SAM gives
   none, the model's feature box stands in, labelled **box from Muse Spark**, with SAM's reason in
   the check record. Another provider's box is labelled for it, such as **box from Gemini**.
+- **Who outlines.** SAM runs on the provider that read the job, at its own endpoint and under the
+  same `images` approval. Meta answers with SAM 3.1. A **Local endpoint** outlines when **Outlines
+  with SAM** names the SAM model its server also answers on `/responses`, such as `sam-3.1`, as SAM
+  3.1's weights are open; it speaks SAM 3.1's prompts and replies. Any other provider's box stands
+  in.
 - **Photo.** A finding's photo `box` is the region shown; its `feature`, the part or hole, is
   outlined the same way.
 - **A stop about no finding** marks its own box: as text when it lies over one text run by half or
@@ -269,6 +306,10 @@ it. Collapsed, the title bar says how the check stands:
 | Checked               | "Check Job 1042 · 3 findings, 2 confirmed"                                               |
 | The job changed since | "Check Job 1042 · Changed since 22:14"                                                   |
 | The export nests      | "Check Job 1042 · Nesting 6 mm: 3 parts, 8 pieces… · 4 s"                                |
+
+The panel belongs to the workspace the check was opened in. Another workspace hides it; back in its
+own, it shows again as it was left, open or collapsed. Closing that workspace closes the check, as
+closing the panel does.
 
 **Play the tour** collapses the panel, so the plane each stop shows is in view, and opens it again
 when the tour ends or stops. **Play again** collapses it again. Once you open or collapse it during

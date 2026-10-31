@@ -1,4 +1,11 @@
-import { useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { BrowserPane as Pane } from '../../domain/contracts';
 import type { BrowserRequest, BrowserSnapshot } from '../../domain/previews/browser';
 import { browserAddress } from '../../domain/previews/browser';
@@ -148,6 +155,25 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
       y: (point.y * size.current.height) / surface.current!.clientHeight,
     };
   };
+  const wheel = useEffectEvent((event: WheelEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    projection.current = undefined;
+    send({
+      type: 'mouseWheel',
+      ...local(event),
+      deltaX: event.deltaX,
+      deltaY: event.deltaY,
+      modifiers: modifiers(event),
+    });
+  });
+  useEffect(() => {
+    // Plurid gives a clicked plane the wheel by stopping it at its view, before React's root
+    // listener sees it, so the surface listens itself; not passively, to cancel its default.
+    const element = surface.current!;
+    element.addEventListener('wheel', wheel, { passive: false });
+    return () => element.removeEventListener('wheel', wheel);
+  }, []);
   return (
     <section className="browser-plane" aria-label="Browser">
       <form
@@ -296,18 +322,6 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
             modifiers: modifiers(event),
           })
         }
-        onWheel={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          projection.current = undefined;
-          send({
-            type: 'mouseWheel',
-            ...local(event),
-            deltaX: event.deltaX,
-            deltaY: event.deltaY,
-            modifiers: modifiers(event),
-          });
-        }}
         onContextMenu={(event) => event.preventDefault()}
       >
         <canvas ref={canvas} aria-label={snapshot?.title || 'Web page'} />

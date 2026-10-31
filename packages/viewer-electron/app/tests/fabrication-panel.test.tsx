@@ -21,8 +21,10 @@ import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { CheckPanel } from '../src/renderer/fabrication/CheckPanel';
 import {
   checkCollapsed,
+  checkSession,
   closeCheck,
   forgetChecks,
+  keptCheck,
   openCheck,
   runCheck,
   toggleCheckPanel,
@@ -34,9 +36,12 @@ import { WorkspaceContext } from '../src/renderer/workspace/context';
 import {
   activeWorkspace,
   addPane,
+  deleteWorkspace,
   getState,
   initialize,
+  newWorkspace,
   setActivePane,
+  switchWorkspace,
 } from '../src/renderer/state/store';
 import { update } from '../src/renderer/state/core';
 import { playTour, stopTour, tourControls, tourPlayback } from '../src/renderer/workspace/tour';
@@ -969,6 +974,39 @@ async function checkedWithTour(): Promise<void> {
 }
 const atStop = () =>
   waitFor(() => expect(tourPlayback()?.status).toBe('showing'), { timeout: 2000 });
+
+it('stays with the workspace it was opened in, as it was left, and closes with it', async () => {
+  panel();
+  const home = activeWorkspace().id;
+  await act(() => openCheck([folder], home));
+  expect(screen.getByRole('heading', { name: 'Check Job 1042' })).toBeTruthy();
+  fireEvent.click(toggle());
+  expect(expanded()).toBe('false');
+
+  // another workspace hides it; the check waits, still open
+  await act(() => newWorkspace('Drawings'));
+  expect(document.querySelector('.check-panel')).toBeNull();
+  expect(checkSession()?.workspaceID).toBe(home);
+  // back in its own, collapsed as it was
+  await act(() => switchWorkspace(home));
+  expect(document.querySelector('.check-panel')).not.toBeNull();
+  expect(expanded()).toBe('false');
+  fireEvent.click(toggle());
+  const other = getState().saved.workspaces.find((space) => space.id !== home)!.id;
+  await act(() => switchWorkspace(other));
+  await act(() => switchWorkspace(home));
+  expect(expanded()).toBe('true');
+
+  // closing another workspace leaves it; closing its own closes it
+  await act(() => deleteWorkspace(other));
+  expect(checkSession()?.workspaceID).toBe(home);
+  await act(() => deleteWorkspace(home));
+  expect(checkSession()).toBeNull();
+  expect(document.querySelector('.check-panel')).toBeNull();
+  // a check without a result ends with its panel, as when the panel closes
+  expect(keptCheck([folder])).toBeUndefined();
+  expect(fabrication).toHaveBeenCalledWith({ kind: 'close', id: opening.id });
+});
 
 it('steps out of the way while its tour plays, above the tour bar, and comes back after', async () => {
   await checkedWithTour();

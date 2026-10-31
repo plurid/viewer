@@ -274,6 +274,12 @@ async function main() {
       ...directEnvironment,
       VIEWER_LOW_SPACE_EVIDENCE: path.join(directory, 'direct-low-space.json'),
     });
+    // the laser job end to end; it keeps every file it makes and moves nothing to the Trash
+    await run('direct-fabrication', ['test:fabrication-native'], {
+      ...directEnvironment,
+      VIEWER_TEST_PRESERVE: '1',
+      VIEWER_TEST_NO_REMOVAL: '1',
+    });
     if (mas) {
       if (checks.some((check) => check.result === 'failed')) {
         checks.push({

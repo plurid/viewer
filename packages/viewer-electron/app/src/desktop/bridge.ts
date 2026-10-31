@@ -126,7 +126,7 @@ import { FabricationChecks } from './fabrication/service';
 import { samSegmenter } from './models/segmentation';
 import { photoPlan } from './fabrication/inputs';
 import { checkLimits } from '../domain/fabrication/check';
-import { providerPresets } from '../domain/models/providers';
+import { providerPresets, providerSegmentation } from '../domain/models/providers';
 import { Lenses } from './workspaces/lenses';
 import { Checkpoints } from './operations/checkpoints';
 import { Workflows } from './automation/workflows';
@@ -659,10 +659,11 @@ export class Desktop {
       access,
       permission: (provider) => this.modelPermissions.get(provider),
       generate: (...args) => this.providers.generate(...args),
-      // SAM runs on the reading model's provider, under the same `images` approval
+      // SAM runs on the reading model's provider, under the same `images` approval: Meta's, or
+      // a local server that names the SAM model it answers
       segmenter: (provider) => {
         const preset = providerPresets[provider.kind];
-        return preset.segmentation
+        return providerSegmentation(provider)
           ? samSegmenter(
               (picture, prompt, signal) =>
                 this.providers.segment(provider, picture, prompt, signal),

@@ -157,6 +157,32 @@ parts and carry the `com.apple.quarantine` mark. Undo of a layout and of a nesti
 refused under `VIEWER_TEST_NO_REMOVAL=1`, with the files kept. It captures each mode in dark and
 light in the run's `Evidence` folder and reads the same `VIEWER_TEST_REAL_CORPUS`.
 
+`pnpm test:fabrication-native` (`tests/native/fabrication.ts`) checks a laser job end to end. Run it
+with the preservation variables above; it uses `VIEWER_TEST_BINARY`, else the regular packaged
+output, and qualification runs it on the direct candidate.
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm test:fabrication-native
+```
+
+- **Its job.** It writes `fabrication/Job 1042` and `fabrication/Evaluation` from the playground
+  samples into its own folder. A loopback stub answers for the model with the test fixture's answer
+  for Job 1042, and for SAM 3.1 with a recorded mask over the box asked about. The generated profile
+  names the stub as a local Chat Completions endpoint that outlines with `sam-3.1`, and already
+  allows it pictures, so no dialog is answered.
+- **What it checks.** **Check laser job…** is not offered on the folder of jobs: **⌘K** lists it
+  greyed out with why, and a click runs nothing. On Job 1042 it is offered with what it compares.
+  The panel lists 7 files and finds one confirmed pitch, named by file, its feature outlined by SAM
+  3.1. The title collapses the panel. The tour shows its 3 stops on the real engine, the drawing
+  drawn with its text and feature outlined, the panel down while it plays. The correction is saved
+  beside the unchanged original. **Nest and export handoff** nests each thickness and writes the
+  folder, its tour pointed at the `Evidence/` copies. The kept check opens again. The Layout plane
+  takes millimetres and inches, picks a part and has no sheet format without failing. **Dark pages**
+  turns the PDF page dark and back. The panel stays with its workspace and returns as it was left.
+- **Beside it.** A second instance runs in another generated profile.
+- **Evidence.** Each step's screenshot, the app's logs and `result.json` go to its folder under
+  `out/native-evidence/`. Every wait is bounded and names its step when it fails.
+
 `tests/native/reader-qualification.ts` checks the published EPUBs pinned in
 `tools/playground/reader-samples.ts`: long chapter lists, supported illustrations, internal notes,
 Unicode links/search, query replacement, warm reopening and cold restart. Obtain these references

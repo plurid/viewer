@@ -13,7 +13,7 @@ import type { IconName } from '../ui/Icon';
 import { captureTarget } from './target';
 import { localServerCommands } from '../local-servers/commands';
 import { layoutCommands } from '../layout/commands';
-import { checkCommands } from '../fabrication/commands';
+import { checkCommands, checkResultCommands } from '../fabrication/commands';
 import { mediaFormats } from '../../domain/operations/transforms';
 import { transformableImage } from '../../domain/operations/image-conversions';
 import { optimizable } from '../../domain/operations/optimization';
@@ -190,6 +190,7 @@ export function programCommands(
     },
     ...layoutCommands(workspace),
     ...checkCommands(),
+    ...checkResultCommands(workspace),
     {
       id: 'image-tools',
       label: 'Convert images…',

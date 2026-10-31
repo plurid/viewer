@@ -646,6 +646,9 @@ describe('estimates', () => {
     expect(durationText(5.2)).toBe('5 min');
     expect(durationText(119.7)).toBe('2 h');
     expect(durationText(0.2)).toBe('12 s');
+    expect(durationText(0.001)).toBe('1 s');
+    // the All row of thicknesses that have no sheet format
+    expect(durationText(0)).toBe('0 s');
     expect(moneyText(205.2, '€')).toBe('€205');
     expect(moneyText(12.5, 'lei')).toBe('12.5 lei');
     expect(lengthText(152_400)).toBe('152 m');

@@ -349,12 +349,12 @@ indexed location.
 Shown in **Settings → Models** and **Settings → Actions**. Model use is described in
 [agents](agents.md#add-a-model).
 
-| Setting                        | Default                   | Values                                                              |
-| ------------------------------ | ------------------------- | ------------------------------------------------------------------- |
-| `settings.providers`           | `[]`                      | Up to 20 `{id, name, kind, endpoint, model, allowContent, effort?}` |
-| `settings.prompts.providerID`  | `""` (the first provider) | A provider ID; the model behind `>` prompts and Ask Viewer          |
-| `settings.recipes`             | The five built-in recipes | Up to 100 recipes                                                   |
-| `settings.optimizationRecipes` | `[]`                      | Up to 100; see [media](media.md)                                    |
+| Setting                        | Default                   | Values                                                                             |
+| ------------------------------ | ------------------------- | ---------------------------------------------------------------------------------- |
+| `settings.providers`           | `[]`                      | Up to 20 `{id, name, kind, endpoint, model, allowContent, effort?, segmentation?}` |
+| `settings.prompts.providerID`  | `""` (the first provider) | A provider ID; the model behind `>` prompts and Ask Viewer                         |
+| `settings.recipes`             | The five built-in recipes | Up to 100 recipes                                                                  |
+| `settings.optimizationRecipes` | `[]`                      | Up to 100; see [media](media.md)                                                   |
 
 A provider's `kind` is `openai`, `anthropic`, `zai`, `deepseek`, `qwen`, `gemini`, `openrouter`,
 `meta` or `local`; a new `meta` provider starts with the model `muse-spark-1.3`. `endpoint` is an
@@ -362,7 +362,10 @@ HTTPS URL without a user name or password; `http` is accepted only for `localhos
 `[::1]`. `model` is the model ID. `allowContent` is a display preference: it never grants data
 access. `effort`, `minimal` or `low` for `meta`, sets how long the model reasons; left out, the API
 reasons as it does by default, and a kind that takes no effort is refused one
-([reasoning effort](agents.md#add-a-model)). Keys are saved in Settings, never in this file.
+([reasoning effort](agents.md#add-a-model)). `segmentation`, for `local` only, names the SAM model
+the server also answers on `/responses`, such as `sam-3.1`, and a laser-job check outlines features
+with it ([outlines](fabrication.md#outlines)); any other kind is refused one. Keys are saved in
+Settings, never in this file.
 
 A recipe is
 `{id, name, kind, formats, recursive, instructions, template, data, providerID?, shortcut?}`:

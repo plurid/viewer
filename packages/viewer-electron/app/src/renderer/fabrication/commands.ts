@@ -1,13 +1,25 @@
 import type { CommandContext, CommandDefinition } from '../commands/registry';
 import type { JobContents } from '../../domain/fabrication/job-files';
+import type { WorkspaceController } from '../workspace/context';
 import type { ContentsSource } from './contents';
 import { inventoryLimit } from '../../domain/fabrication/answer';
 import { folderContents, jobContents } from '../../domain/fabrication/job-files';
 import { listText } from '../../domain/fabrication/plan';
 import { countText } from '../../domain/layout/nesting/format';
 import { fileName } from '../../domain/tours/tour';
-import { clockText, keptCheck, openCheck } from './check';
+import {
+  checkSession,
+  clockText,
+  exportHandoff,
+  handoffNestings,
+  keptCheck,
+  openCheck,
+  playCheckTour,
+  prepareCutSheets,
+  saveCorrection,
+} from './check';
 import { knownJob } from './contents';
+import { gradedCheck, gradedText, sameJob } from './spoken';
 
 /** Where a check reads: the selected files, or one folder, with what the window knows it holds. */
 export type CheckPlace = 'files' | 'folder';
@@ -141,6 +153,152 @@ export function checkCommands(): CommandDefinition[] {
       when: (context) => !!checked(context),
       unavailable: unavailableText,
       run: (context) => openCheck(checked(context)!.paths, context.workspaceID, context.paneID),
+      spoken: {
+        phrase: (context) => {
+          const target = checked(context);
+          if (!target) return 'check the laser job';
+          const { job } = target.contents;
+          return target.place === 'files' ? `check the selected files of ${job}` : `check ${job}`;
+        },
+        subject: (context) => checked(context)?.contents.job,
+        // spoken, "check this job" is graded before the plan goes on
+        run: async (context, progress, signal) => {
+          const { paths } = checked(context)!;
+          const open = checkSession();
+          // a check of this job already open, running or graded, is waited for, not begun again
+          if (!open || !sameJob(open.paths, paths) || ['empty', 'failed'].includes(open.phase))
+            await openCheck(paths, context.workspaceID, context.paneID);
+          return gradedText(await gradedCheck(paths, progress, signal));
+        },
+      },
+    },
+  ];
+}
+
+/** The open check, while its result is current: what its next steps act on. */
+function graded() {
+  const current = checkSession();
+  return current?.phase === 'checked' && current.result && !current.stale ? current : undefined;
+}
+const checkedJob = () => checkSession()?.opening?.job ?? 'the job';
+/** Why a next step is not offered: no check, or one older than the job. */
+function notGraded(): string {
+  const current = checkSession();
+  return current?.stale
+    ? `${checkedJob()} changed since its check. Run the check again first.`
+    : 'Check a laser job first: this follows its check.';
+}
+/** The corrections the open check proposes that are not saved yet. */
+const unsaved = () => {
+  const current = graded();
+  return (current?.result?.findings ?? []).filter(
+    (item) => item.correction && !current?.corrections[item.finding.id],
+  );
+};
+/** A spoken plan names each after "check this job": the check's result is what they act on. */
+const afterCheck = ['check-laser-job'];
+
+/**
+ * The open check's next steps, as its panel offers them: the cut sheets, the tour, the corrected
+ * copies and the handoff. Each acts on the check's current result. The last two save files, so a
+ * spoken plan waits for the person's press on them.
+ */
+export function checkResultCommands(workspace: WorkspaceController): CommandDefinition[] {
+  const subject = () => graded()?.opening?.job;
+  return [
+    {
+      id: 'check-cut-sheets',
+      label: 'Prepare cut sheets',
+      group: 'Files',
+      icon: 'grid',
+      aliases: ['cut sheets', 'nest', 'nest the parts', 'nesting'],
+      detail: () =>
+        `Nest ${checkedJob()}’s ${countText(graded()!.result!.parts.length, 'part')} in a Layout plane, as the check reads them`,
+      when: () => !!graded()?.result?.parts.length,
+      unavailable: notGraded,
+      run: () => prepareCutSheets(workspace),
+      spoken: {
+        phrase: () =>
+          graded() ? `prepare ${checkedJob()}’s cut sheets` : 'prepare the cut sheets',
+        follows: 'prepare its cut sheets',
+        subject,
+        after: afterCheck,
+        run: async () => {
+          const parts = graded()!.result!.parts.length;
+          prepareCutSheets(workspace);
+          return `Opened ${countText(parts, 'part')} in a Layout plane`;
+        },
+      },
+    },
+    {
+      id: 'check-tour',
+      label: 'Play the check’s tour',
+      group: 'Files',
+      icon: 'play',
+      aliases: ['tour', 'play the tour', 'show the findings', 'walk through the findings'],
+      detail: () =>
+        `${countText(graded()!.result!.tour.stops.length, 'stop')} through ${checkedJob()}’s files`,
+      when: () => !!graded()?.result?.tour.stops.length,
+      unavailable: notGraded,
+      run: () => playCheckTour(workspace),
+      spoken: {
+        phrase: () => (graded() ? `play ${checkedJob()}’s tour` : 'play the check’s tour'),
+        follows: 'play its tour',
+        subject,
+        after: afterCheck,
+      },
+    },
+    {
+      id: 'check-corrections',
+      label: 'Save corrected copies',
+      group: 'Files',
+      icon: 'drawing',
+      aliases: ['save the corrections', 'correct the dxf', 'fix the pitch', 'fix the holes'],
+      detail: () =>
+        `${listText(unsaved().map((item) => item.correction!.name))}, beside each original, which is kept`,
+      when: () => unsaved().length > 0,
+      unavailable: () => (graded() ? 'The check proposes no correction to save.' : notGraded()),
+      run: async () => {
+        for (const item of unsaved()) await saveCorrection(item);
+      },
+      spoken: {
+        phrase: () =>
+          graded() ? `save ${checkedJob()}’s corrected copies` : 'save the corrected copies',
+        follows: 'save its corrected copies',
+        subject,
+        after: afterCheck,
+      },
+    },
+    {
+      id: 'check-handoff',
+      label: 'Export handoff',
+      group: 'Files',
+      icon: 'share',
+      aliases: ['handoff', 'export the job', 'export for the shop', 'send to the shop'],
+      detail: (context) =>
+        `Save “${checkedJob()} handoff” in the job’s folder${handoffNestings(graded()!, context.jobs).missing.length ? ', nesting first what no Layout plane has' : ''}`,
+      when: (context) => {
+        const current = graded();
+        return (
+          !!current &&
+          !current.handoff &&
+          !current.handoffProgress &&
+          !handoffNestings(current, context.jobs).hold
+        );
+      },
+      unavailable: (context) => {
+        const current = graded();
+        if (!current) return notGraded();
+        if (current.handoff) return 'The handoff is saved.';
+        return handoffNestings(current, context.jobs).hold ?? 'The handoff is being exported.';
+      },
+      run: () => exportHandoff(),
+      spoken: {
+        phrase: () => (graded() ? `export ${checkedJob()}’s handoff` : 'export the handoff'),
+        follows: 'export its handoff',
+        subject,
+        after: afterCheck,
+      },
     },
   ];
 }

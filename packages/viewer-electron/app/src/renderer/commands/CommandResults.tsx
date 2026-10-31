@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '../ui/Icon';
-import type { ResolvedCommand } from './registry';
+import type { DiscoverableCommand, ResolvedCommand } from './registry';
 
 /** Search retains focus while arrows move the active descendant through results. */
 export function CommandResults({
   query,
   onQuery,
   rows,
+  unavailable = [],
   onSelect,
   onClose,
   placeholder = 'Search actions…',
@@ -25,6 +26,8 @@ export function CommandResults({
   query: string;
   onQuery(query: string): void;
   rows: readonly ResolvedCommand[];
+  /** Commands the query names that cannot run here: shown greyed out with why, never chosen. */
+  unavailable?: readonly DiscoverableCommand[];
   onSelect(command: ResolvedCommand): void;
   onClose(): void;
   placeholder?: string;
@@ -152,7 +155,7 @@ export function CommandResults({
         role="listbox"
         aria-label="Commands"
       >
-        {!rows.length && (
+        {!rows.length && !unavailable.length && (
           <p className="command-empty" role="status">
             {empty}
           </p>
@@ -202,6 +205,27 @@ export function CommandResults({
             </button>
           </div>
         ))}
+        {unavailable.length > 0 && (
+          <>
+            <div className="command-group">Not available here</div>
+            {/* out of the arrows' and Return's reach: no key or click runs one */}
+            {unavailable.map((row) => (
+              <div
+                key={row.id}
+                role="option"
+                aria-disabled="true"
+                aria-selected="false"
+                className="command-result is-unavailable"
+              >
+                <Icon name={row.icon ?? 'file'} size={16} />
+                <span className="command-result-text">
+                  <span>{row.label}</span>
+                  <small>{row.reason}</small>
+                </span>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );

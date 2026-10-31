@@ -16,8 +16,9 @@ Ship a pinned whisper.cpp runtime and compile Viewer's bounded stdin/stdout help
 separately verified data. The helper accepts at most one minute of mono PCM, runs locally and exits
 after an utterance. No audio files, shell installation or agent microphone route exist.
 
-A transcript has no execution authority. A person reviews it and inserts it into a stable
-destination. Ask Viewer follows ordinary model permissions and command reviews. Changing the
+A dictated transcript has no execution authority. A person reviews it and inserts it into a stable
+destination. Ask Viewer follows ordinary model permissions and command reviews. A spoken request's
+transcript picks commands only as [spoken requests](0010-spoken-requests.md) allow. Changing the
 destination closes dictation. Preferences and workspace restoration never start recording.
 
 ## Consequences

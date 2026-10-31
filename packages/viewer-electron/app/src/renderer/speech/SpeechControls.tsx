@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { defaultShortcuts, matchesShortcut } from '../../domain/preferences/shortcuts';
 import { activeWorkspace, useViewer } from '../state/store';
-import { DictationDialog } from './DictationDialog';
+import { SpokenRequest } from '../command-line/SpokenRequest';
 import { onWindowEvent } from '../app/window-events';
 
-export function SpeechControls({ onUse }: { onUse(text: string): void }) {
+/**
+ * Ask Viewer by voice: hold the Dictate shortcut, speak and release; or choose the microphone or
+ * the command, speak, then Finish, or choose the microphone again. One request at a time: a new one
+ * replaces the last.
+ */
+export function SpeechControls({ onEdit }: { onEdit(text: string): void }) {
   const shortcut = useViewer(
     (state) => state.settings.settings.shortcuts.dictate ?? defaultShortcuts.dictate!,
   );
@@ -13,10 +18,10 @@ export function SpeechControls({ onUse }: { onUse(text: string): void }) {
     const pane = space.panes.find((pane) => pane.id === state.activePane);
     return JSON.stringify([space.id, state.activePane, pane?.path]);
   });
-  const [request, setRequest] = useState<{ target: string; held?: boolean }>();
+  const [request, setRequest] = useState<{ opening: number; held?: boolean }>();
   const holding = useRef<string | undefined>(undefined);
-  const current = useRef(target);
-  current.current = target;
+  const recording = useRef(false);
+  const openings = useRef(0);
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (!matchesShortcut(shortcut, event) || event.isComposing) return;
@@ -25,7 +30,7 @@ export function SpeechControls({ onUse }: { onUse(text: string): void }) {
       event.stopImmediatePropagation();
       if (event.repeat || holding.current) return;
       holding.current = event.code || event.key;
-      setRequest({ target: current.current, held: true });
+      setRequest({ opening: ++openings.current, held: true });
     };
     const up = (event: KeyboardEvent) => {
       if (!holding.current) return;
@@ -37,7 +42,11 @@ export function SpeechControls({ onUse }: { onUse(text: string): void }) {
         setRequest((value) => (value ? { ...value, held: false } : undefined));
       }
     };
-    const invoke = () => setRequest({ target: current.current });
+    // the microphone or the command: a second choice while it listens finishes the recording
+    const invoke = () =>
+      setRequest((value) =>
+        value && recording.current ? { ...value, held: false } : { opening: ++openings.current },
+      );
     const blur = () => {
       holding.current = undefined;
     };
@@ -52,15 +61,25 @@ export function SpeechControls({ onUse }: { onUse(text: string): void }) {
       window.removeEventListener('blur', blur);
     };
   }, [shortcut]);
-  return request?.target === target ? (
-    <DictationDialog
-      destination="Ask Viewer · review, then insert into the request field"
+  const onRecording = useCallback((value: boolean) => {
+    recording.current = value;
+  }, []);
+  const close = useCallback(() => {
+    holding.current = undefined;
+    recording.current = false;
+    setRequest(undefined);
+  }, []);
+  return request ? (
+    <SpokenRequest
+      key={request.opening}
+      target={target}
       held={request.held}
-      onClose={() => {
-        holding.current = undefined;
-        setRequest(undefined);
+      onRecording={onRecording}
+      onEdit={(text) => {
+        close();
+        onEdit(text);
       }}
-      onUse={onUse}
+      onClose={close}
     />
   ) : null;
 }

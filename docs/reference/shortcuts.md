@@ -72,14 +72,14 @@ file commands such as **Duplicate** and **Move to Trash** do not run. A text edi
 
 ## Commands, speech and quitting
 
-| Action                             | Key                        | ID or setting                |
-| ---------------------------------- | -------------------------- | ---------------------------- |
-| **Commands…**                      | **⌘K**                     | `palette`                    |
-| **Settings…**                      | **⌘,**                     | `settings`                   |
-| **Dictate an Ask Viewer request…** | Hold **⌃⇧Space**           | `dictate`                    |
-| Key prefix                         | **⌃B**                     | `settings.keymap.prefix`     |
-| **Quit Viewer**                    | **⌘Q** twice               | `settings.quit.warnShortcut` |
-| Show or hide Viewer from any app   | **⌥Space**, off by default | `settings.hotkey`            |
+| Action                           | Key                        | ID or setting                |
+| -------------------------------- | -------------------------- | ---------------------------- |
+| **Commands…**                    | **⌘K**                     | `palette`                    |
+| **Settings…**                    | **⌘,**                     | `settings`                   |
+| **Ask Viewer by voice…**         | Hold **⌃⇧Space**           | `dictate`                    |
+| Key prefix                       | **⌃B**                     | `settings.keymap.prefix`     |
+| **Quit Viewer**                  | **⌘Q** twice               | `settings.quit.warnShortcut` |
+| Show or hide Viewer from any app | **⌥Space**, off by default | `settings.hotkey`            |
 
 The first **⌘Q** shows "Press ⌘Q again to quit"; press it again within 2.5 seconds, or hold it.
 **Quit Viewer** in the menu, the Dock and logging out quit at once. To quit on the first press, turn

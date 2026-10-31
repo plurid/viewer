@@ -35,9 +35,29 @@ export interface CommandDefinition {
   /** A setting's command: the palette lists it apart, by the setting's name, with its
    * value (on or off, or the current value) and whether it is a workspace's own. */
   setting?: CommandSetting;
+  /** How a spoken request's plan says and runs it (command-line/spoken.ts). */
+  spoken?: SpokenDefinition;
   when(context: CommandContext): boolean;
   unavailable?: string | ((context: CommandContext) => string);
   run(context: CommandContext): void | Promise<void>;
+}
+/** A command in a spoken plan, beyond its label: "Check Job 1042, then prepare its cut sheets". */
+export interface SpokenDefinition {
+  /** What the plan says it does here: "check Job 1042". */
+  phrase(context: CommandContext): string;
+  /** What the plan says after a step it follows: "prepare its cut sheets". */
+  follows?: string;
+  /** What it acts on here, as a request names it: "Job 1042". A request naming another hears so. */
+  subject?(context: CommandContext): string | undefined;
+  /** Commands whose run makes it available: a plan may name it after one of them. */
+  after?: readonly string[];
+  /** Runs it for the plan, resolving once its work is done with what it did in words: a check,
+   * once graded. Without it the plan runs `run`. */
+  run?(
+    context: CommandContext,
+    progress: (text: string) => void,
+    signal: AbortSignal,
+  ): Promise<string | void>;
 }
 export interface CommandSetting {
   name: string;
@@ -74,12 +94,15 @@ export interface ResolvedCommand {
   detail?: string;
   primary: boolean;
   setting?: CommandSetting;
+  spoken?: SpokenDefinition;
   source: string;
   context: CommandContext;
 }
 export interface DiscoverableCommand extends ResolvedCommand {
   available: boolean;
   unavailable?: string;
+  /** Why it is unavailable here, when its definition says: the palette shows it, greyed out. */
+  reason?: string;
 }
 
 function commandLabel(
@@ -200,13 +223,17 @@ export class CommandRegistry {
         if (previous !== undefined && commands[previous]?.available) continue;
         const available = definition.when(context);
         if (!available && (previous !== undefined || !includeUnavailable)) continue;
+        const reason = available
+          ? undefined
+          : typeof definition.unavailable === 'function'
+            ? definition.unavailable(context)
+            : definition.unavailable;
         const command: DiscoverableCommand = {
           available,
           unavailable: available
             ? undefined
-            : typeof definition.unavailable === 'function'
-              ? definition.unavailable(context)
-              : (definition.unavailable ?? 'Unavailable for this selection and view.'),
+            : (reason ?? 'Unavailable for this selection and view.'),
+          ...(reason ? { reason } : {}),
           id: definition.id,
           label: commandLabel(definition, context, available),
           detail:
@@ -225,6 +252,7 @@ export class CommandRegistry {
               ? available && definition.primary(context)
               : !!definition.primary,
           ...(definition.setting ? { setting: definition.setting } : {}),
+          ...(definition.spoken ? { spoken: definition.spoken } : {}),
           source: id,
           context,
         };
@@ -236,11 +264,12 @@ export class CommandRegistry {
     }
     return commands;
   }
-  async run(command: ResolvedCommand, remember = true): Promise<boolean> {
+  /** The definition and live context a resolved command runs with, while it still may. */
+  private runnable(command: ResolvedCommand) {
     const source = this.sources.get(command.source);
-    if (!source) return false;
+    if (!source) return undefined;
     const live = source.context();
-    if (source.valid && !source.valid(command.context, live)) return false;
+    if (source.valid && !source.valid(command.context, live)) return undefined;
     const definition = this.catalog(command.source, source).find((item) => item.id === command.id);
     const context = {
       ...live,
@@ -249,11 +278,35 @@ export class CommandRegistry {
       clipboard: live.clipboard,
       jobs: live.jobs,
     };
-    if (!definition?.when(context)) return false;
+    return definition?.when(context) ? { definition, context } : undefined;
+  }
+  async run(command: ResolvedCommand, remember = true): Promise<boolean> {
+    const runnable = this.runnable(command);
+    if (!runnable) return false;
+    const { definition, context } = runnable;
     await definition.run(context);
     if (remember && definition.remember !== false) this.chosen(definition.id, context);
     this.touch(command.source);
     return true;
+  }
+  /**
+   * Runs a spoken plan's step, checked as `run` checks a command, and kept out of Recent commands:
+   * its spoken run, when it has one, resolves once its work is done. False when it can no longer
+   * run here.
+   */
+  async runSpoken(
+    command: ResolvedCommand,
+    progress: (text: string) => void,
+    signal: AbortSignal,
+  ): Promise<{ done?: string } | false> {
+    const runnable = this.runnable(command);
+    if (!runnable) return false;
+    const { definition, context } = runnable;
+    const done = definition.spoken?.run
+      ? await definition.spoken.run(context, progress, signal)
+      : await definition.run(context);
+    this.touch(command.source);
+    return typeof done === 'string' ? { done } : {};
   }
   async invoke(id: string, request: CommandRequest): Promise<boolean> {
     if (request.ids && !request.ids.includes(id)) return false;

@@ -62,6 +62,8 @@ export function weightText(kilograms: number, units: LengthUnit = 'mm'): string 
     : `${number(kilograms, kilograms < 100 ? 1 : 0)} kg`;
 }
 export function durationText(minutes: number): string {
+  // nothing to cut takes no time; any cutting at all takes at least a second
+  if (minutes <= 0) return '0 s';
   if (minutes < 1) return `${Math.max(1, Math.round(minutes * 60))} s`;
   const whole = Math.round(minutes);
   if (whole < 60) return `${whole} min`;

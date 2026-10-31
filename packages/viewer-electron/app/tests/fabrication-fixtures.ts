@@ -6,7 +6,7 @@ import path from 'node:path';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import * as pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 import type { CheckOpening, RenderedPage } from '../src/domain/fabrication/check';
-import type { FabricationAnswer } from '../src/domain/fabrication/answer';
+import type { FabricationAnswer, InventoryItem } from '../src/domain/fabrication/answer';
 import type { ModelDataLevel } from '../src/domain/models/permissions';
 import type { ModelProvider } from '../src/domain/services';
 import { modelEndpoint } from '../src/domain/models/permissions';
@@ -100,13 +100,19 @@ export async function drawingPage(opening: CheckOpening): Promise<RenderedPage> 
     ),
   };
 }
-export const refOf = (opening: CheckOpening, name: string) =>
+/** A job's files by ref and name: a check's opening, or the inventory a model reads. */
+export interface NamedSources {
+  sources: readonly Pick<InventoryItem, 'ref' | 'name'>[];
+}
+export const refOf = (opening: NamedSources, name: string) =>
   opening.sources.find((source) => source.name === name)!.ref;
 
-export function jobAnswer(opening: CheckOpening): FabricationAnswer {
+/** The answer for Job 1042; its tour shows Plate.jpg when the job has it. */
+export function jobAnswer(opening: NamedSources): FabricationAnswer {
   const request = refOf(opening, 'Job 1042 request.eml');
   const drawing = refOf(opening, 'Job 1042 drawing.pdf');
   const plate = refOf(opening, jobMismatch.file);
+  const photo = opening.sources.find((source) => source.name === 'Plate.jpg');
   return {
     summary:
       'The base plate’s DXF puts its right holes 48 mm from the left ones; the drawing gives 50 mm.',
@@ -131,8 +137,10 @@ export function jobAnswer(opening: CheckOpening): FabricationAnswer {
           value: 50,
           quote: 'Holes 4× Ø10.5 at 50 mm pitch',
           box: [0.08, 0.86, 0.6, 0.9],
-          // the hole that moves
-          feature: [0.55, 0.42, 0.6, 0.5],
+          // the hole that moves, Ø10.5 at (105, 25) mm on the drawing: jobDrawing sets the part at
+          // 1:1 from (60, 200) pt on its 842 × 595 pt page, so 342.8 to 372.5 pt across and 255.98
+          // to 285.75 pt up, rounded outward
+          feature: [0.407, 0.519, 0.443, 0.57],
         },
         dxf: { ref: plate, value: 48, axis: 'x', entities: ['8', '9'] },
         photo: null,
@@ -167,15 +175,19 @@ export function jobAnswer(opening: CheckOpening): FabricationAnswer {
         box: null,
         entities: ['8', '9'],
       },
-      {
-        ref: refOf(opening, 'Plate.jpg'),
-        caption: 'The sample plate.',
-        note: null,
-        finding: null,
-        page: null,
-        box: [0.2, 0.2, 0.8, 0.8],
-        entities: [],
-      },
+      ...(photo
+        ? [
+            {
+              ref: photo.ref,
+              caption: 'The sample plate.',
+              note: null,
+              finding: null,
+              page: null,
+              box: [0.2, 0.2, 0.8, 0.8],
+              entities: [],
+            },
+          ]
+        : []),
     ],
   };
 }

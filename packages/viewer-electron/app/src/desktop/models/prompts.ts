@@ -7,8 +7,17 @@ import {
   type PromptAnswer,
   type PromptRequest,
 } from '../../domain/command-line/prompt';
+import type { SpokenAnswer, SpokenRequest } from '../../domain/command-line/spoken';
+import {
+  boundedSpokenAnswer,
+  spokenAnswerSchema,
+  spokenInput,
+  spokenInstructions,
+  spokenSchema,
+} from '../../domain/command-line/spoken';
 import { z } from 'zod';
 import type { ModelDataLevel } from '../../domain/models/permissions';
+import { providerPresets } from '../../domain/models/providers';
 import {
   modelPicks,
   modelSuggestionAnswerSchema,
@@ -71,6 +80,35 @@ export async function answerPrompt(
       )
     : undefined;
   return { line, explanation, ...(problem ? { problem } : {}) };
+}
+/**
+ * A spoken request read by Ask Viewer's model, at the "names" level its permission allows: a plan
+ * of command IDs, which the window checks against the commands where the person spoke before any
+ * runs (domain/command-line/spoken.ts).
+ */
+export async function answerSpoken(
+  request: SpokenRequest,
+  settings: ApplicationSettings,
+  generate: Generate,
+  signal: AbortSignal,
+): Promise<SpokenAnswer> {
+  const provider = promptProvider(settings);
+  if (!provider) throw new Error('Add a model in Settings → Models to ask in words.');
+  const raw = await generate(
+    provider,
+    spokenInstructions(request.context),
+    spokenInput(request),
+    spokenSchema,
+    signal,
+    'names',
+    'user',
+  );
+  const parsed = spokenAnswerSchema.safeParse(raw);
+  if (!parsed.success) throw new Error('The model returned an invalid plan. Try again.');
+  return {
+    ...boundedSpokenAnswer(parsed.data),
+    by: providerPresets[provider.kind].family ?? provider.name,
+  };
 }
 
 const suggestionSchema = z.toJSONSchema(modelSuggestionAnswerSchema);

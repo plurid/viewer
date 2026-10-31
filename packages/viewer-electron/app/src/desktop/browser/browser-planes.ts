@@ -1,7 +1,7 @@
-import { BrowserWindow, session, sharedTexture } from 'electron';
+import { app, BrowserWindow, session, sharedTexture } from 'electron';
 import type { WebContents, Event } from 'electron';
 import type { BrowserRequest, BrowserSnapshot } from '../../domain/previews/browser';
-import { browserAddress } from '../../domain/previews/browser';
+import { browserAddress, chromeUserAgent } from '../../domain/previews/browser';
 import { errorMessage } from '../../domain/errors';
 import { sendEvent } from '../ipc/events';
 import { isolatedContent } from '../windows/web-content-policy';
@@ -71,6 +71,7 @@ export class BrowserPlanes {
     const profile = session.fromPartition('persist:viewer-browser-v1');
     if (!this.configured) {
       this.configured = true;
+      profile.setUserAgent(chromeUserAgent(profile.getUserAgent(), app.getName()));
       profile.setPermissionRequestHandler((_contents, _permission, reply) => reply(false));
       profile.setPermissionCheckHandler(() => false);
       profile.on('will-download', (event) => event.preventDefault());
@@ -364,7 +365,16 @@ export class BrowserPlanes {
         });
       else if (input.type === 'keyDown' || input.type === 'keyUp')
         await contents.debugger.sendCommand('Input.dispatchKeyEvent', input);
-      else await contents.debugger.sendCommand('Input.dispatchMouseEvent', input);
+      else if ('x' in input) {
+        // The plane measures window pixels; the protocol places the pointer in the page's CSS
+        // pixels, which page zoom scales. Wheel deltas are window pixels either way.
+        const zoom = contents.getZoomFactor();
+        await contents.debugger.sendCommand('Input.dispatchMouseEvent', {
+          ...input,
+          x: input.x / zoom,
+          y: input.y / zoom,
+        });
+      }
       return;
     }
     if (request.kind === 'action') {

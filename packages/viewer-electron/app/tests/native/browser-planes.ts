@@ -25,7 +25,7 @@ const server = createServer((request, response) => {
   response.end(`<!doctype html><meta charset="utf-8"><title>Owned browser check</title>
 <style>body{margin:0;font:16px system-ui;background:#f0f4f7}h1{position:absolute;left:20px;top:0}input{position:absolute;left:20px;top:75px;width:300px;height:32px}button{position:absolute;left:20px;top:130px;height:36px}#result{position:absolute;left:20px;top:185px}main{height:2000px}</style>
 <h1>Browser fixture</h1><input aria-label="Fixture input" id="input" oninput="document.querySelector('#typed').style.background='#4477ee'"><button id="button" onclick="document.querySelector('#result').textContent='Clicked';document.querySelector('#clicked').style.background='#00cc66'">Click fixture</button><div id="result">Ready</div><div id="clicked" style="position:absolute;left:20px;top:240px;width:100px;height:40px;background:#ee3344"></div><div id="typed" style="position:absolute;left:140px;top:240px;width:100px;height:40px;background:#ee3344"></div><main></main>
-<script>document.documentElement.dataset.cookie=document.cookie;document.cookie='viewer_fixture=retained; Max-Age=3600; SameSite=Lax';document.documentElement.dataset.viewer=typeof window.viewer;document.documentElement.dataset.require=typeof window.require;</script>`);
+<script>document.documentElement.dataset.cookie=document.cookie;document.cookie='viewer_fixture=retained; Max-Age=3600; SameSite=Lax';document.documentElement.dataset.viewer=typeof window.viewer;document.documentElement.dataset.require=typeof window.require;addEventListener('wheel',(event)=>{document.documentElement.dataset.wheel=event.clientX+','+event.clientY},{passive:true});</script>`);
 });
 await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 const port = (server.address() as { port: number }).port;
@@ -111,6 +111,26 @@ function surfacePoint(x: number, y: number) {
   probe.remove();
   return { x: rect.left, y: rect.top };
 }
+
+/** Where the browser plane is on screen: it moves when the camera does. */
+function planeRect() {
+  const rect = document
+    .querySelector('.browser-plane')!
+    .closest('[data-plurid-plane]')!
+    .getBoundingClientRect();
+  return [rect.left, rect.top, rect.width, rect.height];
+}
+
+const pageScroll = () => window.scrollY;
+
+/** Where the page's last wheel event was, in its CSS pixels. */
+function wheelPosition() {
+  const [x = NaN, y = NaN] = (document.documentElement.dataset.wheel ?? '').split(',').map(Number);
+  return { x, y };
+}
+
+const pause = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 
 function selectionLength() {
   const input = document.querySelector<HTMLInputElement>('#input')!;
@@ -212,6 +232,29 @@ try {
     (value) => value > 0,
     'rotated double-click selection',
   );
+  // The clicked plane takes the wheel: the page scrolls, and the space stays where it is.
+  const wheelAt = async (x: number, y: number, deltaY: number) =>
+    command('Input.dispatchMouseEvent', {
+      type: 'mouseWheel',
+      ...(await point(x, y)),
+      deltaX: 0,
+      deltaY,
+    });
+  const resting = await evaluate(pageCall(planeRect));
+  await wheelAt(400, 300, 120);
+  await until(
+    () => guest(pageCall(pageScroll)),
+    (y) => y > 0,
+    'wheel scrolls the page',
+  );
+  await wheelAt(400, 300, -120);
+  await until(
+    () => guest(pageCall(pageScroll)),
+    (y) => y === 0,
+    'wheel scrolls the page back',
+  );
+  await evaluate(pageCall(pause, 400));
+  assert.deepEqual(await evaluate(pageCall(planeRect)), resting, 'the wheel leaves the space');
   await evaluate(pageCall(showBrowser, false));
   await evaluate(pageCall(showBrowser, true));
   assert.ok((await guest(valueOf('#input'))).includes('Typed'));
@@ -226,6 +269,7 @@ try {
   });
   observations.push({
     pointer: 'rotated click passed',
+    wheel: 'the page scrolls, the space stays',
     keyboard: 'text passed',
     composition: 'actual proxy passed',
     pixels: 'interaction state composited',
@@ -249,7 +293,21 @@ try {
     'back navigation',
   );
   await evaluate(pageCall(browserAction, 'zoom-in'));
-  assert.ok((await evaluate(pageCall(browserState))).zoom > 1);
+  const { zoom } = await evaluate(pageCall(browserState));
+  assert.ok(zoom > 1);
+  // page zoom scales the page's CSS pixels: the wheel still lands under the pointer
+  await wheelAt(400, 300, 120);
+  await until(
+    () => guest(pageCall(wheelPosition)),
+    (at) => Math.abs(at.x - 400 / zoom) < 2 && Math.abs(at.y - 300 / zoom) < 2,
+    'zoomed wheel position',
+  );
+  await wheelAt(400, 300, -120);
+  await until(
+    () => guest(pageCall(pageScroll)),
+    (y) => y === 0,
+    'zoomed wheel scrolls back',
+  );
   await evaluate(pageCall(browserAction, 'zoom-reset'));
   const capture = async (name: string) => {
     await evaluate(

@@ -312,6 +312,7 @@ export const settingsSchema = z
             model: z.string().max(200),
             allowContent: z.boolean(),
             effort: z.enum(reasoningEfforts).optional(),
+            segmentation: z.string().trim().min(1).max(200).optional(),
           })
           .strict()
           .refine(
@@ -320,7 +321,12 @@ export const settingsSchema = z
               message: 'This provider does not take that reasoning effort.',
               path: ['effort'],
             },
-          ),
+          )
+          .refine((provider) => !provider.segmentation || provider.kind === 'local', {
+            message:
+              'Only a local provider names a SAM model; Meta outlines with SAM 3.1 itself, and other providers do not outline.',
+            path: ['segmentation'],
+          }),
       )
       .max(20),
     recipes: z.array(recipe).max(100),

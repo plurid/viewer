@@ -161,8 +161,8 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
   return (
     <>
       <p className="settings-note">
-        Speak into Ask Viewer, notes or chat, then review the transcript. Choose local recognition
-        or a hosted provider. Your microphone opens only when you start a recording.
+        Ask Viewer by voice, or speak into notes and chat. Choose local recognition or a hosted
+        provider. Your microphone opens only when you start a recording.
       </p>
       <div className="settings-row">
         <span>Transcribe with</span>
@@ -254,11 +254,11 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
       <p className="settings-note">
         {shortcut ? (
           <>
-            Hold <kbd>{shortcut}</kbd> in the workspace to dictate an Ask Viewer request. Release to
-            transcribe.
+            Hold <kbd>{shortcut}</kbd> in the workspace to ask Viewer by voice, and release it to
+            transcribe. Viewer shows what it heard and what it will do.
           </>
         ) : (
-          'Choose a Dictate shortcut in Settings → Shortcuts, or use the command palette.'
+          'Choose a Dictate shortcut in Settings → Shortcuts, or use the microphone in the title bar.'
         )}{' '}
         Each recording is limited to 60 seconds.
       </p>

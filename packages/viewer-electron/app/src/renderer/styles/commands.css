@@ -89,6 +89,14 @@
   flex-shrink: 0;
   color: var(--muted);
 }
+/* named by the query but not available here: greyed out, its reason read in full */
+.command-result.is-unavailable {
+  color: var(--muted);
+  cursor: default;
+}
+.command-result.is-unavailable .command-result-text small {
+  white-space: normal;
+}
 .command-result-text {
   display: flex;
   flex-direction: column;

@@ -136,10 +136,10 @@ export function navigationCommands({
     },
     {
       id: 'dictate',
-      label: 'Dictate an Ask Viewer request…',
+      label: 'Ask Viewer by voice…',
       group: 'App',
-      icon: 'command',
-      aliases: ['speech', 'voice', 'microphone', 'talk'],
+      icon: 'microphone',
+      aliases: ['speech', 'voice', 'microphone', 'talk', 'speak', 'dictate'],
       when: windowScope,
       run: () => {
         sendWindowEvent('viewer:dictate');

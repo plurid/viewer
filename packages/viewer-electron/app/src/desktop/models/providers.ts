@@ -7,6 +7,7 @@ import type { SegmentationPicture } from '../../domain/models/segmentation';
 import {
   providerModelID,
   providerPresets,
+  providerSegmentation,
   providerTakesEffort,
   providerTakesImages,
   validProviderEndpoint,
@@ -358,7 +359,8 @@ export class Providers {
   /**
    * A segmentation model's reply to one prompt on one picture, through the provider's Responses
    * route. It is the reading model's provider: the same endpoint and key, and the same `images`
-   * approval, since the picture is one that model is sent.
+   * approval, since the picture is one that model is sent. Meta segments with SAM 3.1; a local
+   * server with the SAM model it names (`providerSegmentation`).
    */
   async segment(
     provider: ModelProvider,
@@ -367,13 +369,12 @@ export class Providers {
     signal: AbortSignal,
     actor: RequestActor = 'user',
   ): Promise<string> {
-    const preset = providerPresets[provider.kind];
-    if (!preset.segmentation) throw new Error(`${preset.name} has no segmentation model.`);
+    const model = providerSegmentation(provider);
+    if (!model) throw new Error(`${provider.name} has no segmentation model.`);
     const url = this.endpoint(provider, 'responses');
     const problem = modelImagesProblem([picture.image]);
     if (problem) throw new Error(problem);
     if (!this.permissions) throw new ModelPermissionRequired();
-    const model = preset.segmentation;
     return this.permissions.run(
       provider,
       'images',
@@ -381,7 +382,9 @@ export class Providers {
       async (authorized) => {
         const secret = await this.credentials.forProvider(provider);
         authorized.throwIfAborted();
-        if (!secret) throw new Error('Add this provider’s API key in Settings.');
+        // a local server may take no key, as its Chat Completions route may
+        if (!secret && provider.kind !== 'local')
+          throw new Error('Add this provider’s API key in Settings.');
         const requestSignal = AbortSignal.any([authorized, AbortSignal.timeout(60000)]);
         const response = await requestProvider(this.request, url, {
           method: 'POST',

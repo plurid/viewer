@@ -71,6 +71,32 @@ const promptRequestSchema = z
       .strict(),
   })
   .strict();
+/** A spoken request: the words as transcribed, and the commands where they were spoken
+ * (domain/command-line/spoken.ts). */
+const spokenRequestSchema = z
+  .object({
+    id,
+    transcript: z.string().trim().min(1).max(2000),
+    context: z
+      .object({
+        folder: localPath.optional(),
+        selection: z.array(z.string().max(255)).max(50),
+        commands: z
+          .array(
+            z
+              .object({
+                id: z.string().max(200),
+                label: z.string().max(200),
+                subject: z.string().max(255).optional(),
+                after: z.array(z.string().max(200)).max(8).optional(),
+              })
+              .strict(),
+          )
+          .max(600),
+      })
+      .strict(),
+  })
+  .strict();
 /** What `:bind` and `:alias` changed this session (domain/preferences/session-keys.ts). */
 const sessionKeysSchema = z
   .object({
@@ -602,6 +628,7 @@ export const schemas = {
   ]),
   settingsGet: z.tuple([]),
   promptLine: z.tuple([promptRequestSchema]),
+  promptPlan: z.tuple([spokenRequestSchema]),
   promptCancel: z.tuple([id]),
   modelSuggestions: z.tuple([modelSuggestionRequestSchema]),
   sessionKeys: z.tuple([]),
@@ -891,6 +918,7 @@ export const methodWindows = {
   settingsGet: 'both',
   settingsPatch: 'both',
   promptLine: 'viewer',
+  promptPlan: 'viewer',
   promptCancel: 'viewer',
   modelSuggestions: 'viewer',
   sessionKeys: 'both',

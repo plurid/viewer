@@ -115,6 +115,7 @@ const api: ViewerAPI = {
   settingsGet: () => invoke('settingsGet'),
   settingsPatch: (patches, revision) => invoke('settingsPatch', patches, revision),
   promptLine: (request) => invoke('promptLine', request),
+  promptPlan: (request) => invoke('promptPlan', request),
   promptCancel: (id) => invoke('promptCancel', id),
   modelSuggestions: (request) => invoke('modelSuggestions', request),
   sessionKeys: () => invoke('sessionKeys'),

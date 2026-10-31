@@ -2,9 +2,10 @@
 
 This page lists speech input's settings, local models, hosted providers, limits and permissions.
 
-Speech is explicit dictation into an editable draft in Ask Viewer, notes or chat, using local
-recognition or a selected hosted provider. **Settings → Speech** owns setup, language and microphone
-choices. **Settings → Models** separately owns the model used by Ask Viewer and chat.
+Speech is explicit dictation into an editable draft in Ask Viewer, notes or chat, or a spoken
+request Viewer plans and runs, using local recognition or a selected hosted provider. **Settings →
+Speech** owns setup, language and microphone choices. **Settings → Models** separately owns the
+model used by Ask Viewer and chat.
 
 ## Settings
 
@@ -23,9 +24,12 @@ choices. **Settings → Models** separately owns the model used by Ask Viewer an
 Languages: English, Romanian, German, French, Spanish, Italian, Portuguese, Dutch, Polish,
 Ukrainian, Russian, Chinese, Japanese, Korean, Arabic, Hindi, Turkish, Greek and Hungarian.
 
-Hold the **Dictate** shortcut, **⌃⇧Space** at first, in the workspace to dictate an Ask Viewer
-request, and release it to transcribe. **Settings → Shortcuts** changes it. A missing selected
-microphone never switches silently to another device.
+Hold the **Dictate** shortcut, **⌃⇧Space** at first, in the workspace to ask Viewer by voice, and
+release it to transcribe. The microphone in the title bar and **Ask Viewer by voice…** start a
+recording that **Finish and transcribe** ends, or the microphone chosen again. **Settings →
+Shortcuts** changes the shortcut. A missing selected microphone never switches silently to another
+device. [Ask Viewer by voice](agents.md#ask-viewer-by-voice) gives exactly what a spoken request
+sends to a model and what it may run.
 
 ## Local recognition
 
@@ -99,6 +103,34 @@ error bodies. Checks are cancelled on owner closure, key/model/endpoint changes 
 credential reads cannot trigger a request. Results last only for the current session and clear on
 provider or key edits. Audio permission remains separate.
 
+### A live run
+
+`tools/speech/transcribe-live.ts` sends one WAV recording to Meta's Muse Voice Transcribe exactly as
+hosted speech in the app does. With `--plan`, Muse Spark then reads the transcript into a plan for a
+job folder shown as Job 1042, through the app's own prompt and checks, beside Viewer's own matching.
+It writes nothing.
+
+1. Record a request, or have macOS speak one:
+   `say --file-format=WAVE --data-format=LEI16@16000 -o request.wav "Check this job and prepare the cut sheets"`.
+   Any 16-bit PCM WAV at 16 kHz or more works; `afconvert -f WAVE -d LEI16@16000 -c 1` converts
+   another recording.
+2. Set `META_API_KEY` in the environment. The run reads the key from there only and holds it in
+   memory: it never prints, writes or logs it.
+3. From the repository root, run
+   `node --import tsx packages/viewer-electron/app/tools/speech/transcribe-live.ts request.wav --plan`.
+   It prints the transcript, the model, the audio's length and the time the call took, then each
+   plan.
+
+| Option              | Effect                                                                        |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `--language en`     | The language, as **Language** in **Settings → Speech**; detected unless given |
+| `--model <id>`      | Another transcription model; `muse-voice-transcribe-1.0` unless given         |
+| `--plan`            | Also plans the transcript with Muse Spark, at the `names` level               |
+| `--plan-model <id>` | Another Muse Spark model; `muse-spark-1.3` unless given                       |
+| `--text "<words>"`  | Plans these words with Muse Spark, without audio                              |
+
+Each run makes one transcription call, and one Muse Spark call with `--plan` or `--text`.
+
 ## Data and permissions
 
 Only a trusted top-level Viewer or Settings window with an active person-started session can request
@@ -119,9 +151,12 @@ Microphone consent, chat data access, configuration imports and agent grants can
 transmission. Keys are never returned in speech status. Restart restores choices and consent without
 recording or uploading.
 
-Continuous listening, wake words, streamed partial transcripts, translation and automatic command
-execution are not implemented. There is no silent cloud fallback. Recognition can mishear names and
-punctuation; review remains necessary.
+A spoken request runs at once only commands that change no file, and only on the folder and
+selection captured when the recording began; every other step waits for the person's press. The
+transcript reaches a model only as text, at the `names` level of **Settings → Models**; audio goes
+only to the speech provider chosen here. Continuous listening, wake words, streamed partial
+transcripts and translation are not implemented. There is no silent cloud fallback. Recognition can
+mishear names and punctuation, so the panel shows the words it heard.
 
 **Related:** [Dictate into Viewer](../guides/speech.md) · [Terminal CLI](cli.md) ·
 [Agents](agents.md) · [Keyboard shortcuts](shortcuts.md) · [Platform status](platforms.md)

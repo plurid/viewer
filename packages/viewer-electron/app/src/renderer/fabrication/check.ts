@@ -22,6 +22,7 @@ import { sourceVersion } from '../../domain/files/inspection';
 import { parentPath } from '../../domain/workspaces/planes';
 import { errorMessage } from '../../domain/errors';
 import { activeWorkspace, getState } from '../state/store';
+import { subscribe as subscribeState } from '../state/core';
 import { preparedNestings } from '../layout/nesting/prepared';
 import { nestWithoutPlane } from '../layout/nesting/headless';
 import { playTour, subscribeTour, tourPlayback } from '../workspace/tour';
@@ -31,9 +32,10 @@ import { drawCheckPages } from './pages';
 /**
  * A LASER JOB'S CHECK, in the window: its inventory, then the run (pages drawn here, the rest read
  * and sent by the desktop), the graded findings, the corrections saved on approval, the tour, the
- * cut sheets and the handoff. One check is open at a time; the desktop keeps its record. A finished
- * check stays after its panel closes, the last five for this window's session, and reopening its
- * job shows it at once, or says what changed in the job since.
+ * cut sheets and the handoff. One check is open at a time, in the workspace it was opened in: the
+ * panel shows only there, as it was left, and closing that workspace closes the check. The desktop
+ * keeps its record. A finished check stays after its panel closes, the last five for this window's
+ * session, and reopening its job shows it at once, or says what changed in the job since.
  */
 export type CheckPhase =
   | 'opening'
@@ -105,9 +107,25 @@ const listeners = new Set<() => void>();
 function notify(): void {
   for (const listener of listeners) listener();
 }
+/** While a check is open: the end of its watch on the window's workspaces. */
+let watching: (() => void) | undefined;
 function change(next: CheckSession | null): void {
   session = next;
+  watchWorkspace();
   notify();
+}
+/** A check belongs to the workspace it was opened in, and closes when that workspace closes. */
+function watchWorkspace(): void {
+  if (!session) {
+    watching?.();
+    watching = undefined;
+    return;
+  }
+  watching ??= subscribeState(() => {
+    const open = session;
+    if (open && !getState().saved.workspaces.some((space) => space.id === open.workspaceID))
+      closeCheck();
+  });
 }
 /** Changes the check `expected` names, unless another has replaced it since; a correction saved
  * as its panel closed reaches the check kept. */

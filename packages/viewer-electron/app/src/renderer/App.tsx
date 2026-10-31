@@ -854,6 +854,13 @@ function AppWindow() {
             </button>
           )}
           <IconButton
+            icon="microphone"
+            label="Ask Viewer by voice"
+            onClick={() => {
+              void invoke('dictate').catch(report);
+            }}
+          />
+          <IconButton
             icon="command"
             label="Commands (⌘K)"
             onClick={() => {
@@ -882,6 +889,7 @@ function AppWindow() {
             <TourStops />
             <SpaceOverlay>
               <CheckPanel />
+              <SpeechControls onEdit={(text) => openPalette('prompt', text)} />
             </SpaceOverlay>
           </main>
         </div>
@@ -954,7 +962,6 @@ function AppWindow() {
           workspace={controller}
           transitionWorkspace={transitionWorkspace}
         />
-        <SpeechControls onUse={(text) => openPalette('prompt', text)} />
       </div>
     </WorkspaceContext.Provider>
   );

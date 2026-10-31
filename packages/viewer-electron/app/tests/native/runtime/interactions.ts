@@ -38,6 +38,10 @@ function unobstructed(selector: string): boolean {
   return opacity > 0.999 && element.contains(centre);
 }
 
+/** Keys whose default action Chromium takes only with their virtual key code: Space presses the
+ * focused button, Escape cancels a modal dialog. */
+const virtualKeyCodes: Record<string, number> = { ' ': 32, Escape: 27 };
+
 /** User-facing actions against an exclusively owned QA app. Waiting stays tied
  * to observed UI state; this adapter never answers native permission/removal dialogs. */
 export class NativeInteractions {
@@ -63,6 +67,7 @@ export class NativeInteractions {
   }
 
   async key(key: string, code: string, modifiers = 0, commands?: string[]): Promise<void> {
+    const virtual = virtualKeyCodes[key];
     for (const type of ['keyDown', 'keyUp'])
       await this.app.command('Input.dispatchKeyEvent', {
         type,
@@ -70,7 +75,7 @@ export class NativeInteractions {
         code,
         modifiers,
         ...(type === 'keyDown' && commands ? { commands } : {}),
-        ...(key === ' ' ? { windowsVirtualKeyCode: 32 } : {}),
+        ...(virtual ? { windowsVirtualKeyCode: virtual } : {}),
       });
   }
 

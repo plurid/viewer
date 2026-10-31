@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 /**
  * A TOUR ON THE REAL ENGINE: Plurid's application (0.0.0-43) mounted as the workspace surface
- * mounts it, its roots from the workspace, and Viewer's controller and player over it. A stop's
- * file opens as a new root, which reaches the engine's tree only once the surface has rendered it.
+ * mounts it, its roots from the workspace and placed by `placeRoots`, and Viewer's controller and
+ * player over it. A stop's file opens as a new root, which reaches the engine's tree only once the
+ * surface has rendered it.
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import type { RefObject } from 'react';
-import { createElement, createRef, useMemo } from 'react';
+import { createElement, createRef, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { PluridApplication, type PluridApplicationHandle } from '@plurid/plurid-react';
+import type { TreePlaneLocation } from '@plurid/plurid-data';
 import {
   configurationWith,
   installMatchMedia,
@@ -25,6 +27,7 @@ import {
   useViewer,
 } from '../src/renderer/state/store';
 import { useWorkspaceController } from '../src/renderer/workspace/controller';
+import { placeRoots } from '../src/renderer/workspace/root-placement';
 import { playTour, stopTour, subscribeTour, tourPlayback } from '../src/renderer/workspace/tour';
 import { flattenTree, hostID, surfaceRoutes } from '../src/renderer/workspace/tree';
 
@@ -80,6 +83,9 @@ function Surface({ engine }: { engine: RefObject<PluridApplicationHandle | null>
     [],
   );
   const storage = useMemo(() => storageAdapter(space.id), [space.id]);
+  useEffect(() => {
+    if (engine.current) return placeRoots(engine.current);
+  }, [engine]);
   return createElement(PluridApplication, {
     ref: engine,
     id: `viewer-${space.id}`,
@@ -132,8 +138,15 @@ it('shows each stop’s plane, opened as a new root, at rest where the engine an
   ).result.current;
   const handle = engine.current!;
   const anchor = vi.spyOn(handle.camera, 'anchor');
-  // each stop as it is shown: its plane, the camera, and where the engine's last anchor put it
-  const shown: { stop: string; plane?: string; camera: unknown; anchored: unknown }[] = [];
+  // each stop as it is shown: its plane and its place, the camera, and where the engine's last
+  // anchor put it
+  const shown: {
+    stop: string;
+    plane?: string;
+    at?: TreePlaneLocation;
+    camera: unknown;
+    anchored: unknown;
+  }[] = [];
   const notices: string[] = [];
   const release = subscribeTour(() => {
     const playback = tourPlayback();
@@ -147,6 +160,7 @@ it('shows each stop’s plane, opened as a new root, at rest where the engine an
     shown.push({
       stop: stop.id,
       plane: plane?.planeID,
+      at: plane && { ...plane.location },
       camera: handle.camera.get(),
       anchored: anchor.mock.results.at(-1)?.value,
     });
@@ -173,4 +187,10 @@ it('shows each stop’s plane, opened as a new root, at rest where the engine an
   for (const item of shown)
     expect(item.anchored).toEqual({ ok: true, planeID: item.plane, camera: item.camera });
   expect(shown[0]!.plane).not.toBe(shown[1]!.plane);
+  // the second stop's plane opened beside the first, which stayed where it was shown
+  const [first, second] = shown;
+  const place = (planeID?: string) =>
+    flattenTree(handle.tree.get()).find((node) => node.planeID === planeID)?.location;
+  expect(place(first!.plane)).toEqual(first!.at);
+  expect(second!.at).toEqual({ ...first!.at, translateX: first!.at!.translateX + 850 });
 });
