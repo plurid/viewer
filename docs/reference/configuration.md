@@ -110,7 +110,7 @@ controls.
 | `settings.quit.warnShortcut`               | `true`        | Boolean; `false` makes the first **⌘Q** quit                                                                                               | **Warn before quitting with ⌘Q**                             |
 | `settings.updates.checkAtLaunch`           | `true`        | Boolean; at most once a day; not in the App Store edition                                                                                  | **Settings → Privacy → Check for updates when Viewer opens** |
 
-`newPlaneLocation` applies to the workspace **+** button and **⌘N** when planes are open; `current`
+`newPlaneLocation` applies to the workspace **+** button and **⇧⌘N** when planes are open; `current`
 uses the active folder, terminal folder or preview's folder, then Home. `emptyWorkspaceLocation`
 applies when the workspace has no planes. With `warnShortcut` on, the first **⌘Q** shows "Press ⌘Q
 again to quit" and a second press within 2.5 seconds quits. **Quit Viewer** in the menu, the Dock

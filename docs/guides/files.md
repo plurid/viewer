@@ -39,18 +39,18 @@ Sizes use decimal units, as Finder shows them: 1 KB is 1,000 bytes and 1 MB is 1
 
 ## Copy, move and rename
 
-| To                       | Do                                                                         |
-| ------------------------ | -------------------------------------------------------------------------- |
-| Copy and paste           | **⌘C**, then **⌘V** in the destination                                     |
-| Move                     | **⌘C**, then **⌥⌘V** (**Move Copied Items Here**) in the destination       |
-| Move by dragging         | Drag onto a folder: it moves on the same disk and copies to another        |
-| Choose copy or move      | Hold **Option** while you drop to copy, **⌘** to move                      |
-| Rename                   | Select, press **Return**, type, press **Return**                           |
-| Duplicate                | **⌘D**                                                                     |
-| Make a folder            | **⌘⇧N**; **⌃⌘N** (**New folder with selection…**) puts the selection in it |
-| Copy a file's full path  | **⌥⌘C** (**Copy path**)                                                    |
-| Copy a path in a dialog  | Click the path to select all of it, or click the copy button beside it     |
-| See size, dates and tags | **⌘I** (**Get info…**)                                                     |
+| To                       | Do                                                                        |
+| ------------------------ | ------------------------------------------------------------------------- |
+| Copy and paste           | **⌘C**, then **⌘V** in the destination                                    |
+| Move                     | **⌘C**, then **⌥⌘V** (**Move Copied Items Here**) in the destination      |
+| Move by dragging         | Drag onto a folder: it moves on the same disk and copies to another       |
+| Choose copy or move      | Hold **Option** while you drop to copy, **⌘** to move                     |
+| Rename                   | Select, press **Return**, type, press **Return**                          |
+| Duplicate                | **⌘D**                                                                    |
+| Make a folder            | **⌘N**; **⌃⌘N** (**New folder with selection…**) puts the selection in it |
+| Copy a file's full path  | **⌥⌘C** (**Copy path**)                                                   |
+| Copy a path in a dialog  | Click the path to select all of it, or click the copy button beside it    |
+| See size, dates and tags | **⌘I** (**Get info…**)                                                    |
 
 A copy on the same disk is instant: on APFS, Viewer clones the file, so the copy shares the
 original's storage until either one changes. Copies to another disk read and write every byte.

@@ -636,7 +636,7 @@ async function verifyDailyFileWork(): Promise<void> {
     false,
     'Command + Shift alone must not create a folder',
   );
-  await key('N', 'KeyN', 12);
+  await key('n', 'KeyN', 4);
   await until(
     () =>
       evaluate(
@@ -859,7 +859,7 @@ async function verifyDailyFileWork(): Promise<void> {
   );
   await snapshot('desktop-native-large-quick-preview.png');
   await key('Escape', 'Escape');
-  await key('n', 'KeyN', 4);
+  await key('N', 'KeyN', 12);
   await until(
     () => evaluate(pageCall(planeCount)),
     (count) => count === 2,
@@ -3082,7 +3082,7 @@ async function verifyRefinements(): Promise<void> {
     (state) => state.workspaces[0].panes[0]?.path === path.join(fixture.files, 'Data'),
     'Empty button uses its own configured folder',
   );
-  await click('[aria-label="New folder plane (⌘N)"]');
+  await click('[aria-label="New folder plane (⇧⌘N)"]');
   await restoredEngine(2);
   await until(
     () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState),
@@ -5751,7 +5751,7 @@ async function verifyRootPlanes(): Promise<void> {
 
   const first = original.workspaces[0].roots[0];
   const firstEngineID = await enginePlaneIDs();
-  await click('[aria-label="New folder plane (⌘N)"]');
+  await click('[aria-label="New folder plane (⇧⌘N)"]');
   let state = await roots(2);
   const second = state.workspaces[0].roots[1];
   assert.equal(state.workspaces[0].panes.find((pane) => pane.id === second)?.path, fixture.files);
@@ -5785,7 +5785,7 @@ async function verifyRootPlanes(): Promise<void> {
     state.workspaces[0].panes.find((pane) => pane.id === state.workspaces[0].roots[2])?.path,
     documents,
   );
-  await key('n', 'KeyN', 4);
+  await key('N', 'KeyN', 12);
   await roots(4);
   await paletteCommand('New folder plane');
   state = await roots(5);
@@ -5797,7 +5797,7 @@ async function verifyRootPlanes(): Promise<void> {
   await evaluate(
     pageCall(() => {
       const button = document.querySelector<HTMLButtonElement>(
-        '[aria-label="New folder plane (⌘N)"]',
+        '[aria-label="New folder plane (⇧⌘N)"]',
       )!;
       button.click();
       button.click();
@@ -6006,7 +6006,7 @@ async function verifyRootPlanes(): Promise<void> {
   await restoredEngine(1);
   await settleCamera();
   console.log(
-    'Root planes: +, Cmd+N, Commands, plane actions, shortcut roots, independent history, rapid additions, reload, minimap facing, projected resizing and narrow docked navigation.',
+    'Root planes: +, Cmd+Shift+N, Commands, plane actions, shortcut roots, independent history, rapid additions, reload, minimap facing, projected resizing and narrow docked navigation.',
   );
 }
 async function job(request: RendererOperationRequest): Promise<OperationJob> {
@@ -6148,9 +6148,9 @@ async function verifyEntryAndPalette(): Promise<void> {
       value.workspaces[0].panes[0].path === path.join(fixture.files, 'Data'),
     'empty-state root uses its separate configured folder',
   );
-  await click('[aria-label="New folder plane (⌘N)"]');
+  await click('[aria-label="New folder plane (⇧⌘N)"]');
   await restoredEngine(2);
-  await key('n', 'KeyN', 4);
+  await key('N', 'KeyN', 12);
   await restoredEngine(3);
   await until(
     async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,

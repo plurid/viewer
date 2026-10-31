@@ -61,7 +61,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.browsing.columnWidth': ['Width in pixels of each browsing column in Columns view.'],
   'settings.browsing.newPlaneLocation': [
-    'The workspace + button and Cmd+N create an independent root here when planes are already open.',
+    'The workspace + button and Cmd+Shift+N create an independent root here when planes are already open.',
     'current uses the active folder, terminal directory or preview parent, with Home as fallback.',
     'custom uses newPlanePath; other values select the named folder in the user home directory.',
   ],
@@ -71,7 +71,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.browsing.emptyWorkspaceLocation': [
     'Independent starting folder for the first plane when the workspace has no planes.',
-    'Used by the empty-workspace New folder plane button, +, and Cmd+N. There is no current folder here.',
+    'Used by the empty-workspace New folder plane button, +, and Cmd+Shift+N. There is no current folder here.',
   ],
   'settings.browsing.emptyWorkspacePath': [
     'Required absolute folder path when emptyWorkspaceLocation is custom. Does not affect newPlanePath.',
@@ -374,7 +374,7 @@ const descriptions: Record<string, string[]> = {
 const revisedGuidance: [RegExp, string][] = [
   [
     /^([\t ]*\/\/ )New folder plane, the workspace \+ button and Cmd\+N create an independent root here\.(?=\r?$)/m,
-    '$1The workspace + button and Cmd+N create an independent root here when planes are already open.',
+    '$1The workspace + button and Cmd+Shift+N create an independent root here when planes are already open.',
   ],
   [
     /^([\t ]*\/\/ )Example: "pdf": "plane", "mkv": "native"\. (Office extensions default to native|New settings preview docx and xlsx in planes)\.(?=\r?$)/m,

@@ -13,7 +13,7 @@ its key beside it. A key belongs to one command only.
 | Action                                            | Key                                   | ID                                          |
 | ------------------------------------------------- | ------------------------------------- | ------------------------------------------- |
 | **Open folder…**                                  | **⇧⌘O**                               | `choose-folder`                             |
-| **New folder plane**                              | **⌘N**                                | `new-root-folder`                           |
+| **New folder plane**                              | **⇧⌘N**                               | `new-root-folder`                           |
 | **Go to folder…**                                 | **⌘L**, also **⇧⌘G**                  | `go-to`                                     |
 | **Open** the selection                            | **⌘O**, also **⌘↓** or **⌃↓**         | `open-selection`                            |
 | **Parent folder**                                 | **⌘↑**                                | `parent`                                    |
@@ -26,7 +26,7 @@ its key beside it. A key belongs to one command only.
 | **Select by pattern…** / **Deselect by pattern…** | **⌃⌘=** / **⌃⌘-**                     | `select-by-pattern` / `deselect-by-pattern` |
 | **Duplicate**                                     | **⌘D**                                | `duplicate`                                 |
 | **Move to Trash…**                                | **⌘⌫**                                | `trash`                                     |
-| **New folder…**                                   | **⇧⌘N**                               | `new-folder`                                |
+| **New folder…**                                   | **⌘N**                                | `new-folder`                                |
 | **New folder with selection…**                    | **⌃⌘N**                               | `new-folder-with-selection`                 |
 | **Show hidden files** / **Hide hidden files**     | **⇧⌘.**                               | `toggle-hidden`                             |
 | **Undo file operation** / **Redo file operation** | **⌘Z** / **⇧⌘Z**                      | `undo-file` / `redo-file`                   |

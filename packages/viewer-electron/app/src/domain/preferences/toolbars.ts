@@ -14,7 +14,7 @@ export const toolbarsSchema = z
 export type Toolbars = z.infer<typeof toolbarsSchema>;
 /**
  * Pins for a kind of plane the person has not pinned for: only a tool its header has no other way
- * to reach. A folder's New folder is in "…", its context menu and ⇧⌘N; a PDF's and an image's
+ * to reach. A folder's New folder is in "…", its context menu and ⌘N; a PDF's and an image's
  * tools are its own toolbar's buttons. Saved pins, even an empty set, are the person's and stay.
  */
 export const defaultToolbar: Readonly<Record<string, readonly string[]>> = {

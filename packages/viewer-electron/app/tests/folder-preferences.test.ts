@@ -361,8 +361,10 @@ describe('shared Finder input and file opening', () => {
     const settings = defaultSettings('/fixtures');
     for (const key of ['Shift', 'Meta', 'Control', 'Alt', 'AltGraph'])
       expect(keyCommand(event(key, { metaKey: true, shiftKey: true }), settings)).toBeUndefined();
-    expect(keyCommand(event('N', { metaKey: true, shiftKey: true }), settings)).toBe('new-folder');
-    expect(keyCommand(event('n', { metaKey: true }), settings)).toBe('new-root-folder');
+    expect(keyCommand(event('N', { metaKey: true, shiftKey: true }), settings)).toBe(
+      'new-root-folder',
+    );
+    expect(keyCommand(event('n', { metaKey: true }), settings)).toBe('new-folder');
   });
   it('opens supported formats in planes, native formats externally, and honors explicit linked/extension overrides', () => {
     const file = (extension: string, mime = 'application/octet-stream') =>

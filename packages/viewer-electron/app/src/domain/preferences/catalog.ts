@@ -170,7 +170,7 @@ export const settingCatalog: SettingDefinition[] = [
     path: 'settings.browsing.newPlaneLocation',
     category: 'Browsing',
     label: 'New folder planes start in',
-    detail: 'Used by the workspace + button and ⌘N when planes are already open.',
+    detail: 'Used by the workspace + button and ⇧⌘N when planes are already open.',
     kind: 'choice',
     choices: [
       ['current', 'Current folder'],
@@ -188,7 +188,7 @@ export const settingCatalog: SettingDefinition[] = [
     path: 'settings.browsing.emptyWorkspaceLocation',
     category: 'Browsing',
     label: 'First plane in an empty workspace starts in',
-    detail: 'Used by New folder plane when no planes are open, including + and ⌘N.',
+    detail: 'Used by New folder plane when no planes are open, including + and ⇧⌘N.',
     kind: 'choice',
     choices: [
       ['home', 'Home'],

@@ -19,7 +19,7 @@ never dropped.
 | **Copy to** _folder_, **Move to** _folder_       | ⌃⌘C, ⌃⌘X | Copies or moves to the other folder of a pair                             |
 | **Duplicate**                                    | ⌘D       | Makes `Name copy.ext` beside each item                                    |
 | **Make alias**                                   |          | Makes a Finder alias, such as `Report.pdf alias`, beside each item        |
-| **New folder…**                                  | ⇧⌘N      | Creates an empty folder; it never replaces an existing item               |
+| **New folder…**                                  | ⌘N       | Creates an empty folder; it never replaces an existing item               |
 | **New file…**                                    |          | Creates an empty file; it never replaces an existing item                 |
 | **New folder with selection…**                   | ⌃⌘N      | Asks for a name, then moves the selection into a new folder               |
 | **Rename…**                                      | Return   | Renames one item; a case-only rename works on a case-blind volume         |

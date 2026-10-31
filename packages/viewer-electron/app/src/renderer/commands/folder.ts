@@ -432,7 +432,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       group: 'Folder',
       icon: 'folder-plus',
       aliases: ['nf', 'mkdir'],
-      shortcut: '⇧⌘N',
+      shortcut: '⌘N',
       primary: (context) => !context.selection.length,
       when: folder,
       run: (context) => actions.dialog('mkdir', context),

@@ -40,6 +40,16 @@ function menuHost() {
 }
 
 describe('native application menu dispatch', () => {
+  it('uses Command N for a folder and Shift Command N for a new plane', () => {
+    installApplicationMenu(undefined, () => () => {}, '/generated/diagnostics.log', vi.fn());
+    const template = nativeMenu.buildFromTemplate.mock.calls.at(-1)![0];
+    const items = template.find((item) => item.label === 'File')!
+      .submenu as MenuItemConstructorOptions[];
+    expect(items.find((item) => item.label === 'New Folder…')?.accelerator).toBe('Command+N');
+    expect(items.find((item) => item.label === 'New Folder Plane')?.accelerator).toBe(
+      'Command+Shift+N',
+    );
+  });
   it.each(['none', 'blurred-settings', 'settings', 'workspace'] as const)(
     'creates independent workspaces from the actual New Window menu with %s focused',
     async (focus) => {

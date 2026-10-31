@@ -68,7 +68,9 @@ export function installApplicationMenu(
           { type: 'separator' },
           {
             label: 'New Folder Plane',
-            accelerator: accelerator(settings?.shortcuts['new-root-folder'] ?? 'Cmd+N'),
+            accelerator: accelerator(
+              settings?.shortcuts['new-root-folder'] ?? defaultShortcuts['new-root-folder'] ?? '',
+            ),
             click: command('new-root-folder'),
           },
           {
@@ -96,7 +98,7 @@ export function installApplicationMenu(
           {
             label: 'New Folder…',
             accelerator: accelerator(
-              settings?.shortcuts['new-folder'] ?? defaultShortcuts['new-folder'] ?? 'Cmd+Shift+N',
+              settings?.shortcuts['new-folder'] ?? defaultShortcuts['new-folder'] ?? '',
             ),
             click: command('new-folder'),
           },

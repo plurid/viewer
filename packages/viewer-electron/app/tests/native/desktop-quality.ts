@@ -366,7 +366,7 @@ async function session(restart: boolean) {
         });
 
       for (const count of [2, 3]) {
-        await evaluate(click('[aria-label="New folder plane (⌘N)"]'));
+        await evaluate(click('[aria-label="New folder plane (⇧⌘N)"]'));
         await until(
           () => evaluate(countOf('.plane-controls')),
           (value) => value === count,

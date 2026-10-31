@@ -40,7 +40,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   _Learn:_ [Keep your work together](../guides/workspaces.md)
 - **Root plane**: a plane with no parent, the start of its own branch of linked planes. A file
   opened again in another root gets a plane of its own there. _In Viewer:_ **New folder plane**
-  (**⌘N**), **Open in another plane**, **Open in new root plane** in the sidebar. _Learn:_
+  (**⇧⌘N**), **Open in another plane**, **Open in new root plane** in the sidebar. _Learn:_
   [Keep your work together](../guides/workspaces.md)
 - **Docked** and **tiled**: docked, one plane fills the window while the rest wait in the space;
   **⌘Return** switches between that plane and all of them. Tiled, the planes in view sit face-on in

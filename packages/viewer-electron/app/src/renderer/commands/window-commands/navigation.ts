@@ -80,7 +80,7 @@ export function navigationCommands({
       group: 'Plane',
       icon: 'plus',
       aliases: ['np', 'new plane', 'add plane', 'root'],
-      shortcut: '⌘N',
+      shortcut: '⇧⌘N',
       primary: true,
       when: (context) =>
         ['window', 'workspace', 'folder', 'files', 'preview'].includes(context.scope) &&

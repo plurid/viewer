@@ -97,7 +97,8 @@ import { openWorkspacePath } from './workspace/open-path';
 import { requestRefresh } from './state/refresh';
 import { useWindowEvent } from './app/window-events';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
-import { commandShortcutID } from '../domain/preferences/shortcuts';
+import { commandShortcutID, defaultShortcuts } from '../domain/preferences/shortcuts';
+import { keyGlyphs } from '../domain/preferences/keymap';
 import { dialogOpen, overlayOpen } from './ui/modal';
 import { savedDefinitionsKey } from './state/saved-keys';
 import { isActiveJob } from '../domain/operations/jobs';
@@ -196,6 +197,9 @@ function AppWindow() {
   const space = useViewer(activeWorkspace);
   const look = useViewer(effectiveWindowLook);
   const settings = useViewer(effectiveWindowSettings);
+  const newPlaneShortcut = keyGlyphs(
+    settings.shortcuts['new-root-folder'] ?? defaultShortcuts['new-root-folder'] ?? '',
+  );
   const [overview, setOverview] = useState<SpatialOverviewHandle>();
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
@@ -836,7 +840,7 @@ function AppWindow() {
           {windowUI.titlebar.newPlane && (
             <IconButton
               icon="plus"
-              label="New folder plane (⌘N)"
+              label={`New folder plane${newPlaneShortcut ? ` (${newPlaneShortcut})` : ''}`}
               disabled={!ready || space.panes.length >= 200}
               onClick={() => {
                 void invoke('new-root-folder').catch(report);
