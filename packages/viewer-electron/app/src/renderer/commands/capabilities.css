@@ -60,21 +60,22 @@
   max-height: 150px;
   overflow: auto;
 }
-.capabilities-pins > summary {
-  padding: 8px 0;
-  font-size: var(--text-compact);
-}
-/* each section's whole bar opens it, not only its words */
+/* Closed, a section is only its summary, so the whole bar opens it, not only its words. Padding
+   around the summary as well would take the room the action list needs for two whole rows at the
+   minimum window with eight pins (DESIGN.md Contextual discovery). */
 .capabilities-pins > summary,
 .capabilities-help > summary {
   width: auto;
+  padding-block: var(--gap-inline);
+  font-size: var(--text-compact);
 }
 .capabilities-pins > summary small {
   display: inline;
   margin-left: 12px;
 }
-.capabilities-pins[open] {
-  padding-bottom: 12px;
+.capabilities-pins[open],
+.capabilities-help[open] {
+  padding-bottom: var(--gap-content);
 }
 .capabilities-results {
   flex: 1;
@@ -176,7 +177,7 @@
   flex: none;
   max-height: 130px;
   overflow: auto;
-  padding: 8px 20px;
+  padding: 0 20px;
   border-top: 1px solid var(--line);
 }
 .capabilities-help dd {

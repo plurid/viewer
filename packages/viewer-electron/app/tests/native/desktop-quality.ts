@@ -193,6 +193,17 @@ function scrollActions(top: number) {
 const disclosureOpen = (selector: string) =>
   document.querySelector<HTMLDetailsElement>(selector)!.open;
 
+/** Each closed section's height beyond its summary and borders: none, its bar is its summary. */
+function closedSectionExtra() {
+  return ['.capabilities-pins', '.capabilities-help'].map((selector) => {
+    const section = document.querySelector<HTMLDetailsElement>(selector)!;
+    const style = getComputedStyle(section);
+    const borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+    const summary = section.querySelector(':scope > summary')!.getBoundingClientRect().height;
+    return Math.round(section.getBoundingClientRect().height - summary - borders);
+  });
+}
+
 const helpInBody = () =>
   document.querySelector('.capabilities-help')!.getBoundingClientRect().bottom <=
   document.querySelector('.capabilities-body')!.getBoundingClientRect().bottom + 1;
@@ -351,6 +362,11 @@ async function session(restart: boolean) {
       await viewport(760, 540);
       await appearance('light');
       await geometry('capabilities-light-minimum');
+      assert.deepEqual(
+        await evaluate(pageCall(closedSectionExtra)),
+        [0, 0],
+        'Closed pinned tools and keyboard help are their summaries, taking no room beyond them',
+      );
       const visibleRows = await evaluate(pageCall(visibleActionRows));
       assert.ok(
         visibleRows >= 2,

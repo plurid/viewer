@@ -15,6 +15,7 @@ import { promisify } from 'node:util';
 import { repeatedPreviewFixture } from './workspace-fixtures';
 import { formatBytes } from '../src/domain/files/entries';
 import { tileTree } from '../src/domain/workspaces/tiling';
+import { uiPreferencesVersion } from '../src/domain/preferences/ui';
 import { reactCommitProbe } from './react-commits';
 import type { OperationJob, RendererOperationRequest, SavedState } from '../src/domain/contracts';
 import { trashTemporary } from '../tools/temporary';
@@ -2522,6 +2523,28 @@ async function geometryStats(
   }
   return { geometry, blackFraction: geometry ? black / geometry : 1 };
 }
+/** Where a model plane's Frame model went: its header, or "…", which it leads once it gave way. */
+type ModelFramePlace = 'header' | 'menu';
+/**
+ * Frames the previewed model as a person would: with the header's button, or, where a narrow
+ * header gave the button way (DESIGN.md Header Spill Rule), with its row at the top of "…".
+ */
+async function frameModel(): Promise<ModelFramePlace> {
+  const button = '[aria-label="Frame model"]';
+  const away = `${button}[data-spilled]`;
+  if (!(await evaluate(exists(away)))) {
+    await click(button);
+    return 'header';
+  }
+  await click(`[data-plurid-plane]:has(${away}) [aria-label="Preview actions"]`);
+  await until(
+    () => evaluate(requiredAttribute('.context-menu [data-menu-id]', 'data-menu-id')),
+    (id) => id === 'preview.model-frame',
+    'Frame model leads "…"',
+  );
+  await click('.context-menu [data-menu-id="preview.model-frame"]');
+  return 'menu';
+}
 async function verifyModelLighting(): Promise<void> {
   await paletteCommand('Dock plane');
   await click(fileSelector(path.join(fixture.files, 'Models')), 2);
@@ -2536,7 +2559,7 @@ async function verifyModelLighting(): Promise<void> {
       (value) => /mm$/.test(value),
       'STEP conversion and model framing complete',
     );
-    await click('[aria-label="Frame model"]');
+    await frameModel();
     await evaluate(animationFrames(2));
     const worldCamera = await evaluate(pageCall(cameraJSON));
     for (let view = 0; view < 5; view++) {
@@ -2548,7 +2571,7 @@ async function verifyModelLighting(): Promise<void> {
           mobile: false,
         });
         await evaluate(animationFrames(2));
-        await click('[aria-label="Frame model"]');
+        await frameModel();
         await evaluate(animationFrames(2));
       }
       const bounds = await evaluate(pageCall(modelCanvasBounds));
@@ -5696,7 +5719,9 @@ async function verifyRootPlanes(): Promise<void> {
   };
   const controls = (id: string) => `[data-viewer-plane=${JSON.stringify(id)}]`;
   const folder = (id: string) => `[data-plurid-plane]:has(${controls(id)}) .folder-plane`;
-  assert.equal(original.ui?.version, 3);
+  // the fixture's version 1 state, with no UI preferences, is saved at the current UI version,
+  // past the plane-navigation step; its backup below keeps the original bytes
+  assert.equal(original.ui?.version, uiPreferencesVersion);
   assert.equal(original.ui.sidebar.visible, false);
   assert.equal(original.workspaces[0].panes[0].type, 'folder');
   assert.equal(await evaluate(exists('.app-main > .location-sidebar')), false);
@@ -6747,7 +6772,7 @@ async function verify(): Promise<void> {
         ui: NonNullable<SavedState['ui']>;
       },
     (state) =>
-      state.ui?.version === 4 &&
+      state.ui?.version === uiPreferencesVersion &&
       !state.ui.space.toolbar &&
       !state.ui.space.minimap &&
       !state.ui.space.viewcube,
@@ -7356,7 +7381,9 @@ async function verify(): Promise<void> {
   await snapshot('compact-native-initial.png');
   await paletteCommand('Dock plane');
   await settleCamera();
-  await click('.plane-module-controls [aria-label="Frame model"]');
+  // docked beside the sidebar, the plane keeps its width: the model's tools give way into "…"
+  // rather than widening it past the window
+  assert.equal(await frameModel(), 'menu', 'Frame model gives way in a narrow docked header');
   await delay(200);
   assert.equal(
     await evaluate(

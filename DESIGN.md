@@ -355,12 +355,12 @@ Dock, pinned tools, **…** and ×, and a format's main tools only, such as a PD
 search. Layout, What can I do here? and a format's rarer tools are rows of **…**. Full shows every
 control, one choice away in Settings. A hidden button never hides its command.
 
-**The Header Spill Rule.** Measure a narrow plane header, never hide its items by breakpoint. Items
-give way strictly in rank order into the plane's **…** menu, where they lead as their commands; a
-read-only detail such as a size just gives way. The title keeps 96 px; Frame, Dock, **…** and ×
-stay. A format control with no command never gives way: the format's toolbar scrolls only as the
-last resort, with a fading edge and a compact scrollbar. A format control the person also pinned
-shows once, as the pin.
+**The Header Spill Rule.** Measure a narrow plane header, never hide its items by breakpoint. The
+header takes its plane's width and never widens the plane. Items give way strictly in rank order
+into the plane's **…** menu, where they lead as their commands; a read-only detail such as a size
+just gives way. The title keeps 96 px; Frame, Dock, **…** and × stay. A format control with no
+command never gives way: the format's toolbar scrolls only as the last resort, with a fading edge
+and a compact scrollbar. A format control the person also pinned shows once, as the pin.
 
 ## Preview controls
 

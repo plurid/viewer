@@ -9,6 +9,10 @@
   background: var(--raised);
   border-bottom: 1px solid var(--line);
   user-select: none;
+  /* the plane gives the header its width, never the header the plane: what does not fit gives
+     way into "…" (header-overflow.ts) instead of widening the plane past its content and the
+     window. Containment only: a container here would bring back hiding by breakpoint. */
+  contain: inline-size;
 }
 /* a narrow header's items wait in "…" (workspace/header-overflow.ts), measured, not by breakpoint */
 .plane-controls [data-spilled],

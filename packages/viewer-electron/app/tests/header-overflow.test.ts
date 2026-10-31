@@ -3,6 +3,8 @@
  * A NARROW PLANE HEADER: items give way strictly in rank order, measured, and lead the plane's
  * "…" menu as their commands; a control with no command never gives way.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement, useRef } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
@@ -190,5 +192,19 @@ describe('useHeaderOverflow', () => {
         .querySelector('[data-header-item="pin:edit-file"]')!
         .hasAttribute('data-pinned-twin'),
     ).toBe(false);
+  });
+});
+
+describe('the header in its plane', () => {
+  // jsdom lays nothing out: the packaged smoke docks a narrow model plane and reaches its footer
+  const planes = path.resolve(import.meta.dirname, '../src/renderer/styles/planes.css');
+  const rule = /^\.plane-controls \{([^}]*)\}/m
+    .exec(readFileSync(planes, 'utf8'))![1]!
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  it('takes its width from the plane, never widening it with what should give way', () => {
+    expect(rule).toMatch(/(?:^|\s)contain:\s*inline-size;/);
+  });
+  it('is no container, so nothing in it hides by breakpoint', () => {
+    expect(rule).not.toMatch(/container(?:-type)?\s*:/);
   });
 });
