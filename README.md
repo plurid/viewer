@@ -75,8 +75,8 @@ The original stays as it was. Each result is a new file beside it, with Undo.
 - **Edit clips and pages.** Trim and join video and audio, and rotate, reorder or combine PDF pages.
 - **Lay out photos and PDFs.** Make collages, contact sheets, 2-up sheets and booklets, cards and
   passport photos, and posters across ordinary sheets. PDF pages stay sharp vectors.
-- **Nest parts for cutting.** Lay out DXF parts on stock sheets for a laser or plasma cutter, with
-  the sheets, cut length, time and cost it takes.
+- **Nest parts for cutting.** Lay out DXF parts on stock sheets for a laser, plasma or water-jet
+  cutter, with the sheets, cut length, time and cost it takes.
 
 | ![Three photographs laid out as one across and two below, with other layouts ranked](docs/media/layout.png) | ![Nine parts nested on a 1250 × 2500 mm sheet, a disc inside a ring, with the estimates](docs/media/nesting.png) |
 | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |

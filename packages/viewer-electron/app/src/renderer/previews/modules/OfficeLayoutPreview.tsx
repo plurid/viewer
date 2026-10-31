@@ -65,7 +65,12 @@ export default function OfficeLayoutPreview(context: PreviewContext) {
             />
           )}
           {picture ? (
-            <FirstPagePicture picture={picture} state={context.state} label={progress} />
+            <FirstPagePicture
+              picture={picture}
+              state={context.state}
+              label={progress}
+              dark={context.pages?.dark}
+            />
           ) : (
             !load.resource && <Loading label={progress} />
           )}

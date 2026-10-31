@@ -1,12 +1,13 @@
-/* Check a laser job: the panel beside the space, as the tour stops panel is. */
+/* Check a laser job: the panel at the top right of the space, in the top row of the space's
+   overlay, so the tour bar below never covers it (tours.css). */
 .check-panel {
-  position: absolute;
-  z-index: 140;
-  top: 12px;
-  right: 12px;
+  grid-row: 1;
+  justify-self: end;
+  align-self: start;
   width: 420px;
-  max-width: calc(100% - 24px);
-  max-height: calc(100% - 24px);
+  max-width: 100%;
+  max-height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -23,12 +24,53 @@
 }
 .check-panel > header h2 {
   flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 14px;
   font-weight: 600;
+}
+/* Collapsed, the title bar is all there is: no line under it. */
+.check-panel[data-collapsed] > header {
+  border-bottom: 0;
+}
+/* The title opens and collapses the panel; collapsed, a short status follows it. */
+.check-panel-toggle {
+  width: calc(100% + 6px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.check-panel-toggle:hover {
+  background: var(--raised);
+}
+.check-panel-toggle svg {
+  flex: none;
+  color: var(--muted);
+}
+/* The status gives way before the title does. */
+.check-panel-title {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.check-panel-status {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-weight: 400;
 }
 .check-panel-body {
   flex: 1;
@@ -169,11 +211,11 @@
   margin-top: 8px;
 }
 /* Its actions stand out as a dialog's do: a ghost button here reads as a line of text. */
-.check-panel button:not(.primary, .icon-button, .choice-button) {
+.check-panel-body button:not(.primary, .icon-button, .choice-button) {
   border-color: var(--line);
   background: var(--field);
 }
-.check-panel button:not(.primary, .icon-button, .choice-button):hover:not(:disabled) {
+.check-panel-body button:not(.primary, .icon-button, .choice-button):hover:not(:disabled) {
   background: var(--raised);
 }
 /* A result shown again: when it was checked, or what changed in the job since. */

@@ -15,6 +15,7 @@ import type { DocumentRequest } from '../../domain/previews/documents/requests';
 import type { ImageRenditionRequest } from '../../domain/previews/images/rendered';
 import type { OfficeLayoutRequest } from '../../domain/previews/documents/layout';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
+import type { PageColors } from '../../domain/previews/documents/dark-pages';
 
 /** Renderer-only capabilities: preview modules never import the workspace or explorer. */
 export interface PreviewCommand {
@@ -24,6 +25,14 @@ export interface PreviewCommand {
   primary?: boolean;
   available?: boolean;
   run(): void | Promise<void>;
+}
+
+/** How page previews (PDF and Office layout) draw their pages: `dark` holds the dark page's
+ * colours while pages are dark. `toggle` turns them the other way for every page preview, as the
+ * Dark pages setting. Hosts without the setting pass none, and pages are as printed. */
+export interface PagePresentation {
+  dark?: PageColors;
+  toggle(): void;
 }
 
 /** Where saved attachments go: beside their message, or to a folder the person chooses. */
@@ -46,6 +55,7 @@ export interface PreviewContext {
   interactive: boolean;
   signal: AbortSignal;
   look: Look;
+  pages?: PagePresentation;
   commands?: { header?: HTMLElement; register(commands: readonly PreviewCommand[]): () => void };
   /** A workspace preview plane's own: its text may be edited where it is. Quick
    * Preview and folder galleries pass none. */

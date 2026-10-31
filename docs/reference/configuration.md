@@ -63,8 +63,9 @@ rename files or close with `!` and drop unsaved text. A cancelled import changes
 A workspace window may change only its own presentation: `ui`, `settings.folders`,
 `settings.toolbars`, `settings.appearance`, `settings.browsing` (except `confirmTrash`),
 `settings.savedSearches`, `settings.editor`, `settings.terminalFont`, `settings.tour`,
-`settings.tiling`, `settings.layouts`, `settings.optimizationRecipes`, `settings.profiles` and
-`settings.theme`. Everything else changes only in Settings or in the file.
+`settings.previews.darkPages`, `settings.tiling`, `settings.layouts`,
+`settings.optimizationRecipes`, `settings.profiles` and `settings.theme`. Everything else changes
+only in Settings or in the file.
 
 ## Units
 
@@ -151,17 +152,28 @@ files open in planes.
 
 Shown in **Settings → Previews**.
 
-| Setting                            | Default    | Values                                               | Settings label         |
-| ---------------------------------- | ---------- | ---------------------------------------------------- | ---------------------- |
-| `settings.previews.thumbnailSize`  | `256`      | 128 to 512 px; Settings offers 128, 256, 384 and 512 | **Thumbnail size**     |
-| `settings.previews.maxImagePixels` | `64000000` | 1,000,000 to 128,000,000                             | **Image pixel limit**  |
-| `settings.previews.maxModelMB`     | `256`      | 16 to 512                                            | **3D file limit (MB)** |
-| `settings.previews.textFontSize`   | `16`       | 8 to 32 px                                           | **Text size**          |
-| `settings.previews.textLineHeight` | `20`       | 12 to 64 px                                          | **Text line height**   |
-| `settings.previews.textWordWrap`   | `false`    | Boolean                                              | **Wrap preview text**  |
+| Setting                            | Default    | Values                                                                                            | Settings label         |
+| ---------------------------------- | ---------- | ------------------------------------------------------------------------------------------------- | ---------------------- |
+| `settings.previews.thumbnailSize`  | `256`      | 128 to 512 px; Settings offers 128, 256, 384 and 512                                              | **Thumbnail size**     |
+| `settings.previews.maxImagePixels` | `64000000` | 1,000,000 to 128,000,000                                                                          | **Image pixel limit**  |
+| `settings.previews.maxModelMB`     | `256`      | 16 to 512                                                                                         | **3D file limit (MB)** |
+| `settings.previews.textFontSize`   | `16`       | 8 to 32 px                                                                                        | **Text size**          |
+| `settings.previews.textLineHeight` | `20`       | 12 to 64 px                                                                                       | **Text line height**   |
+| `settings.previews.textWordWrap`   | `false`    | Boolean                                                                                           | **Wrap preview text**  |
+| `settings.previews.darkPages`      | `off`      | `off` (**Off**), `on` (**On**), `night` (**At night**), `system` (**With macOS dark mode**)       | **Dark pages**         |
+| `settings.previews.darkPagesFrom`  | `20:00`    | 24-hour local time, `HH:MM` from `00:00` to `23:59`                                               | **Dark pages → From**  |
+| `settings.previews.darkPagesUntil` | `07:00`    | The same; earlier than `darkPagesFrom`, the night passes midnight; equal to it, there is no night | **Dark pages → Until** |
 
 A larger image offers a bounded thumbnail and **Open in default app**. These limits never change
 source files.
+
+`darkPages` draws PDF and Office pages dark, with light text, in previews, Quick Preview and the
+pages sidebar. Photographs keep their colours; a scanned page or a drawing on white turns dark with
+the page. `night` is dark from `darkPagesFrom` until `darkPagesUntil` and switches as either time
+passes. `system` follows the macOS appearance, which **Auto** in **System Settings → Appearance**
+switches at sunset. The **Dark pages** button in a page preview sets `on` or `off`, and replaces
+`night` or `system` with that choice. Printing, **Optimize…**, **PDF tools…**, exports and saved
+copies keep the document's own colours. A configuration without these fields uses the defaults.
 
 ## Editor
 
@@ -484,6 +496,7 @@ Space** and **Settings → Browsing → List columns** unless marked.
 | `ui.list.widths.*`          | `name` 0, `modified` 160, `created` 160, `kind` 96, `extension` 80, `size` 95, `git` 80 | `name` 0 (fill) or up to 1600; others 60 to 600 px                                            | Drag a column edge                                       |
 | `ui.list.order`             | Absent                                                                                  | Column IDs, `name` first, no repeats                                                          | Drag a column                                            |
 | `ui.list.wrapNames`         | `false`                                                                                 | Boolean                                                                                       | **Wrap long filenames**                                  |
+| `ui.layout.units`           | `mm`                                                                                    | `mm` or `in`: what the Layout plane's nesting measures in; values stay in millimetres         | **Units** in the nesting panel                           |
 | `ui.recentCommands`         | `[]`                                                                                    | App-managed, up to 30 command IDs                                                             | None                                                     |
 | `ui.suggestionHistory`      | Absent                                                                                  | App-managed: up to 40 kinds of file, 8 command IDs each                                       | **Forget learned suggestions** command                   |
 | `ui.insightsDismissed`      | Absent                                                                                  | App-managed: up to 200 folders, 20 insight IDs each                                           | **Show hidden insights** command                         |

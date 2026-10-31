@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import type { ReactNode } from 'react';
 import {
   describeAnchor,
   fileName,
@@ -165,5 +166,17 @@ export function TourBar() {
           <Running playback={playback} />
         ))}
     </>
+  );
+}
+/**
+ * The space's overlay: `children`, such as the check panel, in its top row and the tour bar in the
+ * bottom one, so the bar never covers them and they never cover the bar (tours.css).
+ */
+export function SpaceOverlay({ children }: { children?: ReactNode }) {
+  return (
+    <div className="space-overlay">
+      {children}
+      <TourBar />
+    </div>
   );
 }

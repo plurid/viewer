@@ -157,6 +157,18 @@ const descriptions: Record<string, string[]> = {
     'Decoded image pixel limit, not bytes. Larger images offer a bounded preview.',
   ],
   'settings.previews.maxModelMB': ['3D preview file-size limit in megabytes.'],
+  'settings.previews.darkPages': [
+    'PDF and Office previews draw pages dark with light ink; photos keep their colours.',
+    'night is dark from darkPagesFrom until darkPagesUntil; system follows macOS dark mode.',
+    'The Dark pages button sets on or off. Printing, exports and PDF tools keep the original colours.',
+  ],
+  'settings.previews.darkPagesFrom': [
+    'When night begins for darkPages night: 24-hour local time HH:MM, such as "20:00".',
+  ],
+  'settings.previews.darkPagesUntil': [
+    'When night ends: HH:MM, such as "07:00". Earlier than darkPagesFrom, the night passes midnight.',
+    'The same time in both is no night.',
+  ],
   'settings.search': [
     'Local search index configuration, separate from model sharing and agent folder grants.',
   ],
@@ -335,6 +347,9 @@ const descriptions: Record<string, string[]> = {
   ],
   'ui.list.order': [
     'Column IDs in display order; name must be first, with no duplicates. Visibility is separate.',
+  ],
+  'ui.layout.units': [
+    'What the Layout plane measures nesting in: "mm" or "in". Values are kept in millimetres.',
   ],
   'ui.recentCommands': [
     'App-managed recent command IDs for ranking. Clearing this resets the recent-action list.',

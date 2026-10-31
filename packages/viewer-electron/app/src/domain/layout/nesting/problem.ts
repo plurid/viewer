@@ -1,7 +1,8 @@
 /** A nesting problem from extracted parts and what a person chose for each. */
 import type { NestFormat, NestPart, NestProblem } from './nest';
 import type { Part } from './parts';
-import { looserRotation, rotationAngles, type RotationMode } from './plan';
+import type { NestDirection, RotationMode } from './plan';
+import { looserRotation, rotationAngles } from './plan';
 import { nestingTolerances } from './parts';
 
 export interface PartChoice {
@@ -14,6 +15,8 @@ export interface PartChoice {
 export interface NestSettings {
   margin: number;
   spacing: number;
+  /** Compact when absent. */
+  direction?: NestDirection;
 }
 
 /** What nesting needs of a part. */
@@ -42,6 +45,7 @@ export function nestProblem(
     margin: settings.margin,
     spacing: settings.spacing,
     tolerance: nestingTolerances.flatten,
+    ...(settings.direction ? { direction: settings.direction } : {}),
   };
 }
 /** The same problem with one more step of rotation freedom where a part allows less, or

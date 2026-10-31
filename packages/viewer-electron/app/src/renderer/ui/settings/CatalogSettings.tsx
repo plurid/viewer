@@ -6,6 +6,7 @@ import { ChoiceButton } from '../ChoiceMenu';
 import { ColorField } from '../ColorField';
 import { looks } from '../../workspace/look';
 import { errorMessage } from '../../../domain/errors';
+import { DarkPagesDetail } from './DarkPagesSettings';
 
 const toolbarIcons: Record<string, IconName> = {
   parent: 'parent-plane',
@@ -153,6 +154,9 @@ export function CatalogSettings({
                 />
               )}
             </Row>
+            {definition.path === 'settings.previews.darkPages' && (
+              <DarkPagesDetail editor={editor} />
+            )}
             {locationField && settings.browsing[locationField] === 'custom' && (
               <div className="settings-folder-choice">
                 <span title={customPath}>{customPath}</span>

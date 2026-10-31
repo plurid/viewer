@@ -24,8 +24,11 @@ read with the files of the folders in it, one level down, so parts kept in `DXF/
 - **One level down.** A folder inside a job's folder, such as `DXF/` or `Photos/`, is read whole. A
   folder inside that one is left out, and so is a handoff a check saved, such as "Job 1042 handoff".
   A folder holding more than 8 folders is read without them.
-- **A folder of jobs.** A folder without a request of its own, holding two or more folders that each
-  have a request and parts, is a folder of jobs. It is not checked as one job.
+- **A job of its own.** A folder inside the job with a request and parts of its own is a job of its
+  own, never read as part of the folder holding it.
+- **A folder of jobs.** A folder holding no request, drawing, photo or part itself, with a job among
+  its folders, is a folder of jobs: `fabrication` holding `Job 1042` and an `Evaluation` folder of
+  parts. It is not checked as one job; each is checked on its own.
 - **DWG.** A `.dwg` file is cutting work, so the command is offered for it, but Viewer measures DXF
   only. It is left out with "a DWG; Viewer measures DXF only".
 
@@ -39,7 +42,7 @@ folder, and offers nothing to run:
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | No DXF or DWG file | "Pictures holds no DXF or DWG file, so there is nothing to check."                                                      |
 | DWG files only     | "Drawings holds 2 DWG files and no DXF. Viewer measures DXF only: save them as DXF from the CAD app, then check again." |
-| Several jobs       | "Clients holds 2 jobs: Job A and Job B. Check one of them."                                                             |
+| Several jobs       | "Clients holds Job A and Job B. Check one of them."                                                                     |
 
 ### Where the command is offered
 
@@ -204,23 +207,72 @@ names files, never their folders.
 ## Handoff
 
 **Export handoff** saves `<job> handoff`, such as "Job 1042 handoff", in the job's folder, through
-**File operations**: it is made in a private stage, published whole, and Undo applies.
+**File operations**: it is made in a private stage, published whole, and Undo applies. When a
+thickness of the job's parts has no nesting yet, the button reads **Nest and export handoff** and
+[nests it first](#cut-sheets-the-export-nests).
 
 | Item                    | Holds                                                                                                                                                    |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Cut sheets/`           | Each nesting of the job's parts the Layout plane has checked, as **Save nesting** writes it                                                              |
+| `Cut sheets/`           | Each thickness's nesting of the job's parts, as **Save nesting** writes it: the one a Layout plane checked, else the one the export nested               |
 | `Evidence/`             | A copy of every file of the check and of each corrected copy, each with its date                                                                         |
 | `Job.viewer-tour.jsonc` | The check's tour, its stops pointed at the copies in `Evidence/`, so it plays wherever the folder goes; each copy has its stop's recorded bytes and date |
 | `Check record.json`     | The [check record](#the-check-record)                                                                                                                    |
 
 - A nesting is saved when its every drawing is a part the job cuts, its corrected copy in place of
-  an original. One of a drawing since corrected is left out: "“Nesting of 3 parts, 6 mm” nests
-  g6-PL60-B2-2buc.dxf, not its corrected copy: prepare the cut sheets again." A thickness no nesting
-  covers is said: "6 mm is not nested yet: open its tab in the Layout plane and wait for Checked."
+  an original. Of two nestings of one drawing, the newer is saved, so no part is cut twice. One of a
+  drawing since corrected is left out: "“Nesting of 3 parts, 6 mm” nests g6-PL60-B2-2buc.dxf, not
+  its corrected copy, so it is left out."
 - Every file's version is checked again when the operation starts. A check no longer kept, or not
   finished, is refused: "This check is no longer open. Check the job again, then export its
   handoff."
 - Agents cannot export a handoff, as they cannot save a correction.
+
+### Cut sheets the export nests
+
+A thickness no nesting covers is grouped as the Layout plane's tabs group the cut sheets, and said:
+"6 mm is not nested yet: the export nests it first on 1250 × 2500 mm sheets. To choose the sheets
+yourself, prepare the cut sheets and wait for Checked."
+
+- **As the plane starts it.** Viewer nests it without a plane, as **Prepare cut sheets** opens it:
+  the same reading of each drawing, the quantities and thicknesses the cut sheets list, the
+  [sheet](nesting.md#sheets), margin, spacing, turns and cutting values a tab starts with, the same
+  [search](nesting.md#true-shape-nesting) and the same exact check.
+- **One at a time.** Thinnest first, each named with its parts and pieces: "Nesting 6 mm: 3 parts, 8
+  pieces… · 4 s". **Cancel** stops it. Each nesting checked is kept as a plane's is, so an export
+  after a stop nests only what is left.
+- **What Viewer does not choose.** A part whose quantity the job leaves open, or whose quantity or
+  thickness nothing in the job gives, is not nested for the export, and the button is unavailable:
+  "How many sets of g6-MB20-A1-4buc.dxf to cut is open, so Viewer does not nest it for the export.
+  Prepare the cut sheets and set it in the Layout plane, then export once its tab says Checked."
+
+Nothing is exported when a nesting stops:
+
+| What stops it                       | The panel says                                                                                                                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A part larger than the sheet        | "Nesting 6 mm: g6-PL60-B2-2buc (2,600 × 300 mm) does not fit a 1250 × 2500 mm sheet inside its 10 mm margin. Choose a larger sheet or more turns in the Layout plane. Nothing was exported." |
+| A drawing that cannot be read       | "g6-PL60-B2-2buc.dxf could not be read for nesting: This drawing is larger than 32 MB. Nothing was exported."                                                                                |
+| A drawing without an outline        | "g6-PL60-B2-2buc.dxf holds no outline to nest. Nothing was exported."                                                                                                                        |
+| A layout that fails its exact check | "Nesting 6 mm did not pass its check: … Nothing was exported."                                                                                                                               |
+| **Cancel**                          | "The nesting was cancelled. Nothing was exported."                                                                                                                                           |
+
+## The panel's title bar
+
+The panel sits at the top right of the space, above the tour bar: neither covers the other at any
+window size. Choosing its title, or **Space** or **Return** on it, collapses the panel to its title
+bar and opens it again. The window keeps that choice until it closes. **Esc** in the panel closes
+it. Collapsed, the title bar says how the check stands:
+
+| While                 | The title bar says                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| Ready to run          | "Check Job 1042 · Ready to check 7 files"                                                |
+| A check runs          | "Check Job 1042 · Muse Spark is reading the request, 2 drawing pages and 1 photo · 34 s" |
+| Checked               | "Check Job 1042 · 3 findings, 2 confirmed"                                               |
+| The job changed since | "Check Job 1042 · Changed since 22:14"                                                   |
+| The export nests      | "Check Job 1042 · Nesting 6 mm: 3 parts, 8 pieces… · 4 s"                                |
+
+**Play the tour** collapses the panel, so the plane each stop shows is in view, and opens it again
+when the tour ends or stops. **Play again** collapses it again. Once you open or collapse it during
+the tour, it stays as you left it. **Esc** stops the tour first.
 
 ## Closing and reopening
 

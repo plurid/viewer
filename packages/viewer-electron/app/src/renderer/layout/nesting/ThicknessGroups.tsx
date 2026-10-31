@@ -9,6 +9,8 @@ export interface ThicknessTab {
   /** Absent while its drawings are read, or when none has a quantity. */
   figures?: GroupFigures;
   reading: boolean;
+  /** No sheet format is chosen for it. */
+  unsheeted?: boolean;
   currency: string;
 }
 
@@ -72,7 +74,11 @@ export function ThicknessGroups({
                 </>
               ) : (
                 <td colSpan={4} className="muted">
-                  {group.reading ? 'Reading…' : 'Nothing to nest'}
+                  {group.reading
+                    ? 'Reading…'
+                    : group.unsheeted
+                      ? 'No sheet format'
+                      : 'Nothing to nest'}
                 </td>
               )}
             </tr>

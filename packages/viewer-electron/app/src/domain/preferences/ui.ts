@@ -175,6 +175,7 @@ export function normalizePreferences(value?: unknown): UIPreferences {
           }
         : {}),
     },
+    layout: { units: object(ui.layout).units === 'in' ? 'in' : 'mm' },
     recentCommands: strings(ui.recentCommands, 20, 300),
     suggestionHistory: Object.fromEntries(
       Object.entries(object(ui.suggestionHistory))

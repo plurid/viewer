@@ -1,7 +1,7 @@
 # Nesting for cutting
 
 This page describes exactly how the **Nesting** mode of the Layout plane reads DXF parts, packs them
-on stock sheets for laser or plasma cutting, checks the result and saves it.
+on stock sheets for laser, plasma or water-jet cutting, checks the result and saves it.
 
 Nesting reads each part's true shape, packs the copies you ask for onto the formats you allow,
 checks the result exactly and saves one DXF per sheet with a PDF report and a CSV parts list. The
@@ -74,16 +74,65 @@ open ends are 2.00 mm apart.", or "has nothing to cut" when every layer is marke
 part's x axis along the sheet's length, so only 0° and 180° remain. Orientations that look the same,
 such as a square's quarter turns, are searched once.
 
+## Units
+
+**Units** beside the **Sheets** heading reads every length in the panel in millimetres or inches:
+part sizes and areas, sheet formats, edge margin, spacing, kerf, speeds (mm/min or in/min), cut
+length, offcuts, weights (kilograms or pounds), and the saved report and parts list. Values are kept
+in millimetres; a drawing's own units still come from its file, and the sheet DXFs are written in
+millimetres. Thickness stays in millimetres, as the presets and the part names give it. The choice
+is the Layout preference `ui.layout.units`, `mm` or `in`; see [configuration](configuration.md).
+
+| Units  | Typed and shown                               | Long lengths    | Areas           |
+| ------ | --------------------------------------------- | --------------- | --------------- |
+| **mm** | Millimetres to a hundredth                    | Metres from 1 m | m²              |
+| **in** | Inches to a thousandth; sheets to a hundredth | Feet from 10 ft | in², ft² from 1 |
+
 ## Sheets
 
-Presets are 1000 × 2000, 1250 × 2500 (on at first), 1500 × 3000, 2000 × 4000 and 2000 × 6000 mm.
-**Add size** adds a custom width and length, each 10 to 100,000 mm; up to 12 formats in all. Each
-format has an optional stock count (empty for **Any**, up to 500) and a price per sheet.
+Only the formats you nest on are listed, each with an optional stock count (empty for **Any**, up
+to 500) and a price per sheet; **×** removes one. **Add format** offers the presets of the chosen
+units and **Custom size…**, a width and length each 10 to 100,000 mm; up to 12 formats in all. A
+preset removed and added again keeps its stock and price. A custom size that matches a preset turns
+on the preset.
 
-A sheet lies with its longer side along x and fills from x = 0, so what is left over is one strip at
-the far end. **Edge margin** (10 mm at first) keeps every part that far inside the sheet edge.
-**Spacing** (5 mm at first) is the least distance between any two parts, holes included. Each is 0
-to 1,000 mm.
+| Units  | Presets                                                         | Chosen at first |
+| ------ | --------------------------------------------------------------- | --------------- |
+| **mm** | 1000 × 2000, 1250 × 2500, 1500 × 3000, 2000 × 4000, 2000 × 6000 | 1250 × 2500     |
+| **in** | 48 × 96, 48 × 120, 60 × 120, 60 × 144 (4' × 8' to 5' × 12')     | 48 × 96         |
+
+Changing units while the formats are as they started changes them to the other unit's first format.
+With no format chosen, no sheet is drawn, the summary reads "Choose a sheet format to nest on." and
+**Save nesting** is off.
+
+A sheet lies with its longer side along x. **Edge margin** (10 mm at first) keeps every part that
+far inside the sheet edge. **Spacing** (5 mm at first) is the least distance between any two parts,
+holes included. Each is 0 to 1,000 mm. Choosing a material sets both from the process and thickness
+(see [cutting allowances](#cutting-allowances)) until you type one yourself.
+
+## Direction
+
+**Direction** chooses where the parts gather.
+
+| Direction            | Placement                                                                   | What is left            |
+| -------------------- | --------------------------------------------------------------------------- | ----------------------- |
+| **Compact block**    | The last sheet's parts in a block in its lower left corner; at first        | Pieces on two sides     |
+| **Along the length** | Rows along the sheet's long side from its upper edge, each row filled first | A strip down the length |
+| **Along the width**  | Columns across the sheet from its left end, each column filled first        | A strip across the end  |
+
+Along the length, the fill stands the sheet on end and turns each part back a quarter turn, so a
+part's allowed turns, mirroring and grain hold as on any sheet. **Compact block** fills full sheets
+along the width, then packs the last sheet again on its own: its columns are capped at heights from
+0.8 to 4 times the side of a square holding its parts' boxes, and at the full width, each with both
+placement rules. The layout whose parts' box, measured from the corner, has the least area wins,
+then the one leaving the larger offcut. The caps and orders are the same every time, so a layout
+compacts the same way each run.
+
+**Offcut.** The offcut is the largest piece one straight cut across the whole sheet takes off, the
+cut at the spacing from the parts: across the sheet past the parts' box, or along it beside them.
+Its cut side is rounded down to a whole millimetre. It is **reusable** when both its sides are at
+least 300 mm, about a foot; otherwise it is **too small to keep**. Sixteen parts of 90 × 72 mm on a
+1250 × 2500 mm sheet form a block of about 310 × 380 mm and leave "Offcut 1250 × 2178 mm, reusable".
 
 ## Estimate while typing
 
@@ -115,7 +164,8 @@ Otherwise the copy goes into the first open sheet where it fits: in each allowed
 part slides up each column of the sheet past what is already there, and the first column where it
 fits gives its position. Of the orientations, the one whose far end lies nearest the start of the
 sheet wins (or, in the other rule, the one that starts nearest). A new sheet opens when no open
-sheet takes a copy.
+sheet takes a copy. The columns run across the sheet's width; **Along the length** they run down it,
+as [Direction](#direction) explains.
 
 **Search.** The search tries each allowed format alone and, with several formats, a mix that opens
 the cheapest material first (or the largest sheet, without prices) within stock. It tries four part
@@ -123,8 +173,11 @@ orders (area, longest side, box area, shortest side) and both placement rules, t
 the best order at random. In every order, a part comes after the parts with a hole its box might fit
 in, so their holes are there when it is placed. A layout is better when it places more copies, then
 when it costs less (or, without prices, uses less sheet area), then when it uses fewer sheets, then
-when its last sheet's parts reach less far, leaving a longer remnant. Once every copy fits on as few
-sheets as the area allows, the search ends after 60 passes in a row bring nothing better.
+when its last sheet's parts spread less (along the width, how far they reach along the sheet; along
+the length, how far across; compact, their box's area), then when it leaves a larger offcut. In the
+compact direction, each new best layout has its last sheet packed again as a block. Once every copy
+fits on as few sheets as the area allows, the search ends after 60 passes in a row bring nothing
+better.
 
 **Exact check.** When the search ends, every pair of placed parts whose boxes come within the
 spacing is measured edge to edge, and every part is checked against the margin. Flattened curves are
@@ -141,9 +194,16 @@ a cell, are missed.
 ## Results and advice
 
 The headline gives the sheets used and their format, the material used (parts' area over sheet
-area), copies placed of those requested, cut length, pierces, cutting time and cost. **Remnant on
-sheet N** gives the strip left on the last sheet: its width by the length from the last part, plus
-the spacing, to the margin.
+area), copies placed of those requested, cut length, pierces, cutting time and cost. Under it, the
+last sheet's [offcut](#direction): "Offcut 1250 × 2178 mm, reusable", or with several sheets "Offcut
+on sheet 3: …".
+
+**Picking a part.** A click on a part on a sheet picks it: every copy of it lights up on every
+sheet, its row in **Parts** is marked, and **Selected part** gives its number and name, its file,
+size, holes, the pieces placed of those requested, and the sheets it is on. A click on empty sheet,
+**Esc** or **×** lets it go. A double click, **Enter** or **Open drawing** opens its DXF in a plane.
+With a sheet focused, **←** **→** (or **↑** **↓**) step through its parts in number order, and
+**Home** and **End** pick the first and last. Picking moves nothing.
 
 Advice appears under the headline:
 
@@ -154,7 +214,8 @@ Advice appears under the headline:
 - the sheets that more turning freedom would save, tried once per search for parts that turn less
   than 45° steps: "Letting Bracket and Plate turn in 45° steps would save 1 sheet (3 instead of 4)";
 - the sheets true-shape nesting saves over boxes;
-- a last sheet less than a quarter used.
+- a last sheet less than a quarter used;
+- a spacing narrower than the kerf, which would run neighbouring cuts together.
 
 ## Estimates
 
@@ -164,23 +225,55 @@ Advice appears under the headline:
 | Cost         | sheets × price + cutting time × machine rate                       |
 | Weight       | area × thickness × density, for parts placed and for sheets bought |
 
-Rapid moves, lead-ins, marking and setup are not included. **Material** fills speed, pierce time and
-density from a table of typical values for about 3 kW fiber, 100 W CO2 and 65 A plasma; editing any
-value makes them **Custom values**. It starts at **Mild steel 3 mm · Fiber laser**. Check the values
-against your machine.
+Rapid moves, lead-ins, marking and setup are not included. **Material** fills speed, pierce time,
+kerf and density from a table of typical values for about 3 kW fiber, 100 W CO2, 65 A plasma and an
+abrasive water jet; editing any value makes them **Custom values**. It starts at **Mild steel 3 mm ·
+Fiber laser**. **Process** picks that process's preset for the same material at the nearest
+thickness, thicker on a tie, or the process's nearest thickness in another material when it has none
+for this one. Check the values against your machine.
 
-| Material        | Process     | Thickness (mm) | Speed (mm/min)                | Pierce (s)          |
-| --------------- | ----------- | -------------- | ----------------------------- | ------------------- |
-| Mild steel      | Fiber laser | 1, 2, 3, 6, 10 | 15000, 7000, 4000, 2200, 1300 | 0.1, 0.2, 0.4, 1, 2 |
-| Mild steel      | Plasma      | 3, 6, 10, 20   | 5000, 3000, 1800, 800         | 0.3, 0.5, 0.8, 1.5  |
-| Stainless steel | Fiber laser | 1, 2, 3, 5     | 20000, 9000, 5000, 2000       | 0.1, 0.2, 0.3, 0.6  |
-| Aluminium       | Fiber laser | 1, 2, 3, 5     | 18000, 8000, 5000, 2000       | 0.1, 0.2, 0.3, 0.6  |
-| Plywood         | CO2 laser   | 3, 6, 9        | 1500, 600, 300                | 0.1, 0.3, 0.5       |
-| Acrylic         | CO2 laser   | 3, 5, 8        | 900, 500, 250                 | 0.2, 0.4, 0.8       |
+The kerf is the width of the cut. The machine offsets its path by half of it, so the parts keep the
+drawn size; nesting uses it for the report and to warn about a spacing narrower than it.
+
+| Material        | Process     | Thickness (mm)   | Speed (mm/min)                | Pierce (s)          | Kerf (mm)                |
+| --------------- | ----------- | ---------------- | ----------------------------- | ------------------- | ------------------------ |
+| Mild steel      | Fiber laser | 1, 2, 3, 6, 10   | 15000, 7000, 4000, 2200, 1300 | 0.1, 0.2, 0.4, 1, 2 | 0.1, 0.15, 0.2, 0.3, 0.4 |
+| Mild steel      | Plasma      | 3, 6, 10, 20     | 5000, 3000, 1800, 800         | 0.3, 0.5, 0.8, 1.5  | 1.5, 1.7, 1.9, 2.3       |
+| Stainless steel | Fiber laser | 1, 2, 3, 5       | 20000, 9000, 5000, 2000       | 0.1, 0.2, 0.3, 0.6  | 0.1, 0.15, 0.2, 0.3      |
+| Aluminium       | Fiber laser | 1, 2, 3, 5       | 18000, 8000, 5000, 2000       | 0.1, 0.2, 0.3, 0.6  | 0.1, 0.15, 0.2, 0.3      |
+| Plywood         | CO2 laser   | 3, 6, 9          | 1500, 600, 300                | 0.1, 0.3, 0.5       | 0.2, 0.25, 0.3           |
+| Acrylic         | CO2 laser   | 3, 5, 8          | 900, 500, 250                 | 0.2, 0.4, 0.8       | 0.15, 0.2, 0.25          |
+| Mild steel      | Water jet   | 3, 6, 10, 20, 30 | 750, 400, 240, 110, 70        | 2, 4, 8, 18, 30     | 0.9, 1, 1, 1.1, 1.2      |
+| Stainless steel | Water jet   | 3, 6, 10, 20     | 520, 300, 180, 80             | 3, 6, 12, 25        | 0.9, 1, 1, 1.1           |
+| Aluminium       | Water jet   | 3, 6, 10, 20, 30 | 1000, 600, 380, 180, 120      | 1.5, 3, 6, 14, 22   | 0.9, 1, 1, 1.1, 1.2      |
 
 Densities: steel 7.85, stainless 8, aluminium 2.7, plywood 0.6 and acrylic 1.19 g/cm³. The machine
 rate starts at 90 an hour and the currency at €; a one-character currency leads the amount, a longer
 one follows it.
+
+**Water-jet values.** Abrasive cutting at 4,100 bar (60,000 psi) with a 0.30 mm orifice, a 1.0 mm
+focusing tube and 80-mesh garnet, at a medium edge quality, the third of the five quality steps
+OMAX's software offers. Each speed, pierce time and kerf lies inside the reference ranges FabFlow
+publishes for that set-up, for example mild steel 6 mm at 350 to 500 mm/min with a 0.8 to 1.1 mm
+kerf and 25 mm at 70 to 120 mm/min; stainless steel 12 mm at 120 to 180 mm/min and a 10 to 20 s
+pierce; aluminium 25 mm at 100 to 180 mm/min and a 15 to 30 s pierce. Values between the published
+thicknesses follow speed falling a little faster than thickness rises. Thick plate pierces with a
+low-pressure start, and a separation cut runs two to three times faster than these speeds. Sources:
+[FabFlow, Waterjet cutting engineering guide](https://www.fabflow.app/blog/waterjet-cutting-complete-engineering-guide)
+(tables 5.1 and 7.1) and the
+[OMAX protocol at UC Berkeley](https://me.berkeley.edu/wp-content/uploads/2025/05/Omax-Abrasive-Jet-Machining-Protocol-2024.pdf)
+(quality steps).
+
+### Cutting allowances
+
+Choosing a material sets **Spacing** and **Edge margin** for its process and thickness, the nearest
+row, until you type them. A water jet starts each part from a lead-in in the scrap beside it, and in
+thick plate the pierce leaves a crater, so its parts sit further apart.
+
+| Process               | Thickness (mm)   | Spacing (mm)   | Edge margin (mm)   |
+| --------------------- | ---------------- | -------------- | ------------------ |
+| Fiber, CO2 and plasma | Any              | 5              | 10                 |
+| Water jet             | 3, 6, 10, 20, 30 | 3, 4, 5, 8, 10 | 10, 10, 15, 15, 20 |
 
 ## Saved files
 
@@ -209,18 +302,22 @@ mm. Coordinates are written to a millionth of a millimetre.
 | `SHEET`     | 8     | The sheet outline                                    |
 
 **Report.** A4 landscape. The first page lists the sheets used, the material used, parts placed, cut
-length, pierces, cutting time, cost and weight; a sheets table with the material used and remnant
+length, pierces, cutting time, cost and weight; a sheets table with the material used and offcut
 length of each; a parts table with each part's number, file, size, quantities, area, cut length and
 pierces; and the assumptions behind the estimate, with the closest distance the exact check found.
 Each further page draws one sheet to scale with its margin, every part numbered, and a legend. A
 sheet with more than about 5,000 outlines and holes is drawn without holes and marks, and says so.
 
-**Parts.csv.** UTF-8 with a byte order mark and CRLF lines; numbers without thousands separators.
+The report and the parts list measure in the units chosen when the nesting was saved; the sheet DXFs
+are in millimetres whatever the units.
 
-| Table  | Columns                                                                                                                                              |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parts  | `No.`, `Part`, `File`, `Requested`, `Placed`, `Width (mm)`, `Height (mm)`, `Area (mm²)`, `Cut length (mm)`, `Pierces`, `Cutting time each (min)`     |
-| Sheets | `Sheet`, `Width (mm)`, `Height (mm)`, `Parts`, `Utilisation (%)`, `Remnant length (mm)`, `Cut length (mm)`, `Pierces`, `Cutting time (min)`, `Price` |
+**Parts.csv.** UTF-8 with a byte order mark and CRLF lines; numbers without thousands separators.
+`(mm)` columns read `(in)`, and `(mm²)` `(in²)`, in inches.
+
+| Table  | Columns                                                                                                                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parts  | `No.`, `Part`, `File`, `Requested`, `Placed`, `Width (mm)`, `Height (mm)`, `Area (mm²)`, `Cut length (mm)`, `Pierces`, `Cutting time each (min)`                                            |
+| Sheets | `Sheet`, `Width (mm)`, `Height (mm)`, `Parts`, `Utilisation (%)`, `Offcut width (mm)`, `Offcut length (mm)`, `Offcut reusable`, `Cut length (mm)`, `Pierces`, `Cutting time (min)`, `Price` |
 
 **Related:** [Lay out photos and PDFs](../guides/layout.md#nest-parts-for-cutting) ·
 [Layout output](layout.md) · [Models and drawings](models.md) ·

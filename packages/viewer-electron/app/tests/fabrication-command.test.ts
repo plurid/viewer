@@ -201,6 +201,27 @@ describe('Check laser job…', () => {
     listings.set(`${clients}/Job B`, files(`${clients}/Job B`, ['Job B.eml', ...parts(1)]));
     await counted(context(clients));
     expect(command.when(context(clients))).toBe(false);
-    expect(unavailable(context(clients))).toBe('Clients holds 2 jobs: select one to check it.');
+    expect(unavailable(context(clients))).toBe(
+      'Clients holds Job A and Job B: select one to check it.',
+    );
+  });
+
+  it('keeps a job and a folder of parts beside it apart', async () => {
+    // the playground's "fabrication": Job 1042 with its request, and the Evaluation parts
+    const fabrication = '/fabrication';
+    shown.set(fabrication, [
+      entry(fabrication, 'Evaluation', 'directory'),
+      entry(fabrication, 'Job 1042', 'directory'),
+    ]);
+    listings.set(`${fabrication}/Evaluation`, files(`${fabrication}/Evaluation`, parts(40)));
+    listings.set(
+      `${fabrication}/Job 1042`,
+      files(`${fabrication}/Job 1042`, ['Job 1042 request.eml', ...parts(5)]),
+    );
+    await counted(context(fabrication));
+    expect(command.when(context(fabrication))).toBe(false);
+    expect(unavailable(context(fabrication))).toBe(
+      'fabrication holds Job 1042 and Evaluation: select one to check it.',
+    );
   });
 });

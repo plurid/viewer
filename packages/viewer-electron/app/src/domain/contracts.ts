@@ -25,6 +25,7 @@ import type { OfficeLayoutMetadata, OfficeLayoutRequest } from './previews/docum
 import type { PreviewHistory } from './previews/history';
 import type { MediaRequest, MediaReply } from './media/documents';
 import type { LayoutMode } from './layout/modes';
+import type { LengthUnit } from './layout/nesting/plan';
 import type { BrowserRequest, BrowserSnapshot } from './previews/browser';
 import type {
   JournalFilter,
@@ -449,6 +450,10 @@ export interface UIPreferences {
     widths: Record<ListColumn, number>;
     wrapNames: boolean;
     order?: ListColumn[];
+  };
+  /** The Layout plane: what nesting measures lengths in. */
+  layout: {
+    units: LengthUnit;
   };
   recentCommands: string[];
   /** Commands chosen for each kind of selection (`renderer/commands/suggestions.ts`), most

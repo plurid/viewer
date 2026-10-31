@@ -1,3 +1,4 @@
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { useId } from 'react';
 import type { Placement } from '../../../domain/layout/nesting/plan';
 import type { BoxPlacement } from '../../../domain/layout/nesting/rectangles';
@@ -56,29 +57,85 @@ export interface SheetPicture {
   boxes?: readonly (BoxPlacement & { width: number; height: number })[];
 }
 
-/** One sheet to scale, length along x, with each part's number. */
+/** The part a click lands on, by its index, or undefined on empty sheet. */
+const partAt = (event: MouseEvent) => {
+  const value = (event.target as Element).closest<SVGElement>('[data-part]')?.dataset.part;
+  return value === undefined ? undefined : Number(value);
+};
+/**
+ * One sheet to scale, length along x, with each part's number. A click picks a part and lights
+ * every copy of it, a click on empty sheet or Escape lets it go, a double click or Enter opens
+ * its drawing; the arrow keys step through the parts on the sheet. Nothing moves.
+ */
 export function SheetView({
   sheet,
   parts,
   zoom,
+  selected,
+  select,
+  open,
 }: {
   sheet: SheetPicture;
   parts: readonly PartView[];
   zoom: number;
+  /** The part picked, by index. */
+  selected?: number;
+  select?(part: number | undefined): void;
+  open?(part: number): void;
 }) {
   const id = useId().replace(/:/g, '');
   const used = new Set(sheet.placements?.map((placement) => placement.part));
+  const numbers = [...used].sort((a, b) => a - b);
   const label = (part: PartView) =>
     Math.max(6, Math.min(40, Math.min(part.width, part.height) * 0.35));
+  const keys = (event: KeyboardEvent) => {
+    if (!select || !numbers.length) return;
+    const at = selected === undefined ? -1 : numbers.indexOf(selected);
+    const step = (to: number) => {
+      event.preventDefault();
+      select(numbers[(to + numbers.length) % numbers.length]);
+    };
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') step(at + 1);
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
+      step(at < 0 ? numbers.length - 1 : at - 1);
+    else if (event.key === 'Home') step(0);
+    else if (event.key === 'End') step(numbers.length - 1);
+    else if (event.key === 'Enter' && selected !== undefined && open) {
+      event.preventDefault();
+      open(selected);
+    } else if (event.key === 'Escape' && selected !== undefined) {
+      // the part lets go; the plane keeps its own Escape for when nothing is picked
+      event.preventDefault();
+      event.stopPropagation();
+      select(undefined);
+    }
+  };
+  const pickable = !!select && numbers.length > 0;
   return (
     <figure className="nesting-sheet">
       <figcaption>{sheet.title}</figcaption>
-      <div className="nesting-sheet-scroll">
+      <div
+        className="nesting-sheet-scroll"
+        tabIndex={pickable ? 0 : undefined}
+        role={pickable ? 'group' : undefined}
+        aria-label={pickable ? `Parts on ${sheet.title}` : undefined}
+        aria-keyshortcuts={pickable ? 'ArrowLeft ArrowRight Enter Escape' : undefined}
+        onKeyDown={pickable ? keys : undefined}
+      >
         <svg
           viewBox={`0 0 ${sheet.length} ${sheet.width}`}
           style={{ width: `${zoom * 100}%` }}
           role="img"
           aria-label={sheet.title}
+          data-picking={selected !== undefined && used.has(selected) ? '' : undefined}
+          onClick={select && ((event) => select(partAt(event)))}
+          onDoubleClick={
+            open &&
+            ((event) => {
+              const part = partAt(event);
+              if (part !== undefined) open(part);
+            })
+          }
         >
           <defs>
             {[...used].map((index) => (
@@ -110,6 +167,8 @@ export function SheetView({
                   key={index}
                   href={`#${id}-part-${placement.part}`}
                   transform={`matrix(${m.map(round).join(' ')})`}
+                  data-part={placement.part}
+                  className={placement.part === selected ? 'nesting-picked' : undefined}
                 />
               );
             })}

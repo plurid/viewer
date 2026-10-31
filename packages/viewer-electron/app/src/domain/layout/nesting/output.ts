@@ -3,14 +3,17 @@
  * a sheets table, and the report plan the desktop draws as `Report.pdf`.
  */
 import type { LayoutTransform } from '../plan';
+import type { Box } from './nest';
+import type { Part } from './parts';
+import type { NestingTransform, Placement } from './plan';
 import { sheetDXF } from './dxf-writer';
 import { cuttingEstimate, cuttingMinutes, type CuttingEstimate } from './estimate';
+import { inUnit } from './format';
 import { sheetLength, sheetWidth } from './nest';
-import type { Part } from './parts';
+import { offcutOf } from './offcut';
 import { nestingTolerances } from './parts';
-import type { NestingTransform, Placement } from './plan';
 import { placementMatrix } from './geometry';
-import { nestingReport, remnantLength, type ReportSheet } from './report';
+import { nestingReport, type ReportSheet } from './report';
 import { verifyNest, type Verification } from './verify';
 
 export interface NestingSource {
@@ -71,14 +74,14 @@ export function nestingFiles(
   for (const sheet of plan.sheets) for (const p of sheet.placements) placed[p.part]!++;
   const sheets: ReportSheet[] = plan.sheets.map((sheet) => {
     const size = plan.formats[sheet.format]!;
-    let area = 0,
-      used = 0;
+    let area = 0;
+    const bounds: Box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
     for (const placement of sheet.placements) {
       const part = parts[placement.part]!.part;
       area += part.area;
-      used = Math.max(used, reachOf(part, placement));
+      extend(bounds, part, placement);
     }
-    return { size, price: size.price, placements: sheet.placements, area, used };
+    return { size, price: size.price, placements: sheet.placements, area, bounds };
   });
   const estimate = cuttingEstimate(
     parts.map(({ part }, index) => ({ ...part, quantity: placed[index]! })),
@@ -122,19 +125,24 @@ export function nestingFiles(
       margin: plan.margin,
       spacing: plan.spacing,
       closest: verification.closest,
+      units: plan.units ?? 'mm',
     }),
     estimate,
     verification,
   };
 }
-/** How far along the sheet a placed part reaches. */
-function reachOf(part: Part, placement: Placement): number {
+/** Widens `bounds` to a placed part. */
+function extend(bounds: Box, part: Part, placement: Placement): void {
   const m = placementMatrix(placement.rotation, placement.mirror, placement.x, placement.y);
-  let reach = -Infinity;
   for (const ring of [...part.rings, ...part.paths])
-    for (let i = 0; i < ring.length; i += 2)
-      reach = Math.max(reach, m[0] * ring[i]! + m[2] * ring[i + 1]! + m[4]);
-  return reach;
+    for (let i = 0; i < ring.length; i += 2) {
+      const x = m[0] * ring[i]! + m[2] * ring[i + 1]! + m[4],
+        y = m[1] * ring[i]! + m[3] * ring[i + 1]! + m[5];
+      bounds.x0 = Math.min(bounds.x0, x);
+      bounds.x1 = Math.max(bounds.x1, x);
+      bounds.y0 = Math.min(bounds.y0, y);
+      bounds.y1 = Math.max(bounds.y1, y);
+    }
 }
 
 const cell = (value: string | number) => {
@@ -142,7 +150,7 @@ const cell = (value: string | number) => {
   return /[",\n\r]/.test(textValue) ? `"${textValue.replace(/"/g, '""')}"` : textValue;
 };
 const row = (values: readonly (string | number)[]) => values.map(cell).join(',');
-/** Two tables, parts then sheets, with a blank line between; plain numbers in millimetres. */
+/** Two tables, parts then sheets, with a blank line between; plain numbers in the plan's unit. */
 export function partsCSV(
   plan: NestingTransform,
   parts: readonly {
@@ -155,6 +163,9 @@ export function partsCSV(
   }[],
   sheets: readonly ReportSheet[],
 ): string {
+  const units = plan.units ?? 'mm';
+  const length = (millimetres: number) => inUnit(millimetres, units);
+  const area = (squareMillimetres: number) => length(length(squareMillimetres));
   const lines = [
     row([
       'No.',
@@ -162,10 +173,10 @@ export function partsCSV(
       'File',
       'Requested',
       'Placed',
-      'Width (mm)',
-      'Height (mm)',
-      'Area (mm²)',
-      'Cut length (mm)',
+      `Width (${units})`,
+      `Height (${units})`,
+      `Area (${units}²)`,
+      `Cut length (${units})`,
       'Pierces',
       'Cutting time each (min)',
     ]),
@@ -176,10 +187,10 @@ export function partsCSV(
         entry.file,
         entry.requested,
         entry.placed,
-        entry.part.width,
-        entry.part.height,
-        entry.part.area,
-        entry.part.cutLength,
+        length(entry.part.width),
+        length(entry.part.height),
+        area(entry.part.area),
+        length(entry.part.cutLength),
         entry.part.pierces,
         cuttingMinutes(entry.part.cutLength, entry.part.pierces, plan.cutting),
       ]),
@@ -187,34 +198,39 @@ export function partsCSV(
     '',
     row([
       'Sheet',
-      'Width (mm)',
-      'Height (mm)',
+      `Width (${units})`,
+      `Height (${units})`,
       'Parts',
       'Utilisation (%)',
-      'Remnant length (mm)',
-      'Cut length (mm)',
+      `Offcut width (${units})`,
+      `Offcut length (${units})`,
+      'Offcut reusable',
+      `Cut length (${units})`,
       'Pierces',
       'Cutting time (min)',
       'Price',
     ]),
     ...sheets.map((sheet, index) => {
-      let length = 0,
+      let cut = 0,
         pierces = 0;
       for (const placement of sheet.placements) {
         const part = parts[placement.part]!.part;
-        length += part.cutLength;
+        cut += part.cutLength;
         pierces += part.pierces;
       }
+      const offcut = offcutOf(sheet.bounds, sheet.size, plan.spacing);
       return row([
         index + 1,
-        sheet.size.width,
-        sheet.size.height,
+        length(sheet.size.width),
+        length(sheet.size.height),
         sheet.placements.length,
         (100 * sheet.area) / (sheet.size.width * sheet.size.height),
-        remnantLength(sheet, plan.margin, plan.spacing),
-        length,
+        offcut ? length(offcut.width) : 0,
+        offcut ? length(offcut.height) : 0,
+        offcut?.reusable ? 'yes' : 'no',
+        length(cut),
         pierces,
-        cuttingMinutes(length, pierces, plan.cutting),
+        cuttingMinutes(cut, pierces, plan.cutting),
         sheet.price,
       ]);
     }),

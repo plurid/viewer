@@ -1,7 +1,8 @@
 /**
  * The search over bottom-left fills: each allowed format alone and, with several, a mix; several
  * part orders and both placement rules; then random reorderings of the best, at a finer grid when
- * time allows. Better layouts are yielded as they are found, so a view can show them at once.
+ * time allows. Better layouts are yielded as they are found, so a view can show them at once. In
+ * the compact direction, each new best has its last sheet packed again as a block in its corner.
  */
 import {
   Orientations,
@@ -14,6 +15,9 @@ import {
   type NestPart,
   type NestProblem,
 } from './nest';
+import type { Offcut } from './offcut';
+import { offcutArea, offcutOf } from './offcut';
+import type { NestedSheet } from './nest';
 import { verifyNest, type Verification } from './verify';
 
 export interface NestSummary {
@@ -26,6 +30,11 @@ export interface NestSummary {
   cost: number;
   /** Parts area over sheet area. */
   utilisation: number;
+  /** What the last sheet leaves to keep. */
+  offcut?: Offcut;
+  /** How far the last sheet's parts spread, the less the better: along the width, how far they
+   * reach along its length; along the length, how far across; compact, their box's area. */
+  spread: number;
 }
 export interface NestUpdate {
   best?: NestSummary;
@@ -62,6 +71,8 @@ export function summarize(problem: NestProblem, layout: NestLayout): NestSummary
     area += sheet.area;
   }
   const requested = problem.parts.reduce((sum, part) => sum + part.quantity, 0);
+  const last = layout.sheets.at(-1);
+  const size = last && problem.formats[last.format]!;
   return {
     layout,
     placed: requested - layout.unplaced.reduce((sum, count) => sum + count, 0),
@@ -69,22 +80,97 @@ export function summarize(problem: NestProblem, layout: NestLayout): NestSummary
     material,
     cost,
     utilisation: material ? area / material : 0,
+    offcut: last && offcutOf(last.bounds, size!, problem.spacing),
+    spread: last ? spreadOf(problem, last) : 0,
   };
 }
+function spreadOf(problem: NestProblem, sheet: NestedSheet): number {
+  const { bounds } = sheet;
+  switch (problem.direction ?? 'compact') {
+    case 'width':
+      return bounds.x1;
+    case 'length':
+      return sheetWidth(problem.formats[sheet.format]!) - bounds.y0;
+    case 'compact':
+      return bounds.x1 * bounds.y1;
+  }
+}
 /** More copies placed, then less spent (or, without prices, less sheet area), then fewer sheets,
- * then a shorter last sheet: the longer the strip left, the more it is worth as a remnant. */
+ * then a last sheet whose parts spread less, then a larger offcut left on it. */
 export function better(a: NestSummary, b: NestSummary | undefined, priced: boolean): boolean {
   if (!b) return true;
   if (a.placed !== b.placed) return a.placed > b.placed;
   const spend = (s: NestSummary) => (priced ? s.cost : s.material);
   if (Math.abs(spend(a) - spend(b)) > 1e-6) return spend(a) < spend(b);
   if (a.sheets !== b.sheets) return a.sheets < b.sheets;
-  return tail(a) < tail(b) - 1e-6;
+  const tolerance = 1e-9 * Math.max(1, a.spread, b.spread);
+  if (Math.abs(a.spread - b.spread) > tolerance) return a.spread < b.spread;
+  return offcutArea(a.offcut) > offcutArea(b.offcut) + 1e-6;
 }
-const tail = (s: NestSummary) => {
-  const last = s.layout.sheets.at(-1);
-  return last ? last.used : 0;
-};
+
+/** Column heights tried for a compact block, as multiples of the side of a square holding its
+ * parts' boxes; the full sheet width is tried too. */
+const blockSides = [0.8, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2, 2.5, 3, 4];
+/**
+ * The layout with its last sheet packed again as a compact block in its corner: the sheet's own
+ * parts nested alone, the columns capped at heights around the side of a square that holds them,
+ * keeping the smallest box from the corner, then the larger offcut. The same caps and orders
+ * every time, so a layout always compacts the same way. The sheet as it was stays when nothing
+ * is tighter.
+ */
+export function compactLast(
+  problem: NestProblem,
+  orientations: Orientations,
+  layout: NestLayout,
+  order: readonly number[],
+  stopped: () => boolean = () => false,
+): NestLayout {
+  const last = layout.sheets.at(-1);
+  if (!last || last.placements.length < 2) return layout;
+  const counts = problem.parts.map(() => 0);
+  for (const placement of last.placements) counts[placement.part]!++;
+  const format = problem.formats[last.format]!;
+  const single: NestProblem = {
+    ...problem,
+    direction: 'width',
+    parts: problem.parts.map((part, index) => ({ ...part, quantity: counts[index]! })),
+    formats: [{ ...format, stock: 1 }],
+  };
+  const parts = order.filter((index) => counts[index]! > 0);
+  const area = parts.reduce((sum, index) => {
+    const part = problem.parts[index]!;
+    return sum + counts[index]! * (part.width + problem.spacing) * (part.height + problem.spacing);
+  }, 0);
+  const side = Math.sqrt(area);
+  const across = sheetWidth(format) - problem.margin;
+  const caps = [
+    ...new Set(
+      blockSides
+        .map((factor) => Math.round(problem.margin + side * factor))
+        .filter((cap) => cap < across),
+    ),
+    Infinity,
+  ];
+  const score = (sheet: NestedSheet) => sheet.bounds.x1 * sheet.bounds.y1;
+  const leaves = (sheet: NestedSheet) =>
+    offcutArea(offcutOf(sheet.bounds, format, problem.spacing));
+  let best = last;
+  for (const cap of caps)
+    for (const criterion of ['length', 'left'] as const) {
+      if (stopped()) return layout;
+      const nested = nestOnce(single, orientations, { order: parts, criterion, formats: [0], cap });
+      if (!nested || nested.sheets.length !== 1 || nested.unplaced.some((count) => count > 0))
+        continue;
+      const candidate = { ...nested.sheets[0]!, format: last.format };
+      const tolerance = 1e-9 * score(best);
+      if (
+        score(candidate) < score(best) - tolerance ||
+        (score(candidate) <= score(best) + tolerance && leaves(candidate) > leaves(best) + 1e-6)
+      )
+        best = candidate;
+    }
+  return best === last ? layout : { ...layout, sheets: [...layout.sheets.slice(0, -1), best] };
+}
 
 /** A grid fine enough for the parts and coarse enough for the sheets, in millimetres. */
 export function baseCell(problem: NestProblem): number {
@@ -209,6 +295,7 @@ export function* nestSearch(
   const stopped = options.stopped ?? (() => false);
   const out = () => stopped() || elapsed() >= options.budget;
   const priced = problem.formats.some((format) => format.price > 0);
+  const compact = (problem.direction ?? 'compact') === 'compact';
   const base = baseCell(problem);
   const levels = new Map<number, Orientations>();
   const at = (cell: number, source = problem) => {
@@ -260,7 +347,9 @@ export function* nestSearch(
     passes++;
     if (!layout) return false;
     cell = level;
-    const summary = summarize(problem, layout);
+    let summary = summarize(problem, layout);
+    if (compact && better(summary, best, priced))
+      summary = summarize(problem, compactLast(problem, at(level), layout, order, stopped));
     let improved = false;
     if (better(summary, bests[strategy]!.summary, priced)) {
       bests[strategy] = { summary, order };

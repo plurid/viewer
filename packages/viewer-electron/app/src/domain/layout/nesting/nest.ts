@@ -1,12 +1,13 @@
 /**
- * True-shape nesting by bottom-left fill on a raster. Sheets lie with their length along x and
- * fill from x = 0, so what is left over is a strip at the far end. Each part goes where its turned
- * outline first fits, found by sliding it up each column of the sheet past what is already there.
- * Holes stay empty, and the holes of parts already placed are tried first, so small parts land
- * inside larger ones.
+ * True-shape nesting by bottom-left fill on a raster. Sheets lie with their length along x. Each
+ * part goes where its turned outline first fits, found by sliding it up each column of the sheet
+ * past what is already there, so the sheet fills from x = 0 and what is left over is a strip at
+ * the far end. Along the length, the fill runs in a frame that stands the sheet on end, and the
+ * placements turn back a quarter. Holes stay empty, and the holes of parts already placed are
+ * tried first, so small parts land inside larger ones.
  */
 import { insideRing, placementMatrix } from './geometry';
-import type { Placement, SheetSize } from './plan';
+import type { NestDirection, Placement, SheetSize } from './plan';
 import { orient, type Orientation, type Shape } from './raster';
 
 export interface NestPart extends Shape {
@@ -33,6 +34,15 @@ export interface NestProblem {
   spacing: number;
   /** How far a flattened curve may stray from the drawing, in millimetres. */
   tolerance: number;
+  /** Where parts gather on a sheet; compact when absent. */
+  direction?: NestDirection;
+}
+/** A box in sheet millimetres, length along x. */
+export interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
 }
 export interface NestedSheet {
   format: number;
@@ -41,6 +51,8 @@ export interface NestedSheet {
   area: number;
   /** How far along the sheet's length the parts reach. */
   used: number;
+  /** The box around its parts. */
+  bounds: Box;
 }
 export interface NestLayout {
   sheets: NestedSheet[];
@@ -57,6 +69,8 @@ export interface NestPass {
   criterion: NestCriterion;
   /** Formats to open, in order of preference. */
   formats: readonly number[];
+  /** How far up its columns a part may reach, in millimetres: the height of a compact block. */
+  cap?: number;
 }
 
 /** A sheet lies with its longer side along x. */
@@ -65,6 +79,14 @@ export const sheetWidth = (size: SheetSize) => Math.min(size.width, size.height)
 /** Each part's raster reaches this far beyond its outline: half the spacing, plus the distance a
  * flattened curve may stray from the drawing. */
 export const reachOf = (problem: NestProblem) => problem.spacing / 2 + problem.tolerance;
+/** Along the length, the fill stands each sheet on end: its columns then run down the sheet's
+ * length. A turn rather than a transpose, so no part is mirrored. */
+const standing = (problem: NestProblem) => problem.direction === 'length';
+/** The sheet as the fill sees it: columns along `length`, each `width` tall. */
+const frameOf = (problem: NestProblem, size: SheetSize) =>
+  standing(problem)
+    ? { length: sheetWidth(size), width: sheetLength(size) }
+    : { length: sheetLength(size), width: sheetWidth(size) };
 
 /** A shape's holes: rings inside an odd number of its other rings. */
 export function holeRings(shape: Shape): (readonly number[])[] {
@@ -89,9 +111,13 @@ export class Orientations {
       const shape = this.problem.parts[part]!,
         reach = reachOf(this.problem);
       const seen = new Set<string>();
+      // A part turned a quarter more in the standing frame lies at its own angle on the sheet.
+      const angles = standing(this.problem)
+        ? shape.angles.map((angle) => (angle + 90) % 360)
+        : shape.angles;
       value = [];
       for (const mirror of shape.mirror ? [false, true] : [false])
-        for (const angle of shape.angles) {
+        for (const angle of angles) {
           const orientation = orient(shape, angle, mirror, this.cell, reach);
           // A symmetric part looks the same in several turns; search one of them.
           if (seen.has(orientation.key)) continue;
@@ -110,19 +136,21 @@ interface Range {
   y0: number;
   y1: number;
 }
-/** The cells an orientation's box corner may take on a sheet, inside the margin. */
+/** The cells an orientation's box corner may take on a sheet, inside the margin and the cap. */
 function rangeOf(
   orientation: Orientation,
   format: NestFormat,
   problem: NestProblem,
   cell: number,
+  cap = Infinity,
 ): Range | undefined {
   const inset = problem.margin + problem.tolerance;
+  const frame = frameOf(problem, format);
   const range = {
     x0: Math.ceil(inset / cell - 1e-9),
-    x1: Math.floor((sheetLength(format) - inset - orientation.width) / cell + 1e-9),
+    x1: Math.floor((frame.length - inset - orientation.width) / cell + 1e-9),
     y0: Math.ceil(inset / cell - 1e-9),
-    y1: Math.floor((sheetWidth(format) - inset - orientation.height) / cell + 1e-9),
+    y1: Math.floor((Math.min(frame.width - inset, cap) - orientation.height) / cell + 1e-9),
   };
   return range.x1 >= range.x0 && range.y1 >= range.y0 ? range : undefined;
 }
@@ -141,7 +169,8 @@ class Sheet {
   /** Holes large enough for some part, smallest first. */
   readonly holes: Hole[] = [];
   area = 0;
-  used = 0;
+  /** The box around its parts, in the fill's frame. */
+  box: Box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
   /** Per part, per orientation: where its last search stopped. Every cell before that point,
    * column by column, was already taken, and a sheet only fills up. */
   private cursors: (Int32Array | undefined)[] = [];
@@ -260,7 +289,7 @@ export function nestOnce(
     if (!ranges.has(key))
       ranges.set(
         key,
-        rangeOf(orientations.of(part)[index]!, problem.formats[format]!, problem, cell),
+        rangeOf(orientations.of(part)[index]!, problem.formats[format]!, problem, cell, pass.cap),
       );
     return ranges.get(key);
   };
@@ -346,7 +375,11 @@ export function nestOnce(
     };
     sheet.placements.push(placement);
     sheet.area += problem.parts[part]!.area;
-    sheet.used = Math.max(sheet.used, candidate.reach);
+    const box = sheet.box;
+    box.x0 = Math.min(box.x0, candidate.x * cell);
+    box.x1 = Math.max(box.x1, candidate.x * cell + orientation.width);
+    box.y0 = Math.min(box.y0, candidate.y * cell);
+    box.y1 = Math.max(box.y1, candidate.y * cell + orientation.height);
     const m = placementMatrix(placement.rotation, placement.mirror, placement.x, placement.y);
     for (const ring of holesOf(part)) {
       const hole = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
@@ -395,7 +428,7 @@ export function nestOnce(
         continue;
       }
       const size = problem.formats[format]!;
-      const sheet = new Sheet(format, sheetLength(size), cell, reach);
+      const sheet = new Sheet(format, frameOf(problem, size).length, cell, reach);
       opened[format]!++;
       sheets.push(sheet);
       const candidate = search(sheet, part);
@@ -406,13 +439,30 @@ export function nestOnce(
   return {
     sheets: sheets
       .filter((sheet) => sheet.placements.length)
-      .map((sheet) => ({
-        format: sheet.format,
-        placements: sheet.placements,
-        area: sheet.area,
-        used: sheet.used,
-      })),
+      .map((sheet) => onSheet(problem, sheet)),
     unplaced,
     cell,
+  };
+}
+/** A filled sheet in sheet millimetres: in the standing frame, x runs across the sheet from its
+ * far side and y along its length, so each placement turns back a quarter. */
+function onSheet(problem: NestProblem, sheet: Sheet): NestedSheet {
+  const { box, format, area } = sheet;
+  if (!standing(problem))
+    return { format, placements: sheet.placements, area, used: box.x1, bounds: { ...box } };
+  const width = sheetWidth(problem.formats[format]!);
+  const bounds = { x0: box.y0, y0: width - box.x1, x1: box.y1, y1: width - box.x0 };
+  return {
+    format,
+    area,
+    used: bounds.x1,
+    bounds,
+    placements: sheet.placements.map((placement) => ({
+      part: placement.part,
+      x: placement.y,
+      y: width - placement.x,
+      rotation: (placement.rotation + 270) % 360,
+      mirror: placement.mirror,
+    })),
   };
 }

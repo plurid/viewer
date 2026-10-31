@@ -114,6 +114,39 @@ describe('saved nesting', () => {
     expect(written.estimate.pierces).toBe(4 * 5 + 2 * 2 + 2);
   });
 
+  it('measures the parts list and the report in inches when the plan does, with each offcut', () => {
+    const { sources, plan } = nested();
+    const metric = nestingFiles(plan, sources, '31 October 2026');
+    expect(metric.files.at(-1)!.content).toContain(
+      ',Offcut width (mm),Offcut length (mm),Offcut reusable,',
+    );
+    const written = nestingFiles({ ...plan, units: 'in' }, sources, '31 October 2026');
+    const csv = written.files.at(-1)!.content;
+    expect(
+      csv.startsWith('﻿No.,Part,File,Requested,Placed,Width (in),Height (in),Area (in²),'),
+    ).toBe(true);
+    // 300 × 200 mm is 11.811 × 7.874 in
+    expect(csv).toContain('\r\n1,Bracket with holes,Bracket with holes.dxf,4,4,11.811,7.874,');
+    expect(csv).toContain(
+      '\r\nSheet,Width (in),Height (in),Parts,Utilisation (%),Offcut width (in),',
+    );
+    expect(csv).toMatch(/\r\n1,39\.37,78\.74,8,[\d.]+,39\.37,[\d.]+,yes,/);
+    const text = written.report.pages.flatMap((page) =>
+      page.items.flatMap((item) => (item.kind === 'text' ? [item.text] : [])),
+    );
+    expect(text.some((line) => /^1 × 39\.37 × 78\.74 in$/.test(line))).toBe(true);
+    expect(text.some((line) => /^39\.37 × [\d.]+ in, reusable$/.test(line))).toBe(true);
+    expect(
+      text.some((line) =>
+        line.startsWith(
+          'Mild steel 3 mm, fiber laser: 157.5 in/min, 0.4 s per pierce, kerf 0.008 in',
+        ),
+      ),
+    ).toBe(true);
+    // the sheet DXFs stay in millimetres
+    expect(written.files[0]!.content).toBe(metric.files[0]!.content);
+  });
+
   it('refuses a drawing that changed and a layout that fails the exact check', () => {
     const { sources, plan } = nested();
     const changed = structuredClone(plan);

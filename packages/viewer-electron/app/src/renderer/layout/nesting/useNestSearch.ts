@@ -14,6 +14,10 @@ export interface NestSearchState {
   update?: NestUpdate;
   error?: string;
 }
+interface State extends NestSearchState {
+  /** The problem `update` belongs to. */
+  problem?: NestProblem;
+}
 /** Quantities typed in a row start one search, not one each. */
 const settle = 500;
 
@@ -22,7 +26,7 @@ export function useNestSearch(
   looser: NestProblem | undefined,
   budget: number,
 ) {
-  const [state, setState] = useState<NestSearchState>({ status: 'idle' });
+  const [state, setState] = useState<State>({ status: 'idle' });
   const worker = useRef<Worker | null>(null);
   const [round, setRound] = useState(0);
   const [extra, setExtra] = useState(0);
@@ -42,12 +46,12 @@ export function useNestSearch(
     }
     const kept = shown.current.problem === problem ? shown.current.update : undefined;
     shown.current = { problem, update: kept };
-    setState({ status: 'waiting', update: kept });
+    setState({ status: 'waiting', update: kept, problem });
     const priced = problem.formats.some((format) => format.price > 0);
     const timer = setTimeout(() => {
       const started = nestingWorkers.nest();
       worker.current = started;
-      setState((current) => ({ status: 'searching', update: current.update }));
+      setState((current) => ({ ...current, status: 'searching' }));
       started.onmessage = (event: MessageEvent<NestReply>) => {
         if (worker.current !== started) return;
         const reply = event.data;
@@ -62,7 +66,7 @@ export function useNestSearch(
             ? { ...reply.update, best: previous.best }
             : reply.update;
         shown.current = { problem, update };
-        setState({ status: update.done ? 'done' : 'searching', update });
+        setState({ status: update.done ? 'done' : 'searching', update, problem });
         if (update.done) close();
       };
       started.onerror = (event) => {
@@ -97,5 +101,10 @@ export function useNestSearch(
     setExtra((value) => value + budget);
     setRound((value) => value + 1);
   }, [budget]);
-  return { ...state, stop, longer };
+  // Until the effect above catches up with a new problem, the last layout is of the old one: its
+  // sheets may name formats that are gone, so it is not shown.
+  const { problem: owner, ...shownState } = state;
+  return owner === problem
+    ? { ...shownState, stop, longer }
+    : { status: problem ? ('waiting' as const) : ('idle' as const), stop, longer };
 }

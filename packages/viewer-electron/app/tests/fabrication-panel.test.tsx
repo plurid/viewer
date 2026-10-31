@@ -3,26 +3,46 @@
  * THE CHECK PANEL: what is sent and at which level, the permission pictures need, Run and each
  * step with its time, the graded findings with Viewer's reasons and a shared cause's readings, a
  * correction saved only on approval, the tour, the cut sheets with the request's quantities and
- * the corrected copy, and the handoff. A finished check kept when its panel closes: shown again at
- * once while its job is unchanged, marked as before when the job changed, the last five kept.
+ * the corrected copy, and the handoff, nesting first what no Layout plane has. A finished check kept
+ * when its panel closes: shown again at once while its job is unchanged, marked as before when the
+ * job changed, the last five kept. The panel collapses to its title bar, by hand or while its tour
+ * plays, and sits above the tour bar, never under it.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { DesktopEvent, OperationJob } from '../src/domain/contracts';
+import type { DesktopEvent, FileEntry, OperationJob } from '../src/domain/contracts';
 import type { CheckOpening, CheckProgress, CheckResult } from '../src/domain/fabrication/check';
 import type { CheckChange } from '../src/domain/fabrication/job-files';
+import type { NestingTransform } from '../src/domain/layout/nesting/plan';
 import type { ModelDataLevel } from '../src/domain/models/permissions';
 import type { ModelProvider } from '../src/domain/services';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { CheckPanel } from '../src/renderer/fabrication/CheckPanel';
-import { closeCheck, forgetChecks, openCheck, runCheck } from '../src/renderer/fabrication/check';
+import {
+  checkCollapsed,
+  closeCheck,
+  forgetChecks,
+  openCheck,
+  runCheck,
+  toggleCheckPanel,
+} from '../src/renderer/fabrication/check';
 import { checkCommands } from '../src/renderer/fabrication/commands';
+import { forgetNestings, prepareNesting } from '../src/renderer/layout/nesting/prepared';
+import { nestWithoutPlane } from '../src/renderer/layout/nesting/headless';
 import { WorkspaceContext } from '../src/renderer/workspace/context';
-import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
+import {
+  activeWorkspace,
+  addPane,
+  getState,
+  initialize,
+  setActivePane,
+} from '../src/renderer/state/store';
 import { update } from '../src/renderer/state/core';
-import { playTour } from '../src/renderer/workspace/tour';
+import { playTour, stopTour, tourControls, tourPlayback } from '../src/renderer/workspace/tour';
+import { SpaceOverlay } from '../src/renderer/workspace/tours/TourBar';
 import type * as Tours from '../src/renderer/workspace/tour';
+import type * as Headless from '../src/renderer/layout/nesting/headless';
 
 vi.mock('../src/renderer/fabrication/pages', () => ({
   drawCheckPages: vi.fn(async () => ({ pages: [], problems: [] })),
@@ -30,6 +50,11 @@ vi.mock('../src/renderer/fabrication/pages', () => ({
 vi.mock('../src/renderer/workspace/tour', async (original) => ({
   ...(await original<typeof Tours>()),
   playTour: vi.fn(),
+}));
+/** The nesting an export runs first stands in here; nesting-headless.test.tsx runs the real one. */
+vi.mock('../src/renderer/layout/nesting/headless', async (original) => ({
+  ...(await original<typeof Headless>()),
+  nestWithoutPlane: vi.fn(),
 }));
 
 const meta: ModelProvider = {
@@ -277,8 +302,12 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  stopTour();
   closeCheck();
   forgetChecks();
+  forgetNestings();
+  // the panel's collapse lasts the window's session: each test starts with it open
+  if (checkCollapsed()) toggleCheckPanel();
   cleanup();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
@@ -412,22 +441,43 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
     stops: result.tour.stops,
   });
 
-  // the handoff copies the job and the corrected copy, with the 6 mm parts not nested yet
+  // 6 mm is not nested, and the export does not choose the bracket's open quantity for anyone
   expect(
     screen.getByText(
-      '6 mm is not nested yet: open its tab in the Layout plane and wait for Checked.',
+      'How many sets of g6-MB20-A1-4buc.dxf to cut is open, so Viewer does not nest it for the export. Prepare the cut sheets and set it in the Layout plane, then export once its tab says Checked.',
     ),
   ).toBeTruthy();
+  expect(
+    (screen.getByRole('button', { name: 'Nest and export handoff' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  // the Layout plane checks its 6 mm tab: the handoff saves that nesting, as it is
+  act(() =>
+    prepareNesting({
+      title: 'Nesting of 2 parts, 6 mm',
+      sources: [
+        { path: `${folder}/g6-MB20-A1-4buc.dxf`, version },
+        { path: corrected, version },
+      ],
+      plan: { title: 'Nesting of 2 parts, 6 mm', sheets: [{}] } as unknown as NestingTransform,
+    }),
+  );
+  expect(document.querySelector('[aria-label="Handoff"] .check-note')!.textContent).toBe(
+    'A folder for the shop: 5 files as evidence, the tour pointed at them, the check record, and “Nesting of 2 parts, 6 mm” on 1 sheet.',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Export handoff' }));
   await waitFor(() => expect(operate).toHaveBeenCalledTimes(2));
   const [handoff] = operate.mock.calls[1]! as [
-    { sources: string[]; transform: { kind: string; check: string; evidence: number[] } },
+    {
+      sources: string[];
+      transform: { kind: string; check: string; evidence: number[]; nestings: unknown[] };
+    },
   ];
   expect(handoff.sources).toEqual([...opening.sources.map((source) => source.path), corrected]);
   expect(handoff.transform).toMatchObject({
     kind: 'fabrication-handoff',
     check: opening.id,
     evidence: [0, 1, 2, 3, 4],
+    nestings: [{ sources: [2, 4] }],
   });
   finish({
     id: 'job-handoff',
@@ -716,7 +766,7 @@ it('says what changed since a kept check, marks its result as before, and checks
   expect(screen.getByRole('heading', { name: 'Findings from 22:14' })).toBeTruthy();
   expect(document.querySelector('.check-since')).toBeNull();
   // nothing of the old result is acted on: only Run again
-  for (const name of ['Play the tour', 'Prepare cut sheets', 'Export handoff'])
+  for (const name of ['Play the tour', 'Prepare cut sheets', 'Nest and export handoff'])
     expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
   // closed again, the palette does not give its grades as current
   act(() => closeCheck());
@@ -794,9 +844,291 @@ it('says plainly when the folder has nothing to check, and offers nothing to run
     'Pictures holds no DXF or DWG file, so there is nothing to check.',
   );
   expect(screen.queryByRole('alert')).toBeNull();
-  expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
-    'Close the check',
-  ]);
+  expect(
+    screen
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label') ?? button.textContent),
+  ).toEqual(['Check Pictures', 'Close the check']);
   act(() => closeCheck());
   expect(kinds()).toEqual(['open']);
+});
+
+/** The title bar's button: the job's name, and collapsed, its status. */
+const toggle = () => document.querySelector<HTMLButtonElement>('.check-panel-toggle')!;
+const expanded = () => toggle().getAttribute('aria-expanded');
+
+it('collapses to its title bar and a short status, from the title, and keeps that for the window', async () => {
+  level = 'images';
+  let answer!: (value: CheckResult) => void;
+  fabrication.mockImplementation(async (request: { kind: string }) =>
+    request.kind === 'open'
+      ? opening
+      : request.kind === 'run'
+        ? new Promise((resolve) => (answer = resolve))
+        : { kind: 'done' },
+  );
+  panel();
+  await act(() => openCheck([folder], activeWorkspace().id));
+  // a real button in the heading: in the tab order, and it says whether the panel is open
+  expect(toggle().tagName).toBe('BUTTON');
+  expect(toggle().type).toBe('button');
+  expect(toggle().tabIndex).toBe(0);
+  expect(expanded()).toBe('true');
+  expect(screen.getByRole('heading', { name: 'Check Job 1042' })).toBeTruthy();
+  expect(screen.getByRole('region', { name: 'What is sent' })).toBeTruthy();
+
+  fireEvent.click(toggle());
+  expect(expanded()).toBe('false');
+  expect(screen.getByRole('heading').textContent).toBe('Check Job 1042 · Ready to check 4 files');
+  expect(screen.queryByRole('region', { name: 'What is sent' })).toBeNull();
+  expect(document.getElementById(toggle().getAttribute('aria-controls')!)!.hidden).toBe(true);
+
+  // the run goes on while the panel is down: its step and seconds show in the title bar
+  fireEvent.click(toggle());
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Check 4 files' }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  fireEvent.click(screen.getByRole('button', { name: 'Check 4 files' }));
+  await waitFor(() =>
+    expect(fabrication).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run' })),
+  );
+  fireEvent.click(toggle());
+  act(() => {
+    for (const listener of listeners)
+      listener({
+        type: 'fabrication',
+        progress: { id: opening.id, step: 'reading', text: 'Muse Spark is reading the request' },
+      });
+  });
+  expect(screen.getByRole('heading').textContent).toBe(
+    'Check Job 1042 · Muse Spark is reading the request · 0 s',
+  );
+  clock.mockReturnValue(1_034_000);
+  await waitFor(() => expect(screen.getByRole('heading').textContent).toContain(' · 34 s'), {
+    timeout: 2500,
+  });
+  clock.mockRestore();
+  await act(async () => answer(result));
+  expect(screen.getByRole('heading').textContent).toBe('Check Job 1042 · 2 findings, 1 confirmed');
+
+  // closed and opened again in this window, it stays as the person left it
+  act(() => closeCheck());
+  await act(() => openCheck([folder], activeWorkspace().id));
+  expect(expanded()).toBe('false');
+  // Escape from the title bar closes the panel
+  toggle().focus();
+  fireEvent.keyDown(toggle(), { key: 'Escape' });
+  expect(screen.queryByRole('heading')).toBeNull();
+});
+
+/** A workspace a tour plays in: each stop's file opens as the active plane, and is reached. */
+const tourSpace = {
+  openLayout,
+  open: (entry: FileEntry) => setActivePane(addPane(entry.path, 'preview', true).id),
+  bookmarks: () => [],
+  tourStage: () => ({ frames: false, travel: async () => 'arrived' as const }),
+} as unknown as WorkspaceController;
+const drawingEntry: FileEntry = {
+  path: `${folder}/Job 1042 drawing.pdf`,
+  name: 'Job 1042 drawing.pdf',
+  parent: folder,
+  extension: 'pdf',
+  kind: 'file',
+  directory: false,
+  size: version.size,
+  modified: version.modified,
+  created: 1,
+  hidden: false,
+  mime: 'application/pdf',
+  identity: version.identity,
+};
+/** The job checked, with the panel and the tour bar in the space's overlay, as the window has them. */
+async function checkedWithTour(): Promise<void> {
+  level = 'images';
+  Object.assign(window.viewer, {
+    tour: async () => ({ state: 'found', entry: drawingEntry }),
+  });
+  const actual = await vi.importActual<typeof Tours>('../src/renderer/workspace/tour');
+  // the end card shows once the last stop is passed, as with Loop off
+  vi.mocked(playTour).mockImplementationOnce((space, tour) =>
+    actual.playTour(space, tour, { dwell: 60_000, duration: 0, loop: false }),
+  );
+  render(
+    <WorkspaceContext.Provider value={tourSpace}>
+      <SpaceOverlay>
+        <CheckPanel />
+      </SpaceOverlay>
+    </WorkspaceContext.Provider>,
+  );
+  await act(() => openCheck([folder], activeWorkspace().id));
+  await act(() => runCheck());
+  await screen.findByRole('button', { name: 'Play the tour' });
+}
+const atStop = () =>
+  waitFor(() => expect(tourPlayback()?.status).toBe('showing'), { timeout: 2000 });
+
+it('steps out of the way while its tour plays, above the tour bar, and comes back after', async () => {
+  await checkedWithTour();
+  fireEvent.click(screen.getByRole('button', { name: 'Play the tour' }));
+  expect(expanded()).toBe('false');
+  // focus stays in the panel, on its title bar
+  expect(document.activeElement).toBe(toggle());
+  await atStop();
+  // the panel holds the overlay's top row, the bar the row below it
+  const overlay = document.querySelector('.space-overlay')!;
+  const panelBox = overlay.querySelector('.check-panel')!;
+  const bar = overlay.querySelector('.tour-bar')!;
+  expect(panelBox.parentElement).toBe(overlay);
+  expect(bar.parentElement).toBe(overlay);
+  expect(panelBox.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(panelBox.hasAttribute('data-collapsed')).toBe(true);
+  expect(bar.textContent).toContain('The drawing gives 50 mm.');
+
+  // the tour ends: the panel comes back; Play again puts it down again
+  act(() => tourControls.next());
+  await waitFor(() => expect(tourPlayback()?.status).toBe('ended'));
+  expect(expanded()).toBe('true');
+  fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+  expect(expanded()).toBe('false');
+  await atStop();
+  // Escape stops the tour first, and the panel comes back; Escape again closes it
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  fireEvent.keyDown(toggle(), { key: 'Escape' });
+  expect(tourPlayback()).toBeNull();
+  expect(expanded()).toBe('true');
+  fireEvent.keyDown(toggle(), { key: 'Escape' });
+  expect(document.querySelector('.check-panel')).toBeNull();
+});
+
+it('leaves the panel as the person set it during the tour', async () => {
+  await checkedWithTour();
+  fireEvent.click(screen.getByRole('button', { name: 'Play the tour' }));
+  await atStop();
+  // opened, then collapsed again by hand: the person's choice stands after the tour
+  fireEvent.click(toggle());
+  expect(expanded()).toBe('true');
+  fireEvent.click(toggle());
+  act(() => tourControls.next());
+  await waitFor(() => expect(tourPlayback()?.status).toBe('ended'));
+  expect(expanded()).toBe('false');
+  act(() => stopTour());
+  expect(expanded()).toBe('false');
+});
+
+/** The check with every part's quantity and thickness given, so the export can nest by itself. */
+const given: CheckResult = {
+  ...result,
+  parts: result.parts.map((part) =>
+    part.question
+      ? {
+          ...part,
+          question: undefined,
+          quantity: { sets: 4, pieces: 8, source: 'request' as const },
+        }
+      : part,
+  ),
+};
+const bracket = `${folder}/g6-MB20-A1-4buc.dxf`;
+
+it('nests the thickness no Layout plane has, saying which and how much, then exports', async () => {
+  level = 'images';
+  fabrication.mockImplementation(async (request: { kind: string }) =>
+    request.kind === 'open' ? opening : request.kind === 'run' ? given : { kind: 'done' },
+  );
+  let nested!: () => void;
+  vi.mocked(nestWithoutPlane).mockImplementationOnce(
+    async (paths, _opening, _wanted, _signal, progress) => {
+      progress('Reading 2 drawings…');
+      progress('Nesting 6 mm: 2 parts, 10 pieces…');
+      await new Promise<void>((resolve) => (nested = resolve));
+      const nesting = {
+        title: 'Nesting of 2 parts, 6 mm',
+        sources: paths.map((path) => ({ path, version })),
+        plan: { title: 'Nesting of 2 parts, 6 mm', sheets: [{}] } as unknown as NestingTransform,
+      };
+      prepareNesting(nesting);
+      return [{ label: '6 mm', nesting, parts: 2, pieces: 10, sheets: 1 }];
+    },
+  );
+  panel();
+  await act(() => openCheck([folder], activeWorkspace().id));
+  await act(() => runCheck());
+  expect(
+    screen.getByText(
+      '6 mm is not nested yet: the export nests it first on 1250 × 2500 mm sheets. To choose the sheets yourself, prepare the cut sheets and wait for Checked.',
+    ),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Nest and export handoff' }));
+  // the plane's own quantities and thicknesses, for the 6 mm tab only
+  expect(nestWithoutPlane).toHaveBeenCalledWith(
+    [bracket, plate],
+    {
+      quantities: { [bracket]: 4, [plate]: 2 },
+      thicknesses: { [bracket]: 6, [plate]: 6 },
+    },
+    new Set(['6']),
+    expect.any(AbortSignal),
+    expect.any(Function),
+  );
+  const status = await screen.findByText(/^Nesting 6 mm: 2 parts, 10 pieces…/);
+  expect(status.textContent).toBe('Nesting 6 mm: 2 parts, 10 pieces… · 0 s');
+  expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Nest and export handoff' })).toBeNull();
+  // collapsed meanwhile, the title bar says so too
+  fireEvent.click(toggle());
+  expect(screen.getByRole('heading').textContent).toBe(
+    'Check Job 1042 · Nesting 6 mm: 2 parts, 10 pieces… · 0 s',
+  );
+  fireEvent.click(toggle());
+  expect(operate).not.toHaveBeenCalled();
+
+  await act(async () => nested());
+  await waitFor(() => expect(operate).toHaveBeenCalledOnce());
+  const [handoff] = operate.mock.calls[0]! as [{ transform: { nestings: unknown[] } }];
+  expect(handoff.transform.nestings).toEqual([
+    { sources: [2, 3], plan: { title: 'Nesting of 2 parts, 6 mm', sheets: [{}] } },
+  ]);
+  expect(document.querySelector('[aria-label="Handoff"] .check-note')!.textContent).toBe(
+    'A folder for the shop: 4 files as evidence, the tour pointed at them, the check record, and “Nesting of 2 parts, 6 mm” on 1 sheet.',
+  );
+});
+
+it('says plainly which part does not nest, and exports nothing', async () => {
+  level = 'images';
+  fabrication.mockImplementation(async (request: { kind: string }) =>
+    request.kind === 'open' ? opening : request.kind === 'run' ? given : { kind: 'done' },
+  );
+  vi.mocked(nestWithoutPlane).mockRejectedValueOnce(
+    new Error(
+      'Nesting 6 mm: g6-PL60-B2-2buc (2600 × 300 mm) does not fit a 1250 × 2500 mm sheet inside its 10 mm margin. Choose a larger sheet or more turns in the Layout plane.',
+    ),
+  );
+  panel();
+  await act(() => openCheck([folder], activeWorkspace().id));
+  await act(() => runCheck());
+  fireEvent.click(screen.getByRole('button', { name: 'Nest and export handoff' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    'Nesting 6 mm: g6-PL60-B2-2buc (2600 × 300 mm) does not fit a 1250 × 2500 mm sheet inside its 10 mm margin. Choose a larger sheet or more turns in the Layout plane. Nothing was exported.',
+  );
+  expect(operate).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Nest and export handoff' })).toBeTruthy();
+
+  // Cancel stops the nesting, and nothing is exported either
+  vi.mocked(nestWithoutPlane).mockImplementationOnce(
+    (_paths, _opening, _wanted, signal) =>
+      new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+      ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Nest and export handoff' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The nesting was cancelled. Nothing was exported.',
+    ),
+  );
+  expect(operate).not.toHaveBeenCalled();
 });

@@ -36,7 +36,8 @@ export interface NestingFile {
 export type FileOptions = Pick<NestingFile, 'units' | 'marks' | 'together'>;
 
 type Pending = (reply: PartsReply) => void;
-class PartsClient {
+/** The parts worker, each question answered once by its number; headless.ts reads with it too. */
+export class PartsClient {
   private worker = nestingWorkers.parts();
   private next = 0;
   private pending = new Map<number, Pending>();
@@ -74,7 +75,7 @@ class PartsClient {
     this.pending.clear();
   }
 }
-const baseName = (entry: FileEntry) => entry.name.replace(/\.dxf$/i, '');
+export const baseName = (entry: FileEntry) => entry.name.replace(/\.dxf$/i, '');
 /** A drawing as selected: a changed file is read again. */
 const fileKey = (entry: FileEntry) => `${entry.path}\0${entry.identity}\0${entry.modified}`;
 

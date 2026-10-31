@@ -38,6 +38,11 @@ import { optimizationRecipeSchema } from '../../domain/operations/optimization';
 import { defaultFileOpening } from '../../domain/services';
 import { maxQueryLength } from '../../domain/search/query';
 import { savedSearchCount, searchNameLength } from '../../domain/search/saved';
+import {
+  clockTime,
+  darkPageDefaults,
+  darkPageModes,
+} from '../../domain/previews/documents/dark-pages';
 const recipe = z
   .object({
     id,
@@ -212,6 +217,15 @@ export const settingsSchema = z
         textFontSize: z.number().int().min(8).max(32).default(16),
         textLineHeight: z.number().int().min(12).max(64).default(20),
         textWordWrap: z.boolean().default(false),
+        darkPages: z.enum(darkPageModes).default(darkPageDefaults.darkPages),
+        darkPagesFrom: z
+          .string()
+          .regex(clockTime, 'A time is HH:MM, from 00:00 to 23:59.')
+          .default(darkPageDefaults.darkPagesFrom),
+        darkPagesUntil: z
+          .string()
+          .regex(clockTime, 'A time is HH:MM, from 00:00 to 23:59.')
+          .default(darkPageDefaults.darkPagesUntil),
       })
       .strict(),
     editor: editorSchema,

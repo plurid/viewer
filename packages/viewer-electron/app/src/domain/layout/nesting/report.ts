@@ -5,6 +5,8 @@
  */
 import { layoutLimits, type LayoutItem, type LayoutPage, type LayoutTransform } from '../plan';
 import type { CuttingEstimate } from './estimate';
+import type { Box } from './nest';
+import type { Part } from './parts';
 import {
   areaText,
   countText,
@@ -14,11 +16,14 @@ import {
   moneyText,
   percentText,
   sizeText,
+  speedText,
+  unitSymbol,
   weightText,
 } from './format';
 import { apply, insideRing, placementMatrix } from './geometry';
 import { sheetLength, sheetWidth } from './nest';
-import type { Part } from './parts';
+import type { Offcut } from './offcut';
+import { offcutOf, reusableSide } from './offcut';
 import {
   processLabels,
   sheetName,
@@ -26,6 +31,7 @@ import {
   type Placement,
   type SheetSize,
 } from './plan';
+import type { LengthUnit } from './plan';
 
 export interface ReportPart {
   /** Its number on the sheets and in the tables. */
@@ -42,8 +48,8 @@ export interface ReportSheet {
   placements: readonly Placement[];
   /** Material area of its parts. */
   area: number;
-  /** How far along its length the parts reach. */
-  used: number;
+  /** The box around its parts. */
+  bounds: Box;
 }
 export interface NestingReport {
   title: string;
@@ -56,6 +62,7 @@ export interface NestingReport {
   spacing: number;
   /** The closest two parts, from the exact check. */
   closest: number;
+  units: LengthUnit;
 }
 
 const page = { width: 842, height: 595, margin: 36 } as const;
@@ -66,9 +73,11 @@ const ink = '#202733',
   fill = '#dcebf4',
   mark = '#386731';
 
-/** The strip left past a sheet's last part, as long as it can be cut off and kept. */
-export const remnantLength = (sheet: ReportSheet, margin: number, spacing: number) =>
-  Math.max(0, sheetLength(sheet.size) - margin - sheet.used - spacing);
+/** "1250 × 2180 mm, reusable", or "None" when the parts reach every edge. */
+export function offcutText(offcut: Offcut | undefined, units: LengthUnit): string {
+  if (!offcut) return 'None';
+  return `${sheetName(offcut, units)} ${unitSymbol(units)}, ${offcut.reusable ? 'reusable' : 'too small to keep'}`;
+}
 
 export function nestingReport(report: NestingReport): LayoutTransform {
   const pages: LayoutPage[] = [...summaryPages(report)];
@@ -150,7 +159,8 @@ function table(
 }
 
 function summaryPages(report: NestingReport): LayoutPage[] {
-  const { estimate, cutting } = report;
+  const { estimate, cutting, units } = report;
+  const unit = unitSymbol(units);
   const requested = report.parts.reduce((sum, part) => sum + part.requested, 0),
     placed = report.parts.reduce((sum, part) => sum + part.placed, 0);
   const material = report.sheets.reduce(
@@ -160,7 +170,7 @@ function summaryPages(report: NestingReport): LayoutPage[] {
   const area = report.sheets.reduce((sum, sheet) => sum + sheet.area, 0);
   const formats = new Map<string, number>();
   for (const sheet of report.sheets)
-    formats.set(sheetName(sheet.size), (formats.get(sheetName(sheet.size)) ?? 0) + 1);
+    formats.set(sheetName(sheet.size, units), (formats.get(sheetName(sheet.size, units)) ?? 0) + 1);
   const items: LayoutItem[] = [];
   let y = page.margin + 18;
   items.push(text(report.title, page.margin, y, { size: 18, bold: true }));
@@ -168,10 +178,13 @@ function summaryPages(report: NestingReport): LayoutPage[] {
   items.push(text(`${report.date} · Viewer`, page.margin, y, { color: muted }));
   y += 28;
   const figures: [string, string][] = [
-    ['Sheets', [...formats].map(([name, count]) => `${count} × ${name} mm`).join(', ')],
-    ['Material used', `${percentText(material ? area / material : 0)} of ${areaText(material)}`],
+    ['Sheets', [...formats].map(([name, count]) => `${count} × ${name} ${unit}`).join(', ')],
+    [
+      'Material used',
+      `${percentText(material ? area / material : 0)} of ${areaText(material, units)}`,
+    ],
     ['Parts placed', `${placed.toLocaleString('en')} of ${requested.toLocaleString('en')}`],
-    ['Cut length', lengthText(estimate.cutLength)],
+    ['Cut length', lengthText(estimate.cutLength, units)],
     ['Pierces', estimate.pierces.toLocaleString('en')],
     ['Cutting time', durationText(estimate.minutes)],
     [
@@ -182,7 +195,7 @@ function summaryPages(report: NestingReport): LayoutPage[] {
   if (cutting.density > 0 && cutting.thickness > 0)
     figures.push([
       'Weight',
-      `${weightText(estimate.partWeight)} of parts from ${weightText(estimate.sheetWeight)} of sheet`,
+      `${weightText(estimate.partWeight, units)} of parts from ${weightText(estimate.sheetWeight, units)} of sheet`,
     ]);
   for (const [label, value] of figures) {
     items.push(text(label, page.margin, y, { color: muted }));
@@ -194,17 +207,17 @@ function summaryPages(report: NestingReport): LayoutPage[] {
   y += 18;
   const sheetRows = report.sheets.map((sheet, index) => [
     String(index + 1),
-    `${sheetName(sheet.size)} mm`,
+    `${sheetName(sheet.size, units)} ${unit}`,
     String(sheet.placements.length),
     percentText(sheet.area / (sheet.size.width * sheet.size.height)),
-    lengthText(remnantLength(sheet, report.margin, report.spacing)),
+    offcutText(offcutOf(sheet.bounds, sheet.size, report.spacing), units),
   ]);
   const sheetColumns: Column[] = [
     { title: 'Sheet', width: 50 },
     { title: 'Format', width: 140 },
     { title: 'Parts', width: 60, align: 'end' },
     { title: 'Used', width: 60, align: 'end' },
-    { title: 'Remnant length', width: 110, align: 'end' },
+    { title: 'Offcut', width: 220 },
   ];
   const partColumns: Column[] = [
     { title: 'No.', width: 34 },
@@ -221,11 +234,11 @@ function summaryPages(report: NestingReport): LayoutPage[] {
     String(part.number),
     part.name,
     part.file,
-    sizeText(part.part.width, part.part.height),
+    sizeText(part.part.width, part.part.height, units),
     String(part.requested),
     String(part.placed),
-    areaText(part.part.area),
-    lengthText(part.part.cutLength),
+    areaText(part.part.area, units),
+    lengthText(part.part.cutLength, units),
     String(part.part.pierces),
   ]);
   const pages: LayoutPage[] = [];
@@ -253,15 +266,18 @@ function summaryPages(report: NestingReport): LayoutPage[] {
     if (partsLeft.length) next();
   }
   const assumptions = [
-    `${cutting.material || 'Material'} ${cutting.thickness} mm, ${processLabels[cutting.process].toLowerCase()}: ${cutting.speed.toLocaleString('en')} mm/min, ${cutting.pierce} s per pierce, machine ${moneyText(cutting.rate, cutting.currency)} an hour.`,
+    `${cutting.material || 'Material'} ${cutting.thickness} mm, ${processLabels[cutting.process].toLowerCase()}: ${speedText(cutting.speed, units)}, ${cutting.pierce} s per pierce` +
+      (cutting.kerf ? `, kerf ${gapText(cutting.kerf, units)}` : '') +
+      `, machine ${moneyText(cutting.rate, cutting.currency)} an hour.`,
     'Cutting time is cut length divided by speed, plus the pierce time for every closed loop and open path.',
     'Rapid moves, lead-ins, marking and setup are not included. The speeds are typical values: check them against your machine.',
-    `Parts are at least ${gapText(report.spacing)} apart and ${gapText(report.margin)} from the sheet edge.` +
+    `Parts are at least ${gapText(report.spacing, units)} apart and ${gapText(report.margin, units)} from the sheet edge.` +
       (Number.isFinite(report.closest)
-        ? ` The exact check found the closest two ${gapText(report.closest)} apart.`
+        ? ` The exact check found the closest two ${gapText(report.closest, units)} apart.`
         : ''),
+    `An offcut is the largest piece one straight cut across the sheet takes off, the cut at the spacing from the parts; it is reusable when both its sides reach ${lengthText(reusableSide, units)}.`,
     ...(estimate.markLength
-      ? [`Marking lines: ${lengthText(estimate.markLength)}, not timed.`]
+      ? [`Marking lines: ${lengthText(estimate.markLength, units)}, not timed.`]
       : []),
   ];
   if (y + 18 + assumptions.length * 13 > bottom) next();
@@ -283,7 +299,7 @@ function sheetPage(report: NestingReport, sheet: ReportSheet, index: number): La
     width = sheetWidth(sheet.size);
   items.push(
     text(
-      `Sheet ${index + 1} of ${report.sheets.length} · ${sheetName(sheet.size)} mm · ${percentText(sheet.area / (length * width))} used · ${countText(sheet.placements.length, 'part')}`,
+      `Sheet ${index + 1} of ${report.sheets.length} · ${sheetName(sheet.size, report.units)} ${unitSymbol(report.units)} · ${percentText(sheet.area / (length * width))} used · ${countText(sheet.placements.length, 'part')}`,
       page.margin,
       page.margin + 12,
       { size: 12, bold: true },

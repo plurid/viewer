@@ -64,6 +64,24 @@ import, follow or download it.
 
 [Supported formats](../reference/formats.md) lists every format and what its preview shows.
 
+## Read PDFs and Office documents at night
+
+1. In a PDF, or an Office document's **Layout**, choose **Dark pages** (the moon) in its toolbar, or
+   press **⌘K** and choose **Dark pages**. Pages turn dark with light text, the thumbnails too, and
+   photographs keep their colours.
+2. Choose it again, or **Light pages** in **⌘K**, to go back. The choice holds for every PDF and
+   Office page from then on.
+3. To have pages switch by themselves, open **Settings → Previews** and choose **Dark pages**:
+   - **At night** turns pages dark from 20:00 until 07:00. Change **From** and **Until** beneath it;
+     the line under them says whether pages are dark now.
+   - **With macOS dark mode** follows macOS. With **Auto** in **System Settings → Appearance**,
+     macOS turns dark at sunset.
+
+Pressing **Dark pages** while **At night** or **With macOS dark mode** is chosen keeps the pages as
+you set them, and a note says how to choose the automatic mode again. A scanned page turns dark with
+the rest. Printing, **Optimize…**, **PDF tools…** and **Save PDF copy** keep the document's own
+colours.
+
 ## Read an email and save its attachments
 
 An email's HTML shows without scripts or remote images, and **Remote images are blocked.** says when

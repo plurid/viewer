@@ -1,6 +1,7 @@
 /** Plain advice from a nesting: which format to buy, what does not fit, what more freedom saves. */
-import { countText, moneyText, percentText, sizeText } from './format';
+import { countText, gapText, moneyText, percentText, sizeText } from './format';
 import { sheetLength, sheetWidth, type NestFormat, type NestPart } from './nest';
+import type { LengthUnit } from './plan';
 import { sheetName } from './plan';
 import type { BoxEstimate } from './rectangles';
 import type { NestSummary } from './search';
@@ -23,6 +24,10 @@ export interface AdviceInput {
   boxes: readonly BoxEstimate[];
   looser?: { summary: NestSummary; loosened: readonly number[]; rotation: string };
   currency: string;
+  /** The space between parts and the width of the cut, in millimetres. */
+  spacing?: number;
+  kerf?: number;
+  units?: LengthUnit;
 }
 interface Outcome {
   format: number;
@@ -65,7 +70,14 @@ const everyAngle = Array.from({ length: 72 }, (_, i) => i * 5);
 
 export function nestingAdvice(input: AdviceInput): Advice[] {
   const advice: Advice[] = [];
+  const units = input.units ?? 'mm';
+  const formatName = (format: NestFormat) => sheetName(format, units);
   const priced = input.formats.some((format) => format.price > 0);
+  if (input.kerf && input.spacing !== undefined && input.spacing < input.kerf)
+    advice.push({
+      tone: 'warning',
+      text: `Spacing ${gapText(input.spacing, units)} is narrower than the ${gapText(input.kerf, units)} kerf: neighbouring cuts would run together. Set it to ${gapText(2 * input.kerf, units)} or more.`,
+    });
   const requested = input.parts.reduce((sum, part) => sum + part.quantity, 0);
   let tooLarge = 0;
   input.parts.forEach((part, index) => {
@@ -81,7 +93,7 @@ export function nestingAdvice(input: AdviceInput): Advice[] {
           }
         : {
             tone: 'warning',
-            text: `${name} (${sizeText(part.width, part.height)}) is larger than every sheet.`,
+            text: `${name} (${sizeText(part.width, part.height, units)}) is larger than every sheet.`,
           },
     );
   });
@@ -127,7 +139,7 @@ export function nestingAdvice(input: AdviceInput): Advice[] {
       advice.push({
         tone: 'note',
         text:
-          `${sheetName(input.formats[o.format]!)}: ${countText(o.sheets, 'sheet')}, ${percentText(o.utilisation)} used` +
+          `${formatName(input.formats[o.format]!)}: ${countText(o.sheets, 'sheet')}, ${percentText(o.utilisation)} used` +
           (priced ? `, ${moneyText(o.cost, input.currency)}` : '') +
           (o.placed < requested ? `, ${countText(requested - o.placed, 'part')} left off` : ''),
       });
@@ -136,12 +148,12 @@ export function nestingAdvice(input: AdviceInput): Advice[] {
     if (complete.length > 1 && complete.some((o) => o.sheets > fewest.sheets))
       advice.push({
         tone: 'saving',
-        text: `${sheetName(input.formats[fewest.format]!)} needs the fewest sheets.`,
+        text: `${formatName(input.formats[fewest.format]!)} needs the fewest sheets.`,
       });
     if (priced && complete[0] && complete[0] !== fewest)
       advice.push({
         tone: 'saving',
-        text: `${sheetName(input.formats[complete[0].format]!)} costs least.`,
+        text: `${formatName(input.formats[complete[0].format]!)} costs least.`,
       });
     const mixed = input.best;
     if (mixed && new Set(mixed.layout.sheets.map((sheet) => sheet.format)).size > 1) {
@@ -153,7 +165,7 @@ export function nestingAdvice(input: AdviceInput): Advice[] {
         text:
           'Mixing formats does best: ' +
           [...counts]
-            .map(([format, count]) => `${count} × ${sheetName(input.formats[format]!)}`)
+            .map(([format, count]) => `${count} × ${formatName(input.formats[format]!)}`)
             .join(' and ') +
           (priced ? `, ${moneyText(mixed.cost, input.currency)}.` : '.'),
       });

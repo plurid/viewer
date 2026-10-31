@@ -29,6 +29,8 @@ export const workspaceSettingPaths: readonly (readonly string[])[] = [
   ['settings', 'editor'],
   ['settings', 'terminalFont'],
   ['settings', 'tour'],
+  // the Dark pages button in a page preview; the night's times change in Settings
+  ['settings', 'previews', 'darkPages'],
   ['settings', 'tiling'],
   ['settings', 'layouts'],
   ['settings', 'optimizationRecipes'],
@@ -350,6 +352,20 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Previews',
     label: 'Wrap preview text',
     kind: 'boolean',
+  },
+  {
+    path: 'settings.previews.darkPages',
+    category: 'Previews',
+    label: 'Dark pages',
+    detail:
+      'PDF and Office pages in dark colours, photos as they are. Printing and exports keep the original.',
+    kind: 'choice',
+    choices: [
+      ['off', 'Off'],
+      ['on', 'On'],
+      ['night', 'At night'],
+      ['system', 'With macOS dark mode'],
+    ],
   },
   {
     path: 'settings.previews.maxImagePixels',

@@ -263,6 +263,7 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
             files={read.drawings}
             quantities={pane.quantities}
             thicknesses={pane.thicknesses}
+            paneID={pane.id}
           />
         </div>
       ) : (

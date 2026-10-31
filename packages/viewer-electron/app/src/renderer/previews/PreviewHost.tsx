@@ -42,6 +42,7 @@ import { documentServices } from './document-cache';
 import { PreviewSize } from './PreviewSize';
 import { saveAttachments } from './attachments';
 import { loadedPreviewModule, preloadPreviewModule } from './module-loading';
+import { useDarkPages } from './dark-pages';
 
 const components = new Map<string, ReturnType<typeof lazy<React.ComponentType<PreviewContext>>>>();
 /** One stable component per module. Once its code has loaded, the loader settles in the same call,
@@ -223,6 +224,7 @@ export const PreviewHost = memo(function PreviewHost({
     [editable, paneID, supplied],
   );
   const look = useViewer(effectiveWindowLook);
+  const pages = useDarkPages();
   useEffect(
     () =>
       window.viewer.onEvent((event) => {
@@ -414,6 +416,7 @@ export const PreviewHost = memo(function PreviewHost({
               signal={signal}
               services={scopedServices}
               look={look}
+              pages={pages}
               commands={commands}
               state={viewState}
               limits={limits}

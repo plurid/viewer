@@ -6,6 +6,8 @@ import { boxFigures, cuttingFor, fileQuantity } from '../../../domain/fabricatio
 import { groupByThickness, thicknessText } from '../../../domain/fabrication/names';
 import { nestingAdvice } from '../../../domain/layout/nesting/advice';
 import { cuttingEstimate } from '../../../domain/layout/nesting/estimate';
+import type { NestFormat } from '../../../domain/layout/nesting/nest';
+import type { LengthUnit, NestingTransform } from '../../../domain/layout/nesting/plan';
 import {
   countText,
   durationText,
@@ -13,17 +15,21 @@ import {
   lengthText,
   moneyText,
   percentText,
+  sizeText,
+  unitSymbol,
   weightText,
 } from '../../../domain/layout/nesting/format';
-import { sheetLength, sheetWidth, type NestFormat } from '../../../domain/layout/nesting/nest';
+import { sheetLength, sheetWidth } from '../../../domain/layout/nesting/nest';
 import {
   cuttingPresets,
+  defaultSheet,
+  inchSheetPresets,
   nestingDefaults,
   rotationAngles,
   rotationLabels,
+  sheetAllowance,
   sheetName,
   sheetPresets,
-  type NestingTransform,
 } from '../../../domain/layout/nesting/plan';
 import {
   looserProblem,
@@ -32,14 +38,18 @@ import {
 } from '../../../domain/layout/nesting/problem';
 import { looserRotation } from '../../../domain/layout/nesting/plan';
 import { packBoxes, type BoxEstimate } from '../../../domain/layout/nesting/rectangles';
+import { offcutText } from '../../../domain/layout/nesting/report';
 import { verifyNest } from '../../../domain/layout/nesting/verify';
-import { report, useViewer } from '../../state/store';
+import { changePreferences, report, useViewer } from '../../state/store';
+import { IconButton } from '../../ui/primitives';
 import { useWorkspace } from '../../workspace/context';
-import { NestingSettings, type NestingChoices } from './NestingSettings';
+import type { FormatChoice, NestingChoices } from './NestingSettings';
+import type { SheetPicture } from './SheetView';
+import { NestingSettings } from './NestingSettings';
 import { PartList, partKey } from './PartList';
 import type { PartView } from './protocol';
 import type { ThicknessTab } from './ThicknessGroups';
-import { SheetView, type SheetPicture } from './SheetView';
+import { PartThumbnail, SheetView } from './SheetView';
 import { ThicknessGroups } from './ThicknessGroups';
 import { useNestingFiles, type NestingFile } from './useNestingFiles';
 import { useNestSearch } from './useNestSearch';
@@ -55,42 +65,70 @@ const startPreset = cuttingPresets.findIndex(
   (preset) =>
     preset.material === 'Mild steel' && preset.process === 'fiber' && preset.thickness === 3,
 );
-const initialChoices: NestingChoices = {
-  formats: sheetPresets.map((size) => ({
+/** Every preset in both units, the unit's usual sheet chosen; removed ones keep their stock. */
+const startingFormats = (units: LengthUnit): FormatChoice[] =>
+  [...sheetPresets, ...inchSheetPresets].map((size) => ({
     ...size,
-    enabled: size === nestingDefaults.sheet,
+    enabled: size === defaultSheet(units),
     price: 0,
-  })),
+  }));
+const initialChoices = (units: LengthUnit): NestingChoices => ({
+  formats: startingFormats(units),
   margin: nestingDefaults.margin,
   spacing: nestingDefaults.spacing,
+  direction: 'compact',
   preset: startPreset,
   cutting: { ...cuttingPresets[startPreset]!, rate: 90, currency: '€' },
   budget: 15,
   labels: true,
-};
+});
+/** Choices in other units: formats still as they started change to the new unit's usual sheet. */
+function inUnits(choices: NestingChoices, from: LengthUnit, to: LengthUnit): NestingChoices {
+  const untouched = choices.formats.every(
+    (format, index) =>
+      format.enabled === (startingFormats(from)[index]?.enabled ?? false) &&
+      !format.custom &&
+      format.stock === undefined &&
+      format.price === 0,
+  );
+  return untouched ? { ...choices, formats: startingFormats(to) } : choices;
+}
 /** A part starts with its file's quantity in sets of the drawing, or the copies drawn. */
-const defaultChoice = (part: PartView, sets?: number): PartChoice => ({
+export const defaultChoice = (part: PartView, sets?: number): PartChoice => ({
   quantity: (sets ?? 1) * part.copies,
   rotation: 'quarter',
   mirror: false,
   grain: false,
 });
-/** What a thickness starts with: the cutting values for it, when its names give it. */
-function startingChoices(thickness?: number): NestingChoices {
-  if (thickness === undefined) return initialChoices;
-  const { preset, cutting } = cuttingFor(thickness, initialChoices.cutting);
-  return { ...initialChoices, preset, cutting };
+/** What a thickness starts with: the cutting values for it, when its names give it, with the
+ * spacing and margin they need. */
+export function startingChoices(thickness?: number, units: LengthUnit = 'mm'): NestingChoices {
+  const initial = initialChoices(units);
+  if (thickness === undefined) return initial;
+  const { preset, cutting } = cuttingFor(thickness, initial.cutting);
+  return { ...initial, preset, cutting, ...sheetAllowance(cutting.process, cutting.thickness) };
 }
 const piecesLeft = (estimate: BoxEstimate) =>
   estimate.unplaced.reduce((sum, count) => sum + count, 0);
 const zooms = [1, 2, 4, 8];
-/** "1250 × 2500", or with several formats, "2 × 1500 × 3000, 1 × 1250 × 2500". */
-function formatsUsed(sheets: readonly NestFormat[]): string {
+/** "1250 × 2500 mm", or with several formats, "2 × 1500 × 3000, 1 × 1250 × 2500 mm". */
+function formatsUsed(sheets: readonly NestFormat[], units: LengthUnit): string {
   const counts = new Map<string, number>();
-  for (const sheet of sheets) counts.set(sheetName(sheet), (counts.get(sheetName(sheet)) ?? 0) + 1);
-  return counts.size === 1
-    ? [...counts.keys()][0]!
-    : [...counts].map(([name, count]) => `${count} × ${name}`).join(', ');
+  for (const sheet of sheets) {
+    const name = sheetName(sheet, units);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return (
+    (counts.size === 1
+      ? [...counts.keys()][0]!
+      : [...counts].map(([name, count]) => `${count} × ${name}`).join(', ')) +
+    ` ${unitSymbol(units)}`
+  );
+}
+/** "Sheet 2", "Sheets 1 and 3", "Sheets 1, 2 and 4". */
+function sheetsText(numbers: readonly number[]): string {
+  if (numbers.length === 1) return `Sheet ${numbers[0]}`;
+  return `Sheets ${numbers.slice(0, -1).join(', ')} and ${numbers.at(-1)}`;
 }
 /** The freedom loosened parts would gain, when they would all gain the same. */
 function looserLabel(loosened: readonly PartChoice[]): string {
@@ -108,11 +146,14 @@ export function NestingPanel({
   files,
   quantities,
   thicknesses,
+  paneID,
 }: {
   files: FileEntry[];
   quantities?: Readonly<Record<string, number>>;
   /** Millimetres by path, as a request gives them; they group a drawing before its name. */
   thicknesses?: Readonly<Record<string, number>>;
+  /** The Layout plane, which a drawing opened from a sheet links from. */
+  paneID?: string;
 }) {
   const drawings = useMemo(
     () => files.filter((file) => !file.directory && /\.dxf$/i.test(file.name)),
@@ -123,6 +164,7 @@ export function NestingPanel({
   const [zoom, setZoom] = useState(1);
   const [saving, setSaving] = useState<{ job?: string; error?: string; busy?: boolean }>({});
   const jobs = useViewer((state) => state.jobs);
+  const units = useViewer((state) => state.saved.ui.layout.units);
   const workspace = useWorkspace();
 
   const groups = useMemo(
@@ -143,15 +185,24 @@ export function NestingPanel({
   const group = groups.find((item) => item.key === picked) ?? groups[0];
   const groupKey = group?.key ?? '';
   const [settingsBy, setSettingsBy] = useState<ReadonlyMap<string, NestingChoices>>(new Map());
-  // Made once per thickness: the estimates below follow the settings object itself.
+  // Made once per thickness and unit: the estimates below follow the settings object itself.
   const startingBy = useMemo(
-    () => new Map(groups.map((item) => [item.key, startingChoices(item.thickness)])),
-    [groups],
+    () => new Map(groups.map((item) => [item.key, startingChoices(item.thickness, units)])),
+    [groups, units],
   );
+  const fallback = useMemo(() => initialChoices(units), [units]);
   const settingsOf = useCallback(
-    (key: string) => settingsBy.get(key) ?? startingBy.get(key) ?? initialChoices,
-    [settingsBy, startingBy],
+    (key: string) => settingsBy.get(key) ?? startingBy.get(key) ?? fallback,
+    [settingsBy, startingBy, fallback],
   );
+  const setUnits = (next: LengthUnit) => {
+    if (next === units) return;
+    setSettingsBy(
+      (current) =>
+        new Map([...current].map(([key, value]) => [key, inUnits(value, units, next)] as const)),
+    );
+    changePreferences((ui) => ({ ...ui, layout: { ...ui.layout, units: next } }));
+  };
   const settings = settingsOf(groupKey);
   const sets = useMemo(
     () =>
@@ -244,10 +295,10 @@ export function NestingPanel({
         ? nestProblem(
             active.map((row) => ({ part: row.part, choice: choices.get(row.key)! })),
             formats,
-            { margin: settings.margin, spacing: settings.spacing },
+            { margin: settings.margin, spacing: settings.spacing, direction: settings.direction },
           )
         : undefined,
-    [active, choices, formats, settings.margin, settings.spacing],
+    [active, choices, formats, settings.margin, settings.spacing, settings.direction],
   );
   const looser = useMemo(
     () =>
@@ -312,6 +363,9 @@ export function NestingPanel({
                   }
                 : undefined,
             currency: settings.cutting.currency,
+            spacing: settings.spacing,
+            kerf: settings.cutting.kerf,
+            units,
           })
         : [],
     [
@@ -326,6 +380,9 @@ export function NestingPanel({
       choices,
       active,
       settings.cutting.currency,
+      settings.spacing,
+      settings.cutting.kerf,
+      units,
     ],
   );
 
@@ -348,7 +405,7 @@ export function NestingPanel({
           length: sheetLength(format),
           width: sheetWidth(format),
           margin: settings.margin,
-          title: `Sheet ${index + 1} · ${sheetName(format)} · ${percentText(sheet.area / (format.width * format.height))} used · ${countText(sheet.placements.length, 'part')}`,
+          title: `Sheet ${index + 1} · ${sheetName(format, units)} · ${percentText(sheet.area / (format.width * format.height))} used · ${countText(sheet.placements.length, 'part')}`,
           placements: sheet.placements,
         };
       })
@@ -359,7 +416,7 @@ export function NestingPanel({
             length: sheetLength(format),
             width: sheetWidth(format),
             margin: settings.margin,
-            title: `Boxes estimate, sheet ${index + 1} · ${sheetName(format)}`,
+            title: `Boxes estimate, sheet ${index + 1} · ${sheetName(format, units)}`,
             boxes: sheet.placements.map((box) => ({
               ...box,
               width: active[box.part]!.part.width,
@@ -443,6 +500,7 @@ export function NestingPanel({
               reading: read.some(
                 (file) => file.status === 'reading' && groupOf.get(file.entry.path) === item.key,
               ),
+              unsheeted: !own.formats.some((format) => format.enabled),
             };
             if (item.key === groupKey) return { ...tab, figures };
             const stored = nested.get(item.key);
@@ -483,13 +541,31 @@ export function NestingPanel({
       choices,
     ],
   );
-  const last = best?.layout.sheets.at(-1);
-  const remnant = last
-    ? Math.max(
-        0,
-        sheetLength(formats[last.format]!) - settings.margin - last.used - settings.spacing,
-      )
-    : 0;
+  const offcut = best?.offcut && offcutText(best.offcut, units);
+
+  // A part picked on a sheet: every copy of it lights up, wherever it lies.
+  const [selected, select] = useState<string>();
+  const pickedIndex = active.findIndex((row) => row.key === selected);
+  const pickedRow = active[pickedIndex];
+  const pickedSheets = useMemo(
+    () =>
+      best && pickedIndex >= 0
+        ? best.layout.sheets.flatMap((sheet, index) =>
+            sheet.placements.some((placement) => placement.part === pickedIndex) ? [index + 1] : [],
+          )
+        : [],
+    [best, pickedIndex],
+  );
+  const openDrawing = (index: number) => {
+    const row = active[index];
+    if (row)
+      void workspace
+        .openPath(row.file.entry.path, {
+          activate: true,
+          ...(paneID ? { paneID, linked: true } : {}),
+        })
+        .catch(report);
+  };
 
   const title =
     `Nesting of ${countText(active.length, 'part')}` +
@@ -531,9 +607,10 @@ export function NestingPanel({
       spacing: settings.spacing,
       cutting: settings.cutting,
       labels: settings.labels,
+      units,
     };
     return { plan, used };
-  }, [best, problem, read, active, choices, formats, settings, title]);
+  }, [best, problem, read, active, choices, formats, settings, title, units]);
   useEffect(() => {
     if (savable && settled && verification?.ok)
       prepareNesting({
@@ -588,8 +665,15 @@ export function NestingPanel({
           choose={choose}
           configure={configure}
           placed={placed}
+          units={units}
+          selected={pickedRow?.key}
         />
-        <NestingSettings choices={settings} change={changeSettings} />
+        <NestingSettings
+          choices={settings}
+          change={changeSettings}
+          units={units}
+          setUnits={setUnits}
+        />
       </aside>
       <main className="nesting-main">
         {grouped && <ThicknessGroups groups={tabs} selected={groupKey} choose={setPicked} />}
@@ -604,9 +688,12 @@ export function NestingPanel({
                     ? `About ${countText(boxes[boxFormat]!.sheets.length, 'sheet')}`
                     : ''}
                 {best
-                  ? ` · ${formatsUsed(best.layout.sheets.map((sheet) => formats[sheet.format]!))} mm`
+                  ? ` · ${formatsUsed(
+                      best.layout.sheets.map((sheet) => formats[sheet.format]!),
+                      units,
+                    )}`
                   : boxFormat !== undefined
-                    ? ` · ${sheetName(formats[boxFormat]!)} mm`
+                    ? ` · ${formatsUsed([formats[boxFormat]!], units)}`
                     : ''}
               </h2>
               <p className="nesting-figures">
@@ -614,19 +701,18 @@ export function NestingPanel({
                 <span>
                   {best ? best.placed : requested} of {countText(requested, 'part')}
                 </span>
-                <span>{lengthText(estimate.cutLength)} cut</span>
+                <span>{lengthText(estimate.cutLength, units)} cut</span>
                 <span>{countText(estimate.pierces, 'pierce')}</span>
                 <span>{durationText(estimate.minutes)}</span>
                 <span>{moneyText(estimate.total, settings.cutting.currency)}</span>
                 {settings.cutting.density > 0 && estimate.partWeight > 0 && (
-                  <span>{weightText(estimate.partWeight)} of parts</span>
+                  <span>{weightText(estimate.partWeight, units)} of parts</span>
                 )}
               </p>
-              {best && last && remnant > 0 && (
+              {best && offcut && (
                 <p className="muted">
-                  Remnant on sheet {best.sheets}:{' '}
-                  {sheetWidth(formats[last.format]!).toLocaleString('en')} ×{' '}
-                  {Math.round(remnant).toLocaleString('en')} mm
+                  {best.sheets > 1 ? `Offcut on sheet ${best.sheets}: ` : 'Offcut '}
+                  {offcut}
                 </p>
               )}
               <div className="nesting-status">
@@ -637,7 +723,7 @@ export function NestingPanel({
                   <span className={verification.ok ? 'muted' : 'nesting-problem'}>
                     {verification.ok
                       ? Number.isFinite(verification.closest)
-                        ? `Checked: parts at least ${gapText(verification.closest)} apart, inside the margin.`
+                        ? `Checked: parts at least ${gapText(verification.closest, units)} apart, inside the margin.`
                         : 'Checked: every part inside the margin.'
                       : verification.problems[0]}
                   </span>
@@ -702,10 +788,52 @@ export function NestingPanel({
             </>
           ) : (
             !reading && (
-              <p className="muted">Give at least one part a quantity and choose a sheet.</p>
+              <>
+                <p className="nesting-empty">
+                  {!formats.length
+                    ? 'Choose a sheet format to nest on.'
+                    : 'Give at least one part a quantity.'}
+                </p>
+                {drawings.length > 0 && (
+                  <div className="nesting-status">
+                    <button type="button" className="primary" disabled>
+                      Save nesting
+                    </button>
+                  </div>
+                )}
+              </>
             )
           )}
         </section>
+        {pickedRow && (
+          <section className="nesting-selection" aria-label="Selected part" aria-live="polite">
+            <PartThumbnail part={pickedRow.part} />
+            <div>
+              <strong>
+                {pickedIndex + 1} · {pickedRow.part.name}
+              </strong>
+              <span className="muted">{pickedRow.file.entry.name}</span>
+              <span>
+                {sizeText(pickedRow.part.width, pickedRow.part.height, units)}
+                {pickedRow.part.holes
+                  ? ` · ${countText(pickedRow.part.holes, 'hole')}`
+                  : ' · no holes'}
+                {` · ${placedCounts[pickedIndex]} of ${countText(choices.get(pickedRow.key)!.quantity, 'piece')} placed`}
+              </span>
+              <span className="muted">
+                {pickedSheets.length
+                  ? `On ${sheetsText(pickedSheets).toLowerCase()}`
+                  : 'On no sheet yet'}
+              </span>
+            </div>
+            <div className="nesting-selection-actions">
+              <button type="button" onClick={() => openDrawing(pickedIndex)}>
+                Open drawing
+              </button>
+              <IconButton icon="close" label="Deselect" onClick={() => select(undefined)} />
+            </div>
+          </section>
+        )}
         {pictures.length > 0 && (
           <section className="nesting-sheets" aria-label="Sheets">
             <div className="nesting-zoom" role="group" aria-label="Zoom">
@@ -726,6 +854,9 @@ export function NestingPanel({
                 sheet={picture}
                 parts={active.map((row) => row.part)}
                 zoom={zoom}
+                selected={pickedIndex >= 0 ? pickedIndex : undefined}
+                select={(part) => select(part === undefined ? undefined : active[part]?.key)}
+                open={openDrawing}
               />
             ))}
           </section>

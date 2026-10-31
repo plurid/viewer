@@ -3,11 +3,32 @@ import { describe, expect, it } from 'vitest';
 import { readCutDrawing } from '../src/domain/layout/nesting/drawing';
 import { sheetDXF } from '../src/domain/layout/nesting/dxf-writer';
 import { cuttingEstimate } from '../src/domain/layout/nesting/estimate';
-import { durationText, lengthText, moneyText } from '../src/domain/layout/nesting/format';
+import {
+  areaText,
+  durationText,
+  fromUnit,
+  gapText,
+  lengthText,
+  moneyText,
+  sizeText,
+  speedText,
+  weightText,
+} from '../src/domain/layout/nesting/format';
 import { insideRings, placementMatrix } from '../src/domain/layout/nesting/geometry';
 import { nestOnce, Orientations, type NestProblem } from '../src/domain/layout/nesting/nest';
+import { offcutOf } from '../src/domain/layout/nesting/offcut';
 import { extractParts, suggestedMarks, type Part } from '../src/domain/layout/nesting/parts';
-import { nestProblem, type PartChoice } from '../src/domain/layout/nesting/problem';
+import {
+  cuttingPresets,
+  inchSheetPresets,
+  presetFor,
+  sheetAllowance,
+  sheetName,
+} from '../src/domain/layout/nesting/plan';
+import type { NestDirection } from '../src/domain/layout/nesting/plan';
+import { normalizePreferences } from '../src/domain/preferences/ui';
+import { preferencesSchema } from '../src/domain/preferences/presentation/ui-schema';
+import { nestPart, nestProblem, type PartChoice } from '../src/domain/layout/nesting/problem';
 import { areaBound, packBoxes } from '../src/domain/layout/nesting/rectangles';
 import {
   baseCell,
@@ -629,6 +650,162 @@ describe('estimates', () => {
     expect(moneyText(12.5, 'lei')).toBe('12.5 lei');
     expect(lengthText(152_400)).toBe('152 m');
     expect(lengthText(850)).toBe('850 mm');
+  });
+});
+
+describe('nesting direction and offcut', () => {
+  const small = () =>
+    only(
+      drawing([
+        cad.outline('CUT', [
+          [0, 0],
+          [90, 0],
+          [90, 72],
+          [0, 72],
+        ]),
+      ]),
+    );
+  const nest = (direction: NestDirection, patch: Partial<PartChoice> = {}) => {
+    const problem = nestProblem(
+      [{ part: small(), choice: choice(16, patch) }],
+      [{ width: 1250, height: 2500, price: 0 }],
+      { margin: 10, spacing: 5, direction },
+    );
+    const update = finish(problem, 2000);
+    expect(update.best!.placed).toBe(16);
+    expect(update.verification!.ok).toBe(true);
+    return update.best!;
+  };
+
+  it('packs small parts into a block in one corner, keeping the largest offcut whole', () => {
+    // 16 small parts on 1250 × 2500 used to come out as a column down the sheet's whole width
+    const best = nest('compact');
+    const { bounds } = best.layout.sheets[0]!;
+    expect(bounds.x0).toBeLessThan(15);
+    expect(bounds.y0).toBeLessThan(15);
+    expect(bounds.x1).toBeLessThan(450);
+    expect(bounds.y1).toBeLessThan(450);
+    expect(best.offcut).toMatchObject({ width: 1250, reusable: true });
+    expect(best.offcut!.height).toBeGreaterThan(2050);
+    // the same layout every time
+    expect(nest('compact').layout.sheets).toEqual(best.layout.sheets);
+  });
+
+  it('lays rows down the length, or fills across the width first', () => {
+    const along = nest('length');
+    const row = along.layout.sheets[0]!.bounds;
+    expect(row.x1 - row.x0).toBeGreaterThan(1000);
+    expect(row.y1 - row.y0).toBeLessThan(200);
+    expect(along.offcut).toMatchObject({ height: 2500, reusable: true });
+    const across = nest('width');
+    const column = across.layout.sheets[0]!.bounds;
+    expect(column.y1 - column.y0).toBeGreaterThan(1000);
+    expect(column.x1).toBeLessThan(200);
+    expect(across.offcut).toMatchObject({ width: 1250, reusable: true });
+  });
+
+  it('keeps a grain-locked part along the length when the rows run down it', () => {
+    const best = nest('length', { grain: true });
+    const turns = new Set(
+      best.layout.sheets.flatMap((sheet) => sheet.placements.map((p) => p.rotation)),
+    );
+    expect([...turns].every((turn) => turn === 0 || turn === 180)).toBe(true);
+    expect(best.layout.sheets.flatMap((sheet) => sheet.placements).some((p) => p.mirror)).toBe(
+      false,
+    );
+  });
+
+  it('takes the offcut as the largest piece one cut across the sheet leaves', () => {
+    const size = { width: 1250, height: 2500 };
+    expect(offcutOf({ x0: 10, y0: 10, x1: 315, y1: 300 }, size, 5)).toEqual({
+      width: 1250,
+      height: 2180,
+      reusable: true,
+    });
+    // a strip down the length is larger than one across
+    expect(offcutOf({ x0: 10, y0: 10, x1: 2490, y1: 300 }, size, 5)).toEqual({
+      width: 945,
+      height: 2500,
+      reusable: true,
+    });
+    expect(offcutOf({ x0: 10, y0: 10, x1: 2300, y1: 1240 }, size, 5)).toEqual({
+      width: 195,
+      height: 1250,
+      reusable: false,
+    });
+    expect(offcutOf({ x0: 0, y0: 0, x1: 2500, y1: 1250 }, size, 5)).toBeUndefined();
+  });
+});
+
+describe('cutting presets', () => {
+  it('cuts with an abrasive water jet: about a millimetre of kerf, slower than a laser', () => {
+    const jet = cuttingPresets[presetFor('waterjet', 'Mild steel', 6)]!;
+    expect(jet).toMatchObject({ material: 'Mild steel', process: 'waterjet', thickness: 6 });
+    const laser = cuttingPresets[presetFor('fiber', 'Mild steel', 6)]!;
+    expect(jet.speed).toBeLessThan(laser.speed / 4);
+    for (const preset of cuttingPresets.filter((item) => item.process === 'waterjet')) {
+      expect(preset.kerf).toBeGreaterThanOrEqual(0.8);
+      expect(preset.kerf).toBeLessThanOrEqual(1.2);
+    }
+    // thicker plate: slower, longer pierces, more room between parts
+    expect(sheetAllowance('waterjet', 20)).toEqual({ spacing: 8, margin: 15 });
+    expect(sheetAllowance('waterjet', 3)).toEqual({ spacing: 3, margin: 10 });
+    expect(sheetAllowance('fiber', 3)).toEqual({ spacing: 5, margin: 10 });
+    // a material the process has no preset for takes the process's nearest thickness
+    expect(cuttingPresets[presetFor('waterjet', 'Plywood', 9)]).toMatchObject({
+      process: 'waterjet',
+      thickness: 10,
+    });
+    expect(cuttingPresets.every((preset) => preset.kerf > 0)).toBe(true);
+  });
+
+  it('warns when the spacing is narrower than the kerf', () => {
+    const part = nestPart(only(nestingParts.Disc()), choice(1));
+    const format = { width: 1250, height: 2500, price: 0 };
+    const advice = nestingAdvice({
+      names: ['Disc'],
+      parts: [part],
+      formats: [format],
+      margin: 10,
+      single: [],
+      boxes: [packBoxes([{ ...part, turn: true }], format, 10, 0.5)],
+      currency: '€',
+      spacing: 0.5,
+      kerf: 1,
+    });
+    expect(advice[0]).toEqual({
+      tone: 'warning',
+      text: 'Spacing 0.5 mm is narrower than the 1 mm kerf: neighbouring cuts would run together. Set it to 2 mm or more.',
+    });
+  });
+});
+
+describe('units', () => {
+  it('reads lengths in millimetres or inches, kept in millimetres', () => {
+    expect(lengthText(850, 'in')).toBe('33.5 in');
+    expect(lengthText(9000, 'in')).toBe('29.5 ft');
+    expect(sizeText(300, 200, 'in')).toBe('11.81 × 7.87 in');
+    expect(gapText(5, 'in')).toBe('0.197 in');
+    expect(speedText(4000, 'in')).toBe('157.5 in/min');
+    expect(speedText(4000)).toBe('4,000 mm/min');
+    expect(areaText(58_400, 'in')).toBe('90.5 in²');
+    expect(areaText(3_125_000, 'in')).toBe('33.64 ft²');
+    expect(weightText(10, 'in')).toBe('22 lb');
+    expect(fromUnit(48, 'in')).toBe(1219.2);
+    expect(inchSheetPresets.map((size) => sheetName(size, 'in'))).toEqual([
+      '48 × 96',
+      '48 × 120',
+      '60 × 120',
+      '60 × 144',
+    ]);
+    expect(sheetName({ width: 1250, height: 2500 }, 'in')).toBe('49.21 × 98.43');
+  });
+
+  it('keeps the choice as a Layout preference, millimetres unless it says inches', () => {
+    expect(normalizePreferences({ layout: { units: 'in' } }).layout).toEqual({ units: 'in' });
+    expect(normalizePreferences({ layout: { units: 'cm' } }).layout).toEqual({ units: 'mm' });
+    const { layout: _layout, ...older } = normalizePreferences();
+    expect(preferencesSchema.parse(older).layout).toEqual({ units: 'mm' });
   });
 });
 

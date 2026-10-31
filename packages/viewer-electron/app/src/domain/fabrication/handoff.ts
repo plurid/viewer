@@ -10,10 +10,12 @@ import type { RendererOperationRequest } from '../contracts';
 import type { SourceVersion } from '../files/inspection';
 import type { NestingTransform } from '../layout/nesting/plan';
 import type { TourDefinition, TourStop } from '../tours/tour';
+import type { ThicknessGroup } from './names';
 import { nestingLimits, nestingTransformSchema } from '../layout/nesting/plan';
 import { countText } from '../layout/nesting/format';
 import { fileName, resolveTourPath } from '../tours/tour';
 import { groupByThickness } from './names';
+import { listText } from './plan';
 
 export const handoffLimits = { sources: 200, nestings: 12 } as const;
 export const handoffNames = {
@@ -133,40 +135,97 @@ export interface HandoffNesting {
   sources: HandoffFile[];
   plan: NestingTransform;
 }
+export interface HandoffNestings {
+  nestings: HandoffNesting[];
+  notes: string[];
+  /** The thicknesses no nesting covers, grouped as the Layout plane groups them. */
+  missing: ThicknessGroup<string>[];
+}
 /**
- * The nestings a handoff saves: those whose every drawing is a part the job cuts. A nesting of a
- * drawing since corrected is left out, and said; so is each thickness no nesting covers.
+ * The nestings a handoff saves: those whose every drawing is a part the job cuts, the newest of
+ * those nesting one drawing, so no part is cut twice. A nesting of a drawing since corrected is
+ * left out, and said. `thickness` groups a drawing as the Layout plane was opened with, before its
+ * name.
  */
 export function chooseNestings(
   prepared: readonly HandoffNesting[],
   cut: readonly string[],
   corrected: ReadonlyMap<string, string>,
-): { nestings: HandoffNesting[]; notes: string[] } {
+  thickness?: (file: string) => number | undefined,
+): HandoffNestings {
   const parts = new Set(cut);
-  const byTitle = new Map<string, HandoffNesting>();
+  const covered = new Set<string>();
+  const titles = new Set<string>();
+  const chosen: HandoffNesting[] = [];
   const notes: string[] = [];
-  for (const nesting of prepared) {
+  for (const nesting of [...prepared].reverse()) {
     const paths = nesting.sources.map((source) => source.path);
-    if (paths.every((file) => parts.has(file))) {
-      byTitle.set(nesting.title.toLowerCase(), nesting);
+    if (!paths.every((file) => parts.has(file))) {
+      const stale = paths.find((file) => corrected.has(file));
+      if (stale)
+        notes.push(
+          `“${nesting.title}” nests ${fileName(stale)}, not its corrected copy, so it is left out.`,
+        );
       continue;
     }
-    const stale = paths.find((file) => corrected.has(file));
-    if (stale)
-      notes.push(
-        `“${nesting.title}” nests ${fileName(stale)}, not its corrected copy: prepare the cut sheets again.`,
-      );
+    const title = nesting.title.toLowerCase();
+    if (titles.has(title) || paths.some((file) => covered.has(file))) continue;
+    titles.add(title);
+    for (const file of paths) covered.add(file);
+    chosen.push(nesting);
   }
-  const nestings = [...byTitle.values()];
-  const covered = new Set(nestings.flatMap((nesting) => nesting.sources.map((item) => item.path)));
-  for (const group of groupByThickness(cut, fileName))
-    if (!group.items.every((file) => covered.has(file)))
-      notes.push(
-        group.thickness === undefined
-          ? 'Parts whose names give no thickness are not nested yet.'
-          : `${group.label} is not nested yet: open its tab in the Layout plane and wait for Checked.`,
-      );
-  return { nestings, notes };
+  const missing = groupByThickness(cut, fileName, thickness).filter(
+    (group) => !group.items.every((file) => covered.has(file)),
+  );
+  return { nestings: chosen.reverse(), notes: notes.reverse(), missing };
+}
+
+/** A part as the cut sheets nest it: the drawing cut, a corrected copy in its original's place. */
+export interface CutPart {
+  cut: string;
+  quantity?: unknown;
+  question?: string;
+}
+/** What keeps a part from being nested for the export: what the job leaves to the person. */
+type HoldReason = 'open' | 'quantity' | 'thickness' | 'both';
+const holdTexts: Record<HoldReason, (names: string) => string> = {
+  open: (names) => `How many sets of ${names} to cut is open`,
+  quantity: (names) => `Nothing in the job gives the quantity of ${names}`,
+  thickness: (names) => `Nothing in the job gives the thickness of ${names}`,
+  both: (names) => `Nothing in the job gives the quantity or thickness of ${names}`,
+};
+function holdReason(part: CutPart, unknown: boolean): HoldReason | undefined {
+  if (part.question) return 'open';
+  if (!part.quantity) return unknown ? 'both' : 'quantity';
+  return unknown ? 'thickness' : undefined;
+}
+/**
+ * Why Viewer cannot nest the thicknesses no nesting covers for the export by itself, naming the
+ * parts, or undefined when it can. A quantity the job leaves open or does not give, and a
+ * thickness it does not give, are the person's to choose in the Layout plane: nesting them as the
+ * plane starts would choose for them.
+ */
+export function nestingHold(
+  parts: readonly CutPart[],
+  missing: readonly ThicknessGroup<string>[],
+): string | undefined {
+  const unknown = new Set(
+    missing.filter((group) => group.thickness === undefined).flatMap((group) => group.items),
+  );
+  const waiting = new Set(missing.flatMap((group) => group.items));
+  const held = new Map<HoldReason, string[]>();
+  for (const part of parts) {
+    if (!waiting.has(part.cut)) continue;
+    const reason = holdReason(part, unknown.has(part.cut));
+    if (reason) held.set(reason, [...(held.get(reason) ?? []), fileName(part.cut)]);
+  }
+  if (!held.size) return undefined;
+  const reasons = [...held].map(([reason, names]) => holdTexts[reason](listText(names)));
+  const one = [...held.values()].flat().length === 1;
+  return (
+    `${reasons.join('. ')}, so Viewer does not nest ${one ? 'it' : 'them'} for the export. ` +
+    `Prepare the cut sheets and set ${one ? 'it' : 'them'} in the Layout plane, then export once ${missing.length === 1 ? 'its tab says' : 'each tab says'} Checked.`
+  );
 }
 
 /** The operation that saves a check's handoff in the job's folder, every file version-checked. */

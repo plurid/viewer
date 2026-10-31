@@ -139,10 +139,11 @@
 }
 .nesting-format {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 76px 76px;
+  grid-template-columns: minmax(0, 1fr) 76px 76px 22px;
   align-items: center;
   gap: 8px;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .nesting-format-head {
   color: var(--muted);
@@ -151,6 +152,34 @@
   width: 22px;
   height: 22px;
   padding: 2px;
+}
+/* The Sheets heading carries the units: every length in the panel reads in them. */
+.nesting-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.nesting-segmented {
+  display: inline-flex;
+  gap: 2px;
+}
+.nesting-segmented button,
+.nesting-format .icon-button,
+.nesting-custom .icon-button {
+  min-width: 0;
+}
+.nesting-segmented button {
+  padding: 1px 8px;
+  font-size: 12px;
+}
+.nesting-segmented button[aria-pressed='true'] {
+  background: var(--selection);
+}
+.nesting-empty {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
 }
 /* One nesting per thickness: its tabs, and every thickness's sheets, time and cost. */
 .nesting-thickness {
@@ -273,11 +302,58 @@
   stroke-width: 0.5;
   stroke-dasharray: 3 3;
 }
+/* Custom properties reach into each <use> copy, so a picked part's copies light up. */
 .nesting-material {
-  fill: color-mix(in srgb, var(--accent) 24%, transparent);
+  fill: var(--nesting-fill, color-mix(in srgb, var(--accent) 24%, transparent));
   fill-rule: evenodd;
-  stroke: var(--accent);
-  stroke-width: 1;
+  stroke: var(--nesting-stroke, var(--accent));
+  stroke-width: var(--nesting-stroke-width, 1);
+}
+.nesting-sheet use {
+  cursor: pointer;
+}
+.nesting-sheet use.nesting-picked {
+  --nesting-fill: color-mix(in srgb, var(--accent) 62%, transparent);
+  --nesting-stroke: var(--ink);
+  --nesting-stroke-width: 2;
+}
+.nesting-sheet svg[data-picking] use:not(.nesting-picked) {
+  opacity: 0.45;
+}
+.nesting-sheet-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.nesting-part-picked {
+  border-radius: var(--radius-control);
+  background: var(--selection);
+}
+.nesting-selection {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  font-size: 12px;
+}
+.nesting-selection > div:not(.nesting-selection-actions) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nesting-selection strong {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nesting-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .nesting-open {
   fill: none;

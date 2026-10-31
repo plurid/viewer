@@ -6,17 +6,25 @@ import type {
   CheckResult,
   FabricationRequest,
 } from '../../domain/fabrication/check';
-import type { HandoffFile } from '../../domain/fabrication/handoff';
+import type {
+  HandoffFile,
+  HandoffNesting,
+  HandoffNestings,
+} from '../../domain/fabrication/handoff';
+import type { ThicknessGroup } from '../../domain/fabrication/names';
 import type { PartPlan } from '../../domain/fabrication/reconcile';
 import type { WorkspaceController } from '../workspace/context';
-import { chooseNestings, handoffOperation } from '../../domain/fabrication/handoff';
+import type { PlayableTour } from '../workspace/tours/player';
+import { chooseNestings, handoffOperation, nestingHold } from '../../domain/fabrication/handoff';
 import { changesText } from '../../domain/fabrication/job-files';
+import { listText } from '../../domain/fabrication/plan';
 import { sourceVersion } from '../../domain/files/inspection';
 import { parentPath } from '../../domain/workspaces/planes';
 import { errorMessage } from '../../domain/errors';
 import { activeWorkspace, getState } from '../state/store';
 import { preparedNestings } from '../layout/nesting/prepared';
-import { playTour } from '../workspace/tour';
+import { nestWithoutPlane } from '../layout/nesting/headless';
+import { playTour, subscribeTour, tourPlayback } from '../workspace/tour';
 import { forgetJobContents } from './contents';
 import { drawCheckPages } from './pages';
 
@@ -58,6 +66,10 @@ export interface CheckSession {
   /** The handoff's operation. */
   handoff?: string;
   handoffError?: string;
+  /** What the export does before the operation, such as nesting a thickness, while it runs. */
+  handoffProgress?: string;
+  /** When the step `handoffProgress` names began, by this window's clock. */
+  handoffSince?: number;
   /** Why there is nothing to check, in the `empty` phase. */
   nothing?: CheckNothing;
   /** When its result came, by this window's clock. */
@@ -73,10 +85,29 @@ const keptLimit = 5;
 let kept: CheckSession[] = [];
 let session: CheckSession | null = null;
 let drawing: AbortController | null = null;
+/** The nesting an export runs before its operation. */
+let nesting: AbortController | null = null;
+/** An export is under way, from its first nesting until its operation is queued. */
+let exporting = false;
+/** Whether the panel shows only its title bar: the person's choice, for this window's session. */
+let collapsed = false;
+/**
+ * The tour the panel started, while it plays: the panel stays down to its title bar, then comes
+ * back as it was before, unless the person has opened or collapsed it since.
+ */
+let touring: {
+  tour: PlayableTour;
+  before: boolean;
+  changed: boolean;
+  stop: () => void;
+} | null = null;
 const listeners = new Set<() => void>();
+function notify(): void {
+  for (const listener of listeners) listener();
+}
 function change(next: CheckSession | null): void {
   session = next;
-  for (const listener of listeners) listener();
+  notify();
 }
 /** Changes the check `expected` names, unless another has replaced it since; a correction saved
  * as its panel closed reaches the check kept. */
@@ -88,6 +119,17 @@ function update(expected: CheckSession, patch: Partial<CheckSession>): void {
     kept = kept.map((item) => (item.opening?.id === id ? { ...item, ...patch } : item));
 }
 export const checkSession = () => session;
+export const checkCollapsed = () => collapsed;
+function collapse(value: boolean): void {
+  if (collapsed === value) return;
+  collapsed = value;
+  notify();
+}
+/** The person opens or collapses the panel from its title bar. */
+export function toggleCheckPanel(): void {
+  if (touring) touring.changed = true;
+  collapse(!collapsed);
+}
 export function subscribeCheck(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
@@ -238,6 +280,7 @@ export async function runCheck(): Promise<void> {
   }
   const { opening, providerID } = current;
   const provider = getState().settings.settings.providers.find((item) => item.id === providerID);
+  nesting?.abort();
   drawing?.abort();
   const abort = new AbortController();
   drawing = abort;
@@ -252,6 +295,8 @@ export async function runCheck(): Promise<void> {
     corrections: {},
     handoff: undefined,
     handoffError: undefined,
+    handoffProgress: undefined,
+    handoffSince: undefined,
     checked: undefined,
     kept: undefined,
   };
@@ -300,9 +345,10 @@ export function cancelCheck(): void {
   if (id) void ask({ kind: 'cancel', id }).catch(() => {});
 }
 /** Closes the panel. A finished check is kept, so that a paid answer is not thrown away; one
- * without a result ends, and a run still going stops. */
+ * without a result ends, and a run still going stops, as does the nesting of an export. */
 export function closeCheck(): void {
   drawing?.abort();
+  nesting?.abort();
   const current = session;
   change(null);
   if (!current?.opening) return;
@@ -372,46 +418,140 @@ export function prepareCutSheets(workspace: WorkspaceController): void {
     { quantities, thicknesses },
   );
 }
+/** Plays the check's tour with the panel down to its title bar, so the plane each stop shows is
+ * in view; the panel comes back as it was when the tour ends or stops. */
 export function playCheckTour(workspace: WorkspaceController): void {
   const tour = session?.result?.tour;
   if (!tour?.stops.length || session?.stale) return;
-  playTour(workspace, { name: tour.name, root: tour.root, stops: tour.stops });
+  const playable: PlayableTour = { name: tour.name, root: tour.root, stops: tour.stops };
+  // played again before the last one ended: the panel comes back as it was before either
+  const before = touring && !touring.changed ? touring.before : collapsed;
+  touring?.stop();
+  touring = null;
+  collapse(true);
+  playTour(workspace, playable);
+  touring = { tour: playable, before, changed: false, stop: subscribeTour(followTour) };
+  followTour();
+}
+/** Keeps the panel down while its tour plays and puts it back when the tour ends or stops; Play
+ * again on the end card puts it down again. */
+function followTour(): void {
+  if (!touring) return;
+  const playback = tourPlayback();
+  const own = playback?.tour === touring.tour ? playback : undefined;
+  if (!touring.changed) collapse(own && own.status !== 'ended' ? true : touring.before);
+  if (own) return;
+  touring.stop();
+  touring = null;
 }
 
-/** The nestings the handoff would save, and what keeps others out. */
-export function handoffNestings(current: CheckSession, jobs: readonly OperationJob[]) {
-  const { parts, copies } = cutSheets(current, jobs);
-  return chooseNestings(
-    preparedNestings(),
+/**
+ * The nestings the handoff would save, what keeps others out, the thicknesses the export nests
+ * first, grouped as the Layout plane groups the cut sheets, and why it cannot, when it cannot.
+ */
+export function handoffNestings(
+  current: CheckSession,
+  jobs: readonly OperationJob[],
+  prepared: readonly HandoffNesting[] = preparedNestings(),
+): HandoffNestings & { hold?: string } {
+  const { parts, copies, thicknesses } = cutSheets(current, jobs);
+  const chosen = chooseNestings(
+    prepared,
     parts.map((part) => part.cut),
     copies,
+    (file) => thicknesses[file],
   );
+  const hold = chosen.missing.length ? nestingHold(parts, chosen.missing) : undefined;
+  return hold ? { ...chosen, hold } : chosen;
 }
-/** Saves the handoff folder in the job's folder through File operations. */
+/**
+ * Saves the handoff folder in the job's folder through File operations. A thickness no Layout
+ * plane has nested is nested first, as the plane starts it; when one cannot be, nothing is saved.
+ */
 export async function exportHandoff(): Promise<void> {
   const current = session;
-  if (!current?.opening || !current.result || current.stale) return;
-  const jobs = getState().jobs;
-  const copies = correctedCopies(current, jobs);
-  const corrected: HandoffFile[] = [];
-  for (const file of copies.values())
-    corrected.push({ path: file, version: sourceVersion(await window.viewer.stat(file)) });
-  const files: HandoffFile[] = [
-    ...current.opening.sources.map((source) => ({ path: source.path, version: source.version })),
-    ...corrected,
-  ];
+  if (!current?.opening || !current.result || current.stale || exporting) return;
+  exporting = true;
   try {
+    await saveHandoff(current);
+  } finally {
+    exporting = false;
+  }
+}
+async function saveHandoff(current: CheckSession): Promise<void> {
+  if (!current.opening) return;
+  const before = handoffNestings(current, getState().jobs);
+  if (before.hold) return update(current, { handoffError: before.hold });
+  if (before.missing.length && !(await nestMissing(current, before.missing))) return;
+  const jobs = getState().jobs;
+  const { nestings, missing } = handoffNestings(current, jobs);
+  if (missing.length)
+    return update(current, {
+      handoffError: `${listText(missing.map((group) => group.label))} could not be nested. Nothing was exported.`,
+    });
+  const { opening } = current;
+  try {
+    const corrected: HandoffFile[] = [];
+    for (const file of correctedCopies(current, jobs).values())
+      corrected.push({ path: file, version: sourceVersion(await window.viewer.stat(file)) });
+    const files: HandoffFile[] = [
+      ...opening.sources.map((source) => ({ path: source.path, version: source.version })),
+      ...corrected,
+    ];
     const id = await window.viewer.operate(
       handoffOperation({
-        check: current.opening.id,
-        folder: current.opening.folder,
-        job: current.opening.job,
+        check: opening.id,
+        folder: opening.folder,
+        job: opening.job,
         files,
-        nestings: handoffNestings(current, jobs).nestings,
+        nestings,
       }),
     );
     update(current, { handoff: id, handoffError: undefined });
   } catch (error) {
     update(current, { handoffError: errorMessage(error) });
   }
+}
+/**
+ * Nests each thickness `missing` names as the Layout plane starts it, saying which one and how
+ * much while it runs; false, with why, when one cannot be nested or the person cancels.
+ */
+async function nestMissing(
+  current: CheckSession,
+  missing: readonly ThicknessGroup<string>[],
+): Promise<boolean> {
+  const { parts, quantities, thicknesses } = cutSheets(current, getState().jobs);
+  nesting?.abort();
+  const abort = new AbortController();
+  nesting = abort;
+  const step = (text: string) =>
+    update(current, { handoffProgress: text, handoffSince: Date.now() });
+  update(current, { handoffError: undefined });
+  step(`Nesting ${listText(missing.map((group) => group.label))}…`);
+  try {
+    await nestWithoutPlane(
+      parts.map((part) => part.cut),
+      { quantities, thicknesses },
+      new Set(missing.map((group) => group.key)),
+      abort.signal,
+      step,
+    );
+    update(current, { handoffProgress: undefined, handoffSince: undefined });
+    return true;
+  } catch (error) {
+    update(current, {
+      handoffProgress: undefined,
+      handoffSince: undefined,
+      handoffError: abort.signal.aborted
+        ? 'The nesting was cancelled. Nothing was exported.'
+        : `${errorMessage(error)} Nothing was exported.`,
+    });
+    return false;
+  } finally {
+    if (nesting === abort) nesting = null;
+  }
+}
+/** Stops the nesting an export runs first; nothing is exported. */
+export function cancelHandoff(): void {
+  nesting?.abort();
 }

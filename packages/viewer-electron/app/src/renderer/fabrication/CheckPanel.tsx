@@ -1,10 +1,11 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import type { OperationJob } from '../../domain/contracts';
 import type { CheckFinding, CheckOutline, CheckSource } from '../../domain/fabrication/check';
+import type { ThicknessGroup } from '../../domain/fabrication/names';
 import type { ModelProvider } from '../../domain/services';
 import type { CheckPhase, CheckSession } from './check';
 import { checkSendingLabels } from '../../domain/fabrication/check';
-import { correctionProposal, savedPitches } from '../../domain/fabrication/plan';
+import { correctionProposal, listText, savedPitches } from '../../domain/fabrication/plan';
 import { namedRefs } from '../../domain/fabrication/answer';
 import { partValuesText } from '../../domain/fabrication/part-values';
 import { countText } from '../../domain/layout/nesting/format';
@@ -18,11 +19,17 @@ import { fileName, findingGradeLabels } from '../../domain/tours/tour';
 import { errorMessage } from '../../domain/errors';
 import { report, useViewer } from '../state/store';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { Icon } from '../ui/Icon';
+import { overlayOpen } from '../ui/modal';
 import { IconButton } from '../ui/primitives';
 import { useModelPermission } from '../ui/models/ModelDataPermission';
+import { startingSheets } from '../layout/nesting/headless';
+import { preparedNestings, subscribeNestings } from '../layout/nesting/prepared';
 import { useWorkspace } from '../workspace/context';
 import {
   cancelCheck,
+  cancelHandoff,
+  checkCollapsed,
   checkSession,
   chooseCheckProvider,
   clockText,
@@ -36,6 +43,7 @@ import {
   runCheck,
   saveCorrection,
   subscribeCheck,
+  toggleCheckPanel,
 } from './check';
 import './check.css';
 
@@ -51,28 +59,100 @@ function jobStatus(job: OperationJob | undefined, done: (job: OperationJob) => s
 /**
  * CHECK A LASER JOB: what will be sent, to which model and at which data level, then Run; the
  * findings with Viewer's grade and reason, each correction for review, the tour, the cut sheets and
- * the handoff (docs/guides/layout.md#check-a-laser-job).
+ * the handoff (docs/guides/layout.md#check-a-laser-job). Its title bar collapses it to the title
+ * and a short status, so the plane behind it shows.
  */
 export function CheckPanel() {
   const current = useSyncExternalStore(subscribeCheck, checkSession);
+  const collapsed = useSyncExternalStore(subscribeCheck, checkCollapsed);
   if (!current) return null;
-  return <CheckPanelBody current={current} />;
+  return <CheckPanelBody current={current} collapsed={collapsed} />;
 }
 
 /** The phases that show what is sent and the model, before and around a run. */
 const listingPhases: readonly CheckPhase[] = ['ready', 'drawing', 'asking', 'failed'];
 
-function CheckPanelBody({ current }: { current: CheckSession }) {
+/**
+ * What the collapsed title bar says after the job: "2 findings, 1 confirmed", or the step that
+ * runs and since when, such as the model reading or a thickness nesting for the export.
+ */
+function collapsedStatus(current: CheckSession): { text: string; since?: number } {
+  const result = current.result;
+  switch (current.phase) {
+    case 'opening':
+      return { text: 'Listing the job’s files' };
+    case 'comparing':
+      return { text: `Comparing with the check at ${clockText(current.checked ?? Date.now())}` };
+    case 'empty':
+      return { text: 'Nothing to check' };
+    case 'ready':
+      return { text: `Ready to check ${countText(current.opening?.sources.length ?? 0, 'file')}` };
+    case 'drawing':
+    case 'asking':
+      return { text: current.progress ?? 'Checking', since: current.since };
+    case 'failed':
+      return { text: 'Not checked' };
+    case 'checked': {
+      if (current.handoffProgress)
+        return { text: current.handoffProgress, since: current.handoffSince };
+      if (current.stale)
+        return { text: `Changed since ${clockText(current.checked ?? Date.now())}` };
+      const findings = result?.findings ?? [];
+      const confirmed = findings.filter((item) => item.grade.status === 'confirmed').length;
+      return {
+        text: findings.length
+          ? `${countText(findings.length, 'finding')}, ${confirmed} confirmed`
+          : 'No findings',
+      };
+    }
+  }
+}
+
+function CheckPanelBody({ current, collapsed }: { current: CheckSession; collapsed: boolean }) {
   const opening = current.opening;
   const job = opening?.job ?? current.nothing?.job;
+  const body = useId();
+  const status = collapsedStatus(current);
   return (
-    <aside className="check-panel" aria-label={`Check ${job ?? 'laser job'}`}>
+    <aside
+      className="check-panel"
+      aria-label={`Check ${job ?? 'laser job'}`}
+      data-collapsed={collapsed || undefined}
+      onKeyDown={(event) => {
+        // a menu or dialog inside keeps its own Escape; a running tour takes it first
+        if (event.key !== 'Escape' || event.defaultPrevented || overlayOpen()) return;
+        event.preventDefault();
+        event.stopPropagation();
+        closeCheck();
+      }}
+    >
       <header>
-        <h2>{job ? `Check ${job}` : 'Check laser job'}</h2>
+        <h2>
+          <button
+            type="button"
+            className="check-panel-toggle"
+            aria-expanded={!collapsed}
+            aria-controls={body}
+            title={collapsed ? 'Show the whole check' : 'Show only the title'}
+            onClick={toggleCheckPanel}
+          >
+            <Icon name={collapsed ? 'right' : 'down'} size={12} />
+            <span className="check-panel-title">{job ? `Check ${job}` : 'Check laser job'}</span>
+            {collapsed && (
+              <span className="check-panel-status">
+                {' '}
+                · {status.text}
+                <Elapsed since={status.since} />
+              </span>
+            )}
+          </button>
+        </h2>
         <IconButton icon="close" label="Close the check" onClick={closeCheck} />
       </header>
       <div
+        id={body}
         className="check-panel-body"
+        hidden={collapsed}
         data-stale={current.phase === 'checked' && current.stale ? true : undefined}
       >
         {current.phase === 'opening' && (
@@ -348,7 +428,14 @@ function Result({ current }: { current: CheckSession }) {
         <button
           type="button"
           disabled={stale || !result.tour.stops.length}
-          onClick={() => playCheckTour(workspace)}
+          onClick={(event) => {
+            // the panel goes down to its title bar: focus stays in it, and comes back there
+            event.currentTarget
+              .closest('.check-panel')
+              ?.querySelector<HTMLButtonElement>('.check-panel-toggle')
+              ?.focus();
+            playCheckTour(workspace);
+          }}
         >
           Play the tour
         </button>
@@ -491,27 +578,46 @@ function CutSheets({ current, jobs }: { current: CheckSession; jobs: readonly Op
   );
 }
 
+/** "6 mm is not nested yet: the export nests it first on 1250 × 2500 mm sheets." */
+function missingText(missing: readonly ThicknessGroup<string>[]): string {
+  const one = missing.length === 1;
+  const sheets = new Set(missing.map((group) => startingSheets(group.thickness)));
+  return (
+    `${listText(missing.map((group) => group.label))} ${one ? 'is' : 'are'} not nested yet: ` +
+    `the export nests ${one ? 'it' : 'them'} first on ${listText([...sheets])} sheets. ` +
+    'To choose the sheets yourself, prepare the cut sheets and wait for Checked.'
+  );
+}
+
+/**
+ * The handoff: what the folder holds, then Export handoff; when a thickness is not nested yet,
+ * Nest and export handoff nests it first, saying which thickness and how much while it runs.
+ */
 function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly OperationJob[] }) {
-  const { nestings, notes } = handoffNestings(current, jobs);
+  // a Layout plane checking a nesting changes what the export saves, and what it nests first
+  const prepared = useSyncExternalStore(subscribeNestings, preparedNestings);
+  const { nestings, notes, missing, hold } = handoffNestings(current, jobs, prepared);
   const job = jobs.find((entry) => entry.id === current.handoff);
   const corrections = correctedCopies(current, jobs).size;
   const files = current.opening!.sources.length + corrections;
+  const sheets = nestings.map(
+    (nesting) => `“${nesting.title}” on ${countText(nesting.plan.sheets.length, 'sheet')}`,
+  );
   return (
     <section aria-label="Handoff">
       <h3>Handoff</h3>
       <p className="check-note">
         A folder for the shop: {countText(files, 'file')} as evidence, the tour pointed at them, the
-        check record
-        {nestings.length
-          ? `, and ${nestings.map((nesting) => `“${nesting.title}” on ${countText(nesting.plan.sheets.length, 'sheet')}`).join(', ')}`
-          : ''}
-        .
+        check record{sheets.length ? `, and ${listText(sheets)}` : ''}.
       </p>
       {notes.map((note) => (
         <p key={note} className="muted check-note">
           {note}
         </p>
       ))}
+      {!current.handoff && missing.length > 0 && (
+        <p className="check-note">{hold ?? missingText(missing)}</p>
+      )}
       {current.handoff ? (
         <p className="check-note" role="status">
           {jobStatus(job, (done) => {
@@ -519,9 +625,23 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
             return folder ? `Saved “${fileName(folder)}”.` : 'Saved.';
           })}
         </p>
+      ) : current.handoffProgress ? (
+        <div className="check-progress" role="status">
+          <span>
+            {current.handoffProgress}
+            <Elapsed since={current.handoffSince} />
+          </span>
+          <button type="button" onClick={cancelHandoff}>
+            Cancel
+          </button>
+        </div>
       ) : (
-        <button type="button" disabled={!!current.stale} onClick={() => void exportHandoff()}>
-          Export handoff
+        <button
+          type="button"
+          disabled={!!current.stale || !!hold}
+          onClick={() => void exportHandoff()}
+        >
+          {missing.length ? 'Nest and export handoff' : 'Export handoff'}
         </button>
       )}
       {current.handoffError && (

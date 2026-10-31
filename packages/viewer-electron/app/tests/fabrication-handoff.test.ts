@@ -24,6 +24,7 @@ import {
   evidenceNames,
   handoffOperation,
   handoffTour,
+  nestingHold,
 } from '../src/domain/fabrication/handoff';
 import { transformDescription, validateTransform } from '../src/domain/operations/transforms';
 import { readCutDrawing } from '../src/domain/layout/nesting/drawing';
@@ -68,7 +69,7 @@ describe('handoff plans', () => {
     expect(request.expectedSources).toHaveLength(3);
   });
 
-  it('keeps out a nesting of a drawing since corrected, and says which thickness is not nested', () => {
+  it('keeps out a nesting of a drawing since corrected, and gives the thickness not nested', () => {
     const plate = file('g6-PL60-B2-2buc.dxf');
     const corrected = file('g6-PL60-B2-2buc (corrected).dxf');
     const nesting = (title: string, sources: { path: string; version: typeof version }[]) => ({
@@ -76,7 +77,7 @@ describe('handoff plans', () => {
       sources,
       plan: {} as NestingTransform,
     });
-    const { nestings, notes } = chooseNestings(
+    const { nestings, notes, missing } = chooseNestings(
       [
         nesting('Nesting of 1 part, 6 mm', [plate]),
         nesting('Nesting of 1 part, 3 mm', [file('g3-CV25-E1-10buc.dxf')]),
@@ -87,9 +88,61 @@ describe('handoff plans', () => {
     );
     expect(nestings.map((item) => item.title)).toEqual(['Nesting of 1 part, 3 mm']);
     expect(notes).toEqual([
-      '“Nesting of 1 part, 6 mm” nests g6-PL60-B2-2buc.dxf, not its corrected copy: prepare the cut sheets again.',
-      '6 mm is not nested yet: open its tab in the Layout plane and wait for Checked.',
+      '“Nesting of 1 part, 6 mm” nests g6-PL60-B2-2buc.dxf, not its corrected copy, so it is left out.',
     ]);
+    // the thickness the export nests first
+    expect(missing.map((group) => [group.label, group.items])).toEqual([
+      ['6 mm', [corrected.path]],
+    ]);
+  });
+
+  it('cuts no drawing twice, and groups by the thickness the plane was opened with', () => {
+    const nesting = (title: string, names: string[]) => ({
+      title,
+      sources: names.map(file),
+      plan: {} as NestingTransform,
+    });
+    const cover = '/jobs/1042/g3-CV25-E1-10buc.dxf';
+    const gusset = '/jobs/1042/g3-GS30-D1-6buc.dxf';
+    // the plane nested the cover alone, then both: the newer one is saved
+    const { nestings, missing } = chooseNestings(
+      [
+        nesting('Nesting of 1 part, 3 mm', ['g3-CV25-E1-10buc.dxf']),
+        nesting('Nesting of 2 parts, 3 mm', ['g3-CV25-E1-10buc.dxf', 'g3-GS30-D1-6buc.dxf']),
+      ],
+      [cover, gusset, '/jobs/1042/Spacer.dxf'],
+      new Map(),
+      // the request gives the spacer's thickness, which its name does not
+      (path) => (path.endsWith('Spacer.dxf') ? 4 : undefined),
+    );
+    expect(nestings.map((item) => item.title)).toEqual(['Nesting of 2 parts, 3 mm']);
+    expect(missing.map((group) => group.label)).toEqual(['4 mm']);
+  });
+
+  it('nests for the export only what the job gives, and says which part waits for a person', () => {
+    const groups = (thickness?: number) => [
+      {
+        key: thickness === undefined ? 'unknown' : String(thickness),
+        ...(thickness === undefined ? {} : { thickness }),
+        label: thickness === undefined ? 'Thickness not in name' : `${thickness} mm`,
+        items: ['/jobs/1042/g6-MB20-A1-4buc.dxf', '/jobs/1042/g6-PL60-B2-2buc.dxf'],
+      },
+    ];
+    const plate = { cut: '/jobs/1042/g6-PL60-B2-2buc.dxf', quantity: { sets: 2 } };
+    expect(nestingHold([plate, { ...plate, cut: groups(6)[0]!.items[0]! }], groups(6))).toBe(
+      undefined,
+    );
+    expect(
+      nestingHold(
+        [{ cut: '/jobs/1042/g6-MB20-A1-4buc.dxf', question: 'How many sets?' }, plate],
+        groups(6),
+      ),
+    ).toBe(
+      'How many sets of g6-MB20-A1-4buc.dxf to cut is open, so Viewer does not nest it for the export. Prepare the cut sheets and set it in the Layout plane, then export once its tab says Checked.',
+    );
+    expect(nestingHold([{ cut: '/jobs/1042/g6-MB20-A1-4buc.dxf' }, plate], groups(undefined))).toBe(
+      'Nothing in the job gives the quantity or thickness of g6-MB20-A1-4buc.dxf. Nothing in the job gives the thickness of g6-PL60-B2-2buc.dxf, so Viewer does not nest them for the export. Prepare the cut sheets and set them in the Layout plane, then export once its tab says Checked.',
+    );
   });
 
   it('points the tour at the copies, numbering a name an earlier copy has', () => {

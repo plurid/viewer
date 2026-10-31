@@ -108,7 +108,10 @@ function unavailableText(context: CommandContext): string {
       ? 'A check reads the job folder itself, not a link to it.'
       : 'Viewer is still counting the files here.';
   const { job, jobs } = target.contents;
-  if (jobs.length) return `${job} holds ${countText(jobs.length, 'job')}: select one to check it.`;
+  if (jobs.length)
+    return jobs.length === 1
+      ? `${job} holds ${jobs[0]}: select it to check it.`
+      : `${job} holds ${listText(jobs)}: select one to check it.`;
   return target.place === 'files'
     ? 'The selection holds no DXF or DWG file.'
     : `${job} holds no DXF or DWG file.`;

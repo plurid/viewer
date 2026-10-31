@@ -489,7 +489,18 @@ describe('a job’s files', () => {
     ]);
     expect(await open([clients])).toMatchObject({
       kind: 'nothing',
-      text: 'Clients holds 2 jobs: Job A and Job B. Check one of them.',
+      text: 'Clients holds Job A and Job B. Check one of them.',
+    });
+    // a job beside a folder of parts: neither is read into the other
+    const fabrication = await job('fabrication', [
+      'Job 1042/Job 1042 request.eml',
+      'Job 1042/g6-PL60-B2-2buc.dxf',
+      'Evaluation/g3-CV25-E1-10buc.dxf',
+      'Evaluation/g6-FL80-C1-2buc.dxf',
+    ]);
+    expect(await open([fabrication])).toMatchObject({
+      kind: 'nothing',
+      text: 'fabrication holds Job 1042 and Evaluation. Check one of them.',
     });
   });
 

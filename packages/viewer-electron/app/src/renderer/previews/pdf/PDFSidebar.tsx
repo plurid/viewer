@@ -1,15 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { resolveOutline, type OutlineEntry } from './outline';
+import { drawPage, type PageDrawing } from './darken';
 import { Loading } from '../../ui/primitives';
+import type { PageColors } from '../../../domain/previews/documents/dark-pages';
 
-/** A page thumbnail, rendered only while its row is in view. */
-function Thumbnail({ pdf, page }: { pdf: PDFDocumentProxy; page: number }) {
+/** A page thumbnail, rendered only while its row is in view, dark as its page is. */
+function Thumbnail({
+  pdf,
+  page,
+  dark,
+}: {
+  pdf: PDFDocumentProxy;
+  page: number;
+  dark: PageColors | undefined;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let cancelled = false,
-      task: RenderTask | undefined;
+      task: PageDrawing | undefined;
     void pdf
       .getPage(page)
       .then((sheet) => {
@@ -24,7 +34,7 @@ function Thumbnail({ pdf, page }: { pdf: PDFDocumentProxy; page: number }) {
         target.height = Math.ceil(viewport.height * ratio);
         target.style.width = `${viewport.width}px`;
         target.style.height = `${viewport.height}px`;
-        task = sheet.render({ canvas: target, viewport, transform: [ratio, 0, 0, ratio, 0, 0] });
+        task = drawPage(sheet, target, { viewport, transform: [ratio, 0, 0, ratio, 0, 0] }, dark);
         return task.promise;
       })
       .catch(() => {
@@ -34,17 +44,19 @@ function Thumbnail({ pdf, page }: { pdf: PDFDocumentProxy; page: number }) {
       cancelled = true;
       task?.cancel();
     };
-  }, [pdf, page]);
+  }, [pdf, page, dark]);
   return <canvas ref={canvas} aria-hidden="true" />;
 }
 
 export function PDFThumbnails({
   pdf,
   page,
+  dark,
   onSelect,
 }: {
   pdf: PDFDocumentProxy;
   page: number;
+  dark?: PageColors;
   onSelect(page: number): void;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
@@ -58,7 +70,15 @@ export function PDFThumbnails({
     virtual.scrollToIndex(page - 1, { align: 'auto' });
   }, [page, virtual]);
   return (
-    <div className="pdf-thumbnails" ref={scroll} role="listbox" aria-label="Pages">
+    <div
+      className="pdf-thumbnails"
+      ref={scroll}
+      role="listbox"
+      aria-label="Pages"
+      data-pages={dark ? 'dark' : undefined}
+      // the page's colour only: the selected page's outline stays in the window's accent
+      style={dark ? ({ '--page': dark.page } as CSSProperties) : undefined}
+    >
       <div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
         {virtual.getVirtualItems().map((item) => {
           const number = item.index + 1;
@@ -72,7 +92,7 @@ export function PDFThumbnails({
               style={{ position: 'absolute', top: item.start, height: item.size, width: '100%' }}
               onClick={() => onSelect(number)}
             >
-              <Thumbnail pdf={pdf} page={number} />
+              <Thumbnail pdf={pdf} page={number} dark={dark} />
               <span>{number}</span>
             </button>
           );

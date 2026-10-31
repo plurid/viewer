@@ -108,20 +108,33 @@ Letter.
    mark engraving and text layers **mark only**: they are drawn but not cut. Layers named like
    ENGRAVE, MARK, ETCH or TEXT are marked already. A drawing that does not say its units shows
    **Units not given**: choose them.
-5. Under **Sheets**, turn on every format you can use, with its **In stock** count and **Price
-   each**, or **Add size** for your own. Set the **Edge margin** and the **Spacing** between parts.
-6. Under **Cutting**, choose the **Material** and thickness, then adjust **Speed**, **Pierce** and
-   **Machine rate** to your machine.
-7. Read the advice under the headline: which format needs the fewest sheets or costs least, parts
-   that fit no sheet, and how many sheets more turning would save. **Fit**, **2×**, **4×** and
-   **8×** zoom the sheets.
-8. When the headline says **Checked**, choose **Save nesting**. A folder such as "Nesting of 3
-   parts" appears beside the first drawing, holding `Sheet 1.dxf` for each sheet, `Report.pdf` and
-   `Parts.csv`. **Open folder** shows it.
+5. Under **Sheets**, choose **mm** or **in**: every length in the panel, the report and the parts
+   list reads in it, and Viewer keeps the choice. The formats you nest on are listed with their **In
+   stock** count and **Price each**; **×** removes one. **Add format** offers the usual sheets, such
+   as 1250 × 2500 mm or 48 × 96 in (4' × 8'), and **Custom size…** for your own.
+6. Set the **Edge margin**, the **Spacing** between parts and the **Direction**: **Compact block**
+   gathers the parts in one corner and keeps the largest offcut whole, **Along the length** lays
+   rows down the sheet's long side, and **Along the width** fills across it first.
+7. Under **Cutting**, choose the **Material** and thickness, or the **Process**: **Fiber laser**,
+   **CO2 laser**, **Plasma** or **Water jet**. Adjust **Speed**, **Pierce**, **Kerf** and **Machine
+   rate** to your machine. A water jet also sets a wider spacing and margin for thick plate, until
+   you type your own.
+8. Read the advice under the headline: which format needs the fewest sheets or costs least, parts
+   that fit no sheet, and how many sheets more turning would save. The offcut reads under the
+   figures, such as "Offcut 1250 × 2180 mm, reusable". **Fit**, **2×**, **4×** and **8×** zoom the
+   sheets.
+9. Click a part on a sheet to see what it is: every copy of it lights up, and **Selected part**
+   gives its file, size, quantity, holes and the sheets it is on. Double-click it, or press
+   **Enter**, to open its drawing. With a sheet focused, **←** and **→** step through its parts;
+   **Esc** or a click on empty sheet lets go. Nothing moves.
+10. When the headline says **Checked**, choose **Save nesting**. A folder such as "Nesting of 3
+    parts" appears beside the first drawing, holding `Sheet 1.dxf` for each sheet, `Report.pdf` and
+    `Parts.csv`. **Open folder** shows it.
 
-**Stop** keeps the best layout so far; **Search longer** looks again for longer. The
-[nesting reference](../reference/nesting.md) explains the search, the estimate formulas and the
-saved files exactly.
+**Stop** keeps the best layout so far; **Search longer** looks again for longer. With no format
+chosen, the plane reads "Choose a sheet format to nest on." until you add one. The
+[nesting reference](../reference/nesting.md) explains the search, the directions, the presets and
+their sources, the estimate formulas and the saved files exactly.
 
 ## Check a laser job
 
@@ -161,14 +174,26 @@ then measure every DXF part itself and say where the job disagrees with itself: 
    "Saved: pitch 48.00 mm → 50.00 mm, measured again." Nothing is changed until you choose it.
 6. Choose **Play the tour** to be shown each finding: the request's line, the drawing with the
    quoted dimension boxed and the hole it is about outlined, the DXF holes with the pitch Viewer
-   measured. **Esc** stops it.
+   measured. The panel collapses to its title bar while the tour plays and opens again when it ends.
+   **Esc** stops it.
 7. Under **Cut sheets**, read each part's quantity and thickness and where it comes from, such as "2
-   pieces · 6 mm, both from the request", then choose **Prepare cut sheets**. The Nesting plane
-   opens on the job's parts, the corrected copy in place of its original, a tab per thickness. Wait
-   for **Checked** on each tab.
-8. Choose **Export handoff**. A folder such as "Job 1042 handoff" appears in the job's folder,
-   holding `Cut sheets/`, `Evidence/` copies of the job's files, `Job.viewer-tour.jsonc`, which
-   plays from those copies, and `Check record.json`. **File operations** offers Undo.
+   pieces · 6 mm, both from the request". To choose the sheets yourself, choose **Prepare cut
+   sheets**: the Nesting plane opens on the job's parts, the corrected copy in place of its
+   original, a tab per thickness. Wait for **Checked** on each tab.
+8. Choose **Export handoff**. When a thickness is not nested yet, the button reads **Nest and export
+   handoff**: Viewer nests it first as the Nesting plane starts it, saying which thickness and how
+   much, such as "Nesting 6 mm: 3 parts, 8 pieces…". A folder such as "Job 1042 handoff" appears in
+   the job's folder, holding `Cut sheets/`, `Evidence/` copies of the job's files,
+   `Job.viewer-tour.jsonc`, which plays from those copies, and `Check record.json`. **File
+   operations** offers Undo.
+   - If a part does not fit the sheet, or a drawing cannot be read, the panel names it and exports
+     nothing. Nest that thickness under **Prepare cut sheets**, then export again.
+   - A part whose quantity the job leaves open is never nested for you: set it in the Nesting plane
+     first.
+
+When the panel covers a plane you want to see, choose its title: it collapses to the title and a
+short status, such as "Check Job 1042 · 3 findings, 2 confirmed", or the step that runs and its
+seconds. Choose the title again to open it. The window keeps your choice until it closes.
 
 Closing the panel keeps the check while the window is open, for its last 5 jobs. Choose **Check
 laser job…** on the job again and the panel shows it at once, with "Checked at 22:14 · Run again",

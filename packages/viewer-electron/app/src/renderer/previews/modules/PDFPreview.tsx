@@ -19,6 +19,7 @@ import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { getState, report } from '../../state/store';
 import { PDFOutline, PDFThumbnails } from '../pdf/PDFSidebar';
 import { EvidenceOverlay } from '../EvidenceOverlay';
+import { darkSheetStyle, drawPage, type PageDrawing } from '../pdf/darken';
 import { outlinesBounds, regionScale } from '../../../domain/files/regions';
 import type { EvidenceNavigation } from '../../../domain/files/inspection';
 
@@ -28,7 +29,8 @@ GlobalWorkerOptions.workerSrc = workerURL;
 /** `onPaint` follows each painted page: the Office layout holds a picture of its first page until
  * then, so nothing blank shows between them. */
 export default function PDFPreview(context: PreviewContext & { onPaint?(): void }) {
-  const { resource, signal, active } = context;
+  const { resource, signal, active, pages } = context;
+  const dark = pages?.dark;
   const painted = useEffectEvent(() => context.onPaint?.());
   const [pdf, setPDF] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = usePreviewState(context, 'pdf.page', 1);
@@ -200,7 +202,7 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
     )
       return;
     let cancelled = false;
-    let render: ReturnType<Awaited<ReturnType<PDFDocumentProxy['getPage']>>['render']> | undefined;
+    let render: PageDrawing | undefined;
     let layer: TextLayer | undefined;
     void pdf
       .getPage(page)
@@ -232,7 +234,7 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
         // can reset a scroll the reader already made while the page appeared;
         // so can restoring in a later task than the one that sized the page.
         flushSync(() => setLaidOut(`${page}:${zoom}`));
-        render = sheet.render({ canvas: target, viewport, transform: [ratio, 0, 0, ratio, 0, 0] });
+        render = drawPage(sheet, target, { viewport, transform: [ratio, 0, 0, ratio, 0, 0] }, dark);
         drawing.current = render.promise.catch(() => {});
         await render.promise;
         if (cancelled) return;
@@ -254,7 +256,7 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
       render?.cancel();
       layer?.cancel();
     };
-  }, [pdf, page, zoom, available, active]);
+  }, [pdf, page, zoom, available, active, dark]);
   useEffect(() => {
     if (!pdf || !query.trim()) {
       setMatches([]);
@@ -363,6 +365,13 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
           run: () => setSidebar(sidebar === 'outline' ? 'none' : 'outline'),
         },
         {
+          id: 'dark-pages',
+          label: dark ? 'Light pages' : 'Dark pages',
+          aliases: ['dark mode', 'night', 'invert colours', 'invert colors'],
+          available: !!pdf && !!pages,
+          run: () => pages?.toggle(),
+        },
+        {
           id: 'pdf-print',
           label: 'Print PDF…',
           aliases: ['print'],
@@ -382,7 +391,7 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
           run: () => setZoom(Math.max(0.1, Math.min(4, Math.round((scale / 1.25) * 100) / 100))),
         },
       ],
-      [pdf, page, scale, setPage, setZoom, sidebar, setSidebar, printable, print],
+      [pdf, page, scale, setPage, setZoom, sidebar, setSidebar, printable, print, dark, pages],
     ),
   );
   if (error) return <Empty icon="pdf" title="PDF could not be displayed" detail={error} />;
@@ -490,6 +499,9 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
           aria-pressed={sidebar === 'outline'}
           onClick={() => setSidebar(sidebar === 'outline' ? 'none' : 'outline')}
         />
+        {pages && (
+          <IconButton icon="moon" label="Dark pages" aria-pressed={!!dark} onClick={pages.toggle} />
+        )}
         {printable && <IconButton icon="print" label="Print…" onClick={print} />}
       </PreviewToolbar>
       {searchOpen && (
@@ -528,10 +540,16 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
         </div>
       )}
       <div className="pdf-body">
-        {sidebar === 'pages' && <PDFThumbnails pdf={pdf} page={page} onSelect={setPage} />}
+        {sidebar === 'pages' && (
+          <PDFThumbnails pdf={pdf} page={page} dark={dark} onSelect={setPage} />
+        )}
         {sidebar === 'outline' && <PDFOutline pdf={pdf} page={page} onSelect={setPage} />}
         <div className="pdf-scroll" ref={scroll}>
-          <div className="pdf-sheet">
+          <div
+            className="pdf-sheet"
+            data-pages={dark ? 'dark' : undefined}
+            style={dark ? darkSheetStyle(dark) : undefined}
+          >
             <canvas ref={canvas} />
             <div className="textLayer" ref={text} />
             {(anchor?.region || anchor?.marks) && page === anchor.page && (

@@ -19,6 +19,7 @@ import type { WebArchiveSummary } from './previews/documents/web-archive';
 import type { InspectedFile } from './previews/inspected';
 import type { OptimizationRecipe } from './operations/optimization';
 import type { FileGrouping } from './files/entries';
+import { darkPageDefaults, type DarkPageMode } from './previews/documents/dark-pages';
 export type { ProviderKind } from './models/providers';
 export interface ModelProvider {
   id: string;
@@ -104,6 +105,12 @@ export interface ApplicationSettings {
     textFontSize: number;
     textLineHeight: number;
     textWordWrap: boolean;
+    /** When PDF and Office previews draw pages dark; domain/previews/documents/dark-pages.ts. */
+    darkPages: DarkPageMode;
+    /** When night begins, `HH:MM` local time. */
+    darkPagesFrom: string;
+    /** When night ends, `HH:MM`; earlier than `darkPagesFrom`, the night passes midnight. */
+    darkPagesUntil: string;
   };
   /** Editor appearance and behavior defaults. */
   editor: {
@@ -439,6 +446,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       textFontSize: 16,
       textLineHeight: 20,
       textWordWrap: false,
+      ...darkPageDefaults,
     },
     editor: {
       fontSize: 18,

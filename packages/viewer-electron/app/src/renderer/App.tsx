@@ -103,7 +103,7 @@ import { savedDefinitionsKey } from './state/saved-keys';
 import { isActiveJob } from '../domain/operations/jobs';
 import { invalidateThumbnails } from './explorer/thumbnail-cache';
 import { previewsAsFile } from '../domain/previews/documents/embedded';
-import { TourBar } from './workspace/tours/TourBar';
+import { SpaceOverlay } from './workspace/tours/TourBar';
 import { TourStops } from './workspace/tours/TourStops';
 import { CheckPanel } from './fabrication/CheckPanel';
 import { subscribeJobContents } from './fabrication/contents';
@@ -880,8 +880,9 @@ function AppWindow() {
               />
             </ErrorBoundary>
             <TourStops />
-            <CheckPanel />
-            <TourBar />
+            <SpaceOverlay>
+              <CheckPanel />
+            </SpaceOverlay>
           </main>
         </div>
         <OperationsPanel />

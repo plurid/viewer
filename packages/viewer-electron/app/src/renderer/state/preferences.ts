@@ -111,6 +111,8 @@ export function changePreferences(transform: (ui: UIPreferences) => UIPreference
     for (const key of Object.keys(ui[group]) as (keyof (typeof ui)[typeof group])[]) {
       if (old[group][key] !== ui[group][key]) queuePreference(`ui.${group}.${key}`, ui[group][key]);
     }
+  // whole, so a config.jsonc written before it gains it
+  if (old.layout !== ui.layout) queuePreference('ui.layout', ui.layout);
   if (old.recentCommands !== ui.recentCommands)
     queuePreference('ui.recentCommands', ui.recentCommands);
   if (old.suggestionHistory !== ui.suggestionHistory)

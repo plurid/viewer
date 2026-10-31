@@ -1,9 +1,6 @@
 import { areaText, sizeText } from '../../../domain/layout/nesting/format';
-import {
-  rotationLabels,
-  rotationModes,
-  type RotationMode,
-} from '../../../domain/layout/nesting/plan';
+import type { LengthUnit, RotationMode } from '../../../domain/layout/nesting/plan';
+import { rotationLabels, rotationModes } from '../../../domain/layout/nesting/plan';
 import type { PartChoice } from '../../../domain/layout/nesting/problem';
 import { units, unitInfo } from '../../../domain/previews/drawings/dxf/units';
 import { ChoiceButton, type Choice } from '../../ui/ChoiceMenu';
@@ -30,6 +27,8 @@ export function PartList({
   configure,
   placed,
   origins,
+  units = 'mm',
+  selected,
 }: {
   files: readonly NestingFile[];
   choices: ReadonlyMap<string, PartChoice>;
@@ -39,6 +38,9 @@ export function PartList({
   placed: ReadonlyMap<string, number>;
   /** Where an untouched quantity came from, by part key: "From “4buc”". */
   origins?: ReadonlyMap<string, string>;
+  units?: LengthUnit;
+  /** The part picked on a sheet, by key. */
+  selected?: string;
 }) {
   return (
     <section className="nesting-parts" aria-label="Parts">
@@ -60,13 +62,17 @@ export function PartList({
             const done = placed.get(key);
             const origin = origins?.get(key);
             return (
-              <div key={key} className="nesting-part">
+              <div
+                key={key}
+                className={'nesting-part' + (key === selected ? ' nesting-part-picked' : '')}
+                aria-current={key === selected ? 'true' : undefined}
+              >
                 <PartThumbnail part={part} />
                 <div className="nesting-part-body">
                   <div className="nesting-part-title">
                     <strong title={file.entry.path}>{part.name}</strong>
                     <span className="muted">
-                      {sizeText(part.width, part.height)} · {areaText(part.area)}
+                      {sizeText(part.width, part.height, units)} · {areaText(part.area, units)}
                       {part.holes ? ` · ${part.holes} ${part.holes === 1 ? 'hole' : 'holes'}` : ''}
                     </span>
                   </div>

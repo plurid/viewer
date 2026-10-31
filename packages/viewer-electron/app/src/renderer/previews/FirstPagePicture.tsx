@@ -3,6 +3,8 @@ import type { Resource } from '../../domain/contracts';
 import type { PreviewContext } from './contracts';
 import { pdfScale, pdfZoom } from './pdf-viewport';
 import { carriesThumbnail, openDocumentThumbnail } from '../../domain/previews/documents/layout';
+import type { PageColors } from '../../domain/previews/documents/dark-pages';
+import { darkPageFilter, darkSheetStyle } from './pdf/darken';
 
 interface Size {
   width: number;
@@ -50,16 +52,19 @@ export function useFirstPagePicture(
 /**
  * Fitted as the layout's first page will be, in the same scroller and sheet, so the page replaces
  * it in place. A numeric zoom needs the page's own size, which only the layout has: the picture
- * fits the page then.
+ * fits the page then. With dark pages it is dark as the page will be; for the moment it shows,
+ * its photographs darken with it.
  */
 export function FirstPagePicture({
   picture,
   state,
   label,
+  dark,
 }: {
   picture: PagePicture;
   state: PreviewContext['state'];
   label: string;
+  dark?: PageColors;
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState<Size>({ width: 0, height: 0 });
@@ -90,7 +95,14 @@ export function FirstPagePicture({
     <div className="pdf-viewer office-first-page" role="status" aria-label={label}>
       <div className="pdf-body">
         <div className="pdf-scroll" ref={scroll}>
-          <div className="pdf-sheet" style={scale ? undefined : { visibility: 'hidden' }}>
+          <div
+            className="pdf-sheet"
+            data-pages={dark ? 'dark' : undefined}
+            style={{
+              ...(dark ? darkSheetStyle(dark) : {}),
+              ...(scale ? {} : { visibility: 'hidden' }),
+            }}
+          >
             <img
               src={picture.url}
               alt=""
@@ -98,6 +110,7 @@ export function FirstPagePicture({
               style={{
                 width: picture.dimensions.width * scale,
                 height: picture.dimensions.height * scale,
+                ...(dark ? { filter: darkPageFilter(dark) } : {}),
               }}
             />
           </div>

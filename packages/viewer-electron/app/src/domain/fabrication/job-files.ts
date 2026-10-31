@@ -94,21 +94,27 @@ export interface JobContents extends Record<JobFileKind, number> {
   jobs: string[];
 }
 
+/** Whether files hold anything a check reads. */
+const holdsWork = (contents: FolderContents) => jobFileKinds.some((kind) => contents[kind] > 0);
+/** Whether a folder is a job of its own: a request and parts to cut. */
+const isJob = (contents: FolderContents) => contents.request > 0 && contents.dxf + contents.dwg > 0;
+
 /**
- * A job's contents. A folder without a request of its own, holding two or more folders with a
- * request and parts of their own, is a folder of jobs rather than one job: each is checked alone.
+ * A job's contents. A folder with a request and parts of its own is a job of its own, never read
+ * as part of the folder holding it. A folder holding nothing itself, with a job among its folders,
+ * is a folder of jobs, checked one at a time: "fabrication" holding "Job 1042" and an
+ * "Evaluation" folder of parts. Otherwise its folders are its job's own, such as "DXF".
  */
 export function jobContents(
   job: string,
   own: FolderContents,
   inside: readonly ReadFolder[],
 ): JobContents {
-  const jobs = own.request
-    ? []
-    : inside
-        .filter(({ contents }) => contents.request && contents.dxf + contents.dwg)
-        .map(({ name }) => name);
-  const read = jobs.length > 1 ? [] : inside;
+  const separate = inside.filter(({ contents }) => isJob(contents));
+  const rest = inside.filter(({ contents }) => !isJob(contents) && holdsWork(contents));
+  const jobs =
+    !holdsWork(own) && separate.length ? [...separate, ...rest].map(({ name }) => name) : [];
+  const read = jobs.length ? [] : rest;
   const total: JobContents = {
     job,
     request: own.request,
@@ -118,7 +124,7 @@ export function jobContents(
     dxf: own.dxf,
     dwg: own.dwg,
     folders: read.length,
-    jobs: jobs.length > 1 ? jobs : [],
+    jobs,
   };
   for (const { contents } of read) {
     for (const kind of jobFileKinds) total[kind] += contents[kind];
@@ -142,7 +148,9 @@ const someNames = (names: readonly string[]) =>
 export function nothingText(contents: JobContents, fromFolder: boolean): string | undefined {
   const { job, jobs, dxf, dwg, folders } = contents;
   if (jobs.length)
-    return `${job} holds ${countText(jobs.length, 'job')}: ${someNames(jobs)}. Check one of them.`;
+    return jobs.length === 1
+      ? `${job} holds ${jobs[0]}: check it on its own.`
+      : `${job} holds ${someNames(jobs)}. Check one of them.`;
   if (dxf) return undefined;
   const holds = !fromFolder
     ? 'The selection holds'
