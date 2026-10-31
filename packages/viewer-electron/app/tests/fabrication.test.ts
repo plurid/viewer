@@ -466,8 +466,12 @@ describe('answer schema', () => {
       { ref: 'S2', name: 'Job 1042 drawing.pdf' },
       { ref: 'S7', name: 'g6-PL60-B2-2buc.dxf' },
     ];
-    expect(namedRefs('Pitch 50 mm on drawing S2 versus 48 mm in DXF S7.', sources)).toBe(
-      'Pitch 50 mm on drawing Job 1042 drawing.pdf versus 48 mm in DXF g6-PL60-B2-2buc.dxf.',
+    // the name takes the kind's noun before the ref, which it already says
+    expect(namedRefs('Pitch 50 mm on drawing S2 versus 48 mm in the DXF S7.', sources)).toBe(
+      'Pitch 50 mm on Job 1042 drawing.pdf versus 48 mm in g6-PL60-B2-2buc.dxf.',
+    );
+    expect(namedRefs('Drawing S2 gives 50 mm; drawing S9 is not in the job.', sources)).toBe(
+      'Job 1042 drawing.pdf gives 50 mm; drawing S9 is not in the job.',
     );
     // only a whole ref the job has: not S20, S9, a number's start or a word holding one
     expect(namedRefs('S20, S9, S2.5 mm, S2’s outline, AS2, (S7)', sources)).toBe(

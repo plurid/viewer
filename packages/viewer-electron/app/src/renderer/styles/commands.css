@@ -183,7 +183,20 @@
   margin-left: auto;
   color: var(--muted);
 }
-.palette-context:has(.palette-hint) > span:first-child {
+.palette-path {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  flex: 1 0 100%;
+  min-width: 0;
+}
+.palette-path > span:first-child:not(.path-field) {
+  flex-shrink: 0;
+}
+.palette-path > .path-field {
+  flex: 1;
+}
+.palette-context:has(.palette-hint) > .palette-path {
   flex: 1 1 0;
 }
 .palette-hint kbd {

@@ -25,6 +25,7 @@ import { WorkspaceContext } from '../src/renderer/workspace/context';
 import { CommandsContext } from '../src/renderer/commands/context';
 import { CommandRegistry } from '../src/renderer/commands/registry';
 import { PlaneHeader } from '../src/renderer/workspace/PlaneHeader';
+import { RelatedPlanes } from '../src/renderer/workspace/RelatedPlanes';
 import { changeWorkspace } from '../src/renderer/state/core';
 import { initialize } from '../src/renderer/state/store';
 import { setWorkspaceOverride } from '../src/renderer/state/workspaces';
@@ -226,5 +227,40 @@ describe('the header as this window shows it', () => {
     act(() => changeWorkspace((space) => ({ ...space, profileID: 'full' })));
     expect(button(view, 'Layout')).toBeTruthy();
     expect(button(view, 'What can I do here?')).toBeTruthy();
+  });
+  it('keeps roots and branches navigable, and the parent-only child has one route back', () => {
+    changeWorkspace((space) => ({
+      ...space,
+      panes: ['root', 'branch', 'leaf'].map((id) => ({
+        id,
+        type: 'preview',
+        path: `/Jobs/${id}.pdf`,
+      })),
+    }));
+    const parents: Record<string, string> = { branch: 'root', leaf: 'branch' };
+    const workspace = {
+      subscribeLinks: () => () => {},
+      subtree: (id: string) =>
+        id === 'root'
+          ? ['root', 'branch', 'leaf']
+          : id === 'branch'
+            ? ['branch', 'leaf']
+            : ['leaf'],
+      parentPaneID: (id: string) => parents[id],
+    } as unknown as WorkspaceController;
+    const related = (id: string, parentShown: boolean) =>
+      createElement(
+        WorkspaceContext.Provider,
+        { value: workspace },
+        createElement(RelatedPlanes, { id, parentShown }),
+      );
+    const view = render(related('root', false));
+    expect(view.getByRole('button', { name: 'Related planes' }).textContent).toBe('1');
+    view.rerender(related('branch', true));
+    expect(view.getByRole('button', { name: 'Related planes' }).textContent).toBe('2');
+    view.rerender(related('leaf', true));
+    expect(view.queryByRole('button', { name: 'Related planes' })).toBeNull();
+    view.rerender(related('leaf', false));
+    expect(view.getByRole('button', { name: 'Related planes' }).textContent).toBe('1');
   });
 });

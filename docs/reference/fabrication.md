@@ -434,8 +434,9 @@ inventory or are of the wrong kind, pages past the last, boxes and feature boxes
 and tour stops naming a missing finding are reported as issues.
 
 The panel shows the summary and each finding's summary with the job's refs written as file names,
-and the tour's captions and notes are saved so: "drawing S2" reads "drawing Job 1042 drawing.pdf". A
-ref the job does not have stays as written. The check record keeps the answer as the model gave it.
+and the tour's captions and notes are saved so: "drawing S2" reads "Job 1042 drawing.pdf", the name
+taking the noun before the ref. A ref the job does not have stays as written. The check record keeps
+the answer as the model gave it.
 
 Each finding is graded against Viewer's own value:
 

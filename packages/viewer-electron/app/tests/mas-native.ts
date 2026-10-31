@@ -451,7 +451,7 @@ async function renderedPreview() {
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: ' ', code: 'Space' });
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space' });
   await until(
-    () => evaluate(pageCall(pageIncludes, '1 meshes · 1 triangles · 3 vertices')),
+    () => evaluate(pageCall(pageIncludes, '1 mesh · 1 triangle · 3 vertices')),
     Boolean,
     'rendered signed STL preview',
   );

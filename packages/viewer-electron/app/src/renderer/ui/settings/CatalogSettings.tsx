@@ -12,7 +12,7 @@ import { Icon, type IconName } from '../Icon';
 import type { SettingsEditor } from './editor';
 import { ChoiceButton } from '../ChoiceMenu';
 import type { RowElement } from '../primitives';
-import { Row } from '../primitives';
+import { Button, PathField, Row } from '../primitives';
 import { ColorField } from '../ColorField';
 import { looks } from '../../workspace/look';
 import { errorMessage } from '../../../domain/errors';
@@ -210,8 +210,10 @@ export function CatalogSettings({
             )}
             {locationField && settings.browsing[locationField] === 'custom' && (
               <div className="settings-folder-choice">
-                <span title={customPath}>{customPath}</span>
-                <button onClick={() => chooseNewPlaneFolder(locationField)}>Change folder…</button>
+                <PathField path={customPath} onError={(error) => setError(errorMessage(error))} />
+                <Button variant="secondary" onClick={() => chooseNewPlaneFolder(locationField)}>
+                  Change folder…
+                </Button>
               </div>
             )}
           </Fragment>

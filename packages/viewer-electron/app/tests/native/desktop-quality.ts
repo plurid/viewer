@@ -6,6 +6,7 @@ import path from 'node:path';
 import { parse } from 'jsonc-parser';
 import { CURRENT_STATE_VERSION, type SavedState } from '../../src/domain/contracts';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
+import { headerPreset, headerPresetPatches } from '../../src/domain/preferences/header';
 import { defaultSettings } from '../../src/domain/services';
 import { temporaryRoot } from '../../tools/temporary';
 import { hashFile } from '../../tools/qualification/source';
@@ -62,6 +63,7 @@ settings.appearance = 'dark';
 settings.browsing.scrollbars = 'always';
 settings.toolbars = { folder: ['missing.extension', 'new-folder'] };
 const ui = normalizePreferences();
+ui.firstRunHint = { used: [] };
 ui.sidebar.inNewPlanes = false;
 ui.space.headerControls.back = false;
 // the discovery button this check opens, which Essential leaves to "…"
@@ -304,6 +306,102 @@ async function session(restart: boolean) {
     if (!restart) {
       await until(() => evaluate(pageCall(fullyFramed)), Boolean, 'fully framed folder');
       await capture('folder-always-visible-scrollbars');
+      await evaluate(patchSettings(...headerPresetPatches('essential')));
+      await until(() => evaluate(exists('.folder-tips')), Boolean, 'first-run tips');
+      assert.equal(await evaluate(exists('[data-plurid-minimap]')), false);
+      assert.equal(await evaluate(exists('[data-plurid-overlay="viewcube"]')), false);
+      assert.equal(await evaluate(exists('[data-plurid-entity="PluridToolbar"]')), false);
+      await capture('header-essential');
+      await evaluate(patchSettings(...headerPresetPatches('full')));
+      await until(
+        () => evaluate(exists('.plane-controls [aria-label="Layout"]')),
+        Boolean,
+        'Full exposes the layout control',
+      );
+      await capture('header-full');
+      await evaluate(
+        patchSettings(
+          ...headerPresetPatches('essential'),
+          { path: 'ui.space.headerControls.back', value: false },
+          { path: 'ui.space.headerControls.discover', value: true },
+        ),
+      );
+      const current = await evaluate(pageCall(() => window.viewer.settingsGet()));
+      assert.equal(headerPreset(current.ui.space.headerControls), 'custom');
+      await capture('header-custom');
+
+      await evaluate(click('[data-file-path]'));
+      for (const type of ['keyDown', 'keyUp'])
+        await command('Input.dispatchKeyEvent', {
+          type,
+          key: ' ',
+          code: 'Space',
+          windowsVirtualKeyCode: 32,
+        });
+      await until(
+        () => evaluate(exists('.quick-preview-dialog[open]')),
+        Boolean,
+        'Space opens preview',
+      );
+      for (const type of ['keyDown', 'keyUp'])
+        await command('Input.dispatchKeyEvent', {
+          type,
+          key: 'Escape',
+          code: 'Escape',
+          windowsVirtualKeyCode: 27,
+        });
+      await evaluate(click('[aria-label="Commands (⌘K)"]'));
+      await until(() => evaluate(exists('.command-palette[open]')), Boolean, 'Commands opens');
+      await until(
+        () => evaluate(exists('.folder-tips')),
+        (shown) => !shown,
+        'used tips retire',
+      );
+      for (const type of ['keyDown', 'keyUp'])
+        await command('Input.dispatchKeyEvent', {
+          type,
+          key: 'Escape',
+          code: 'Escape',
+          windowsVirtualKeyCode: 27,
+        });
+
+      for (const count of [2, 3]) {
+        await evaluate(click('[aria-label="New folder plane (⌘N)"]'));
+        await until(
+          () => evaluate(countOf('.plane-controls')),
+          (value) => value === count,
+          'new root plane',
+        );
+        await until(
+          () => evaluate(exists('[data-plurid-minimap]')),
+          (shown) => shown === (count === 3),
+          'minimap starts at three planes',
+        );
+      }
+      await capture('minimap-three-planes');
+      for (const count of [2, 1]) {
+        await evaluate(
+          click('.plane-controls:not([data-viewer-plane="folder"]) [aria-label="Close plane"]'),
+        );
+        await until(
+          () => evaluate(countOf('.plane-controls')),
+          (value) => value === count,
+          'close generated extra plane',
+        );
+      }
+      await until(
+        () => evaluate(exists('[data-plurid-minimap]')),
+        (shown) => !shown,
+        'minimap retires below three',
+      );
+    } else {
+      const current = await evaluate(pageCall(() => window.viewer.settingsGet()));
+      assert.equal(current.ui.firstRunHint, 'retired');
+      assert.equal(
+        await evaluate(exists('.folder-tips')),
+        false,
+        'Tips stay retired after restart',
+      );
     }
     await evaluate(pageCall(openDiscovery));
     await until(() => evaluate(exists('.capabilities-dialog')), Boolean, 'discovery dialog');

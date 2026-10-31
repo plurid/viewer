@@ -4,8 +4,11 @@ import { activeWorkspace, useViewer } from '../state/store';
 import { paneTitle } from '../../domain/workspaces/planes';
 import { useWorkspace } from './context';
 
-/** A route through related content without changing the authored arrangement. */
-export function RelatedPlanes({ id }: { id: string }) {
+/**
+ * A route through related content without changing the authored arrangement. A plane whose only
+ * relative is its parent shows none: the header's Back to parent plane already goes there.
+ */
+export function RelatedPlanes({ id, parentShown }: { id: string; parentShown: boolean }) {
   const workspace = useWorkspace();
   const related = useSyncExternalStore(workspace.subscribeLinks, () =>
     workspace
@@ -29,7 +32,7 @@ export function RelatedPlanes({ id }: { id: string }) {
         ]
       : [];
   });
-  if (!choices.length) return null;
+  if (!choices.length || (parentShown && !related)) return null;
   return (
     <ChoiceButton
       label="Related planes"

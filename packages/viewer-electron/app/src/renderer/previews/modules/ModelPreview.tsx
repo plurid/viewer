@@ -44,6 +44,10 @@ interface ModelSession {
   background(look: Look): void;
 }
 const backgrounds = { dark: '#292d34', light: '#e9edf1' } as const;
+/** "1 mesh", "12 triangles": a count and its noun, singular for one. */
+function counted(count: number, one: string, many: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? one : many}`;
+}
 function disposeObject(object: THREE.Object3D): void {
   const materials = new Set<THREE.Material>(),
     textures = new Set<THREE.Texture>();
@@ -528,7 +532,11 @@ export default function ModelPreview(context: PreviewContext) {
       surfaces = modelSurfaceAppearance(loaded);
       setHasDeformingMeshes(surfaces.hasDeformingMeshes);
       setInfo(
-        `${meshes.toLocaleString()} meshes · ${Math.round(triangles).toLocaleString()} triangles · ${vertices.toLocaleString()} vertices`,
+        [
+          counted(meshes, 'mesh', 'meshes'),
+          counted(Math.round(triangles), 'triangle', 'triangles'),
+          counted(vertices, 'vertex', 'vertices'),
+        ].join(' · '),
       );
       setNotices(notes);
       setAnimations(clips.map((clip, index) => clip.name || `Animation ${index + 1}`));

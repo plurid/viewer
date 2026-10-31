@@ -139,6 +139,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [registry, request, revision, pane, active],
   );
+  const parentShown = controls.parent && available.some((item) => item.id === 'parent-plane');
   const run = (command: string) => {
     setActivePane(id);
     void registry
@@ -195,7 +196,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       data-scroll-selected={context.scrollSelected || undefined}
       onPointerDown={() => setActivePane(id)}
     >
-      {controls.parent && available.some((item) => item.id === 'parent-plane') && (
+      {parentShown && (
         <IconButton
           {...headerItem('parent', 2, ['parent-plane'])}
           icon="parent-plane"
@@ -203,7 +204,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           onClick={() => run('parent-plane')}
         />
       )}
-      <RelatedPlanes id={id} />
+      <RelatedPlanes id={id} parentShown={parentShown} />
       {pane?.type === 'folder' && (controls.sidebar || controls.back || controls.forward) && (
         <div className="plane-navigation">
           {controls.sidebar && (

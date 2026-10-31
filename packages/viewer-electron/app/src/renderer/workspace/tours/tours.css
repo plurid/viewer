@@ -21,13 +21,12 @@
 .space-overlay > * {
   pointer-events: auto;
 }
+/* One width for every stop, so Previous and Next stay under the pointer as the captions change. */
 .tour-bar {
   grid-row: 2;
   justify-self: center;
   margin: 0 var(--gap-tight) var(--gap-tight);
-  width: max-content;
-  min-width: min(420px, 100% - 8px);
-  max-width: min(760px, 100% - 8px);
+  width: min(720px, 100% - 8px);
   /* room above for a collapsed panel's title bar and the gap */
   max-height: calc(100cqh - 64px);
   overflow-y: auto;

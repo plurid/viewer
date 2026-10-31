@@ -16,18 +16,25 @@ export const inventoryRefSchema = z
   .regex(/^S[1-9]\d{0,2}$/)
   .describe('A ref from the inventory, such as S2.');
 export type InventoryRef = z.infer<typeof inventoryRefSchema>;
-/** A ref as the model writes it in prose: a whole word, and not the start of a number ("S2.5"). */
-const proseRef = /\bS[1-9]\d{0,2}\b(?![.,]\d)/g;
+/**
+ * A ref as the model writes it in prose: a whole word, and not the start of a number ("S2.5"),
+ * with the kind's noun the model may put before it ("drawing S2", "the DXF S7").
+ */
+const proseRef =
+  /(?:\b(?:[Tt]he\s+)?(?:[Dd]rawing|DXF|dxf|PDF|[Rr]equest|[Pp]hoto)\s+)?\bS[1-9]\d{0,2}\b(?![.,]\d)/g;
+const refAtEnd = /S[1-9]\d{0,2}$/;
 /**
  * The model's prose with each ref of the job written as its file's name: the model reads the job
- * by refs, a person by names. A ref the job does not have stays as written.
+ * by refs, a person by names. The name also takes the kind's noun before the ref, which it already
+ * says: "drawing S2" reads "Job 1042 drawing.pdf", not "drawing Job 1042 drawing.pdf". A ref the job
+ * does not have stays as written, its noun with it.
  */
 export function namedRefs(
   text: string,
   sources: readonly Pick<InventoryItem, 'ref' | 'name'>[],
 ): string {
   const names = new Map(sources.map((source) => [source.ref, source.name]));
-  return text.replace(proseRef, (ref) => names.get(ref) ?? ref);
+  return text.replace(proseRef, (written) => names.get(refAtEnd.exec(written)![0]) ?? written);
 }
 /** One file of the job as the model reads it. */
 export interface InventoryItem {

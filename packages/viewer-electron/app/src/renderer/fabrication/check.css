@@ -7,6 +7,22 @@
   width: 420px;
   max-width: 100%;
 }
+.check-panel-footer {
+  flex-shrink: 0;
+}
+.check-handoff-result {
+  display: grid;
+  gap: var(--gap-tight);
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-compact);
+}
+.check-handoff-result > p {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .check-files,
 .check-parts,
 .check-findings,
@@ -113,19 +129,19 @@
   gap: var(--gap-small);
   padding-top: var(--gap-content);
 }
-/* A result shown again: when it was checked, or what changed in the job since. */
+/* A result shown again: when it was checked, or what changed in the job since. It opens the
+   panel's body, and the section after it brings its own room: no margin of its own. */
 .check-since {
   display: flex;
   align-items: baseline;
   gap: var(--gap-small);
-  margin-top: var(--gap-content);
+  margin: 0;
 }
 .check-stale {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--gap-content);
-  margin-top: var(--gap-content);
   padding: var(--gap-inline) var(--gap-content);
   border-radius: var(--radius-control);
   background: var(--raised);

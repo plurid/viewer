@@ -185,8 +185,9 @@ then measure every DXF part itself and say where the job disagrees with itself: 
    handoff**: Viewer nests it first as the Nesting plane starts it, saying which thickness and how
    much, such as "Nesting 6 mm: 3 parts, 8 pieces…". A folder such as "Job 1042 handoff" appears in
    the job's folder, holding `Cut sheets/`, `Evidence/` copies of the job's files,
-   `Job.viewer-tour.jsonc`, which plays from those copies, and `Check record.json`. **File
-   operations** offers Undo.
+   `Job.viewer-tour.jsonc`, which plays from those copies, and `Check record.json`. The saved path
+   stays at the bottom of the expanded panel: choose **Copy path** to copy it or **Open handoff** to
+   open the folder in the check's workspace. **File operations** offers Undo.
    - If a part does not fit the sheet, or a drawing cannot be read, the panel names it and exports
      nothing. Nest that thickness under **Prepare cut sheets**, then export again.
    - A part whose quantity the job leaves open is never nested for you: set it in the Nesting plane

@@ -326,10 +326,11 @@ selection, model gestures and text selection must not drag or rotate the plane. 
 remains the movement affordance.
 
 Linked children originate at their source row/tile; reveal a virtualized source before measuring it.
-Keep parent/child navigation intelligible through Related planes and source markers. Closing a child
-returns to the parent. Tiling changes logical geometry and camera framing together rather than
-shrinking controls into unusable surfaces. Keep plane backs and native engine controls consistent
-with the current product preferences.
+Keep parent/child navigation intelligible through Related planes and source markers; a child whose
+only relative is its parent shows Back to parent plane alone, not both. Closing a child returns to
+the parent. Tiling changes logical geometry and camera framing together rather than shrinking
+controls into unusable surfaces. Keep plane backs and native engine controls consistent with the
+current product preferences.
 
 ## Browsing and commands
 

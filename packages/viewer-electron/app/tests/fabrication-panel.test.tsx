@@ -243,7 +243,9 @@ let listeners: ((event: DesktopEvent) => void)[];
 let operate: ReturnType<typeof vi.fn>;
 let fabrication: ReturnType<typeof vi.fn>;
 const openLayout = vi.fn();
-const workspace = { openLayout } as unknown as WorkspaceController;
+const openPath = vi.fn(async () => {});
+const copyPaths = vi.fn(async () => {});
+const workspace = { openLayout, openPath } as unknown as WorkspaceController;
 
 beforeEach(() => {
   initialize({ home: '/Jobs', platform: 'darwin', state: null, locations: [], openPaths: [] });
@@ -261,6 +263,7 @@ beforeEach(() => {
     request.kind === 'open' ? opening : request.kind === 'run' ? result : { kind: 'done' },
   );
   vi.stubGlobal('viewer', {
+    copyPaths,
     fabrication,
     operate,
     providerPermissionGet: async () => ({
@@ -369,7 +372,7 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
   );
   expect(
     screen.getByText(
-      'The base plate’s DXF g6-PL60-B2-2buc.dxf puts its right holes 48 mm from the left ones; drawing Job 1042 drawing.pdf gives 50 mm.',
+      'The base plate’s g6-PL60-B2-2buc.dxf puts its right holes 48 mm from the left ones; Job 1042 drawing.pdf gives 50 mm.',
     ),
   ).toBeTruthy();
   expect(fabrication).toHaveBeenCalledWith({
@@ -488,7 +491,23 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
     id: 'job-handoff',
     completed: [{ source: '', destination: `${folder}/Job 1042 handoff` }],
   });
-  await screen.findByText('Saved “Job 1042 handoff”.');
+  const saved = await screen.findByText('Saved “Job 1042 handoff”.');
+  expect(saved.closest('.check-panel-footer')).toBeTruthy();
+  expect(saved.closest('.check-panel-body')).toBeNull();
+  expect(screen.getByText(`${folder}/Job 1042 handoff`)).toBeTruthy();
+  expect(openPath).not.toHaveBeenCalled();
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy path' })));
+  expect(copyPaths).toHaveBeenCalledWith([`${folder}/Job 1042 handoff`]);
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open handoff' })));
+  expect(openPath).toHaveBeenCalledWith(`${folder}/Job 1042 handoff`, {
+    workspaceID: activeWorkspace().id,
+    directory: true,
+    activate: true,
+  });
+  openPath.mockRejectedValueOnce(new Error('The handoff folder is unavailable.'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open handoff' })));
+  expect(getState().notice).toBe('The handoff folder is unavailable.');
+  expect(screen.getByText(`${folder}/Job 1042 handoff`)).toBeTruthy();
 });
 
 it('says why a check failed, and offers to run it again', async () => {
@@ -678,6 +697,83 @@ async function checkedAndSaved(): Promise<void> {
   await screen.findByText('Saved: pitch 48.00 mm → 50.00 mm, measured again.');
 }
 const kinds = () => fabrication.mock.calls.map(([request]) => (request as { kind: string }).kind);
+
+async function exportingHandoff() {
+  level = 'images';
+  fabrication.mockImplementation(async (request: { kind: string }) =>
+    request.kind === 'open'
+      ? opening
+      : request.kind === 'run'
+        ? result
+        : request.kind === 'changes'
+          ? { kind: 'changes', id: opening.id, changes: [] }
+          : { kind: 'done' },
+  );
+  panel();
+  await checkedAndSaved();
+  act(() =>
+    prepareNesting({
+      title: 'Job cut sheets',
+      sources: [
+        { path: `${folder}/g6-MB20-A1-4buc.dxf`, version },
+        { path: corrected, version },
+      ],
+      plan: { title: 'Job cut sheets', sheets: [{}] } as unknown as NestingTransform,
+    }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Export handoff' }));
+  await waitFor(() => expect(checkSession()?.handoff).toBe('job-handoff'));
+}
+
+it.each(['running', 'failed', 'cancelled', 'missing destination'] as const)(
+  'does not offer a saved handoff for %s',
+  async (status) => {
+    await exportingHandoff();
+    const missing = status === 'missing destination';
+    finish({
+      id: 'job-handoff',
+      status: missing ? 'completed' : status,
+      completed: missing ? [] : [{ source: '', destination: `${folder}/Job 1042 handoff` }],
+      errors: status === 'failed' ? [{ path: folder, message: 'The destination is full.' }] : [],
+    });
+    expect(screen.queryByRole('button', { name: 'Open handoff' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy path' })).toBeNull();
+    expect(screen.queryByText('Saved “Job 1042 handoff”.')).toBeNull();
+    expect(document.querySelector('.check-panel-footer')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Handoff' }).textContent).toContain(
+      missing
+        ? 'The handoff completed without a destination. Check File operations.'
+        : status === 'failed'
+          ? 'The destination is full.'
+          : status === 'cancelled'
+            ? 'Cancelled.'
+            : 'Saving…',
+    );
+  },
+);
+
+it('keeps the saved destination on collapse and reopening, then clears it on rerun', async () => {
+  await exportingHandoff();
+  const destination = `${folder}/Job 1042 handoff`;
+  const rerun = screen.getByRole('button', { name: 'Run again' });
+  rerun.focus();
+  finish({ id: 'job-handoff', completed: [{ source: '', destination }] });
+  expect(document.activeElement).toBe(rerun);
+  expect(openPath).not.toHaveBeenCalled();
+  fireEvent.click(toggle());
+  expect(toggle().textContent).toContain('Handoff saved');
+  expect(screen.queryByRole('button', { name: 'Open handoff' })).toBeNull();
+  fireEvent.click(toggle());
+  expect(screen.getByText(destination)).toBeTruthy();
+  act(() => closeCheck());
+  await act(() => openCheck([folder], activeWorkspace().id));
+  expect(screen.getByText(destination)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Open handoff' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
+  await waitFor(() => expect(checkSession()?.phase).toBe('checked'));
+  expect(screen.queryByText(destination)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Open handoff' })).toBeNull();
+});
 
 it('keeps a finished check when its panel closes, and shows it again at once while the job is unchanged', async () => {
   level = 'images';

@@ -257,7 +257,7 @@ async function select(file: string) {
 async function models() {
   await until(
     () => evaluate(textOf('.model-statistics')),
-    (text) => text.includes('meshes'),
+    (text) => /\d+ mesh/.test(text),
     'loaded model',
   );
 }

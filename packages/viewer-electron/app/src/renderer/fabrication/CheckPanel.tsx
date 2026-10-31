@@ -21,7 +21,7 @@ import { report, useViewer } from '../state/store';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { overlayOpen } from '../ui/modal';
 import { Panel, PanelSection } from '../ui/Panel';
-import { Button, Row } from '../ui/primitives';
+import { Button, PathField, Row } from '../ui/primitives';
 import { useModelPermission } from '../ui/models/ModelDataPermission';
 import { startingSheets } from '../layout/nesting/headless';
 import { preparedNestings, subscribeNestings } from '../layout/nesting/prepared';
@@ -78,7 +78,10 @@ const listingPhases: readonly CheckPhase[] = ['ready', 'drawing', 'asking', 'fai
  * What the collapsed title bar says after the job: "2 findings, 1 confirmed", or the step that
  * runs and since when, such as the model reading or a thickness nesting for the export.
  */
-function collapsedStatus(current: CheckSession): { text: string; since?: number } {
+function collapsedStatus(
+  current: CheckSession,
+  handoff: OperationJob | undefined,
+): { text: string; since?: number } {
   const result = current.result;
   switch (current.phase) {
     case 'opening':
@@ -99,6 +102,12 @@ function collapsedStatus(current: CheckSession): { text: string; since?: number 
         return { text: current.handoffProgress, since: current.handoffSince };
       if (current.stale)
         return { text: `Changed since ${clockText(current.checked ?? Date.now())}` };
+      if (current.handoff)
+        return {
+          text: jobStatus(handoff, (done) =>
+            done.completed[0]?.destination ? 'Handoff saved' : 'Handoff destination unavailable',
+          ),
+        };
       const findings = result?.findings ?? [];
       const confirmed = findings.filter((item) => item.grade.status === 'confirmed').length;
       return {
@@ -111,9 +120,15 @@ function collapsedStatus(current: CheckSession): { text: string; since?: number 
 }
 
 function CheckPanelBody({ current, collapsed }: { current: CheckSession; collapsed: boolean }) {
+  const workspace = useWorkspace();
+  const handoff = useViewer((state) => state.jobs.find((entry) => entry.id === current.handoff));
+  const destination =
+    current.phase === 'checked' && handoff?.status === 'completed'
+      ? handoff.completed[0]?.destination
+      : undefined;
   const opening = current.opening;
   const job = opening?.job ?? current.nothing?.job;
-  const status = collapsedStatus(current);
+  const status = collapsedStatus(current, handoff);
   return (
     <Panel
       className="check-panel"
@@ -129,6 +144,30 @@ function CheckPanelBody({ current, collapsed }: { current: CheckSession; collaps
       onCollapsedChange={toggleCheckPanel}
       onClose={closeCheck}
       closeLabel="Close the check"
+      footer={
+        destination && (
+          <>
+            <div className="check-handoff-result">
+              <p role="status">Saved “{fileName(destination)}”.</p>
+              <PathField path={destination} layout="line" />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                void workspace
+                  .openPath(destination, {
+                    workspaceID: current.workspaceID,
+                    directory: true,
+                    activate: true,
+                  })
+                  .catch(report)
+              }
+            >
+              Open handoff
+            </Button>
+          </>
+        )
+      }
       data-stale={current.phase === 'checked' && current.stale ? true : undefined}
       onKeyDown={(event) => {
         // a menu or dialog inside keeps its own Escape; a running tour takes it first
@@ -610,12 +649,12 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
       {!current.handoff && missing.length > 0 && (
         <p className="check-note">{hold ?? missingText(missing)}</p>
       )}
-      {current.handoff ? (
+      {job?.status === 'completed' && job.completed[0]?.destination ? null : current.handoff ? (
         <p className="check-note" role="status">
-          {jobStatus(job, (done) => {
-            const folder = done.completed[0]?.destination;
-            return folder ? `Saved “${fileName(folder)}”.` : 'Saved.';
-          })}
+          {jobStatus(
+            job,
+            () => 'The handoff completed without a destination. Check File operations.',
+          )}
         </p>
       ) : current.handoffProgress ? (
         <div className="check-progress" role="status">

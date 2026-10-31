@@ -36,7 +36,7 @@
   width: 28px;
   height: 28px;
 }
-.plane-related {
+.plane-controls .plane-related {
   flex-shrink: 0;
   width: auto;
   min-width: 0;
@@ -96,6 +96,9 @@
 }
 /* a format's controls with no command of their own scroll, as the last resort, at a fading edge */
 .plane-module-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;

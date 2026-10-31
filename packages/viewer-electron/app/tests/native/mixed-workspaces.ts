@@ -13,7 +13,7 @@ import { localSamples } from '../../tools/playground/catalog';
 import { temporaryRoot } from '../../tools/temporary';
 import { modelHeapSummary } from '../../tools/qualification/heap';
 import { ownedApp, until } from '../owned-app';
-import { animationFrames, click, countOf, textOf } from './runtime/page';
+import { animationFrames, click, countOf, patchSettings, textOf } from './runtime/page';
 import { pageCall } from './runtime/page-function';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
@@ -258,16 +258,29 @@ function planeFramed(id: string) {
   return bounds.width >= 375 && !document.querySelector('[data-plurid-motion]');
 }
 
-/** Each plane header's overflow and whether Frame and Dock are shown. */
+/** Header bounds in the rendered space, and the Related control's unscaled width. */
 const headerGeometry = () =>
-  [...document.querySelectorAll<HTMLElement>('.plane-controls')].map((header) => ({
-    id: header.dataset.viewerPlane,
-    overflow: header.scrollWidth - header.clientWidth,
-    frame: !!header.querySelector('[aria-label="Frame plane"]')?.getClientRects().length,
-    dock: !![...header.querySelectorAll('button')]
-      .find((button) => /^(Dock|Undock) plane$/.test(button.getAttribute('aria-label') ?? ''))
-      ?.getClientRects().length,
-  }));
+  [...document.querySelectorAll<HTMLElement>('.plane-controls')].map((header) => {
+    const bounds = header.getBoundingClientRect();
+    const toolbars = [...header.querySelectorAll('.plane-module-controls .preview-toolbar')]
+      .map((toolbar) => toolbar.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0);
+    const centers = toolbars.map((rect) => (rect.top + rect.bottom) / 2);
+    return {
+      id: header.dataset.viewerPlane,
+      overflow: header.scrollWidth - header.clientWidth,
+      frame: !!header.querySelector('[aria-label="Frame plane"]')?.getClientRects().length,
+      dock: !![...header.querySelectorAll('button')]
+        .find((button) => /^(Dock|Undock) plane$/.test(button.getAttribute('aria-label') ?? ''))
+        ?.getClientRects().length,
+      relatedWidth: header.querySelector<HTMLElement>('.plane-related')?.offsetWidth ?? 0,
+      toolbars: toolbars.length,
+      toolbarOverflow: toolbars.some(
+        (rect) => rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1,
+      ),
+      toolbarRowSpread: centers.length > 1 ? Math.max(...centers) - Math.min(...centers) : 0,
+    };
+  });
 const app = await ownedApp(binary, profile, { environment: { SHELL: '/bin/sh' } });
 let connection: Awaited<ReturnType<typeof app.connect>> | undefined;
 const observations: unknown[] = [];
@@ -522,6 +535,28 @@ try {
     'Navigate to related terminal',
   );
   const terminal = selected.workspaces[0]!.activePane!;
+  assert.equal(
+    await evaluate(countOf(`.plane-controls[data-viewer-plane="${terminal}"] .plane-related`)),
+    0,
+    'The parent-only child uses its Back to parent plane button',
+  );
+  await evaluate(patchSettings({ path: 'ui.space.headerControls.parent', value: false }));
+  await until(
+    () => evaluate(countOf(`.plane-controls[data-viewer-plane="${terminal}"] .plane-related`)),
+    (count) => count === 1,
+    'Related keeps the parent reachable when the dedicated button is hidden',
+  );
+  await evaluate(patchSettings({ path: 'ui.space.headerControls.parent', value: true }));
+  await until(
+    () =>
+      evaluate(
+        countOf(
+          `.plane-controls[data-viewer-plane="${terminal}"] [aria-label="Back to parent plane"]`,
+        ),
+      ),
+    (count) => count === 1,
+    'The parent button returns',
+  );
   await evaluate(
     click(`.plane-controls[data-viewer-plane="${terminal}"] [aria-label="Back to parent plane"]`),
   );
@@ -546,6 +581,9 @@ try {
         for (const header of geometry) {
           assert.ok(header.overflow <= 1, 'Header controls fit: ' + header.id);
           assert.ok(header.frame && header.dock, 'Frame and Dock remain reachable: ' + header.id);
+          assert.ok(header.relatedWidth <= 72, 'Related stays compact: ' + header.id);
+          assert.equal(header.toolbarOverflow, false, 'Tools stay inside the header: ' + header.id);
+          assert.ok(header.toolbarRowSpread <= 1, 'Toolbars share one row: ' + header.id);
         }
         const picture = await command<{ data: string }>('Page.captureScreenshot', {
           format: 'png',
@@ -557,6 +595,18 @@ try {
         );
       }
     }
+    await evaluate(
+      click('.plane-controls[data-viewer-plane="preview-2"] [aria-label="Frame plane"]'),
+    );
+    const office = await until(
+      () => evaluate(pageCall(headerGeometry)),
+      (headers) => headers.some((header) => header.id === 'preview-2' && header.toolbars > 1),
+      'The framed Office document has both its mode and PDF layout toolbar',
+    );
+    const header = office.find((header) => header.id === 'preview-2')!;
+    assert.equal(header.toolbarOverflow, false, 'Both Office toolbars fit the header height');
+    assert.ok(header.toolbarRowSpread <= 1, 'Office toolbars share one row');
+    observations.push({ phase: 'office-header', header });
   }
   passed = true;
 } finally {

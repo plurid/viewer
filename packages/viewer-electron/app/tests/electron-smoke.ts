@@ -2637,7 +2637,7 @@ async function verifyModelLighting(): Promise<void> {
   for (const extension of ['glb', 'stl']) {
     await preview(
       path.join(fixture.files, 'Models', `Triangle.${extension}`),
-      '1 meshes · 1 triangles · 3 vertices',
+      '1 mesh · 1 triangle · 3 vertices',
     );
     await closePreview();
   }
@@ -2865,7 +2865,7 @@ async function verifyRefinements(): Promise<void> {
   for (const extension of ['glb', 'gltf', 'obj', 'stl', 'fbx']) {
     await preview(
       path.join(fixture.files, 'Models', `Triangle.${extension}`),
-      '1 meshes · 1 triangles · 3 vertices',
+      '1 mesh · 1 triangle · 3 vertices',
     );
     await closePreview();
   }
@@ -6044,6 +6044,22 @@ function paletteBounds() {
     viewport: innerHeight,
   };
 }
+function pathControlGeometry(scope: string) {
+  return [...document.querySelectorAll<HTMLElement>(scope + ' .path-field')].map((field) => {
+    const rect = field.getBoundingClientRect();
+    const button = field.querySelector('.copy-button')!.getBoundingClientRect();
+    return {
+      path: field.querySelector('.path-text')!.textContent,
+      copyVisible:
+        button.width > 0 &&
+        button.left >= rect.left &&
+        button.right <= rect.right + 1 &&
+        button.top >= 0 &&
+        button.bottom <= innerHeight,
+      overflow: field.scrollWidth - field.clientWidth,
+    };
+  });
+}
 async function verifyEntryAndPalette(): Promise<void> {
   await delay(800);
   const original = JSON.parse(await readFile(stateFile, 'utf8')) as SavedState;
@@ -6088,6 +6104,14 @@ async function verifyEntryAndPalette(): Promise<void> {
     'custom starting folder in Settings',
   );
   await snapshot('desktop-native-new-plane-settings.png');
+  const folderPaths = await settingsEvaluate(
+    pageCall(pathControlGeometry, '.settings-folder-choice'),
+  );
+  assert.deepEqual(
+    folderPaths.map((entry) => entry.path),
+    [fixture.files, path.join(fixture.files, 'Data')],
+  );
+  assert.ok(folderPaths.every((entry) => entry.copyVisible && entry.overflow <= 1));
   await click('dialog [aria-label="Close"]');
   const empty = structuredClone(original);
   empty.workspaces[0].panes = [];
@@ -6197,6 +6221,8 @@ async function verifyEntryAndPalette(): Promise<void> {
   });
   const narrow = await bounds();
   assert.ok(narrow.bottom <= narrow.viewport - 19, JSON.stringify(narrow));
+  const commandPaths = await evaluate(pageCall(pathControlGeometry, '.palette-context'));
+  assert.deepEqual(commandPaths, [{ path: fixture.files, copyVisible: true, overflow: 0 }]);
   await key('Escape', 'Escape');
   await key('f', 'KeyF', 4);
   await until(
@@ -6216,6 +6242,8 @@ async function verifyEntryAndPalette(): Promise<void> {
     ),
   );
   await snapshot('desktop-native-palette-small-window.png');
+  const filePaths = await evaluate(pageCall(pathControlGeometry, '.palette-context'));
+  assert.deepEqual(filePaths, [{ path: fixture.files, copyVisible: true, overflow: 0 }]);
   await command('Emulation.clearDeviceMetricsOverride');
   await key('Escape', 'Escape');
   console.log(
@@ -6983,7 +7011,7 @@ async function verify(): Promise<void> {
   for (const extension of ['glb', 'gltf', 'obj', 'stl', 'fbx']) {
     await preview(
       path.join(fixture.files, 'Models', `Triangle.${extension}`),
-      '1 meshes · 1 triangles · 3 vertices',
+      '1 mesh · 1 triangle · 3 vertices',
     );
     await closePreview();
   }
@@ -7237,7 +7265,7 @@ async function verify(): Promise<void> {
   await until(text, (value) => value.includes('Triangle.glb'), 'linked preview folder');
   await preview(
     path.join(fixture.files, 'Models', 'Triangle.glb'),
-    '1 meshes · 1 triangles · 3 vertices',
+    '1 mesh · 1 triangle · 3 vertices',
   );
   await evaluate(
     pageCall(() =>
@@ -7405,7 +7433,7 @@ async function verify(): Promise<void> {
   await snapshot('compact-native-docked.png');
   await command('Emulation.clearDeviceMetricsOverride');
   await appearance('light');
-  await until(text, (value) => value.includes('1 meshes'), 'model after look change');
+  await until(text, (value) => value.includes('1 mesh · '), 'model after look change');
   await settleCamera();
   await delay(300);
   await snapshot('desktop-light.png');

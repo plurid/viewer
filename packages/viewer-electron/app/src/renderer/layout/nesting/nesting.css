@@ -21,7 +21,10 @@
   overflow: auto;
   padding: var(--gap-content) var(--gap-panel) var(--gap-panel);
 }
+/* The parts and settings column is its rows' container: narrower than a settings page, a choice
+   goes under its label, whole, instead of cut at the shared edge (base.css .row). */
 .nesting-sidebar {
+  container-type: inline-size;
   border-right: 1px solid var(--line);
   background: var(--surface);
 }

@@ -20,7 +20,7 @@ import {
   report,
   useViewer,
 } from '../state/store';
-import { Dialog, IconButton, NameDialog } from '../ui/primitives';
+import { Dialog, IconButton, NameDialog, PathField } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { useFolder } from '../explorer/useFolder';
 import { useSearch } from '../explorer/useSearch';
@@ -333,10 +333,7 @@ function CommandFinder({
           <span>⌘, opens Settings</span>
         ) : (
           <>
-            <span title={directory}>
-              {context.selection.length ? `${context.selection.length} selected · ` : ''}
-              {directory}
-            </span>
+            <PalettePath directory={directory} selected={context.selection.length} />
             <span className="palette-hint">
               <kbd>{palettePrefixes.settings}</kbd> settings
             </span>
@@ -344,6 +341,15 @@ function CommandFinder({
         )}
       </div>
     </>
+  );
+}
+
+function PalettePath({ directory, selected }: { directory: string; selected: number }) {
+  return (
+    <div className="palette-path">
+      {selected > 0 && <span>{selected} selected ·</span>}
+      <PathField path={directory} layout="line" />
+    </div>
   );
 }
 
@@ -625,10 +631,7 @@ function FileFinder({
         leading={<IconButton icon="left" label="Back to commands" onClick={onCommands} />}
       />
       <div className="palette-context">
-        <span title={directory}>
-          {context.selection.length ? `${context.selection.length} selected · ` : ''}
-          {directory}
-        </span>
+        <PalettePath directory={directory} selected={context.selection.length} />
         <ChoiceButton
           label="Search scope"
           value={scope}

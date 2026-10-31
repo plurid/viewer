@@ -113,10 +113,10 @@ function recordedAnswer(input: CheckInput) {
 /** The answer's prose as the panel and the tour show it. */
 const named = {
   summary:
-    'g6-PL60-B2-2buc.dxf puts its right holes 48 mm from the left ones; drawing Job 1042 drawing.pdf gives 50 mm.',
+    'g6-PL60-B2-2buc.dxf puts its right holes 48 mm from the left ones; Job 1042 drawing.pdf gives 50 mm.',
   finding:
     'The bottom holes of g6-PL60-B2-2buc.dxf are 48 mm apart; Job 1042 drawing.pdf gives 50 mm.',
-  caption: 'Drawing Job 1042 drawing.pdf gives 50 mm between the holes.',
+  caption: 'Job 1042 drawing.pdf gives 50 mm between the holes.',
 };
 const proseRef = /\bS[1-9]\d{0,2}\b/;
 
@@ -381,7 +381,8 @@ function panelState() {
     parts: [...(panel?.querySelectorAll('.check-parts .check-file') ?? [])].map(text),
     since: text(panel?.querySelector('.check-since')),
     stale: text(panel?.querySelector('.check-stale')),
-    handoff: text(panel?.querySelector('[aria-label="Handoff"] p[role="status"]')),
+    handoff: text(panel?.querySelector('.check-panel-footer p[role="status"]')),
+    handoffPath: text(panel?.querySelector('.check-panel-footer .path-text')),
     handoffError: text(panel?.querySelector('[aria-label="Handoff"] [role="alert"]')),
     error: text(panel?.querySelector('.check-panel-body > .error')),
   };
@@ -579,6 +580,8 @@ async function step<T>(name: string, work: () => Promise<T>): Promise<T> {
 }
 const panel = () => page.evaluate(pageCall(panelState));
 const nesting = () => page.evaluate(pageCall(nestingState));
+const saved = async () =>
+  JSON.parse(await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8')) as SavedState;
 /** Opens ⌘K and types `query`; its rows once the palette shows them. */
 async function palette(query: string): Promise<PaletteRows> {
   await actions.key('k', 'KeyK', 4);
@@ -966,6 +969,43 @@ try {
       180_000,
     );
     assert.equal(done.handoffError, '', 'The handoff was exported');
+    assert.equal(done.handoffPath, handoff, 'The saved path is the operation’s destination');
+    const footer = await page.evaluate(
+      pageCall(() => {
+        const panel = document.querySelector('.check-panel')!;
+        const body = panel.querySelector('.check-panel-body')!;
+        body.scrollTop = 0;
+        const footer = panel.querySelector('.check-panel-footer')!;
+        const bounds = footer.getBoundingClientRect();
+        const controls = [...footer.querySelectorAll('button')].map((button) => {
+          const rect = button.getBoundingClientRect();
+          return {
+            label: button.getAttribute('aria-label') ?? button.textContent.trim(),
+            visible:
+              rect.width > 0 &&
+              rect.height > 0 &&
+              rect.left >= bounds.left &&
+              rect.right <= bounds.right + 1 &&
+              rect.top >= bounds.top &&
+              rect.bottom <= bounds.bottom + 1,
+          };
+        });
+        return {
+          outsideBody: !body.contains(footer),
+          visible: bounds.top >= 0 && bounds.bottom <= innerHeight,
+          controls,
+        };
+      }),
+    );
+    assert.equal(
+      footer.outsideBody && footer.visible,
+      true,
+      'Saved result stays outside the scroll',
+    );
+    assert.deepEqual(footer.controls, [
+      { label: 'Copy path', visible: true },
+      { label: 'Open handoff', visible: true },
+    ]);
     const progress = await page.evaluate(pageCall(recorded, 'handoff'));
     for (const nested of ['Nesting 3 mm: 2 parts, 16 pieces…', 'Nesting 6 mm: 3 parts, 8 pieces…'])
       assert.ok(
@@ -1064,7 +1104,21 @@ try {
         ['text', 'page-text'],
       ],
     );
-    return { progress, copies, sheets: await readdir(sheets) };
+    const workspaceID = (await saved()).activeWorkspace;
+    await page.evaluate(pressButton('Open handoff', '.check-panel-footer'));
+    const opened = await wait(
+      saved,
+      (state) => {
+        const space = state.workspaces.find((space) => space.id === workspaceID)!;
+        return space.panes.some(
+          (pane) => pane.id === space.activePane && pane.type === 'folder' && pane.path === handoff,
+        );
+      },
+      'Open handoff activates the saved folder in the check’s workspace',
+    );
+    assert.equal(opened.activeWorkspace, workspaceID);
+    await capture('handoff-opened');
+    return { progress, copies, sheets: await readdir(sheets), footer };
   });
 
   await step('Closed and opened again, the check is kept', async () => {
@@ -1088,6 +1142,7 @@ try {
     assert.equal(shown.stale, '', 'The job has not changed since');
     assert.equal(shown.correction, 'Saved: pitch 48.00 mm → 50.00 mm, measured again.');
     assert.equal(shown.handoff, 'Saved “Job 1042 handoff”.');
+    assert.equal(shown.handoffPath, handoff);
     assert.equal(
       calls.filter((call) => call.route === '/v1/chat/completions').length,
       1,
