@@ -5,6 +5,20 @@ off to an external terminal or tmux, with the settings, limits and agent access 
 
 Terminal commands use the selected folder, a selected file's folder, or the active browsing column.
 
+## Quick commands in the palette
+
+In **⌘K**, type `!` to open **Quick command**. **Return** runs the text verbatim using the default
+shell profile; **Shift+Return** adds a line. The limit is 16,000 characters. The folder displayed
+above the input is captured on opening: the folder or active browsing column, a terminal's starting
+folder, a preview's parent, or Home when no file context is active. Execution refuses a context
+whose workspace, plane or path has changed.
+
+Output streams inline with status, exit code, **Stop**, **Copy output** and **Open receipt**.
+Closing the palette does not cancel the command, and reopening returns to its last output. Only one
+quick command runs at a time in a window. The output buffer keeps the last 256 KiB and marks
+truncation. Interactive programs need a terminal plane. Quick commands use the same execution
+service, process cancellation and receipts as **Run command…**.
+
 ## Run one command
 
 **Run command…** opens the **Run command** dialog for the current folder.
@@ -37,8 +51,8 @@ For a program that needs input, use a terminal plane.
 
 ## Command receipts
 
-Each **Run command…** run writes a private receipt in Viewer's data. **Tasks…** → **Command
-history** lists them, and **Open receipt** opens one as a plane.
+Each quick command and **Run command…** run writes a private receipt in Viewer's data. **Tasks…** →
+**Command history** lists them, and **Open receipt** opens one as a plane.
 
 | Field   | Content                                                                                       |
 | ------- | --------------------------------------------------------------------------------------------- |

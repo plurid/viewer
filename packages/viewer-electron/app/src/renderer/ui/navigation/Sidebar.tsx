@@ -29,7 +29,17 @@ import { sendWindowEvent } from '../../app/window-events';
 const titles = { locations: 'Locations', favorites: 'Favorites', recents: 'Recent' };
 export const SIDEBAR_DRAG = 'application/x-viewer-sidebar';
 const SHORTCUT_DRAG = 'application/x-viewer-shortcuts';
+const SIDEBAR_DRAG_KIND = 'application/x-viewer-sidebar-';
 type SidebarDrag = { section: SidebarSection; path?: string };
+type SidebarDrop = {
+  kind: 'section' | 'item';
+  section: SidebarSection;
+  row?: string;
+  edge: 'before' | 'after';
+  before?: string;
+  beforeSection?: SidebarSection;
+  effect: 'link' | 'move';
+};
 function readSidebarDrag(data: string): SidebarDrag | null {
   try {
     const value: unknown = JSON.parse(data);
@@ -62,7 +72,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
       : { visible: false, width: 210 }
     : sidebar;
   const [menu, setMenu] = useState<{ x: number; y: number; request: CommandRequest } | null>(null);
-  const [drop, setDrop] = useState('');
+  const [drop, setDrop] = useState<SidebarDrop | null>(null);
   const element = useRef<HTMLElement>(null);
   const resizing = useRef<{
     x: number;
@@ -109,17 +119,90 @@ export function Sidebar({ paneID }: { paneID?: string }) {
   function drag(event: DragEvent, section: SidebarSection, path?: string) {
     event.stopPropagation();
     event.dataTransfer.setData(SIDEBAR_DRAG, JSON.stringify({ section, path }));
+    // Browsers hide payloads during dragover, but expose types for accurate drop feedback.
+    event.dataTransfer.setData(SIDEBAR_DRAG_KIND + (path ? section : 'section'), '');
     event.dataTransfer.effectAllowed = 'linkMove';
   }
-  async function finishDrop(event: DragEvent, section: SidebarSection, before?: string) {
+  function destination(
+    event: DragEvent,
+    section: SidebarSection,
+    row?: string,
+  ): SidebarDrop | null {
+    const types = Array.from(event.dataTransfer.types);
+    const source = readSidebarDrag(event.dataTransfer.getData(SIDEBAR_DRAG));
+    const sectionDrag = types.includes(SIDEBAR_DRAG_KIND + 'section') || (source && !source.path);
+    if (sectionDrag) {
+      const group = event.currentTarget.closest('.sidebar-group')!;
+      const box = group.getBoundingClientRect();
+      const after = box.height > 0 && event.clientY >= box.top + box.height / 2;
+      return {
+        kind: 'section',
+        section,
+        edge: after ? 'after' : 'before',
+        effect: 'move',
+        beforeSection: after ? sidebar.order[sidebar.order.indexOf(section) + 1] : section,
+      };
+    }
+    const sourceSection =
+      source?.section ??
+      (['locations', 'favorites', 'recents'] as const).find((name) =>
+        types.includes(SIDEBAR_DRAG_KIND + name),
+      );
+    if (
+      section === 'locations'
+        ? sourceSection !== 'locations'
+        : section !== 'favorites' ||
+          !(sourceSection || types.includes(SHORTCUT_DRAG) || types.includes('Files'))
+    )
+      return null;
+    const box = event.currentTarget.getBoundingClientRect();
+    const after =
+      row !== trashLocation && box.height > 0 && event.clientY >= box.top + box.height / 2;
+    const items = groups[section];
+    const before = row
+      ? after
+        ? items[items.findIndex((item) => item.path === row) + 1]?.path
+        : row
+      : section === 'locations'
+        ? trashLocation
+        : undefined;
+    // A group-level Locations drop inserts before pinned Trash. Mark that same boundary.
+    const endRow =
+      !row && section === 'locations' && !sidebar.collapsed.includes(section)
+        ? items.at(-1)?.path
+        : undefined;
+    return {
+      kind: 'item',
+      section,
+      row: row ?? endRow,
+      before,
+      edge: row ? (after ? 'after' : 'before') : endRow === trashLocation ? 'before' : 'after',
+      effect: section === 'favorites' && sourceSection !== 'favorites' ? 'link' : 'move',
+    };
+  }
+  function dragOver(event: DragEvent, section: SidebarSection, row?: string) {
+    const next = destination(event, section, row);
+    event.stopPropagation();
+    setDrop((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
+    if (!next) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = next.effect;
+  }
+  async function finishDrop(event: DragEvent, section: SidebarSection, row?: string) {
     event.preventDefault();
     event.stopPropagation();
-    setDrop('');
+    const target = destination(event, section, row);
+    setDrop(null);
+    if (!target) return;
+    const { before } = target;
     const dragged = readSidebarDrag(event.dataTransfer.getData(SIDEBAR_DRAG));
     if (dragged && !dragged.path) {
       changePreferences((ui) => ({
         ...ui,
-        sidebar: { ...ui.sidebar, order: reorder(ui.sidebar.order, dragged.section, section) },
+        sidebar: {
+          ...ui.sidebar,
+          order: reorder(ui.sidebar.order, dragged.section, target.beforeSection),
+        },
       }));
       return;
     }
@@ -169,27 +252,17 @@ export function Sidebar({ paneID }: { paneID?: string }) {
       onPointerDown={() => {
         if (paneID) setActivePane(paneID);
       }}
+      onDragEnd={() => setDrop(null)}
     >
       <div className="sidebar-scroll">
         {sidebar.order.map((section) => (
           <section
             key={section}
             aria-label={titles[section]}
-            className={`sidebar-group ${drop === section ? 'sidebar-drop' : ''}`}
-            onDragOver={(event) => {
-              const supported =
-                event.dataTransfer.types.includes(SIDEBAR_DRAG) ||
-                (section === 'favorites' &&
-                  (event.dataTransfer.types.includes(SHORTCUT_DRAG) ||
-                    event.dataTransfer.types.includes('Files')));
-              if (!supported) return;
-              event.preventDefault();
-              event.stopPropagation();
-              event.dataTransfer.dropEffect = section === 'favorites' ? 'link' : 'move';
-              setDrop(section);
-            }}
+            className={`sidebar-group ${drop?.section === section && !drop.row ? `sidebar-drop-${drop.edge}` : ''}`}
+            onDragOver={(event) => dragOver(event, section)}
             onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop('');
+              if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null);
             }}
             onDrop={(event) => {
               void finishDrop(event, section).catch(report);
@@ -221,11 +294,11 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                 {groups[section].map((item) => (
                   <button
                     key={item.path}
-                    className={`location ${current === item.path ? 'selected' : ''} ${drop === item.path ? 'sidebar-drop' : ''}`}
+                    className={`location ${current === item.path ? 'selected' : ''} ${drop?.section === section && drop.row === item.path ? `sidebar-drop-${drop.edge}` : ''}`}
                     title={item.path}
                     draggable={item.path !== trashLocation}
                     onDragStart={(event) => drag(event, section, item.path)}
-                    onDragEnd={() => setDrop('')}
+                    onDragEnd={() => setDrop(null)}
                     onContextMenu={(event) => {
                       if (item.path === trashLocation) {
                         event.preventDefault();
@@ -237,20 +310,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                         name: sidebar.labels[item.path] || item.name,
                       });
                     }}
-                    onDragOver={(event) => {
-                      if (
-                        !event.dataTransfer.types.includes(SIDEBAR_DRAG) &&
-                        !(
-                          section === 'favorites' &&
-                          (event.dataTransfer.types.includes(SHORTCUT_DRAG) ||
-                            event.dataTransfer.types.includes('Files'))
-                        )
-                      )
-                        return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setDrop(item.path);
-                    }}
+                    onDragOver={(event) => dragOver(event, section, item.path)}
                     onDrop={(event) => {
                       void finishDrop(event, section, item.path).catch(report);
                     }}

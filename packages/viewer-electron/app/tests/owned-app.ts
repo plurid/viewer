@@ -167,12 +167,22 @@ export async function ownedApp(
     await command('Emulation.setFocusEmulationEnabled', { enabled: true });
     // A debugger target exists before loadURL resolves. Browser.close during
     // that interval can close only the loading Mac window rather than Quit.
+    // Readiness polling is not user input. Marking it as a gesture while modules
+    // initialize can stall Electron's renderer before the first frame.
     await until(
-      () => evaluate(pageCall(() => document.readyState)),
+      () =>
+        evaluate(
+          pageCall(() => document.readyState),
+          { userGesture: false },
+        ).catch((error: Error) => {
+          throw new Error('Renderer document readiness: ' + error.message);
+        }),
       (state) => state === 'complete',
       'owned renderer finished loading',
     );
-    await evaluate(animationFrames(1));
+    await evaluate(animationFrames(1)).catch((error: Error) => {
+      throw new Error('Renderer initial animation frame: ' + error.message);
+    });
     const onEvent = (listener: (method: string, params: Record<string, unknown>) => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);

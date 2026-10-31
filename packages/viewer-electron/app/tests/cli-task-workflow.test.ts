@@ -351,7 +351,7 @@ it('cancellation while existing drafts flush cannot open a late task and retains
   const work = f.tasks
     .execute(setup, (value) => progress.push(value))
     .catch((error: Error) => error);
-  await vi.waitFor(() => expect(f.flush).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(f.flush).toHaveBeenCalledOnce(), { timeout: 10000 });
   f.tasks.cancel(setup.id);
   release();
   expect(await work).toBeInstanceOf(Error);

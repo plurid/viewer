@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { ExecutionTask } from '../../domain/automation/actions';
 import { report } from '../state/store';
 import { followSnapshot } from '../state/requests';
@@ -7,9 +7,12 @@ import { Panel, PanelSection } from '../ui/Panel';
 import { Button, CopyButton, PathField } from '../ui/primitives';
 import { useWorkspace } from '../workspace/context';
 import { useWindowEvent } from '../app/window-events';
+import { observeQuickCommands, quickCommandSnapshot, subscribeQuickCommand } from './quick-command';
 export function ExecutionPanel() {
   const workspace = useWorkspace();
+  const quick = useSyncExternalStore(subscribeQuickCommand, quickCommandSnapshot);
   const [tasks, setTasks] = useState<ExecutionTask[]>([]);
+  useEffect(() => observeQuickCommands(tasks), [tasks]);
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [now, setNow] = useState(Date.now);
@@ -44,7 +47,7 @@ export function ExecutionPanel() {
       unsubscribe();
     };
   }, []);
-  if (!tasks.length || dismissed) return null;
+  if (!tasks.length || dismissed || quick.visible) return null;
   return (
     <Panel
       className="execution-panel"

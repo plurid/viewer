@@ -337,8 +337,8 @@ const marked = (Content: React.ComponentType): React.ComponentType =>
 const planes: PluridPlane<React.ComponentType>[] = [
   { route: '/tasks/:id', component: marked(TaskContent) },
   { route: '/receipts/:id', component: marked(TaskContent) },
-  { route: '/servers/:id', component: marked(ServerContent) },
-  { route: '/browsers/:id', component: marked(BrowserContent) },
+  { route: '/servers/:id', component: marked(ServerContent), pinnable: false },
+  { route: '/browsers/:id', component: marked(BrowserContent), pinnable: false },
   { route: '/media/:id', component: marked(MediaContent) },
   { route: '/layouts/:id', component: marked(LayoutContent) },
   { route: '/journals/:id', component: marked(JournalContent) },
@@ -350,7 +350,7 @@ const planes: PluridPlane<React.ComponentType>[] = [
   { route: '/folders/:id', component: marked(FolderContent) },
   { route: '/searches/:id', component: marked(SearchContent) },
   { route: '/collections/:id', component: marked(CollectionContent) },
-  { route: '/previews/:id', component: marked(PreviewContent) },
+  { route: '/previews/:id', component: marked(PreviewContent), pinnable: false },
 ];
 export function WorkspaceSurface({
   engine,
@@ -488,6 +488,12 @@ export function WorkspaceSurface({
         elements.plane.backface === 'visible' &&
         engineSpace.gestures?.wheel === configuration.space?.gestures?.wheel &&
         engineSpace.gestures?.dragHandle === configuration.space?.gestures?.dragHandle &&
+        (engineSpace.gestures?.selection?.target ?? 'chrome') === 'chrome' &&
+        ['shift', 'ctrl', 'meta'].every((modifier) =>
+          (engineSpace.gestures?.selection?.modifiers ?? ['shift', 'ctrl', 'meta']).some(
+            (enabled) => enabled === modifier,
+          ),
+        ) &&
         engineSpace.navigation?.childFraming === 'plane' &&
         engineSpace.bridge?.planeAngle === 90.1 &&
         engineSpace.transformOrigin.show === preferences.origin

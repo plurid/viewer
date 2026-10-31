@@ -5,7 +5,8 @@ import type { Terminals } from '../terminals/terminals';
 import type { ExternalTerminals } from '../terminals/terminal-launch';
 import type { Executions } from '../actions/executions';
 import type { GitActions } from '../comparison/git-actions';
-import { bindGitTarget, type GitTargetWindow } from '../comparison/git-target';
+import type { GitTargetWindow } from '../comparison/git-target';
+import { bindManualTarget } from '../actions/manual-target';
 import type { JournalActivity } from '../journal/activity';
 import type { FileAccess } from '../files/file-access';
 import type { SettingsService } from '../preferences/settings';
@@ -26,6 +27,7 @@ type TerminalHandlers = Pick<
   | 'executionCancel'
 >;
 interface TerminalPorts {
+  home: string;
   terminals: Pick<Terminals, 'start' | 'write' | 'resize' | 'ack' | 'stop'>;
   external: Pick<ExternalTerminals, 'application' | 'open'>;
   executions: Pick<Executions, 'start' | 'startManual' | 'list' | 'cancel'>;
@@ -67,7 +69,8 @@ export function createTerminalHandlers(ports: TerminalPorts): TerminalHandlers {
     },
     runCommand: async ([script, input], owner) => {
       if (ports.isAgent(owner)) throw new Error('Agents cannot run shell commands.');
-      const target = await bindGitTarget(input, ports.gitWindow(owner));
+      if (!ports.isViewer(owner)) throw new Error('Run commands from a workspace window.');
+      const target = await bindManualTarget(input, ports.gitWindow(owner), ports.home);
       return ports.executions.startManual(script, target, owner);
     },
     commandDraft: async ([request], owner) => {

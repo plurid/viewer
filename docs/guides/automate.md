@@ -5,7 +5,21 @@ Viewer from your terminal, prepare reviews automatically, and, if you want them,
 connect an agent. Saved actions, typed commands, the CLI and workflows need no model or agent.
 
 **Find it:** **Settings → Actions** · **⌘K** → **Command line…** (or type `:`) and **Ask in words…**
-(or type `>`) · **File → Workflows…** · **Settings → Models** and **Settings → Agents**
+(or type `>`) · type `!` for a shell command · **File → Workflows…** · **Settings → Models** and
+**Settings → Agents**
+
+## Run a quick shell command
+
+1. Press **⌘K**, type `!`, then enter a command such as `pwd` or `git status`.
+2. Check the folder shown above the command. It is captured when you open the panel: the active
+   folder or column, the terminal's starting folder, a preview's parent, or Home in an empty
+   workspace.
+3. Press **Return** to run. **Shift+Return** adds a line. Output appears in the panel with its
+   status and exit code; **Stop**, **Copy output** and **Open receipt** act on that run.
+
+Closing the panel keeps the command running. Open `!` again to return to its output. Use a terminal
+plane for programs that ask for input. [Terminals and command output](../reference/terminals.md)
+lists the limits and receipts.
 
 ## Save a shell line as an action
 

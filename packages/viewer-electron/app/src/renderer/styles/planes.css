@@ -1,8 +1,4 @@
 /* Plane chrome in the spatial workspace. */
-/* The custom header owns its row height; Plurid's default bar reserves 56px. */
-.workspace-surface [data-plurid-plane]:has(> .plane-controls) {
-  grid-template-rows: auto minmax(0, 1fr);
-}
 .plane-controls {
   display: flex;
   align-items: center;

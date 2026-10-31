@@ -155,6 +155,15 @@ try {
     );
     console.log(JSON.stringify({ passed: results, evidence: app.evidenceDirectory }));
   }
+} catch (error) {
+  console.error('Plane chrome scenario failed:', error);
+  if (connection) {
+    await writeFile(
+      path.join(app.evidenceDirectory, 'failure.txt'),
+      await connection.evaluate(pageCall(() => document.body.innerText)),
+    );
+  }
+  throw error;
 } finally {
   await app.close(connection);
 }

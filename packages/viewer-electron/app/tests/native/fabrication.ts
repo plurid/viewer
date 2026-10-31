@@ -1305,7 +1305,7 @@ try {
     await runSelected('Laser jobs');
     const back = await wait(panel, (state) => state.open, 'the check in its own workspace');
     assert.equal(back.collapsed, true, 'Collapsed, as it was left');
-    assert.equal(back.title, 'Check Job 1042 · 1 finding, 1 confirmed');
+    assert.equal(back.title, 'Check Job 1042 · Handoff saved');
     await page.evaluate(click('.check-panel-toggle'));
     const opened = await wait(panel, (state) => !state.collapsed, 'the panel opens');
     assert.equal(opened.correction, 'Saved: pitch 48.00 mm → 50.00 mm, measured again.');

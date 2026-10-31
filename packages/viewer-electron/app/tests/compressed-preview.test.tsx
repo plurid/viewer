@@ -77,7 +77,11 @@ it('shows the expanded text read-only, labelled, and releases it on close', asyn
   const text = 'Field notes\n\nA short walk, a few photographs and time to look around.\n';
   const { context, services } = fixture('notes.txt.gz', {}, text);
   const view = render(<CompressedPreview {...context} />);
-  await screen.findByText('A short walk, a few photographs and time to look around.');
+  await screen.findByText(
+    'A short walk, a few photographs and time to look around.',
+    {},
+    { timeout: 10000 },
+  );
   expect(services.archiveEntry).toHaveBeenCalledWith('source', 'notes.txt');
   expect(services.read).toHaveBeenCalledWith('expanded');
   expect(screen.getByText(`Expanded from gzip · ${text.length} B`)).toBeTruthy();

@@ -242,9 +242,18 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       <span
         className="plane-heading"
         data-plurid-drag-handle={dragging ? '' : undefined}
+        data-plurid-selection-handle=""
         data-dragging={dragging}
         onPointerDownCapture={(event) => {
-          if (event.button !== 0 || !dragging) return;
+          if (
+            event.button !== 0 ||
+            event.shiftKey ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.altKey ||
+            event.defaultPrevented
+          )
+            return;
           // The engine evaluates this press on its native bubble listener. Select first,
           // keeping a deliberate multi-selection when this plane already belongs to it.
           workspace.selectForDrag(id);

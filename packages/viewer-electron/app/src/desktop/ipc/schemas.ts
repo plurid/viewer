@@ -600,11 +600,10 @@ export const schemas = {
   runCommand: z.tuple([
     z
       .string()
-      .trim()
-      .min(1)
+      .refine((value) => !!value.trim())
       .max(16000)
       .refine((value) => !value.includes('\0')),
-    targetSchema.strict(),
+    targetSchema.extend({ rootID: id.or(z.literal('')), paneID: id.or(z.literal('')) }).strict(),
   ]),
   commandDraft: z.tuple([
     z

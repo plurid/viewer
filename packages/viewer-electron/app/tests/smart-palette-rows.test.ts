@@ -31,6 +31,7 @@ const entry = (name: string, directory = true): FileEntry =>
   }) as FileEntry;
 const viewer = {
   save: vi.fn(async () => {}),
+  clipboardWriteText: vi.fn(async () => {}),
   list: vi.fn(async () => ({
     path: '/fixtures',
     parent: '/',
@@ -39,14 +40,11 @@ const viewer = {
   stat: vi.fn(async (path: string) => ({ ...entry(path.split('/').pop()!), path })),
   operate: vi.fn(async () => 'job'),
 };
-const writeText = vi.fn(async () => {});
 const openPath = vi.fn(async () => {});
 beforeEach(() => {
   for (const method of Object.values(viewer)) method.mockClear();
-  writeText.mockClear();
   openPath.mockClear();
   Object.assign(window, { viewer });
-  Object.assign(navigator, { clipboard: { writeText } });
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
 });
 afterEach(cleanup);
@@ -93,7 +91,7 @@ it('copies a calculation', async () => {
   const { type, choose } = show();
   type('= 2 * 21');
   await choose('= 42');
-  expect(writeText).toHaveBeenCalledWith('42');
+  expect(viewer.clipboardWriteText).toHaveBeenCalledWith('42');
 });
 it('lists a typed path’s folder and opens what is chosen', async () => {
   const { type, choose } = show();

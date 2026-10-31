@@ -44,6 +44,10 @@ already owns files, views, typed transforms, review and resource lifetimes.
 
 ## Presentation video
 
+The [laser-job shooting script](../release/hackathon-demo.md) turns this direction into a
+three-minute demonstration of the implemented fabrication workflow. It still requires live Meta
+evaluation and a successful recorded take.
+
 The agreed opening has three spoken categories, then nine shown visually:
 
 > A file explorer.

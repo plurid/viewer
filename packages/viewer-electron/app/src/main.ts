@@ -622,8 +622,8 @@ async function openSettingsWindow(focus?: string): Promise<void> {
       settingsWindow.show();
       settingsWindow.focus();
     }
-    // a setting's command: Settings shows that setting
-    if (focus) desktop.emit({ type: 'settings-focus', path: focus });
+    // Explicitly reopening Settings focuses search unless a command names a destination.
+    desktop.emit({ type: 'settings-focus', path: focus });
     return;
   }
   await desktop.settings.load();

@@ -38,6 +38,8 @@ export function SettingsWindow() {
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [category, setCategory] = useState('Browsing');
   const [query, setQuery] = useState('');
+  const search = useRef<HTMLInputElement>(null);
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
   // a setting's command opened Settings at it: its category, the row shown and marked
   const [focused, setFocused] = useState<{ path: string; at: number } | null>(null);
   const show = (path: string) => {
@@ -99,6 +101,7 @@ export function SettingsWindow() {
         );
         const focus = new URLSearchParams(window.location.search).get('focus');
         if (focus) show(focus);
+        else setSearchFocusRequest((request) => request + 1);
       })
       .catch((error) => setError(error.message));
     void window.viewer
@@ -110,7 +113,11 @@ export function SettingsWindow() {
       if (event.type === 'settings') accept(event.snapshot);
       else if (event.type === 'session-keys') receiveSessionKeys(event.session);
       if (event.type === 'settings-focus') {
-        show(event.path);
+        if (event.path) show(event.path);
+        else {
+          setFocused(null);
+          setSearchFocusRequest((request) => request + 1);
+        }
         if (event.path === 'settings.customActions') readDraft();
       }
       if (event.type === 'flush-settings') {
@@ -125,12 +132,20 @@ export function SettingsWindow() {
       }
     });
   }, []);
+  const ready = !!snapshot;
   useEffect(() => {
-    if (!focused) return;
+    if (!ready || !searchFocusRequest) return;
+    search.current?.focus({ preventScroll: true });
+    search.current?.select();
+  }, [ready, searchFocusRequest]);
+  const appliedFocus = useRef<typeof focused>(null);
+  useEffect(() => {
+    if (!focused || appliedFocus.current === focused) return;
     const row = document.querySelector<HTMLElement>(
       `[data-setting-path="${CSS.escape(focused.path)}"]`,
     );
     if (!row) return;
+    appliedFocus.current = focused;
     row.scrollIntoView({ block: 'center' });
     row.querySelector<HTMLElement>('input, button')?.focus({ preventScroll: true });
     row.classList.add('is-focused');
@@ -185,6 +200,7 @@ export function SettingsWindow() {
         <div className="settings-search">
           <Icon name="search" size={16} />
           <input
+            ref={search}
             aria-label="Search settings"
             placeholder="Search settings"
             value={query}

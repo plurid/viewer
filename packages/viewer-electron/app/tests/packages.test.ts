@@ -8,7 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, renderHook } from '@testing-library/react';
 import { createElement } from 'react';
 import type { FileEntry } from '../src/domain/contracts';
-import { browsable, fileGroup, kindLabel, sortEntries } from '../src/domain/files/entries';
+import {
+  browsable,
+  fileGroup,
+  groupEntries,
+  kindLabel,
+  sortEntries,
+} from '../src/domain/files/entries';
 import { defaultSettings } from '../src/domain/services';
 import { nativeOpening } from '../src/renderer/explorer/opening';
 import { folderCommands, type FolderActions } from '../src/renderer/commands/folder';
@@ -62,6 +68,24 @@ describe('an application is one item', () => {
     expect(kindLabel(app)).toBe('Application');
     expect(kindLabel(pages)).toBe('PAGES');
     expect(kindLabel(notes)).toBe('MD');
+  });
+  it('labels folder and file links as aliases and groups them without changing navigation', () => {
+    const drive = {
+      ...entry('Google Drive', true),
+      kind: 'symlink' as const,
+      linkTarget: '/cloud/drive',
+    };
+    const fileLink = { ...notes, kind: 'symlink' as const };
+    const broken = { ...fileLink, directory: false, error: 'Missing target' };
+    for (const link of [drive, fileLink, broken]) {
+      expect(kindLabel(link)).toBe('Alias');
+      expect(fileGroup(link, 'kind')).toBe('Aliases');
+    }
+    expect(browsable(drive)).toBe(true);
+    const sorted = sortEntries([folder, drive, notes], 'name', false);
+    expect(groupEntries(sorted, 'none')).toBe(sorted);
+    expect(groupEntries(sorted, 'kind')[0]).toBe(drive);
+    expect(fileGroup(drive, 'modified')).toBe(fileGroup(folder, 'modified'));
   });
   it('sorts among files with folders kept first, and groups as an application', () => {
     expect(sortEntries([app, notes, folder], 'name', false).map((item) => item.name)).toEqual([

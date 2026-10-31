@@ -528,10 +528,26 @@ select {
   font-size: var(--text-compact);
   color: var(--subtle);
 }
-.sidebar-drop {
-  outline: 1px solid var(--accent);
-  outline-offset: -1px;
-  background: var(--raised);
+.sidebar-drop-before,
+.sidebar-drop-after {
+  position: relative;
+}
+.sidebar-drop-before::before,
+.sidebar-drop-after::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 1;
+}
+.sidebar-drop-before::before {
+  top: -1px;
+}
+.sidebar-drop-after::after {
+  bottom: -1px;
 }
 .sidebar-resizer {
   position: absolute;

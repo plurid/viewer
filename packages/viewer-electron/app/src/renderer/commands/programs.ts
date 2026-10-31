@@ -200,10 +200,10 @@ export function programCommands(
     ...checkResultCommands(workspace),
     {
       id: 'image-tools',
-      label: 'Convert images…',
+      label: 'Image tools…',
       group: 'Images',
       icon: 'image',
-      aliases: ['webp', 'avif', 'resize', 'crop', 'image tools', 'quality'],
+      aliases: ['webp', 'avif', 'resize', 'crop', 'convert images', 'quality'],
       when: (context) => {
         const files = toolFiles(context);
         return (

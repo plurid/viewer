@@ -31,6 +31,7 @@ import type { FileEntry } from '../../domain/contracts';
 import { calculate, paletteIntent, rankFrecent } from './smart-palette';
 import { LineFinder } from '../command-line/LineFinder';
 import { PromptFinder } from '../command-line/PromptFinder';
+import { QuickCommand } from '../terminals/QuickCommand';
 import { lineHint } from '../command-line/hints';
 import { quoteWord } from '../../domain/command-line/lex';
 import type { LineHost } from '../command-line/host';
@@ -107,14 +108,23 @@ export function CommandPalette({
               ? 'Settings'
               : mode === 'line'
                 ? 'Command line'
-                : mode === 'prompt'
-                  ? 'Ask in words'
-                  : 'Commands'
+                : mode === 'shell'
+                  ? 'Quick command'
+                  : mode === 'prompt'
+                    ? 'Ask in words'
+                    : 'Commands'
       }
       onClose={onClose}
       className="command-palette"
     >
-      {mode === 'prompt' && line ? (
+      {mode === 'shell' ? (
+        <QuickCommand
+          context={context}
+          initialQuery={carried}
+          onBack={() => change('commands')}
+          onClose={onClose}
+        />
+      ) : mode === 'prompt' && line ? (
         <PromptFinder
           host={line.host}
           initialQuery={carried}
@@ -257,6 +267,8 @@ function CommandFinder({
             onMode('line', text.slice(palettePrefixes.line.length));
           else if (mode === 'commands' && text.startsWith(palettePrefixes.prompt))
             onMode('prompt', text.slice(palettePrefixes.prompt.length).trimStart());
+          else if (mode === 'commands' && text.startsWith(palettePrefixes.shell))
+            onMode('shell', text.slice(palettePrefixes.shell.length).replace(/^ /, ''));
           else setQuery(text);
         }}
         rows={rows}
@@ -335,7 +347,8 @@ function CommandFinder({
           <>
             <PalettePath directory={directory} selected={context.selection.length} />
             <span className="palette-hint">
-              <kbd>{palettePrefixes.settings}</kbd> settings
+              <kbd>{palettePrefixes.shell}</kbd> shell · <kbd>{palettePrefixes.settings}</kbd>{' '}
+              settings
             </span>
           </>
         )}

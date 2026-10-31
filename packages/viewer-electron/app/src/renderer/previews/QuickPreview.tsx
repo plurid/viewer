@@ -13,6 +13,7 @@ import { baseName } from '../../domain/workspaces/planes';
 import { MAX_TEXT_BYTES } from '../../domain/editing/documents';
 import { CommandsContext } from '../commands/context';
 import { suggestionsFor } from '../commands/suggestions';
+import { transformableImage } from '../../domain/operations/image-conversions';
 
 /** Quick Preview's Edit while it shows a text file: ⌘E reaches it through the window's commands. */
 let editShown: (() => void) | undefined;
@@ -29,10 +30,12 @@ function SuggestedAction({
   entry,
   paneID,
   workspaceID,
+  excluded,
 }: {
   entry: FileEntry;
   paneID?: string;
   workspaceID: string;
+  excluded: readonly string[];
 }) {
   // a preview shown outside a window's commands, as in a test, has none to suggest
   const registry = useContext(CommandsContext);
@@ -51,7 +54,7 @@ function SuggestedAction({
       },
     }) ?? [];
   const [suggestion] = suggestionsFor(
-    applicable.filter((command) => command.id !== 'edit-selected'),
+    applicable.filter((command) => !excluded.includes(command.id)),
     [entry],
     1,
   );
@@ -152,6 +155,13 @@ export const QuickPreview = memo(function QuickPreview({
             )}
             <OpenDefaultButton path={resource.entry.path} />
             <SuggestedAction
+              excluded={[
+                'edit-selected',
+                ...(['image', 'rendered-image'].includes(module.id) &&
+                transformableImage(resource.entry)
+                  ? ['image-tools']
+                  : []),
+              ]}
               entry={resource.entry}
               paneID={session.paneID}
               workspaceID={session.workspaceID}

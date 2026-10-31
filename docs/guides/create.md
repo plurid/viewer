@@ -10,8 +10,8 @@ for its tools
 
 ## Convert, crop or resize images
 
-1. Select one or more images, press **⌘K** and choose **Convert images…**. In an image's preview,
-   **Image tools…** opens the same tools.
+1. Select one or more images, press **⌘K** and choose **Image tools…**, also available in an image's
+   preview toolbar.
 2. Pick the **Format** (WebP, AVIF, JPEG or PNG) and the **Quality**.
 3. Set **Width** and **Height** to resize. Under **Resize**, **Fit · keep aspect ratio** keeps the
    proportions; **Fill and crop** and **Stretch to size** fill the exact size.

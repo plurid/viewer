@@ -27,6 +27,7 @@ vi.mock('@tanstack/react-virtual', () => ({
 }));
 
 beforeEach(() => {
+  Object.assign(window, { viewer: { clipboardWriteText: vi.fn(async () => {}) } });
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -53,7 +54,7 @@ const rows = [
 it('extends a range with Shift-click and Shift-arrows, copies TSV and clears with Escape', async () => {
   const writeText = vi.fn(async () => {});
   const bubbled = vi.fn();
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  Object.assign(window.viewer, { clipboardWriteText: writeText });
   render(
     <div onKeyDown={bubbled}>
       <DataTable rows={rows} headers={['A', 'B']} label="Data" numbered />
@@ -109,13 +110,10 @@ it('keeps range coordinates through a page transition and restoration', () => {
   expect(screen.getByLabelText('Selected range').textContent).toBe('A3:A4');
 });
 it('reports clipboard failures instead of claiming a successful copy', async () => {
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    value: {
-      writeText: vi.fn(async () => {
-        throw new Error('Clipboard denied');
-      }),
-    },
+  Object.assign(window.viewer, {
+    clipboardWriteText: vi.fn(async () => {
+      throw new Error('Clipboard denied');
+    }),
   });
   render(<DataTable rows={rows} headers={['A', 'B']} label="Data" numbered />);
   fireEvent.click(screen.getByRole('button', { name: 'Copy' }));

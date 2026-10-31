@@ -49,6 +49,7 @@ import type {
   CommandDescriptor,
 } from '../domain/agents/requests';
 import { Executions } from './actions/executions';
+import { validateManualTarget } from './actions/manual-target';
 import { CommandReceipts } from './actions/receipts';
 import { ExecutionConfirmations } from './actions/execution-confirmations';
 import { ProtectedPaths } from './files/protected-paths';
@@ -110,8 +111,8 @@ import { Search } from './search/search';
 import { Storage } from './persistence/storage';
 import { Watchers } from './files/watchers';
 import { Trash } from './operations/trash';
-import { applicationsPath } from './operations/trash-locations';
-import { trashLocation, trashName, type DesktopPlatform } from '../domain/files/trash';
+import { defaultSidebarLocations } from './files/sidebar-locations';
+import type { DesktopPlatform } from '../domain/files/trash';
 import { FileAccess } from './files/file-access';
 import { NativeSelections } from './native/native-selections';
 import { Pasteboard } from './native/pasteboard';
@@ -573,7 +574,7 @@ export class Desktop {
       access,
       (action) => confirmations.require(action),
       (profile) => confirmations.requireTerminal(profile),
-      (owner, target) => validateGitTarget(target, this.gitWindow(owner)),
+      (owner, target) => validateManualTarget(target, this.gitWindow(owner), this.home),
     );
     this.credentials = new Credentials(
       dataPath,
@@ -1881,26 +1882,12 @@ export class Desktop {
       gitActionsAvailable: !process.mas,
       settings: this.settings.snapshot(this.credentials.ids()),
       platform: process.platform as DesktopPlatform,
-      locations: [
-        { name: 'Home', path: home },
-        ...['Desktop', 'Documents', 'Downloads', 'Pictures', 'Movies', 'Music'].map((name) => ({
-          name,
-          path: path.join(home, name),
-        })),
-        {
-          name: 'Applications',
-          path: applicationsPath(
-            process.platform as DesktopPlatform,
-            home,
-            process.env.ProgramFiles,
-          ),
-        },
-        {
-          name: process.platform === 'darwin' ? 'Volumes' : 'Computer',
-          path: process.platform === 'darwin' ? '/Volumes' : path.parse(home).root,
-        },
-        { name: trashName(process.platform as DesktopPlatform), path: trashLocation },
-      ],
+      locations: defaultSidebarLocations(
+        process.platform as DesktopPlatform,
+        home,
+        process.mas ? undefined : (folder) => app.getPath(folder),
+        process.env.ProgramFiles,
+      ),
       openPaths: paths,
     };
   }
@@ -2118,6 +2105,7 @@ export class Desktop {
         requireWindow,
       }),
       ...createTerminalHandlers({
+        home: this.home,
         terminals: this.terminals,
         external: this.externalTerminals,
         executions: this.executions,

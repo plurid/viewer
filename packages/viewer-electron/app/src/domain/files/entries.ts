@@ -119,8 +119,8 @@ export const browsable = (entry: Pick<FileEntry, 'directory' | 'extension'>) =>
   entry.directory && !isPackage(entry);
 /** The Kind column: Folder, Application, Alias, or a file's or bundle's extension. */
 export function kindLabel(entry: Pick<FileEntry, 'directory' | 'extension' | 'kind'>): string {
-  if (browsable(entry)) return 'Folder';
   if (entry.kind === 'symlink') return 'Alias';
+  if (browsable(entry)) return 'Folder';
   if (isPackage(entry) && entry.extension.toLowerCase() === 'app') return 'Application';
   return entry.extension.toUpperCase() || 'File';
 }
@@ -170,13 +170,15 @@ export type FileGrouping = 'none' | 'kind' | 'modified';
 export function fileGroup(entry: FileEntry, group: FileGrouping): string {
   if (group === 'none') return '';
   if (group === 'kind')
-    return browsable(entry)
-      ? 'Folders'
-      : isPackage(entry) && entry.extension.toLowerCase() === 'app'
-        ? 'Applications'
-        : entry.extension
-          ? entry.extension.toUpperCase() + ' files'
-          : 'Files';
+    return entry.kind === 'symlink'
+      ? 'Aliases'
+      : browsable(entry)
+        ? 'Folders'
+        : isPackage(entry) && entry.extension.toLowerCase() === 'app'
+          ? 'Applications'
+          : entry.extension
+            ? entry.extension.toUpperCase() + ' files'
+            : 'Files';
   if (!entry.modified) return 'Unknown date';
   // The person's calendar day, not the UTC one.
   const date = new Date(entry.modified);

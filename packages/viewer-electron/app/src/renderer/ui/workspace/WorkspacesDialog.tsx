@@ -3,6 +3,7 @@ import { maximumWorkspaces, orderedWorkspaces } from '../../../domain/workspaces
 import { report, useViewer } from '../../state/store';
 import { Dialog, IconButton } from '../primitives';
 import { Icon } from '../Icon';
+import { ChoiceButton } from '../ChoiceMenu';
 import './workspaces.css';
 
 const pageSize = 25;
@@ -70,17 +71,18 @@ export function WorkspacesDialog({
             }}
           />
         </div>
-        <select
-          aria-label="Sort workspaces"
+        <ChoiceButton
+          label="Sort workspaces"
           value={sort}
-          onChange={(event) => {
-            setSort(event.target.value as 'recent' | 'name');
+          choices={[
+            { value: 'recent', label: 'Recent first' },
+            { value: 'name', label: 'Name' },
+          ]}
+          onChoose={(value) => {
+            setSort(value === 'name' ? 'name' : 'recent');
             changePage(0);
           }}
-        >
-          <option value="recent">Recent first</option>
-          <option value="name">Name</option>
-        </select>
+        />
       </div>
       <ul ref={list} className="workspace-catalog-list" aria-label="Saved workspaces">
         {rows.map((space) => {

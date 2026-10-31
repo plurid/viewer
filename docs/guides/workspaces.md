@@ -43,7 +43,9 @@ then keep their size when the window changes; **⌘0** frames them all again.
 | Hide the window's chrome for a while | **⌘⇧F** (**Focus mode**); press it again to leave |
 
 In the spatial view, click inside a plane to scroll it and type into it. Click the background or
-press **Escape** to move around the space again. Drag a plane by its header.
+press **Escape** to move around the space again. Drag a plane by its header. **Shift**, **⌘** or
+**Ctrl**-click the header to toggle plane selection. Modified clicks and drags inside the content
+belong to the content, so selecting files or text keeps working.
 
 The minimap appears once three planes are open, to find one among them. **Settings → Space** shows
 it always (turn off **Minimap only with 3 or more planes**), and adds the space toolbar and the
@@ -56,10 +58,11 @@ viewcube (**Show space toolbar**, **Show viewcube**).
 
 Open **Settings → Space → Title bar icons**. Toggle **Window navigation**, **New folder plane**,
 **File operations**, **Microphone** and **Commands** individually. The microphone starts hidden.
-Their commands and keyboard shortcuts remain available when an icon is hidden.
+Their commands and keyboard shortcuts remain available when an icon is hidden. Settings focuses its
+search field when opened; reopening selects the previous query so you can replace it.
 
-Click the workspace name in the title bar to choose another workspace directly. **New workspace…**,
-**Rename workspace…**, **Workspace look…** and **Delete workspace…** follow the workspace list.
+Click the workspace name in the title bar for recent workspaces and the full action menu. **Manage
+workspaces…** searches the complete workspace list.
 
 ## Choose a plane's header buttons
 

@@ -45,6 +45,24 @@ function toggled(path: string): SettingsSnapshot {
 }
 
 describe('Settings pages', () => {
+  it('focuses search on open and selects the previous query on explicit reopen', async () => {
+    const view = render(createElement(SettingsWindow));
+    const search = (await view.findByRole('textbox', {
+      name: 'Search settings',
+    })) as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    fireEvent.change(search, { target: { value: 'header' } });
+    search.blur();
+    act(() => listeners.forEach((listener) => listener({ type: 'settings-focus' })));
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    expect(search.selectionStart).toBe(0);
+    expect(search.selectionEnd).toBe(6);
+    search.blur();
+    snapshot = { ...snapshot, revision: snapshot.revision + 1 };
+    act(() => listeners.forEach((listener) => listener({ type: 'settings', snapshot })));
+    expect(document.activeElement).not.toBe(search);
+  });
+
   it('draw one switch for each on/off setting', async () => {
     const view = render(createElement(SettingsWindow));
     await waitFor(() => expect(view.getByRole('heading', { level: 1 })).toBeTruthy());

@@ -24,9 +24,8 @@ replaced.
 
 ## Image tools
 
-**Convert images…** in **⌘K**, or **Image tools…** in an image preview, exports up to 1,000 JPEG,
-PNG, TIFF, GIF, WebP or AVIF images. HEIC previews on macOS but is not an image-tool input; use
-**Convert copy to JPEG**.
+**Image tools…** in **⌘K** or an image preview exports up to 1,000 JPEG, PNG, TIFF, GIF, WebP or
+AVIF images. HEIC previews on macOS but is not an image-tool input; use **Convert copy to JPEG**.
 
 | Choice     | Values                                                                                                  |
 | ---------- | ------------------------------------------------------------------------------------------------------- |

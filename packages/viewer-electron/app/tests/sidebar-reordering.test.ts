@@ -114,6 +114,54 @@ function commands() {
 }
 
 describe('displayed sidebar location moves', () => {
+  it('marks the boundary before pinned Trash even when browser drag payloads are hidden', () => {
+    const view = mount();
+    const group = view.getByRole('region', { name: 'Locations' });
+    fireEvent.dragOver(group, {
+      dataTransfer: {
+        types: [SIDEBAR_DRAG, 'application/x-viewer-sidebar-locations'],
+        getData: () => '',
+      },
+    });
+    expect(
+      view.getByRole('button', { name: 'Trash' }).classList.contains('sidebar-drop-before'),
+    ).toBe(true);
+    expect(group.classList.contains('sidebar-drop-after')).toBe(false);
+    fireEvent.dragEnd(group);
+    expect(
+      view.getByRole('button', { name: 'Trash' }).classList.contains('sidebar-drop-before'),
+    ).toBe(false);
+  });
+
+  it('shows an insertion boundary and uses the same half-row position on drop', async () => {
+    const view = mount();
+    const row = view.getByRole('button', { name: 'Applications' });
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({ top: 100, height: 40 } as DOMRect);
+    const transfer = {
+      types: [SIDEBAR_DRAG],
+      getData: () => JSON.stringify({ section: 'locations', path: home }),
+      dropEffect: '',
+    };
+    const drag = (type: string, clientY: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperties(event, {
+        clientY: { value: clientY },
+        dataTransfer: { value: transfer },
+      });
+      fireEvent(row, event);
+    };
+    drag('dragover', 110);
+    expect(row.classList.contains('sidebar-drop-before')).toBe(true);
+    drag('dragover', 135);
+    expect(row.classList.contains('sidebar-drop-after')).toBe(true);
+    expect(row.classList.contains('sidebar-drop')).toBe(false);
+    await act(async () => drag('drop', 135));
+    await waitFor(() =>
+      expect(view.order()).toEqual([applications, home, downloads, trashLocation]),
+    );
+    expect(row.classList.contains('sidebar-drop-after')).toBe(false);
+  });
+
   it('moves past hidden and unavailable references while preserving them for future sessions', async () => {
     const view = mount();
     expect(view.order()).toEqual([home, applications, downloads, trashLocation]);

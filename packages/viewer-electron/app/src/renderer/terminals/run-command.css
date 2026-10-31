@@ -46,3 +46,54 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+.quick-command {
+  padding: var(--gap-content);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.quick-command-context,
+.quick-command-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.quick-command-context > :nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.quick-command textarea {
+  width: 100%;
+  min-height: 64px;
+  max-height: 160px;
+  resize: vertical;
+  padding: var(--gap-content);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--field);
+  color: var(--ink);
+  font:
+    var(--text-body)/1.5 Menlo,
+    monospace;
+  caret-color: var(--accent);
+}
+.quick-command textarea:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+.quick-command-note {
+  margin: 0;
+}
+.quick-command-output {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.quick-command-output pre {
+  max-height: min(320px, 38vh);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  margin-bottom: 0;
+}

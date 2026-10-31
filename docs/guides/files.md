@@ -21,13 +21,25 @@ keeps its own selection.
 
 The **View mode** button in the folder's header switches views too. To group items, right-click
 empty space and choose **View → Group by**, then **Group by kind** or **Group by date modified**.
-**⌘⇧.** shows or hides hidden files.
+**⌘⇧.** shows or hides hidden files. Links have kind **Alias**, including links to folders, and
+**Group by kind** places them in **Aliases** before **Folders**. They still open their targets;
+ordinary name, date and size sorting keep their existing order.
 
 **Columns** shows the path from the filesystem root to the current folder and scrolls that folder
 into view. Scroll left to reach its ancestors, or use the left and right arrow keys to follow the
 folder trail.
 
 Sizes use decimal units, as Finder shows them: 1 KB is 1,000 bytes and 1 MB is 1,000,000 bytes.
+
+## Arrange the sidebar
+
+Drag a location or favorite to reorder it. A line above or below a row marks where it will be
+inserted. Dragging to Favorites adds a shortcut. These gestures change the sidebar only.
+
+On macOS, the default Locations order is **Desktop**, **Documents**, **Downloads**, **Pictures**,
+**Movies**, **Music**, **Applications**, **Home**, **Volumes**, **Trash**. Windows and Linux use
+**Videos**, their applications location and **Computer**. Saved custom order takes precedence; Trash
+stays at the end.
 
 ## Select
 

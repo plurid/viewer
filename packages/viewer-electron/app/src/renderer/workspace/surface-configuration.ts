@@ -49,7 +49,11 @@ export function surfaceConfiguration({
       // restore a plane belonging to another workspace.
       docking: { url: false },
       clipboard: false,
-      gestures: { wheel: 'click-to-scroll', dragHandle: 'chrome' },
+      gestures: {
+        wheel: 'click-to-scroll',
+        dragHandle: 'chrome',
+        selection: { target: 'chrome', modifiers: ['shift', 'ctrl', 'meta'] },
+      },
       bridge: { preset: 'reading', planeAngle: 90.1 },
       shortcuts: {
         // The engine's own close/reopen keys change its tree without Viewer's workspace,

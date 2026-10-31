@@ -1,32 +1,34 @@
 import { createRequire } from 'node:module';
 import { expect, it } from 'vitest';
-import { boundPluridCamera, pluridCameraSource } from '../tools/plurid-camera';
-import type { createSelector } from 'reselect';
+import { pluridCameraSource } from '../tools/plurid-camera';
+import type { createSelector, lruMemoize } from 'reselect';
 
 for (const extension of ['.js', '.mjs'] as const)
   it(`bounds the installed ${extension} camera selector across 20,000 positions`, async () => {
-    const original = await pluridCameraSource(extension);
-    const patched = boundPluridCamera(original);
-    const start = patched.search(/var getTransform = (?:toolkit\.)?createSelector\(/);
-    const end = patched.indexOf('\nvar getActiveUniverseID', start);
+    const published = await pluridCameraSource(extension);
+    const start = published.search(/var getTransform = (?:toolkit\.)?createSelector\(/);
+    const end = published.indexOf('\nvar getActiveUniverseID', start);
     expect(end).toBeGreaterThan(start);
     const toolkit = createRequire(import.meta.url)('@reduxjs/toolkit') as {
       createSelector: typeof createSelector;
+      lruMemoize: typeof lruMemoize;
     };
     const factory = new Function(
       'toolkit',
       'createSelector',
+      'lruMemoize',
       'getRotationX',
       'getRotationY',
       'getTranslationX',
       'getTranslationY',
       'getTranslationZ',
       'getScale',
-      patched.slice(start, end) + '\nreturn getTransform;',
+      published.slice(start, end) + '\nreturn getTransform;',
     );
     const select = factory(
       toolkit,
       toolkit.createSelector,
+      toolkit.lruMemoize,
       ...Array.from({ length: 6 }, (_, index) => (state: number[]) => state[index]),
     ) as ReturnType<typeof createSelector>;
     const first = select([0, 0, 0, 0, 0, 1]);
@@ -43,7 +45,4 @@ for (const extension of ['.js', '.mjs'] as const)
       translationZ: 7,
       scale: 2,
     });
-    expect(() =>
-      boundPluridCamera(original.replace('    getScale\n', '    getNewScale\n')),
-    ).toThrow('Review the Plurid camera selector');
   });
