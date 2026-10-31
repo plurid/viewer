@@ -539,8 +539,9 @@ once the space holds three planes.
 own flow before any insight cards: Space previews the selected file, the palette's keys find any
 action, and a plane's title drags it. The card names the keys the person has, leaves out dragging
 while titles do not move planes, and drops each step once it is used. With Space and the palette
-both used, or the card dismissed, it retires for good. A profile made before it never shows it. It
-never floats over content and never becomes a shortcut footer.
+both used, it teaches Frame all planes once the workspace holds multiple planes, using the
+configured shortcut. It retires after all steps or dismissal. A previously retired profile stays
+retired. It never floats over content and never becomes a shortcut footer.
 
 ### Backup review
 

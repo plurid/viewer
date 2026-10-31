@@ -18,6 +18,7 @@ const routeKinds: Record<Pane['type'], string> = {
   // a scratch plane renders where a preview does, so Save As turns it into one in place
   scratch: 'previews',
   note: 'previews',
+  check: 'checks',
   diff: 'diffs',
   'git-changes': 'git-changes',
   chat: 'chats',

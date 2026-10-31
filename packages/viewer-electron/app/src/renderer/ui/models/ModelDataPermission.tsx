@@ -10,6 +10,18 @@ import { ChoiceButton } from '../ChoiceMenu';
 import { Disclosure } from '../Disclosure';
 import { errorMessage } from '../../../domain/errors';
 
+const dataTitles: Record<ModelDataLevel, string> = {
+  names: 'Names and metadata',
+  excerpts: 'Document excerpts',
+  'full-text': 'Full document text',
+  images: 'Text and pictures',
+};
+const dataChoices = modelDataLevels.map((level) => ({
+  value: level,
+  label: dataTitles[level],
+  detail: `Includes ${modelDataLabels[level]}.`,
+}));
+
 export function useModelPermission(provider?: ModelProvider) {
   const identity = provider ? `${provider.id}:${provider.kind}:${provider.endpoint}` : '';
   const [state, setState] = useState<{
@@ -78,7 +90,7 @@ export function ProviderDataPermission({
       summary="Data access"
       meta={
         <>
-          {loading ? 'Checking…' : permission ? modelDataLabels[permission.level] : 'Not allowed'}
+          {loading ? 'Checking…' : permission ? dataTitles[permission.level] : 'Not allowed'}
           {permission && ` · Agent actions ${permission.agents ? 'allowed' : 'off'}`}
         </>
       }
@@ -102,10 +114,7 @@ export function ProviderDataPermission({
         <ChoiceButton
           label={`Data to allow for ${provider.name}`}
           value={level}
-          choices={modelDataLevels.map((level) => ({
-            value: level,
-            label: modelDataLabels[level],
-          }))}
+          choices={dataChoices}
           onChoose={(level) => setLevel(level as ModelDataLevel)}
           disabled={busy || loading}
         />
@@ -122,6 +131,9 @@ export function ProviderDataPermission({
           </button>
         )}
       </div>
+      {level !== permission?.level && (
+        <p className="settings-note">Selected: {modelDataLabels[level]}.</p>
+      )}
       {permission && (
         <label className="check-row">
           <input

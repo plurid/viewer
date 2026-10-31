@@ -33,7 +33,7 @@ function fixture() {
       [2, { window: settings.window, role: 'settings', paths: [], launches: [] }],
     ]),
   );
-  for (const name of ['storage', 'settings', 'buffers', 'notes'])
+  for (const name of ['storage', 'settings', 'buffers', 'notes', 'fabrication'])
     Reflect.set(desktop, name, store());
   Reflect.set(desktop, 'chats', { ...store(), stopOwner: vi.fn(async () => {}) });
   /** The renderer answers each flush it is sent, as a working window does. */

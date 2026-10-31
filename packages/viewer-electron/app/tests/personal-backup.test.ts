@@ -13,6 +13,9 @@ import { normalizePreferences } from '../src/domain/preferences/ui';
 import { readText } from '../src/desktop/editing/text-files';
 import { SettingsService } from '../src/desktop/preferences/settings';
 import { temporaryRoot } from '../tools/temporary';
+import { CheckStore } from '../src/desktop/fabrication/check-store';
+import { checkDocumentSchema } from '../src/domain/fabrication/check-document';
+import { CURRENT_STATE_VERSION } from '../src/domain/contracts';
 
 const saved = (folder: string): SavedState => ({
   version: 11,
@@ -302,7 +305,7 @@ it('keeps every supported saved-state version and protects a newer format in pla
     expect(restoreBackupState(second, ids, []).ui?.space.headerControls.sidebar).toBe(false);
   }
   const file = path.join(root, 'newer-state.json'),
-    original = JSON.stringify({ ...saved(root), version: 12 });
+    original = JSON.stringify({ ...saved(root), version: CURRENT_STATE_VERSION + 1 });
   await writeFile(file, original, { flag: 'wx' });
   const storage = new Storage(file);
   expect((await storage.load()).recovery).toContain('newer Viewer');
@@ -363,4 +366,146 @@ it('lets Quit wait for an export being written, not for its file dialog', async 
   await backups.exported();
   expect(backupSchema.parse(JSON.parse(await readFile(file, 'utf8'))).privateRoot).toBe(root);
   await expect(written).resolves.toMatchObject({ kind: 'written' });
+});
+
+it('restores checks as inspectable copies, remaps stack identities, and never restores execution authority', async () => {
+  const root = await temporaryRoot('viewer-backup-checks-');
+  const first = path.join(root, 'First'),
+    second = path.join(root, 'Second');
+  const source = path.join(root, 'Job'),
+    target = path.join(root, 'Relinked');
+  for (const folder of [first, second, source, target]) await mkdir(folder);
+  const checkID = randomUUID();
+  const version = { identity: 'captured-source', modified: 1, size: 5 };
+  const requirement = {
+    status: 'human-confirmed' as const,
+    key: 'finding:F1',
+    kind: 'pitch' as const,
+    value: 50,
+    unit: 'mm' as const,
+    evidence: { ref: 'S1', page: 1, version, quote: null },
+    part: 'S2',
+    confirmedAt: 2,
+  };
+  const { status: _status, ...confirmation } = requirement;
+  const document = checkDocumentSchema.parse({
+    version: 1,
+    id: checkID,
+    created: 1,
+    updated: 2,
+    status: 'running',
+    paths: [source],
+    folder: source,
+    job: 'Retained job',
+    skipped: [],
+    sources: [
+      {
+        ref: 'S1',
+        kind: 'drawing',
+        name: 'drawing.pdf',
+        path: path.join(source, 'drawing.pdf'),
+        version,
+      },
+    ],
+    confirmations: [confirmation],
+    corrections: { F1: randomUUID() },
+    result: {
+      kind: 'result',
+      id: checkID,
+      provider: { name: 'Meta', model: 'fixture' },
+      summary: 'Previously paid result',
+      request: [],
+      findings: [],
+      issues: [],
+      parts: [],
+      notSent: [],
+      seconds: 3,
+      tour: { name: 'Retained job', root: source, stops: [], skipped: [] },
+      requirements: [
+        {
+          claim: {
+            key: 'finding:F1',
+            kind: 'pitch',
+            ref: 'S1',
+            page: 1,
+            value: 50,
+            quote: null,
+            part: 'S2',
+          },
+          verification: requirement,
+        },
+      ],
+    },
+  });
+  const firstStore = new CheckStore(path.join(first, 'fabrication-checks'));
+  await firstStore.save(document);
+  const state = saved(source),
+    space = state.workspaces[0]!;
+  space.panes.push({ id: 'check', type: 'check', checkID, path: source, title: 'Retained job' });
+  const location = { translateX: 0, translateY: 0, translateZ: 0, rotateX: 0, rotateY: 0 };
+  space.layout = {
+    placements: ['a', 'check'].map((id) => ({ id, location, width: 800, height: 600, show: true })),
+    stacks: [
+      { id: 'stack', panes: ['a', 'check'], previous: { a: { location }, check: { location } } },
+    ],
+  };
+  const archive = path.join(root, 'backup.json');
+  const host = {
+    flush: async () => firstStore.flush(),
+    state: async () => state,
+    settings: () => snapshot(source),
+    apply: async () => snapshot(source),
+    choose: async () => archive,
+  };
+  const exporter = new PersonalBackups(first, host);
+  const pending = review(await exporter.request({ kind: 'prepare-export' }, 1));
+  expect(pending.documents.checks).toBe(1);
+  await exporter.request({ kind: 'write', id: pending.id }, 1);
+  const bundle = backupSchema.parse(JSON.parse(await readFile(archive, 'utf8')));
+  expect(bundle.documents.checks[0]?.result?.summary).toBe('Previously paid result');
+  const importer = new PersonalBackups(second, {
+    ...host,
+    state: async () => null,
+    choose: async (_owner, kind) => (kind === 'folder' ? target : archive),
+  });
+  const importing = review(await importer.request({ kind: 'choose-import' }, 2));
+  await importer.request({ kind: 'relink', id: importing.id, root: source }, 2);
+  const restored = await importer.request(
+    { kind: 'restore', id: importing.id, preferences: false },
+    2,
+  );
+  if (restored.kind !== 'restored') throw new Error('Expected restored check.');
+  const pane = restored.state.workspaces[0]!.panes.find((pane) => pane.type === 'check')!;
+  if (pane.type !== 'check') throw new Error('Missing check plane.');
+  expect(pane.checkID).not.toBe(checkID);
+  const store = new CheckStore(path.join(second, 'fabrication-checks'));
+  expect(await store.list()).toMatchObject([
+    { id: pane.checkID, folder: target, status: 'interrupted' },
+  ]);
+  const copy = (await store.read(pane.checkID))!;
+  expect(copy.paths).toEqual([target]);
+  expect(copy.sources[0]?.path).toBe(path.join(target, 'drawing.pdf'));
+  expect(copy.result?.requirements?.[0]?.verification).toEqual(requirement);
+  expect(copy.verification).toBeUndefined();
+  expect(copy.confirmations).toEqual([]);
+  expect(copy.corrections).toEqual({});
+  expect(copy.error).toContain('inspection');
+  const stack = restored.state.workspaces[0]!.layout!.stacks![0]!;
+  expect(stack.id).not.toBe('stack');
+  expect(stack.panes).toContain(pane.id);
+  expect(Object.keys(stack.previous)).toEqual(stack.panes);
+  expect((await firstStore.read(checkID))?.confirmations).toHaveLength(1);
+
+  const { checks: _checks, ...legacyDocuments } = bundle.documents;
+  expect(backupSchema.parse({ ...bundle, documents: legacyDocuments }).documents.checks).toEqual(
+    [],
+  );
+  const incomplete = path.join(root, 'incomplete.json');
+  await writeFile(incomplete, JSON.stringify({ ...bundle, documents: legacyDocuments }), {
+    flag: 'wx',
+  });
+  const missing = new PersonalBackups(second, { ...host, choose: async () => incomplete });
+  await expect(missing.request({ kind: 'choose-import' }, 3)).rejects.toThrow(
+    'private document is missing',
+  );
 });

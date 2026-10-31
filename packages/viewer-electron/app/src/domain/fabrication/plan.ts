@@ -41,6 +41,11 @@ export const dxfCorrectionSchema = z
     /** Further pitches the move sets, as when one misplaced hole gives two wrong pitches; each is
      * measured again in the copy. */
     also: z.array(pitchSchema).min(1).max(8).optional(),
+    /** Desktop check and finding that authorize the target; the executor resolves them again. */
+    review: z
+      .object({ check: z.uuid(), finding: z.string().regex(/^F[1-9]\d{0,2}$/) })
+      .strict()
+      .optional(),
   })
   .strict();
 export type DXFCorrection = z.infer<typeof dxfCorrectionSchema>;

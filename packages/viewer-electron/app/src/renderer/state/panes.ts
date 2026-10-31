@@ -17,6 +17,7 @@ import type {
   MediaPane,
   LayoutPane,
   NotePane,
+  CheckPane,
   TaskPane,
   ReceiptPane,
   PreviewPane,
@@ -245,7 +246,8 @@ export function addContentPane(
     | BrowserPane
     | MediaPane
     | LayoutPane
-    | NotePane,
+    | NotePane
+    | CheckPane,
   root = true,
 ): void {
   if (activeWorkspace().panes.length >= 200)

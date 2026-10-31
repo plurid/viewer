@@ -153,8 +153,9 @@ async function extractCoordinated(
         options.signal?.throwIfAborted();
         const page = await document.getPage(i);
         const text = (await page.getTextContent()).items
-          .map((item) => ('str' in item ? item.str : ''))
-          .join(' ');
+          .map((item) => ('str' in item ? item.str + (item.hasEOL ? '\n' : ' ') : ''))
+          .join('')
+          .trim();
         if (text.trim())
           result.evidence.push({
             source: 'page ' + i,

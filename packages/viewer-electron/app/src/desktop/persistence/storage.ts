@@ -54,6 +54,15 @@ const pane = z.discriminatedUnion('type', [
   z
     .object({
       id,
+      type: z.literal('check'),
+      path: localPath,
+      checkID: z.uuid(),
+      title: z.string().max(255),
+    })
+    .strict(),
+  z
+    .object({
+      id,
       type: z.literal('note'),
       path: localPath,
       documentID: z.uuid(),
@@ -224,6 +233,7 @@ const savedStateSchema = z
       z.literal(8),
       z.literal(9),
       z.literal(10),
+      z.literal(11),
       z.literal(CURRENT_STATE_VERSION),
     ]),
     previewStates: z.record(id, previewValuesSchema).optional(),
@@ -452,6 +462,7 @@ export class Storage {
     if (state.version < 9) await this.preserve(bytes, '.before-notes-v9');
     if (state.version < 10) await this.preserve(bytes, '.before-task-areas-v10');
     if (state.version < 11) await this.preserve(bytes, '.before-task-workflows-v11');
+    if (state.version < 12) await this.preserve(bytes, '.before-workshop-v12');
     if (state.version < CURRENT_STATE_VERSION) state = { ...state, version: CURRENT_STATE_VERSION };
     return { state };
   }

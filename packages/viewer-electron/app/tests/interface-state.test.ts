@@ -33,6 +33,11 @@ import {
 } from '../src/renderer/state/store';
 
 const operate = vi.fn();
+const spatialQueries = {
+  planePinState: () => ({ pinnable: false, pinned: false, collapsed: false }),
+  selectedPaneIDs: () => [],
+  planeStacks: () => [],
+};
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
@@ -66,6 +71,7 @@ describe('layout-only changes', () => {
   it('can discover the real command catalog outside each command’s guarded context', () => {
     const actions = {
       workspace: {
+        ...spatialQueries,
         parentPaneID: () => undefined,
         isDocked: () => false,
         arrangementHistory: () => ({ canUndo: false, canRedo: false }),
@@ -127,6 +133,7 @@ describe('layout-only changes', () => {
       await import('../src/domain/preferences/shortcuts');
     const actions = {
       workspace: {
+        ...spatialQueries,
         newRootFolder: addRootFolder,
         parentPaneID: () => undefined,
         isDocked: () => false,
@@ -187,6 +194,7 @@ describe('layout-only changes', () => {
     const other = addPane('/fixtures/other', 'folder', true);
     const actions = {
       workspace: {
+        ...spatialQueries,
         newRootFolder: addRootFolder,
         parentPaneID: () => undefined,
         isDocked: () => false,

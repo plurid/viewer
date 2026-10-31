@@ -12,6 +12,7 @@ instructions or a list of shipped features. Current behavior is in the [guides](
 - [Composable tools](actions.md)
 - [Sharing and plurid.link](sharing.md)
 - [Viewer Workshop and hackathon strategy](workshop.md)
+- [Ecosystem review, technical audit and hackathon plan](audit-and-hackathon-plan.md)
 - [Earlier Viewer app](history.md)
 
 Promote an idea into the guides only after its implementation and limits are clear. Keep useful

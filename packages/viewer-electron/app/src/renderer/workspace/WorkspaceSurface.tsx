@@ -35,9 +35,10 @@ import { PreviewFrame } from './preview-frame';
 import { Empty } from '../ui/primitives';
 import { Sidebar } from '../ui/navigation/Sidebar';
 import { PlaneHeader } from './PlaneHeader';
+import { PinnedHeader } from './PinnedHeader';
 import { frameWorkspace, refitWorkspace } from './framing';
 import { focusFiles } from './sessions';
-import { applyTiling } from './tiling';
+import { applyTiling, reconcileTiling } from './tiling';
 import { useWorkspace } from './context';
 import { minimapShown, surfaceConfiguration } from './surface-configuration';
 import { placeRoots } from './root-placement';
@@ -129,6 +130,22 @@ const LazyJournalPlane = lazy(() => import('../journal/JournalPlane'));
 const LazyOverviewPlane = lazy(() => import('../overview/OverviewPlane'));
 const LazyTaskPlane = lazy(() => import('../tasks/TaskPlane'));
 const LazyReceiptPlane = lazy(() => import('../tasks/ReceiptPlane'));
+const LazyCheckPlane = lazy(() => import('../fabrication/CheckPlane'));
+
+function CheckContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (pane?.type !== 'check') return <Empty title="Check unavailable" />;
+  return (
+    <PreviewFrame activate={() => setActivePane(pane.id)}>
+      <Suspense fallback={<Empty title="Opening check…" />}>
+        <LazyCheckPlane pane={pane} active={planeIsActive(plane)} />
+      </Suspense>
+    </PreviewFrame>
+  );
+}
 
 function TaskContent() {
   const plane = usePluridPlane();
@@ -335,22 +352,34 @@ const marked = (Content: React.ComponentType): React.ComponentType =>
     );
   };
 const planes: PluridPlane<React.ComponentType>[] = [
-  { route: '/tasks/:id', component: marked(TaskContent) },
-  { route: '/receipts/:id', component: marked(TaskContent) },
+  {
+    route: '/checks/:id',
+    component: marked(CheckContent),
+    pinnable: true,
+    head: { title: 'Job check' },
+  },
+  { route: '/tasks/:id', component: marked(TaskContent), pinnable: false },
+  { route: '/receipts/:id', component: marked(TaskContent), pinnable: false },
   { route: '/servers/:id', component: marked(ServerContent), pinnable: false },
   { route: '/browsers/:id', component: marked(BrowserContent), pinnable: false },
-  { route: '/media/:id', component: marked(MediaContent) },
-  { route: '/layouts/:id', component: marked(LayoutContent) },
-  { route: '/journals/:id', component: marked(JournalContent) },
-  { route: '/overviews/:id', component: marked(OverviewContent) },
-  { route: '/chats/:id', component: marked(ChatContent) },
-  { route: '/diffs/:id', component: marked(ComparisonContent) },
-  { route: '/git-changes/:id', component: marked(ComparisonContent) },
-  { route: '/terminals/:id', component: marked(TerminalContent) },
-  { route: '/folders/:id', component: marked(FolderContent) },
-  { route: '/searches/:id', component: marked(SearchContent) },
-  { route: '/collections/:id', component: marked(CollectionContent) },
-  { route: '/previews/:id', component: marked(PreviewContent), pinnable: false },
+  { route: '/media/:id', component: marked(MediaContent), pinnable: false },
+  { route: '/layouts/:id', component: marked(LayoutContent), pinnable: false },
+  { route: '/journals/:id', component: marked(JournalContent), pinnable: false },
+  { route: '/overviews/:id', component: marked(OverviewContent), pinnable: false },
+  { route: '/chats/:id', component: marked(ChatContent), pinnable: false },
+  { route: '/diffs/:id', component: marked(ComparisonContent), pinnable: false },
+  { route: '/git-changes/:id', component: marked(ComparisonContent), pinnable: false },
+  { route: '/terminals/:id', component: marked(TerminalContent), pinnable: false },
+  { route: '/folders/:id', component: marked(FolderContent), pinnable: false },
+  { route: '/searches/:id', component: marked(SearchContent), pinnable: false },
+  { route: '/collections/:id', component: marked(CollectionContent), pinnable: false },
+  {
+    route: '/previews/:id',
+    component: marked(PreviewContent),
+    head: { title: 'Viewer' },
+    pinnable: ({ parameters }) =>
+      activeWorkspace().panes.some((pane) => pane.id === parameters.id && pane.type === 'note'),
+  },
 ];
 export function WorkspaceSurface({
   engine,
@@ -448,7 +477,7 @@ export function WorkspaceSurface({
     .filter((id) => space.panes.some((pane) => pane.id === id))
     .join('\n');
   useEffect(() => {
-    if (tiled) applyTiling(engine, surface);
+    if (tiled) reconcileTiling(engine, surface);
   }, [tiled, engine, surface]);
   // The engine needs a stable `view` array: rebuild it only when a route changes.
   const routes = surfaceRoutes(space);
@@ -550,6 +579,10 @@ export function WorkspaceSurface({
     (context: Parameters<typeof PlaneHeader>[0]['context']) => <PlaneHeader context={context} />,
     [],
   );
+  const renderPinnedControls = useCallback(
+    (context: Parameters<typeof PinnedHeader>[0]['context']) => <PinnedHeader context={context} />,
+    [],
+  );
   const renderEmpty = useCallback(
     () => (
       <Empty title="No open planes" detail="Create a folder plane or choose a folder.">
@@ -622,6 +655,7 @@ export function WorkspaceSurface({
         storageAdapter={storage}
         onReady={onEngineReady}
         renderPlaneControls={renderPlaneControls}
+        renderPinnedControls={renderPinnedControls}
         renderEmpty={renderEmpty}
       />
     </div>

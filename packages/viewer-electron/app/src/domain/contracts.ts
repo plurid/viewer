@@ -195,6 +195,14 @@ export interface NotePane {
   documentID: string;
   title: string;
 }
+/** A view of a private, durable fabrication check; opening it never reruns the model. */
+export interface CheckPane {
+  id: string;
+  type: 'check';
+  path: string;
+  checkID: string;
+  title: string;
+}
 export interface SearchPane {
   id: string;
   type: 'search';
@@ -318,6 +326,7 @@ export type Pane =
   | CollectionPane
   | ScratchPane
   | NotePane
+  | CheckPane
   | DiffPane
   | GitChangesPane
   | ChatPane
@@ -338,6 +347,7 @@ export const paneTypes = {
   collection: 'collection',
   scratch: 'scratch',
   note: 'note',
+  check: 'check',
   diff: 'diff',
   'git-changes': 'git-changes',
   chat: 'chat',
@@ -373,11 +383,11 @@ export interface Workspace {
   tiling?: Tiling;
 }
 /** Current saved-state format. Increment with a compatible migration and preserved input. */
-export const CURRENT_STATE_VERSION = 11 as const;
+export const CURRENT_STATE_VERSION = 12 as const;
 /** The interface's colour scheme. */
 export type Look = 'dark' | 'light';
 export interface SavedState {
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | typeof CURRENT_STATE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
   /** Bounded, private file view positions, independent of disposable plane IDs. */
   previewHistory?: PreviewHistory;

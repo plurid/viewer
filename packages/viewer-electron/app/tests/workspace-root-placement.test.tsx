@@ -29,6 +29,8 @@ import {
   useViewer,
 } from '../src/renderer/state/store';
 import { useWorkspaceController } from '../src/renderer/workspace/controller';
+import { setTiling } from '../src/renderer/state/workspaces';
+import { applyTiling, reconcileTiling } from '../src/renderer/workspace/tiling';
 import { besideLocation, placeRoots } from '../src/renderer/workspace/root-placement';
 import { flattenTree, hostID, surfaceRoutes } from '../src/renderer/workspace/tree';
 
@@ -123,7 +125,7 @@ async function mount(place = true) {
       readyRef: { current: true },
     }),
   ).result.current;
-  return { handle: engine.current!, controller };
+  return { handle: engine.current!, controller, container };
 }
 /** Quits, as far as the arrangement goes: saves it as the engine stores it, then opens it again. */
 async function reopen() {
@@ -259,6 +261,53 @@ describe('a saved workspace', () => {
   /** Each root's place and size, by its pane. */
   const geometry = (handle: PluridApplicationHandle) =>
     handle.tree.get().map((root) => [hostID(root), root.location, root.width, root.height]);
+
+  it('restores tiling policy after stack undo without reflowing geometry or replacing redo', async () => {
+    const { handle, controller, container } = await mount();
+    await openRoot(controller, 'Drawing.txt');
+    await openRoot(controller, 'Request.txt');
+    Object.defineProperties(container, {
+      clientWidth: { value: 1200 },
+      clientHeight: { value: 800 },
+    });
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1200, 800));
+    const engine = { current: handle },
+      surface = { current: container };
+    const ids = [...activeWorkspace().roots];
+    act(() => {
+      setTiling({ panes: ids, layout: 'tiled', main: 0.5 });
+      applyTiling(engine, surface, 0, false);
+    });
+    const comparison = structuredClone(geometry(handle));
+    act(() => {
+      controller.stackPanes(ids);
+    });
+    const stacked = structuredClone(geometry(handle));
+    const stacks = structuredClone(handle.planes.stacks());
+    expect(stacks).toHaveLength(1);
+    expect(stacked).not.toEqual(comparison);
+    // The compact stack has a different camera. A second tiling operation here uses this new
+    // origin, moving the restored planes and discarding the engine's redo entry.
+    act(() => handle.camera.moveBy({ absolute: { offset: { x: 28, y: 12, z: 0 } } }));
+    act(() => controller.undo());
+    act(() => reconcileTiling(engine, surface));
+    expect(activeWorkspace().tiling?.panes).toEqual(ids);
+    expect(geometry(handle)).toEqual(comparison);
+    expect(handle.planes.stacks()).toEqual([]);
+    expect(handle.history.get().canRedo).toBe(true);
+    act(() => controller.redo());
+    act(() => reconcileTiling(engine, surface));
+    expect(activeWorkspace().tiling).toBeUndefined();
+    expect(geometry(handle)).toEqual(stacked);
+    expect(handle.planes.stacks()).toEqual(stacks);
+    // An explicit layout change still recomputes geometry.
+    act(() => {
+      controller.unstackPanes(stacks[0]!.stackID);
+      setTiling({ panes: ids, layout: 'even-vertical', main: 0.5 });
+      applyTiling(engine, surface, 0, false);
+    });
+    expect(geometry(handle)).not.toEqual(comparison);
+  });
 
   it('opens with its roots where they were, at their size', async () => {
     const { handle, controller } = await mount();

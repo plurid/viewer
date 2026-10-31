@@ -27,6 +27,16 @@ and skip larger candidates. The renderer owns tools and drafts, not process argu
 filesystem mutation queue. Workflows and agents prepare reviewed typed exports; they gain no shell,
 deletion-approval or authenticated-browser capability.
 
-Saved workspace state is v8, with byte-preserving pre-migration backups. Browser session and media
-draft references stay outside portable project exports. Actual processor/UI behavior is qualified
-with retained generated native fixtures; service tests alone do not qualify an interactive surface.
+Fabrication checks are private documents with independent views. Closing a plane detaches its owner;
+only explicit cancellation stops its request. A restored check reads its saved result and never
+replays a model call. Source verification and human confirmations bind to captured source versions.
+The desktop validates them again when a reviewed correction or handoff executes.
+
+Check and note instances may pin to the viewport. Per-instance engine policy preserves shared
+preview route identity when a scratchpad is saved. Restoring a layout cannot bypass pinning policy.
+Stack membership and previous placements are part of arrangement history, alongside geometry.
+
+Saved workspace state uses byte-preserving pre-migration backups. Browser sessions, media drafts and
+private check references stay outside portable project exports. Actual processor/UI behavior is
+qualified with retained generated native fixtures; service tests alone do not qualify an interactive
+surface.

@@ -10,7 +10,7 @@ import { ChoiceButton } from '../src/renderer/ui/ChoiceMenu';
 
 afterEach(cleanup);
 const choices = [
-  { value: 'markdown', label: 'Markdown' },
+  { value: 'markdown', label: 'Markdown', detail: 'Formatted text with headings and links.' },
   { value: 'plaintext', label: 'Plain text' },
   { value: 'python', label: 'Python' },
   { value: 'rust', label: 'Rust', aliases: ['rs'] },
@@ -29,8 +29,11 @@ it('shows the current choice, and opens a searchable menu with it checked', asyn
   // only the current choice carries an icon, its check; the others keep its place blank
   const rows = [...menu.querySelectorAll('.command-result')];
   expect(rows.filter((row) => row.querySelector('svg')).map((row) => row.textContent)).toEqual([
-    'Markdown',
+    'MarkdownFormatted text with headings and links.',
   ]);
+  expect(rows[0]!.querySelector('small')?.textContent).toBe(
+    'Formatted text with headings and links.',
+  );
   expect(rows.filter((row) => row.querySelector('.command-icon-spacer'))).toHaveLength(3);
 });
 it('chooses what the search finds, by name or alias', async () => {

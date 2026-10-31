@@ -40,6 +40,9 @@ const controller: Record<string, unknown> = {
   isDocked: () => false,
   arrangementHistory: () => ({ canUndo: false, canRedo: false }),
   hasRepeatedPreviews: () => false,
+  planePinState: () => ({ pinnable: false, pinned: false, collapsed: false }),
+  selectedPaneIDs: () => [],
+  planeStacks: () => [],
   bookmarks: () => [],
 };
 const workspace = new Proxy(controller, {

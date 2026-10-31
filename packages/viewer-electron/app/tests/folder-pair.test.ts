@@ -14,6 +14,8 @@ import {
   type RenderedPlurid,
 } from '@plurid/plurid-react/testing';
 import type { FolderPane } from '../src/domain/contracts';
+import { layoutSchema } from '../src/domain/workspaces/project';
+import { addContentPane } from '../src/renderer/state/panes';
 import { stateSchema } from '../src/desktop/persistence/storage';
 import {
   activeWorkspace,
@@ -297,9 +299,12 @@ describe('saved arrangements', () => {
   });
 });
 
-const planes = ['folders', 'git-changes', 'diffs'].map((route) => ({
+const planes = ['folders', 'git-changes', 'diffs', 'checks', 'previews'].map((route) => ({
   route: `/${route}/:id`,
   component: () => createElement('div', null, route),
+  pinnable: ({ parameters }: { parameters: Readonly<Record<string, string>> }) =>
+    route !== 'previews' ||
+    activeWorkspace().panes.some((pane) => pane.id === parameters.id && pane.type === 'note'),
 }));
 const configuration = configurationWith({ elements: { plane: { width: 800, height: 480 } } });
 let rendered: RenderedPlurid | undefined;
@@ -320,7 +325,10 @@ function memoryStorage(): Storage {
     setItem: (key, value) => void items.set(key, String(value)),
   };
 }
-const routes = () => activeWorkspace().roots.map((id) => paneRoute('folder', id));
+const routes = () =>
+  activeWorkspace().roots.map((id) =>
+    paneRoute(activeWorkspace().panes.find((pane) => pane.id === id)!.type, id),
+  );
 const target = () => {
   const folder = activeWorkspace().panes[0]!;
   return { workspaceID: activeWorkspace().id, paneID: folder.id, path: folder.path };
@@ -500,6 +508,17 @@ afterEach(async () => {
 });
 
 describe('two-folder geometry', () => {
+  it('keeps a pinned review panel out of readable comparisons, including its collapsed title', async () => {
+    const { element } = await workspace();
+    const pin = document.createElement('div');
+    pin.dataset.pluridPinned = 'check';
+    let rectangle = new DOMRect(568, 12, 420, 576);
+    vi.spyOn(pin, 'getBoundingClientRect').mockImplementation(() => rectangle);
+    element.append(pin);
+    expect(folderPairArea(element)).toMatchObject({ x: 8, y: 8, width: 552 });
+    rectangle = new DOMRect(568, 12, 420, 30);
+    expect(folderPairArea(element)).toMatchObject({ x: 8, y: 50, width: 984 });
+  });
   it.each(['x', 'y'] as const)(
     'fills equal halves along %s at natural scale, including small windows',
     (axis) => {
@@ -538,6 +557,100 @@ describe('two-folder geometry', () => {
     expect(() =>
       folderPairGeometry({ width: 0, height: 0 }, { x: 0, y: 0, width: 0, height: 0 }, origin, 'x'),
     ).toThrow('too small');
+  });
+});
+
+describe('pinned tools and evidence arrangements', () => {
+  const placed = (id: string) =>
+    flattenTree(rendered!.handle.tree.get()).find((node) => hostID(node) === id);
+  it('pins notes by instance, refuses file previews, and persists the checked layout', async () => {
+    const note = {
+      id: 'note-view',
+      type: 'note' as const,
+      path: '/fixtures',
+      documentID: crypto.randomUUID(),
+      title: 'Review notes',
+    };
+    const file = { id: 'file-view', type: 'preview' as const, path: '/fixtures/drawing.pdf' };
+    addContentPane(note);
+    addContentPane(file);
+    const { controller } = await workspace();
+    await act(async () => {
+      expect(controller.pinPane(file.id)).toBe(false);
+      expect(controller.pinPane(note.id, { width: 360, height: 400 })).toBe(true);
+    });
+    expect(controller.planePinState(note.id)).toEqual({
+      pinnable: true,
+      pinned: true,
+      collapsed: false,
+    });
+    const saved = layoutSchema.parse(controller.captureLayout());
+    expect(saved.placements.find((item) => item.id === note.id)?.pinned?.rect).toMatchObject({
+      width: 360,
+      height: 400,
+    });
+    await flushState();
+    await rendered!.unmount();
+    rendered = undefined;
+    const reopened = await workspace();
+    expect(reopened.controller.planePinState(note.id).pinned).toBe(true);
+    expect(reopened.controller.planePinState(file.id).pinned).toBe(false);
+    await act(async () => reopened.controller.collapsePinnedPane(note.id, true));
+    expect(reopened.controller.planePinState(note.id).collapsed).toBe(true);
+  });
+
+  it('compares an evidence stack as one undo step and restores only those planes', async () => {
+    addPane('/fixtures/drawing', 'folder', true);
+    addPane('/fixtures/unrelated', 'folder', true);
+    const { controller } = await workspace();
+    const [a, b, other] = activeWorkspace().panes.map((pane) => pane.id) as [
+      string,
+      string,
+      string,
+    ];
+    const before = controller.captureLayout();
+    const untouched = structuredClone(placed(other));
+    let stack: string | undefined;
+    await act(async () => {
+      stack = controller.stackPanes([a, b]);
+    });
+    expect(stack).toBeTruthy();
+    expect(layoutSchema.parse(controller.captureLayout()).stacks?.[0]?.panes).toEqual([a, b]);
+    const depth = rendered!.handle.history.get().undoDepth;
+    await act(async () => controller.comparePanes([a, b]));
+    expect(controller.planeStacks()).toEqual([]);
+    expect(activeWorkspace().tiling?.panes).toEqual([a, b]);
+    expect(rendered!.handle.history.get().undoDepth).toBe(depth + 1);
+    expect(placed(other)).toEqual(untouched);
+    await act(async () => controller.undo());
+    expect(controller.planeStacks()).toEqual([{ id: stack, panes: [a, b] }]);
+    await act(async () => controller.redo());
+    expect(controller.planeStacks()).toEqual([]);
+    await act(async () => controller.restorePaneLayout(before, [a, b]));
+    for (const id of [a, b]) {
+      const saved = before.placements.find((item) => item.id === id)!;
+      expect(placed(id)).toMatchObject({
+        location: saved.location,
+        width: saved.width,
+        height: saved.height,
+      });
+    }
+    expect(placed(other)).toEqual(untouched);
+  });
+
+  it('refuses a partial-stack comparison before moving a neighbouring member', async () => {
+    addPane('/fixtures/two', 'folder', true);
+    addPane('/fixtures/three', 'folder', true);
+    const { controller } = await workspace();
+    const ids = activeWorkspace().panes.map((pane) => pane.id);
+    await act(async () => {
+      controller.stackPanes(ids);
+    });
+    const before = controller.captureLayout();
+    await expect(controller.comparePanes(ids.slice(0, 2))).rejects.toThrow(
+      'Unstack the existing group',
+    );
+    expect(controller.captureLayout()).toEqual(before);
   });
 });
 

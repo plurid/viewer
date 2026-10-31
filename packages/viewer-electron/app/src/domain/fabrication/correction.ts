@@ -12,6 +12,7 @@ import type { CorrectionPitch, CorrectionReport, DXFCorrection, PitchAxis } from
 import { parseDrawing } from '../previews/drawings/dxf/geometry';
 import { readCutDrawing, transformPrimitive } from '../layout/nesting/drawing';
 import { partDXF } from '../layout/nesting/dxf-writer';
+import { findingRequirementKey } from './requirements';
 import { translation } from '../layout/nesting/geometry';
 import {
   alignedAxis,
@@ -39,8 +40,15 @@ export function correctionFor(
     grade.status !== 'confirmed' ||
     !finding.dxf ||
     !finding.proposal ||
-    finding.drawing?.value === null ||
-    finding.drawing?.value === undefined ||
+    !grade.requirement ||
+    grade.requirement.status === 'unverified' ||
+    grade.requirement.kind !== 'pitch' ||
+    grade.requirement.unit !== 'mm' ||
+    grade.finding !== finding.id ||
+    grade.requirement.key !== findingRequirementKey(finding.id) ||
+    grade.requirement.evidence.ref !== finding.drawing?.ref ||
+    grade.requirement.evidence.page !== (finding.drawing?.page ?? 1) ||
+    grade.requirement.part !== finding.dxf.ref ||
     grade.measured === undefined
   )
     return undefined;
@@ -56,7 +64,7 @@ export function correctionFor(
     from: still.entities[0]!,
     to: moved.entities[0]!,
     axis: finding.dxf.axis ?? alignedAxis(a, b),
-    target: finding.drawing.value,
+    target: grade.requirement.value,
     measured: grade.measured,
     move: [...moving]
       .filter((hole): hole is Hole => !!hole && hole !== moved)

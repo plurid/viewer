@@ -13,6 +13,9 @@ import { noteSchema } from '../../domain/editing/notes';
 import { mediaDraftSchema } from '../../domain/media/documents';
 import { chatDocumentSchema } from '../../domain/models/chat';
 import { receiptSchema } from '../../domain/automation/receipts';
+import { checkDocumentSchema } from '../../domain/fabrication/check-document';
+import type { CheckDocument } from '../../domain/fabrication/check-document';
+import { CheckStore } from '../fabrication/check-store';
 import { pathMapper } from '../../domain/files/changes';
 import { inspectReviewedFile } from '../native/reviewed-file';
 import { textBufferSchema } from '../editing/text-buffers';
@@ -27,6 +30,7 @@ const documentKinds = {
   media: { directory: 'media-drafts', schema: mediaDraftSchema },
   conversations: { directory: 'chat-documents', schema: chatDocumentSchema },
   receipts: { directory: 'command-receipts', schema: receiptSchema },
+  checks: { directory: 'fabrication-checks', schema: checkDocumentSchema },
 } as const;
 type DocumentKind = keyof typeof documentKinds;
 const documentKeys = Object.keys(documentKinds) as DocumentKind[];
@@ -69,6 +73,7 @@ export const backupSchema = z
         media: z.array(mediaDraftSchema).max(1000),
         conversations: z.array(chatDocumentSchema).max(1000),
         receipts: z.array(receiptSchema).max(1000),
+        checks: z.array(checkDocumentSchema).max(1000).default([]),
       })
       .strict(),
   })
@@ -147,7 +152,9 @@ function validate(value: unknown): Backup {
                 ? { kind: 'conversations', id: pane.conversationID }
                 : pane.type === 'receipt'
                   ? { kind: 'receipts', id: pane.receiptID }
-                  : undefined;
+                  : pane.type === 'check'
+                    ? { kind: 'checks', id: pane.checkID }
+                    : undefined;
       if (reference && !members[reference.kind].has(reference.id))
         throw new Error(
           'The backup is incomplete: a plane’s private document is missing. Current work was left unchanged.',
@@ -190,6 +197,7 @@ export class PersonalBackups {
       media: [],
       conversations: [],
       receipts: [],
+      checks: [],
     };
     let bytes = 0;
     for (const kind of documentKeys) {
@@ -208,7 +216,10 @@ export class PersonalBackups {
         throw new Error('The private document folder exceeds the backup limit.');
       for (const name of names.sort()) {
         if (!name.endsWith('.json') || !z.uuid().safeParse(name.slice(0, -5)).success) continue;
-        const inspected = await inspectReviewedFile(path.join(directory, name), 4 * 1024 * 1024);
+        const inspected = await inspectReviewedFile(
+          path.join(directory, name),
+          (kind === 'checks' ? 16 : 4) * 1024 * 1024,
+        );
         bytes += inspected.bytes.length;
         if (bytes > maximumBackupBytes)
           throw new Error('The backup exceeds 64 MiB. Export fewer workspaces or documents first.');
@@ -239,6 +250,7 @@ export class PersonalBackups {
           media: item.backup.documents.media.length,
           conversations: item.backup.documents.conversations.length,
           receipts: item.backup.documents.receipts.length,
+          checks: item.backup.documents.checks.length,
         },
         roots: item.roots.map((source) => ({ source, destination: item.bindings.get(source) })),
         warnings: [
@@ -327,6 +339,10 @@ export class PersonalBackups {
         ),
         ...backup.documents.conversations.map((item) => item.path),
         ...backup.documents.receipts.map((item) => item.directory),
+        ...backup.documents.checks.flatMap((item) => [
+          item.folder,
+          ...item.sources.map((source) => path.dirname(source.path)),
+        ]),
       ]);
       const id = randomUUID(),
         item: Prepared = {
@@ -453,6 +469,40 @@ export class PersonalBackups {
         paneID: id(doc.paneID),
         status: doc.status === 'running' ? ('interrupted' as const) : doc.status,
       })),
+      checks: item.backup.documents.checks.map((doc): CheckDocument => ({
+        ...doc,
+        id: id(doc.id),
+        folder: map(doc.folder),
+        paths: doc.paths.map(map),
+        sources: doc.sources.map((source) => ({ ...source, path: map(source.path) })),
+        status: doc.status === 'running' ? 'interrupted' : doc.status,
+        updated: Date.now(),
+        // A readable import preserves observations, never authority derived from editable JSON.
+        verification: undefined,
+        confirmations: [],
+        corrections: {},
+        handoffs: [],
+        error:
+          'Imported check: saved observations are available for inspection. Run the check again before confirming requirements, correcting drawings or exporting.',
+        result: doc.result && {
+          ...doc.result,
+          id: id(doc.id),
+          parts: doc.result.parts.map((part) => ({ ...part, path: map(part.path) })),
+          findings: doc.result.findings.map(({ correction: _correction, ...finding }) => finding),
+          tour: { ...doc.result.tour, root: map(doc.result.tour.root) },
+        },
+        record: doc.record && {
+          ...doc.record,
+          corrections: doc.record.corrections.map((correction) => ({
+            ...correction,
+            plan: {
+              ...correction.plan,
+              review: correction.plan.review && { ...correction.plan.review, check: id(doc.id) },
+            },
+          })),
+        },
+        tour: doc.tour && { ...doc.tour, root: map(doc.tour.root) },
+      })),
     };
     for (const draft of documents.drafts)
       if (draft.file && draft.base && this.host.textVersion) {
@@ -482,6 +532,10 @@ export class PersonalBackups {
         }
       }
     }
+    // The discovery index is separate from documents and contains only their restored identities.
+    const checks = new CheckStore(path.join(this.root, documentKinds.checks.directory));
+    for (const document of documents.checks) await checks.save(document);
+    await checks.flush();
     this.requireOwner(owner);
     const settings = patches.length ? await this.host.apply(patches) : this.host.settings();
     this.host.imported?.();

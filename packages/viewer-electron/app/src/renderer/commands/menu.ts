@@ -69,6 +69,7 @@ const leaf = (command: ResolvedCommand): MenuEntry => ({
   kind: 'command',
   id: command.id,
   command,
+  note: command.source === 'choice' ? command.detail : undefined,
 });
 const section = (commands: ResolvedCommand[], label?: string): MenuSection => ({
   label,

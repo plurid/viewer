@@ -148,4 +148,24 @@ describe('evaluation set', () => {
       'Accuracy: names 100%, measurement 100%, grading 100%, corrections 100%.',
     );
   });
+
+  it('does not grade a mismatch or offer a correction when its independent source text is absent or changed', () => {
+    const part = evaluationParts().find((item) => item.truth.mismatch)!;
+    for (const text of ['', 'Pitch: 999 mm']) {
+      const report = evaluateFabrication({
+        budget: 1,
+        parts: [{ ...part, requirement: { ...part.requirement, text } }],
+      });
+      expect(report.parsed).toBe(1);
+      expect(report.pitch).toEqual({ correct: 1, total: 1 });
+      expect(report.grades).toEqual({
+        correct: 2,
+        total: 4,
+        confirmed: 0,
+        refuted: 0,
+        unverified: 4,
+      });
+      expect(report.corrections).toEqual({ correct: 0, total: 0 });
+    }
+  });
 });

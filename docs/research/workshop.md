@@ -11,10 +11,10 @@ workspace of source documents, images, models, actions and verified results. A s
 understanding an assembly, finding a mismatch and preparing a grounded correction with the original
 evidence beside it.
 
-The supplied guide requires Meta tooling, public source, a three-minute video and clear separation
-of event work from an existing codebase. Its equally weighted criteria are impact, creative use of
-Meta tooling, technical execution and demo. The supplied submission deadline is November 4, 2026, 9
-PM Eastern. Confirm the
+The event guide requires Meta tooling, public source, a video of at most three minutes and clear
+separation of event work from an existing codebase. Its criteria weight impact 30%, creative use of
+Meta tooling 25%, technical execution 20% and demo 25%. The submission deadline is November 4, 2026,
+9 PM Eastern. Confirm the
 [event guide](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details) before submission.
 
 ## A complete demonstration
@@ -25,6 +25,11 @@ PM Eastern. Confirm the
 4. Present a typed proposed action or correction with its assumptions and evidence.
 5. Run an appropriate deterministic check and show the actual result.
 6. Export a useful handoff rather than ending with an unverified chat answer.
+
+For Job 1042, **Review evidence** opens a readable comparison of the exact drawing, DXF and request.
+**Stack evidence** is optional and reversible. Completion of a model request never rearranges the
+person's workspace by itself. Source-verified and human-confirmed requirements retain separate
+labels; geometry verification alone cannot establish what a drawing requires.
 
 Meta models should do substantive multimodal interpretation, decomposition and grounding.
 Deterministic tools own measurements, validation and execution. Model names, API availability,

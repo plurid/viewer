@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { Storage } from '../src/desktop/persistence/storage';
+import { Storage, stateSchema } from '../src/desktop/persistence/storage';
 import { CURRENT_STATE_VERSION, type SavedState } from '../src/domain/contracts';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
@@ -34,7 +34,110 @@ const state = (version: number, panes: unknown[]) => ({
 });
 
 it('uses the current plane format', () => {
-  expect(CURRENT_STATE_VERSION).toBe(11);
+  expect(CURRENT_STATE_VERSION).toBe(12);
+});
+it('preserves version 11 before adding check views, pins and stacks', async () => {
+  const storage = new Storage(path.join(root, 'state.json'));
+  const previous = stateSchema.parse(
+    state(11, [
+      { id: 'drawing', type: 'preview', path: path.join(root, 'part.dxf') },
+      { id: 'request', type: 'preview', path: path.join(root, 'request.pdf') },
+    ]),
+  );
+  const location = { translateX: 120, translateY: 80, translateZ: 0, rotateX: 0, rotateY: 0 };
+  previous.workspaces[0]!.layout = {
+    active: 'drawing',
+    placements: previous.workspaces[0]!.panes.map(({ id }, index) => ({
+      id,
+      location: { ...location, translateX: location.translateX + index * 900 },
+      width: 800,
+      height: 600,
+      show: true,
+    })),
+  };
+  const original = JSON.stringify(previous, null, 2);
+  await writeFile(storage.file, original, { flag: 'wx' });
+  const loaded = await storage.load();
+  expect(loaded.recovery).toBeUndefined();
+  expect(loaded.state?.version).toBe(12);
+  expect(loaded.state?.workspaces).toEqual(previous.workspaces);
+  expect(await readFile(storage.file, 'utf8')).toBe(original);
+  const backups = (await readdir(root)).filter((file) => file.includes('before-workshop-v12'));
+  expect(backups).toHaveLength(1);
+  const backup = path.join(root, backups[0]!);
+  expect(await readFile(backup, 'utf8')).toBe(original);
+  expect((await stat(backup)).mode & 0o777).toBe(0o600);
+  await storage.save(loaded.state!);
+  expect(JSON.parse(await readFile(storage.file, 'utf8')).version).toBe(12);
+  expect(await readFile(backup, 'utf8')).toBe(original);
+});
+
+it('round trips check references, pinned rectangles and stack restoration positions in version 12', async () => {
+  const storage = new Storage(path.join(root, 'state.json'));
+  const checkID = '6f1c2c0a-6a43-4c51-9e3e-6f3f0d3b9a01';
+  const next = stateSchema.parse(
+    state(12, [
+      {
+        id: 'check',
+        type: 'check',
+        path: root,
+        checkID,
+        title: 'Job check',
+      },
+      { id: 'drawing', type: 'preview', path: path.join(root, 'part.dxf') },
+      { id: 'request', type: 'preview', path: path.join(root, 'request.pdf') },
+    ]),
+  );
+  const location = { translateX: 40, translateY: 120, translateZ: 0, rotateX: 0, rotateY: 0 };
+  next.workspaces[0]!.layout = {
+    active: 'check',
+    placements: [
+      {
+        id: 'check',
+        location,
+        width: 600,
+        height: 700,
+        show: true,
+        pinned: {
+          rect: { x: 0.75, y: 0.1, width: 0.2, height: 0.8, unit: 'fraction', anchor: 'top-right' },
+          collapsed: false,
+          order: 1,
+        },
+      },
+      {
+        id: 'drawing',
+        location: { ...location, translateX: 800 },
+        width: 800,
+        height: 600,
+        show: true,
+      },
+      {
+        id: 'request',
+        location: { ...location, translateX: 824, translateY: 144 },
+        width: 800,
+        height: 600,
+        show: true,
+      },
+    ],
+    stacks: [
+      {
+        id: 'evidence-stack',
+        panes: ['drawing', 'request'],
+        previous: {
+          drawing: { location: { ...location, translateX: 850 }, manuallyPositioned: true },
+          request: { location: { ...location, translateX: 1800 }, manuallyPositioned: false },
+        },
+      },
+    ],
+  };
+  await storage.save(next);
+  const restored = await new Storage(storage.file).load();
+  expect(restored.recovery).toBeUndefined();
+  expect(restored.state?.workspaces).toEqual(next.workspaces);
+  const bytes = JSON.parse(await readFile(storage.file, 'utf8'));
+  expect(bytes.version).toBe(12);
+  expect(bytes.workspaces[0].panes[0]).toMatchObject({ type: 'check', checkID });
+  expect(await readdir(root)).toEqual(['state.json']);
 });
 it('backs up version 8 before adding durable note views', async () => {
   const storage = new Storage(path.join(root, 'state.json'));

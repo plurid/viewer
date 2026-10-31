@@ -1,16 +1,21 @@
 /**
  * GRADING: each finding of a model's answer against Viewer's own measurement of the DXF it names.
- * Confirmed: Viewer measures the finding's DXF value, within tolerance, and that differs from the
- * drawing's value by more than the tolerance. Refuted: Viewer measures otherwise. Unverified: Viewer
- * cannot measure it, as with a claim only a photo shows. The model's numbers are never trusted
+ * Confirmed: Viewer measures the finding's DXF value and a verified or human-confirmed requirement
+ * differs by more than the tolerance. The source-to-feature association remains for review.
+ * Refuted: Viewer measures otherwise. Unverified: a requirement or measurement cannot be checked
  * (docs/reference/fabrication.md).
  */
-import type { Finding, InventoryItem } from './answer';
+import type { Finding, InventoryItem, InventorySource } from './answer';
+import type {
+  RequirementClaim,
+  RequirementConfirmation,
+  RequirementVerification,
+} from './requirements';
 import type { FindingGrade } from '../tours/tour';
 import type { Hole, MeasureOutcome, Measurement, PitchAxis } from './measure';
 import { alignedAxis, holeOf, millimetreText, pitchBetween } from './measure';
 import { readJobName } from './names';
-import { quoteOn } from './quotes';
+import { findingRequirement, verifyRequirement } from './requirements';
 
 /** Millimetres between two lengths that count as the same; counts must match exactly. */
 export const gradeTolerance = 0.05;
@@ -26,16 +31,29 @@ export interface Grade {
   /** The values and the reason, in a sentence or two. */
   reason: string;
   tolerance: number;
+  /** Source evidence and human confirmation remain distinguishable from DXF measurement. */
+  requirement?: RequirementVerification;
 }
 /** What grading reads, resolved by ref: the job's inventory, its DXF measurements and page text. */
 export interface GradeJob {
   inventory: readonly InventoryItem[];
+  sources?: readonly InventorySource[];
+  /** Only the desktop supplies accepted, source-bound human confirmations. */
+  confirmations?: readonly RequirementConfirmation[];
   /** A DXF part's file name and measurement. */
   dxf(ref: string): { name: string; outcome: MeasureOutcome } | undefined;
   /** A drawing or request page's text; undefined when the page has none, such as a scan. */
   text?(ref: string, page: number): string | undefined;
   /** Millimetres; `gradeTolerance` unless given. */
   tolerance?: number;
+}
+
+export function gradeRequirement(claim: RequirementClaim, job: GradeJob): RequirementVerification {
+  return verifyRequirement(claim, {
+    source: job.sources?.find((source) => source.ref === claim.ref),
+    text: job.text?.(claim.ref, claim.page),
+    confirmation: job.confirmations?.find((item) => item.key === claim.key),
+  });
 }
 
 /** What a value counts. */
@@ -67,6 +85,8 @@ interface Reading {
 
 export function gradeFinding(finding: Finding, job: GradeJob): Grade {
   const tolerance = job.tolerance ?? gradeTolerance;
+  const claim = findingRequirement(finding);
+  const requirement = claim && gradeRequirement(claim, job);
   const verdict = (status: FindingGrade, reason: string, reading?: Reading): Grade => ({
     finding: finding.id,
     status,
@@ -74,6 +94,7 @@ export function gradeFinding(finding: Finding, job: GradeJob): Grade {
     entities: reading?.entities ?? [],
     reason,
     tolerance: reading?.unit === 'mm' ? tolerance : 0,
+    ...(requirement ? { requirement } : {}),
   });
   const unverified = (reason: string, reading?: Reading) => verdict('unverified', reason, reading);
   const byRef = new Map(job.inventory.map((item) => [item.ref, item]));
@@ -94,18 +115,6 @@ export function gradeFinding(finding: Finding, job: GradeJob): Grade {
   const read = part?.kind === 'dxf' ? job.dxf(part.ref) : undefined;
   if (!part || !read) return unverified(`${finding.dxf.ref} is not a DXF part in this job.`);
 
-  if (finding.drawing) {
-    const source = byRef.get(finding.drawing.ref);
-    if (!source || (source.kind !== 'drawing' && source.kind !== 'request'))
-      return unverified(`${finding.drawing.ref} is not a drawing or request in this job.`);
-    const { quote, page } = finding.drawing;
-    const text = quote ? job.text?.(source.ref, page ?? 1) : undefined;
-    if (quote && text && !quoteOn(text, quote))
-      return unverified(
-        `“${quote}” is not on page ${page ?? 1} of ${source.name}, so the ${source.kind} value is unconfirmed.`,
-      );
-  }
-
   const reading =
     finding.kind === 'thickness' || finding.kind === 'quantity'
       ? nameReading(finding.kind, read.name)
@@ -114,22 +123,25 @@ export function gradeFinding(finding: Finding, job: GradeJob): Grade {
         : measuredReading(finding, read.outcome.measurement, read.name);
   if (typeof reading === 'string') return unverified(reading);
 
-  const said = finding.drawing?.value ?? null,
+  if (!requirement || requirement.status === 'unverified')
+    return unverified(
+      `${reading.lead}; ${requirement?.reason ?? 'there is no requirement to compare.'}`,
+      reading,
+    );
+  const said = requirement.value,
     claimed = finding.dxf.value;
   const limit = reading.unit === 'mm' ? tolerance : 0;
   const origin =
     finding.drawing && byRef.get(finding.drawing.ref)?.kind === 'request' ? 'request' : 'drawing';
-  if (said === null)
-    return unverified(`${reading.lead}; the finding gives no ${origin} value to compare.`, reading);
   if (claimed === null)
     return unverified(
-      `${reading.lead}; the ${origin} gives ${amount(said, reading.unit)}, and the finding gives no DXF value.`,
+      `${reading.lead}; the accepted ${origin} requirement is ${amount(said, reading.unit)}, and the finding gives no DXF value.`,
       reading,
     );
   if (Math.abs(reading.value - said) <= limit)
     return verdict(
       'refuted',
-      `${reading.lead}, as the ${origin} gives: there is no mismatch.`,
+      `${reading.lead}, matching the accepted ${origin} requirement: there is no mismatch.`,
       reading,
     );
   if (Math.abs(reading.value - claimed) > limit)
@@ -140,7 +152,7 @@ export function gradeFinding(finding: Finding, job: GradeJob): Grade {
     );
   return verdict(
     'confirmed',
-    `${reading.lead}; the ${origin} gives ${amount(said, reading.unit)}.`,
+    `${reading.lead}; ${requirement.status === 'human-confirmed' ? 'you confirmed' : `the quoted ${origin} requirement states`} ${amount(said, reading.unit)}. Review that it applies to the highlighted part.`,
     reading,
   );
 }

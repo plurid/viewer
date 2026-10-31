@@ -15,8 +15,9 @@ import type {
 } from './answer';
 import type { UnreadValue } from './check';
 import type { Grade, GradeJob } from './grade';
-import { gradeFinding, gradeTolerance } from './grade';
-import { quoteGives, quoteOn } from './quotes';
+import type { AcceptedRequirement, RequirementVerification } from './requirements';
+import { gradeRequirement, gradeTolerance } from './grade';
+import { requestRequirement } from './requirements';
 import { readJobName, thicknessText } from './names';
 
 /** Where a value comes from, in the order Viewer takes it. */
@@ -28,11 +29,13 @@ export interface PartQuantity {
   pieces: number;
   source: ValueSource;
   quote?: string;
+  requirements?: AcceptedRequirement[];
 }
 export interface PartThickness {
   value: number;
   source: ValueSource;
   quote?: string;
+  requirements?: AcceptedRequirement[];
 }
 /** A DXF part as the job asks for it. */
 export interface PartPlan {
@@ -77,6 +80,8 @@ interface Reading {
   ref?: string;
   page?: number;
   quote: string | null;
+  requirements?: AcceptedRequirement[];
+  problem?: string;
 }
 const amount = (kind: Compared, value: number) =>
   kind === 'thickness' ? thicknessText(value) : `${value} ${value === 1 ? 'piece' : 'pieces'}`;
@@ -100,20 +105,7 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
         finding.kind === kind &&
         (finding.dxf?.ref === ref || (drawing !== undefined && finding.drawing?.ref === drawing)),
     );
-  /** Where a quoted reading fails: no quote, a quote not on its page, or one without the value. */
-  const unchecked = (kind: Compared, reading: Reading): string | undefined => {
-    if (reading.source === 'name' || !reading.ref) return undefined;
-    const name = byRef.get(reading.ref)?.name ?? reading.ref;
-    const page = reading.page ?? 1;
-    if (!reading.quote)
-      return `The ${reading.source} value has no quote, so Viewer cannot check it.`;
-    const text = job.grading.text?.(reading.ref, page);
-    if (text && !quoteOn(text, reading.quote))
-      return `“${reading.quote}” is not on page ${page} of ${name}.`;
-    if (!quoteGives(reading.quote, reading.value))
-      return `“${reading.quote}” does not give ${amount(kind, reading.value)}.`;
-    return undefined;
-  };
+  const grading = { ...job.grading, sources: job.sources };
   const raise = (entry: Omit<ViewerFinding, 'grade'>, grade: (finding: Finding) => Grade) => {
     if (next > 99) return;
     findings.push({ ...entry, grade: grade(entry.finding) });
@@ -129,40 +121,63 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
 
   for (const source of job.sources) {
     if (source.kind !== 'dxf') continue;
-    const asked = answer.request.filter((part) => part.dxf === source.ref);
+    const asked = answer.request
+      .map((part, index) => ({ part, index }))
+      .filter(({ part }) => part.dxf === source.ref);
     const name = readJobName(source.name);
     const pieces = job.pieces(source.ref) ?? 1;
-    const label = name.part ?? asked[0]?.part ?? source.name;
+    const label = name.part ?? asked[0]?.part.part ?? source.name;
     const plan: PartPlan = { ref: source.ref, path: source.path, name: source.name, pieces };
 
     const readings = (kind: Compared): Partial<Record<ValueSource, Reading>> => {
       const result: Partial<Record<ValueSource, Reading>> = {};
-      const counted = asked.filter((part) => part[kind] !== null);
-      if (counted.length)
-        result.request = {
-          source: 'request',
-          // Parts the request lists apart that are one drawing: a left and a right, say.
-          value:
-            kind === 'quantity'
-              ? counted.reduce((sum, part) => sum + part.quantity!, 0)
-              : counted[0]!.thickness!,
-          ref: counted[0]!.ref,
-          page: 1,
+      for (const origin of ['request', 'drawing'] as const) {
+        const claims = asked
+          .map(({ part, index }) => requestRequirement(part, index, origin, kind))
+          .filter((claim) => claim !== undefined);
+        if (!claims.length) continue;
+        const checked = claims.map((claim) => gradeRequirement(claim, grading));
+        const requirements = checked.filter(
+          (item): item is AcceptedRequirement => item.status !== 'unverified',
+        );
+        const unread = checked.find(
+          (item): item is Extract<RequirementVerification, { status: 'unverified' }> =>
+            item.status === 'unverified',
+        );
+        const values = checked.map((item, index) =>
+          item.status === 'unverified' ? claims[index]!.value! : item.value,
+        );
+        const passages = claims.map(
+          (claim) =>
+            `${claim.ref}:${claim.page}:${claim.quote?.normalize('NFKC').toLowerCase().replace(/\s+/g, '')}`,
+        );
+        const repeated = kind === 'quantity' && new Set(passages).size !== passages.length;
+        const conflict = kind === 'thickness' && values.some((value) => value !== values[0]);
+        const value =
+          kind === 'quantity' ? values.reduce((sum, entry) => sum + entry, 0) : values[0]!;
+        const problem =
+          unread?.reason ??
+          (repeated
+            ? 'The same quoted quantity is listed more than once for this part.'
+            : undefined) ??
+          (conflict ? 'The source gives different thicknesses for this part.' : undefined) ??
+          (kind === 'quantity' && value > 20_000
+            ? 'The combined quantity exceeds 20,000 pieces.'
+            : undefined);
+        result[origin] = {
+          source: origin,
+          value,
+          ref: claims[0]!.ref,
+          page: claims[0]!.page,
           quote:
-            counted
-              .map((part) => part.quote)
+            claims
+              .map((claim) => claim.quote)
               .filter(Boolean)
-              .join(' · ') || null,
+              .join('\n') || null,
+          requirements,
+          ...(problem ? { problem } : {}),
         };
-      const drawn = asked.find((part) => part.drawing && part.drawing[kind] !== null)?.drawing;
-      if (drawn)
-        result.drawing = {
-          source: 'drawing',
-          value: drawn[kind]!,
-          ref: drawn.ref,
-          page: drawn.page,
-          quote: drawn.quote,
-        };
+      }
       const read = name[kind];
       if (read) result.name = { source: 'name', value: read.value, quote: read.text };
       return result;
@@ -191,11 +206,17 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
               proposal: null,
             },
           },
-          (finding) => {
-            const graded = gradeFinding(finding, job.grading);
-            const problem = graded.status === 'confirmed' && unchecked(kind, against);
-            return problem ? { ...graded, status: 'unverified', reason: problem } : graded;
-          },
+          (finding) => ({
+            finding: finding.id,
+            status: against.problem ? 'unverified' : 'confirmed',
+            measured: named.value,
+            entities: [],
+            reason:
+              against.problem ??
+              `The name ${source.name} gives ${amount(kind, named.value)} (“${named.quote}”); the accepted ${against.source} requirement is ${amount(kind, against.value)}.`,
+            tolerance: kind === 'thickness' ? gradeTolerance : 0,
+            ...(against.requirements?.length === 1 ? { requirement: against.requirements[0] } : {}),
+          }),
         );
       // The request against the drawing.
       if (
@@ -220,7 +241,7 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
             },
           },
           (finding) => {
-            const problem = unchecked(kind, request) ?? unchecked(kind, drawing);
+            const problem = request.problem ?? drawing.problem;
             return {
               finding: finding.id,
               status: problem ? 'unverified' : 'confirmed',
@@ -235,12 +256,45 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
       }
       const chosen = request ?? drawing ?? named;
       if (!chosen) continue;
+      if (chosen.problem) {
+        const question = `${source.name}: review its ${kind}. ${chosen.problem}`;
+        plan.question = [plan.question, question].filter(Boolean).join(' ');
+        if (
+          !findings.some((entry) => entry.part === source.ref && entry.finding.kind === kind) &&
+          !said(kind, source.ref)
+        )
+          raise(
+            {
+              part: source.ref,
+              question,
+              finding: {
+                id: `F${next++}`,
+                kind,
+                summary: question.slice(0, 300),
+                drawing: documentValue(chosen),
+                dxf: { ref: source.ref, value: named?.value ?? null, axis: null, entities: [] },
+                photo: null,
+                proposal: null,
+              },
+            },
+            (finding) => ({
+              finding: finding.id,
+              status: 'unverified',
+              entities: [],
+              reason: chosen.problem!,
+              tolerance: kind === 'thickness' ? gradeTolerance : 0,
+            }),
+          );
+        continue;
+      }
       const quote = chosen.quote ?? undefined;
+      const requirements = chosen.requirements?.length ? { requirements: chosen.requirements } : {};
       if (kind === 'thickness') {
         plan.thickness = {
           value: chosen.value,
           source: chosen.source,
           ...(quote ? { quote } : {}),
+          ...requirements,
         };
         continue;
       }
@@ -251,6 +305,7 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
           pieces: chosen.value * pieces,
           source: 'name',
           ...(quote ? { quote } : {}),
+          ...requirements,
         };
         continue;
       }
@@ -260,6 +315,7 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
           pieces: chosen.value,
           source: chosen.source,
           ...(quote ? { quote } : {}),
+          ...requirements,
         };
         continue;
       }

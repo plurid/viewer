@@ -149,7 +149,8 @@ describe('fabrication check', () => {
       grade: {
         status: 'confirmed',
         measured: 48,
-        reason: 'Viewer measured 48.00 mm between holes 4 and 5 along x; the drawing gives 50 mm.',
+        reason:
+          'Viewer measured 48.00 mm between holes 4 and 5 along x; the quoted drawing requirement states 50 mm. Review that it applies to the highlighted part.',
       },
       names: { drawing: 'Job 1042 drawing.pdf', dxf: 'g6-PL60-B2-2buc.dxf' },
       correction: {
@@ -238,6 +239,7 @@ describe('fabrication check', () => {
         },
       ],
       [1, { id: opening.id, step: 'outlining', text: 'SAM 3.1 is outlining 2 features' }],
+      [1, { id: opening.id, step: 'settled', text: 'Check completed.' }],
     ]);
     const record = JSON.parse(checks.handoff(opening.id)!.record) as {
       segmentation: { label: string; note?: string }[];
@@ -267,14 +269,13 @@ describe('fabrication check', () => {
       },
       grade: {
         status: 'unverified',
-        reason: '“MB20-A1 mounting bracket, 6 mm, 4 pieces” does not give 5 pieces.',
+        reason: "The passage gives 4 pieces for quantity; the model's value is not supported.",
       },
       names: { drawing: 'Job 1042 request.eml', dxf: 'g6-MB20-A1-4buc.dxf' },
     });
-    // the request still comes first, with the finding beside it
-    expect(
-      result.parts.find((part) => part.name === 'g6-MB20-A1-4buc.dxf')!.quantity,
-    ).toMatchObject({ sets: 5, source: 'request' });
+    const part = result.parts.find((part) => part.name === 'g6-MB20-A1-4buc.dxf')!;
+    expect(part.quantity).toBeUndefined();
+    expect(part.question).toContain('not supported');
   });
 
   it('keeps an evidence record of what was asked, sent and answered, for the handoff only', async () => {
@@ -343,7 +344,7 @@ describe('fabrication check', () => {
     );
     await expect(
       checks.request({ kind: 'run', id: opening.id, providerID: meta.id, pages: [page] }, 2),
-    ).rejects.toThrow('This check was closed.');
+    ).rejects.toThrow('Open this saved check before continuing.');
     expect(generate).not.toHaveBeenCalled();
   });
 
@@ -523,11 +524,11 @@ describe('a job’s files', () => {
       ],
     });
     await expect(checks.request({ kind: 'changes', id: opening.id }, 2)).rejects.toThrow(
-      'This check was closed.',
+      'Open this saved check before continuing.',
     );
   });
 
-  it('keeps a window’s last eight checks, closing its oldest past them', async () => {
+  it('keeps earlier checks available when more than eight are opened', async () => {
     const first = await opened();
     for (let count = 0; count < 7; count++) await opened();
     await expect(checks.request({ kind: 'changes', id: first.id }, 1)).resolves.toMatchObject({
@@ -536,8 +537,8 @@ describe('a job’s files', () => {
     // another window's checks do not count
     await open([folder], 2);
     await opened();
-    await expect(checks.request({ kind: 'changes', id: first.id }, 1)).rejects.toThrow(
-      'This check was closed.',
-    );
+    await expect(checks.request({ kind: 'changes', id: first.id }, 1)).resolves.toMatchObject({
+      kind: 'changes',
+    });
   });
 });

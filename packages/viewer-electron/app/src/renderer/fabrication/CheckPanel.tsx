@@ -1,13 +1,18 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { OperationJob } from '../../domain/contracts';
 import type { CheckFinding, CheckOutline, CheckSource } from '../../domain/fabrication/check';
 import type { ThicknessGroup } from '../../domain/fabrication/names';
+import type {
+  RequirementClaim,
+  RequirementVerification,
+} from '../../domain/fabrication/requirements';
 import type { ModelProvider } from '../../domain/services';
 import type { CheckPhase, CheckSession } from './check';
 import { checkSendingLabels } from '../../domain/fabrication/check';
 import { correctionProposal, listText, savedPitches } from '../../domain/fabrication/plan';
 import { namedRefs } from '../../domain/fabrication/answer';
 import { partValuesText } from '../../domain/fabrication/part-values';
+import { findingRequirementKey, requirementUnit } from '../../domain/fabrication/requirements';
 import { countText } from '../../domain/layout/nesting/format';
 import {
   modelDataLabels,
@@ -34,14 +39,18 @@ import {
   chooseCheckProvider,
   clockText,
   closeCheck,
+  confirmRequirement,
   correctedCopies,
   cutSheets,
   exportHandoff,
   handoffNestings,
   playCheckTour,
   prepareCutSheets,
+  restoreEvidenceArrangement,
+  reviewEvidence,
   runCheck,
   saveCorrection,
+  stackEvidence,
   subscribeCheck,
   toggleCheckPanel,
 } from './check';
@@ -67,7 +76,7 @@ export function CheckPanel() {
   const collapsed = useSyncExternalStore(subscribeCheck, checkCollapsed);
   // the check belongs to the workspace it was opened in: in another, it waits as it was left
   const workspace = useViewer((state) => state.saved.activeWorkspace);
-  if (!current || current.workspaceID !== workspace) return null;
+  if (!current || current.workspaceID !== workspace || current.viewPaneID) return null;
   return <CheckPanelBody current={current} collapsed={collapsed} />;
 }
 
@@ -119,7 +128,15 @@ function collapsedStatus(
   }
 }
 
-function CheckPanelBody({ current, collapsed }: { current: CheckSession; collapsed: boolean }) {
+export function CheckPanelBody({
+  current,
+  collapsed,
+  embedded = false,
+}: {
+  current: CheckSession;
+  collapsed: boolean;
+  embedded?: boolean;
+}) {
   const workspace = useWorkspace();
   const handoff = useViewer((state) => state.jobs.find((entry) => entry.id === current.handoff));
   const destination =
@@ -131,7 +148,7 @@ function CheckPanelBody({ current, collapsed }: { current: CheckSession; collaps
   const status = collapsedStatus(current, handoff);
   return (
     <Panel
-      className="check-panel"
+      className={`check-panel${embedded ? ' check-plane-panel' : ''}`}
       label={`Check ${job ?? 'laser job'}`}
       title={job ? `Check ${job}` : 'Check laser job'}
       status={
@@ -140,9 +157,9 @@ function CheckPanelBody({ current, collapsed }: { current: CheckSession; collaps
           <Elapsed since={status.since} />
         </>
       }
-      collapsed={collapsed}
-      onCollapsedChange={toggleCheckPanel}
-      onClose={closeCheck}
+      collapsed={!embedded && collapsed}
+      onCollapsedChange={embedded ? undefined : toggleCheckPanel}
+      onClose={embedded ? undefined : () => closeCheck(current)}
       closeLabel="Close the check"
       footer={
         destination && (
@@ -171,10 +188,10 @@ function CheckPanelBody({ current, collapsed }: { current: CheckSession; collaps
       data-stale={current.phase === 'checked' && current.stale ? true : undefined}
       onKeyDown={(event) => {
         // a menu or dialog inside keeps its own Escape; a running tour takes it first
-        if (event.key !== 'Escape' || event.defaultPrevented || overlayOpen()) return;
+        if (embedded || event.key !== 'Escape' || event.defaultPrevented || overlayOpen()) return;
         event.preventDefault();
         event.stopPropagation();
-        closeCheck();
+        closeCheck(current);
       }}
     >
       {current.phase === 'opening' && (
@@ -199,7 +216,7 @@ function CheckPanelBody({ current, collapsed }: { current: CheckSession; collaps
             {current.progress}
             <Elapsed since={current.since} />
           </span>
-          <button type="button" onClick={cancelCheck}>
+          <button type="button" onClick={() => cancelCheck(current)}>
             Cancel
           </button>
         </div>
@@ -299,7 +316,7 @@ function Inventory({ current }: { current: CheckSession }) {
                   value: item.id,
                   label: `${item.name} · ${item.model || 'no model ID'}`,
                 }))}
-                onChoose={chooseCheckProvider}
+                onChoose={(id) => chooseCheckProvider(id, current)}
                 disabled={running}
               />
             }
@@ -373,7 +390,7 @@ function Permission({
           title={
             !provider.model ? `Enter ${provider.name}’s model ID in Settings → Models.` : undefined
           }
-          onClick={() => void runCheck()}
+          onClick={() => void runCheck(current)}
         >
           {current.phase === 'failed' ? 'Run again' : `Check ${countText(count, 'file')}`}
         </button>
@@ -389,7 +406,7 @@ function Permission({
 function Since({ current }: { current: CheckSession }) {
   const at = clockText(current.checked ?? Date.now());
   const again = (
-    <button type="button" onClick={() => void runCheck()}>
+    <button type="button" onClick={() => void runCheck(current)}>
       Run again
     </button>
   );
@@ -425,10 +442,11 @@ function Result({ current }: { current: CheckSession }) {
         <p className="muted check-note">
           {result.provider.name} · {result.provider.model} · {result.seconds} s ·{' '}
           {result.findings.length
-            ? `${countText(result.findings.length, 'finding')}, ${confirmed} confirmed by Viewer`
+            ? `${countText(result.findings.length, 'finding')}, ${confirmed} confirmed`
             : 'no findings'}
         </p>
         {notSent.length > 0 && <p className="muted check-note">Not sent: {notSent.join(' ')}</p>}
+        <EvidenceActions current={current} />
       </PanelSection>
       {result.findings.length > 0 && (
         <PanelSection
@@ -440,6 +458,20 @@ function Result({ current }: { current: CheckSession }) {
               <Finding key={item.finding.id} item={item} current={current} jobs={jobs} />
             ))}
           </ol>
+        </PanelSection>
+      )}
+      {(result.requirements ?? []).some(({ claim }) => claim.key.startsWith('part:')) && (
+        <PanelSection title="Job requirements">
+          {(result.requirements ?? [])
+            .filter(({ claim }) => claim.key.startsWith('part:'))
+            .map(({ claim, verification }) => (
+              <RequirementReview
+                key={claim.key}
+                claim={claim}
+                verification={verification}
+                current={current}
+              />
+            ))}
         </PanelSection>
       )}
       {result.issues.length > 0 && (
@@ -467,7 +499,7 @@ function Result({ current }: { current: CheckSession }) {
               .closest('.check-panel')
               ?.querySelector<HTMLButtonElement>('.check-panel-toggle')
               ?.focus();
-            playCheckTour(workspace);
+            playCheckTour(workspace, current);
           }}
         >
           Play the tour
@@ -477,12 +509,241 @@ function Result({ current }: { current: CheckSession }) {
       <Handoff current={current} jobs={jobs} />
       {!shownAgain && (
         <footer className="check-actions">
-          <button type="button" onClick={() => void runCheck()}>
+          <button type="button" onClick={() => void runCheck(current)}>
             Run again
           </button>
         </footer>
       )}
     </>
+  );
+}
+
+function EvidenceActions({ current }: { current: CheckSession }) {
+  const workspace = useWorkspace();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const compare = () => {
+    setBusy(true);
+    setError('');
+    void reviewEvidence(workspace, current)
+      .catch((value: unknown) => setError(errorMessage(value)))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <>
+      <div className="check-evidence-actions" aria-label="Arrange evidence">
+        <Button variant="secondary" disabled={!!current.stale || busy} onClick={compare}>
+          {busy ? 'Opening evidence…' : 'Compare evidence'}
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={!!current.stale || busy || (current.evidencePaneIDs?.length ?? 0) < 2}
+          onClick={() => {
+            setError('');
+            try {
+              stackEvidence(workspace, current);
+            } catch (value) {
+              setError(errorMessage(value));
+            }
+          }}
+        >
+          Stack evidence
+        </Button>
+        {current.evidenceBefore && (
+          <Button
+            variant="secondary"
+            disabled={busy}
+            onClick={() => {
+              setError('');
+              try {
+                restoreEvidenceArrangement(workspace, current);
+              } catch (value) {
+                setError(errorMessage(value));
+              }
+            }}
+          >
+            Restore arrangement
+          </Button>
+        )}
+      </div>
+      {error && (
+        <p className="error check-note" role="alert">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** A source passage stays distinct from the person's decision about an unsupported reading. */
+function RequirementReview({
+  claim,
+  verification,
+  current,
+}: {
+  claim: RequirementClaim;
+  verification: RequirementVerification;
+  current: CheckSession;
+}) {
+  const workspace = useWorkspace();
+  const details = useRef<HTMLDetailsElement>(null);
+  const [expanded, setExpanded] = useState(verification.status === 'unverified');
+  const [reviewing, setReviewing] = useState(false);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const source = current.opening?.sources.find((item) => item.ref === claim.ref);
+  const part = current.opening?.sources.find((item) => item.ref === claim.part);
+  const unit = requirementUnit(claim.kind);
+  const accepted = verification.status === 'unverified' ? undefined : verification;
+  const status =
+    verification.status === 'source-verified'
+      ? 'Source verified'
+      : verification.status === 'human-confirmed'
+        ? 'Human confirmed'
+        : 'Needs review';
+  const parsed = /^\d+(?:[.,]\d+)?$/.test(value.trim())
+    ? Number(value.trim().replace(',', '.'))
+    : NaN;
+  const valid =
+    Number.isFinite(parsed) &&
+    (unit === 'mm'
+      ? parsed > 0 && parsed <= 1e9
+      : Number.isInteger(parsed) && parsed >= 0 && parsed <= 20_000);
+  const disabled = !!current.stale || busy || !source;
+  return (
+    <details
+      ref={details}
+      className="check-requirement"
+      open={expanded}
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+    >
+      <summary>
+        <span className="check-requirement-label">
+          {part?.name ?? claim.label ?? source?.name ?? 'Requirement'} · {claim.kind}
+        </span>
+        <span className="check-requirement-status" data-status={verification.status}>
+          {accepted ? `${accepted.value} ${accepted.unit} · ` : ''}
+          {status}
+        </span>
+      </summary>
+      <div className="check-requirement-body">
+        <p className="muted check-note">
+          {source?.name ?? 'Source unavailable'} · page {claim.page}
+        </p>
+        {claim.quote ? (
+          <blockquote className="check-source-quote">{claim.quote}</blockquote>
+        ) : (
+          <p className="muted check-note">No quoted passage. Open the source to review it.</p>
+        )}
+        {verification.status === 'unverified' && (
+          <p className="check-note">{verification.reason}</p>
+        )}
+        {part && <p className="check-note">Associated part: {part.name}.</p>}
+        <div className="check-evidence-actions">
+          <Button
+            variant="secondary"
+            disabled={disabled}
+            onClick={() => {
+              if (!source) return;
+              setError('');
+              void workspace
+                .openEvidence(
+                  {
+                    path: source.path,
+                    version: source.version,
+                    quote: claim.quote ?? '',
+                    anchor:
+                      source.sending === 'pages'
+                        ? { kind: 'pdf', page: claim.page }
+                        : { kind: 'text', line: 1, start: 0, end: 0 },
+                  },
+                  current.paneID ?? current.viewPaneID,
+                )
+                .catch((reason: unknown) => setError(errorMessage(reason)));
+            }}
+          >
+            Open source
+          </Button>
+          {!reviewing && (
+            <Button
+              variant="secondary"
+              disabled={disabled}
+              onClick={() => {
+                setValue(
+                  verification.status === 'human-confirmed' ? String(verification.value) : '',
+                );
+                setError('');
+                setReviewing(true);
+              }}
+            >
+              {verification.status === 'human-confirmed'
+                ? 'Edit confirmation…'
+                : 'Confirm from source…'}
+            </Button>
+          )}
+        </div>
+        {reviewing && (
+          <form
+            className="check-requirement-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!valid || disabled) return;
+              setBusy(true);
+              setError('');
+              void confirmRequirement(current, claim.key, parsed, unit)
+                .then(() => {
+                  setReviewing(false);
+                  details.current?.querySelector('summary')?.focus();
+                })
+                .catch((reason: unknown) => setError(errorMessage(reason)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            <p className="check-note">
+              Enter the {claim.kind} you read in the source and confirm that it applies to{' '}
+              {part?.name ?? claim.label ?? 'this requirement'}.
+            </p>
+            <label className="check-requirement-value">
+              <span>Value ({unit})</span>
+              <input
+                autoFocus
+                inputMode="decimal"
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                disabled={disabled}
+                placeholder="Value from the source"
+                autoComplete="off"
+              />
+            </label>
+            <div className="check-evidence-actions">
+              <Button variant="primary" type="submit" disabled={disabled || !valid}>
+                {busy ? 'Confirming…' : 'Confirm value'}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={busy}
+                onClick={() => {
+                  setReviewing(false);
+                  details.current?.querySelector('summary')?.focus();
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+            <p className="muted check-note">
+              Recorded as your confirmation, separately from source verification.
+            </p>
+          </form>
+        )}
+        {error && (
+          <p className="error check-note" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -496,7 +757,15 @@ function Finding({
   jobs: readonly OperationJob[];
 }) {
   const [error, setError] = useState('');
+  const [reviewing, setReviewing] = useState(false);
+  const workspace = useWorkspace();
   const { finding, grade, correction } = item;
+  const requirement = grade.requirement?.status !== 'unverified' ? grade.requirement : undefined;
+  const reviews = (current.result?.requirements ?? []).filter(({ claim }) =>
+    (item.readings ?? [{ finding }]).some(
+      (reading) => claim.key === findingRequirementKey(reading.finding.id),
+    ),
+  );
   const job = jobs.find((entry) => entry.id === current.corrections[finding.id]);
   const where = [
     item.names.drawing &&
@@ -514,6 +783,48 @@ function Finding({
           {namedRefs(finding.summary, current.opening!.sources)}
         </span>
       </div>
+      {grade.measured !== undefined && (
+        <dl className="check-measurements">
+          <div>
+            <dt>Requirement</dt>
+            <dd>{requirement ? `${requirement.value} ${requirement.unit}` : 'Needs review'}</dd>
+          </div>
+          <div>
+            <dt>
+              {finding.kind === 'quantity' || finding.kind === 'thickness'
+                ? 'File name'
+                : 'DXF measured'}
+            </dt>
+            <dd>
+              {grade.measured}{' '}
+              {finding.kind === 'quantity' ? 'pieces' : finding.kind === 'holes' ? 'holes' : 'mm'}
+            </dd>
+          </div>
+        </dl>
+      )}
+      <div className="check-evidence-actions">
+        <Button
+          variant="primary"
+          disabled={!!current.stale || reviewing}
+          onClick={() => {
+            setError('');
+            setReviewing(true);
+            void reviewEvidence(workspace, current, item)
+              .catch((value: unknown) => setError(errorMessage(value)))
+              .finally(() => setReviewing(false));
+          }}
+        >
+          {reviewing ? 'Opening evidence…' : 'Review evidence'}
+        </Button>
+      </div>
+      {reviews.map(({ claim, verification }) => (
+        <RequirementReview
+          key={claim.key}
+          claim={claim}
+          verification={verification}
+          current={current}
+        />
+      ))}
       {item.readings ? (
         <ul className="check-readings" aria-label={`Readings of ${finding.id}`}>
           {item.readings.map((reading) => (
@@ -563,18 +874,20 @@ function Finding({
               type="button"
               disabled={!!current.stale}
               onClick={() =>
-                void saveCorrection(item).catch((value: unknown) => setError(errorMessage(value)))
+                void saveCorrection(item, current).catch((value: unknown) =>
+                  setError(errorMessage(value)),
+                )
               }
             >
               Save {correction.name}
             </button>
           )}
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
         </div>
+      )}
+      {error && (
+        <p className="error check-note" role="alert">
+          {error}
+        </p>
       )}
     </li>
   );
@@ -601,8 +914,8 @@ function CutSheets({ current, jobs }: { current: CheckSession; jobs: readonly Op
       </ul>
       <button
         type="button"
-        disabled={!!current.stale || !parts.length}
-        onClick={() => prepareCutSheets(workspace)}
+        disabled={!!current.stale || !parts.length || parts.some((part) => !!part.question)}
+        onClick={() => void prepareCutSheets(workspace, current).catch(report)}
       >
         Prepare cut sheets
       </button>
@@ -662,7 +975,7 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
             {current.handoffProgress}
             <Elapsed since={current.handoffSince} />
           </span>
-          <button type="button" onClick={cancelHandoff}>
+          <button type="button" onClick={() => cancelHandoff(current)}>
             Cancel
           </button>
         </div>
@@ -670,7 +983,7 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
         <button
           type="button"
           disabled={!!current.stale || !!hold}
-          onClick={() => void exportHandoff()}
+          onClick={() => void exportHandoff(current)}
         >
           {missing.length ? 'Nest and export handoff' : 'Export handoff'}
         </button>

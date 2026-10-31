@@ -73,10 +73,21 @@ window records, bootstrap and save, published commands and context, and `quiesce
 go through `desktop/native/dialogs.ts`, which grants access to exactly what was chosen. Git
 mutations still bind and validate the captured target before service entry.
 
-Views are not resources. Notes, task references and command receipts can outlive their views.
-Terminals and window-owned servers have different close behavior. Preview leases, decoders, browser
-guests and cancellation release their own work. Restoring a task or project never authorizes replay
-of commands or agent input.
+Views are not resources. Notes, checks, task references and command receipts can outlive their
+views. Terminals and window-owned servers have different close behavior. Preview leases, decoders,
+browser guests and cancellation release their own work. Restoring a task or project never authorizes
+replay of commands or agent input.
+
+Fabrication check planes hold a private document ID. `desktop/fabrication/check-store.ts` persists
+the document; `desktop/fabrication/service.ts` owns its lifecycle and execution authority. Closing a
+view detaches its owner without cancelling the run. Reopening reads the saved result. Interrupted
+runs never restart through workspace restoration. `domain/fabrication/requirements.ts` separates
+source verification and explicit human confirmation from model claims and measured geometry.
+
+The workspace adapter translates stable host pane IDs to engine IDs for pinning, evidence comparison
+and stacks. Pinning is permitted per instance for notes and checks. Shared preview routes retain
+their identity through Save As. Geometry and stack restoration metadata travel together in layout
+persistence and history; asynchronous review retains its originating workspace and source versions.
 
 `desktop/windows/quit-sequence.ts` owns Quit's order: ask about running file operations, wait for
 them, finish backup exports, save every window and its placement, stop browser guests, close the

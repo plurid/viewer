@@ -243,6 +243,11 @@ const plateSource = dxfOf(plateName);
 const plateMeasure = measured(plateSource);
 const job: GradeJob = {
   inventory,
+  sources: inventory.map((item) => ({
+    ...item,
+    path: `/job/${item.name}`,
+    version: { identity: item.ref, size: 1, modified: 1 },
+  })),
   dxf: (ref) =>
     ref === 'S4'
       ? {
@@ -272,12 +277,13 @@ const pitchFinding = (patch: Partial<Finding> = {}): Finding => ({
 
 describe('grading', () => {
   it('confirms a mismatch Viewer measures, with the values and the entities', () => {
-    expect(gradeFinding(pitchFinding(), job)).toEqual({
+    expect(gradeFinding(pitchFinding(), job)).toMatchObject({
       finding: 'F1',
       status: 'confirmed',
       measured: 48,
       entities: ['8', '9'],
-      reason: 'Viewer measured 48.00 mm between holes 4 and 5 along x; the drawing gives 50 mm.',
+      reason:
+        'Viewer measured 48.00 mm between holes 4 and 5 along x; the quoted drawing requirement states 50 mm. Review that it applies to the highlighted part.',
       tolerance: 0.05,
     });
   });
@@ -294,14 +300,14 @@ describe('grading', () => {
         'Viewer measured 48.00 mm between holes 4 and 5 along x, not the 47 mm the finding gives.',
     });
     const vertical = pitchFinding({
-      drawing: { ref: 'S2', page: 1, value: 50, quote: null, box: null, feature: null },
+      drawing: { ref: 'S2', page: 1, value: 50, quote: '50 mm pitch', box: null, feature: null },
       dxf: { ref: 'S4', value: 48, axis: null, entities: ['10', '8'] },
     });
     expect(gradeFinding(vertical, job)).toMatchObject({
       status: 'refuted',
       measured: 50,
       reason:
-        'Viewer measured 50.00 mm between holes 1 and 4 along y, as the drawing gives: there is no mismatch.',
+        'Viewer measured 50.00 mm between holes 1 and 4 along y, matching the accepted drawing requirement: there is no mismatch.',
     });
   });
 
@@ -341,7 +347,7 @@ describe('grading', () => {
     ).toMatchObject({
       status: 'unverified',
       reason:
-        '“52 mm pitch” is not on page 1 of Job 1042 drawing.pdf, so the drawing value is unconfirmed.',
+        'Viewer measured 48.00 mm between holes 4 and 5 along x; “52 mm pitch” is not on page 1 of Job 1042 drawing.pdf.',
     });
     expect(
       gradeFinding(pitchFinding({ dxf: { ref: 'S9', value: 48, axis: 'x', entities: [] } }), job),
@@ -360,35 +366,43 @@ describe('grading', () => {
   it('checks diameters, sizes and counts, and quantities against the name', () => {
     const diameter = pitchFinding({
       kind: 'diameter',
-      drawing: { ref: 'S2', page: 1, value: 11, quote: null, box: null, feature: null },
+      drawing: { ref: 'S2', page: 1, value: 11, quote: 'Diameter 11 mm', box: null, feature: null },
       dxf: { ref: 'S4', value: 10.5, axis: null, entities: ['8'] },
     });
-    expect(gradeFinding(diameter, job)).toMatchObject({ status: 'confirmed', measured: 10.5 });
+    expect(gradeFinding(diameter, { ...job, text: () => 'Diameter 11 mm' })).toMatchObject({
+      status: 'confirmed',
+      measured: 10.5,
+    });
     const width = pitchFinding({
       kind: 'size',
-      drawing: { ref: 'S2', page: 1, value: 160, quote: null, box: null, feature: null },
+      drawing: { ref: 'S2', page: 1, value: 160, quote: 'Width 160 mm', box: null, feature: null },
       dxf: { ref: 'S4', value: 160, axis: 'x', entities: [] },
     });
-    expect(gradeFinding(width, job)).toMatchObject({ status: 'refuted', measured: 160 });
+    expect(gradeFinding(width, { ...job, text: () => 'Width 160 mm' })).toMatchObject({
+      status: 'refuted',
+      measured: 160,
+    });
     const count = pitchFinding({
       kind: 'holes',
-      drawing: { ref: 'S2', page: 1, value: 6, quote: null, box: null, feature: null },
+      drawing: { ref: 'S2', page: 1, value: 6, quote: '6 holes', box: null, feature: null },
       dxf: { ref: 'S4', value: 5, axis: null, entities: [] },
     });
-    expect(gradeFinding(count, job)).toMatchObject({
+    expect(gradeFinding(count, { ...job, text: () => '6 holes' })).toMatchObject({
       status: 'confirmed',
-      reason: 'Viewer counted 5 holes in outline 1; the drawing gives 6 holes.',
+      reason:
+        'Viewer counted 5 holes in outline 1; the quoted drawing requirement states 6 holes. Review that it applies to the highlighted part.',
       tolerance: 0,
     });
     const quantity = pitchFinding({
       kind: 'quantity',
-      drawing: { ref: 'S1', page: 1, value: 4, quote: null, box: null, feature: null },
+      drawing: { ref: 'S1', page: 1, value: 4, quote: '4 pieces', box: null, feature: null },
       dxf: { ref: 'S4', value: 2, axis: null, entities: [] },
     });
-    expect(gradeFinding(quantity, job)).toMatchObject({
+    expect(gradeFinding(quantity, { ...job, text: () => '4 pieces' })).toMatchObject({
       status: 'confirmed',
       measured: 2,
-      reason: 'The name g6-PL60-B2-2buc.dxf gives 2 pieces (“2buc”); the request gives 4 pieces.',
+      reason:
+        'The name g6-PL60-B2-2buc.dxf gives 2 pieces (“2buc”); the quoted request requirement states 4 pieces. Review that it applies to the highlighted part.',
     });
   });
 });

@@ -5,8 +5,9 @@ it reconciles quantities and thicknesses, its own measurement of a DXF part, how
 finding against that measurement, the reviewed DXF correction, and the handoff for the shop.
 [Check a laser job](../guides/layout.md#check-a-laser-job) has the steps.
 
-The model reads and points; Viewer measures, compares and grades. A model's numbers are never
-trusted: a finding stands only when Viewer measures it, or finds its quote on the page.
+The model reads and points; Viewer measures, compares and grades. A dimensional finding needs both a
+verified requirement and Viewer's measurement. An unverified model value cannot become a correction
+target or a nesting quantity.
 
 ## What a check reads
 
@@ -133,9 +134,9 @@ runs, the panel says what is being read and for how long, then what SAM outlines
 
 The faster effort is suggested only for a provider that takes one and does not use it already.
 
-The check sends pictures, so it needs the `images` data level in **Settings → Models**, **filenames,
-metadata, document text and pictures (photos and rendered drawing pages)**, and a provider that
-takes pictures: Meta, Gemini, OpenRouter or another Chat Completions model; see
+The check sends pictures, so it needs **Text and pictures** in **Settings → Models**, which includes
+filenames, metadata, document text, photos and rendered drawing pages, and a provider that takes
+pictures: Meta, Gemini, OpenRouter or another Chat Completions model; see
 [models and agents](agents.md#add-a-model). Without it, nothing is read: "Meta may receive
 filenames, metadata and extracted document text. This check also sends pictures: allow …". The check
 asks the first Meta model first, then the model of Ask Viewer, then the first that takes pictures;
@@ -147,7 +148,9 @@ asks the first Meta model first, then the model of Ask Viewer, then the first th
    at tour, so nothing was graded. Run the check again."
 2. What the schema cannot check, refs, pages and boxes, is listed under **Notes on the answer**
    ([answer and grading](#answer-and-grading)).
-3. Every finding is graded against Viewer's own measurement.
+3. Every finding is graded against Viewer's own measurement and a separately verified requirement.
+   The desktop reads requirement text from the source file; renderer-supplied PDF text positions are
+   used for highlighting only.
 4. Findings one cause explains become [one finding](#one-cause-one-finding).
 5. Quantities and thicknesses are [reconciled](#quantities-and-thicknesses); what disagrees, and
    what the answer leaves unread in the request, becomes a finding of Viewer's own.
@@ -173,10 +176,15 @@ them itself and never picks one silently.
   pieces” does not give 5 pieces." A disagreement the model already found is not raised twice.
 - **Agree.** Thicknesses agree within 0.05 mm. Quantities agree when they are the same count, or one
   is the other times the separate pieces the drawing holds.
-- **Used.** **Prepare cut sheets** takes the request's value, else the drawing's, else the name's,
-  and says which: "4 pieces · 6 mm, both from the request", or "4 pieces, from the request · 6 mm,
-  from the file name (“g6”)" when they differ. Parts the request lists apart that are one drawing,
-  such as a left and a right, add up.
+- **Used.** **Prepare cut sheets** takes the verified request's value, else the verified drawing's,
+  else an explicit file-name fallback when no document value is claimed, and says which: "4 pieces ·
+  6 mm, both from the request", or "4 pieces, from the request · 6 mm, from the file name (“g6”)"
+  when they differ. Parts the request lists apart that are one drawing, such as a left and a right,
+  add up.
+- **Unverified.** Each row must pass source verification or explicit human confirmation before
+  quantities are added or thicknesses enter nesting. An unsupported document value remains
+  unresolved; the file name does not silently override it. **Prepare cut sheets** and handoff
+  validation refuse unresolved quantities and thicknesses.
 
 **Unread.** When the job has a request, what the answer leaves unread in it is a finding of its own,
 one for each part, **Unverified** and without a number of Viewer's:
@@ -225,9 +233,13 @@ part the value is about. The page opens fitted to both: the feature outlined, th
 
 ## The check record
 
-A check keeps its record in memory, also while it is [kept](#closing-and-reopening) after its panel
-closes; it is written only when its [handoff](#handoff) is exported, as `Check record.json`. It
-names files, never their folders.
+A check has a private, versioned document in the desktop profile. It stores the inventory and source
+versions, lifecycle, model result, verification context, human confirmations and related correction
+and handoff operation IDs. The view refers to the document by ID. Credentials are never stored in
+it. Closing a view does not discard the document or cancel its run.
+
+The exported [handoff](#handoff) includes `Check record.json`, naming files without their original
+folders. This portable record contains:
 
 | Field                    | Holds                                                                                                                                                                   |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -294,22 +306,20 @@ Nothing is exported when a nesting stops:
 
 ## The panel's title bar
 
-The panel sits at the top right of the space, above the tour bar: neither covers the other at any
-window size. Choosing its title, or **Space** or **Return** on it, collapses the panel to its title
-bar and opens it again. The window keeps that choice until it closes. **Esc** in the panel closes
-it. Collapsed, the title bar says how the check stands:
+The check is a plane, initially pinned at the top right of its workspace. Its title bar provides
+collapse, expand, place in space and close controls. Check and note instances can be pinned; file
+previews, scratch buffers, terminals, browser views and other runtime views stay in space. Notes and
+scratch buffers retain their shared preview route; pin eligibility is checked per instance.
 
-| While                 | The title bar says                                                                       |
-| --------------------- | ---------------------------------------------------------------------------------------- |
-| Ready to run          | "Check Job 1042 · Ready to check 7 files"                                                |
-| A check runs          | "Check Job 1042 · Muse Spark is reading the request, 2 drawing pages and 1 photo · 34 s" |
-| Checked               | "Check Job 1042 · 3 findings, 2 confirmed"                                               |
-| The job changed since | "Check Job 1042 · Changed since 22:14"                                                   |
-| The export nests      | "Check Job 1042 · Nesting 6 mm: 3 parts, 8 pieces… · 4 s"                                |
+**Review evidence** resolves captured source references and versions under the originating folder
+and workspace. It opens the selected drawing and DXF first, then related context, waits for each
+plane and lays them out to read. No arrangement happens on check completion. **Stack evidence** is
+an optional compact view. **Restore arrangement** restores the affected evidence geometry while
+leaving other planes in place. Comparisons reject a partial selection of another stack.
 
-The panel belongs to the workspace the check was opened in. Another workspace hides it; back in its
-own, it shows again as it was left, open or collapsed. Closing that workspace closes the check, as
-closing the panel does.
+Pins, stack membership and previous placements persist with layouts. Arrangement Undo and Redo
+restore stack metadata together with its geometry. A narrow window collapses the pinned check for
+comparison; expanded pins reserve space beside the readable evidence area.
 
 **Play the tour** collapses the panel, so the plane each stop shows is in view, and opens it again
 when the tour ends or stops. **Play again** collapses it again. Once you open or collapse it during
@@ -317,9 +327,9 @@ the tour, it stays as you left it. **Esc** stops the tour first.
 
 ## Closing and reopening
 
-Closing the panel keeps a finished check, so a paid answer is not thrown away. The window keeps its
-last 5 checks in memory and forgets them when it closes; the desktop keeps each one's record for its
-handoff. Nothing is written to disk.
+Closing the plane detaches its view. The desktop retains the check across restarts, including its
+paid result and operation relationships. Reopening reads the saved document and checks source
+identities without making a model request.
 
 **Check laser job…** on the same folder or files compares the job with what the check read, each
 file by its size, date and identity, then shows the kept check at once:
@@ -331,9 +341,13 @@ file by its size, date and identity, then shows the kept check at once:
 
 - **What counts.** A file changed, one added that the check would read, and one gone. A corrected
   copy the check saved is not a change.
-- **Before a result.** A check closed while it runs is cancelled. One closed before a result, or
-  after its run failed, ends.
-- **Past 5.** Closing a sixth check ends the oldest kept one: its job is listed and checked afresh.
+- **Before a result.** Closing the view does not cancel work. **Cancel** stops it explicitly.
+- **Restart.** A previously running document becomes interrupted and waits for an explicit rerun.
+- **Import.** Private backup import remaps document IDs and paths. Imported observations remain
+  inspectable but cannot authorize corrections or nesting; run a new check against the local files.
+- **Execution.** The desktop revalidates source identities before correction, nesting and handoff,
+  and again before publishing a staged correction. Corrected copies must still match the verified
+  file-operation output before they enter a handoff.
 
 ## Part names
 
@@ -440,11 +454,11 @@ the answer as the model gave it.
 
 Each finding is graded against Viewer's own value:
 
-| Grade          | When                                                                                                                                         |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Confirmed**  | Viewer's value matches the finding's DXF value within the tolerance and differs from the drawing's value by more than it                     |
-| **Refuted**    | Viewer's value matches the drawing's, so there is no mismatch, or differs from the finding's DXF value                                       |
-| **Unverified** | Viewer cannot measure it: only a photo shows it, an entity is not a hole, the drawing has no units, a value is missing, or a quote is absent |
+| Grade          | When                                                                                                                        |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Confirmed**  | Viewer's value matches the claimed DXF value and differs from a source-verified or explicitly human-confirmed requirement   |
+| **Refuted**    | Viewer's value matches the drawing's, so there is no mismatch, or differs from the finding's DXF value                      |
+| **Unverified** | Either measurement or requirement cannot be checked, including absent, contradictory, ambiguous or unitless source evidence |
 
 The tolerance is 0.05 mm for lengths; counts must match exactly.
 
@@ -473,8 +487,16 @@ forms. The instructions ask for the first, the shortest that states the value.
 - **Never a cut number.** "2 pieces" is not on a page that says "12 pieces", nor "Ø8.5" on one that
   says "Ø8.55".
 
-A scanned page without text is not checked. Every reason gives the values: "Viewer measured 48.00 mm
-between holes 4 and 5 along x; the drawing gives 50 mm."
+A source-verified requirement binds its key, kind, part, value, unit, source reference, page and
+source version. Bounded parsing covers pitch, diameter, outline size, hole count, thickness and
+quantity. A bare number or an ambiguous passage does not establish the requirement. Tolerances apply
+to geometry comparison, not to changing the source's stated value.
+
+For a scanned page or unsupported expression, the person can inspect the cited source and enter a
+value in **Confirm from source…**. The desktop validates its unit and current source identity and
+records the confirmation time. **Human confirmed** remains distinct from **Source verified**.
+Confirmation regrades the saved answer without another model request. The association between a
+source passage and the selected physical feature still requires review.
 
 The answer's tour becomes a tour Viewer plays (`checkTour` in `src/domain/fabrication/tour.ts`). A
 drawing's page opens with its text and feature [outlined](#outlines), without searching for the
@@ -509,7 +531,7 @@ A confirmed pitch finding with a proposal becomes a reviewed transform of kind `
 | `from`     | An entity of the hole that stays                                                                                                |
 | `to`       | An entity of the hole whose pitch is set; it moves                                                                              |
 | `axis`     | `x`, `y` or `centre`                                                                                                            |
-| `target`   | The pitch to set, in millimetres: the drawing's value                                                                           |
+| `target`   | The pitch to set, in millimetres: the accepted source-verified or human-confirmed requirement                                   |
 | `measured` | The pitch as reviewed, in millimetres                                                                                           |
 | `move`     | Entities of further holes that move with `to`, such as its column                                                               |
 | `also`     | Further pitches the same move sets, each `from`, `to`, `axis`, `target` and `measured`: for [one cause](#one-cause-one-finding) |
@@ -534,6 +556,11 @@ A confirmed pitch finding with a proposal becomes a reviewed transform of kind `
 
 Agents cannot propose a correction; it is saved from a reviewed check with **Save `<name>`
 (corrected).dxf**, as nestings are saved from the Layout plane.
+
+The request names the saved check and finding. The desktop resolves its canonical plan and checks
+the reviewed source identities before processing and before publication. Renderer-supplied targets
+cannot replace that plan. Handoff also compares a corrected file with the saved operation's output
+identity and hash before accepting it.
 
 ## Samples and evaluation
 
@@ -568,24 +595,53 @@ problems planted; J7 and J8 are controls with none. Every part, customer and add
 | J7  | `g6-HP50-A3-2buc.dxf`                   | Nothing                                                                    |
 | J8  | `Plate P9.dxf`                          | Nothing; 4 pieces of a drawing of 2 is 2 sets                              |
 
-1. Set `META_API_KEY` in the environment. The evaluation reads the key from there only and holds it
-   in memory: it never prints, writes or logs it, and stops before writing a result that would hold
-   it.
-2. From the repository root, run
-   `node --import tsx packages/viewer-electron/app/tools/fabrication/evaluate-live.ts --out <folder>`
-   with a new or empty folder outside the repository. The evaluation never overwrites.
-3. Read `summary.md` in that folder. `answers.json` holds every raw reply, each check record and the
-   score of every run; `truth.json` holds what each job plants and where its text and features are;
-   `jobs/` holds the jobs as sent.
+To use the Meta provider already configured in Viewer Settings → Models, run the desktop entry from
+the repository root. It reads the selected profile without changing its settings. Inspection shows
+only provider IDs, names, models and whether a saved key exists; it does not decrypt a key or
+contact Meta:
 
-| Option                     | Effect                                                                                           |
-| -------------------------- | ------------------------------------------------------------------------------------------------ |
-| `--jobs J1,J7`             | Only these jobs                                                                                  |
-| `--repeat <n>`             | Each job `n` times, for the variance between runs                                                |
-| `--model <id>`             | Another Muse Spark model; `muse-spark-1.3` unless given                                          |
-| `--effort <value>`         | Muse Spark's reasoning effort, `minimal` or `low`; the API's own unless given                    |
-| `--retries <n>`            | Runs a check again after a schema miss, invalid JSON, a timeout or a busy server; 1 unless given |
-| `--price <input>,<output>` | US dollars per million tokens, for the cost when the replies report tokens without one           |
+```sh
+node node_modules/electron/cli.js packages/viewer-electron/app/tools/fabrication/evaluate-profile.mjs -- --inspect --profile <Viewer-profile>
+```
+
+The `--` separator is required: otherwise Electron interprets `--inspect` as its debugger switch.
+The entry refuses to open credentials while a debugger is listening. Omit `--profile` to use the
+normal Viewer profile. A live run resolves the selected provider's key through Electron's OS key
+store, checks its saved endpoint binding and keeps it in the main process. It exposes no key to the
+CLI or a renderer and creates no application IPC route.
+
+Start with the planted pitch job and one clean control, then use a separate output folder for the
+eight jobs repeated three times:
+
+```sh
+node node_modules/electron/cli.js packages/viewer-electron/app/tools/fabrication/evaluate-profile.mjs -- --run --profile <Viewer-profile> --out <smoke-folder>
+node node_modules/electron/cli.js packages/viewer-electron/app/tools/fabrication/evaluate-profile.mjs -- --run --profile <Viewer-profile> --out <full-folder> --jobs all --repeat 3
+```
+
+The default is J1 and J7 once, with one retry. When several Meta providers are configured, pass
+`--provider <id>`. Model and reasoning effort come from that provider's settings. Output folders
+must be new or empty and outside the repository. All generated jobs and artifacts are retained; the
+evaluator never overwrites an earlier report.
+
+The original environment-key entry remains available:
+`node --import tsx packages/viewer-electron/app/tools/fabrication/evaluate-live.ts --out <folder>`.
+It reads `META_API_KEY` in its own process and uses all eight jobs unless `--jobs` selects fewer.
+Both entries use the same check service, grading and scoring. They redact an echoed API key from
+console messages and retained responses.
+
+Read `summary.md` in the output folder. `answers.json` holds the replies, each check record and the
+score of every run; `truth.json` holds what each job plants and where its text and features are;
+`jobs/` holds the jobs as sent. A report describes only the runs that completed, including failed
+attempts, and records why an evaluation stopped. Offline stub tests do not count as live results.
+
+| Option                     | Effect                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `--jobs J1,J7`             | Only these jobs                                                                                   |
+| `--repeat <n>`             | Each job 1 to 3 times, for the variance between runs                                              |
+| `--model <id>`             | Environment-key entry only: another Muse Spark model; `muse-spark-1.3` unless given               |
+| `--effort <value>`         | Environment-key entry only: `minimal` or `low`; the API's own unless given                        |
+| `--retries <n>`            | 0 to 2 retries after a schema miss, invalid JSON, timeout or busy server; 1 unless given          |
+| `--price <input>,<output>` | Environment-key entry only: US dollars per million tokens when replies report tokens without cost |
 
 Each run makes one Muse Spark call, and one SAM 3.1 call for each feature a tour stop outlines on a
 drawing page or photo: the answer may have 12 stops, and the instructions ask for at most 8. A retry
@@ -598,7 +654,7 @@ leave out J1, J4 and J7.
 | Unread             | Viewer's findings of what Muse Spark did not read from the request, counted apart: neither found nor false. A planted problem they name is marked so in the missed list                                                                                                                                                                        |
 | Recall             | Found over planted, for each kind and in all, with how many were confirmed and how many got the grade expected: confirmed, or unverified for a missing DXF and an open count                                                                                                                                                                   |
 | False findings     | Findings of no planted problem, by job, by the model or Viewer, and by grade. A second finding of a found problem is a duplicate, not false                                                                                                                                                                                                    |
-| Quotes             | Each quote of the answer against the text of the page it names, as grading checks it                                                                                                                                                                                                                                                           |
+| Quotes             | Whether each quote appears on the page it names. Presence alone does not verify the value's numeric role, units or association with the part                                                                                                                                                                                                   |
 | Request            | The parts the model listed from the request, with the right quantity, thickness and DXF                                                                                                                                                                                                                                                        |
 | Schema and retries | Attempts, and why each failed: schema, JSON, incomplete, HTTP, timeout or network, with where the answer missed the schema                                                                                                                                                                                                                     |
 | Outlines           | Text and features apart, by intersection over union: a quoted text's box against the page's text runs and labelled text, a feature's outline against the drawing's pieces and holes and the photo's part and holes, a hole as the circle in its box; the model's boxes the same way; and how often the box stood in for SAM, with SAM's reason |

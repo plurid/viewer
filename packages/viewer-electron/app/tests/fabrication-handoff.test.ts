@@ -213,7 +213,7 @@ beforeEach(async () => {
     async () => Buffer.alloc(0),
     undefined,
     {},
-    (id) => checks.handoff(id),
+    (id, plan, sources) => checks.prepareHandoff(id, plan, sources),
   );
   operations = new Operations(
     async () => {
@@ -303,7 +303,7 @@ function nestingOf(names: readonly string[]): Promise<HandoffNesting> {
         })),
         margin: 10,
         spacing: 5,
-        cutting: { ...cuttingPresets[0]!, rate: 90, currency: '€' },
+        cutting: { ...cuttingPresets[0]!, thickness: 3, rate: 90, currency: '€' },
         labels: true,
       },
     };
@@ -385,7 +385,7 @@ describe('handoff export', () => {
     expect(JSON.stringify(record)).not.toContain(root);
   });
 
-  it('refuses a handoff of a check that is not finished or no longer open', async () => {
+  it('refuses a handoff before the check has finished', async () => {
     const request = handoffOperation({
       check: opening.id,
       folder: opening.folder,
@@ -396,7 +396,7 @@ describe('handoff export', () => {
     const job = await finished(operations.start(request));
     expect(job.status).toBe('failed');
     expect(job.errors[0]!.message).toBe(
-      'This check is no longer open. Check the job again, then export its handoff.',
+      'This older result has no verified source record. Run the check again before correcting or exporting.',
     );
     expect(existsSync(path.join(folder, 'Job 1042 handoff'))).toBe(false);
   });

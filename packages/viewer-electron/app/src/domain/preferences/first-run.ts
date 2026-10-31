@@ -1,10 +1,10 @@
 /**
- * The first-run hint: one card above a new profile's first folder that names Space, ⌘K and title
- * dragging. Each step it teaches leaves the card once it has been used; with both used, or the card
+ * The first-run hint names Quick preview, the command palette and Frame all, plus title dragging.
+ * Each step it teaches leaves the card once it has been used; with all used, or the card
  * dismissed, it retires for good.
  */
 // in the card's order: the small action first
-export const firstRunSteps = ['quick-preview', 'palette'] as const;
+export const firstRunSteps = ['quick-preview', 'palette', 'frame-all'] as const;
 export type FirstRunStep = (typeof firstRunSteps)[number];
 /**
  * The steps used so far, or retired. Only a new configuration starts one (desktop

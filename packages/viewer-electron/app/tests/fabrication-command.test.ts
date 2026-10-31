@@ -145,6 +145,7 @@ describe('Check laser job…', () => {
       job.map((item) => item.path),
       'workspace',
       'plane',
+      undefined,
     );
   });
 
@@ -179,7 +180,7 @@ describe('Check laser job…', () => {
     expect(command.when(context('/Jobs', [selected]))).toBe(true);
     expect(detail(context('/Jobs', [selected]))).toBe('Check the 3 DXF parts in Job 1043');
     await command.run(context('/Jobs', [selected]));
-    expect(openCheck).toHaveBeenCalledWith([folder], 'workspace', 'plane');
+    expect(openCheck).toHaveBeenCalledWith([folder], 'workspace', 'plane', undefined);
     expect(list).toHaveBeenCalledTimes(1);
 
     // a file added changes the folder's date: it is counted again

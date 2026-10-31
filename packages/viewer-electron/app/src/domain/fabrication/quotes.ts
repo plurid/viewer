@@ -182,9 +182,3 @@ export function quotePassages(
   );
   return found?.map((pieces) => pieces.map((index) => runs[index]!));
 }
-
-/** Whether a quote gives a value: one of its numbers is it, a decimal comma read as a point. */
-export const quoteGives = (quote: string, value: number) =>
-  (quote.match(/\d+(?:[.,]\d+)?/g) ?? []).some(
-    (number) => Math.abs(Number(number.replace(',', '.')) - value) < 1e-9,
-  );

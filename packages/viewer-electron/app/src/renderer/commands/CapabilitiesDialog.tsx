@@ -30,6 +30,7 @@ const planeNames: Record<Pane['type'], string> = {
   collection: 'Collection',
   scratch: 'Scratch text',
   note: 'Note',
+  check: 'Job check',
   diff: 'Diff',
   'git-changes': 'Git changes',
   chat: 'Conversation',

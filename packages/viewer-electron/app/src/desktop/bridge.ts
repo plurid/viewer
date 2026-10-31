@@ -654,9 +654,15 @@ export class Desktop {
           raw: assetPath(`viewer-raw-v3-darwin-${process.arch}`, 'viewer-raw'),
         },
       },
-      (check) => this.fabrication.handoff(check),
+      (check, plan, sources) => this.fabrication.prepareHandoff(check, plan, sources),
+      (plan, sources) => this.fabrication.authorizeCorrection(plan, sources),
     );
     this.fabrication = new FabricationChecks({
+      dataPath,
+      operate: (request) => this.operations.start(request),
+      operations: () => this.operations.all(),
+      matchesOutput: (id, file) => this.operations.matchesOutput(id, file),
+      extract: (file, signal) => this.files.extract(file, signal),
       settings: () => this.settings.snapshot().settings,
       access,
       permission: (provider) => this.modelPermissions.get(provider),
@@ -1636,6 +1642,7 @@ export class Desktop {
       this.buffers.flush(),
       this.notes.flush(),
       this.chats.flush(),
+      this.fabrication.flush(),
     ]);
   }
   flush(): Promise<void> {
@@ -2066,6 +2073,7 @@ export class Desktop {
       }),
       ...createOperationHandlers({
         operations: this.operations,
+        recorded: (request, id) => this.fabrication.rememberOperation(request, id),
         plans: this.operationPlans,
         checkpoints: this.checkpoints,
         isAgent,

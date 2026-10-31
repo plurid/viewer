@@ -7,18 +7,34 @@ import {
 const inset = 8;
 const gap = 12;
 
-/** Use the full canvas width, reserving only the bottom toolbar. */
+/** The readable canvas excludes edge-pinned tools and the bottom toolbar. */
 export function folderPairArea(surface: HTMLElement) {
   let bottom = inset;
+  let left = inset,
+    right = inset,
+    top = inset;
   const toolbar = surface.querySelector<HTMLElement>(
     `[data-plurid-entity="${PLURID_ENTITY_TOOLBAR}"]`,
   );
   if (toolbar) bottom = Math.max(bottom, toolbar.offsetHeight + inset);
+  const view = surface.getBoundingClientRect();
+  for (const pin of surface.querySelectorAll<HTMLElement>('[data-plurid-pinned]')) {
+    const rect = pin.getBoundingClientRect();
+    if (!rect.width || !rect.height) continue;
+    const x = rect.left - view.left,
+      y = rect.top - view.top;
+    if (rect.height <= 80) {
+      if (y < view.height / 2) top = Math.max(top, y + rect.height + inset);
+      else bottom = Math.max(bottom, view.height - y + inset);
+    } else if (x + rect.width / 2 >= view.width / 2) {
+      right = Math.max(right, view.width - x + inset);
+    } else left = Math.max(left, x + rect.width + inset);
+  }
   return {
-    x: inset,
-    y: inset,
-    width: surface.clientWidth - inset * 2,
-    height: surface.clientHeight - inset - bottom,
+    x: left,
+    y: top,
+    width: Math.max(0, surface.clientWidth - left - right),
+    height: Math.max(0, surface.clientHeight - top - bottom),
   };
 }
 

@@ -14,6 +14,7 @@ function placementKey(tree: TreePlane[]): string {
         location: node.location,
         width: node.width,
         height: node.height,
+        pinned: node.pinned,
       }))
       .sort((left, right) => left.id.localeCompare(right.id)),
   );
@@ -33,4 +34,20 @@ export function restoreTiling(tree: TreePlane[]): void {
   const history = histories.get(activeWorkspace().id);
   const key = placementKey(tree);
   if (history?.has(key)) setTiling(structuredClone(history.get(key)));
+}
+
+/** Restored geometry already embodies its policy; replaying it would create another history step. */
+export function tilingIsPlaced(tree: TreePlane[]): boolean {
+  const workspace = activeWorkspace();
+  const tiling = workspace.tiling;
+  const placed = histories.get(workspace.id)?.get(placementKey(tree));
+  return (
+    !!tiling &&
+    !!placed &&
+    placed.layout === tiling.layout &&
+    placed.main === tiling.main &&
+    placed.panes.length === tiling.panes.length &&
+    placed.panes.every((id, index) => id === tiling.panes[index]) &&
+    JSON.stringify(placed.tree) === JSON.stringify(tiling.tree)
+  );
 }

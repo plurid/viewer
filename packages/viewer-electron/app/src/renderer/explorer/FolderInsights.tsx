@@ -79,6 +79,10 @@ function useFirstRunTips(paneID: string): ReactNode {
   const palette = useViewer(
     (state) => state.settings.settings.shortcuts.palette ?? defaultShortcuts.palette,
   );
+  const frameAll = useViewer(
+    (state) => state.settings.settings.shortcuts['frame-all'] ?? defaultShortcuts['frame-all'],
+  );
+  const multiple = useViewer((state) => activeWorkspace(state).panes.length > 1);
   const dragging = useViewer((state) => {
     const { space } = effectiveWindowUI(state);
     return space.planeHeaders && space.dragging;
@@ -89,6 +93,14 @@ function useFirstRunTips(paneID: string): ReactNode {
       <li key={step}>
         <kbd>Space</kbd> previews the selected file
       </li>
+    ) : step === 'frame-all' ? (
+      multiple && frameAll ? (
+        <li key={step}>
+          <kbd>{keyGlyphs(frameAll)}</kbd> brings all planes into view
+        </li>
+      ) : (
+        []
+      )
     ) : palette ? (
       <li key={step}>
         <kbd>{keyGlyphs(palette)}</kbd> finds any action

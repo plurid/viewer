@@ -444,10 +444,11 @@ describe('live evaluation runner', () => {
 
   it('counts the planted problems found and missed, by kind, with their grades', () => {
     const { recall } = report.metrics;
-    expect(recall.pitch).toEqual({ planted: 1, found: 1, confirmed: 1, expected: 1 });
+    // The stub cites a bare “60”; finding the issue does not verify that number's role.
+    expect(recall.pitch).toEqual({ planted: 1, found: 1, confirmed: 0, expected: 0 });
     expect(recall.diameter).toEqual({ planted: 1, found: 1, confirmed: 1, expected: 1 });
     expect(recall.quantity).toEqual({ planted: 1, found: 0, confirmed: 0, expected: 0 });
-    expect(recall.all).toEqual({ planted: 3, found: 2, confirmed: 2, expected: 2 });
+    expect(recall.all).toEqual({ planted: 3, found: 2, confirmed: 1, expected: 1 });
     const j2 = report.runs.find((run) => run.job === 'J2')!;
     expect(j2.problems.map((problem) => [problem.kind, problem.found])).toEqual([
       ['diameter', true],
@@ -456,13 +457,13 @@ describe('live evaluation runner', () => {
     expect(report.summary).toContain('- J2 run 1, B2: The request asks for 6 brackets');
   });
 
-  it('counts the invented finding as false, per control job, and Viewer refutes it', () => {
+  it('counts the invented finding and unsupported requirement alerts without hiding their uncertainty', () => {
     const { falseFindings, grades } = report.metrics;
     expect(falseFindings).toMatchObject({
-      total: 1,
-      perRun: 0.25,
-      byOrigin: { model: 1, viewer: 0 },
-      byGrade: { confirmed: 0, refuted: 1, unverified: 0 },
+      total: 6,
+      perRun: 1.5,
+      byOrigin: { model: 1, viewer: 5 },
+      byGrade: { confirmed: 0, refuted: 0, unverified: 6 },
     });
     expect(falseFindings.jobs.filter((job) => job.control)).toEqual([
       {
@@ -471,23 +472,27 @@ describe('live evaluation runner', () => {
         control: true,
         runs: 1,
         findings: 1,
-        grades: { confirmed: 0, refuted: 1, unverified: 0 },
+        grades: { confirmed: 0, refuted: 0, unverified: 1 },
       },
       {
         job: 'J8',
         name: 'Job 2108',
         control: true,
         runs: 1,
-        findings: 0,
-        grades: { confirmed: 0, refuted: 0, unverified: 0 },
+        findings: 3,
+        grades: { confirmed: 0, refuted: 0, unverified: 3 },
       },
     ]);
-    expect(grades.planted).toEqual({ confirmed: 2, refuted: 0, unverified: 0 });
+    expect(grades.planted).toEqual({ confirmed: 1, refuted: 0, unverified: 1 });
     expect(report.runs.find((run) => run.job === 'J7')!.findings).toEqual([
-      expect.objectContaining({ kind: 'pitch', origin: 'model', grade: 'refuted' }),
+      expect.objectContaining({ kind: 'pitch', origin: 'model', grade: 'unverified' }),
     ]);
-    // A drawing of two pieces asked for 4 pieces is 2 sets: no question is raised.
-    expect(report.runs.find((run) => run.job === 'J8')!.findings).toEqual([]);
+    // Its misquoted plate values and unlabeled pair thickness still need source review.
+    expect(report.runs.find((run) => run.job === 'J8')!.findings).toEqual([
+      expect.objectContaining({ kind: 'thickness', origin: 'viewer', grade: 'unverified' }),
+      expect.objectContaining({ kind: 'quantity', origin: 'viewer', grade: 'unverified' }),
+      expect.objectContaining({ kind: 'thickness', origin: 'viewer', grade: 'unverified' }),
+    ]);
   });
 
   it('checks every quote against its page, and the request as the model read it', () => {

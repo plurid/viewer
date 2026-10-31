@@ -18,6 +18,8 @@ export function paneTitle(pane: Pane, collectionName?: string): string {
       return pane.title;
     case 'receipt':
       return 'Command receipt';
+    case 'check':
+      return `Check ${pane.title}`;
     case 'media':
       return 'Edit media · ' + name;
     case 'layout':

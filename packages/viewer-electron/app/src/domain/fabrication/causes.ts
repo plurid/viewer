@@ -89,8 +89,8 @@ function cause(members: readonly CauseReading[], readings: number[], move: Move)
   const direction =
     Math.abs(shift.y) <= same ? ' along x' : Math.abs(shift.x) <= same ? ' along y' : '';
   const pitches = members.map(
-    ({ finding, grade }) =>
-      `the ${lengthText(finding.drawing!.value!)} pitch reads ${millimetreText(grade.measured!)}`,
+    ({ plan, grade }) =>
+      `the ${lengthText(plan!.target)} pitch reads ${millimetreText(grade.measured!)}`,
   );
   const others = holes.slice(1).map((hole) => hole.number);
   const fixes = members.length === 2 ? 'both' : `all ${members.length}`;

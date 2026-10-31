@@ -7,6 +7,24 @@
   width: 420px;
   max-width: 100%;
 }
+/* The plane supplies its own title bar and frame. Its check body keeps one scroll owner. */
+.check-plane-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.check-plane-panel {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.check-plane-panel > .panel-header {
+  display: none;
+}
 .check-panel-footer {
   flex-shrink: 0;
 }
@@ -93,6 +111,83 @@
   margin: var(--gap-tight) 0 0;
   font-size: var(--text-compact);
   line-height: 1.4;
+}
+.check-measurements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-content);
+  margin: var(--gap-inline) 0;
+}
+.check-measurements dt {
+  color: var(--muted);
+  font-size: var(--text-compact);
+}
+.check-measurements dd {
+  margin: var(--gap-tight) 0 0;
+  font-size: var(--text-section);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.check-evidence-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap-small);
+  margin-top: var(--gap-inline);
+}
+.check-requirement {
+  margin-top: var(--gap-inline);
+  padding: var(--gap-small) 0;
+  border-top: 1px solid var(--line);
+}
+.check-requirement > summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: var(--text-compact);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.check-requirement > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-control);
+}
+.check-requirement-label {
+  font-weight: 600;
+}
+.check-requirement-status {
+  display: block;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.check-requirement-status[data-status='human-confirmed'] {
+  color: var(--accent);
+}
+.check-source-quote {
+  margin: var(--gap-small) 0;
+  padding: 0;
+  border: 0;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.check-requirement-form {
+  margin-top: var(--gap-inline);
+  padding-top: var(--gap-inline);
+  border-top: 1px solid var(--line);
+}
+.check-requirement-value {
+  display: grid;
+  gap: var(--gap-small);
+  margin-top: var(--gap-inline);
+  font-size: var(--text-compact);
+}
+.check-requirement-value input {
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
 }
 /* Each reading of a finding one cause explains: its grade, quote and reason. */
 .check-readings {

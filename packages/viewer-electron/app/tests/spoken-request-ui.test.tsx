@@ -233,6 +233,8 @@ beforeEach(() => {
       await answer.wait;
       return result;
     }
+    if (request.kind === 'validate') return result;
+    if (request.kind === 'correct') return { kind: 'operation', id: 'job-correction' };
     return { kind: 'done' };
   });
   operate = vi.fn(async () => 'job-correction');
@@ -346,7 +348,7 @@ it('holds the key, shows the words, plans with Muse Spark, checks the job, then 
 
   // the check opens and runs at once: the model may receive pictures
   await waitFor(() => expect(runCheck).toHaveBeenCalledOnce());
-  expect(openCheck).toHaveBeenCalledWith([folder], activeWorkspace().id, 'plane');
+  expect(openCheck).toHaveBeenCalledWith([folder], activeWorkspace().id, 'plane', undefined);
   expect(fabrication).toHaveBeenCalledWith({
     kind: 'run',
     id: opening.id,
@@ -368,7 +370,7 @@ it('asked again over a job checked and unchanged, shows that check rather than p
   fabrication.mockImplementation(async (request: { kind: string }) =>
     request.kind === 'open'
       ? opening
-      : request.kind === 'run'
+      : request.kind === 'run' || request.kind === 'validate'
         ? result
         : request.kind === 'changes'
           ? { kind: 'changes', id: opening.id, changes: [] }
@@ -423,7 +425,7 @@ it('says plainly when the words name a job that is not here, and checks the one 
     screen.getByRole('button', { name: 'Check Job 1042, then prepare its cut sheets' }),
   );
   await waitFor(() => expect(openLayout).toHaveBeenCalledWith(...layout));
-  expect(openCheck).toHaveBeenCalledWith([folder], activeWorkspace().id, 'plane');
+  expect(openCheck).toHaveBeenCalledWith([folder], activeWorkspace().id, 'plane', undefined);
 });
 
 it('keeps a step that saves files for the person’s press', async () => {
@@ -438,14 +440,13 @@ it('keeps a step that saves files for the person’s press', async () => {
   expect(operate).not.toHaveBeenCalled();
   fireEvent.click(save);
   await waitFor(() =>
-    expect(operate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 'convert',
-        sources: [plate],
-        name: 'g6-PL60-B2-2buc (corrected).dxf',
-      }),
-    ),
+    expect(fabrication).toHaveBeenCalledWith({
+      kind: 'correct',
+      id: opening.id,
+      finding: 'F1',
+    }),
   );
+  expect(operate).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull());
 });
 

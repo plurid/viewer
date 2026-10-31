@@ -157,6 +157,7 @@ describe('the Layout plane record', () => {
       rootID: vi.fn<WorkspaceController['rootID']>(() => 'root'),
       openDiff: vi.fn<WorkspaceController['openDiff']>(),
       open: vi.fn<WorkspaceController['open']>(),
+      existingPaneID: vi.fn<WorkspaceController['existingPaneID']>(),
     };
     const registerContent = vi.fn((pane: Parameters<typeof addContentPane>[0]) =>
       addContentPane(pane, false),

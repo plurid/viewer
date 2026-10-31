@@ -196,7 +196,7 @@ export function programCommands(
         ),
     },
     ...layoutCommands(workspace),
-    ...checkCommands(),
+    ...checkCommands(workspace),
     ...checkResultCommands(workspace),
     {
       id: 'image-tools',

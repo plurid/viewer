@@ -235,6 +235,8 @@ it('publishes new output with keep-both collisions, retains its typed receipt an
     expect(job.completed[0].destination).not.toBe(file);
     expect(await readFile(file, 'utf8')).toBe('source bytes');
     expect(await readFile(job.completed[0].destination!, 'utf8')).toBe('new output');
+    expect(await operations.matchesOutput(id, job.completed[0].destination!)).toBe(true);
+    expect(await operations.matchesOutput(id, file)).toBe(false);
     changeSource = true;
     const changed = operations.start({ ...request, name: 'changed.png' });
     await vi.waitFor(
@@ -265,7 +267,11 @@ it('publishes new output with keep-both collisions, retains its typed receipt an
     path.join(root, 'Profile'),
   );
   await restored.load();
-  expect(restored.all().some((job) => job.status === 'completed')).toBe(true);
+  const kept = restored.all().find((job) => job.status === 'completed')!;
+  const output = kept.completed[0]!.destination!;
+  expect(await restored.matchesOutput(kept.id, output)).toBe(true);
+  await writeFile(output, 'changed after completion');
+  expect(await restored.matchesOutput(kept.id, output)).toBe(false);
   await restored.close();
 });
 it.each(['media', 'pdf-pages'] as const)(

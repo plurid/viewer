@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * THE FIRST-RUN TIPS: one card above a new profile's first folder names Space, ⌘K and title
- * dragging. Each step leaves the card once used; with both used, or the card dismissed, it retires
+ * dragging. Frame all appears with multiple planes. Once every step is used, or dismissed, it retires
  * for good. A profile made before it, the person's own included, never shows it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,6 +38,7 @@ import {
   getState,
   initialize,
   quickPreview,
+  noteFirstRunStep,
 } from '../src/renderer/state/store';
 import { savePatch, update } from '../src/renderer/state/core';
 import { flushPreferences, resetPreferences } from '../src/renderer/state/preferences';
@@ -50,15 +51,16 @@ HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
 };
 
 describe('the first-run hint', () => {
-  it('drops each step once used and retires once both are, or stays as it is', () => {
+  it('drops each step once used and retires once all are, or stays as it is', () => {
     const fresh: FirstRunHint = { used: [] };
-    expect(firstRunStepsLeft(fresh)).toEqual(['quick-preview', 'palette']);
+    expect(firstRunStepsLeft(fresh)).toEqual(['quick-preview', 'palette', 'frame-all']);
     const previewed = firstRunHintAfter(fresh, 'quick-preview');
     expect(previewed).toEqual({ used: ['quick-preview'] });
-    expect(firstRunStepsLeft(previewed)).toEqual(['palette']);
+    expect(firstRunStepsLeft(previewed)).toEqual(['palette', 'frame-all']);
     // the same step again records nothing new
     expect(firstRunHintAfter(previewed, 'quick-preview')).toBe(previewed);
-    expect(firstRunHintAfter(previewed, 'palette')).toBe('retired');
+    expect(firstRunHintAfter(previewed, 'palette')).toEqual({ used: ['quick-preview', 'palette'] });
+    expect(firstRunHintAfter(firstRunHintAfter(previewed, 'palette'), 'frame-all')).toBe('retired');
     expect(firstRunHintAfter('retired', 'palette')).toBe('retired');
     // no hint is never started
     expect(firstRunHintAfter(undefined, 'palette')).toBeUndefined();
@@ -66,9 +68,14 @@ describe('the first-run hint', () => {
     expect(firstRunStepsLeft('retired')).toEqual([]);
   });
 
-  it('keeps a valid saved hint, reads both steps as retired and anything else as none', () => {
+  it('keeps a valid saved hint, reads all steps as retired and anything else as none', () => {
     expect(normalizeFirstRunHint({ used: ['palette', 'other'] })).toEqual({ used: ['palette'] });
-    expect(normalizeFirstRunHint({ used: ['quick-preview', 'palette'] })).toBe('retired');
+    expect(normalizeFirstRunHint({ used: ['quick-preview', 'palette'] })).toEqual({
+      used: ['quick-preview', 'palette'],
+    });
+    expect(normalizeFirstRunHint({ used: ['quick-preview', 'palette', 'frame-all'] })).toBe(
+      'retired',
+    );
     expect(normalizeFirstRunHint('retired')).toBe('retired');
     for (const value of [undefined, 'shown', [], { used: 'palette' }])
       expect(normalizeFirstRunHint(value)).toBeUndefined();
@@ -291,7 +298,7 @@ describe('the tips above a folder', () => {
     expect(tips()).not.toBeNull();
   });
 
-  it('retires for good once Quick preview and the palette have each been used', async () => {
+  it('teaches Frame all when another plane opens, then retires once every step is used', async () => {
     profile({ firstRunHint: { used: [] } });
     folder();
     act(() => quickPreview([home + '/Notes.txt']));
@@ -304,6 +311,11 @@ describe('the tips above a folder', () => {
     expect(written()).toEqual([{ path: 'ui.firstRunHint', value: { used: ['quick-preview'] } }]);
 
     openPalette();
+    expect(getState().saved.ui.firstRunHint).toEqual({ used: ['quick-preview', 'palette'] });
+    expect(tips()).toBeNull();
+    act(() => addPane(home + '/Documents', 'folder', true, { remember: false }));
+    expect(tips()?.textContent).toContain('brings all planes into view');
+    act(() => noteFirstRunStep('frame-all'));
     expect(getState().saved.ui.firstRunHint).toBe('retired');
     expect(tips()).toBeNull();
     await act(async () => flushPreferences());

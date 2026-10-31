@@ -7,8 +7,9 @@
  *   node --import tsx tools/fabrication/evaluate.ts [--budget <milliseconds per thickness>]
  */
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import type { Finding, InventoryItem } from '../../src/domain/fabrication/answer';
+import type { Finding, InventoryItem, InventorySource } from '../../src/domain/fabrication/answer';
 import type { FindingGrade } from '../../src/domain/tours/tour';
 import type { Hole, MeasureOutcome, Measurement } from '../../src/domain/fabrication/measure';
 import type { EvaluationPart } from '../playground/samples/fabrication';
@@ -53,7 +54,7 @@ export interface EvaluationReport {
 }
 
 const inventory: InventoryItem[] = [
-  { ref: 'S1', kind: 'drawing', name: 'Drawing.pdf', pages: 1 },
+  { ref: 'S1', kind: 'request', name: 'Generated requirement.txt', pages: 1 },
   { ref: 'S2', kind: 'dxf', name: '' },
   { ref: 'S3', kind: 'photo', name: 'Photo.jpg' },
 ];
@@ -92,7 +93,7 @@ export function evaluateFabrication(
     nesting: [],
     lines: [],
   };
-  for (const { truth, dxf } of parts) {
+  for (const { truth, dxf, requirement } of parts) {
     const name = readJobName(truth.name);
     for (const kind of ['thickness', 'quantity'] as const) {
       const tally = report[kind];
@@ -122,13 +123,30 @@ export function evaluateFabrication(
     if (Math.abs(measured - truth.pitch.drawn) <= 1e-6) report.pitch.correct++;
 
     // What a model might answer: the true finding, an invented DXF value, a photo, a wrong entity.
-    const job = { inventory, dxf: () => ({ name: truth.name, outcome }) };
+    // These are deterministic in-memory fixtures, not evidence captured from a live file.
+    // The source text is independent of the model claim and can be changed or absent in a trial.
+    const source: InventorySource = {
+      ...inventory[0]!,
+      path: `fixture:${truth.part}/requirements.txt`,
+      version: {
+        identity: 'generated:' + createHash('sha256').update(requirement.text).digest('hex'),
+        size: Buffer.byteLength(requirement.text),
+        modified: 0,
+      },
+    };
+    const job = {
+      inventory,
+      sources: [source],
+      text: (ref: string, page: number) =>
+        ref === source.ref && page === 1 ? requirement.text : undefined,
+      dxf: () => ({ name: truth.name, outcome }),
+    };
     const entities = [...from.entities, ...to.entities];
     const drawing = {
       ref: 'S1',
       page: 1,
       value: truth.pitch.specified,
-      quote: null,
+      quote: requirement.quote,
       box: null,
       feature: null,
     };

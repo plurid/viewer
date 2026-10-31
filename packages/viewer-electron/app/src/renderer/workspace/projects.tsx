@@ -14,6 +14,7 @@ import type {
   Pane,
   ScratchPane,
   NotePane,
+  CheckPane,
   ChatPane,
   ServerPane,
   JournalPane,
@@ -168,6 +169,7 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
     if (
       pane.type === 'scratch' ||
       pane.type === 'note' ||
+      pane.type === 'check' ||
       pane.type === 'chat' ||
       pane.type === 'server' ||
       pane.type === 'browser' ||
@@ -204,6 +206,7 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
       Pane,
       | ScratchPane
       | NotePane
+      | CheckPane
       | ChatPane
       | ServerPane
       | JournalPane
@@ -216,6 +219,7 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
     > =>
       pane.type !== 'scratch' &&
       pane.type !== 'note' &&
+      pane.type !== 'check' &&
       pane.type !== 'chat' &&
       pane.type !== 'server' &&
       pane.type !== 'browser' &&
@@ -314,6 +318,9 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
     ],
     layout: {
       ...layout,
+      active: layout.active && known.has(layout.active) ? layout.active : undefined,
+      docked: layout.docked && known.has(layout.docked) ? layout.docked : undefined,
+      stacks: layout.stacks?.filter((stack) => stack.panes.every((id) => known.has(id))),
       placements: placements.map((plane) => ({
         ...plane,
         parent: plane.parent && known.has(plane.parent) ? plane.parent : undefined,

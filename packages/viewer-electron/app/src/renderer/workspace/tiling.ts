@@ -8,7 +8,16 @@ import { flattenTree, hostID } from './tree';
 import { cancelWorkspaceFraming, frameWorkspace } from './framing';
 import { folderPairArea } from './folder-pair';
 import { frontPlaneDepth } from './plane-layout';
-import { rememberTiling } from './tiling-history';
+import { rememberTiling, tilingIsPlaced } from './tiling-history';
+
+/** Reconcile a mounted workspace or changed tile membership with its saved tiling policy. */
+export function reconcileTiling(
+  engine: RefObject<PluridApplicationHandle | null>,
+  surface: RefObject<HTMLDivElement | null>,
+): void {
+  if (!engine.current || tilingIsPlaced(engine.current.tree.get())) return;
+  applyTiling(engine, surface);
+}
 
 /**
  * Tiling in the space: the active workspace's tiled planes placed face-on in the space's

@@ -25,6 +25,7 @@ export interface BackupReview {
     media: number;
     conversations: number;
     receipts: number;
+    checks: number;
   };
   roots: { source: string; destination?: string }[];
   warnings: string[];

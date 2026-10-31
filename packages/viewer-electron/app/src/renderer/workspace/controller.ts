@@ -55,6 +55,8 @@ import { rememberTiling, restoreTiling } from './tiling-history';
 import { gitTerminalProfileID } from '../../domain/comparison/git-actions';
 import { runGitAction } from '../git/runtime';
 import { taskController } from '../tasks/controller';
+import { captureStacks, restoreStacks, spatialActions } from './spatial-actions';
+import { noteFirstRunStep } from '../state/preferences';
 
 /** Where a new plane goes, as this window shows the space: its workspace may choose its own. */
 const openingPreference = () => effectiveWindowUI(getState()).space.opening;
@@ -169,6 +171,27 @@ export function useWorkspaceController({
   const controller: WorkspaceController = useMemo<WorkspaceController>(
     () => ({
       ...contentPlaneActions({ controller: () => controller, registerContent }),
+      ...spatialActions(engine, surface, waitForPlanes),
+      whenPanesReady: (ids) => waitForPlanes(ids, activeWorkspace().id),
+      async openCheckPlane(check, parentPaneID) {
+        const owner = activeWorkspace().id;
+        const existing = activeWorkspace().panes.find(
+          (pane) => pane.type === 'check' && pane.checkID === check.id,
+        );
+        const id = existing?.id ?? crypto.randomUUID();
+        if (!existing)
+          registerContent(
+            { id, type: 'check', checkID: check.id, path: check.folder, title: check.job },
+            parentPaneID,
+          );
+        await waitForPlanes([id], owner);
+        if (!existing && !controller.pinPane(id, { width: 420 }))
+          throw new Error(
+            'The check opened in space, but could not be pinned. Use Pin plane to try again.',
+          );
+        controller.focusPane(id, { activate: true, frame: false });
+        return id;
+      },
       ...taskController({
         controller: () => controller,
         register: registerContent,
@@ -286,6 +309,7 @@ export function useWorkspaceController({
               width: node.width,
               height: node.height,
               show: node.show,
+              pinned: node.pinned && structuredClone(node.pinned),
               bridge: {
                 length: node.bridgeLength,
                 side: node.bridgeSide,
@@ -304,6 +328,7 @@ export function useWorkspaceController({
           placements,
           active: getState().activePane || undefined,
           docked: docked ? hostID(docked) : undefined,
+          stacks: captureStacks(api),
         };
       },
       restoreLayout(layout) {
@@ -324,6 +349,7 @@ export function useWorkspaceController({
             width: placement.width,
             height: placement.height,
             show: placement.show,
+            pinned: placement.pinned && structuredClone(placement.pinned),
             manuallyPositioned: true,
             sizeMode: 'manual',
             spawnedByLinkID: undefined,
@@ -345,6 +371,7 @@ export function useWorkspaceController({
           pluridStateModules.space.actions.restoreArrangement({
             tree: roots,
             links: api.getSnapshot().space.links,
+            stacks: restoreStacks(layout.stacks, tree),
           }),
         );
         // Planes outside the arrangement have left the engine. Close their records before
@@ -847,9 +874,10 @@ export function useWorkspaceController({
           flattenTree(engine.current.tree.get()).find((node) => hostID(node) === id);
         const api = engine.current;
         // a plane already on screen (hints, directional focus) becomes active where it is
-        if (options?.frame === false) {
+        if (options?.frame === false || node?.pinned) {
           setActivePane(id);
-          if (options.activate) activatePlane(engine, id);
+          if (node?.pinned) api?.planes.raise(node.planeID);
+          if (options?.activate) activatePlane(engine, id);
           return;
         }
         if (node && api) {
@@ -863,7 +891,10 @@ export function useWorkspaceController({
         setActivePane(id);
         if (options?.activate) activatePlane(engine, id);
       },
-      frameAll: () => frameWorkspace(engine, surface),
+      frameAll: () => {
+        noteFirstRunStep('frame-all');
+        frameWorkspace(engine, surface);
+      },
       // the space's named views are plurid's bookmarks, saved with the workspace's arrangement
       bookmarks: () =>
         (engine.current?.bookmarks.get() ?? [])
@@ -1204,6 +1235,7 @@ export function useWorkspaceController({
         });
       },
       undo: () => {
+        if (engine.current) cancelWorkspaceFraming(engine.current);
         engine.current?.history.undo();
         if (engine.current) {
           reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));
@@ -1211,6 +1243,7 @@ export function useWorkspaceController({
         }
       },
       redo: () => {
+        if (engine.current) cancelWorkspaceFraming(engine.current);
         engine.current?.history.redo();
         if (engine.current) {
           reconcilePanes(flattenTree(engine.current.tree.get()).map(hostID));

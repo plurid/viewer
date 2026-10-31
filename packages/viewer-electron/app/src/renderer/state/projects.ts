@@ -104,6 +104,9 @@ export async function installProject(
     }));
   const layout = {
     placements,
+    stacks: document.definition.layout.stacks?.filter((stack) =>
+      stack.panes.every((pane) => available.has(pane)),
+    ),
     active: available.has(document.definition.layout.active || '')
       ? document.definition.layout.active
       : panes[0]?.id,

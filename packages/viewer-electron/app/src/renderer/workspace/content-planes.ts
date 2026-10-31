@@ -26,7 +26,10 @@ type ContentPlaneActions = Pick<
   | 'openEvidence'
 >;
 interface ContentPlanePorts {
-  controller(): Pick<WorkspaceController, 'focusPane' | 'rootID' | 'openDiff' | 'open'>;
+  controller(): Pick<
+    WorkspaceController,
+    'focusPane' | 'rootID' | 'openDiff' | 'open' | 'existingPaneID'
+  >;
   registerContent(pane: Parameters<typeof addContentPane>[0], parentID?: string): void;
 }
 
@@ -266,18 +269,20 @@ export function contentPlaneActions({
       if (!existing) registerContent({ id, type: 'git-changes', path }, parentPaneID);
       controller().focusPane(id);
     },
-    async openEvidence(evidence, parentPaneID) {
+    async openEvidence(evidence, parentPaneID, options) {
       const origin = activeWorkspace().id;
       const entry = await window.viewer.stat(evidence.path);
       if (origin !== activeWorkspace().id)
         throw new Error('The workspace changed. Open the result again.');
       if (!sameSourceVersion(sourceVersion(entry), evidence.version))
         throw new Error(
-          'This search evidence is stale. Refresh the index before opening its location.',
+          'This evidence changed since it was checked. Refresh the source before opening its location.',
         );
       // Search hits also carry transient coverage metadata. Persist only the
       // navigation contract so one result cannot block all workspace saves.
+      const before = new Set(activeWorkspace().panes.map((pane) => pane.id));
       controller().open(entry, parentPaneID, {
+        frame: options?.frame,
         evidence: {
           path: evidence.path,
           version: evidence.version,
@@ -285,6 +290,18 @@ export function contentPlaneActions({
           quote: evidence.quote,
         },
       });
+      const added = activeWorkspace().panes.find(
+        (pane) => !before.has(pane.id) && pane.path === entry.path,
+      );
+      const id =
+        added?.id ??
+        (parentPaneID
+          ? controller().existingPaneID(parentPaneID, entry)
+          : activeWorkspace().panes.findLast(
+              (pane) => pane.type === 'preview' && pane.path === entry.path,
+            )?.id);
+      if (!id) throw new Error('The evidence plane could not be opened. Try again.');
+      return id;
     },
   };
 }

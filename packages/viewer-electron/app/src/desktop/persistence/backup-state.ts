@@ -23,6 +23,7 @@ export function backupIdentityMap(state: SavedState, documents: readonly string[
   };
   for (const space of state.workspaces) {
     add(space.id);
+    space.layout?.stacks?.forEach((stack) => add(stack.id));
     space.panes.forEach((pane) => {
       add(pane.id);
       if (pane.type === 'terminal' && pane.taskSessionID) add(pane.taskSessionID);
@@ -120,6 +121,8 @@ export function restoreBackupState(
         return { ...base, receiptID: id(base.receiptID) };
       case 'task':
         return { ...base, areaID: id(base.areaID) };
+      case 'check':
+        return { ...base, checkID: id(base.checkID) };
       case 'terminal':
         return {
           ...base,
@@ -243,6 +246,14 @@ export function restoreBackupState(
           id: id(item.id),
           parent: optionalID(item.parent),
         })),
+        stacks: space.layout.stacks?.map((stack) => ({
+          ...stack,
+          id: id(stack.id),
+          panes: stack.panes.map(id),
+          previous: Object.fromEntries(
+            Object.entries(stack.previous).map(([plane, previous]) => [id(plane), previous]),
+          ),
+        })),
       },
       tiling: space.tiling && {
         ...space.tiling,
@@ -294,6 +305,7 @@ export function backupRoots(
           'browser',
           'task',
           'receipt',
+          'check',
           'git-changes',
           'search',
           'collection',

@@ -18,7 +18,8 @@ import type { ModelDataLevel } from '../src/domain/models/permissions';
 import type { ModelProvider } from '../src/domain/services';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
-import { CheckPanel } from '../src/renderer/fabrication/CheckPanel';
+import { CheckPanel, CheckPanelBody } from '../src/renderer/fabrication/CheckPanel';
+import { findingRequirement } from '../src/domain/fabrication/requirements';
 import {
   checkCollapsed,
   checkSession,
@@ -244,8 +245,16 @@ let operate: ReturnType<typeof vi.fn>;
 let fabrication: ReturnType<typeof vi.fn>;
 const openLayout = vi.fn();
 const openPath = vi.fn(async () => {});
+const openEvidence = vi.fn(async () => 'evidence-pane');
 const copyPaths = vi.fn(async () => {});
-const workspace = { openLayout, openPath } as unknown as WorkspaceController;
+const workspace = { openLayout, openPath, openEvidence } as unknown as WorkspaceController;
+
+/** The desktop revalidates a check and owns the correction operation. */
+function desktopReply(request: { kind: string }) {
+  if (request.kind === 'validate') return checkSession()?.result ?? result;
+  if (request.kind === 'correct') return { kind: 'operation', id: 'job-correction' };
+  return { kind: 'done' };
+}
 
 beforeEach(() => {
   initialize({ home: '/Jobs', platform: 'darwin', state: null, locations: [], openPaths: [] });
@@ -260,7 +269,7 @@ beforeEach(() => {
     request.transform.kind === 'dxf-correction' ? 'job-correction' : 'job-handoff',
   );
   fabrication = vi.fn(async (request: { kind: string }) =>
-    request.kind === 'open' ? opening : request.kind === 'run' ? result : { kind: 'done' },
+    request.kind === 'open' ? opening : request.kind === 'run' ? result : desktopReply(request),
   );
   vi.stubGlobal('viewer', {
     copyPaths,
@@ -400,14 +409,7 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
   // the correction is saved only on approval, and its measured result is shown
   fireEvent.click(screen.getByRole('button', { name: 'Save g6-PL60-B2-2buc (corrected).dxf' }));
   await waitFor(() =>
-    expect(operate).toHaveBeenCalledWith({
-      kind: 'convert',
-      sources: [plate],
-      destination: folder,
-      name: 'g6-PL60-B2-2buc (corrected).dxf',
-      transform: plan,
-      expectedSources: [{ path: plate, version }],
-    }),
+    expect(fabrication).toHaveBeenCalledWith({ kind: 'correct', id: opening.id, finding: 'F1' }),
   );
   finish({
     id: 'job-correction',
@@ -431,17 +433,12 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
   await screen.findByText('Saved: pitch 48.00 mm → 50.00 mm, measured again.');
   expect(screen.getByText('g6-PL60-B2-2buc.dxf, corrected copy')).toBeTruthy();
 
-  // the cut sheets nest the corrected copy, with the request's quantities and thicknesses
+  // An unresolved quantity must be reviewed before it becomes a nesting default.
   fireEvent.click(screen.getByRole('button', { name: 'Prepare cut sheets' }));
-  expect(openLayout).toHaveBeenCalledWith(
-    [`${folder}/g6-MB20-A1-4buc.dxf`, corrected],
-    undefined,
-    'nesting',
-    {
-      quantities: { [corrected]: 2 },
-      thicknesses: { [`${folder}/g6-MB20-A1-4buc.dxf`]: 6, [corrected]: 6 },
-    },
-  );
+  expect(
+    (screen.getByRole('button', { name: 'Prepare cut sheets' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(openLayout).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Play the tour' }));
   expect(playTour).toHaveBeenCalledWith(workspace, {
     name: 'Job 1042',
@@ -473,8 +470,8 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
     'A folder for the shop: 5 files as evidence, the tour pointed at them, the check record, and “Nesting of 2 parts, 6 mm” on 1 sheet.',
   );
   fireEvent.click(screen.getByRole('button', { name: 'Export handoff' }));
-  await waitFor(() => expect(operate).toHaveBeenCalledTimes(2));
-  const [handoff] = operate.mock.calls[1]! as [
+  await waitFor(() => expect(operate).toHaveBeenCalledOnce());
+  const [handoff] = operate.mock.calls[0]! as [
     {
       sources: string[];
       transform: { kind: string; check: string; evidence: number[]; nestings: unknown[] };
@@ -518,7 +515,7 @@ it('says why a check failed, and offers to run it again', async () => {
       throw new Error(
         'Meta’s answer does not fit the check’s form at tour, so nothing was graded. Run the check again.',
       );
-    return { kind: 'done' };
+    return desktopReply(request);
   });
   render(
     <WorkspaceContext.Provider value={workspace}>
@@ -546,7 +543,7 @@ it('shows each step of a running check with its time, a cause’s readings and w
       ? opening
       : request.kind === 'run'
         ? new Promise((resolve) => (answer = resolve))
-        : { kind: 'done' },
+        : desktopReply(request),
   );
   render(
     <WorkspaceContext.Provider value={workspace}>
@@ -674,7 +671,9 @@ async function checkedAndSaved(): Promise<void> {
   );
   clock.mockRestore();
   fireEvent.click(screen.getByRole('button', { name: 'Save g6-PL60-B2-2buc (corrected).dxf' }));
-  await waitFor(() => expect(operate).toHaveBeenCalled());
+  await waitFor(() =>
+    expect(fabrication).toHaveBeenCalledWith({ kind: 'correct', id: opening.id, finding: 'F1' }),
+  );
   finish({
     id: 'job-correction',
     completed: [
@@ -707,7 +706,7 @@ async function exportingHandoff() {
         ? result
         : request.kind === 'changes'
           ? { kind: 'changes', id: opening.id, changes: [] }
-          : { kind: 'done' },
+          : desktopReply(request),
   );
   panel();
   await checkedAndSaved();
@@ -785,14 +784,14 @@ it('keeps a finished check when its panel closes, and shows it again at once whi
         ? result
         : request.kind === 'changes'
           ? { kind: 'changes', id: opening.id, changes }
-          : { kind: 'done' },
+          : desktopReply(request),
   );
   panel();
   await checkedAndSaved();
   act(() => closeCheck());
   expect(screen.queryByRole('heading', { name: 'Check Job 1042' })).toBeNull();
   // the desktop keeps the record: nothing is closed
-  expect(kinds()).toEqual(['open', 'run']);
+  expect(kinds()).toEqual(['open', 'run', 'correct']);
 
   // the palette names the check it would show
   const [command] = checkCommands() as [ReturnType<typeof checkCommands>[number]];
@@ -810,7 +809,7 @@ it('keeps a finished check when its panel closes, and shows it again at once whi
   );
 
   await act(() => openCheck([folder], activeWorkspace().id));
-  expect(kinds()).toEqual(['open', 'run', 'changes']);
+  expect(kinds()).toEqual(['open', 'run', 'correct', 'changes']);
   expect(screen.getByRole('heading', { name: 'Check Job 1042' })).toBeTruthy();
   expect(document.querySelector('.check-since')!.textContent).toBe('Checked at 22:14 · Run again');
   expect(
@@ -829,7 +828,7 @@ it('keeps a finished check when its panel closes, and shows it again at once whi
   expect(screen.getAllByRole('button', { name: 'Run again' })).toHaveLength(1);
   changes = [];
   fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
-  await waitFor(() => expect(kinds()).toEqual(['open', 'run', 'changes', 'run']));
+  await waitFor(() => expect(kinds()).toEqual(['open', 'run', 'correct', 'changes', 'run']));
   expect(fabrication).toHaveBeenLastCalledWith({
     kind: 'run',
     id: opening.id,
@@ -855,7 +854,7 @@ it('says what changed since a kept check, marks its result as before, and checks
               id: opening.id,
               changes: [{ name: 'g6-PL60-B2-2buc.dxf', change: 'changed' }],
             }
-          : { kind: 'done' },
+          : desktopReply(request),
   );
   panel();
   await checkedAndSaved();
@@ -895,7 +894,7 @@ it('says what changed since a kept check, marks its result as before, and checks
       pages: [],
     }),
   );
-  expect(kinds()).toEqual(['open', 'run', 'changes', 'changes', 'close', 'open', 'run']);
+  expect(kinds()).toEqual(['open', 'run', 'correct', 'changes', 'changes', 'open', 'close', 'run']);
   expect(fabrication).toHaveBeenCalledWith({ kind: 'close', id: opening.id });
   await waitFor(() => expect(document.querySelector('.check-stale')).toBeNull());
   expect(screen.getByRole('heading', { name: 'Findings' })).toBeTruthy();
@@ -912,7 +911,7 @@ it('keeps the last five checks, and ends the oldest past them', async () => {
     }
     if (request.kind === 'run') return result;
     if (request.kind === 'changes') return { kind: 'changes', id: id(2), changes: [] };
-    return { kind: 'done' };
+    return desktopReply(request);
   });
   for (let index = 1; index <= 6; index++) {
     await openCheck([job(index)], activeWorkspace().id);
@@ -966,7 +965,7 @@ it('collapses to its title bar and a short status, from the title, and keeps tha
       ? opening
       : request.kind === 'run'
         ? new Promise((resolve) => (answer = resolve))
-        : { kind: 'done' },
+        : desktopReply(request),
   );
   panel();
   await act(() => openCheck([folder], activeWorkspace().id));
@@ -1170,7 +1169,7 @@ const bracket = `${folder}/g6-MB20-A1-4buc.dxf`;
 it('nests the thickness no Layout plane has, saying which and how much, then exports', async () => {
   level = 'images';
   fabrication.mockImplementation(async (request: { kind: string }) =>
-    request.kind === 'open' ? opening : request.kind === 'run' ? given : { kind: 'done' },
+    request.kind === 'open' ? opening : request.kind === 'run' ? given : desktopReply(request),
   );
   let nested!: () => void;
   vi.mocked(nestWithoutPlane).mockImplementationOnce(
@@ -1197,15 +1196,17 @@ it('nests the thickness no Layout plane has, saying which and how much, then exp
   ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Nest and export handoff' }));
   // the plane's own quantities and thicknesses, for the 6 mm tab only
-  expect(nestWithoutPlane).toHaveBeenCalledWith(
-    [bracket, plate],
-    {
-      quantities: { [bracket]: 4, [plate]: 2 },
-      thicknesses: { [bracket]: 6, [plate]: 6 },
-    },
-    new Set(['6']),
-    expect.any(AbortSignal),
-    expect.any(Function),
+  await waitFor(() =>
+    expect(nestWithoutPlane).toHaveBeenCalledWith(
+      [bracket, plate],
+      {
+        quantities: { [bracket]: 4, [plate]: 2 },
+        thicknesses: { [bracket]: 6, [plate]: 6 },
+      },
+      new Set(['6']),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    ),
   );
   const status = await screen.findByText(/^Nesting 6 mm: 2 parts, 10 pieces…/);
   expect(status.textContent).toBe('Nesting 6 mm: 2 parts, 10 pieces… · 0 s');
@@ -1233,7 +1234,7 @@ it('nests the thickness no Layout plane has, saying which and how much, then exp
 it('says plainly which part does not nest, and exports nothing', async () => {
   level = 'images';
   fabrication.mockImplementation(async (request: { kind: string }) =>
-    request.kind === 'open' ? opening : request.kind === 'run' ? given : { kind: 'done' },
+    request.kind === 'open' ? opening : request.kind === 'run' ? given : desktopReply(request),
   );
   vi.mocked(nestWithoutPlane).mockRejectedValueOnce(
     new Error(
@@ -1265,4 +1266,112 @@ it('says plainly which part does not nest, and exports nothing', async () => {
     ),
   );
   expect(operate).not.toHaveBeenCalled();
+});
+
+it('reviews the exact source and records a typed human confirmation separately from source verification', async () => {
+  level = 'images';
+  const claim = findingRequirement(result.findings[0]!.finding)!;
+  const unverified = {
+    status: 'unverified' as const,
+    key: claim.key,
+    reason: 'The source value needs review.',
+  };
+  const pending: CheckResult = {
+    ...result,
+    requirements: [{ claim, verification: unverified }],
+    findings: [
+      {
+        ...result.findings[0]!,
+        grade: { ...result.findings[0]!.grade, status: 'unverified', requirement: unverified },
+        correction: undefined,
+      },
+    ],
+  };
+  const accepted = {
+    status: 'human-confirmed' as const,
+    key: claim.key,
+    kind: claim.kind,
+    value: 60,
+    unit: 'mm' as const,
+    evidence: { ref: claim.ref, page: claim.page, quote: claim.quote, version },
+    part: claim.part,
+    confirmedAt: 1000,
+  };
+  const reviewed: CheckResult = {
+    ...pending,
+    requirements: [{ claim, verification: accepted }],
+    findings: [
+      {
+        ...result.findings[0]!,
+        grade: { ...result.findings[0]!.grade, requirement: accepted },
+        correction: { ...result.findings[0]!.correction!, plan: { ...plan, target: 60 } },
+      },
+    ],
+  };
+  fabrication.mockImplementation(async (request: { kind: string }) =>
+    request.kind === 'open'
+      ? opening
+      : request.kind === 'run'
+        ? pending
+        : request.kind === 'confirm'
+          ? reviewed
+          : desktopReply(request),
+  );
+  panel();
+  await act(() => openCheck([folder], activeWorkspace().id));
+  await act(() => runCheck());
+  expect(screen.getByText('50 mm pitch')).toBeTruthy();
+  expect(screen.getByText('Job 1042 drawing.pdf · page 1')).toBeTruthy();
+  expect(screen.getByText('Associated part: g6-PL60-B2-2buc.dxf.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^Save g6/ })).toBeNull();
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open source' })));
+  expect(openEvidence).toHaveBeenCalledWith(
+    {
+      path: `${folder}/Job 1042 drawing.pdf`,
+      version,
+      quote: '50 mm pitch',
+      anchor: { kind: 'pdf', page: 1 },
+    },
+    undefined,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm from source…' }));
+  const input = screen.getByRole('textbox', { name: 'Value (mm)' }) as HTMLInputElement;
+  expect(input.value).toBe('');
+  expect(document.activeElement).toBe(input);
+  expect(
+    (screen.getByRole('button', { name: 'Confirm value' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  fireEvent.change(input, { target: { value: '60' } });
+  await act(async () => fireEvent.submit(input.closest('form')!));
+  expect(fabrication).toHaveBeenCalledWith({
+    kind: 'confirm',
+    id: opening.id,
+    key: claim.key,
+    value: 60,
+    unit: 'mm',
+  });
+  expect(screen.getByText('60 mm · Human confirmed')).toBeTruthy();
+  expect(screen.queryByText(/confirmed by Viewer/)).toBeNull();
+  expect(screen.getByRole('button', { name: /^Save g6/ })).toBeTruthy();
+  expect(kinds().filter((kind) => kind === 'run')).toHaveLength(1);
+  expect(operate).not.toHaveBeenCalled();
+});
+
+it('leaves embedded check lifetime and Escape to its plane', async () => {
+  level = 'images';
+  await act(() => openCheck([folder], activeWorkspace().id));
+  await act(() => runCheck());
+  const current = checkSession()!;
+  render(
+    <WorkspaceContext.Provider value={workspace}>
+      <CheckPanelBody current={current} collapsed={false} embedded />
+    </WorkspaceContext.Provider>,
+  );
+  const body = screen.getByRole('complementary', { name: 'Check Job 1042' });
+  expect(body.classList.contains('check-plane-panel')).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Close the check' })).toBeNull();
+  expect(body.querySelector('.panel-toggle')).toBeNull();
+  fireEvent.keyDown(body, { key: 'Escape' });
+  expect(checkSession()?.opening?.id).toBe(opening.id);
+  expect(kinds().filter((kind) => kind === 'close' || kind === 'cancel')).toEqual([]);
 });

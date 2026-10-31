@@ -58,12 +58,18 @@ const answer = (request: RequestPart[]): FabricationAnswer => ({
   findings: [],
   tour: [],
 });
-const reconcile = (request: RequestPart[], pieces = 1) =>
+const reconcile = (request: RequestPart[], pieces = 1, requestText?: string) =>
   reconcileJob({
     answer: answer(request),
     sources,
     reader: 'Muse Spark',
-    grading,
+    grading:
+      requestText === undefined
+        ? grading
+        : {
+            ...grading,
+            text: (ref, page) => (ref === 'S1' ? requestText : texts[`${ref}:${page}`]),
+          },
     pieces: () => pieces,
   });
 /** The finding that says the answer has no quantity for the base plate. */
@@ -98,11 +104,12 @@ describe('values the request and the name disagree on', () => {
       },
       grade: {
         status: 'confirmed',
-        reason: 'The name g6-PL60-B2-2buc.dxf gives 2 pieces (“2buc”); the request gives 4 pieces.',
+        reason:
+          'The name g6-PL60-B2-2buc.dxf gives 2 pieces (“2buc”); the accepted request requirement is 4 pieces.',
       },
     });
     // the request comes first, and says so; the finding stands beside it
-    expect(parts[0]!.quantity).toEqual({
+    expect(parts[0]!.quantity).toMatchObject({
       sets: 4,
       pieces: 4,
       source: 'request',
@@ -115,20 +122,22 @@ describe('values the request and the name disagree on', () => {
   it('sets the request against the drawing’s title block, with both quotes', () => {
     const { findings, parts } = reconcile([
       part({
-        quantity: 2,
+        quantity: 4,
         drawing: {
           ref: 'S2',
           page: 1,
-          quantity: 2,
+          quantity: null,
           thickness: 5,
           material: null,
           quote: 'Thickness 5 mm',
         },
       }),
     ]);
-    expect(findings.map((item) => item.finding.summary)).toEqual([
-      'The request asks for 6 mm of PL60-B2; Drawing.pdf gives 5 mm.',
-    ]);
+    expect(
+      findings
+        .filter((item) => item.finding.kind === 'thickness')
+        .map((item) => item.finding.summary),
+    ).toEqual(['The request asks for 6 mm of PL60-B2; Drawing.pdf gives 5 mm.']);
     expect(findings[0]).toMatchObject({
       request: { ref: 'S1', value: 6, quote: 'PL60-B2 base plate, 6 mm, 4 pieces' },
       finding: { kind: 'thickness', drawing: { ref: 'S2', page: 1, value: 5 }, dxf: null },
@@ -145,8 +154,7 @@ describe('values the request and the name disagree on', () => {
     const elsewhere = reconcile([part({ quote: 'PL60-B2, 4 pieces, urgent' })]);
     expect(elsewhere.findings[0]!.grade).toMatchObject({
       status: 'unverified',
-      reason:
-        '“PL60-B2, 4 pieces, urgent” is not on page 1 of Request.eml, so the request value is unconfirmed.',
+      reason: '“PL60-B2, 4 pieces, urgent” is not on page 1 of Request.eml.',
     });
     const drawn = reconcile([
       part({
@@ -163,12 +171,13 @@ describe('values the request and the name disagree on', () => {
     ]);
     expect(drawn.findings[0]!.grade).toMatchObject({
       status: 'unverified',
-      reason: '“Thickness 5 mm” does not give 8 mm.',
+      reason: "The passage gives 5 mm for thickness; the model's value is not supported.",
     });
   });
 
   it('raises nothing where they agree, and nothing the model already found', () => {
-    expect(reconcile([part({ quantity: 2 })]).findings).toEqual([]);
+    const agreed = 'PL60-B2 base plate, 6 mm, 2 pieces';
+    expect(reconcile([part({ quantity: 2, quote: agreed })], 1, agreed).findings).toEqual([]);
     const said = reconcileJob({
       answer: {
         ...answer([part()]),
@@ -207,7 +216,7 @@ describe('values the request and the name disagree on', () => {
 
 describe('a drawing of several separate pieces', () => {
   it('shows sets as the default only when nothing else decides', () => {
-    const { parts, findings } = reconcile([part({ quantity: null, quote: null })], 2);
+    const { parts, findings } = reconcile([part({ quantity: null })], 2);
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject(unreadPlate);
     expect(parts[0]!.quantity).toEqual({
@@ -235,23 +244,26 @@ describe('a drawing of several separate pieces', () => {
     );
     // 2 pieces of a drawing of 2: the name counted pieces
     const pieces = reconcile(
-      [part({ quantity: 2, quote: 'PL60-B2 base plate, 6 mm, 4 pieces' })],
+      [part({ quantity: 2, quote: 'PL60-B2 base plate, 6 mm, 2 pieces' })],
       2,
+      'PL60-B2 base plate, 6 mm, 2 pieces',
     );
     expect(pieces.parts[0]!.quantity).toMatchObject({ sets: 1, pieces: 2, source: 'request' });
     // a left and a right listed apart, drawn together
     const halves = reconcile(
       [
-        part({ part: 'PL60-B2 left', quantity: 3, quote: null }),
-        part({ part: 'PL60-B2 right', quantity: 3, quote: null }),
+        part({ part: 'PL60-B2 left', quantity: 3, quote: 'PL60-B2 left, 6 mm, 3 pieces' }),
+        part({ part: 'PL60-B2 right', quantity: 3, quote: 'PL60-B2 right, 6 mm, 3 pieces' }),
       ],
       2,
+      'PL60-B2 left, 6 mm, 3 pieces\nPL60-B2 right, 6 mm, 3 pieces',
     );
     expect(halves.parts[0]!.quantity).toMatchObject({ sets: 3, pieces: 6 });
   });
 
   it('asks instead of giving a number when the request’s count is not whole sets', () => {
-    const { parts, findings } = reconcile([part({ quantity: 5, quote: null })], 2);
+    const stated = 'PL60-B2 base plate, 6 mm, 5 pieces';
+    const { parts, findings } = reconcile([part({ quantity: 5, quote: stated })], 2, stated);
     expect(parts[0]!.quantity).toBeUndefined();
     expect(parts[0]!.question).toBe(
       'g6-PL60-B2-2buc.dxf holds 2 separate pieces, and the request asks for 5, which is not a whole number of sets. How many sets should be cut?',
@@ -278,17 +290,24 @@ describe('what the answer leaves unread in the request', () => {
     path: '/jobs/Spacer S4.dxf',
     version,
   };
-  const job = (request: RequestPart[], more: InventorySource[] = []) =>
+  const job = (request: RequestPart[], more: InventorySource[] = [], requestText?: string) =>
     reconcileJob({
       answer: answer(request),
       sources: [...sources, ...more],
       reader: 'Muse Spark',
-      grading,
+      grading:
+        requestText === undefined
+          ? grading
+          : {
+              ...grading,
+              text: (ref, page) => (ref === 'S1' ? requestText : texts[`${ref}:${page}`]),
+            },
       pieces: () => 1,
     });
 
   it('names a DXF part no listed part is, and a listed part not tied to its DXF', () => {
-    const { findings } = job([part({ quantity: 2 })], [spacer]);
+    const stated = 'PL60-B2 base plate, 6 mm, 2 pieces';
+    const { findings } = job([part({ quantity: 2, quote: stated })], [spacer], stated);
     expect(findings).toMatchObject([
       {
         unread: 'part',

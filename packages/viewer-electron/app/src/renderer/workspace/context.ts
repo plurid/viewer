@@ -50,7 +50,26 @@ export interface WorkspaceController {
   /** Plays the tour opened last, else the saved views. */
   present(): void;
   openCollection(id: string): void;
-  openEvidence(evidence: EvidenceNavigation, parentPaneID?: string): Promise<void>;
+  openEvidence(
+    evidence: EvidenceNavigation,
+    parentPaneID?: string,
+    options?: { frame?: boolean },
+  ): Promise<string>;
+  openCheckPlane(
+    check: { id: string; folder: string; job: string },
+    parentPaneID?: string,
+  ): Promise<string>;
+  pinPane(id: string, options?: { width?: number; height?: number }): boolean;
+  placePane(id: string): Promise<'placed' | 'interrupted' | 'refused'>;
+  planePinState(id: string): { pinnable: boolean; pinned: boolean; collapsed: boolean };
+  collapsePinnedPane(id: string, collapsed: boolean): boolean;
+  selectedPaneIDs(): string[];
+  stackPanes(ids: readonly string[]): string | undefined;
+  unstackPanes(reference: string | readonly string[]): boolean;
+  planeStacks(): { id: string; panes: string[] }[];
+  comparePanes(ids: readonly string[]): Promise<void>;
+  whenPanesReady(ids: readonly string[]): Promise<void>;
+  restorePaneLayout(layout: ProjectLayout, ids: readonly string[]): void;
   captureLayout(): ProjectLayout;
   restoreLayout(layout: ProjectLayout): void;
   newTerminal(target: CapturedTarget, profileID?: string): void;

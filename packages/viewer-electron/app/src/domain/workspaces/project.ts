@@ -42,6 +42,23 @@ export const planePlacementSchema = z
     width: z.number().finite().min(100).max(16000),
     height: z.number().finite().min(100).max(16000),
     show: z.boolean(),
+    pinned: z
+      .object({
+        rect: z
+          .object({
+            x: finite,
+            y: finite,
+            width: z.number().finite().positive().max(16000),
+            height: z.number().finite().positive().max(16000),
+            unit: z.enum(['px', 'fraction']).optional(),
+            anchor: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']).optional(),
+          })
+          .strict(),
+        collapsed: z.boolean().optional(),
+        order: z.number().finite().min(0).max(1e12),
+      })
+      .strict()
+      .optional(),
     bridge: z
       .object({
         length: finite.optional(),
@@ -54,11 +71,27 @@ export const planePlacementSchema = z
   })
   .strict();
 export type PlanePlacement = z.infer<typeof planePlacementSchema>;
+export const planeStackSchema = z
+  .object({
+    id,
+    panes: z.array(id).min(2).max(12),
+    previous: z.record(
+      id,
+      z
+        .object({
+          location: planePlacementSchema.shape.location,
+          manuallyPositioned: z.boolean().optional(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
 export const layoutSchema = z
   .object({
     placements: z.array(planePlacementSchema).max(200),
     active: id.optional(),
     docked: id.optional(),
+    stacks: z.array(planeStackSchema).max(100).optional(),
   })
   .strict()
   .superRefine((layout, context) => {
@@ -83,6 +116,26 @@ export const layoutSchema = z
     for (const target of [layout.active, layout.docked])
       if (target && !ids.has(target))
         context.addIssue({ code: 'custom', message: 'The layout target is missing.' });
+    const stacked = new Set<string>();
+    const stackIDs = new Set<string>();
+    for (const stack of layout.stacks ?? []) {
+      if (stackIDs.has(stack.id))
+        context.addIssue({ code: 'custom', message: 'Stack IDs must be unique.' });
+      stackIDs.add(stack.id);
+      for (const pane of stack.panes) {
+        if (!ids.has(pane) || stacked.has(pane) || !stack.previous[pane])
+          context.addIssue({
+            code: 'custom',
+            message: 'Stack members need unique existing planes and previous placements.',
+          });
+        stacked.add(pane);
+      }
+      if (Object.keys(stack.previous).some((pane) => !stack.panes.includes(pane)))
+        context.addIssue({
+          code: 'custom',
+          message: 'Stack placements must belong to its members.',
+        });
+    }
   });
 export type ProjectLayout = z.infer<typeof layoutSchema>;
 

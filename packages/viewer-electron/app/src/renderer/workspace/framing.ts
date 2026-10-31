@@ -87,7 +87,10 @@ export function frameWorkspace(
       return;
     }
     const nodes = flattenTree(api.tree.get()).filter(
-      (node) => (node.show || options.recover) && (!targets || targets.includes(hostID(node))),
+      (node) =>
+        !node.pinned &&
+        (node.show || options.recover) &&
+        (!targets || targets.includes(hostID(node))),
     );
     if (options.recover && nodes.some((node) => !node.show)) {
       for (const node of nodes) if (!node.show) api.tree.open(node.planeID);

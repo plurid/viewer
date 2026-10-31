@@ -530,6 +530,8 @@ export interface EvaluationTruth {
 export interface EvaluationPart {
   truth: EvaluationTruth;
   dxf: string;
+  /** A labeled synthetic requirement, kept separately from the expected measurement and grade. */
+  requirement: { text: string; quote: string };
 }
 /** Name forms the reader must handle: the convention, its variants, and three it must not guess. */
 const nameStyles: ((
@@ -609,6 +611,10 @@ export function evaluationParts(count = 40): EvaluationPart[] {
     ];
     return {
       dxf: autocadDXF(entities),
+      requirement: {
+        text: `Part: ${code}\nPitch: ${pitch} mm\nAxis: ${offAxis}\n`,
+        quote: `Pitch: ${pitch} mm`,
+      },
       truth: {
         name: named.name,
         part: named.part ?? code,

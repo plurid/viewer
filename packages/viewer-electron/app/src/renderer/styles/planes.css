@@ -1,4 +1,20 @@
 /* Plane chrome in the spatial workspace. */
+.pinned-plane-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  width: 100%;
+  min-width: 0;
+}
+.pinned-plane-controls > .plane-title {
+  flex: 1;
+  min-width: 0;
+}
+.pinned-plane-controls > .icon-button {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
 .plane-controls {
   display: flex;
   align-items: center;

@@ -240,6 +240,13 @@
 .choice-menu .command-results {
   max-height: calc(34px * 5.5 + 10px);
 }
+.choice-menu .command-result-text small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.choice-menu:has(.command-result-text small) .command-results {
+  max-height: min(420px, 60vh);
+}
 .choice-placeholder {
   color: var(--muted);
 }

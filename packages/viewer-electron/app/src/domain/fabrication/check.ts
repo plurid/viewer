@@ -12,6 +12,8 @@ import type { DXFCorrection } from './plan';
 import type { Finding, InventoryKind, RequestPart } from './answer';
 import type { Grade } from './grade';
 import type { PartPlan } from './reconcile';
+import type { RequirementClaim, RequirementVerification } from './requirements';
+import { requirementUnits } from './requirements';
 import type { CheckChange } from './job-files';
 import type { SegmentationSource } from '../models/segmentation';
 import { sourceVersionSchema } from '../files/inspection';
@@ -111,6 +113,27 @@ export const fabricationRequestSchema = z.discriminatedUnion('kind', [
   /** What changed in a kept check's job since it listed the job. */
   z.object({ kind: z.literal('changes'), id: checkID }).strict(),
   z.object({ kind: z.literal('close'), id: checkID }).strict(),
+  z.object({ kind: z.literal('read'), id: checkID }).strict(),
+  z
+    .object({ kind: z.literal('list'), paths: z.array(path).min(1).max(inventoryLimit).optional() })
+    .strict(),
+  z.object({ kind: z.literal('validate'), id: checkID }).strict(),
+  z
+    .object({
+      kind: z.literal('correct'),
+      id: checkID,
+      finding: z.string().regex(/^F[1-9]\d{0,2}$/),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('confirm'),
+      id: checkID,
+      key: z.string().min(1).max(200),
+      value: z.number().finite().nonnegative().max(100_000),
+      unit: z.enum(requirementUnits),
+    })
+    .strict(),
 ]);
 export type FabricationRequest = z.infer<typeof fabricationRequestSchema>;
 export type FabricationRequestKind = FabricationRequest['kind'];
@@ -252,13 +275,52 @@ export interface CheckResult {
   /** Files not sent, with why: past the picture limit, or changed. */
   notSent: string[];
   seconds: number;
+  /** Each source claim and its independent verification, including human confirmations. */
+  requirements?: { claim: RequirementClaim; verification: RequirementVerification }[];
+}
+export const checkStatuses = [
+  'ready',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+  'interrupted',
+] as const;
+export type CheckStatus = (typeof checkStatuses)[number];
+export interface CheckSummary {
+  id: string;
+  job: string;
+  folder: string;
+  status: CheckStatus;
+  updated: number;
+  summary?: string;
+}
+/** A private saved check reopens without making a provider request. */
+export interface CheckSaved {
+  kind: 'saved';
+  paths: string[];
+  opening: CheckOpening;
+  status: CheckStatus;
+  updated: number;
+  result?: CheckResult;
+  error?: string;
+  changes: CheckChange[];
+  corrections: Record<string, string>;
+  handoffs: string[];
 }
 export type FabricationReply =
-  CheckOpening | CheckNothing | CheckChanges | CheckResult | { kind: 'done' };
+  | CheckOpening
+  | CheckNothing
+  | CheckChanges
+  | CheckResult
+  | CheckSaved
+  | { kind: 'checks'; checks: CheckSummary[] }
+  | { kind: 'operation'; id: string }
+  | { kind: 'done' };
 
-/** What a running check does now: reads the job with the model, or outlines features with SAM. */
-export type CheckStep = 'reading' | 'outlining';
-/** A running check's step, sent to the window that runs it. */
+/** The current step, or notice that the final result/status has been saved. */
+export type CheckStep = 'reading' | 'outlining' | 'settled';
+/** A check's step, sent to every window with an attached view. */
 export interface CheckProgress {
   /** The check. */
   id: string;

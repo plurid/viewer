@@ -1,9 +1,10 @@
 /**
  * A laser job checked end to end in the packaged app, the way a person works through it: where
  * **Check laser job…** is offered and why not, the panel's inventory and findings, its title bar,
- * the tour on the real engine, the reviewed correction, the handoff with the nestings it makes, the
- * check kept and shown again, the Layout plane's nesting without a sheet format, dark pages, and the
- * panel staying with its workspace. Job 1042 and the evaluation parts are generated from the
+ * the tour on the real engine, the reviewed correction, the handoff with the nestings it makes,
+ * pin/place identity, explicit evidence comparison and reversible stacks, and the check and its
+ * arrangement after a cold restart. It also exercises the Layout plane's nesting without a sheet
+ * format, dark pages, and the check staying with its workspace. Job 1042 and the evaluation parts are generated from the
  * playground samples into the run's own folder. A loopback stub answers for the model with the
  * fixture's answer, and for SAM 3.1 as a self-hosted server does; nothing reaches a paid provider.
  * A second instance runs in another profile beside the first. Every file stays; the screenshots,
@@ -18,6 +19,7 @@ import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
+import type { PluridStack, TreePlane } from '@plurid/plurid-data';
 import DxfParser from 'dxf-parser';
 import type { ICircleEntity } from 'dxf-parser';
 import { parse as parseJSONC } from 'jsonc-parser';
@@ -34,8 +36,9 @@ import type { ApplicationSettings, ModelProvider } from '../../src/domain/servic
 import { CURRENT_STATE_VERSION } from '../../src/domain/contracts';
 import { fabricationAnswerSchema } from '../../src/domain/fabrication/answer';
 import { checkSendingLabels } from '../../src/domain/fabrication/check';
+import { checkDocumentSchema } from '../../src/domain/fabrication/check-document';
 import { checkAnswerSchema, checkInstructions } from '../../src/domain/fabrication/prompt';
-import { modelEndpoint } from '../../src/domain/models/permissions';
+import { modelDataLabels, modelEndpoint } from '../../src/domain/models/permissions';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { defaultSettings } from '../../src/domain/services';
 import { tourDefinitionSchema } from '../../src/domain/tours/tour';
@@ -354,14 +357,21 @@ function clickUnavailable(label: string): boolean {
 type PaletteRows = ReturnType<typeof paletteRows>;
 function panelState() {
   const panel = document.querySelector<HTMLElement>('.check-panel');
+  const pinned = panel?.closest<HTMLElement>('[data-plurid-pinned]');
   const text = (element: Element | null | undefined) =>
     element?.textContent.replace(/\s+/g, ' ').trim() ?? '';
   return {
     open: !!panel,
     label: panel?.getAttribute('aria-label') ?? '',
-    collapsed: panel?.dataset.collapsed === 'true',
-    hidden: panel?.querySelector<HTMLElement>('.check-panel-body')?.hidden ?? false,
-    title: text(panel?.querySelector('.check-panel-toggle')),
+    id: panel?.closest<HTMLElement>('[data-viewer-check]')?.dataset.viewerCheck ?? '',
+    paneID: panel?.closest<HTMLElement>('[data-viewer-pane]')?.dataset.viewerPane ?? '',
+    pinned: !!pinned,
+    collapsed: pinned?.getAttribute('data-plurid-collapsed') === 'true',
+    hidden: panel?.closest('[data-plurid-pinned-content]')?.getAttribute('aria-hidden') === 'true',
+    title: text(
+      pinned?.querySelector('.plane-title') ?? panel?.querySelector('.check-panel-title'),
+    ),
+    status: text(panel?.querySelector('.check-panel-status')).replace(/^·\s*/, ''),
     sources: [...(panel?.querySelectorAll<HTMLElement>('.check-files li') ?? [])].map((item) => ({
       ref: item.dataset.ref ?? '',
       name: text(item.querySelector('.check-file')),
@@ -374,6 +384,7 @@ function panelState() {
       grade: text(item.querySelector('.tour-grade')),
       summary: text(item.querySelector('.check-finding-summary')),
       reason: text(item.querySelector('.check-reason')),
+      requirement: text(item.querySelector('.check-requirement-status')),
       notes: [...item.querySelectorAll(':scope > .check-note')].map(text),
     })),
     correction: text(panel?.querySelector('.check-correction [role="status"]')),
@@ -430,24 +441,71 @@ function tourState() {
     notice: text(bar?.querySelector('.tour-notice')),
     title: text(bar?.querySelector('.tour-bar-text > strong')),
     detail: text(bar?.querySelector('.tour-bar-text > .muted')),
-    collapsed: document.querySelector<HTMLElement>('.check-panel')?.dataset.collapsed === 'true',
+    collapsed:
+      document
+        .querySelector('.check-panel')
+        ?.closest('[data-plurid-pinned]')
+        ?.getAttribute('data-plurid-collapsed') === 'true',
   };
+}
+
+/** The actual content node survives pin/place; a remount loses this run-owned marker. */
+function checkIdentity(mark: string | null) {
+  const content = document.querySelector<HTMLElement>('[data-viewer-check]');
+  if (mark && content) content.dataset.nativeIdentity = mark;
+  return content?.dataset.nativeIdentity ?? '';
+}
+
+/** Activate a view through the same capture path as a pointer, without changing its camera. */
+function activatePane(id: string): boolean {
+  const content = document.querySelector<HTMLElement>(
+    `[data-viewer-pane=${JSON.stringify(id)}] .preview-plane`,
+  );
+  content?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  return !!content;
 }
 type TourState = ReturnType<typeof tourState>;
 /** The plane showing `file`: how much of it is in the window, its error if any, and the outlines
  * drawn over it. */
 function planeView(file: string) {
-  const plane = [...document.querySelectorAll<HTMLElement>('[data-plurid-plane]')].find(
-    (item) => item.querySelector('.plane-heading')?.getAttribute('title') === file,
-  );
+  const visibleArea = (element: HTMLElement) => {
+    const box = element.getBoundingClientRect();
+    return (
+      Math.max(0, Math.min(box.right, innerWidth) - Math.max(box.left, 0)) *
+      Math.max(0, Math.min(box.bottom, innerHeight) - Math.max(box.top, 0))
+    );
+  };
+  // A tour may open another view of an already reviewed source. Inspect the view on screen.
+  const plane = [...document.querySelectorAll<HTMLElement>('[data-plurid-plane]')]
+    .filter((item) => item.querySelector('.plane-heading')?.getAttribute('title') === file)
+    .sort((a, b) => visibleArea(b) - visibleArea(a))[0];
   if (!plane)
-    return { shown: 0, failure: 'No plane shows it.', marks: [] as string[], drawn: false };
+    return {
+      shown: 0,
+      width: 0,
+      height: 0,
+      coveredByPin: 0,
+      failure: 'No plane shows it.',
+      marks: [] as string[],
+      drawn: false,
+    };
   const box = plane.getBoundingClientRect();
   const width = Math.max(0, Math.min(box.right, innerWidth) - Math.max(box.left, 0));
   const height = Math.max(0, Math.min(box.bottom, innerHeight) - Math.max(box.top, 0));
   const overlay = plane.querySelector<SVGElement>('.evidence-overlay');
+  const covered = [...document.querySelectorAll('[data-plurid-pinned]')].reduce((sum, item) => {
+    const pin = item.getBoundingClientRect();
+    return (
+      sum +
+      Math.max(0, Math.min(box.right, pin.right) - Math.max(box.left, pin.left)) *
+        Math.max(0, Math.min(box.bottom, pin.bottom) - Math.max(box.top, pin.top))
+    );
+  }, 0);
   return {
     shown: (width * height) / Math.max(1, box.width * box.height),
+    width: box.width,
+    height: box.height,
+    coveredByPin: covered / Math.max(1, box.width * box.height),
     failure: /[^.]*could not be (?:displayed|read)[^.]*/.exec(plane.textContent)?.[0] ?? '',
     marks: [...(overlay?.querySelectorAll('g[data-kind]') ?? [])].map(
       (group) => group.getAttribute('data-kind') ?? '',
@@ -543,8 +601,11 @@ const tour: { at: number; state: TourState }[] = [];
 let current = 'Start';
 let page!: Connection;
 let actions!: NativeInteractions;
-const viewer = await ownedApp(binary, profile, { label: 'native-fabrication' });
+let viewer = await ownedApp(binary, profile, { label: 'native-fabrication' });
+let appOpen = true;
 const evidence = viewer.evidenceDirectory;
+const appEvidence = [evidence];
+let checkID = '';
 
 /** A bounded wait whose failure names the step and what it waited for. */
 const wait = <T>(
@@ -582,6 +643,56 @@ const panel = () => page.evaluate(pageCall(panelState));
 const nesting = () => page.evaluate(pageCall(nestingState));
 const saved = async () =>
   JSON.parse(await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8')) as SavedState;
+/** Inspect the bytes that will restore the engine, rather than a second test-only layout model. */
+async function spatial() {
+  const workspace = (await saved()).workspaces.find((space) => space.id === 'jobs')!;
+  const state = Object.values(workspace.arrangement)
+    .map(
+      (value) =>
+        JSON.parse(value) as {
+          space?: { tree?: TreePlane[]; stacks?: Record<string, PluridStack> };
+        },
+    )
+    .find((value) => Array.isArray(value.space?.tree))?.space;
+  const flatten = (nodes: TreePlane[]): TreePlane[] =>
+    nodes.flatMap((node) => [node, ...flatten(node.children ?? [])]);
+  return { workspace, tree: flatten(state?.tree ?? []), stacks: state?.stacks ?? {} };
+}
+type Spatial = Awaited<ReturnType<typeof spatial>>;
+const hostID = (node: TreePlane) =>
+  node.routeDivisions.plane.parameters.id || node.routeDivisions.path.parameters.id;
+const placements = (state: Spatial, ids: string[]) =>
+  state.tree
+    .filter((node) => ids.includes(hostID(node)))
+    .map((node) => ({
+      id: hostID(node),
+      location: node.location,
+      width: node.width,
+      height: node.height,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+const checkDocument = async () =>
+  checkDocumentSchema.parse(
+    JSON.parse(await readFile(path.join(profile, 'fabrication-checks', checkID + '.json'), 'utf8')),
+  );
+
+async function connect(): Promise<void> {
+  page = await viewer.connect();
+  actions = new NativeInteractions({ evaluate: page.evaluate, command: page.command, until });
+  await page.command('Runtime.enable');
+  page.onEvent((method, params) => {
+    if (method === 'Runtime.exceptionThrown')
+      exceptions.push(`${current}: ${JSON.stringify(params).slice(0, 1200)}`);
+    if (method === 'Runtime.consoleAPICalled' && ['error', 'warning'].includes(String(params.type)))
+      consoleProblems.push(`${current}: ${JSON.stringify(params.args).slice(0, 800)}`);
+  });
+  await page.command('Emulation.setDeviceMetricsOverride', {
+    width: 1600,
+    height: 1000,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+}
 /** Opens ⌘K and types `query`; its rows once the palette shows them. */
 async function palette(query: string): Promise<PaletteRows> {
   await actions.key('k', 'KeyK', 4);
@@ -628,6 +739,14 @@ async function runSelected(label: string): Promise<void> {
     `${label} runs from the palette`,
   );
 }
+async function command(label: string): Promise<void> {
+  await offered(
+    label,
+    ({ rows }) => rows.some((row) => row.label === label && row.selected && !row.unavailable),
+    label + ' is available',
+  );
+  await runSelected(label);
+}
 async function selectFolder(folder: string): Promise<void> {
   await wait(
     () => page.evaluate(pageCall(selectRows, [folder])),
@@ -663,22 +782,8 @@ async function crashReports(folder: string): Promise<string[]> {
 
 let failure: unknown;
 try {
-  page = await viewer.connect();
-  actions = new NativeInteractions({ evaluate: page.evaluate, command: page.command, until });
-  await page.command('Runtime.enable');
-  page.onEvent((method, params) => {
-    if (method === 'Runtime.exceptionThrown')
-      exceptions.push(`${current}: ${JSON.stringify(params).slice(0, 1200)}`);
-    if (method === 'Runtime.consoleAPICalled' && ['error', 'warning'].includes(String(params.type)))
-      consoleProblems.push(`${current}: ${JSON.stringify(params.args).slice(0, 800)}`);
-  });
   // one window size for every run, so the planes and the panel lie the same way each time
-  await page.command('Emulation.setDeviceMetricsOverride', {
-    width: 1600,
-    height: 1000,
-    deviceScaleFactor: 1,
-    mobile: false,
-  });
+  await connect();
   await wait(
     () =>
       page.evaluate(
@@ -768,6 +873,9 @@ try {
       'the inventory of Job 1042',
     );
     assert.equal(ready.label, 'Check Job 1042');
+    assert.equal(ready.pinned, true, 'A check opens as a pinned engine plane');
+    checkID = ready.id;
+    assert.match(checkID, /^[0-9a-f-]{36}$/);
     assert.deepEqual(ready.sources, [
       { ref: 'S1', name: 'Job 1042 request.eml', sending: checkSendingLabels.text },
       { ref: 'S2', name: 'Job 1042 drawing.pdf', sending: checkSendingLabels.pages },
@@ -813,7 +921,7 @@ try {
     assert.equal(checked.summary, named.summary);
     assert.match(
       checked.reader,
-      /^Meta stub · muse-spark-1\.3 · [\d.]+ s · 1 finding, 1 confirmed by Viewer$/,
+      /^Meta stub · muse-spark-1\.3 · [\d.]+ s · 1 finding, 1 confirmed$/,
     );
     assert.equal(checked.findings.length, 1);
     const [finding] = checked.findings;
@@ -821,8 +929,9 @@ try {
     assert.equal(finding!.summary, named.finding);
     assert.equal(
       finding!.reason,
-      'Viewer measured 48.00 mm between holes 4 and 5 along x; the drawing gives 50 mm.',
+      'Viewer measured 48.00 mm between holes 4 and 5 along x; the quoted drawing requirement states 50 mm. Review that it applies to the highlighted part.',
     );
+    assert.ok(finding!.requirement.includes('Source verified'), finding!.requirement);
     assert.deepEqual(finding!.notes, [
       'Job 1042 drawing.pdf, page 1 · g6-PL60-B2-2buc.dxf',
       'Feature: outline from SAM 3.1, confidence 89%',
@@ -843,15 +952,163 @@ try {
     return { progress, finding };
   });
 
-  await step('The title collapses the panel and opens it again', async () => {
-    await page.evaluate(click('.check-panel-toggle'));
+  await step('Pin chrome collapses the check and pin/place keeps its content', async () => {
+    await actions.click('[data-plurid-control="pinned-collapse"]');
     const collapsed = await wait(panel, (state) => state.collapsed, 'the panel collapses');
     assert.equal(collapsed.hidden, true, 'Only the title bar shows');
-    assert.equal(collapsed.title, 'Check Job 1042 · 1 finding, 1 confirmed');
+    assert.equal(collapsed.title, 'Check Job 1042');
+    assert.equal(collapsed.status, '1 finding, 1 confirmed');
     await capture('panel-collapsed');
-    await page.evaluate(click('.check-panel-toggle'));
+    await actions.click('[data-plurid-control="pinned-collapse"]');
     await wait(panel, (state) => !state.collapsed && !state.hidden, 'the panel opens again');
-    return { title: collapsed.title };
+    await page.evaluate(pageCall(checkIdentity, checkID));
+    await actions.click('[data-plurid-control="pinned-place"]');
+    const placed = await wait(
+      panel,
+      (state) => state.open && !state.pinned,
+      'the check is placed in space',
+    );
+    assert.equal(placed.id, checkID);
+    assert.equal(
+      await page.evaluate(pageCall(checkIdentity, null)),
+      checkID,
+      'Place preserves the mounted content',
+    );
+    assert.ok(await page.evaluate(pageCall(activatePane, placed.paneID)));
+    await command('Pin plane');
+    await wait(panel, (state) => state.pinned, 'the same check is pinned again');
+    assert.equal(
+      await page.evaluate(pageCall(checkIdentity, null)),
+      checkID,
+      'Pin preserves the mounted content',
+    );
+    return { title: collapsed.title, status: collapsed.status, id: checkID };
+  });
+
+  await step('Review explicitly compares evidence; stacks undo, redo and restore', async () => {
+    const before = await wait(
+      spatial,
+      (state) => state.tree.some((node) => node.pinned),
+      'the pinned check is saved',
+    );
+    assert.equal(
+      before.workspace.panes.filter((pane) => pane.type === 'preview').length,
+      0,
+      'Checking alone opens no evidence planes',
+    );
+    const document = await wait(
+      checkDocument,
+      (value) => !!value.result,
+      'the completed check document is stored',
+    );
+    assert.equal(document.id, checkID);
+    assert.equal(document.result!.findings[0]!.grade.requirement?.status, 'source-verified');
+    assert.equal(document.sources.length, 7);
+    const folderID = before.workspace.panes.find(
+      (pane) => pane.type === 'folder' && pane.path === fabrication,
+    )!.id;
+    const folderBefore = placements(before, [folderID]);
+    await actions.button('Review evidence', '.check-finding');
+    const arranging = await wait(
+      spatial,
+      (state) => state.workspace.tiling?.panes.length === 3,
+      'three sources are compared',
+    );
+    const ids = arranging.workspace.tiling!.panes;
+    assert.deepEqual(
+      ids.map((id) => arranging.workspace.panes.find((pane) => pane.id === id)!.path).sort(),
+      [drawing, plate, request].sort(),
+      'Only exact captured source paths are opened',
+    );
+    const views = new Map<string, { width: number; height: number }>();
+    for (const file of [drawing, plate, request]) {
+      const view = await wait(
+        () => page.evaluate(pageCall(planeView, file)),
+        (value) =>
+          value.shown > 0.8 &&
+          value.width >= 300 &&
+          value.height >= 200 &&
+          value.coveredByPin < 0.05 &&
+          !value.failure,
+        path.basename(file) + ' is readable beside the pinned check',
+      );
+      views.set(arranging.workspace.panes.find((pane) => pane.path === file)!.id, view);
+    }
+    // Host tiling and debounced engine persistence are separate writes. The snapshot used for
+    // undo must contain the layout that is visibly rendered, not the preceding spawn positions.
+    const compared = await wait(
+      spatial,
+      (state) =>
+        ids.every((id) => {
+          const node = state.tree.find((node) => hostID(node) === id),
+            view = views.get(id)!;
+          return (
+            node && Math.abs(node.width - view.width) < 4 && Math.abs(node.height - view.height) < 4
+          );
+        }),
+      'the rendered tile geometry reaches persistent storage',
+    );
+    assert.deepEqual(
+      placements(compared, [folderID]),
+      folderBefore,
+      'The job folder stays in place',
+    );
+    const comparison = placements(compared, ids);
+    assert.equal(comparison.length, 3);
+    assert.equal(
+      new Set(comparison.map((item) => JSON.stringify(item.location))).size,
+      3,
+      'Sources have separate readable placements',
+    );
+    await writeFile(
+      path.join(evidence, 'comparison-arrangement.json'),
+      JSON.stringify({ views: [...views], comparison }, null, 2) + '\n',
+      { flag: 'wx' },
+    );
+    await capture('evidence-comparison');
+    await actions.button('Stack evidence', '.check-panel');
+    const stacked = await wait(
+      spatial,
+      (state) => Object.values(state.stacks).some((stack) => stack.planeIDs.length === 3),
+      'evidence forms a compact stack',
+    );
+    assert.notDeepEqual(placements(stacked, ids), comparison);
+    assert.deepEqual(placements(stacked, [folderID]), folderBefore);
+    await capture('evidence-stack');
+    await command('Undo arrangement');
+    await wait(
+      spatial,
+      (state) =>
+        Object.keys(state.stacks).length === 0 &&
+        isDeepStrictEqual(placements(state, ids), comparison),
+      'one undo restores comparison geometry and removes stack membership',
+    );
+    await command('Redo arrangement');
+    await wait(
+      spatial,
+      (state) =>
+        isDeepStrictEqual(state.stacks, stacked.stacks) &&
+        isDeepStrictEqual(placements(state, ids), placements(stacked, ids)),
+      'one redo restores stack membership and geometry',
+    );
+    await actions.button('Restore arrangement', '.check-panel');
+    const restored = await wait(
+      spatial,
+      (state) =>
+        !state.workspace.tiling &&
+        Object.keys(state.stacks).length === 0 &&
+        !isDeepStrictEqual(placements(state, ids), placements(stacked, ids)),
+      'restore returns the evidence to its earlier arrangement',
+    );
+    assert.deepEqual(placements(restored, [folderID]), folderBefore);
+    assert.equal((await panel()).id, checkID);
+    assert.equal((await panel()).pinned, true);
+    assert.equal(
+      await page.evaluate(buttonState('Restore arrangement', '.check-panel')),
+      'missing',
+    );
+    await capture('evidence-restored');
+    return { checkID, sources: ids, comparison, stacks: stacked.stacks };
   });
 
   await step('The tour shows every stop on the real engine', async () => {
@@ -1122,7 +1379,7 @@ try {
   });
 
   await step('Closed and opened again, the check is kept', async () => {
-    await page.evaluate(click('.check-panel [aria-label="Close the check"]'));
+    await actions.click('[data-plurid-control="pinned-close"]');
     await wait(panel, (state) => !state.open, 'the panel closes');
     await selectFolder(job);
     const rows = await offered(
@@ -1132,12 +1389,10 @@ try {
       'Check laser job… offers the kept check',
     );
     const offer = rows.rows.find((row) => row.selected)!;
-    assert.match(
-      offer.detail,
-      /^Show the check from \d{2}:\d{2}: 1 finding, 1 confirmed by Viewer$/,
-    );
+    assert.match(offer.detail, /^Show the check from \d{2}:\d{2}: 1 finding, 1 confirmed by Viewer$/);
     await runSelected('Check laser job…');
     const shown = await wait(panel, (state) => !!state.since, 'Checked at …');
+    assert.equal(shown.id, checkID, 'Reopening uses the same document');
     assert.match(shown.since, /^Checked at \d{2}:\d{2} · Run again$/);
     assert.equal(shown.stale, '', 'The job has not changed since');
     assert.equal(shown.correction, 'Saved: pitch 48.00 mm → 50.00 mm, measured again.');
@@ -1250,7 +1505,7 @@ try {
 
   await step('Dark pages turn the PDF page dark and back', async () => {
     // the check is left collapsed in its workspace, to find it so on return
-    await page.evaluate(click('.check-panel-toggle'));
+    await actions.click('[data-plurid-control="pinned-collapse"]');
     await wait(panel, (state) => state.collapsed, 'the panel collapses');
     await offered(
       'Job drawing',
@@ -1305,18 +1560,195 @@ try {
     await runSelected('Laser jobs');
     const back = await wait(panel, (state) => state.open, 'the check in its own workspace');
     assert.equal(back.collapsed, true, 'Collapsed, as it was left');
-    assert.equal(back.title, 'Check Job 1042 · Handoff saved');
-    await page.evaluate(click('.check-panel-toggle'));
+    assert.equal(back.title, 'Check Job 1042');
+    assert.equal(back.status, 'Handoff saved');
+    await actions.click('[data-plurid-control="pinned-collapse"]');
     const opened = await wait(panel, (state) => !state.collapsed, 'the panel opens');
     assert.equal(opened.correction, 'Saved: pitch 48.00 mm → 50.00 mm, measured again.');
     await capture('panel-back');
     return { title: back.title };
   });
+
+  await step('Cold restart restores the check, pin and reversible evidence stack', async () => {
+    await actions.button('Compare evidence', '.check-panel');
+    await wait(
+      spatial,
+      (state) => state.workspace.tiling?.panes.length === 3,
+      'the evidence is compared again',
+    );
+    await actions.button('Stack evidence', '.check-panel');
+    const stacked = await wait(
+      spatial,
+      (state) => Object.values(state.stacks).some((stack) => stack.planeIDs.length === 3),
+      'a compact stack is saved',
+    );
+    const stack = Object.values(stacked.stacks).find((item) => item.planeIDs.length === 3)!;
+    const check = await panel();
+    const document = await checkDocument();
+    assert.equal(Object.keys(document.corrections).length, 1);
+    assert.equal(document.handoffs.length, 1);
+    assert.equal(document.result?.findings[0]?.grade.requirement?.status, 'source-verified');
+    await actions.click('[data-plurid-control="pinned-collapse"]');
+    await wait(panel, (state) => state.collapsed, 'the pinned check is collapsed for restart');
+    await capture('before-restart');
+    await viewer.close(page);
+    appOpen = false;
+    viewer = await ownedApp(binary, profile, { label: 'native-fabrication-restarted' });
+    appOpen = true;
+    appEvidence.push(viewer.evidenceDirectory);
+    await connect();
+    const reopened = await wait(
+      panel,
+      (state) => state.id === checkID && state.open && !!state.handoff,
+      'the durable result loads without rerunning the model',
+    );
+    assert.equal(reopened.paneID, check.paneID, 'The workspace restores the same check pane');
+    assert.equal(reopened.pinned, true);
+    assert.equal(reopened.collapsed, true);
+    assert.equal(reopened.handoffPath, handoff);
+    assert.equal(reopened.correction, 'Saved: pitch 48.00 mm → 50.00 mm, measured again.');
+    assert.equal(calls.length, 2, 'Restart makes no model or segmentation request');
+    const restored = await wait(
+      spatial,
+      (state) => isDeepStrictEqual(state.stacks, stacked.stacks),
+      'the persisted stack includes its return placements',
+    );
+    const ids = stack.planeIDs.map((id) =>
+      hostID(restored.tree.find((node) => node.planeID === id)!),
+    );
+    assert.deepEqual(placements(restored, ids), placements(stacked, ids));
+    const reopenedDocument = await checkDocument();
+    assert.deepEqual(reopenedDocument.result, document.result);
+    assert.deepEqual(reopenedDocument.corrections, document.corrections);
+    assert.deepEqual(reopenedDocument.handoffs, document.handoffs);
+    await capture('after-restart');
+    assert.ok(
+      await page.evaluate(pageCall(activatePane, ids[0]!)),
+      'The front evidence plane is mounted',
+    );
+    await command('Unstack planes');
+    await wait(
+      spatial,
+      (state) =>
+        Object.keys(state.stacks).length === 0 &&
+        stack.planeIDs.every((id) =>
+          isDeepStrictEqual(
+            state.tree.find((node) => node.planeID === id)?.location,
+            stack.previous[id]!.location,
+          ),
+        ),
+      'unstack after restart restores every saved return placement',
+    );
+    await actions.click('[data-plurid-control="pinned-collapse"]');
+    await actions.button('Compare evidence', '.check-panel');
+    await wait(
+      spatial,
+      (state) => state.workspace.tiling?.panes.length === 3,
+      'the restored check can review its sources again',
+    );
+    await capture('restart-evidence-comparison');
+    return {
+      id: checkID,
+      paneID: check.paneID,
+      stack,
+      modelCalls: calls.length,
+      evidence: viewer.evidenceDirectory,
+    };
+  });
+
+  await step('Model data access choices remain fully readable at both Settings sizes', async () => {
+    await page.evaluate(pageCall(() => window.viewer.openSettings('settings.providers')));
+    const settings = await viewer.connect(true);
+    const controls = new NativeInteractions({ ...settings, until });
+    await wait(
+      () => settings.evaluate(exists('.model-data-permission')),
+      Boolean,
+      'Models settings are ready',
+    );
+    const before = await settings.evaluate(
+      pageCall((id: string) => window.viewer.providerPermissionGet(id), provider.id),
+    );
+    await controls.click('.model-data-permission > summary');
+    const reports = [];
+    for (const [width, height] of [
+      [900, 640],
+      [760, 540],
+    ]) {
+      await settings.command('Emulation.setDeviceMetricsOverride', {
+        width,
+        height,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await settings.evaluate(
+        pageCall(() =>
+          document
+            .querySelector('.model-data-permission .settings-actions')
+            ?.scrollIntoView({ block: 'center' }),
+        ),
+      );
+      await controls.click('[aria-label="Data to allow for Meta stub"]');
+      const menu = await wait(
+        () =>
+          settings.evaluate(
+            pageCall(() => {
+              const list = document.querySelector<HTMLElement>('.choice-menu .command-results');
+              return {
+                scrolling: !!list && list.scrollHeight > list.clientHeight + 1,
+                rows: [
+                  ...document.querySelectorAll<HTMLElement>('.choice-menu .command-result'),
+                ].map((row) => {
+                  const title = row.querySelector<HTMLElement>('.command-result-text > span')!,
+                    detail = row.querySelector<HTMLElement>('small')!;
+                  const rect = row.getBoundingClientRect();
+                  return {
+                    title: title.textContent.trim(),
+                    detail: detail?.textContent.trim() ?? '',
+                    clipped:
+                      !detail ||
+                      title.scrollWidth > title.clientWidth + 1 ||
+                      detail.scrollHeight > detail.clientHeight + 1 ||
+                      detail.scrollWidth > detail.clientWidth + 1,
+                    ellipsis: !!detail && getComputedStyle(detail).textOverflow === 'ellipsis',
+                    visible:
+                      rect.top >= 0 &&
+                      rect.bottom <= innerHeight &&
+                      rect.left >= 0 &&
+                      rect.right <= innerWidth,
+                  };
+                }),
+              };
+            }),
+          ),
+        (value) => value.rows.length === 4 && value.rows.every((row) => row.visible),
+        'all four data choices fit in Settings',
+      );
+      assert.equal(menu.scrolling, false, 'The permission choices need no menu scroll');
+      assert.deepEqual(
+        menu.rows.map((row) => row.detail),
+        Object.values(modelDataLabels).map((text) => `Includes ${text}.`),
+      );
+      assert.ok(
+        menu.rows.every((row) => !row.clipped && !row.ellipsis),
+        JSON.stringify(menu),
+      );
+      const file = path.join(evidence, `models-data-access-${width}.png`);
+      await controls.capture(file);
+      screenshots.push(file);
+      reports.push({ width, height, menu });
+      await controls.key('Escape', 'Escape');
+    }
+    const after = await settings.evaluate(
+      pageCall((id: string) => window.viewer.providerPermissionGet(id), provider.id),
+    );
+    assert.deepEqual(after, before, 'Opening and reading choices grants no new data permission');
+    return reports;
+  });
 } catch (error) {
   failure = error;
 } finally {
   try {
-    await viewer.close(page);
+    if (appOpen) await viewer.close(page);
   } catch (error) {
     failure ??= error;
   }
@@ -1335,6 +1767,7 @@ try {
         version: 1,
         binary,
         root,
+        appEvidence,
         endpoint: provider.endpoint,
         passed:
           !failure && steps.every((item) => item.passed) && !exceptions.length && !crashes.length,

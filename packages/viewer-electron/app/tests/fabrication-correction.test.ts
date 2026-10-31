@@ -24,7 +24,22 @@ const transforms = () =>
     'unused',
     async () => {},
     async () => Buffer.alloc(0),
+    undefined,
+    {},
+    undefined,
+    async () => {},
   );
+
+it('requires a desktop check authority before a correction can execute', async () => {
+  const unreviewed = new Transforms(
+    'unused',
+    async () => {},
+    async () => Buffer.alloc(0),
+  );
+  await expect(unreviewed.validateReview(plan, ['/unreviewed.dxf'])).rejects.toThrow(
+    'Save this correction from its reviewed fabrication check.',
+  );
+});
 
 it('writes the corrected copy beside the original, measures it again and keeps the original', async () => {
   const root = await temporaryRoot('viewer-fabrication-correction-');

@@ -43,6 +43,9 @@ const candidateBudget = 512_000_000;
 /** A candidate is a window-owned capability, never a renderer-supplied staging path.
  * Export copies those measured bytes through the ordinary pinned operation journal. */
 export class OptimizationReviews implements TransformExecutor {
+  validateReview(plan: TransformPlan, sources: readonly string[]): Promise<void> {
+    return this.engine.validateReview?.(plan, sources) ?? Promise.resolve();
+  }
   private candidates = new Map<string, Candidate>();
   private pending = new Map<string, { owner: number; source: string; abort: AbortController }>();
   private comparisons = new Map<number, { id: string; resources: string[] }>();

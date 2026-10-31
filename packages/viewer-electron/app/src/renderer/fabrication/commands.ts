@@ -7,6 +7,7 @@ import { folderContents, jobContents } from '../../domain/fabrication/job-files'
 import { listText } from '../../domain/fabrication/plan';
 import { countText } from '../../domain/layout/nesting/format';
 import { fileName } from '../../domain/tours/tour';
+import { activeWorkspace } from '../state/store';
 import {
   checkSession,
   clockText,
@@ -17,6 +18,9 @@ import {
   playCheckTour,
   prepareCutSheets,
   saveCorrection,
+  reviewEvidence,
+  stackEvidence,
+  restoreEvidenceArrangement,
 } from './check';
 import { knownJob } from './contents';
 import { gradedCheck, gradedText, sameJob } from './spoken';
@@ -129,7 +133,7 @@ function unavailableText(context: CommandContext): string {
     : `${job} holds no DXF or DWG file.`;
 }
 
-export function checkCommands(): CommandDefinition[] {
+export function checkCommands(workspace?: WorkspaceController): CommandDefinition[] {
   return [
     {
       id: 'check-laser-job',
@@ -152,7 +156,8 @@ export function checkCommands(): CommandDefinition[] {
       },
       when: (context) => !!checked(context),
       unavailable: unavailableText,
-      run: (context) => openCheck(checked(context)!.paths, context.workspaceID, context.paneID),
+      run: (context) =>
+        openCheck(checked(context)!.paths, context.workspaceID, context.paneID, workspace),
       spoken: {
         phrase: (context) => {
           const target = checked(context);
@@ -167,7 +172,7 @@ export function checkCommands(): CommandDefinition[] {
           const open = checkSession();
           // a check of this job already open, running or graded, is waited for, not begun again
           if (!open || !sameJob(open.paths, paths) || ['empty', 'failed'].includes(open.phase))
-            await openCheck(paths, context.workspaceID, context.paneID);
+            await openCheck(paths, context.workspaceID, context.paneID, workspace);
           return gradedText(await gradedCheck(paths, progress, signal));
         },
       },
@@ -178,7 +183,12 @@ export function checkCommands(): CommandDefinition[] {
 /** The open check, while its result is current: what its next steps act on. */
 function graded() {
   const current = checkSession();
-  return current?.phase === 'checked' && current.result && !current.stale ? current : undefined;
+  return current?.phase === 'checked' &&
+    current.workspaceID === activeWorkspace().id &&
+    current.result &&
+    !current.stale
+    ? current
+    : undefined;
 }
 const checkedJob = () => checkSession()?.opening?.job ?? 'the job';
 /** Why a next step is not offered: no check, or one older than the job. */
@@ -207,6 +217,32 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
   const subject = () => graded()?.opening?.job;
   return [
     {
+      id: 'review-check-evidence',
+      label: 'Review evidence',
+      group: 'Files',
+      icon: 'side-by-side',
+      aliases: ['compare evidence', 'inspect finding', 'show proof'],
+      when: () => !!graded(),
+      unavailable: notGraded,
+      run: () => reviewEvidence(workspace, graded()!),
+    },
+    {
+      id: 'stack-check-evidence',
+      label: 'Stack evidence',
+      group: 'Files',
+      icon: 'copy',
+      when: () => !!graded()?.evidencePaneIDs?.length,
+      run: () => stackEvidence(workspace, graded()!),
+    },
+    {
+      id: 'restore-check-arrangement',
+      label: 'Restore evidence arrangement',
+      group: 'Files',
+      icon: 'left',
+      when: () => !!graded()?.evidenceBefore,
+      run: () => restoreEvidenceArrangement(workspace, graded()!),
+    },
+    {
       id: 'check-cut-sheets',
       label: 'Prepare cut sheets',
       group: 'Files',
@@ -225,7 +261,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
         after: afterCheck,
         run: async () => {
           const parts = graded()!.result!.parts.length;
-          prepareCutSheets(workspace);
+          await prepareCutSheets(workspace);
           return `Opened ${countText(parts, 'part')} in a Layout plane`;
         },
       },

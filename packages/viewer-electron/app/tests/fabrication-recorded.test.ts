@@ -1,21 +1,25 @@
 /**
  * ANSWERS MUSE SPARK GAVE, CHECKED AGAIN: two answers of the live evaluation, run through Viewer's
  * check service on the generated jobs they answered. In J1's quick run one misplaced hole gave
- * two findings, a 60 mm pitch that reads 58 and a 28 mm one that reads 30: they become one finding
- * with one correction and one stop for both. In J2's first run the answer read Bracket B2 from the
+ * two findings, a 60 mm pitch that reads 58 and a 28 mm one that reads 30: after human verification
+ * of those bare dimensions they become one finding with one correction and one stop for both.
+ * In J2's first run the answer read Bracket B2 from the
  * request with every field empty and left Spacer S4 out: Viewer says so, part by part. Each answer
  * is as it came, with the `feature` boxes the schema now asks for set to null.
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FabricationAnswer } from '../src/domain/fabrication/answer';
 import type { CheckProgress, CheckRecord, CheckResult } from '../src/domain/fabrication/check';
+import type { Segmenter } from '../src/desktop/models/segmentation';
 import { FabricationChecks } from '../src/desktop/fabrication/service';
 import { samSegmenter } from '../src/desktop/models/segmentation';
 import { correctDrawing } from '../src/domain/fabrication/correction';
 import { correctionProposal } from '../src/domain/fabrication/plan';
+import { findingRequirementKey } from '../src/domain/fabrication/requirements';
 import { defaultSettings } from '../src/domain/services';
+import { boxRegion } from '../src/domain/files/regions';
 import { drawPagesInNode } from '../tools/fabrication/live-pages';
 import { liveJobs } from '../tools/playground/samples/fabrication-jobs';
 import { temporaryRoot } from '../tools/temporary';
@@ -214,36 +218,72 @@ beforeAll(async () => {
 });
 
 /** The job written to a folder of its own, checked with the answer it got. */
-async function check(id: string, answer: FabricationAnswer) {
+async function check(
+  id: string,
+  answer: FabricationAnswer,
+  confirmations: readonly { finding: string; value: number }[] = [],
+  segmenter: Segmenter = samSegmenter(async () => samReply, 'Muse Spark'),
+) {
   const job = liveJobs().find((item) => item.truth.id === id)!;
-  const folder = path.join(root, job.truth.job);
+  const folder = path.join(await mkdtemp(path.join(root, 'run-')), job.truth.job);
   await mkdir(folder);
   for (const file of job.files) await writeFile(path.join(folder, file.name), file.bytes);
   const progress: CheckProgress[] = [];
+  const generate = vi.fn(async () => structuredClone(answer));
   const checks = new FabricationChecks({
     settings: () => ({ ...defaultSettings(root), providers: [meta] }),
     access: async () => {},
     permission: async () => allowed('images'),
-    generate: vi.fn(async () => structuredClone(answer)),
+    generate,
     encodePhoto: async () => Buffer.from(jpeg(1600, 1200)),
-    segmenter: () => samSegmenter(async () => samReply, 'Muse Spark'),
+    segmenter: () => segmenter,
     progress: (_owner, step) => progress.push(step),
   });
   const opened = await checks.request({ kind: 'open', paths: [folder] }, 1);
   if (opened.kind !== 'opened') throw new Error('Expected an inventory.');
   const { pages } = await drawPagesInNode(opened.sources);
-  const result = (await checks.request(
+  let result = (await checks.request(
     { kind: 'run', id: opened.id, providerID: meta.id, pages },
     1,
   )) as CheckResult;
+  const initial = structuredClone(result);
+  const reviews: CheckResult[] = [];
+  for (const confirmation of confirmations) {
+    const confirmed = await checks.request(
+      {
+        kind: 'confirm',
+        id: opened.id,
+        key: findingRequirementKey(confirmation.finding),
+        value: confirmation.value,
+        unit: 'mm',
+      },
+      1,
+    );
+    if (confirmed.kind !== 'result') throw new Error('Expected a reviewed result.');
+    result = confirmed;
+    reviews.push(structuredClone(result));
+  }
   const record = JSON.parse(checks.handoff(opened.id)!.record) as CheckRecord;
   checks.close();
-  return { result, record, progress };
+  return { id: opened.id, initial, result, record, progress, reviews, generate };
 }
 
 describe('one cause, one finding', () => {
-  it('shows one misplaced hole as one finding, with one correction and one stop per file', async () => {
-    const { result, record, progress } = await check('J1', quickJ1);
+  it('joins the recorded readings only after both bare dimensions are human-confirmed', async () => {
+    const { id, initial, result, record, progress, reviews, generate } = await check(
+      'J1',
+      quickJ1,
+      [
+        { finding: 'F1', value: 60 },
+        { finding: 'F2', value: 28 },
+      ],
+    );
+    const unreviewed = initial.findings.filter((item) => item.origin === 'model');
+    expect(unreviewed).toHaveLength(2);
+    expect(unreviewed.map((item) => item.grade.status)).toEqual(['unverified', 'unverified']);
+    expect(unreviewed.every((item) => !item.correction)).toBe(true);
+    expect(reviews[0]!.findings.filter((item) => item.origin === 'model')).toHaveLength(2);
+    expect(generate).toHaveBeenCalledOnce();
     const model = result.findings.filter((item) => item.origin === 'model');
     expect(model).toHaveLength(1);
     const [cause] = model as [(typeof model)[number]];
@@ -257,6 +297,7 @@ describe('one cause, one finding', () => {
         finding.id,
         finding.drawing!.quote,
         grade.status,
+        grade.requirement?.status,
         grade.reason,
       ]),
     ).toEqual([
@@ -264,13 +305,15 @@ describe('one cause, one finding', () => {
         'F1',
         '60',
         'confirmed',
-        'Viewer measured 58.00 mm between holes 1 and 2 along x; the drawing gives 60 mm.',
+        'human-confirmed',
+        'Viewer measured 58.00 mm between holes 1 and 2 along x; you confirmed 60 mm. Review that it applies to the highlighted part.',
       ],
       [
         'F2',
         '28',
         'confirmed',
-        'Viewer measured 30.00 mm between holes 2 and 3 along x; the drawing gives 28 mm.',
+        'human-confirmed',
+        'Viewer measured 30.00 mm between holes 2 and 3 along x; you confirmed 28 mm. Review that it applies to the highlighted part.',
       ],
     ]);
 
@@ -286,6 +329,7 @@ describe('one cause, one finding', () => {
       measured: 58,
       move: ['9'],
       also: [{ from: '12', to: '11', axis: 'x', target: 28, measured: 30 }],
+      review: { check: id, finding: 'F1' },
     });
     expect(correctionProposal(correction!.plan, correction!.name)).toBe(
       'pitches along x from 58.00 mm to 60.00 mm and from 30.00 mm to 28.00 mm, moving 2 holes, saved as g5-TP40-A1-4buc (corrected).dxf beside the original, which is kept',
@@ -324,16 +368,88 @@ describe('one cause, one finding', () => {
     expect(dxf?.kind === 'dxf' && dxf.measure).toHaveLength(2);
 
     // the record keeps every reading's grade, the cause and its one correction
-    expect(record.grades.map((grade) => grade.finding)).toEqual(['F1', 'F2']);
+    expect(record.grades.map((grade) => grade.finding)).toEqual([
+      'F1',
+      'F2',
+      'F3',
+      'F4',
+      'F5',
+      'F6',
+    ]);
+    expect(record.grades.slice(2).every((grade) => grade.status === 'unverified')).toBe(true);
+    // The recorded multi-part passages still cannot establish either part's quantity/thickness.
+    expect(result.parts.every((part) => !part.quantity && !part.thickness && part.question)).toBe(
+      true,
+    );
     expect(record.causes).toEqual([
       { finding: 'F1', readings: ['F1', 'F2'], summary: cause.finding.summary },
     ]);
-    expect(record.corrections).toEqual([{ finding: 'F1', plan: correction!.plan }]);
+    const { review: _review, ...recordedPlan } = correction!.plan;
+    expect(record.corrections).toEqual([{ finding: 'F1', plan: recordedPlan }]);
     expect(record.tour).toEqual({ stops: 4, skipped: [] });
     // no feature boxed, so SAM has nothing to outline
     expect(progress.map((step) => step.text)).toEqual([
       'Muse Spark is reading the request, 1 drawing page, 1 photo and 2 DXF parts',
+      'Check completed.',
     ]);
+  }, 30_000);
+
+  it('describes the accepted targets when human confirmation corrects the model numbers', async () => {
+    const answer = structuredClone(quickJ1);
+    answer.findings[0]!.drawing!.value = 61;
+    answer.findings[1]!.drawing!.value = 29;
+    const { result } = await check('J1', answer, [
+      { finding: 'F1', value: 60 },
+      { finding: 'F2', value: 28 },
+    ]);
+    const [cause] = result.findings.filter((item) => item.origin === 'model');
+    expect(
+      cause!.readings!.map(({ finding, grade }) => [finding.drawing!.value, grade.requirement]),
+    ).toEqual([
+      [61, expect.objectContaining({ status: 'human-confirmed', value: 60 })],
+      [29, expect.objectContaining({ status: 'human-confirmed', value: 28 })],
+    ]);
+    expect(cause!.finding.summary).toBe(
+      'Hole 2 is 2.00 mm off along x: the 60 mm pitch reads 58.00 mm and the 28 mm pitch reads 30.00 mm. Moving it, with hole 5, fixes both.',
+    );
+    expect(cause!.correction!.plan.target).toBe(60);
+    expect(cause!.correction!.plan.also![0]!.target).toBe(28);
+  }, 30_000);
+
+  it('preserves each feature outline and updates its stop when confirmation merges findings', async () => {
+    const answer = structuredClone(quickJ1);
+    const boxes = [box(0.1, 0.3, 0.2, 0.4), box(0.6, 0.3, 0.7, 0.4)];
+    answer.findings.forEach((finding, index) => {
+      finding.drawing!.feature = boxes[index]!;
+    });
+    const segment = vi.fn<Segmenter['segment']>(async (_picture, prompt) =>
+      prompt.kind === 'box'
+        ? { polygon: boxRegion(prompt.box), source: 'segmentation', label: 'Recorded outline' }
+        : undefined,
+    );
+    const { initial, result, record } = await check(
+      'J1',
+      answer,
+      [
+        { finding: 'F1', value: 60 },
+        { finding: 'F2', value: 28 },
+      ],
+      { name: 'Fixture segmenter', segment },
+    );
+    expect(segment).toHaveBeenCalledTimes(2);
+    const before = initial.findings
+      .flatMap((item) => item.outlines)
+      .filter((outline) => outline.kind === 'feature');
+    const after = result.findings
+      .flatMap((item) => item.outlines)
+      .filter((outline) => outline.kind === 'feature');
+    expect(after.map((outline) => outline.box)).toEqual(boxes);
+    expect(after.map((outline) => outline.region)).toEqual(before.map((outline) => outline.region));
+    expect(after[0]!.region).not.toEqual(after[1]!.region);
+    expect(after.map((outline) => outline.source)).toEqual(['segmentation', 'segmentation']);
+    expect(after.map((outline) => outline.stop)).toEqual(['stop-2', 'stop-2']);
+    const stops = new Set(result.tour.stops.map((stop) => stop.id));
+    expect(record.segmentation.every((outline) => stops.has(outline.stop!))).toBe(true);
   }, 30_000);
 });
 

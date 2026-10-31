@@ -170,18 +170,27 @@ then measure every DXF part itself and say where the job disagrees with itself: 
      fixes both." Each pitch's grade and quote is listed under it.
    - "Muse Spark did not read a quantity for Bracket B2 from the request" means the answer left it
      out. Read the request yourself, or choose **Run again**.
-5. For a confirmed pitch, read the proposed correction and choose **Save g6-PL60-B2-2buc
+5. Choose **Review evidence** on a finding. Viewer opens the exact drawing, DXF and request as
+   linked planes and compares them at a readable size. **Stack evidence** compacts those views;
+   **Compare evidence** spreads them out again. **Restore arrangement** restores their earlier
+   positions. Other planes keep their positions.
+   - **Source verified** means the cited passage and its value were checked against the file.
+     **Human confirmed** records a value you reviewed and entered yourself.
+   - For an unverified requirement, expand its source review, open the source, choose **Confirm from
+     source…** and enter the value with its unit. A scanned or ambiguous source needs this review. A
+     model's number alone cannot authorize a correction or enter cut sheets.
+6. For a confirmed pitch, read the proposed correction and choose **Save g6-PL60-B2-2buc
    (corrected).dxf**. The copy is saved beside the original, measured again, and the panel says
    "Saved: pitch 48.00 mm → 50.00 mm, measured again." Nothing is changed until you choose it.
-6. Choose **Play the tour** to be shown each finding: the request's line, the drawing with the
+7. Choose **Play the tour** to be shown each finding: the request's line, the drawing with the
    quoted dimension boxed and the hole it is about outlined, the DXF holes with the pitch Viewer
    measured. The panel collapses to its title bar while the tour plays and opens again when it ends.
    **Esc** stops it.
-7. Under **Cut sheets**, read each part's quantity and thickness and where it comes from, such as "2
+8. Under **Cut sheets**, read each part's quantity and thickness and where it comes from, such as "2
    pieces · 6 mm, both from the request". To choose the sheets yourself, choose **Prepare cut
    sheets**: the Nesting plane opens on the job's parts, the corrected copy in place of its
    original, a tab per thickness. Wait for **Checked** on each tab.
-8. Choose **Export handoff**. When a thickness is not nested yet, the button reads **Nest and export
+9. Choose **Export handoff**. When a thickness is not nested yet, the button reads **Nest and export
    handoff**: Viewer nests it first as the Nesting plane starts it, saying which thickness and how
    much, such as "Nesting 6 mm: 3 parts, 8 pieces…". A folder such as "Job 1042 handoff" appears in
    the job's folder, holding `Cut sheets/`, `Evidence/` copies of the job's files,
@@ -190,18 +199,18 @@ then measure every DXF part itself and say where the job disagrees with itself: 
    open the folder in the check's workspace. **File operations** offers Undo.
    - If a part does not fit the sheet, or a drawing cannot be read, the panel names it and exports
      nothing. Nest that thickness under **Prepare cut sheets**, then export again.
-   - A part whose quantity the job leaves open is never nested for you: set it in the Nesting plane
-     first.
+   - A part whose quantity or thickness remains unresolved is never nested for you. Review its
+     requirement in the check first.
 
-When the panel covers a plane you want to see, choose its title: it collapses to the title and a
-short status, such as "Check Job 1042 · 3 findings, 2 confirmed", or the step that runs and its
-seconds. Choose the title again to open it. The window keeps your choice until it closes.
+The check opens as a pinned plane. Its title bar offers **Collapse pinned plane**, **Place plane in
+space** and **Close plane**. **Pin plane** in the command palette pins a placed check or note again.
+Pinning, placement and stacks participate in arrangement Undo and survive workspace restoration.
 
-Closing the panel keeps the check while the window is open, for its last 5 jobs. Choose **Check
-laser job…** on the job again and the panel shows it at once, with "Checked at 22:14 · Run again",
-its saved corrections and its handoff. If a file changed since, the panel names it, such as
-"g6-PL60-B2-2buc.dxf changed since the check at 22:14", dims the findings as from before, and **Run
-again** checks the job as it is now.
+Closing the plane keeps its check on this device and does not cancel a running check. Choose **Check
+laser job…** on the job again to reopen its saved findings, corrections and handoff without another
+model request. A run interrupted by an app restart waits for **Run again**. If a file changed since,
+the check names it, such as "g6-PL60-B2-2buc.dxf changed since the check at 22:14", dims the
+findings as from before, and **Run again** checks the job as it is now.
 
 Without a check, nesting reads each part's thickness and quantity from its name when it follows a
 convention Viewer reads, such as `g6-MB20-A1-4buc.dxf`: 6 mm, part MB20-A1, 4 pieces. Select every

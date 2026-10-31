@@ -4,7 +4,7 @@
  * jobs of tools/playground/samples/fabrication-jobs.ts. It writes the jobs, checks each one, scores
  * the result against the job's truth (live-score.ts), and writes `summary.md`, `answers.json` with
  * every raw reply, and `truth.json` to --out, which must be new or empty. The key comes from
- * META_API_KEY only; it is held in memory, never printed, written or logged.
+ * META_API_KEY for this CLI. The main-only profile entry instead supplies its desktop authentication.
  *
  *   node --import tsx tools/fabrication/evaluate-live.ts --out <folder>
  *     [--jobs J1,J7] [--repeat <n>] [--model <id>] [--effort <value>] [--retries <n>]
@@ -20,6 +20,7 @@ import type { ReasoningEffort } from '../../src/domain/models/providers';
 import type { ModelProvider } from '../../src/domain/services';
 import type { ModelPermissions } from '../../src/desktop/models/model-permissions';
 import type { PhotoEncoder } from '../../src/desktop/fabrication/inputs';
+import type { EvaluationProvider } from '../../src/desktop/fabrication/evaluation';
 import type { LiveJob } from '../playground/samples/fabrication-jobs';
 import type {
   AttemptLog,
@@ -42,7 +43,9 @@ import { errorMessage } from '../../src/domain/errors';
 import { FabricationChecks } from '../../src/desktop/fabrication/service';
 import { photoPlan, requestInput, requestText } from '../../src/desktop/fabrication/inputs';
 import { ModelPermissionRequired } from '../../src/desktop/models/model-permissions';
-import { Credentials, Providers } from '../../src/desktop/models/providers';
+import { configuredEvaluationProvider } from '../../src/desktop/fabrication/evaluation';
+import { setAssetRoot } from '../../src/desktop/native/assets';
+import { extractDocument } from '../../src/desktop/previews/formats';
 import { samSegmenter } from '../../src/desktop/models/segmentation';
 import { transformImage } from '../../src/desktop/transforms/image';
 import { liveJobs } from '../playground/samples/fabrication-jobs';
@@ -52,7 +55,11 @@ import { liveMetrics, liveSummary, scoreRun } from './live-score';
 export interface LiveOptions {
   /** A new or empty folder for the jobs and the results. */
   out: string;
-  key: string;
+  /** The original environment-key CLI. A desktop caller supplies authentication instead. */
+  key?: string;
+  authentication?: EvaluationProvider;
+  /** Recorded response replay has no network and never represents a new live evaluation. */
+  replay?: { source: string };
   /** Job ids, J1 to J8; every job unless given. */
   jobs?: readonly string[];
   repeat?: number;
@@ -96,25 +103,6 @@ const processorPhoto: PhotoEncoder = async (bytes, signal) => {
   return transformImage(processors, bytes, photoPlan);
 };
 
-/** The key from META_API_KEY, held in memory only: never saved, printed or logged. */
-class EnvironmentKey extends Credentials {
-  constructor(
-    private readonly secret: string,
-    folder: string,
-  ) {
-    super(folder, refuse, refuse);
-  }
-  override async forProvider(): Promise<string> {
-    return this.secret;
-  }
-  override async get(): Promise<string> {
-    return this.secret;
-  }
-}
-const refuse = async (): Promise<never> => {
-  throw new Error('The evaluation keeps its key in memory only.');
-};
-
 /** Token counts from an OpenAI-style `usage` or a Llama-style `metrics` list, when given. */
 export function replyUsage(text: string): TokenUsage | undefined {
   let body: { usage?: Record<string, unknown>; metrics?: { metric?: unknown; value?: unknown }[] };
@@ -150,6 +138,7 @@ function recorded(
   request: typeof fetch,
   log: (call: CallLog) => void,
   now: () => number,
+  publicText: (value: string) => string,
 ): typeof fetch {
   return async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
@@ -168,7 +157,7 @@ function recorded(
         milliseconds: now() - started,
         sent,
         ...(usage ? { usage } : {}),
-        reply,
+        reply: publicText(reply),
       });
       return new Response(reply, {
         status: response.status,
@@ -176,7 +165,13 @@ function recorded(
         headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' },
       });
     } catch (error) {
-      log({ route, status, milliseconds: now() - started, sent, error: errorMessage(error) });
+      log({
+        route,
+        status,
+        milliseconds: now() - started,
+        sent,
+        error: publicText(errorMessage(error)),
+      });
       throw error;
     }
   };
@@ -234,6 +229,8 @@ async function writeJobs(folder: string, jobs: readonly LiveJob[]) {
 const json = (value: unknown) => JSON.stringify(value, null, 2) + '\n';
 
 export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
+  // A tool's Electron Resources belong to Electron, not the Viewer source application.
+  setAssetRoot(false, appRoot);
   const all = liveJobs();
   const unknown = (options.jobs ?? []).filter((id) => !all.some((job) => job.truth.id === id));
   if (unknown.length)
@@ -245,11 +242,33 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
     : all;
   const repeat = options.repeat ?? 1,
     retries = options.retries ?? 1;
+  if (!Number.isInteger(repeat) || repeat < 1 || repeat > 3)
+    throw new Error('A live evaluation runs each job between 1 and 3 times.');
+  if (!Number.isInteger(retries) || retries < 0 || retries > 2)
+    throw new Error('A live evaluation allows between 0 and 2 retries per run.');
+  if (options.authentication && (options.key || options.model || options.effort))
+    throw new Error('A configured evaluation uses its captured provider settings.');
+  if (!options.authentication && !options.key)
+    throw new Error('The evaluation needs META_API_KEY or desktop authentication.');
+  const defaultProvider: ModelProvider = {
+    id: 'meta-live-evaluation',
+    name: 'Meta',
+    kind: 'meta',
+    endpoint: providerPresets.meta.endpoint,
+    model: options.model ?? providerPresets.meta.model!,
+    allowContent: false,
+    ...(options.effort ? { effort: options.effort } : {}),
+  };
+  const authentication =
+    options.authentication ??
+    (await configuredEvaluationProvider([defaultProvider], {
+      forProvider: async () => options.key!,
+    }));
+  const { provider, publicText } = authentication;
   const now = options.now ?? (() => performance.now());
-  const log = options.log ?? (() => {});
+  const log = (line: string) => options.log?.(publicText(line));
   const wait =
     options.wait ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
-  if (!options.key) throw new Error('The evaluation needs META_API_KEY in the environment.');
 
   const out = path.resolve(options.out);
   const present = await readdir(out).catch((error: NodeJS.ErrnoException) => {
@@ -270,15 +289,6 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
   await writeJobs(files.jobs, jobs);
   await writeFile(files.truth, json(jobs.map((job) => job.truth)), { flag: 'wx' });
 
-  const provider: ModelProvider = {
-    id: 'meta-live-evaluation',
-    name: 'Meta',
-    kind: 'meta',
-    endpoint: providerPresets.meta.endpoint,
-    model: options.model ?? providerPresets.meta.model!,
-    allowContent: false,
-    ...(options.effort ? { effort: options.effort } : {}),
-  };
   // Running the evaluation is the person's consent to send these generated jobs, pictures included.
   const granted: ModelDataPermission = {
     providerID: provider.id,
@@ -293,9 +303,8 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
     },
   };
   let calls: CallLog[] = [];
-  const providers = new Providers(
-    new EnvironmentKey(options.key, out),
-    recorded(options.request ?? fetch, (call) => calls.push(call), now),
+  const providers = authentication.connect(
+    recorded(options.request ?? fetch, (call) => calls.push(call), now, publicText),
     permissions,
   );
   const reader = providerPresets.meta.family ?? provider.name;
@@ -331,6 +340,9 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
           owner,
         );
         if (opened.kind !== 'opened') throw new Error(`${truth.job} did not open as a check.`);
+        // Fail tooling setup before a paid request, while scanned PDFs may still have no text.
+        for (const source of opened.sources)
+          if (source.kind === 'drawing') await extractDocument(source.path, { pages: 64 });
         const drawn = await drawPagesInNode(opened.sources);
         if (drawn.problems.length) throw new Error(drawn.problems.join(' '));
         const texts = new Map<string, string>();
@@ -364,7 +376,7 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
             const issues = failure === 'schema' ? schemaIssues(calls) : [];
             attempts.push({
               outcome: failure,
-              error: errorMessage(error),
+              error: publicText(errorMessage(error)),
               ...(issues.length ? { schemaIssues: issues } : {}),
               calls,
             });
@@ -431,6 +443,8 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
                 parts: result.parts.map(({ path: _path, ...part }) => part),
                 issues: result.issues,
                 notSent: result.notSent,
+                requirements: result.requirements ?? [],
+                sources: opened.sources.map(({ path: _path, ...source }) => source),
                 tour: { stops: result.tour.stops.length, skipped: result.tour.skipped },
               }
             : {}),
@@ -451,40 +465,47 @@ export async function evaluateLive(options: LiveOptions): Promise<LiveReport> {
   }
 
   const metrics = liveMetrics(runs, options.price);
-  const summary = liveSummary(metrics, runs, {
-    model: provider.model,
-    ...(options.effort ? { effort: options.effort } : {}),
-    endpoint: provider.endpoint,
-    started: started.toISOString(),
-    jobs: jobs.length,
-    repeat,
-    retries,
-    ...(options.price ? { price: options.price } : {}),
-    ...(stopped ? { stopped: errorMessage(stopped) } : {}),
-  });
-  const document = json({
-    version: 1,
-    started: started.toISOString(),
-    model: provider.model,
-    effort: options.effort ?? null,
-    endpoint: provider.endpoint,
-    segmentation: providerPresets.meta.segmentation,
-    repeat,
-    retries,
-    ...(options.price ? { price: options.price } : {}),
-    pages: nodePages,
-    instructions: checkInstructions,
-    ...(stopped ? { stopped: errorMessage(stopped) } : {}),
-    metrics,
-    runs: answers,
-  });
-  // A last guard: the key never reaches a file.
-  if (document.includes(options.key) || summary.includes(options.key))
-    throw new Error('The results would hold the API key, so nothing more was written.');
+  const summary = publicText(
+    (options.replay
+      ? 'Recorded response replay. No model API calls were made. Token usage comes from the retained responses, not new billed work.\n\n'
+      : '') +
+      liveSummary(metrics, runs, {
+        model: provider.model,
+        ...(provider.effort ? { effort: provider.effort } : {}),
+        endpoint: provider.endpoint,
+        started: started.toISOString(),
+        jobs: jobs.length,
+        repeat,
+        retries,
+        ...(options.price ? { price: options.price } : {}),
+        ...(stopped ? { stopped: errorMessage(stopped) } : {}),
+      }),
+  );
+  const document = publicText(
+    json({
+      version: 1,
+      execution: options.replay
+        ? { kind: 'recorded-replay', source: options.replay.source }
+        : { kind: 'live' },
+      started: started.toISOString(),
+      model: provider.model,
+      effort: provider.effort ?? null,
+      endpoint: provider.endpoint,
+      segmentation: providerPresets.meta.segmentation,
+      repeat,
+      retries,
+      ...(options.price ? { price: options.price } : {}),
+      pages: nodePages,
+      instructions: checkInstructions,
+      ...(stopped ? { stopped: errorMessage(stopped) } : {}),
+      metrics,
+      runs: answers,
+    }),
+  );
   await writeFile(files.answers, document, { flag: 'wx' });
   await writeFile(files.summary, summary, { flag: 'wx' });
-  if (stopped) throw stopped;
-  return { metrics, runs, summary, files };
+  if (stopped) throw new Error(publicText(errorMessage(stopped)));
+  return { metrics, runs: JSON.parse(publicText(json(runs))) as RunScore[], summary, files };
 }
 
 function argument(name: string): string | undefined {

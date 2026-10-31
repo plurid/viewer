@@ -42,6 +42,8 @@ export type TransformOutcome =
   | (OptimizationStatistics & Without<{ correction: CorrectionReport }>)
   | ({ correction: CorrectionReport } & Without<OptimizationStatistics>);
 export interface TransformExecutor {
+  /** Rechecks a reviewed operation immediately before publishing its staged output. */
+  validateReview?(plan: TransformPlan, sources: readonly string[]): Promise<void>;
   execute(
     plan: TransformPlan,
     sources: readonly string[],
@@ -67,7 +69,18 @@ export class Transforms implements TransformExecutor {
     private layout: Omit<LayoutTools, 'qpdf'> = {},
     /** The open fabrication checks a handoff saves the tour and record of. */
     private checks?: HandoffChecks,
+    private correctionReview?: (plan: DXFCorrection, sources: readonly string[]) => Promise<void>,
   ) {}
+  async validateReview(plan: TransformPlan, sources: readonly string[]): Promise<void> {
+    if (plan.kind === 'dxf-correction') {
+      if (!this.correctionReview)
+        throw new Error('Save this correction from its reviewed fabrication check.');
+      await this.correctionReview(plan, sources);
+    } else if (plan.kind === 'fabrication-handoff') {
+      if (!(await this.checks?.(plan.check, plan, sources)))
+        throw new Error('Open this fabrication check before exporting its handoff.');
+    }
+  }
   /** What `renderLayout` needs from this service's processors. */
   layoutTools(): LayoutTools {
     return { qpdf: pdfProcessor(this.root), ...this.layout };
@@ -258,6 +271,7 @@ export class Transforms implements TransformExecutor {
           async (sources) => {
             await this.access([output]);
             scope.check();
+            await this.validateReview(plan, files);
             if (plan.kind === 'mail-attachment')
               return saveAttachment(sources[0]!, plan, output, scope.signal, progress);
             if (plan.kind === 'pdf' || plan.kind === 'pdf-pages')

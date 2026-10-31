@@ -23,7 +23,11 @@ export interface HandoffCheck {
   tour?: { root: string; definition: TourDefinition };
   record: string;
 }
-export type HandoffChecks = (check: string) => HandoffCheck | undefined;
+export type HandoffChecks = (
+  check: string,
+  plan?: HandoffTransform,
+  sources?: readonly string[],
+) => HandoffCheck | undefined | Promise<HandoffCheck | undefined>;
 
 const copyChunk = 1024 * 1024;
 
@@ -82,7 +86,7 @@ export async function writeHandoff(
   checks: HandoffChecks | undefined,
   draw: DrawReport,
 ): Promise<void> {
-  const check = checks?.(plan.check);
+  const check = await checks?.(plan.check, plan, requested);
   if (!check)
     throw new Error('This check is no longer open. Check the job again, then export its handoff.');
   await mkdir(output);

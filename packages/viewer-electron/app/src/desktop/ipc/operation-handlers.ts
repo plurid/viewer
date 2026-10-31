@@ -2,6 +2,7 @@ import type { ApiHandlers } from './schemas';
 import type { Operations } from '../operations/operations';
 import type { OperationPlans } from '../operations/operation-plans';
 import type { Checkpoints } from '../operations/checkpoints';
+import type { OperationRequest } from '../../domain/contracts';
 
 type OperationHandlers = Pick<
   ApiHandlers,
@@ -26,13 +27,17 @@ interface OperationPorts {
   isAgent(owner: number): boolean;
   /** The person's native answer: a checkpoint's private copy is erased, never moved to the Trash. */
   confirmCheckpointRemoval(owner: number): Promise<boolean>;
+  recorded?(request: OperationRequest, id: string): Promise<void>;
 }
 
 /** A checkpoint is restored through the operations queue, as an ordinary file operation. */
 export function createOperationHandlers(ports: OperationPorts): OperationHandlers {
   return {
-    operate: ([request], owner) =>
-      ports.operations.start(request, ports.isAgent(owner) ? 'agent' : 'person'),
+    operate: async ([request], owner) => {
+      const id = ports.operations.start(request, ports.isAgent(owner) ? 'agent' : 'person');
+      await ports.recorded?.(request, id);
+      return id;
+    },
     jobs: async () => {
       await ports.operations.load();
       return ports.operations.all();

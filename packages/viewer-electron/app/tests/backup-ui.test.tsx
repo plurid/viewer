@@ -30,7 +30,7 @@ it('backs up an empty workspace with retained documents without requiring a moun
             created: new Date().toISOString(),
             bytes: 2500,
             workspaces: ['Empty'],
-            documents: { notes: 2, drafts: 1, media: 0, conversations: 0, receipts: 0 },
+            documents: { notes: 2, drafts: 1, media: 0, conversations: 0, receipts: 0, checks: 0 },
             roots: [],
             warnings: [],
           },

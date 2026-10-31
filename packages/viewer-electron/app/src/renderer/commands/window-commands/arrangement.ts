@@ -108,6 +108,88 @@ export function arrangementCommands({
           actions.workspace.closePane(context.paneID!);
       },
     },
+    {
+      id: 'pin-plane',
+      label: 'Pin plane',
+      group: 'Plane',
+      icon: 'pin',
+      aliases: ['keep visible', 'pin note', 'pin check'],
+      when: (context) =>
+        paneScope(context) &&
+        actions.workspace.planePinState(context.paneID!).pinnable &&
+        !actions.workspace.planePinState(context.paneID!).pinned,
+      run: (context) => {
+        if (!actions.workspace.pinPane(context.paneID!))
+          throw new Error('This plane cannot be pinned.');
+      },
+    },
+    {
+      id: 'place-plane',
+      label: 'Place in space',
+      group: 'Plane',
+      icon: 'planes',
+      aliases: ['unpin plane'],
+      when: (context) =>
+        paneScope(context) && actions.workspace.planePinState(context.paneID!).pinned,
+      run: async (context) => {
+        const result = await actions.workspace.placePane(context.paneID!);
+        if (result === 'refused') throw new Error('The plane could not be placed in space.');
+      },
+    },
+    {
+      id: 'collapse-pinned-plane',
+      label: 'Collapse pinned plane',
+      group: 'Plane',
+      icon: 'up',
+      when: (context) =>
+        paneScope(context) &&
+        actions.workspace.planePinState(context.paneID!).pinned &&
+        !actions.workspace.planePinState(context.paneID!).collapsed,
+      run: (context) => {
+        actions.workspace.collapsePinnedPane(context.paneID!, true);
+      },
+    },
+    {
+      id: 'expand-pinned-plane',
+      label: 'Expand pinned plane',
+      group: 'Plane',
+      icon: 'down',
+      when: (context) =>
+        paneScope(context) && actions.workspace.planePinState(context.paneID!).collapsed,
+      run: (context) => {
+        actions.workspace.collapsePinnedPane(context.paneID!, false);
+      },
+    },
+    {
+      id: 'stack-planes',
+      label: 'Stack selected planes',
+      group: 'Space',
+      icon: 'copy',
+      aliases: ['stack'],
+      when: (context) =>
+        windowScope(context) &&
+        actions.workspace.selectedPaneIDs().length >= 2 &&
+        actions.workspace.selectedPaneIDs().length <= 12,
+      run: () => {
+        if (!actions.workspace.stackPanes(actions.workspace.selectedPaneIDs()))
+          throw new Error('Choose two to twelve unpinned planes to stack.');
+      },
+    },
+    {
+      id: 'unstack-planes',
+      label: 'Unstack planes',
+      group: 'Plane',
+      icon: 'side-by-side',
+      when: (context) =>
+        paneScope(context) &&
+        actions.workspace.planeStacks().some((stack) => stack.panes.includes(context.paneID!)),
+      run: (context) => {
+        const stack = actions.workspace
+          .planeStacks()
+          .find((stack) => stack.panes.includes(context.paneID!));
+        if (stack) actions.workspace.unstackPanes(stack.id);
+      },
+    },
     // vim's :qa and :only, unsaved text asked about first
     {
       id: 'close-all-planes',

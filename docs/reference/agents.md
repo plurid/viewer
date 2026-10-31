@@ -502,12 +502,15 @@ steps.
 | **Reasoning effort**                                  | How long the model reasons before it answers; shown only for a provider that takes it, such as Meta      |
 | **Outlines with SAM**                                 | The SAM model a local server also answers, such as `sam-3.1`; shown only for **Local endpoint**          |
 
-| Level       | Label in **Data access**                                                                |
-| ----------- | --------------------------------------------------------------------------------------- |
-| `names`     | **filenames and file metadata**                                                         |
-| `excerpts`  | **filenames, metadata and document excerpts**                                           |
-| `full-text` | **filenames, metadata and extracted document text**                                     |
-| `images`    | **filenames, metadata, document text and pictures (photos and rendered drawing pages)** |
+| Level       | Label in **Data access** | Includes                                                          |
+| ----------- | ------------------------ | ----------------------------------------------------------------- |
+| `names`     | **Names and metadata**   | Filenames and file metadata                                       |
+| `excerpts`  | **Document excerpts**    | Names, metadata and document excerpts                             |
+| `full-text` | **Full document text**   | Names, metadata and extracted document text                       |
+| `images`    | **Text and pictures**    | Names, metadata, document text, photos and rendered drawing pages |
+
+Each choice shows its full scope. Selecting a level changes the pending choice; **Allow selected
+data** grants it. The current allowed scope remains visible separately.
 
 Each level includes the ones above it. Pictures come last: an approval of `full-text` never sends a
 photo or a drawing page. Pictures go only to providers that use the Chat Completions API, each one

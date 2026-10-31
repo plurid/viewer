@@ -303,6 +303,24 @@ export class Operations {
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
   }
+  /** The exact output the operation recorded, still unchanged; callers receive no Undo authority. */
+  async matchesOutput(id: string, file: string): Promise<boolean> {
+    await this.load();
+    const task = this.tasks.get(id);
+    const step = task?.undo.find((item) => item.from === file && item.remove && item.proof);
+    if (!step || task?.job.status !== 'completed') return false;
+    await this.access([file]);
+    const current = await lstat(file).catch(() => undefined);
+    if (
+      !current ||
+      current.isSymbolicLink() ||
+      `${current.dev}:${current.ino}` !== step.identity ||
+      current.mtimeMs !== step.modified ||
+      current.size !== step.size
+    )
+      return false;
+    return (await outputProof(file)) === step.proof;
+  }
   /** Clearing finished notifications preserves receipts, recovery paths and Undo. */
   async dismiss(ids: readonly string[]): Promise<void> {
     await this.load();
@@ -1659,7 +1677,12 @@ export class Operations {
       prefix: '.viewer-convert-',
       extension: path.extname(destination),
       replaced,
-      guard: transform ? () => this.checkPins(task, source) : undefined,
+      guard: transform
+        ? async () => {
+            await this.checkPins(task, source);
+            await this.transforms?.validateReview?.(transform, source ? [source] : request.sources);
+          }
+        : undefined,
     };
     const progress = (fraction: number, detail: string) => {
       job.progress = Math.max(
