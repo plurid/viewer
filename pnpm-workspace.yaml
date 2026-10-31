@@ -5,6 +5,17 @@ overrides:
   'undici@6.29.0': 6.29.1
   'undici@7.30.0': 7.30.1
   'undici@8.11.2': 8.12.2
+# Reviewed 2026-10-31. Both advisories reach Viewer only through build and lint tools
+# (@electron/asar in Electron Forge's packager; ESLint and typescript-eslint), which read this
+# repository's own patterns, never untrusted input; nothing ships in the app. The patched majors
+# cannot be forced: ESLint 10 calls minimatch's makeRe, removed in minimatch 11. Remove these once
+# Electron Forge and ESLint move to minimatch 11 and glob 14.
+auditConfig:
+  ignoreGhsas:
+    # minimatch < 11.0.1: denial of service through globparts amplification
+    - GHSA-g3hv-75wg-m249
+    # glob 9 to 14.0.1: an aborted walk keeps reading directories
+    - GHSA-3g3m-2fjr-6pw4
 allowBuilds:
   electron: true
   esbuild: true

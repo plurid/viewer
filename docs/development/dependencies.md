@@ -21,6 +21,11 @@ shipped runtime is declared as a development dependency. An audit of npm package
 every bundled native library. Review the upstream advisory or release notes and verify the patched
 bytes. Retain corresponding sources, licenses and notices for bundled processors.
 
+When a patched version cannot be adopted, record the advisory under `auditConfig.ignoreGhsas` in
+[pnpm-workspace.yaml](../../pnpm-workspace.yaml), with the date, the path it reaches Viewer by, why
+it cannot be exploited there, and what removes the exception. Only build and lint tools qualify: an
+advisory in a package the app ships is fixed, never ignored.
+
 Build-time downloads must match their reviewed hashes. Preserve mismatched caches for inspection.
 The Office build appends the pinned, unmodified Noto CJK font collection to a new virtual-filesystem
 package. Upstream engine files and earlier packages stay intact. The resulting data and metadata
