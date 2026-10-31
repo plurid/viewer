@@ -116,6 +116,19 @@ const commands = [
 const ids = (rows: readonly ResolvedCommand[]) => rows.map((row) => row.id);
 
 describe('the palette’s rows', () => {
+  it('finds file operation history before the title-bar visibility setting', () => {
+    const rows = [
+      command('recent-operations', 'File operations'),
+      setting(
+        'setting.ui.titlebar.operations',
+        'Turn off: Title bar icons › File operations',
+        'Title bar icons › File operations',
+        true,
+      ),
+    ];
+    for (const query of ['file opera', 'file operations'])
+      expect(paletteRows(rows, query, []).rows[0]?.id).toBe('recent-operations');
+  });
   it('leave settings out of a short or verb-only query', () => {
     for (const query of ['o', 't', 's', 'h', 'turn', 'show', 'hide', 'turn off', 'change'])
       expect(

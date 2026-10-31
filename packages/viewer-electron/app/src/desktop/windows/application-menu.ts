@@ -163,7 +163,7 @@ export function installApplicationMenu(
             click: command('trash'),
           },
           { type: 'separator' },
-          { label: 'Recent File Operations', click: command('recent-operations') },
+          { label: 'File Operations', click: command('recent-operations') },
           { type: 'separator' },
           { role: 'close' },
         ],

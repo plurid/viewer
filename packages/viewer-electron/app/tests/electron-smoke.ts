@@ -7216,7 +7216,7 @@ async function verify(): Promise<void> {
     (value) => !value,
     'operations control removed after completion',
   );
-  await paletteCommand('Recent file operations');
+  await paletteCommand('File operations');
   await until(text, (value) => value.includes('completed'), 'explicit operation history');
   await click('[aria-label="Close operations"]');
   const renamed = await job({

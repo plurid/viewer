@@ -3,10 +3,15 @@
 This page states how Viewer copies, moves, creates, saves and removes files, and how collisions,
 Undo, the Trash and recovery work.
 
-The **File operations** button in the title bar, or **Recent file operations** in **⌘K**, lists each
-job with its progress, collision prompt, completed outputs, errors, recovery paths and **Undo**.
-Jobs run one at a time, in order. The list keeps the 100 most recent finished jobs; a pending job is
-never dropped.
+Choose **File operations** in **⌘K**, or **File → File Operations**, to toggle the operations panel,
+even when its list is empty. It lists each job with its progress, collision prompt, completed
+outputs, errors, recovery paths and **Undo**. Jobs run one at a time, in order. The list keeps the
+100 most recent finished jobs; a pending job is never dropped.
+
+The title-bar button appears when work lasts at least one second, when a conflict or unread failure
+needs attention, or while the panel is open. Fast successful operations keep the title bar quiet.
+**Settings → Space → Title bar icons → File operations** controls this button; the command remains
+available when the button is hidden.
 
 ## Commands
 

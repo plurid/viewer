@@ -1,13 +1,26 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Executions } from '../src/desktop/actions/executions';
 import { defaultSettings } from '../src/domain/services';
 import { temporaryRoot } from '../tools/temporary';
 import { agentCommandID, modelLineCommandProblem } from '../src/domain/agents/safety';
 import { methodWindows, schemas } from '../src/desktop/ipc/schemas';
+import { settingsSchema } from '../src/desktop/preferences/settings-schema';
 
 const services: Executions[] = [];
+it('loads existing shell settings with startup enabled and preserves an explicit opt-out', () => {
+  const settings = defaultSettings('/fixtures');
+  expect(
+    settingsSchema.parse({
+      ...settings,
+      terminals: { ...settings.terminals, commandStartup: undefined },
+    }).terminals.commandStartup,
+  ).toBe('interactive');
+  settings.terminals.commandStartup = 'profile';
+  expect(settingsSchema.parse(settings).terminals.commandStartup).toBe('profile');
+});
 afterEach(async () => {
   await Promise.all(services.splice(0).map((service) => service.close()));
 });
@@ -43,8 +56,42 @@ async function fixture() {
     directory,
     selection: [],
   };
-  return { service, target, confirmAction, confirmProfile };
+  return { service, target, settings, root, confirmAction, confirmProfile };
 }
+it.skipIf(!existsSync('/bin/zsh'))(
+  'loads zsh aliases from the configured startup folder and allows profile-only commands',
+  async () => {
+    const { service, target, settings, root } = await fixture();
+    await writeFile(path.join(root, '.zshrc'), "alias ll='printf alias-loaded'\n");
+    const profile = settings.terminals.profiles[0];
+    profile.executable = '/bin/zsh';
+    profile.args = ['-l'];
+    profile.env = { HOME: root, ZDOTDIR: root };
+    await service.startManual('ll', target, 1);
+    await vi.waitFor(() => expect(service.list(1)[0].status).toBe('completed'));
+    expect(service.list(1)[0]).toMatchObject({ exitCode: 0, output: 'alias-loaded' });
+
+    settings.terminals.commandStartup = 'profile';
+    await service.startManual('ll', target, 1);
+    await vi.waitFor(() => expect(service.list(1)[1].status).toBe('failed'));
+    expect(service.list(1)[1]).toMatchObject({ exitCode: 127 });
+
+    profile.args.push('-i');
+    await service.startManual('ll', target, 1);
+    await vi.waitFor(() => expect(service.list(1)[2].status).toBe('completed'));
+    expect(service.list(1)[2].output).toBe('alias-loaded');
+
+    settings.terminals.commandStartup = 'interactive';
+    for (const argument of ['+i', '-f']) {
+      profile.args = ['-l', argument];
+      const id = await service.startManual('ll', target, 1);
+      await vi.waitFor(() =>
+        expect(service.list(1).find((task) => task.id === id)?.status).toBe('failed'),
+      );
+      expect(service.list(1).find((task) => task.id === id)?.exitCode).toBe(127);
+    }
+  },
+);
 it('runs an explicitly submitted shell command in its captured folder without an action confirmation', async () => {
   const { service, target, confirmAction, confirmProfile } = await fixture();
   const id = await service.startManual(

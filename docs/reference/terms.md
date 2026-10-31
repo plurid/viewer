@@ -112,8 +112,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 
 - **Job**: one file operation, such as a copy, a move, a conversion, an extraction or a move to the
   Trash, with its progress, name conflicts, finished outputs, errors and Undo. _In Viewer:_ **File
-  operations** in the title bar, **Recent file operations**. _Learn:_
-  [File operations](file-operations.md)
+  operations** in the title bar or **⌘K**. _Learn:_ [File operations](file-operations.md)
 - **Undo** and **Redo**: **⌘Z** undoes the latest file operation or lens edit, after checking that
   its files are still as it left them; **⇧⌘Z** does it again, a file operation as a new job. Moving
   and closing planes has its own Undo, **⌥⌘Z**; Git actions and other apps' changes have none in

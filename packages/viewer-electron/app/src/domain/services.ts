@@ -98,6 +98,7 @@ export interface ApplicationSettings {
     application: string;
     profileID: string;
     profiles: TerminalProfile[];
+    commandStartup: 'interactive' | 'profile';
     scrollback: number;
     tmux: { executable: string; session: string; socket: string; windowName: string };
   };
@@ -439,6 +440,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       application: 'auto',
       profileID: 'login',
       profiles: [{ id: 'login', name: 'Login shell', executable: '', args: ['-l'], env: {} }],
+      commandStartup: 'interactive',
       scrollback: 10000,
       tmux: { executable: 'tmux', session: 'viewer', socket: '', windowName: '{folder}' },
     },

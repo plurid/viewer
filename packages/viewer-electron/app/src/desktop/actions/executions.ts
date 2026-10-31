@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type {
   CapturedTarget,
@@ -17,6 +18,24 @@ import { errorMessage } from '../../domain/errors';
 import { containsPath } from '../files/containment';
 /** Commands running or starting at once. */
 const commandLimit = 20;
+const configuredShells = new Set(['zsh', 'bash', 'fish']);
+
+/** Pipes do not make a shell interactive as a terminal does. Keep its own startup-file rules. */
+function commandArguments(
+  executable: string,
+  profile: TerminalProfile,
+  script: string,
+  startup: ApplicationSettings['terminals']['commandStartup'],
+): string[] {
+  const explicitMode = profile.args.some(
+    (arg) => arg === '--interactive' || /^[+-][a-zA-Z]*i[a-zA-Z]*$/.test(arg),
+  );
+  const interactive =
+    startup !== 'profile' &&
+    configuredShells.has(path.basename(executable).replace(/\.exe$/i, '')) &&
+    !explicitMode;
+  return [...profile.args, ...(interactive ? ['-i'] : []), '-c', script, 'viewer-command'];
+}
 
 /** User-authored executables are subprocesses. Only the explicit shell executor interprets code. */
 export class Executions {
@@ -196,7 +215,12 @@ export class Executions {
           if (isCancelled()) break;
           const args =
             manual && profile
-              ? [...profile.args, '-c', manual.script, 'viewer-command']
+              ? commandArguments(
+                  executable,
+                  profile,
+                  manual.script,
+                  settings.terminals.commandStartup,
+                )
               : executor.kind === 'executable'
                 ? actionArguments(executor.args, target, item, values)
                 : [

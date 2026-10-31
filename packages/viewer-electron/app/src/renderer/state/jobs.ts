@@ -37,9 +37,12 @@ export function setOperationsOpen(open: boolean, history = false): void {
   });
 }
 export function needsOperations(state = getState()): boolean {
+  return state.jobs.some(isActiveJob) || needsOperationsAttention(state);
+}
+export function needsOperationsAttention(state = getState()): boolean {
   return state.jobs.some(
     (job) =>
-      isActiveJob(job) ||
+      job.status === 'collision' ||
       (!job.dismissed && job.status === 'failed' && !state.acknowledgedJobs.includes(job.id)),
   );
 }

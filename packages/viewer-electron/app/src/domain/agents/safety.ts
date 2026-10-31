@@ -245,7 +245,7 @@ function agentBuiltinCommandID(command: string): string {
     );
   if (command === 'undo-file')
     throw new Error(
-      'Agent file Undo can remove outputs outside the captured selection. Review it yourself in Recent file operations.',
+      'Agent file Undo can remove outputs outside the captured selection. Review it yourself in File operations.',
     );
   if (command === 'parent-plane' || command === 'view-open-plane')
     throw new Error('Use propose_focus_plane for an explicitly authorized destination plane.');

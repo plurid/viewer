@@ -115,6 +115,18 @@ export const settingCatalog: SettingDefinition[] = [
     ],
   },
   {
+    path: 'settings.terminals.commandStartup',
+    category: 'Terminals',
+    label: 'Command startup',
+    detail:
+      'Load aliases and functions for quick commands and Run command from your shell startup files, such as .zshrc.',
+    kind: 'choice',
+    choices: [
+      ['interactive', 'Load shell configuration'],
+      ['profile', 'Use profile arguments only'],
+    ],
+  },
+  {
     path: 'settings.terminals.scrollback',
     category: 'Terminals',
     label: 'Terminal scrollback lines',

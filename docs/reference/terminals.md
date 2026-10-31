@@ -30,9 +30,19 @@ service, process cancellation and receipts as **Run command…**.
 | **Run**             | Starts the command in the folder and shows it in **Command progress**.                           |
 | **Save as action…** | Names it (**Action name**), then **Review in Settings** sends a draft to **Settings → Actions**. |
 
-The command runs as `SHELL ARGS -c COMMAND` with the default shell profile: for the built-in **Login
-shell** profile that is your `$SHELL -l`. It has no input; stdout and stderr are combined. Viewer
-checks the folder is the same one before launch and refuses if it changed.
+The command uses the default shell profile. **Settings → Terminals → Command startup** defaults to
+**Load shell configuration**: Viewer adds `-i` for zsh, bash and fish, preserving the profile's
+arguments. The built-in **Login shell** profile runs `$SHELL -l -i -c COMMAND`. Each shell reads its
+own startup files, including `.zshrc` for zsh, so configured aliases and functions work. zsh honors
+`ZDOTDIR`; bash follows its login or non-login startup rules.
+
+Choose **Use profile arguments only** to run `SHELL ARGS -c COMMAND` without adding `-i`. An
+explicit interactive-mode argument in a profile takes precedence. Other shells use only their
+profile arguments. This setting applies to quick commands and **Run command…**, and leaves saved
+custom actions unchanged.
+
+The command has no input; stdout and stderr are combined. Viewer checks the folder is the same one
+before launch and refuses if it changed.
 
 **Command progress** shows each command's status, exit code, elapsed seconds and output, with
 **Stop**, **Open receipt** and **Copy output**. Hiding the panel leaves commands running.

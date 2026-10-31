@@ -1072,7 +1072,7 @@ export class Operations {
         throw new Error(
           kept
             ? `${errorMessage(error)} The replaced item was kept as ${path.basename(kept)}.`
-            : `${errorMessage(error)} The replaced item is in the Trash; Undo in Recent file operations can restore it.`,
+            : `${errorMessage(error)} The replaced item is in the Trash; Undo in File operations can restore it.`,
         );
       throw error;
     }

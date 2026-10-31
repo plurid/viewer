@@ -21,6 +21,10 @@ Closing the panel keeps the command running. Open `!` again to return to its out
 plane for programs that ask for input. [Terminals and command output](../reference/terminals.md)
 lists the limits and receipts.
 
+Your shell's aliases and functions load by default, including those in `.zshrc` for zsh. Change this
+in **Settings → Terminals → Command startup**. **Default shell profile** selects the shell and its
+arguments.
+
 ## Save a shell line as an action
 
 1. Press **⌘K** → **Run command…** in the folder you work in, type the line and choose **Run**.

@@ -35,7 +35,6 @@ import {
   dismissNotice,
   flushState,
   getState,
-  needsOperations,
   newWorkspace,
   quickPreview,
   receiveJob,
@@ -67,6 +66,7 @@ import { WorkflowControls } from './ui/automation/Workflows';
 import { RelationshipControls } from './ui/relationships/Relationships';
 import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
+import { useOperationsIndicator } from './operations/useOperationsIndicator';
 import { QuickPreview, quickPreviewEdit } from './previews/QuickPreview';
 import { previewDocuments } from './previews/document-cache';
 import { useTitlebar } from './ui/titlebar';
@@ -219,7 +219,7 @@ function AppWindow() {
   const jobsSignature = useViewer(undoSignature);
   const inProgress = useViewer((state) => state.jobs.filter(isActiveJob).length);
   const operationsOpen = useViewer((state) => state.operationsOpen);
-  const showOperations = useViewer(needsOperations);
+  const showOperations = useOperationsIndicator();
   const deleted = useViewer((state) => state.deletedWorkspace);
   useEffect(() => {
     setShowWorkspaceUndo(!!deleted);
@@ -854,7 +854,7 @@ function AppWindow() {
               className="operations-button"
               aria-label="File operations"
               aria-expanded={operationsOpen}
-              onClick={() => setOperationsOpen(!operationsOpen)}
+              onClick={() => setOperationsOpen(!operationsOpen, true)}
             >
               <Icon name="copy" size={17} />
               {inProgress > 0 && <span className="count-badge">{inProgress}</span>}

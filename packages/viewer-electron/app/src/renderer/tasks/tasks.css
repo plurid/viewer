@@ -172,6 +172,10 @@
   gap: var(--gap-inline) var(--gap-panel);
   margin: 0 0 var(--gap-panel);
 }
+.receipt-scroll > .inline-warning,
+.receipt-scroll > .error {
+  margin: 0 0 var(--gap-panel);
+}
 .receipt-scroll dd {
   margin: 0;
   overflow-wrap: anywhere;

@@ -188,6 +188,7 @@ export const settingsSchema = z
         application: z.string().max(32768),
         profileID: id,
         profiles: z.array(terminalProfileSchema).min(1).max(30),
+        commandStartup: z.enum(['interactive', 'profile']).default('interactive'),
         scrollback: z.number().int().min(100).max(50000),
         tmux: z
           .object({
@@ -206,6 +207,7 @@ export const settingsSchema = z
         application: 'auto',
         profileID: 'login',
         profiles: [{ id: 'login', name: 'Login shell', executable: '', args: ['-l'], env: {} }],
+        commandStartup: 'interactive',
         scrollback: 10000,
         tmux: { executable: 'tmux', session: 'viewer', socket: '', windowName: '{folder}' },
       }),

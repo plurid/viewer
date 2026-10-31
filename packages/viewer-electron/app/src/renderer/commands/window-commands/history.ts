@@ -41,12 +41,12 @@ export function historyCommands({ windowScope }: WindowScopes): CommandDefinitio
     },
     {
       id: 'recent-operations',
-      label: 'Recent file operations',
+      label: 'File operations',
       group: 'Files',
       icon: 'copy',
-      aliases: ['jobs', 'operations', 'progress'],
-      when: (context) => windowScope(context) && !!context.jobs?.length,
-      run: () => setOperationsOpen(true, true),
+      aliases: ['jobs', 'operations', 'progress', 'recent file operations', 'operation history'],
+      when: windowScope,
+      run: () => setOperationsOpen(!getState().operationsOpen, true),
     },
     {
       id: 'undo-file',
