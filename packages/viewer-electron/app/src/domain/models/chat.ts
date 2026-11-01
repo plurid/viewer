@@ -143,6 +143,7 @@ export const chatStepSchema = z
       'canvas_write',
       'canvas_asset',
       'canvas_source',
+      'canvas_robot_assets',
     ]),
     text: z.string().max(32000),
     path: z.string().max(32768).nullable(),

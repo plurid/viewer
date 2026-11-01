@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { inspectionResultSchema, sourceVersionSchema } from '../files/inspection';
+import { robotModelSchema } from '../robotics/model';
 
 export const canvasSourceLimits = { count: 12, bytes: 64_000, totalBytes: 128_000 } as const;
 export const canvasSourceDataSchema = inspectionResultSchema
   .pick({ facts: true, evidence: true, coverage: true })
   .extend({
+    robot: robotModelSchema.optional(),
     table: z
       .object({ rows: z.array(z.array(z.string())), malformed: z.boolean() })
       .strict()

@@ -73,6 +73,26 @@ app.
 
 ## Focused native scenarios
 
+`tests/native/robotics.ts` loads the pinned SO-101 follower and all visual meshes through canvas
+snapshots and assets. It checks articulated motion, hard-limit reporting, exact joint source review,
+base translation, cold restart and portable export/import. Its HTML is an explicitly labeled local
+test fixture. It makes no model request and is not evidence of generated controls, target solving,
+collision checking or the completed film.
+
+Download the checksummed corpus to a new retained folder, then run the scenario with
+`VIEWER_ROBOT_CORPUS` pointing to it, `VIEWER_TEST_BINARY` to the candidate, and both preservation
+variables above. Commands run from the repository root:
+
+```sh
+pnpm exec node --import tsx packages/viewer-electron/app/tools/robotics/fetch-so101.ts /tmp/viewer-so101-corpus
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 VIEWER_ROBOT_CORPUS=/tmp/viewer-so101-corpus pnpm exec node --import tsx packages/viewer-electron/app/tests/native/robotics.ts
+```
+
+Use a new absolute corpus path for each download. `tests/robotics.test.ts` compares every link at
+three pinned poses against separately generated NumPy/SciPy matrices, and covers malformed trees,
+unsupported semantics, scoped resource attachment and snapshot round trips. The retained reference
+JSON does not require Python during tests; its generator is `tools/robotics/reference.py`.
+
 `tests/native/dialogs.ts` checks Viewer folder selection, filtered multiple-file selection, folder
 creation, Save As through Enter, editor warnings and Settings window ownership. It captures wide and
 narrow light/dark layouts, reads back a newly saved file and retains every fixture. It never

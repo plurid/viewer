@@ -234,8 +234,14 @@ export class Canvases {
       });
     });
   }
-  async attachFile(owner: number, id: string, file: string): Promise<CanvasAsset> {
+  async attachFile(
+    owner: number,
+    id: string,
+    file: string,
+    validate?: (bytes: Uint8Array) => void,
+  ): Promise<CanvasAsset> {
     const data = await readBounded(file, canvasLimits.assetBytes);
+    validate?.(data);
     return this.attach(owner, id, path.basename(file), data, file);
   }
   source(

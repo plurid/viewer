@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 import { ownRendererLookup } from './three-renderer.ts';
+import { transpileModule, ModuleKind, ScriptTarget } from 'typescript';
+import { fileURLToPath } from 'node:url';
 
 /** Bundle the installed renderer's browser modules as offline canvas assets. */
 export function canvasLibraries(): Plugin {
@@ -21,6 +23,7 @@ export function canvasLibraries(): Plugin {
         ...[
           'controls/OrbitControls.js',
           'loaders/GLTFLoader.js',
+          'loaders/STLLoader.js',
           'utils/BufferGeometryUtils.js',
           'utils/SkeletonUtils.js',
         ].map((name) => ['addons/' + name, 'examples/jsm/' + name]),
@@ -33,6 +36,14 @@ export function canvasLibraries(): Plugin {
           return [name, name === 'three.module.js' ? ownRendererLookup(text) : text];
         }),
       );
+      const robotics = fileURLToPath(
+        new URL('../src/domain/robotics/kinematics.ts', import.meta.url),
+      );
+      this.addWatchFile(robotics);
+      const compiled = transpileModule(await readFile(robotics, 'utf8'), {
+        compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
+      });
+      parts.push(['robotics.js', compiled.outputText]);
       return `export const canvasLibraries = new Map(${JSON.stringify(parts)});`;
     },
   };

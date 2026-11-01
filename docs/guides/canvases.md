@@ -45,6 +45,9 @@ conversation** returns to the selected passage.
 
 ## Reconstruct one object from a photo
 
+For an existing articulated robot definition, use the URDF workflow below. Photo reconstruction
+produces a mesh without the machine's joints or constraints.
+
 1. Add a Meta model that supports object selection in **Settings → Models**.
 2. Under **3D reconstruction**, enter your separate fal API key and choose **Save key**.
 3. Drop a photo on the canvas toolbar and choose **Tools → Photo to 3D**.
@@ -72,6 +75,24 @@ conversation.
 Personal backups include canvases and their attached assets within the backup size limit. For large
 canvases, use their individual export. Keep exports and backups private when their contents are
 private.
+
+## Explore a URDF robot
+
+1. Attach the folder containing the URDF and its relative STL meshes to a conversation. Approve the
+   model's requested data access.
+2. Ask it to build joint controls from that definition, using the bundled forward-kinematics module
+   and approved meshes. The agent can bind the definition and attach its meshes in separate steps.
+3. Move a joint and inspect the displayed limits. Angles use radians and distances use metres.
+   Values outside the declared range are reported without being silently corrected.
+4. Ask the tool to show the source of a constraint. In **Sources**, choose **Open joint definition**
+   to inspect the captured passage in the original file.
+5. Export the canvas to retain its model snapshot, assets and saved inputs.
+
+The controls are generated for the conversation. A working page does not establish that the arm can
+reach a target or move without collisions. The current capability calculates poses from specified
+joint values and reports hard position limits. Confirm the file's calibration convention before
+interpreting its values as hardware settings. See the
+[supported subset](../reference/canvases.md#robot-sources-and-motion).
 
 [Canvas contracts and limits](../reference/canvases.md) ·
 [Models and permissions](../reference/agents.md)

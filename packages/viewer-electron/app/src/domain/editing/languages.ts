@@ -39,7 +39,7 @@ export const textLanguages: TextLanguage[] = [
     id: 'xml',
     label: 'XML',
     prism: 'markup',
-    extensions: ['xml', 'svg', 'plist', 'xsl', 'xsd', 'gpx', 'kml'],
+    extensions: ['xml', 'svg', 'plist', 'xsl', 'xsd', 'gpx', 'kml', 'urdf'],
   },
   { id: 'css', label: 'CSS', prism: 'css', extensions: ['css'] },
   { id: 'scss', label: 'SCSS', prism: 'scss', extensions: ['scss'] },

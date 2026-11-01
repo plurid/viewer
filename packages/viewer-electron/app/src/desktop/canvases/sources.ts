@@ -8,6 +8,7 @@ import {
   canvasSourceDataSchema,
 } from '../../domain/canvases/sources';
 import { parseDelimited } from '../../domain/previews/data/delimited';
+import { parseRobotURDF } from '../../domain/robotics/urdf';
 
 const size = (value: unknown) => Buffer.byteLength(JSON.stringify(value));
 export const sourceHash = (data: CanvasSource['data']) =>
@@ -39,6 +40,15 @@ export function sourceSnapshot(
   );
   const data: CanvasSource['data'] = { facts, evidence, coverage: { ...inspection.coverage } };
   const extension = path.extname(inspection.path).toLowerCase();
+  if (extension === '.urdf') {
+    if (inspection.coverage.content !== 'complete')
+      throw new Error('A robot requires the complete URDF definition. This inspection is partial.');
+    const texts = inspection.evidence.filter((item) => item.source === 'text');
+    if (texts.length !== 1) throw new Error('A robot requires one complete text definition.');
+    data.robot = parseRobotURDF(texts[0]!.text);
+    if (size(data.robot) > canvasSourceLimits.bytes - 8000)
+      throw new Error('The robot structure exceeds the canvas snapshot limit.');
+  }
   if (extension === '.csv' || extension === '.tsv') {
     const table = parseDelimited(
       evidence.find((item) => item.source === 'text')?.text ?? '',

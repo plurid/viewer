@@ -112,6 +112,67 @@ async function send(id: string): Promise<void> {
 }
 
 describe('quoted conversations and canvases', () => {
+  it('attaches a robot mesh through the existing scoped conversation and images permission', async () => {
+    const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
+    ports.canvases = canvases;
+    const permit = vi.spyOn(ports, 'permit');
+    const file = path.join(root, 'context', 'arm.urdf');
+    const model =
+      '<robot name="arm"><link name="base"><visual><geometry><mesh filename="part.stl"/></geometry></visual></link></robot>';
+    await writeFile(file, model);
+    const mesh = Buffer.alloc(134);
+    mesh.writeUInt32LE(1, 80);
+    await writeFile(path.join(root, 'context', 'part.stl'), mesh);
+    inspect.mockResolvedValue({
+      path: file,
+      version: { identity: 'fixture', modified: 1, size: model.length },
+      availability: 'available',
+      facts: {},
+      evidence: [{ source: 'text', text: model }],
+      coverage: { content: 'complete' },
+    });
+    const conversation = await create();
+    generate
+      .mockResolvedValueOnce(step('canvas_source', { path: file }))
+      .mockResolvedValueOnce(step('canvas_robot_assets', { path: file }))
+      .mockResolvedValueOnce(
+        step('canvas_write', { text: '<main>Robot fixture</main>', commandID: '2' }),
+      )
+      .mockResolvedValueOnce(step('reply', { text: 'Inspect the joints.' }));
+    await send(conversation.id);
+    const saved = await settled(conversation.id);
+    expect(saved.status).toBe('idle');
+    expect((await canvases.read(1, saved.canvasID!)).assets).toHaveLength(1);
+    expect(permit.mock.calls.some((call) => call[3] === 'images')).toBe(true);
+  });
+
+  it('does not infer permission for mesh siblings when only the URDF was attached', async () => {
+    const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
+    ports.canvases = canvases;
+    const file = path.join(root, 'context', 'arm.urdf');
+    const model =
+      '<robot name="arm"><link name="base"><visual><geometry><mesh filename="part.stl"/></geometry></visual></link></robot>';
+    await writeFile(file, model);
+    await writeFile(path.join(root, 'context', 'part.stl'), Buffer.alloc(134));
+    inspect.mockResolvedValue({
+      path: file,
+      version: { identity: 'fixture', modified: 1, size: model.length },
+      availability: 'available',
+      facts: {},
+      evidence: [{ source: 'text', text: model }],
+      coverage: { content: 'complete' },
+    });
+    const conversation = document(await chat.request({ kind: 'create', paths: [file] }, 1, origin));
+    generate
+      .mockResolvedValueOnce(step('canvas_source', { path: file }))
+      .mockResolvedValueOnce(step('canvas_robot_assets', { path: file }));
+    await send(conversation.id);
+    const saved = await settled(conversation.id);
+    expect(saved.status).toBe('failed');
+    expect(saved.error).toContain('outside the attached');
+    expect((await canvases.read(1, saved.canvasID!)).assets).toHaveLength(0);
+  });
+
   it('binds inspected sources once and exposes snapshots and preview observations to the next round', async () => {
     const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
     ports.canvases = canvases;

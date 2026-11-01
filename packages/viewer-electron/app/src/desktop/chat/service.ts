@@ -1,5 +1,6 @@
 import type { Canvases } from '../canvases/service';
 import { canvasInstructions } from '../canvases/runtime';
+import { attachRobotMeshes } from '../canvases/robot';
 import { portableCanvasSources } from '../../domain/canvases/sources';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
@@ -620,6 +621,27 @@ export class Chats {
               principal.owner,
               canvas.id,
               await this.authorize(principal, step.path ?? ''),
+            ),
+          'images',
+        );
+      }
+      if (step.kind === 'canvas_robot_assets') {
+        const file = await this.authorize(principal, step.path ?? '');
+        const source = canvas.sources.find((source) => source.path === file && source.data.robot);
+        if (!source)
+          throw new Error('Use canvas_source on the complete URDF before attaching its meshes.');
+        await this.edit(id, (current) => ({ ...current, level: 'images' }));
+        return this.ports.permit(
+          provider,
+          signal,
+          (authorized) =>
+            attachRobotMeshes(
+              canvases,
+              principal.owner,
+              canvas.id,
+              source,
+              (file) => this.authorize(principal, file),
+              authorized,
             ),
           'images',
         );

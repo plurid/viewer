@@ -29,6 +29,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [sourceJoint, setSourceJoint] = useState<{ id: string; name: string }>();
   const [result, setResult] = useState<PendingCanvasResult>();
   const [saved, setSaved] = useState('');
   const iframe = useRef<HTMLIFrameElement>(null);
@@ -171,7 +172,10 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
             fail(value);
           }
         } else if (value.kind === 'source' && typeof value.assetID === 'string') {
-          if (current.current?.sources.some((item) => item.id === value.assetID)) {
+          const snapshot = current.current?.sources.find((item) => item.id === value.assetID);
+          if (snapshot) {
+            const joint = snapshot.data.robot?.joints.find((item) => item.name === value.joint);
+            setSourceJoint(joint ? { id: snapshot.id, name: joint.name } : undefined);
             setSourcesOpen(true);
             return;
           }
@@ -343,6 +347,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           onOpenChange={setSourcesOpen}
         >
           <CanvasSources
+            joint={sourceJoint}
             sources={document.sources}
             paneID={pane.id}
             busy={busy}

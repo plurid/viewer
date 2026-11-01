@@ -11,16 +11,16 @@ still reject stale changes.
 
 Generated HTML receives `window.viewerCanvas`:
 
-| Member                     | Behavior                                               |
-| -------------------------- | ------------------------------------------------------ |
-| `getSources()`             | Return copies of bound evidence snapshots              |
-| `requestExport(result)`    | Request host review of `{format,name,content}`         |
-| `getState()`               | Return a copy of saved input state                     |
-| `setState({ key: value })` | Merge values and request a desktop save                |
-| `subscribe(listener)`      | Observe state updates; returns an unsubscribe function |
-| `assets`                   | Attached assets as `{ id, name, mime, url }` records   |
-| `openSource(assetID)`      | Request a user-reviewed source action                  |
-| `propose(text)`            | Prepare text for review in the conversation            |
+| Member                     | Behavior                                                 |
+| -------------------------- | -------------------------------------------------------- |
+| `getSources()`             | Return copies of bound evidence snapshots                |
+| `requestExport(result)`    | Request host review of `{format,name,content}`           |
+| `getState()`               | Return a copy of saved input state                       |
+| `setState({ key: value })` | Merge values and request a desktop save                  |
+| `subscribe(listener)`      | Observe state updates; returns an unsubscribe function   |
+| `assets`                   | Attached assets as `{ id, name, mime, url }` records     |
+| `openSource(id, joint?)`   | Request source review, optionally for a named URDF joint |
+| `propose(text)`            | Prepare text for review in the conversation              |
 
 Use stable state keys. A new content revision cannot change the type of an existing saved value.
 HTML, CSS and scripts run in an opaque sandbox through `viewer-html`. The page has no desktop
@@ -28,8 +28,8 @@ bridge, Node, credentials, parent-document access or external network. Asset URL
 preview. Workers, nested frames, forms and plugins are disabled.
 
 The import map supplies `three` and bundled `three/addons/` modules for `OrbitControls`,
-`GLTFLoader`, `BufferGeometryUtils` and `SkeletonUtils`. Other dependencies must be included in the
-document; remote CDNs are unavailable.
+`GLTFLoader`, `STLLoader`, `BufferGeometryUtils` and `SkeletonUtils`. Other dependencies must be
+included in the document; remote CDNs are unavailable.
 
 Snapshots contain `{id,name,version,hash,data}`. `data` contains bounded `facts`, `evidence`,
 `coverage`, and optionally `table: {rows,malformed}` for CSV/TSV. Rows include the header. Local
@@ -64,6 +64,45 @@ Preview observations are tied to a content revision. `ready` means the page load
 calculations were verified. `error` includes a bounded runtime message. `not-observed` means no
 renderer report arrived. The agent may make one repair after a runtime error, within the same
 eight-round request budget; remaining errors stop further automatic repairs.
+
+## Robot sources and motion
+
+`canvas_source` recognizes `.urdf` files. A complete definition supplies `data.robot`, with
+`format`, `name`, `root`, `units`, `links`, `joints` and scope `notes`. Links contain visual
+geometry, origins and optional RGBA colors. Joints contain parent and child names, type, origin,
+normalized axis, hard position limits and the exact captured definition. URDF units are metres and
+radians. The file's zero convention is preserved; hardware calibration is not inferred.
+
+The reader supports one connected tree with fixed, revolute, continuous and prismatic joints. It
+rejects mimic, floating and planar joints, cycles, unresolved macros, missing hard position limits
+and incomplete source text. Limits are 128 KB of input, 64 links and 256 visual elements, subject to
+the existing snapshot size limit. Supported visuals are meshes, boxes, spheres and cylinders.
+Collision geometry, dynamics, soft safety-controller limits and calibration tags do not participate
+in these calculations. Texture resources are not loaded.
+
+`canvas_robot_assets` takes `path` to an already-bound URDF. It authorizes and attaches the relative
+binary STL visual files, returning `{resources:[{resource,assetID}],revision}`. Each file must
+already belong to the conversation's scope, and provider images permission is required. The
+containing folder can supply that scope; attaching only the URDF does not. Paths must stay within
+its folder, without links, parent traversal, absolute paths or package/network URLs. A mesh is
+limited to 200,000 triangles and the normal canvas asset budgets. Failed or cancelled attachment can
+retain previously attached assets; it does not change the original files.
+
+Use the returned IDs to find asset URLs. Resource names inside URDF are metadata, not fetchable
+URLs. The offline `viewer/robotics` module exports:
+
+- `forwardKinematics(robot, positions, base?)`: `positions` names every movable joint exactly once.
+  `base` is `{xyz:[x,y,z],rpy:[roll,pitch,yaw]}`, defaulting to zero. The result has `links`, a map
+  of column-major 4×4 world transforms, and `violations`, the unclamped hard position-limit
+  violations.
+- `originTransform(origin)`: convert URDF fixed-axis roll/pitch/yaw and translation to a matrix.
+- `multiplyTransforms(a,b)`: compose two column-major matrices. A visual's world transform is its
+  link transform multiplied by its visual origin, followed by its mesh scale.
+
+The page can call `openSource(sourceID,jointName)` to show a captured joint in the host's source
+review. **Open joint definition** navigates through the original version and stored anchor. These
+calculations do not solve targets, prove reachability, check collision or validate a motion
+sequence. Generated HTML cannot certify its own conclusions.
 
 ## Branches
 
