@@ -205,6 +205,12 @@ components:
     textColor: '{colors.ink}'
     rounded: '{rounded.dialog}'
     width: '440px'
+  file-picker:
+    backgroundColor: '{colors.surface}'
+    textColor: '{colors.ink}'
+    typography: '{typography.body}'
+    rounded: '{rounded.dialog}'
+    width: '780px'
   settings-window:
     backgroundColor: '{colors.surface}'
     textColor: '{colors.ink}'
@@ -510,6 +516,23 @@ its title to the title bar and a short status.
 anchor's box on screen, so it lines up with a control in a transformed plane. It stays 8 px inside
 the window, opens above the anchor when there is no room below, and closes on an outside press or
 Escape, returning focus to what opened it.
+
+### Ordinary window dialogs
+
+**The Window Dialog Rule.** Ordinary file choices and notices use the shared dialog in the
+requesting Viewer window. Size notices to their copy, scroll long details and keep actions visible.
+Show a message once when it matches the title. In these dialogs, keyboard focus retains the primary
+action's accent fill and a destructive action's danger ink.
+
+**The File Choice Rule.** Keep folder navigation and the editable path above the browser, with
+Locations, Favorites and Recent beside the filtered file list. Use bounded scrolling for places,
+files and destination fields while the footer stays stationary. Keep File name, file type, new
+folder entry and conflict recovery within the chooser. Retain the order of multiple selections in
+the result. Keep System dialog… visible beside the chooser actions for an explicit OS fallback.
+
+The file chooser fits inside the viewport and narrows its places column when space is limited.
+Protected approval and platform access prompts retain the native boundaries described in the
+[window-dialog decision](docs/adr/0012-window-owned-dialogs.md).
 
 ### Contextual discovery and pinned tools
 

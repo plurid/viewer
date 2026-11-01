@@ -4,6 +4,7 @@ import { initialize } from './renderer/state/store';
 import { markStartup } from './renderer/app/startup';
 import { Empty } from './renderer/ui/primitives';
 import { QuitHint } from './renderer/app/QuitHint';
+import { DialogHost } from './renderer/dialogs/DialogHost';
 import './renderer/styles.css';
 // Failures reach the local diagnostic log; each window reports at most 50.
 let reports = 0;
@@ -26,6 +27,7 @@ if (new URLSearchParams(location.search).get('window') === 'settings')
         <>
           <SettingsWindow />
           <QuitHint />
+          <DialogHost />
         </>,
       ),
     )
@@ -40,6 +42,7 @@ else
         <>
           <App />
           <QuitHint />
+          <DialogHost />
         </>,
       );
     })

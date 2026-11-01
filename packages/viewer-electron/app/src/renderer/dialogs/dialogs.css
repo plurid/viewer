@@ -1,0 +1,287 @@
+.dialog.viewer-file-picker {
+  width: 780px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+}
+.viewer-file-picker[open] {
+  display: flex;
+  flex-direction: column;
+}
+.viewer-file-picker > header,
+.viewer-file-picker > footer,
+.file-picker-navigation,
+.file-picker-fields {
+  flex: none;
+}
+.file-picker-navigation {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+  padding: var(--gap-content) var(--gap-panel);
+  border-bottom: 1px solid var(--line);
+}
+.viewer-file-picker .file-picker-navigation form {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline);
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+}
+.file-picker-navigation form > svg {
+  flex: none;
+  color: var(--muted);
+}
+.file-picker-navigation input {
+  flex: 1;
+  min-width: 0;
+}
+.file-picker-message {
+  margin: 0;
+  padding: var(--gap-content) var(--gap-panel);
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.file-picker-browser {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  min-height: 140px;
+  height: min(360px, 42vh);
+  flex: 1 1 auto;
+}
+.file-picker-places {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gap-inline);
+  background: var(--space);
+  border-right: 1px solid var(--line);
+}
+.file-picker-places h2 {
+  margin: var(--gap-content) var(--gap-inline) var(--gap-small);
+  font-size: var(--text-compact);
+  color: var(--muted);
+  font-weight: 600;
+}
+.file-picker-places section:first-child h2 {
+  margin-top: var(--gap-small);
+}
+.file-picker-places button {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline);
+  width: 100%;
+  text-align: left;
+  padding: var(--gap-small) var(--gap-inline);
+}
+.file-picker-places button svg {
+  flex: none;
+  color: var(--muted);
+}
+.file-picker-places button span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.file-picker-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.file-picker-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline);
+  padding: var(--gap-small) var(--gap-content);
+  border-bottom: 1px solid var(--line);
+}
+.file-picker-filter > svg {
+  color: var(--muted);
+  flex: none;
+}
+.file-picker-filter input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border-color: transparent;
+}
+.file-picker-columns {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--gap-small) var(--gap-panel);
+  color: var(--muted);
+  font-size: var(--text-compact);
+  border-bottom: 1px solid var(--line);
+}
+.file-picker-files {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.file-picker-rows {
+  position: relative;
+}
+.file-picker-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline);
+  padding: 0 var(--gap-panel);
+  cursor: default;
+}
+.file-picker-row > svg {
+  flex: none;
+  color: var(--accent);
+}
+.file-picker-row > span {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-picker-row small {
+  color: var(--muted);
+  font-size: var(--text-compact);
+  font-variant-numeric: tabular-nums;
+}
+.file-picker-row:hover {
+  background: var(--raised);
+}
+.file-picker-row.selected,
+.file-picker-row.selected:hover {
+  background: var(--selection);
+}
+.file-picker-row[aria-disabled='true'] {
+  color: var(--muted);
+}
+.file-picker-row[aria-disabled='true'] > svg {
+  color: var(--muted);
+}
+.file-picker-empty {
+  padding: var(--gap-dialog);
+  color: var(--muted);
+}
+.file-picker-fields {
+  display: grid;
+  gap: var(--gap-content);
+  padding: var(--gap-content) var(--gap-panel);
+  border-top: 1px solid var(--line);
+  max-height: 35vh;
+  overflow: auto;
+}
+.file-picker-fields:empty {
+  display: none;
+}
+.file-picker-name,
+.file-picker-type {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--gap-content);
+}
+.file-picker-name input,
+.file-picker-type .choice-button {
+  width: 100%;
+  min-width: 0;
+}
+.file-picker-fields .error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.viewer-file-picker .file-picker-new-folder {
+  display: flex;
+  align-items: end;
+  gap: var(--gap-inline);
+  padding: 0;
+}
+.file-picker-new-folder label {
+  display: grid;
+  gap: var(--gap-small);
+  flex: 1;
+  min-width: 0;
+}
+.file-picker-new-folder input {
+  min-width: 0;
+  width: 100%;
+}
+.file-picker-conflict {
+  display: grid;
+  gap: var(--gap-inline);
+}
+.file-picker-conflict p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.file-picker-conflict > div {
+  display: flex;
+  justify-content: end;
+  gap: var(--gap-inline);
+}
+.viewer-file-picker footer {
+  padding: var(--gap-content) var(--gap-panel);
+  gap: var(--gap-inline);
+}
+.file-picker-system {
+  margin-right: auto;
+}
+.file-picker-selection {
+  font-size: var(--text-compact);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 160px;
+}
+.viewer-message-dialog {
+  max-height: calc(100vh - 32px);
+}
+.viewer-message-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.viewer-message-copy {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gap-dialog);
+  display: grid;
+  gap: var(--gap-content);
+}
+.viewer-message-copy p {
+  margin: 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.viewer-message-dialog footer {
+  flex: none;
+  flex-wrap: wrap;
+}
+#viewer .dialog:is(.viewer-file-picker, .viewer-message-dialog) button.primary:focus-visible {
+  background: var(--accent);
+  color: var(--space);
+  filter: brightness(1.1);
+}
+#viewer .dialog:is(.viewer-file-picker, .viewer-message-dialog) button.danger:focus-visible {
+  color: var(--danger);
+}
+@media (max-width: 620px) {
+  .file-picker-browser {
+    grid-template-columns: 130px minmax(0, 1fr);
+  }
+  .file-picker-places {
+    padding: var(--gap-tight);
+  }
+  .file-picker-navigation {
+    padding: var(--gap-inline);
+  }
+  .file-picker-selection {
+    display: none;
+  }
+}

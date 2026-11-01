@@ -1,4 +1,4 @@
-import { dialog, type BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import path from 'node:path';
 import type { DesktopEvent } from '../../domain/contracts';
 import { errorMessage } from '../../domain/errors';
@@ -7,7 +7,8 @@ import type { FileAccess } from '../files/file-access';
 import type { Resources } from '../previews/resources';
 import type { TextFiles } from '../editing/text-files';
 import type { TextBuffers } from '../editing/text-buffers';
-import { askNatively } from '../native/native-confirmation';
+import { showViewerMessage } from '../native/native-confirmation';
+import { saveDialog } from '../native/dialogs';
 
 type EditingHandlers = Pick<
   ApiHandlers,
@@ -32,7 +33,7 @@ interface EditingPorts {
   emit(event: DesktopEvent): void;
 }
 
-/** All native text dialogs, grants, saves and recovery buffers share this handler group. */
+/** Text dialogs, grants, saves and recovery buffers share this handler group. */
 export function createEditingHandlers(ports: EditingPorts): EditingHandlers {
   return {
     textEdit: (args, senderID) => {
@@ -61,9 +62,7 @@ export function createEditingHandlers(ports: EditingPorts): EditingHandlers {
           : path.join(ports.home, 'Desktop', path.basename(name)),
         securityScopedBookmarks: ports.fileAccess.scoped,
       };
-      const { canceled, filePath, bookmark } = window
-        ? await dialog.showSaveDialog(window, options)
-        : await dialog.showSaveDialog(options);
+      const { canceled, filePath, bookmark } = await saveDialog(window, options, true);
       if (canceled || !filePath) return null;
       await ports.fileAccess.allowOnce(filePath, bookmark);
       await ports.fileAccess.require([filePath]);
@@ -76,22 +75,34 @@ export function createEditingHandlers(ports: EditingPorts): EditingHandlers {
       const [kind, name] = args;
       const window = ports.window(senderID);
       if (kind === 'revert')
-        return (await askNatively(window, {
-          message: `Revert “${name}” to the saved version?`,
-          detail: 'Your unsaved edits are discarded. The saved file is not changed.',
-          buttons: ['Cancel', 'Revert'],
-          defaultId: 0,
-          cancelId: 0,
-        })) === 1
+        return (
+          await showViewerMessage(
+            window,
+            {
+              title: 'Revert changes?',
+              message: `Revert “${name}” to the saved version?`,
+              detail: 'Your unsaved edits are discarded. The saved file is not changed.',
+              buttons: ['Cancel', 'Revert'],
+              defaultId: 0,
+              cancelId: 0,
+            },
+            1,
+          )
+        ).response === 1
           ? 'discard'
           : 'cancel';
-      const choice = await askNatively(window, {
-        message: `Save the changes to “${name}” before closing it?`,
-        detail: 'If you don’t save, your changes are discarded.',
-        buttons: ['Save', 'Don’t Save', 'Cancel'],
-        defaultId: 0,
-        cancelId: 2,
-      });
+      const { response: choice } = await showViewerMessage(
+        window,
+        {
+          title: 'Save changes?',
+          message: `Save the changes to “${name}” before closing it?`,
+          detail: 'If you don’t save, your changes are discarded.',
+          buttons: ['Save', 'Don’t Save', 'Cancel'],
+          defaultId: 0,
+          cancelId: 2,
+        },
+        1,
+      );
       return (['save', 'discard', 'cancel'] as const)[choice] ?? 'cancel';
     },
     bufferList: async () => ({

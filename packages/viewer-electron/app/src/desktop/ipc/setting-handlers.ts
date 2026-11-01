@@ -59,13 +59,13 @@ export function createSettingHandlers(ports: SettingPorts): SettingHandlers {
     configRestore: () => ports.settings.restoreConfiguration(),
     configTransfer: async ([direction], owner) => {
       if (direction === 'export') {
-        const file = await saveOnce(ports.fileAccess, undefined, {
+        const file = await saveOnce(ports.fileAccess, ports.window(owner), {
           title: 'Export configuration',
           defaultPath: 'config.jsonc',
         });
         if (file) await ports.settings.exportConfiguration(file);
       } else {
-        const file = await openOnce(ports.fileAccess, undefined, {
+        const file = await openOnce(ports.fileAccess, ports.window(owner), {
           title: 'Import configuration',
           filters: [{ name: 'Configuration', extensions: ['jsonc', 'json'] }],
         });

@@ -17,7 +17,7 @@ reads bounded evidence through the runtime, never local paths. Refresh is explic
 the earlier snapshot. Portable exports and backups strip source-path authority.
 
 Result export is a request for host review. The host binds that review to both content and input
-revisions, checks them again after the native picker and creates only a new file. A frame cannot
+revisions, checks them again after the save dialog and creates only a new file. A frame cannot
 silently write a result or replace an existing file. Preview observations report loading and runtime
 errors; they do not certify calculation correctness. Repair attempts remain bounded.
 

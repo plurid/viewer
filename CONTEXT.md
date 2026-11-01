@@ -147,6 +147,11 @@ Shared controls live in `src/renderer/ui/`; a feature's own dialogs and panels s
 feature. `SpaceOverlay` (`renderer/workspace/tours/TourBar.tsx`) is the grid that holds the panels
 over the space. [DESIGN.md](DESIGN.md) holds their rules.
 
+Ordinary open/save dialogs and app notices use `renderer/dialogs/DialogHost.tsx`. Their desktop
+owner is `desktop/native/window-dialogs.ts`, attached to each window by the bridge. The native
+dialog facades retain sandbox bookmark panels, explicit system-picker fallback and protected
+approvals. [Window-owned dialogs](docs/adr/0012-window-owned-dialogs.md) records the boundary.
+
 | Control                         | Owner                                                                                            |
 | ------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `Disclosure`                    | `renderer/ui/Disclosure.tsx`; base.css draws every summary, `disclosure.css` places each variant |

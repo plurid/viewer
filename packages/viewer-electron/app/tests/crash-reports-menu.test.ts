@@ -13,6 +13,7 @@ const native = vi.hoisted(() => ({
   showMessageBox: vi.fn(async () => ({ response: 0 })),
 }));
 vi.mock('electron', () => ({
+  BrowserWindow: { getFocusedWindow: () => null },
   Menu: { buildFromTemplate: native.buildFromTemplate, setApplicationMenu: vi.fn() },
   app: { isPackaged: true, getPath: () => native.crashDumps, getVersion: () => '1.0.0' },
   shell: { openPath: native.openPath, showItemInFolder: vi.fn(), openExternal: vi.fn() },

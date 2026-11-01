@@ -1,4 +1,5 @@
 import { reconstructionRequestSchema } from '../../domain/canvases/reconstruction';
+import { dialogRequestSchema } from '../../domain/dialogs';
 import { canvasRequestSchema } from '../../domain/canvases/document';
 import { maximumWorkspaces } from '../../domain/workspaces/catalog';
 /** Argument schemas for every IPC method. The bridge validates each call against these
@@ -216,6 +217,7 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export const schemas = {
+  dialog: z.tuple([dialogRequestSchema]),
   speech: z.tuple([speechRequestSchema]),
   createTask: z.tuple([taskWorkflowInputSchema]),
   optimization: z.tuple([optimizationRequestSchema]),
@@ -835,6 +837,7 @@ export const schemas = {
  * provider's model data permission and the ⌘Q hint. The workspace window receives every event.
  */
 export const settingsEvents: readonly DesktopEvent['type'][] = [
+  'dialog',
   'speech-changed',
   'settings',
   'index',
@@ -848,6 +851,7 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  dialog: 'both',
   speech: 'both',
   createTask: 'viewer',
   optimization: 'viewer',

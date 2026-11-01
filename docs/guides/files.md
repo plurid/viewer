@@ -9,6 +9,25 @@ any command by name · **File** and **Edit** in the menu bar
 Each folder remembers its own view, sort order and column widths. A second plane on the same folder
 keeps its own selection.
 
+## Open and save in Viewer
+
+File, folder and save dialogs open inside the Viewer window that requested them. Settings uses its
+own window. Locations, Favorites and recent folders appear on the left.
+
+1. Choose a location, double-click a folder, or enter a **Folder path** and press **Enter**. **⌘⇧G**
+   (**Ctrl+Shift+G** on Windows/Linux) focuses the path. `~` opens Home.
+2. Type in **Filter by name…** to narrow the current folder. Press **↓** to move into the list.
+   **Show hidden files** includes names starting with a dot. **File type** limits eligible files.
+3. Select a file and choose **Open**. When multiple selection is available, use **Shift** for a
+   range or **⌘** (**Ctrl**) to add an item. **⌘A** (**Ctrl+A**) selects eligible files only.
+4. When saving, enter **File name** and press **Enter** or choose **Save**. **New folder** creates a
+   destination without leaving the dialog. Exports that require a new file refuse existing names;
+   editor **Save As** asks before replacing a file and preserves its previous version.
+
+**Escape** or **Cancel** leaves the selection unchanged. **System dialog…** opens the operating
+system picker when needed. macOS sandbox access grants and protected agent approvals continue to use
+system dialogs. Editor save warnings and ordinary app notices use Viewer's dialog style.
+
 ## Pick a view
 
 | View        | Key    | Best for                                             |

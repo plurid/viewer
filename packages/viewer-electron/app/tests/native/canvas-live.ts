@@ -1,11 +1,9 @@
 /** Verify saved live-model canvases without contacting a provider. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Canvases } from '../../src/desktop/canvases/service';
 import { ChatDocumentStore } from '../../src/desktop/chat/documents';
@@ -110,7 +108,6 @@ await service.flush();
 const binary =
   process.env.VIEWER_TEST_BINARY ??
   path.join(appRoot, 'out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer');
-const execute = promisify(execFile);
 let app: Awaited<ReturnType<typeof ownedApp>> | undefined;
 let main: CanvasConnection | undefined;
 const checks: string[] = [];
@@ -227,51 +224,33 @@ try {
             pageCall(() => document.querySelector('.canvas-result strong')?.textContent),
           ),
         (name) => !!name && name !== filename,
-        'next export arrives while native save is pending',
+        'next export arrives while Viewer save is pending',
       );
     }
-    const picker = await execute(
-      '/usr/bin/osascript',
-      [
-        '-e',
-        `on run argv
-  tell application "System Events"
-    set targetProcess to first application process whose unix id is (item 1 of argv as integer)
-    tell targetProcess
-      repeat 60 times
-        if exists sheet 1 of window 1 then exit repeat
-        delay 0.1
-      end repeat
-      if not (exists sheet 1 of window 1) then error "Owned Save sheet not found"
-      tell sheet 1 of window 1
-        if not (exists button "Save") then error "Save control not found"
-        click button "Save"
-      end tell
-    end tell
-  end tell
-end run`,
-        String(app!.child.pid),
-      ],
-      { timeout: 20000 },
-    ).then(
-      () => 'owned Save button clicked',
-      async (error: unknown) => {
-        // The sheet may finish closing before System Events can inspect it.
-        // Accept that only when this run's new file already matches the review.
-        if (
-          !String(error).includes('Owned Save sheet not found') ||
-          (await readFile(saved, 'utf8').catch(() => undefined)) !== content
-        )
-          throw error;
-        return 'sheet closed before automation; exact new file verified';
-      },
+    await until(
+      () =>
+        main!.evaluate(
+          pageCall(() => {
+            const picker = document.querySelector('.viewer-file-picker[open]');
+            return (
+              !!picker && !picker.querySelector<HTMLButtonElement>('footer .primary')?.disabled
+            );
+          }),
+        ),
+      Boolean,
+      'Viewer save dialog ready',
+    );
+    await main!.evaluate(
+      pageCall(() =>
+        document.querySelector<HTMLButtonElement>('.viewer-file-picker footer .primary')!.click(),
+      ),
     );
     await until(
       () => readFile(saved, 'utf8').catch(() => ''),
       (text) => text === content,
-      'native picker saves exact reviewed result',
+      'Viewer picker saves exact reviewed result',
     );
-    observations.push({ export: filename, picker });
+    observations.push({ export: filename, picker: 'Viewer Save button clicked' });
     return { file: saved, content };
   };
   const actions = async () => {
@@ -372,14 +351,14 @@ end run`,
     const csv = await exportResult('csvBtn', 'supplier-comparison.csv', 118, 'mdBtn');
     assert.match(csv.content, /North,40,42,180,7,1860/);
     assert.match(csv.content, /East,40,48,40,2,1960/);
-    checks.push('CSV saved through native picker matches the reviewed generated output');
+    checks.push('CSV saved through Viewer dialog matches the reviewed generated output');
     await beat(125);
     const markdown = await exportResult(null, 'decision-report.md', 148);
     assert.match(markdown.content, /100/);
     checks.push(
-      'Markdown report saved through native picker matches the reviewed generated output',
+      'Markdown report saved through Viewer dialog matches the reviewed generated output',
     );
-    checks.push('an export requested during a native save remains available for the next review');
+    checks.push('an export requested while saving remains available for the next review');
     await beat(152);
     await main!.evaluate(
       pageCall(() =>

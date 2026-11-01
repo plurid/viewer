@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, shell } from 'electron';
+import { BrowserWindow, shell } from 'electron';
+import { showViewerMessage } from '../native/native-confirmation';
 import path from 'node:path';
 import { browserAddress } from '../../domain/previews/browser';
 import { updateFeedConfiguration } from '../release';
@@ -16,9 +17,7 @@ async function presentNotice(notice: UpdateNotice): Promise<boolean> {
     cancelId: notice.download ? 1 : 0,
   };
   const parent = BrowserWindow.getFocusedWindow();
-  const { response } = parent
-    ? await dialog.showMessageBox(parent, options)
-    : await dialog.showMessageBox(options);
+  const { response } = await showViewerMessage(parent ?? undefined, options);
   return !!notice.download && response === 0;
 }
 
@@ -30,7 +29,7 @@ async function openDownload(url: string): Promise<void> {
   await shell.openExternal(address.href);
 }
 
-/** Updates for this copy of Viewer, with native dialogs; its record stays in `dataPath`. */
+/** Updates for this copy of Viewer; its record stays in `dataPath`. */
 export function applicationUpdates(dataPath: string, checkAtLaunch: () => boolean): Updates {
   return new Updates(path.join(dataPath, 'updates-v1.json'), {
     configuration: updateFeedConfiguration,

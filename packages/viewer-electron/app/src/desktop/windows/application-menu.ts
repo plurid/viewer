@@ -1,4 +1,5 @@
-import { Menu, app, dialog, shell } from 'electron';
+import { Menu, app, BrowserWindow, shell } from 'electron';
+import { showViewerMessage } from '../native/native-confirmation';
 import type { MenuItemConstructorOptions } from 'electron';
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -402,7 +403,7 @@ export function installApplicationMenu(
             click: () => {
               if (existsSync(diagnosticFile)) shell.showItemInFolder(diagnosticFile);
               else
-                void dialog.showMessageBox({
+                void showViewerMessage(BrowserWindow.getFocusedWindow() ?? undefined, {
                   type: 'info',
                   message: 'No problems have been recorded.',
                   detail: 'Viewer keeps a local log of errors here for support. It is never sent.',
@@ -416,7 +417,7 @@ export function installApplicationMenu(
               const folder = app.getPath('crashDumps');
               if (crashReported(folder)) void shell.openPath(folder);
               else
-                void dialog.showMessageBox({
+                void showViewerMessage(BrowserWindow.getFocusedWindow() ?? undefined, {
                   type: 'info',
                   message: 'No crash reports have been recorded.',
                   detail:

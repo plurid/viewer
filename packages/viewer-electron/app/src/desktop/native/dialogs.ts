@@ -5,6 +5,29 @@ import {
   type SaveDialogOptions,
 } from 'electron';
 import type { FileAccess } from '../files/file-access';
+import { windowDialogs } from './window-dialogs';
+
+/** OS panels remain the source of sandbox bookmarks and an explicit escape hatch. */
+export async function openDialog(window: BrowserWindow | undefined, options: OpenDialogOptions) {
+  const owner = !options.securityScopedBookmarks && windowDialogs(window);
+  if (owner) {
+    const result = await owner.open(options);
+    if (result) return result;
+  }
+  return window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options);
+}
+export async function saveDialog(
+  window: BrowserWindow | undefined,
+  options: SaveDialogOptions,
+  overwrite = false,
+) {
+  const owner = !options.securityScopedBookmarks && windowDialogs(window);
+  if (owner) {
+    const result = await owner.save(options, overwrite);
+    if (result) return result;
+  }
+  return window ? dialog.showSaveDialog(window, options) : dialog.showSaveDialog(options);
+}
 
 /** The grants a native panel's choice carries into Viewer. */
 export type DialogAccess = Pick<FileAccess, 'scoped' | 'remember' | 'allowOnce' | 'require'>;
@@ -18,7 +41,7 @@ export async function chooseRemembered(
   options: OpenOptions,
   directory: boolean,
 ): Promise<string | undefined> {
-  const result = await dialog.showOpenDialog(window, {
+  const result = await openDialog(window, {
     ...options,
     securityScopedBookmarks: access.scoped,
   });
@@ -35,7 +58,7 @@ export async function chooseRememberedFiles(
   options: Omit<OpenOptions, 'properties'>,
   limit: { count: number; message: string },
 ): Promise<string[]> {
-  const result = await dialog.showOpenDialog(window, {
+  const result = await openDialog(window, {
     ...options,
     properties: ['openFile', 'multiSelections'],
     securityScopedBookmarks: access.scoped,
@@ -58,9 +81,7 @@ export async function openOnce(
     properties: ['openFile'],
     securityScopedBookmarks: access.scoped,
   };
-  const result = window
-    ? await dialog.showOpenDialog(window, settings)
-    : await dialog.showOpenDialog(settings);
+  const result = await openDialog(window, settings);
   const chosen = result.filePaths[0];
   if (result.canceled || !chosen) return;
   await access.allowOnce(chosen, result.bookmarks?.[0]);
@@ -75,9 +96,7 @@ export async function saveOnce(
   options: SaveOptions,
 ): Promise<string | undefined> {
   const settings: SaveDialogOptions = { ...options, securityScopedBookmarks: access.scoped };
-  const result = window
-    ? await dialog.showSaveDialog(window, settings)
-    : await dialog.showSaveDialog(settings);
+  const result = await saveDialog(window, settings);
   if (result.canceled || !result.filePath) return;
   await access.allowOnce(result.filePath, result.bookmark);
   await access.require([result.filePath]);

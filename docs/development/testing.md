@@ -73,6 +73,14 @@ app.
 
 ## Focused native scenarios
 
+`tests/native/dialogs.ts` checks Viewer folder selection, filtered multiple-file selection, folder
+creation, Save As through Enter, editor warnings and Settings window ownership. It captures wide and
+narrow light/dark layouts, reads back a newly saved file and retains every fixture. It never
+replaces or removes a file and does not qualify native permission prompts. Run it against the
+candidate with both preservation variables above. `tests/window-dialogs.test.ts` and
+`tests/file-picker.test.tsx` cover cancellation, stale requests, access revocation, keyboard
+selection and conflict review.
+
 `tests/native/cli.ts` checks offline help/completion, exit codes, the authenticated packaged CLI,
 content-search evidence, read-only Git, a real inspection workflow, proposal cancellation and speech
 setup review at normal/minimum window sizes. It uses synthetic authority only inside its generated
@@ -289,13 +297,13 @@ evaluation. It is not a generic session selector or a robot rehearsal. It import
 HTML and source snapshots into a separate credential-free profile without changing the generated
 HTML or contacting a provider.
 
-The replay changes inputs, checks the visible totals, saves CSV and Markdown through the native
-picker, reads back the files, reopens the report and checks state after restart. On macOS, System
-Events targets only the owned test application's Save sheet. Retain inputs, failures and results.
+The replay changes inputs, checks the visible totals, saves CSV and Markdown through the Viewer save
+dialog, reads back the files, reopens the report and checks state after restart. It interacts only
+with the owned test application's dialogs. Retain inputs, failures and results.
 
 Add `--record` to retain frames, MP4, GIF and screenshots with the result report. This captures
-existing output, not a fresh model call or a newly generated branch. The renderer recording excludes
-the native Save sheet; restart is checked after that capture. Do not imply either appears in the
+existing output, not a fresh model call or a newly generated branch. The renderer recording includes
+the Viewer save dialog; restart is checked after that capture. Do not imply restart appears in the
 video without recording it separately. Inspect captures at their delivery resolution and remove
 personal information from the public edit, while preserving the original evidence.
 

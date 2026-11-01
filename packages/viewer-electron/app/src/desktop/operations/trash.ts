@@ -18,6 +18,7 @@ import { linuxMounts, trashRoots, type TrashRoot } from './trash-locations';
 import { macFiles } from '../native/macos-files';
 import type { FileAccess } from '../files/file-access';
 import { errorMessage } from '../../domain/errors';
+import { openDialog } from '../native/dialogs';
 
 const run = promisify(execFile);
 const limit = 4000;
@@ -200,7 +201,7 @@ export class Trash {
     }
   }
   async #pick(window: BrowserWindow): Promise<string | undefined> {
-    const picked = await dialog.showOpenDialog(window, {
+    const picked = await openDialog(window, {
       title: 'Restore to…',
       message: 'Choose a destination. Existing files will be kept.',
       properties: ['openDirectory', 'dontAddToRecent'],

@@ -1,4 +1,5 @@
 import type { ReconstructionRequest, ReconstructionReply } from './canvases/reconstruction';
+import type { DialogPrompt, DialogRequest, DialogReply } from './dialogs';
 import type { CanvasDocument, CanvasRequest, CanvasReply } from './canvases/document';
 import type { PromptAnswer, PromptRequest, PromptHistoryEntry } from './command-line/prompt';
 import type { SpokenAnswer, SpokenRequest } from './command-line/spoken';
@@ -663,6 +664,7 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'dialog'; prompt: DialogPrompt | null }
   | { type: 'speech-changed' }
   | { type: 'speech'; event: SpeechSessionEvent }
   | { type: 'prepare-note-trash'; id: string; token: string }
@@ -719,6 +721,7 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  dialog(request: DialogRequest): Promise<DialogReply>;
   speech(request: SpeechRequest): Promise<SpeechReply>;
   createTask(input: TaskWorkflowInput): Promise<TaskWorkflowReply>;
   optimization(request: OptimizationRequest): Promise<OptimizationReply>;
@@ -975,7 +978,7 @@ export interface ViewerAPI {
   ): Promise<{ file: string; version: TextVersion } | null>;
   /** An editor closed: its saves are no longer its own to overwrite. */
   textEditEnd(session: string): Promise<void>;
-  /** Asks natively what to do with unsaved text: before closing it, or before Revert to Saved. */
+  /** Asks what to do with unsaved text: before closing it, or before Revert to Saved. */
   textPrompt(kind: 'close' | 'revert', name: string): Promise<'save' | 'discard' | 'cancel'>;
   /** Unsaved text kept in the profile, without the text, and what could not be read. */
   bufferList(): Promise<{ buffers: TextBufferSummary[]; problems: string[] }>;

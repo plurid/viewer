@@ -127,6 +127,8 @@ import { NativeSelections } from './native/native-selections';
 import { Pasteboard } from './native/pasteboard';
 import { confirmAgentProposal, confirmNatively } from './native/native-confirmation';
 import { chooseRemembered, chooseRememberedFiles, openOnce, saveOnce } from './native/dialogs';
+import { attachWindowDialogs, windowDialogs, WindowDialogs } from './native/window-dialogs';
+import type { DialogPlace } from '../domain/dialogs';
 import { canvasResultName } from '../domain/canvases/results';
 import { AgentAccess } from './agents/agent-access';
 import { fileCoordination } from './files/file-coordination';
@@ -1536,6 +1538,39 @@ export class Desktop {
   }
   attach(window: BrowserWindow, role: WindowRole, workspaceID?: string): void {
     const sender = window.webContents.id;
+    attachWindowDialogs(
+      window,
+      new WindowDialogs({
+        home: this.home,
+        access: (paths) => this.fileAccess.require(paths),
+        publish: (prompt) => {
+          if (!window.isDestroyed()) sendEvent(window.webContents, { type: 'dialog', prompt });
+        },
+        places: async () => {
+          const saved = (await this.storage.load()).state;
+          const locations = defaultSidebarLocations(
+            process.platform as DesktopPlatform,
+            this.home,
+            process.mas ? undefined : (folder) => app.getPath(folder),
+            process.env.ProgramFiles,
+          );
+          const places: DialogPlace[] = [
+            ...locations
+              .filter((item) => path.isAbsolute(item.path))
+              .map((item) => ({ ...item, group: 'Locations' as const })),
+            ...(saved?.favorites ?? []).map((item) => ({ ...item, group: 'Favorites' as const })),
+            ...(saved?.recents ?? []).slice(0, 8).map((file) => ({
+              name: path.basename(file) || file,
+              path: file,
+              group: 'Recent' as const,
+            })),
+          ];
+          return places.filter(
+            (item, index) => places.findIndex((other) => other.path === item.path) === index,
+          );
+        },
+      }),
+    );
     if (role === 'viewer' && workspaceID) this.workspaceSessions.reserve(sender, workspaceID);
     this.windows.set(sender, {
       window,
@@ -1994,6 +2029,11 @@ export class Desktop {
     const isAgent = (owner: number) => this.isAgentDriven(owner);
     const emit = (event: DesktopEvent) => this.emit(event);
     return {
+      dialog: ([request], owner) => {
+        const dialogs = windowDialogs(requireWindow(owner), false);
+        if (!dialogs) throw new Error('The dialog window is unavailable.');
+        return dialogs.request(request);
+      },
       ...createWindowHandlers({
         host: this.options,
         shellCommand: this.shellCommand,

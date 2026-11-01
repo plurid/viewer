@@ -1,5 +1,17 @@
 import { dialog, type BrowserWindow, type MessageBoxOptions } from 'electron';
 import type { AgentProposal } from '../../domain/agents/requests';
+import { windowDialogs } from './window-dialogs';
+
+/** Ordinary notices use the owning window. Security approvals and failed renderers stay native. */
+export async function showViewerMessage(
+  window: BrowserWindow | undefined,
+  options: MessageBoxOptions,
+  destructiveId?: number,
+) {
+  const owner = windowDialogs(window);
+  if (owner && !options.checkboxLabel) return owner.message(options, destructiveId);
+  return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options);
+}
 
 /** The desktop process asks the person itself; the renderer cannot answer this dialog. */
 export async function confirmAgentProposal(
