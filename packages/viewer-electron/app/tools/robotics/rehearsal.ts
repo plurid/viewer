@@ -96,6 +96,18 @@ export async function readEvidence(file: string | URL, maximum = 8 * 1024 * 1024
 export const readJSON = async (file: string | URL): Promise<unknown> =>
   JSON.parse((await readEvidence(file)).toString('utf8'));
 
+export async function readRobotSessionResult(folder: string): Promise<unknown> {
+  let recovered = false;
+  try {
+    await readJSON(path.join(folder, 'recovery-started.json'));
+    recovered = true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  // An interrupted recovery must not release another paid attempt against partially applied state.
+  return readJSON(path.join(folder, recovered ? 'recovered-result.json' : 'result.json'));
+}
+
 async function specification() {
   const manifest = manifestSchema.parse(await readJSON(fixture('so101/manifest.json')));
   const placement = await readJSON(fixture('base-placement.json'));
@@ -259,6 +271,27 @@ const budgetSchema = z
   })
   .strict();
 export type RobotBudget = z.infer<typeof budgetSchema>;
+const extensionSchema = z
+  .object({
+    after: z
+      .object({
+        sessions: z.number().int().nonnegative(),
+        requests: z.number().int().nonnegative(),
+      })
+      .strict(),
+    sessions: z.number().int().min(1).max(8),
+    requests: z.number().int().min(1).max(64),
+    approval: z.string().trim().min(1).max(1000),
+  })
+  .strict();
+const reallocationSchema = z
+  .object({
+    maximumSessions: z.number().int().min(1).max(99),
+    maximumRequests: z.number().int().positive(),
+    previousBudget: hashSchema,
+    approval: z.string().trim().min(1).max(1000),
+  })
+  .strict();
 
 /** Exclusive records reserve budget before work; failures and interruptions never refund it. */
 export class RobotRehearsalLedger {
@@ -282,13 +315,12 @@ export class RobotRehearsalLedger {
       throw new Error('The session ledger is incomplete.');
     return names.map((name) => path.join(this.root, 'sessions', name));
   }
-  async begin(stage: RobotStage, metadata: unknown) {
-    robotStageSchema.parse(stage);
-    const budget = budgetSchema.parse(await readJSON(path.join(this.root, 'budget.json')));
+  private async completedUsage() {
     const previous = await this.sessions();
+    let requests = 0;
     for (const session of previous) {
       // An absent or malformed result is an interrupted attempt, not another free attempt.
-      const result = await readJSON(path.join(session, 'result.json'));
+      const result = await readRobotSessionResult(session);
       if (
         !result ||
         typeof result !== 'object' ||
@@ -296,23 +328,109 @@ export class RobotRehearsalLedger {
         !['generated', 'failed', 'stopped'].includes(String(result.status))
       )
         throw new Error('Inspect the interrupted session before proceeding.');
+      const names = (await readdir(session))
+        .filter((name) => /^request-\d{2}\.json$/.test(name))
+        .sort();
+      if (names.some((name, index) => Number(name.slice(8, 10)) !== index + 1))
+        throw new Error('The request ledger is incomplete.');
+      requests += names.length;
     }
-    if (previous.length >= budget.sessions)
+    return { sessions: previous.length, requests };
+  }
+  /** Record one separately approved extension without replacing the original allowance. */
+  async extend(sessions: number, requests: number, approval: string) {
+    const budget = budgetSchema.parse(await readJSON(path.join(this.root, 'budget.json')));
+    const after = await this.completedUsage();
+    if (after.sessions !== budget.sessions)
+      throw new Error('Finish the original session allowance before recording an extension.');
+    const extension = extensionSchema.parse({ after, sessions, requests, approval });
+    await saveEvidence(path.join(this.root, 'budget-extension.json'), extension);
+    return extension;
+  }
+  /** Reallocate remaining requests only after explicit approval; the request ceiling cannot grow. */
+  async reallocate(maximumSessions: number, maximumRequests: number, approval: string) {
+    const budget = budgetSchema.parse(await readJSON(path.join(this.root, 'budget.json')));
+    const extension = extensionSchema.parse(
+      await readJSON(path.join(this.root, 'budget-extension.json')),
+    );
+    await this.completedUsage();
+    if (
+      maximumRequests !== extension.after.requests + extension.requests ||
+      maximumSessions <= budget.sessions + extension.sessions
+    )
+      throw new Error('Session reallocation must preserve the existing total request cap.');
+    const grant = reallocationSchema.parse({
+      maximumSessions,
+      maximumRequests,
+      previousBudget: fingerprint({ budget, extension }),
+      approval,
+    });
+    await saveEvidence(path.join(this.root, 'budget-reallocation.json'), grant);
+    return grant;
+  }
+  async begin(stage: RobotStage, metadata: unknown) {
+    robotStageSchema.parse(stage);
+    const budget = budgetSchema.parse(await readJSON(path.join(this.root, 'budget.json')));
+    const usage = await this.completedUsage();
+    let maximumSessions = budget.sessions;
+    let maximumRequests = budget.sessions * budget.requestsPerSession;
+    let previousBudget: string | undefined;
+    try {
+      const extension = extensionSchema.parse(
+        await readJSON(path.join(this.root, 'budget-extension.json')),
+      );
+      if (
+        extension.after.sessions !== budget.sessions ||
+        usage.sessions < extension.after.sessions ||
+        usage.requests < extension.after.requests
+      )
+        throw new Error('The extension does not match the retained session ledger.');
+      maximumSessions += extension.sessions;
+      maximumRequests = extension.after.requests + extension.requests;
+      previousBudget = fingerprint({ budget, extension });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      const grant = reallocationSchema.parse(
+        await readJSON(path.join(this.root, 'budget-reallocation.json')),
+      );
+      if (
+        grant.previousBudget !== previousBudget ||
+        grant.maximumRequests !== maximumRequests ||
+        grant.maximumSessions <= maximumSessions
+      )
+        throw new Error('The session reallocation does not match the existing request cap.');
+      maximumSessions = grant.maximumSessions;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    if (usage.sessions >= maximumSessions)
       throw new Error('The approved session budget is exhausted.');
-    const folder = path.join(this.root, 'sessions', String(previous.length + 1).padStart(2, '0'));
+    if (usage.requests >= maximumRequests)
+      throw new Error('The approved total request budget is exhausted.');
+    const folder = path.join(this.root, 'sessions', String(usage.sessions + 1).padStart(2, '0'));
     await mkdir(folder, { mode: 0o700 });
     await saveEvidence(path.join(folder, 'started.json'), { stage, at: Date.now(), metadata });
-    return new RobotRehearsalSession(folder, budget.requestsPerSession);
+    return new RobotRehearsalSession(
+      folder,
+      Math.min(budget.requestsPerSession, maximumRequests - usage.requests),
+    );
   }
 }
 
 export class RobotRehearsalSession {
   private next = 0;
+  private finished = false;
   constructor(
     readonly folder: string,
     private limit: number,
   ) {}
+  get remainingRequests() {
+    return this.limit - this.next;
+  }
   async reserveRequest(input: unknown) {
+    if (this.finished) throw new Error('This session is finished.');
     if (this.next >= this.limit)
       throw new Error('The approved request budget for this session is exhausted.');
     const number = ++this.next;
@@ -321,6 +439,7 @@ export class RobotRehearsalSession {
     return prefix;
   }
   finish(result: unknown) {
+    this.finished = true;
     return saveEvidence(path.join(this.folder, 'result.json'), result);
   }
 }

@@ -3,9 +3,11 @@
 This is the selected hackathon direction and its implementation audit. The canvas foundation is
 implemented. The robot foundation now reads URDF, attaches scoped STL assets and computes forward
 kinematics. Bounded target solving, independent endpoint verification, fixed-target base comparisons
-and visual pose replay are implemented. The live generated workflow remains unverified. The
-[screenplay](../release/hackathon-demo.md) owns narration, timing and capture requirements; it is
-not evidence that those missing capabilities work.
+and visual pose replay are implemented. Actual Meta-generated creation, refinement and a quoted
+alternative have passed native workflow checks, including comparison save, export/reopen and cold
+restart. The generated interface still needs visual polish and a foreground capture rehearsal. The
+[screenplay](../release/hackathon-demo.md) owns narration, timing and capture requirements; the
+finished film remains outstanding.
 
 ## Product thesis
 
@@ -46,9 +48,10 @@ not treat an unsuccessful numerical solve as proof of unreachability.
 
 ## Implementation audit
 
-The table records source and test coverage, not a newly qualified robot workflow. Automated service
-checks, fixture-based native scenarios and live-provider evidence are different kinds of evidence.
-Keep run-specific results outside this page and follow [testing](../development/testing.md).
+The table records source coverage and qualification boundaries. Automated service checks,
+fixture-based native scenarios and native replay of actual provider output are different kinds of
+evidence. Keep run-specific results outside this page and follow
+[testing](../development/testing.md).
 
 | Film capability                           | Current implementation                                                                                                             | Evidence and remaining boundary                                                                                                                                                                                                                                                                                                                                                            |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -64,7 +67,8 @@ Keep run-specific results outside this page and follow [testing](../development/
 | Move joints and solve targets             | Implemented: forward kinematics, bounded position-only solving and hard position-limit reporting.                                  | [Motion library](../../packages/viewer-electron/app/src/domain/robotics/kinematics.ts), [independent pose tests](../../packages/viewer-electron/app/tests/robotics.test.ts) and [native robot fixture](../../packages/viewer-electron/app/tests/native/robotics.ts). The fixture UI is supplied test code, not live Meta evidence.                                                         |
 | Independently check robot results         | Implemented for endpoint positions and hard joint limits, with saved-input and source bindings.                                    | [Desktop checker](../../packages/viewer-electron/app/src/desktop/robotics/check.ts) uses separate point propagation. [Target tests](../../packages/viewer-electron/app/tests/robot-targets.test.ts) cover SciPy reference agreement, stale inputs and restart. No interval, orientation or collision verification is provided.                                                             |
 | Compare base placements and replay poses  | Implemented: native comparison requires equal model, world targets, tool and tolerance; offline replay interpolates copied joints. | [Comparison owner](../../packages/viewer-electron/app/src/desktop/canvases/robot-check.ts), [replay module](../../packages/viewer-electron/app/src/domain/robotics/replay.ts), [native comparison fixture](../../packages/viewer-electron/app/tests/native/robot-comparison.ts). Both tasks are checked again after restart. Visual interpolation does not check intervals.                |
-| Complete the robot film                   | Unverified: the live Meta creation, refinement and quoted alternative still need qualification.                                    | Existing supplier evaluations and 3D fixtures do not establish this workflow.                                                                                                                                                                                                                                                                                                              |
+| Qualify the generated robot workflow      | Verified in native replay of actual Meta output: articulated creation, target-solving refinement and an exact quoted alternative.  | The alternative keeps the original unchanged and passes independent endpoint checks. Comparison save, paused replay, export/reopen and cold restart passed. A valid response rejected by a local parser was recovered unchanged; failures remain retained. This is functional qualification, not finished footage.                                                                         |
+| Complete the robot film                   | Outstanding: visual polish, foreground interaction rehearsal, capture, narration and captions.                                     | The generated camera needs reframing after moving the base, and the controls need a clearer hierarchy. Native screenshots do not qualify the complete three-minute film.                                                                                                                                                                                                                   |
 
 The [canvas reference](../reference/canvases.md) owns current APIs and limits. The SDK exposes
 state, sources, assets and reviewed proposals/exports. The offline motion library computes supplied
@@ -72,7 +76,7 @@ joint poses. It supplies a bounded position solver and a request for independent
 Viewer. It does not expose arbitrary native execution. The current native robot fixture is
 development evidence, not the completed movie.
 
-## Work required before filming
+## Qualification and work before filming
 
 Use existing document, canvas, preview, operation and conversation owners. Extend their capabilities
 where needed; avoid a parallel application or a hardcoded success demonstration.
@@ -86,22 +90,24 @@ where needed; avoid a parallel application or a hardcoded success demonstration.
 | 5     | Connect quoted alternatives to the completed task.                                                                    | Fork the actual explanation, retain original targets and show a changed base placement without silently changing the original.                                           |
 | 6     | Export, reopen and qualify the complete workflow.                                                                     | Read back the saved result; recover the canvas and motion after restart; complete the real Meta creation/refinement/branch sequence within a separately approved budget. |
 
-The first milestone is a short working loop: load the real arm, move a target, expose a checked
-constraint, change the arrangement and show a checked result. Production remains gated until this
-works. The [robot snapshot decision](../adr/0013-robot-model-snapshots.md) records the implemented
-foundation. The [target-check decision](../adr/0014-robot-target-checks.md) records the solving and
-endpoint-check boundary. The local comparison fixture exercises a meaningful alternative-base
-arrangement and candidate-pose replay. The next gate is the separately approved live Meta creation,
-refinement and quoted-branch run. A supplied HTML fixture cannot qualify generated controls or a
-model explanation. The
+The generated workflow now completes the functional loop: the original candidates miss the fixed
+targets, an explicitly moved base yields candidates within tolerance, and Viewer independently
+checks and saves the comparison. This does not prove the original placement unreachable. The
+[robot snapshot decision](../adr/0013-robot-model-snapshots.md) records the implemented foundation.
+The [target-check decision](../adr/0014-robot-target-checks.md) records the solving and
+endpoint-check boundary. The work items above remain the acceptance checklist; their implementation
+is complete for this bounded case. Next, rehearse the actual pointer interactions in the foreground,
+frame both placements clearly and make the result understandable before recording. A supplied HTML
+fixture cannot qualify generated controls or a model explanation. The
 [staged robot runner](../development/testing.md#robot-creation-revision-and-quoted-alternative)
 prepares pinned public inputs, records the paid allowance across restarts and stops between stages
 for native review. Its offline provider tests establish harness behavior, not live generation.
 
-Live robot creation has exposed generated JavaScript and camera-interaction failures. The native
-review must exercise every movable joint, source navigation, camera changes and cold restart;
-loading the meshes alone is insufficient. Keep diagnostic edits separate from the provider output. A
-locally corrected copy does not qualify the live creation/refinement/branch sequence.
+The retained run includes failed generated JavaScript, camera interaction and replay attempts. The
+successful revisions were produced by the provider; native review did not rewrite their HTML.
+Inspect every movable joint, source navigation, camera gestures and target placement during the
+foreground rehearsal. Keep later visual edits identifiable and separate from the retained provider
+output. Native loading and selected automated interactions do not establish every control's quality.
 
 ## Model and human responsibilities
 

@@ -20,16 +20,20 @@ These source boundaries identify existing implementations. Their inclusion here 
 that every behavior was filmed, that the robot case works, or that all of this code falls within the
 event window.
 
-| Area                  | Concrete behavior                                                                                                           | Primary source boundary                                                                  |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Conversation canvases | Generated selectable HTML in an isolated plane; content revisions separate from saved input state                           | `src/domain/canvases`, `src/desktop/canvases`, `src/renderer/canvases`                   |
-| Quote branches        | Exact quoted range and frozen conversation context; independent canvas; conflict-aware application to the original          | `src/domain/models/chat.ts`, `src/desktop/chat`, `src/renderer/chat`                     |
-| File-backed tools     | Bound inspection snapshots with hashes and coverage; explicit refresh; portable data without source-file authority          | `src/desktop/canvases/sources.ts`, `src/domain/canvases/sources.ts`, `CanvasSources.tsx` |
-| Reviewed results      | CSV, JSON, Markdown and text proposal review; content/state revision checks; exclusive new-file save; open the saved result | `src/domain/canvases/results.ts`, `src/desktop/canvases/service.ts`, `ResultReview.tsx`  |
-| Runtime feedback      | Revision-bound loading/error observations and one bounded repair attempt                                                    | `src/desktop/canvases/observations.ts`, `src/desktop/chat/service.ts`                    |
-| Meta tool protocol    | Paired assistant calls and actual tool results; validated single-step arguments and final replies                           | `src/desktop/models/providers.ts`, `src/desktop/chat/service.ts`                         |
-| Entry point           | **Build tool from selection** opens a contextual draft without sending it automatically                                     | `src/renderer/commands/window-commands/comparison.ts`                                    |
-| Supplier regression   | Fictional request/quotes with known arithmetic; retained live responses; native replay and result/restart checks            | `tools/canvases`, `tests/native/canvas-live.ts`, `tests/native/canvas-productivity.ts`   |
+| Area                           | Concrete behavior                                                                                                                    | Primary source boundary                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Conversation canvases          | Generated selectable HTML in an isolated plane; content revisions separate from saved input state                                    | `src/domain/canvases`, `src/desktop/canvases`, `src/renderer/canvases`                                 |
+| Quote branches                 | Exact quoted range and frozen conversation context; independent canvas; conflict-aware application to the original                   | `src/domain/models/chat.ts`, `src/desktop/chat`, `src/renderer/chat`                                   |
+| File-backed tools              | Bound inspection snapshots with hashes and coverage; explicit refresh; portable data without source-file authority                   | `src/desktop/canvases/sources.ts`, `src/domain/canvases/sources.ts`, `CanvasSources.tsx`               |
+| Reviewed results               | CSV, JSON, Markdown and text proposal review; content/state revision checks; exclusive new-file save; open the saved result          | `src/domain/canvases/results.ts`, `src/desktop/canvases/service.ts`, `ResultReview.tsx`                |
+| Runtime feedback               | Revision-bound loading/error observations and one bounded repair attempt                                                             | `src/desktop/canvases/observations.ts`, `src/desktop/chat/service.ts`                                  |
+| Meta tool protocol             | Paired assistant calls and actual tool results; validated single-step arguments and final replies                                    | `src/desktop/models/providers.ts`, `src/desktop/chat/service.ts`                                       |
+| Entry point                    | **Build tool from selection** opens a contextual draft without sending it automatically                                              | `src/renderer/commands/window-commands/comparison.ts`                                                  |
+| Supplier regression            | Fictional request/quotes with known arithmetic; retained live responses; native replay and result/restart checks                     | `tools/canvases`, `tests/native/canvas-live.ts`, `tests/native/canvas-productivity.ts`                 |
+| Robot sources and motion       | Bounded URDF joint tree, scoped STL meshes, exact source definitions, articulated motion and bounded target solving                  | `src/domain/robotics`, `src/desktop/canvases/robot.ts`, `src/desktop/canvases/sources.ts`              |
+| Independent robot checks       | Endpoint positions and hard joint limits checked outside generated HTML; version-bound results and fixed-target base comparison      | `src/desktop/robotics/check.ts`, `src/desktop/canvases/robot-check.ts`                                 |
+| Robot replay and handoff       | Visual pose interpolation; reviewed comparison JSON; portable canvas export/reopen with saved state and recomputed check             | `src/domain/robotics/replay.ts`, `src/desktop/canvases/service.ts`, `tests/native/robot-comparison.ts` |
+| Robot generation qualification | Budgeted Meta creation, refinement and exact quoted alternative; retained failures, saved-response recovery and native output review | `tools/robotics`, `tests/robot-rehearsal.test.ts`                                                      |
 
 Paths in this table are relative to `packages/viewer-electron/app`. The
 [canvas reference](../reference/canvases.md) defines the contracts and limits. The
@@ -39,13 +43,14 @@ The supplier case remains
 [evaluation material](../development/testing.md#canvas-evaluation-and-replay). Its outputs and tests
 are not evidence for the selected robot demonstration.
 
-## Proposed work, not completed contributions
+## Work outside the qualified case
 
-The [implementation audit](../research/workshop.md#implementation-audit) owns the remaining gaps:
-robot-model ingestion and mesh resolution, articulated joint motion, target solving, exact
-joint-to-source navigation, independent version-bound validation, and motion export/reopen
-qualification. Keep these out of the completed contribution list until their code and evidence
-exist. The existing canvas export contract does not itself validate a trajectory.
+The [implementation audit](../research/workshop.md#implementation-audit) owns the qualification
+boundary and remaining presentation work. The generated SO-101 workflow has native evidence for
+creation, refinement, an unchanged original with a quoted alternative, checked endpoints, comparison
+save, replay, export/reopen and restart. This does not establish collision checking, continuous
+trajectory validation, dynamics, device calibration or physical operation. Keep these absent
+capabilities out of the completed contribution list.
 
 The [screenplay](hackathon-demo.md) is publication preparation. Its synthetic opening and planned
 robot scenes do not establish implemented behavior. Attribute public robot assets, supporting

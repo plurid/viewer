@@ -49,9 +49,10 @@ requested while the picker is open remains available for a separate review and s
 
 `canvas_read` obtains current content, saved state and revision. `canvas_write` supplies complete
 HTML in `text`, a title in `query`, the expected revision in `commandID`, and default state values
-in `patches`. The structured turn's `text` field has a 32,000-character limit. `canvas_asset`
-attaches a file the conversation is allowed to inspect. Attached files require the provider's images
-data level before being sent as model context.
+in `patches`. Canvas writes accept up to 512,000 HTML characters, matching the document limit. Other
+structured turns retain a 32,000-character text limit. `canvas_asset` attaches a file the
+conversation is allowed to inspect. Attached files require the provider's images data level before
+being sent as model context.
 
 Writes use revision checks. A stale response cannot replace a newer revision. The model receives
 current content and state, not the entire revision history. Canvas requests cannot authorize file or

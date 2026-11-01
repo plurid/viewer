@@ -15,6 +15,8 @@ import { ChatDocumentStore } from '../src/desktop/chat/documents';
 import { Canvases } from '../src/desktop/canvases/service';
 import { defaultSettings, type ModelProvider } from '../src/domain/services';
 import type { ChatDocument, ChatReply, ChatStep } from '../src/domain/models/chat';
+import { chatStepSchema } from '../src/domain/models/chat';
+import { canvasLimits } from '../src/domain/canvases/document';
 import type { CapturedTarget } from '../src/domain/automation/actions';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
@@ -112,6 +114,28 @@ async function send(id: string): Promise<void> {
 }
 
 describe('quoted conversations and canvases', () => {
+  it('accepts complete canvas HTML beyond the reply limit without expanding other text limits', async () => {
+    const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
+    ports.canvases = canvases;
+    const html = '<main>' + '<p>Target controls</p>'.repeat(2200) + '</main>';
+    expect(html.length).toBeGreaterThan(32000);
+    expect(chatStepSchema.safeParse(step('reply', { text: html })).success).toBe(false);
+    expect(chatStepSchema.safeParse(step('command', { text: html })).success).toBe(false);
+    expect(
+      chatStepSchema.safeParse(step('canvas_write', { text: 'x'.repeat(canvasLimits.html + 1) }))
+        .success,
+    ).toBe(false);
+    const conversation = await create();
+    generate
+      .mockResolvedValueOnce(step('canvas_write', { text: html, commandID: '0' }))
+      .mockResolvedValueOnce(step('reply', { text: 'Inspect the complete canvas.' }));
+    await send(conversation.id);
+    const saved = await settled(conversation.id);
+    expect(saved.status, saved.error).toBe('idle');
+    expect((await canvases.read(1, saved.canvasID!)).html).toBe(html);
+    expect(saved.messages.at(-1)?.text).toBe('Inspect the complete canvas.');
+  });
+
   it('attaches a robot mesh through the existing scoped conversation and images permission', async () => {
     const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
     ports.canvases = canvases;

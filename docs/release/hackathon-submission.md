@@ -1,9 +1,9 @@
 # Hackathon submission draft
 
-This copy describes the selected film and distinguishes it from implemented behavior. The robot
-workbench is proposed and unqualified. Update the claims only after its acceptance evidence exists.
-Public source and video URLs, team details and the contribution window remain to be supplied. This
-page does not record a published entry.
+This copy describes the selected film and distinguishes it from implemented behavior. The actual
+Meta-generated robot workflow has passed native functional checks. Presentation polish, foreground
+rehearsal and the finished film remain outstanding. Public source and video URLs, team details and
+the contribution window remain to be supplied. This page does not record a published entry.
 
 ## Project
 
@@ -29,21 +29,21 @@ separate checker validates the proposed kinematic result before the person saves
 work.
 
 The [screenplay](hackathon-demo.md) owns the exact narration and shots. The
-[implementation audit](../research/workshop.md#implementation-audit) identifies the missing robot
-reader, articulated motion, solver, semantic source links and independent checker. These are planned
-capabilities, not completed contributions.
+[implementation audit](../research/workshop.md#implementation-audit) records the implemented robot
+reader, articulated motion, solver, source links and independent checker, alongside the remaining
+recording work.
 
 ## Meta's role
 
-The intended model work is interpreting approved source material, generating the
-HTML/CSS/JavaScript, refining its controls and investigating the quoted alternative. Record the
-actual provider and model used by the final demonstration; an earlier model evaluation does not
-establish a robot run.
+Meta's `muse-spark-1.3` generated and revised the HTML/CSS/JavaScript from approved robot source
+material and produced the quoted alternative. The retained run includes failed attempts and their
+repairs. One intact provider response was recovered unchanged after fixing a local parser rejection,
+without another request. Keep this provenance with the final demonstration.
 
 The canvas foundation pairs native tool calls with actual results and validates structured
 responses. Viewer owns source access, saved state, revision checks, sandboxing and reviewed exports.
-Generated code has no direct file-write or shell capability through the canvas. The proposed robot
-checker must operate outside generated HTML and report the limits of what it checked.
+Generated code has no direct file-write or shell capability through the canvas. The robot checker
+operates outside generated HTML and reports the limits of what it checked.
 
 ## Existing evidence and its limits
 
@@ -54,17 +54,22 @@ checker must operate outside generated HTML and report the limits of what it che
 - The retained supplier evaluation and replay concern fictional quotations with known arithmetic.
   The [testing guide](../development/testing.md#canvas-evaluation-and-replay) records reproduction
   and the distinction between model generation, fixtures and saved-output replay.
-- Three.js and GLB rendering are implemented. They do not supply robot-model semantics, verified
-  kinematics or physical simulation.
+- The actual Meta-generated robot creation, refinement and quoted alternative passed native checks.
+  Moving the alternative base produced endpoint candidates within the task's tolerance while the
+  original remained unchanged. Comparison save, pose replay, export/reopen and cold restart passed.
+- The robot reader, motion library and separate endpoint checker are Viewer capabilities. Generated
+  UI uses those capabilities; Three.js supplies rendering, not robot semantics or physical
+  simulation. Visual replay does not check the path between poses.
 
 Keep run-specific evidence, failures, retries and usage in the evaluation report. Do not transfer
 success claims from the supplier or fabrication examples to the robot demonstration.
 
 ## Claims requiring qualification
 
-The proposed film must establish actual agent creation, a subsequent revision that preserves inputs,
-a quoted independent alternative, checks bound to the exact robot and input versions, and saved
-results that reopen and replay. Restart persistence must be checked, and shown only if recorded.
+The film must visibly demonstrate the qualified creation, refinement, quoted alternative and saved
+result. Native functional tests do not establish that every control works well with pointer input or
+that a viewer can understand the result. Complete the foreground rehearsal and show restart only if
+it is recorded.
 
 Ambiguous units, dimensions and source associations require human confirmation. An unresolved
 numerical solve is not proof of unreachability. Kinematic checks do not establish collision safety,
@@ -77,8 +82,9 @@ and supporting libraries independently of Viewer's generated interface.
 
 ## Before submitting
 
-1. Complete the robot prototype and the screenplay's readiness checks. Keep evidence of failures as
-   well as successful runs; obtain a new explicit budget before further paid model sessions.
+1. Polish the qualified robot prototype and complete the screenplay's foreground readiness checks.
+   Keep evidence of failures as well as successful runs; obtain a new explicit budget before further
+   paid model sessions.
 2. Confirm the current requirements in the
    [official event guide](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details) and
    [terms](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/waiver), including duration,

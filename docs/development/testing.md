@@ -398,6 +398,25 @@ and the captured API key are excluded from retained records. Failed, rejected an
 consume the allowance. An interrupted session blocks automatic continuation. Restarting cannot
 increase `budget.json`; inspect saved responses before considering a separately approved recovery.
 
+After the original session allowance is exhausted, one explicit extension can add a bounded number
+of sessions and a shared request allowance. Record the user's approval without changing the original
+budget. For example, after approval for three more sessions and ten more requests total:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec node --import tsx tools/robotics/extend-rehearsal.ts --run /path/to/prepared/run --sessions 3 --requests 10 --approval 'User approved three additional sessions and ten additional requests total.'
+```
+
+This offline command exclusively creates `budget-extension.json`, bound to the completed session and
+request counts. It refuses an unfinished attempt or a second extension. Subsequent live commands
+keep the original budget flags. Each session retains its original per-session limit, and all
+extended sessions together must fit the additional request allowance, including failed requests.
+
+An explicit approval can distribute the remaining requests across more sessions without raising the
+total request cap. `RobotRehearsalLedger.reallocate(maximumSessions, maximumRequests, approval)`
+exclusively records `budget-reallocation.json`, bound to the preceding allowance. It requires the
+same total request cap and refuses an unfinished attempt or a second reallocation. This is an
+offline bookkeeping operation, not permission for more requests.
+
 The runner prepares its own `Profile` with no configured models. Quit the live runner before opening
 this profile in the candidate Viewer:
 
@@ -438,6 +457,13 @@ diagnostic to the same conversation, preserves the failed output and consumes an
 session. It does not extend the budget or permit progression to later stages. Review the repaired
 output in Viewer before continuing. The standalone runner does not execute a preview while the model
 is generating; `not-observed` is not successful execution.
+
+After fixing a local parser rejection, `recoverRobotCanvas` in `tools/robotics/recover-canvas.ts`
+can apply the latest failed session's intact saved `canvas_write` response without another provider
+request. It requires the current review token, unchanged documents and the expected canvas revision.
+It preserves the failed result and raw response, records the response hash in
+`recovered-result.json`, and adds a tool recovery note without inventing an assistant reply. The
+recovered HTML still needs native review. An interrupted recovery blocks further paid sessions.
 
 ## What evidence means
 

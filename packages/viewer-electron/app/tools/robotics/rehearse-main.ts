@@ -139,7 +139,20 @@ async function main() {
       const models = authentication.connect(request, {
         run: async (_provider, _level, signal, work) => work(signal),
       });
-      return models.generate.bind(models);
+      return (provider, instructions, input, schema, signal, level, actor, protocol) =>
+        models.generate(
+          provider,
+          instructions +
+            '\nThis session has ' +
+            session.remainingRequests +
+            ' provider requests remaining, including this request and the final reply. The full current canvas is already in context; do not read identical content again. After a successful canvas_write, give your final reply unless there is new failure evidence.',
+          input,
+          schema,
+          signal,
+          level,
+          actor,
+          protocol,
+        );
     },
   });
   console.log(

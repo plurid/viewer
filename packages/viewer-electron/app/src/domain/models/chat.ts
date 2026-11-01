@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { sessionLinkSchema } from '../agents/sessions';
+import { canvasLimits } from '../canvases/document';
 
 export const chatDraftLimit = 16_000;
 
@@ -145,7 +146,7 @@ export const chatStepSchema = z
       'canvas_source',
       'canvas_robot_assets',
     ]),
-    text: z.string().max(32000),
+    text: z.string().max(canvasLimits.html),
     path: z.string().max(32768).nullable(),
     query: z.string().max(300).nullable(),
     commandID: z.string().max(200).nullable(),
@@ -158,7 +159,11 @@ export const chatStepSchema = z
     /** With a reply: inspected files worth opening, shown as links under it. */
     files: z.array(z.string().max(32768)).max(12),
   })
-  .strict();
+  .strict()
+  .refine((step) => step.kind === 'canvas_write' || step.text.length <= 32000, {
+    path: ['text'],
+    message: 'Non-canvas text must contain at most 32000 characters.',
+  });
 
 export type ChatStep = z.infer<typeof chatStepSchema>;
 

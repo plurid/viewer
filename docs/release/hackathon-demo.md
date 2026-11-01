@@ -1,8 +1,10 @@
 # There Is No Interface
 
-This is the proposed three-minute film for Viewer. The screenplay is selected; the robot workflow is
-not ready to film. The [implementation audit](../research/workshop.md#implementation-audit)
-separates existing canvas capabilities from the robotics work still required.
+This is the proposed three-minute film for Viewer. The screenplay is selected. The actual
+Meta-generated robot workflow has passed native creation, refinement, quoted-alternative,
+comparison-save, export/reopen and restart checks. Visual polish and a foreground rehearsal remain
+before filming. The [implementation audit](../research/workshop.md#implementation-audit) separates
+functional qualification from the unfinished presentation.
 
 The thesis is that the project persists while an agent creates the interface needed for the next
 task. The person's work moves toward architecture, dependencies and consequences. The phrase “there
@@ -43,8 +45,8 @@ Keep each shot four to six seconds, with readable content and one visible action
 4. **One project:** move through its browser, editor and terminal views. Use the three-part rhythm
    associated with the iPhone presentation, without depicting Steve Jobs or implying endorsement.
 
-These shots explain the narration. They are not a separate feature tour or a claim that the robot
-workflow already exists.
+These shots explain the narration. They are not a separate feature tour or evidence for capabilities
+outside the demonstrated task.
 
 ## The three requests
 
@@ -102,9 +104,11 @@ recording requires all of the following:
    the comparison JSON retains both tasks.
 8. Verify persistence after a cold restart. Show that restart only if it is actually recorded.
 
-First qualify a short prototype: load the arm, move a target, expose a checked constraint, change
-the arrangement and demonstrate a checked result. If that loop fails, the film remains a script. Do
-not replace it with fabricated success panels or a prerecorded animation labeled as computation.
+The functional prototype is qualified. Before capture, frame the arm at both base placements,
+simplify the dense controls and rehearse target placement, source navigation and every filmed action
+with real pointer input. Keep any presentation edits separate from the original provider output. The
+film remains unfinished until these actions are clear in the recording. Do not replace them with
+fabricated success panels or a prerecorded animation labeled as computation.
 
 ## Capture and edit
 

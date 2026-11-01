@@ -6,6 +6,7 @@ import { temporaryRoot } from '../tools/temporary';
 import * as rehearsal from '../tools/robotics/rehearsal';
 import { currentRobotSession, runRobotSession } from '../tools/robotics/rehearsal-session';
 import { recordRobotRequests } from '../tools/robotics/rehearsal-transport';
+import { recoverRobotCanvas } from '../tools/robotics/recover-canvas';
 import { Canvases } from '../src/desktop/canvases/service';
 import { ChatDocumentStore } from '../src/desktop/chat/documents';
 import { parseRobotURDF } from '../src/domain/robotics/urdf';
@@ -45,6 +46,79 @@ describe('robot rehearsal budgets and retained responses', () => {
     await first.reserveRequest({});
     await expect(new rehearsal.RobotRehearsalLedger(root).begin('create', {})).rejects.toThrow();
     expect(await readdir(first.folder)).toEqual(['request-01.json', 'started.json']);
+  });
+
+  it('blocks another paid attempt while a retained response recovery is incomplete', async () => {
+    const ledger = new rehearsal.RobotRehearsalLedger(root);
+    await ledger.authorize({ sessions: 2, requestsPerSession: 8 });
+    const first = await ledger.begin('create', {});
+    await first.finish({ status: 'failed' });
+    await rehearsal.saveEvidence(path.join(first.folder, 'recovery-started.json'), {});
+    await expect(ledger.begin('create', {})).rejects.toThrow();
+    expect(await ledger.sessions()).toHaveLength(1);
+  });
+
+  it('retains the original budget and caps a separately approved extension across restarts', async () => {
+    const ledger = new rehearsal.RobotRehearsalLedger(root);
+    const budget = { sessions: 1, requestsPerSession: 2 };
+    await ledger.authorize(budget);
+    const first = await ledger.begin('create', {});
+    await first.reserveRequest({});
+    await expect(ledger.extend(3, 3, 'Approved recovery')).rejects.toThrow();
+    await first.finish({ status: 'failed' });
+    await expect(first.reserveRequest({})).rejects.toThrow('finished');
+    const extensions = await Promise.allSettled([
+      ledger.extend(3, 3, 'Approved recovery'),
+      ledger.extend(3, 3, 'Approved recovery'),
+    ]);
+    expect(extensions.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(await rehearsal.readJSON(path.join(root, 'budget.json'))).toEqual(budget);
+    expect(await rehearsal.readJSON(path.join(root, 'budget-extension.json'))).toMatchObject({
+      after: { sessions: 1, requests: 1 },
+      sessions: 3,
+      requests: 3,
+    });
+    const restarted = new rehearsal.RobotRehearsalLedger(root);
+    await restarted.authorize(budget);
+    const second = await restarted.begin('create', {});
+    await second.reserveRequest({});
+    await second.reserveRequest({});
+    await expect(second.reserveRequest({})).rejects.toThrow('request budget');
+    await second.finish({ status: 'generated' });
+    const third = await new rehearsal.RobotRehearsalLedger(root).begin('refine', {});
+    await third.reserveRequest({});
+    await expect(third.reserveRequest({})).rejects.toThrow('request budget');
+    await third.finish({ status: 'failed' });
+    await expect(new rehearsal.RobotRehearsalLedger(root).begin('refine', {})).rejects.toThrow(
+      'total request budget',
+    );
+  });
+
+  it('caps extended session attempts even if their request allowance was not used', async () => {
+    const ledger = new rehearsal.RobotRehearsalLedger(root);
+    await ledger.authorize({ sessions: 1, requestsPerSession: 8 });
+    await (await ledger.begin('create', {})).finish({ status: 'stopped' });
+    await ledger.extend(1, 8, 'One approved retry');
+    await (await ledger.begin('create', {})).finish({ status: 'failed' });
+    await expect(ledger.begin('create', {})).rejects.toThrow('session budget');
+  });
+
+  it('reallocates unused requests across approved sessions without increasing the request cap', async () => {
+    const ledger = new rehearsal.RobotRehearsalLedger(root);
+    await ledger.authorize({ sessions: 1, requestsPerSession: 8 });
+    await (await ledger.begin('create', {})).finish({ status: 'failed' });
+    await ledger.extend(1, 3, 'Three requests approved');
+    const second = await ledger.begin('create', {});
+    await second.reserveRequest({});
+    await second.finish({ status: 'failed' });
+    await expect(ledger.reallocate(3, 4, 'Invalid increase')).rejects.toThrow('preserve');
+    await ledger.reallocate(3, 3, 'One more session with unchanged request cap');
+    const last = await new rehearsal.RobotRehearsalLedger(root).begin('refine', {});
+    await last.reserveRequest({});
+    await last.reserveRequest({});
+    await expect(last.reserveRequest({})).rejects.toThrow('request budget');
+    await last.finish({ status: 'generated' });
+    await expect(ledger.begin('branch', {})).rejects.toThrow('session budget');
   });
 
   it('allows only one concurrent reservation of the next session', async () => {
@@ -203,6 +277,75 @@ async function localProject() {
 }
 
 describe('staged real Chat ownership with an offline provider fixture', () => {
+  it('recovers exact saved provider HTML without another request or an invented assistant reply', async () => {
+    const { urdf } = await localProject();
+    const html = '<main>' + '<p>Saved canvas</p>'.repeat(2500) + '</main>';
+    const steps = [
+      step('canvas_source', { path: urdf }),
+      step('canvas_robot_assets', { path: urdf }),
+      step('canvas_write', { commandID: '2', query: 'Recovered canvas', text: html }),
+    ];
+    const failed = await runRobotSession(root, {
+      stage: 'create',
+      execution: 'scripted-test',
+      budget: { sessions: 2, requestsPerSession: 8 },
+      provider,
+      publicText: (text) => text,
+      generate: (session) => async () => {
+        const next = steps.shift()!;
+        const prefix = await session.reserveRequest({ execution: 'scripted-test' });
+        if (next.kind !== 'canvas_write') return next;
+        await rehearsal.saveEvidence(prefix + '-response.json', {
+          status: 200,
+          envelope: {
+            choices: [
+              {
+                finish_reason: 'tool_calls',
+                message: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      type: 'function',
+                      function: {
+                        name: 'viewer_step',
+                        arguments: JSON.stringify(next),
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        });
+        throw new Error('Historical parser rejected canvas text above 32000 characters.');
+      },
+    });
+    expect(failed.result.status).toBe('failed');
+    const failureBytes = await readFile(path.join(failed.folder, 'result.json'), 'utf8');
+    await expect(recoverRobotCanvas(root, 'unreviewed')).rejects.toThrow('Review this exact');
+    expect(await readdir(failed.folder)).not.toContain('recovery-started.json');
+    const recovered = await recoverRobotCanvas(root, failed.result.reviewToken!);
+    expect(recovered.result.canvas?.html).toBe(html);
+    expect(recovered.result.recovery?.response).toBe('request-03-response.json');
+    expect(recovered.result.conversation?.messages.filter((m) => m.role === 'assistant')).toEqual(
+      [],
+    );
+    expect(recovered.result.conversation?.messages.at(-1)?.text).toContain(
+      'No new provider request',
+    );
+    expect(await readFile(path.join(failed.folder, 'result.json'), 'utf8')).toBe(failureBytes);
+    expect(
+      (await readdir(failed.folder)).filter((n) => /^request-\d{2}\.json$/.test(n)),
+    ).toHaveLength(3);
+    expect((await currentRobotSession(root, 'create')).canvas.html).toBe(html);
+    expect((await currentRobotSession(root, 'create')).reviewToken).toBe(
+      recovered.result.reviewToken,
+    );
+    await expect(recoverRobotCanvas(root, recovered.result.reviewToken!)).rejects.toThrow(
+      'latest failed',
+    );
+  });
+
   it('binds native repair feedback to the generated revision and spends another approved session', async () => {
     const { urdf } = await localProject();
     const options = {
