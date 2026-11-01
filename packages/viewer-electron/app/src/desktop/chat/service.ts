@@ -1,6 +1,7 @@
 import type { Canvases } from '../canvases/service';
 import { canvasInstructions } from '../canvases/runtime';
 import { attachRobotMeshes } from '../canvases/robot';
+import { canvasRobotReport } from '../canvases/robot-check';
 import { portableCanvasSources } from '../../domain/canvases/sources';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
@@ -482,6 +483,7 @@ export class Chats {
                 defaults: canvas.defaults,
                 assets: canvas.assets,
                 sources: portableCanvasSources(canvas.sources),
+                robotReport: canvasRobotReport(canvas),
                 preview: this.ports.canvases!.previewObservation(canvas.id, canvas.revision),
               }
             : null,
@@ -587,6 +589,7 @@ export class Chats {
           defaults: canvas.defaults,
           assets: canvas.assets,
           sources: portableCanvasSources(canvas.sources),
+          robotReport: canvasRobotReport(canvas),
           preview: canvases.previewObservation(canvas.id, canvas.revision),
         };
       if (step.kind === 'canvas_source') {

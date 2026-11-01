@@ -159,6 +159,55 @@
   overflow: auto;
   max-height: 180px;
 }
+.canvas-robot-report {
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--gap-content);
+  border-bottom: 1px solid var(--line);
+}
+.canvas-robot-report header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap-inline);
+}
+.canvas-robot-report header strong {
+  margin-inline-end: auto;
+}
+.canvas-robot-report p {
+  margin: var(--gap-content) 0;
+  overflow-wrap: anywhere;
+}
+.canvas-robot-report table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.canvas-robot-report th,
+.canvas-robot-report td {
+  padding: var(--gap-small) var(--gap-inline);
+  text-align: start;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.canvas-robot-report th {
+  font-weight: 500;
+}
+.canvas-robot-report small,
+.canvas-robot-report td button {
+  display: block;
+}
+.canvas-robot-report caption,
+.canvas-robot-report small,
+.canvas-robot-scope {
+  color: var(--muted);
+  font-size: var(--text-compact);
+  text-align: start;
+}
+.canvas-robot-report [role='alert'] {
+  color: var(--danger);
+}
 .canvas-result {
   padding: var(--gap-content);
   border-bottom: 1px solid var(--line);

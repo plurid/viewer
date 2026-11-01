@@ -7,6 +7,7 @@ import { validateReconstructedGLB } from './canvases/glb';
 import { preparePhoto } from './fabrication/inputs';
 import { canvasLibraries } from 'virtual:viewer-canvas-libraries';
 import { Canvases } from './canvases/service';
+import { canvasRobotReport } from './canvases/robot-check';
 import { createGitHandlers } from './ipc/git-handlers';
 import { createEditingHandlers } from './ipc/editing-handlers';
 import { createModelHandlers } from './ipc/model-handlers';
@@ -2272,6 +2273,32 @@ export class Desktop {
           const inspection = await this.files.inspect(file, true, false);
           await this.canvases.source(owner, document.id, request.revision, inspection, source.id);
           document = await this.canvases.read(owner, document.id);
+        }
+        if (request.kind === 'check-robot')
+          document = await this.canvases.checkRobot(
+            owner,
+            document.id,
+            request.revision,
+            request.stateRevision,
+            request.sourceID,
+            request.stateKey,
+          );
+        if (request.kind === 'robot-report' || request.kind === 'check-robot')
+          return { document, robotReport: canvasRobotReport(document) };
+        if (request.kind === 'save-robot-check') {
+          const saved = await this.canvases.saveRobotCheck(
+            owner,
+            document.id,
+            request.revision,
+            request.stateRevision,
+            () =>
+              saveOnce(this.fileAccess, this.windows.get(owner)?.window, {
+                title: 'Save robot check as a new file',
+                defaultPath: path.join(document.path, 'robot-check.json'),
+              }),
+          );
+          if (saved) this.emit({ type: 'folder-changed', path: path.dirname(saved) });
+          return { document: await this.canvases.read(owner, document.id), saved };
         }
         if (request.kind === 'save-result') {
           const saved = await this.canvases.saveResult(

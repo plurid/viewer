@@ -11,16 +11,17 @@ still reject stale changes.
 
 Generated HTML receives `window.viewerCanvas`:
 
-| Member                     | Behavior                                                 |
-| -------------------------- | -------------------------------------------------------- |
-| `getSources()`             | Return copies of bound evidence snapshots                |
-| `requestExport(result)`    | Request host review of `{format,name,content}`           |
-| `getState()`               | Return a copy of saved input state                       |
-| `setState({ key: value })` | Merge values and request a desktop save                  |
-| `subscribe(listener)`      | Observe state updates; returns an unsubscribe function   |
-| `assets`                   | Attached assets as `{ id, name, mime, url }` records     |
-| `openSource(id, joint?)`   | Request source review, optionally for a named URDF joint |
-| `propose(text)`            | Prepare text for review in the conversation              |
+| Member                                 | Behavior                                                 |
+| -------------------------------------- | -------------------------------------------------------- |
+| `getSources()`                         | Return copies of bound evidence snapshots                |
+| `requestRobotCheck(sourceID,stateKey)` | Ask Viewer to check the task saved under that state key  |
+| `requestExport(result)`                | Request host review of `{format,name,content}`           |
+| `getState()`                           | Return a copy of saved input state                       |
+| `setState({ key: value })`             | Merge values and request a desktop save                  |
+| `subscribe(listener)`                  | Observe state updates; returns an unsubscribe function   |
+| `assets`                               | Attached assets as `{ id, name, mime, url }` records     |
+| `openSource(id, joint?)`               | Request source review, optionally for a named URDF joint |
+| `propose(text)`                        | Prepare text for review in the conversation              |
 
 Use stable state keys. A new content revision cannot change the type of an existing saved value.
 HTML, CSS and scripts run in an opaque sandbox through `viewer-html`. The page has no desktop
@@ -100,9 +101,56 @@ URLs. The offline `viewer/robotics` module exports:
   link transform multiplied by its visual origin, followed by its mesh scale.
 
 The page can call `openSource(sourceID,jointName)` to show a captured joint in the host's source
-review. **Open joint definition** navigates through the original version and stored anchor. These
-calculations do not solve targets, prove reachability, check collision or validate a motion
-sequence. Generated HTML cannot certify its own conclusions.
+review. **Open joint definition** navigates through the original version and stored anchor.
+
+`await solvePosition(robot,{link,point,target,positions,base,tolerance},signal?)` searches for a
+candidate tool position. `point` is local to `link`; `target` is in world coordinates. It returns
+`{outcome,positions,residual,iterations}`. `outcome` is `candidate` or `unresolved`. A failed
+numerical search does not establish unreachability. The solver uses a damped Jacobian update with
+hard-limit projection, deterministic restarts and line search. It preserves joints outside the tool
+chain. Its cap is six attempts of 96 iterations, at most 16 moving chain joints. It yields every
+eight iterations and accepts an AbortSignal. Inputs are copied before yielding. Tolerance is
+0.000001 to 0.005 metres. Orientation is not a search objective.
+
+### Check target poses in Viewer
+
+Save the task under one stable canvas state key, then call `requestRobotCheck(sourceID,stateKey)`.
+The task shape is:
+
+```json
+{
+  "version": 1,
+  "units": { "length": "m", "angle": "rad" },
+  "tool": { "link": "tool_link", "point": [0, 0, 0] },
+  "base": { "xyz": [0, 0, 0], "rpy": [0, 0, 0] },
+  "tolerance": 0.001,
+  "targets": [{ "id": "A", "position": [0.2, 0.1, 0.3] }],
+  "poses": [{ "targetID": "A", "positions": { "joint_name": 0.5 } }]
+}
+```
+
+The example shows syntax, not a measured robot pose. Supply each actual movable joint exactly once.
+There must be exactly one pose per unique target, with at most 16 targets. The host waits for input
+saves and verifies the persisted values, not an independently supplied frame payload. The desktop
+checker uses a separate point-propagation implementation from the solver's matrix implementation. It
+measures each endpoint's error and all hard joint bounds. The panel displays the tolerance, world
+target coordinates, tool offset, base transform and source-linked limit violations.
+
+The saved binding contains the source ID/hash, canonical task hash, canvas content revision, checker
+version and request time. It contains no pass/fail result. Every report is recomputed in Viewer,
+including after restart and portable import. Changed task inputs, source snapshots or canvas content
+require a new check. Unrelated camera state does not. `canvas_read` and the conversation's canvas
+context include `robotReport`; its status is `checked` or `stale`. A checked report can pass or
+fail. Generated HTML has no API for supplying a check result.
+
+**Save check JSON…** builds its payload in the desktop service and uses the existing exclusive
+new-file save. The saved file includes inputs, source version/hash, checker version, residuals and
+joint violations. Revision and check-binding changes during save review cancel the write. Ordinary
+frame exports remain proposed content; JSON parsing does not certify them as checked.
+
+These checks cover endpoint positions and hard position limits only. Orientation, intervals between
+poses, collision, dynamics and hardware calibration remain unchecked. No physical operation is
+implied.
 
 ## Branches
 

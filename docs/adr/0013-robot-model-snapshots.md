@@ -29,8 +29,9 @@ second persistence service is introduced.
 
 Unsupported joint types, mimic joints, malformed trees and missing hard limits fail explicitly.
 Calibration, dynamics, collision and physical safety are outside the implementation. A generated
-page's success message is not trusted verification. Independent motion checking and target solving
-require a later capability with version-bound inputs and results.
+page's success message is not trusted verification. The
+[target-check decision](0014-robot-target-checks.md) extends this foundation with bounded position
+solving and independent endpoint checks. Motion intervals and collisions remain unchecked.
 
 ## Owners
 

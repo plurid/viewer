@@ -1,0 +1,500 @@
+<style>
+  :root {
+    color-scheme: dark;
+    font: 14px system-ui;
+    color: #e8ebef;
+    background: #25292f;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+  }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    height: 100vh;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  #scene {
+    position: relative;
+    min-height: 0;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    inset: 0;
+  }
+  header {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    pointer-events: none;
+    z-index: 1;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    font-weight: 600;
+  }
+  header p,
+  small {
+    color: #acb6c2;
+  }
+  aside {
+    padding: 20px;
+    border-left: 1px solid #41474f;
+    background: #2e333b;
+    overflow: auto;
+  }
+  h2 {
+    font-size: 15px;
+    margin: 0 0 16px;
+  }
+  .joint {
+    margin: 0 0 22px;
+  }
+  .joint label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .joint input[type='range'] {
+    width: 100%;
+    margin: 12px 0 6px;
+    accent-color: #a9cfe6;
+  }
+  input[type='number'] {
+    width: 78px;
+    padding: 5px;
+    color: inherit;
+    background: #22272e;
+    border: 1px solid #5b626e;
+    border-radius: 4px;
+    font: inherit;
+  }
+  button {
+    background: transparent;
+    border: 0;
+    color: #a9cfe6;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+  }
+  button:focus-visible,
+  input:focus-visible {
+    outline: 2px solid #a9cfe6;
+    outline-offset: 3px;
+  }
+  .limits {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+  #status {
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    bottom: 24px;
+    padding: 14px 16px;
+    background: #2e333bef;
+    border: 1px solid #515b66;
+    border-radius: 8px;
+  }
+  #status[data-invalid='true'] {
+    border-color: #e69090;
+    color: #ffb1b1;
+  }
+  #point {
+    margin-top: 8px;
+    font:
+      12px ui-monospace,
+      monospace;
+    color: #bac6d3;
+  }
+  #target-inputs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  #target-inputs label {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  #target-inputs input {
+    width: 100%;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .actions button {
+    padding: 7px 9px;
+    border: 1px solid #5b626e;
+    border-radius: 4px;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .base {
+    border-top: 1px solid #49515d;
+    padding-top: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  aside > p {
+    line-height: 1.5;
+    color: #acb6c2;
+    font-size: 12px;
+  }
+  @media (max-width: 720px) {
+    main {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: 480px auto;
+      height: auto;
+    }
+    aside {
+      border-left: 0;
+      border-top: 1px solid #41474f;
+    }
+    #scene {
+      height: 480px;
+    }
+  }
+</style>
+<main>
+  <section id="scene" aria-label="Articulated robot">
+    <header>
+      <h1>SO-101 target workbench</h1>
+      <p>Local test fixture · no model call</p>
+    </header>
+    <div id="status" role="status">
+      <span id="message">Loading approved meshes…</span>
+      <div id="point"></div>
+    </div>
+  </section>
+  <aside>
+    <h2>Target <small>world coordinates · m</small></h2>
+    <div id="target-inputs"></div>
+    <div class="actions">
+      <button id="solve">Find pose</button><button id="check">Check with Viewer</button>
+    </div>
+    <p id="solve-result" role="status">
+      Place a target or drag its marker. Find a pose, then check it with Viewer.
+    </p>
+    <h2>Joint positions <small>rad</small></h2>
+    <div id="joints"></div>
+    <label class="base"
+      >Base X
+      <span
+        ><input id="base" type="number" step="0.01" aria-label="Base X in metres" /> m</span
+      ></label
+    >
+    <p>Position limits only. No collision, dynamics or hardware calibration checks.</p>
+  </aside>
+</main>
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+  import {
+    forwardKinematics,
+    originTransform,
+    multiplyTransforms,
+    solvePosition,
+  } from 'viewer/robotics';
+  const api = window.viewerCanvas;
+  const source = api.getSources().find((source) => source.data.robot);
+  if (!source) throw new Error('The robot source is missing.');
+  const robot = source.data.robot;
+  const saved = api.getState();
+  const resources = saved.robotResources;
+  const positions = Object.fromEntries(
+    robot.joints
+      .filter((joint) => joint.type !== 'fixed')
+      .map((joint) => [
+        joint.name,
+        saved.robotTask?.poses[0].positions[joint.name] ?? saved['joint.' + joint.name] ?? 0,
+      ]),
+  );
+  let baseX = saved.robotTask?.base.xyz[0] ?? saved.baseX ?? 0;
+  const initial = forwardKinematics(robot, positions, { xyz: [baseX, 0, 0], rpy: [0, 0, 0] });
+  const task = saved.robotTask ?? {
+    version: 1,
+    units: { length: 'm', angle: 'rad' },
+    tool: { link: 'gripper_frame_link', point: [0, 0, 0] },
+    base: { xyz: [baseX, 0, 0], rpy: [0, 0, 0] },
+    tolerance: 0.001,
+    targets: [{ id: 'A', position: initial.links.gripper_frame_link.slice(12, 15) }],
+    poses: [{ targetID: 'A', positions }],
+  };
+  task.poses[0].positions = positions;
+  let solving;
+  const solverStatus = document.querySelector('#solve-result');
+  function saveTask() {
+    api.setState({ robotTask: task });
+  }
+  if (!saved.robotTask) saveTask();
+  function cancelSolve() {
+    solving?.abort();
+    solving = undefined;
+    document.querySelector('#solve').disabled = false;
+  }
+  const stage = document.querySelector('#scene');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#25292f');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  stage.prepend(renderer.domElement);
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.001, 10);
+  camera.up.set(0, 0, 1);
+  camera.position.fromArray(saved.cameraPosition ?? [0.65, -0.7, 0.5]);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.fromArray(saved.cameraTarget ?? [0, -0.07, 0.17]);
+  controls.update();
+  scene.add(new THREE.HemisphereLight(0xeaf3ff, 0x515964, 2.2));
+  const light = new THREE.DirectionalLight(0xfff6e5, 3);
+  light.position.set(1, -1, 2);
+  scene.add(light);
+  const grid = new THREE.GridHelper(1.2, 24, 0x62717f, 0x38404a);
+  grid.rotation.x = Math.PI / 2;
+  grid.position.z = -0.003;
+  scene.add(grid);
+  const marker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.009, 20, 12),
+    new THREE.MeshBasicMaterial({ color: '#f4b969' }),
+  );
+  marker.position.fromArray(task.targets[0].position);
+  scene.add(marker);
+  const geometry = new Map();
+  const loader = new STLLoader();
+  for (const resource of resources) {
+    const asset = api.assets.find((asset) => asset.id === resource.assetID);
+    if (!asset) throw new Error('An approved mesh is missing: ' + resource.resource);
+    const response = await fetch(asset.url);
+    if (!response.ok) throw new Error('Mesh unavailable: ' + resource.resource);
+    geometry.set(resource.resource, loader.parse(await response.arrayBuffer()));
+  }
+  const visuals = [];
+  for (const link of robot.links)
+    for (const visual of link.visuals) {
+      if (visual.geometry.kind !== 'mesh') throw new Error('The SO-101 fixture expects meshes.');
+      const shape = geometry.get(visual.geometry.resource);
+      if (!shape) throw new Error('Missing mesh: ' + visual.geometry.resource);
+      const rgba = visual.color ?? [0.65, 0.7, 0.75, 1];
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setRGB(...rgba.slice(0, 3), THREE.SRGBColorSpace),
+        roughness: 0.65,
+      });
+      const mesh = new THREE.Mesh(shape, material);
+      mesh.matrixAutoUpdate = false;
+      scene.add(mesh);
+      visuals.push({ mesh, link: link.name, visual });
+    }
+  function render() {
+    renderer.render(scene, camera);
+  }
+  function update() {
+    const pose = forwardKinematics(robot, positions, { xyz: [baseX, 0, 0], rpy: [0, 0, 0] });
+    for (const { mesh, link, visual } of visuals) {
+      mesh.matrix.fromArray(multiplyTransforms(pose.links[link], originTransform(visual.origin)));
+      mesh.matrix.scale(new THREE.Vector3(...visual.geometry.scale));
+      mesh.matrixWorldNeedsUpdate = true;
+    }
+    const invalid = pose.violations.length > 0;
+    document.querySelector('#status').dataset.invalid = String(invalid);
+    document.querySelector('#message').textContent = invalid
+      ? pose.violations
+          .map(
+            (v) => `${v.joint}: ${v.value.toFixed(3)} ${v.unit}, outside ${v.lower} to ${v.upper}`,
+          )
+          .join('; ')
+      : 'All six joint positions are within URDF limits';
+    const tip = pose.links.gripper_frame_link.slice(12, 15);
+    document.querySelector('#point').textContent =
+      'Gripper frame · ' + tip.map((v) => v.toFixed(4)).join(', ') + ' m';
+    document.documentElement.dataset.pose = JSON.stringify(tip);
+    render();
+  }
+  for (const joint of robot.joints.filter((joint) => joint.type !== 'fixed').reverse()) {
+    const row = document.createElement('div');
+    row.className = 'joint';
+    const label = document.createElement('label');
+    label.append(joint.name.replaceAll('_', ' '));
+    const numeric = document.createElement('input');
+    numeric.type = 'number';
+    numeric.step = '0.001';
+    numeric.value = positions[joint.name];
+    numeric.setAttribute('aria-label', joint.name + ' radians');
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = joint.limit.lower;
+    slider.max = joint.limit.upper;
+    slider.step = '0.001';
+    slider.value = positions[joint.name];
+    slider.setAttribute('aria-label', joint.name);
+    const limits = document.createElement('div');
+    limits.className = 'limits';
+    const range = document.createElement('small');
+    range.textContent = `${joint.limit.lower.toFixed(3)} to ${joint.limit.upper.toFixed(3)}`;
+    const definition = document.createElement('button');
+    definition.textContent = 'Definition';
+    definition.setAttribute('aria-label', joint.name + ' definition');
+    definition.onclick = () => api.openSource(source.id, joint.name);
+    function change(value) {
+      if (!Number.isFinite(value)) return;
+      positions[joint.name] = value;
+      numeric.value = value;
+      slider.value = value;
+      cancelSolve();
+      saveTask();
+      update();
+    }
+    slider.oninput = () => change(slider.valueAsNumber);
+    numeric.oninput = () => change(numeric.valueAsNumber);
+    label.append(numeric);
+    limits.append(range, definition);
+    row.append(label, slider, limits);
+    document.querySelector('#joints').append(row);
+  }
+  const base = document.querySelector('#base');
+  base.value = baseX;
+  base.oninput = () => {
+    if (Number.isFinite(base.valueAsNumber)) {
+      baseX = base.valueAsNumber;
+      cancelSolve();
+      task.base.xyz[0] = baseX;
+      saveTask();
+      update();
+    }
+  };
+  const targetInputs = [0, 1, 2].map((axis) => {
+    const label = document.createElement('label');
+    label.append(['X', 'Y', 'Z'][axis]);
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = '0.01';
+    input.value = task.targets[0].position[axis];
+    input.setAttribute('aria-label', 'Target ' + ['X', 'Y', 'Z'][axis] + ' in metres');
+    input.oninput = () => {
+      if (!Number.isFinite(input.valueAsNumber)) return;
+      cancelSolve();
+      task.targets[0].position[axis] = input.valueAsNumber;
+      marker.position.fromArray(task.targets[0].position);
+      solverStatus.textContent = 'Target changed. Find a new pose or check the current one.';
+      saveTask();
+      render();
+    };
+    label.append(input);
+    document.querySelector('#target-inputs').append(label);
+    return input;
+  });
+  document.querySelector('#solve').onclick = async () => {
+    cancelSolve();
+    const controller = new AbortController();
+    solving = controller;
+    document.querySelector('#solve').disabled = true;
+    solverStatus.textContent = 'Finding a candidate pose…';
+    try {
+      const solution = await solvePosition(
+        robot,
+        {
+          ...task.tool,
+          target: task.targets[0].position,
+          base: task.base,
+          positions,
+          tolerance: task.tolerance,
+        },
+        controller.signal,
+      );
+      if (solving !== controller) return;
+      Object.assign(positions, solution.positions);
+      for (const joint of robot.joints.filter((joint) => joint.type !== 'fixed')) {
+        document.querySelector('input[aria-label="' + joint.name + ' radians"]').value =
+          positions[joint.name];
+        document.querySelector('input[aria-label="' + joint.name + '"]').value =
+          positions[joint.name];
+      }
+      solverStatus.textContent =
+        solution.outcome === 'candidate'
+          ? 'Candidate found. Check this pose with Viewer.'
+          : 'Unresolved: best position error ' +
+            (solution.residual * 1000).toFixed(2) +
+            ' mm. This search does not prove the target unreachable.';
+      document.documentElement.dataset.solve = solution.outcome;
+      saveTask();
+      update();
+    } catch (error) {
+      if (!controller.signal.aborted) solverStatus.textContent = error.message;
+    } finally {
+      if (solving === controller) cancelSolve();
+    }
+  };
+  document.querySelector('#check').onclick = () => api.requestRobotCheck(source.id, 'robotTask');
+  const ray = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let dragging = false;
+  const plane = new THREE.Plane();
+  function rayFrom(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.set(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      (-(event.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    ray.setFromCamera(pointer, camera);
+  }
+  renderer.domElement.addEventListener('pointerdown', (event) => {
+    rayFrom(event);
+    if (!ray.intersectObject(marker).length) return;
+    cancelSolve();
+    dragging = true;
+    controls.enabled = false;
+    plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1), marker.position);
+    renderer.domElement.setPointerCapture(event.pointerId);
+  });
+  renderer.domElement.addEventListener('pointermove', (event) => {
+    if (!dragging) return;
+    rayFrom(event);
+    const point = ray.ray.intersectPlane(plane, new THREE.Vector3());
+    if (!point) return;
+    task.targets[0].position = point.toArray();
+    marker.position.copy(point);
+    targetInputs.forEach((input, i) => {
+      input.value = point.toArray()[i].toFixed(4);
+    });
+    render();
+  });
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    controls.enabled = true;
+    saveTask();
+    solverStatus.textContent = 'Target changed. Find a new pose or check the current one.';
+  }
+  renderer.domElement.addEventListener('pointerup', endDrag);
+  renderer.domElement.addEventListener('pointercancel', endDrag);
+  controls.addEventListener('change', render);
+  controls.addEventListener('end', () =>
+    api.setState({
+      cameraPosition: camera.position.toArray(),
+      cameraTarget: controls.target.toArray(),
+    }),
+  );
+  new ResizeObserver(() => {
+    renderer.setSize(stage.clientWidth, stage.clientHeight, false);
+    camera.aspect = stage.clientWidth / stage.clientHeight;
+    camera.updateProjectionMatrix();
+    render();
+  }).observe(stage);
+  update();
+  document.documentElement.dataset.loaded = String(visuals.length);
+</script>

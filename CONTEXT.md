@@ -84,10 +84,13 @@ GLB validation. The sandbox runtime uses the existing private web-preview capabi
 [conversation canvases](docs/adr/0011-conversation-canvases.md).
 
 Robot source snapshots use `domain/robotics` for a bounded URDF tree, exact joint definitions and
-forward kinematics. `desktop/canvases/robot.ts` attaches authorized relative STL meshes through the
-existing asset store. The bundled `viewer/robotics` module gives generated pages motion
-calculations, not trusted verification. See
-[robot model snapshots](docs/adr/0013-robot-model-snapshots.md).
+forward kinematics and bounded target solving. `desktop/canvases/robot.ts` attaches authorized
+relative STL meshes through the existing asset store. The bundled `viewer/robotics` module gives
+generated pages motion calculations. `desktop/robotics/check.ts` independently propagates tool
+points for endpoint checks; `desktop/canvases/robot-check.ts` binds their inputs to saved sources
+and state. Host controls own results and checked JSON export. See
+[robot model snapshots](docs/adr/0013-robot-model-snapshots.md) and
+[robot target checks](docs/adr/0014-robot-target-checks.md).
 
 Different worktrees have different working files and indices. Two views of one checkout share those
 files and staging. A view ID is never checkout identity. Cold restoration does not replay terminal

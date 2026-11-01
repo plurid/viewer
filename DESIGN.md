@@ -398,6 +398,14 @@ labeled fields and Add, Rename and Remove actions. Let names wrap, keep the read
 the sidebar at narrow desktop widths, and show unavailable chapters as disabled bookmarks with an
 explanation.
 
+**The Robot Check Rule.** Keep robot checks outside the generated canvas in a compact disclosure
+that starts closed. Show Checking…, Passed, Needs review or Check again in its summary, with errors
+and stale reasons in the report. Bound and scroll the report; let actions and details wrap at narrow
+desktop widths. Show target positions, measured error, tolerance and units together. Link hard joint
+limit violations to their source definitions. Keep Check poses and Save check JSON… in the Viewer
+report; enable export only for a current check. State that checks cover endpoint positions and hard
+joint limits only.
+
 Show source imagery in creative tools. Tie export, progress, optimization savings and output links
 to real jobs. Label camera previews, RAW renditions and video compatibility copies accurately.
 Failed renders retain retry and alternative-open actions. A stale retained preview identifies its

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { canvasSourcesSchema } from './sources';
 import { canvasResultSchema } from './results';
+import { robotCheckBindingSchema } from '../robotics/task';
+import type { RobotCheckReport } from '../robotics/task';
 
 export const canvasLimits = {
   html: 512_000,
@@ -55,6 +57,7 @@ export const canvasDocumentSchema = z
     ...content,
     state: canvasStateSchema,
     stateRevision: z.number().int().nonnegative(),
+    robotCheck: robotCheckBindingSchema.optional(),
     history: z.array(z.object(content).strict()).max(canvasLimits.history),
     fork: z.object({ id: z.uuid(), revision: z.number().int().nonnegative() }).strict().optional(),
   })
@@ -68,6 +71,25 @@ export const canvasAssetFile = (asset: Pick<CanvasAsset, 'id' | 'name'>) =>
   '.' +
   (asset.name.match(/\.([a-z0-9]{1,12})$/i)?.[1]?.toLowerCase() ?? 'bin');
 export const canvasRequestSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('check-robot'),
+      id: z.uuid(),
+      revision: z.number().int().nonnegative(),
+      stateRevision: z.number().int().nonnegative(),
+      sourceID: z.uuid(),
+      stateKey: z.string().min(1).max(200),
+    })
+    .strict(),
+  z.object({ kind: z.literal('robot-report'), id: z.uuid() }).strict(),
+  z
+    .object({
+      kind: z.literal('save-robot-check'),
+      id: z.uuid(),
+      revision: z.number().int().nonnegative(),
+      stateRevision: z.number().int().nonnegative(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('refresh-source'),
@@ -130,6 +152,7 @@ export type CanvasReply = {
   preview?: { id: string; url: string };
   exported?: string;
   saved?: string;
+  robotReport?: RobotCheckReport;
 };
 
 /** Existing values belong to the person, even when the app no longer displays their controls. */

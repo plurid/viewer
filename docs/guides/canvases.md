@@ -86,12 +86,19 @@ private.
    Values outside the declared range are reported without being silently corrected.
 4. Ask the tool to show the source of a constraint. In **Sources**, choose **Open joint definition**
    to inspect the captured passage in the original file.
-5. Export the canvas to retain its model snapshot, assets and saved inputs.
+5. Ask for world-coordinate target controls and a candidate-pose search. A search can find a
+   candidate or remain unresolved. An unresolved search does not prove a target unreachable.
+6. Request a Viewer check from the generated tool. Expand **Robot check** to inspect each target's
+   measured error, tolerance and joint limits. Change a target, tool point, base placement or pose
+   and use **Check poses** again.
+7. Choose **Save check JSON…** to save the checked inputs and measured results as a new file. Export
+   the canvas to retain the model snapshot, meshes, controls, inputs and check binding. Viewer
+   recomputes the check when reopening it.
 
 The controls are generated for the conversation. A working page does not establish that the arm can
-reach a target or move without collisions. The current capability calculates poses from specified
-joint values and reports hard position limits. Confirm the file's calibration convention before
-interpreting its values as hardware settings. See the
+reach a target or move without collisions. The checker measures the listed endpoint positions and
+hard joint limits. It does not check orientation or movement between those poses. Confirm the file's
+calibration convention before interpreting its values as hardware settings. See the
 [supported subset](../reference/canvases.md#robot-sources-and-motion).
 
 [Canvas contracts and limits](../reference/canvases.md) ·

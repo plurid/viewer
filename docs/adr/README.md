@@ -17,3 +17,5 @@ These records explain decisions that still shape the application. Feature usage 
 - [Conversation canvases and independent input state](0011-conversation-canvases.md)
 - [Window-owned ordinary dialogs](0012-window-owned-dialogs.md)
 - [Robot model snapshots and motion](0013-robot-model-snapshots.md)
+
+- [Robot target checks](0014-robot-target-checks.md)

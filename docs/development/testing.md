@@ -88,6 +88,12 @@ pnpm exec node --import tsx packages/viewer-electron/app/tools/robotics/fetch-so
 VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 VIEWER_ROBOT_CORPUS=/tmp/viewer-so101-corpus pnpm exec node --import tsx packages/viewer-electron/app/tests/native/robotics.ts
 ```
 
+`tests/native/robot-targets.ts` uses the same corpus and environment. Its supplied HTML fixture
+places targets, runs the bounded solver, requests the desktop check, invalidates changed inputs and
+reopens the saved work. It records both unresolved and successful searches. This is local fixture
+qualification, not a model-generated robot session. `tests/robot-targets.test.ts` compares the
+independent checker with SciPy reference poses, exercises invalidation and refuses stale saves.
+
 Use a new absolute corpus path for each download. `tests/robotics.test.ts` compares every link at
 three pinned poses against separately generated NumPy/SciPy matrices, and covers malformed trees,
 unsupported semantics, scoped resource attachment and snapshot round trips. The retained reference

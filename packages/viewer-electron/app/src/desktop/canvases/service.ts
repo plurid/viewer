@@ -21,6 +21,9 @@ import { portableCanvasSources } from '../../domain/canvases/sources';
 import { sourceHash, sourceSnapshot } from './sources';
 import { CanvasObservations } from './observations';
 import type { CanvasObservation } from './observations';
+import { robotTaskSchema } from '../../domain/robotics/task';
+import { canvasRobotReport, robotInputHash } from './robot-check';
+import { checkRobotTask } from '../robotics/check';
 
 interface CanvasPorts {
   changed(owner: number, document: CanvasDocument): void;
@@ -288,12 +291,14 @@ export class Canvases {
     stateRevision: number,
     input: CanvasResult,
     choose: () => Promise<string | undefined>,
+    validate?: (document: CanvasDocument) => void,
   ): Promise<string | undefined> {
     const result = canvasResultSchema.parse(input);
     const check = async () => {
       const document = await this.read(owner, id);
       if (document.revision !== revision || document.stateRevision !== stateRevision)
         throw new Error('The canvas or its inputs changed. Prepare the result again.');
+      validate?.(document);
     };
     await check();
     const destination = await choose();
@@ -302,6 +307,7 @@ export class Canvases {
       const document = await this.load(owner, id);
       if (document.revision !== revision || document.stateRevision !== stateRevision)
         throw new Error('The canvas or its inputs changed. Prepare the result again.');
+      validate?.(document);
       // Exclusive creation preserves existing destinations, including links. A failed write is kept.
       const handle = await open(destination, 'wx', 0o600);
       try {
@@ -312,6 +318,75 @@ export class Canvases {
       }
       return destination;
     });
+  }
+  checkRobot(
+    owner: number,
+    id: string,
+    revision: number,
+    stateRevision: number,
+    sourceID: string,
+    stateKey: string,
+  ) {
+    return this.serial(async () => {
+      const document = await this.load(owner, id);
+      if (document.revision !== revision || document.stateRevision !== stateRevision)
+        throw new Error('The canvas or its inputs changed. Check the saved task again.');
+      const source = document.sources.find((source) => source.id === sourceID);
+      if (!source?.data.robot) throw new Error('Choose a bound robot source.');
+      const input = robotTaskSchema.parse(document.state[stateKey]);
+      checkRobotTask(source.data.robot, input);
+      return this.save(owner, {
+        ...document,
+        robotCheck: {
+          sourceID,
+          stateKey,
+          revision,
+          sourceHash: source.hash,
+          inputHash: robotInputHash(input),
+          checker: 'position-v1',
+          at: Date.now(),
+        },
+      });
+    });
+  }
+  async saveRobotCheck(
+    owner: number,
+    id: string,
+    revision: number,
+    stateRevision: number,
+    choose: () => Promise<string | undefined>,
+  ) {
+    const document = await this.read(owner, id);
+    const report = canvasRobotReport(document);
+    if (!report || report.status !== 'checked')
+      throw new Error('Check the current task before saving the result.');
+    const source = document.sources.find((source) => source.id === document.robotCheck!.sourceID)!;
+    return this.saveResult(
+      owner,
+      id,
+      revision,
+      stateRevision,
+      {
+        format: 'json',
+        name: 'robot-check.json',
+        content: JSON.stringify(
+          {
+            version: 1,
+            checker: document.robotCheck!.checker,
+            source: { name: source.name, hash: source.hash, version: source.version },
+            inputHash: document.robotCheck!.inputHash,
+            ...report,
+          },
+          null,
+          2,
+        ),
+      },
+      choose,
+      (current) => {
+        if (JSON.stringify(current.robotCheck) !== JSON.stringify(document.robotCheck))
+          throw new Error('The selected robot check changed. Review the current result.');
+      },
+    );
   }
   attach(
     owner: number,

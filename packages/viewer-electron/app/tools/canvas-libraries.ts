@@ -36,14 +36,15 @@ export function canvasLibraries(): Plugin {
           return [name, name === 'three.module.js' ? ownRendererLookup(text) : text];
         }),
       );
-      const robotics = fileURLToPath(
-        new URL('../src/domain/robotics/kinematics.ts', import.meta.url),
-      );
-      this.addWatchFile(robotics);
-      const compiled = transpileModule(await readFile(robotics, 'utf8'), {
-        compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
-      });
-      parts.push(['robotics.js', compiled.outputText]);
+      for (const module of ['kinematics', 'solver']) {
+        const file = fileURLToPath(new URL(`../src/domain/robotics/${module}.ts`, import.meta.url));
+        this.addWatchFile(file);
+        const compiled = transpileModule(await readFile(file, 'utf8'), {
+          compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
+        });
+        parts.push([module + '.js', compiled.outputText]);
+      }
+      parts.push(['robotics.js', "export * from './kinematics.js'; export * from './solver.js';"]);
       return `export const canvasLibraries = new Map(${JSON.stringify(parts)});`;
     },
   };

@@ -112,7 +112,7 @@ not replace it with fabricated success panels or a prerecorded animation labeled
   Meta session**. Keep failed requests in evaluation evidence.
 - Existing inputs can survive an agent revision. Show the person changing a control when needed; a
   response claiming to have changed it is not evidence of a changed value.
-- Capture the full application window, including native Save dialogs when shown. Renderer-only
+- Capture the full application window, including Viewer Save dialogs when shown. Renderer-only
   recordings omit those dialogs and cannot stand in for that footage.
 - Use your narration and original or cleared audio. Keep the synthetic homage visibly separate from
   the real application. Confirm applicable event and asset requirements before production.

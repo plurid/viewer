@@ -12,6 +12,7 @@ import { Empty, Loading } from '../ui/primitives';
 import { Disclosure } from '../ui/Disclosure';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { CanvasSources } from './CanvasSources';
+import { RobotCheckPanel } from './RobotCheckPanel';
 import { ResultReview } from './ResultReview';
 import type { PendingCanvasResult } from './ResultReview';
 import { canvasResultSchema } from '../../domain/canvases/results';
@@ -80,6 +81,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
     let capability: string | undefined;
     let port: MessagePort | undefined;
     let writes = Promise.resolve();
+    let checkingRobot = false;
     const saveInput = canvasInputWriter(
       async (patch) => {
         const latest = current.current;
@@ -160,6 +162,35 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
               setResult({ result: parsed.data, revision, stateRevision: latest.stateRevision });
             })
             .catch(fail);
+        } else if (
+          value.kind === 'robot-check' &&
+          typeof value.sourceID === 'string' &&
+          typeof value.stateKey === 'string'
+        ) {
+          if (checkingRobot) return;
+          checkingRobot = true;
+          void writes
+            .then(async () => {
+              const latest = current.current;
+              if (!live || !latest || latest.revision !== revision) return;
+              if (JSON.stringify(latest.state) !== JSON.stringify(value.state))
+                throw new Error(
+                  'The task inputs changed or could not be saved. Request the check again.',
+                );
+              const reply = await window.viewer.canvas({
+                kind: 'check-robot',
+                id: pane.canvasID,
+                revision,
+                stateRevision: latest.stateRevision,
+                sourceID: value.sourceID,
+                stateKey: value.stateKey,
+              });
+              if (live) receive(reply.document);
+            })
+            .catch(fail)
+            .finally(() => {
+              checkingRobot = false;
+            });
         } else if (value.kind === 'state') {
           const patch = canvasStateSchema.safeParse(value.patch);
           if (!patch.success) {
@@ -339,6 +370,45 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           </>
         )}
       </header>
+      {document.robotCheck && (
+        <RobotCheckPanel
+          document={document}
+          busy={busy}
+          onDefinition={(id, name) => {
+            setSourceJoint({ id, name });
+            setSourcesOpen(true);
+          }}
+          onCheck={() =>
+            void act(async () => {
+              const latest = current.current!;
+              receive(
+                (
+                  await window.viewer.canvas({
+                    kind: 'check-robot',
+                    id: latest.id,
+                    revision: latest.revision,
+                    stateRevision: latest.stateRevision,
+                    sourceID: latest.robotCheck!.sourceID,
+                    stateKey: latest.robotCheck!.stateKey,
+                  })
+                ).document,
+              );
+            })
+          }
+          onSave={() =>
+            void act(async () => {
+              const latest = current.current!;
+              const reply = await window.viewer.canvas({
+                kind: 'save-robot-check',
+                id: latest.id,
+                revision: latest.revision,
+                stateRevision: latest.stateRevision,
+              });
+              if (reply.saved) setSaved(reply.saved);
+            })
+          }
+        />
+      )}
       {!!document.sources.length && (
         <Disclosure
           variant="compact"
