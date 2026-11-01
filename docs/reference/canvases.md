@@ -2,7 +2,10 @@
 
 A canvas is a private versioned document linked to a conversation. Its plane identity is stable
 across content changes. Content revisions hold HTML, default values, evidence snapshots and assets.
-Input state has a separate revision counter; changing a control does not reload the page.
+Input state has a separate revision counter; changing a control does not reload the page. Rapid
+updates retain the latest value for each changed key while a save is in flight. Refinement requests,
+quote branches, reload and export wait for pending input saves. Content and state revision checks
+still reject stale changes.
 
 ## Runtime API
 
@@ -38,7 +41,8 @@ Result formats are `csv`, `json`, `markdown` and `text`. `content` is UTF-8 text
 `name` is a basename without path separators. The host adds the extension if missing. It captures
 content and state revisions when preparing review and checks both again after the save picker.
 Saving creates an exclusive new file; it never overwrites a destination or follows a destination
-link. Canceling writes nothing.
+link. Canceling writes nothing. Completing a save closes only its own review. A newer result
+requested while the picker is open remains available for a separate review and save.
 
 ## Model tools
 

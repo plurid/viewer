@@ -47,6 +47,7 @@ const bound = await service.source(1, initial.id, 0, {
 });
 const html = `<style>body{margin:0;padding:28px;font:16px system-ui;color:#edf1f6;background:#252a32}input,button{font:inherit;padding:8px;margin:8px;border:1px solid #607080;border-radius:6px;color:inherit;background:#323a44}output{display:block;font-size:42px;margin:24px 0}</style><h1>Source-backed calculator</h1><label>Quantity<input id="quantity" type="number"></label><output id="total"></output><button id="csv">Export CSV</button><button id="bad">Invalid result</button><script>
 const api=window.viewerCanvas,input=document.querySelector('input'),out=document.querySelector('output');
+for(let initialized=1;initialized<=200;initialized++)api.setState({initialized});
 const row=api.getSources()[0].data.table.rows[1];
 function total(){return Number(row[1])*Number(input.value)+Number(row[2]);}
 function render(){out.textContent='EUR '+total();}
@@ -131,6 +132,12 @@ try {
   console.log('Canvas frame connected');
   const total = () => frame.evaluate(pageCall(() => document.querySelector('output')?.textContent));
   await until(total, (value) => value === 'EUR 1020', 'snapshot-backed total');
+  await until(
+    async () => (await read(main!)).document.state.initialized,
+    (value) => value === 200,
+    'input initialization before the frame connects retains its last value',
+  );
+  checks.push('input initialization survives the frame connection handshake');
   await frame.evaluate(
     pageCall(() => {
       const input = document.querySelector('input')!;
@@ -182,6 +189,42 @@ try {
     'invalid JSON result rejected',
   );
   checks.push('malformed result rejected at the host boundary');
+  await frame.evaluate(
+    pageCall(() => {
+      const input = document.querySelector('input')!;
+      for (let quantity = 42; quantity <= 241; quantity++) {
+        input.value = String(quantity);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      document.querySelector<HTMLButtonElement>('#csv')!.click();
+    }),
+  );
+  await until(
+    review,
+    (value) => value === 'supplier,quantity,total_eur\nNorth,241,10302\n',
+    'rapid input updates and immediate export retain the final value',
+  );
+  assert.equal((await read(main)).document.state.quantity, 241);
+  checks.push('rapid input changes coalesce without losing the final value before export');
+  await main.evaluate(
+    pageCall(() =>
+      [...document.querySelectorAll<HTMLButtonElement>('.canvas-result button')]
+        .find((b) => b.textContent === 'Cancel')!
+        .click(),
+    ),
+  );
+  await frame.evaluate(
+    pageCall(() => {
+      const input = document.querySelector('input')!;
+      input.value = '41';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }),
+  );
+  await until(
+    async () => (await read(main!)).document.state.quantity,
+    (value) => value === 41,
+    'input restored for source refresh',
+  );
   await main.evaluate(
     pageCall(() =>
       [...document.querySelectorAll<HTMLElement>('summary')]

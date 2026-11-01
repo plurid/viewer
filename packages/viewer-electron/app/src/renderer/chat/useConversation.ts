@@ -10,6 +10,7 @@ import { useWorkspace } from '../workspace/context';
 import { chatDraft, flushChatDraft, keepChatDraft } from './drafts';
 import { messageAuthor } from './presentation';
 import { sendWindowEvent } from '../app/window-events';
+import { flushCanvasWrites } from '../canvases/writes';
 
 const draftDelay = 250;
 
@@ -110,6 +111,7 @@ export function useConversation(pane: ChatPane) {
       const sentRevision = revision.current;
       clearTimeout(timer.current);
       await flushChatDraft(pane.conversationID);
+      await flushCanvasWrites();
       const reply = await window.viewer.chat({
         kind: 'send',
         id: pane.conversationID,

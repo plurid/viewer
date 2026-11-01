@@ -19,7 +19,7 @@ assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 const appRoot = fileURLToPath(new URL('../..', import.meta.url));
 const binary = path.resolve(
   process.env.VIEWER_TEST_BINARY ??
-    path.join(appRoot, 'out/spatial-canvas-20261101-a/Viewer.app/Contents/MacOS/Viewer'),
+    path.join(appRoot, 'out/Viewer-darwin-arm64/Viewer.app/Contents/MacOS/Viewer'),
 );
 const root = await realpath(await temporaryRoot('viewer-native-canvases-'));
 const profile = path.join(root, 'Profile');
@@ -372,15 +372,29 @@ try {
   checks.push(
     'quote branch freezes context, forks canvas and navigates to the exact source passage',
   );
+  assert.ok(branch.canvasID);
   await main.evaluate(
     pageCall((id) => {
       const chat = document.querySelector(`[data-conversation-id="${id}"]`)!;
       [...chat.querySelectorAll('button')]
         .find((button) => button.textContent === 'Canvas')!
         .click();
-    }, conversation),
+    }, branchID),
   );
-  content = await frame(main, canvas.id);
+  let alternative = await frame(main, branch.canvasID);
+  await alternative.evaluate(
+    pageCall(() => {
+      const input = document.querySelector('input')!;
+      input.value = '300';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }),
+  );
+  await until(
+    async () => (await canvases.read(1, branch.canvasID!)).state.budget,
+    (value) => value === 300,
+    'alternative has independent inputs',
+  );
+  assert.equal((await canvases.read(1, canvas.id)).state.budget, 42);
   await main.evaluate(
     pageCall(
       async (id, assetID) => {
@@ -392,16 +406,50 @@ try {
           revision: latest.document.revision,
         });
       },
-      canvas.id,
+      branch.canvasID,
       modelAsset.id,
     ),
   );
+  alternative = await frame(main, branch.canvasID, alternative.url);
+  await until(
+    () => alternative.evaluate(pageCall(() => document.querySelector('#status')?.textContent)),
+    (text) => text === 'Drag to orbit · scroll to zoom',
+    'alternative revision renders',
+  );
+  await click(main, branch.canvasID, 'Compare original');
+  content = await frame(main, canvas.id);
+  await content.evaluate(
+    pageCall(() => {
+      const input = document.querySelector('input')!;
+      input.value = '84';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }),
+  );
+  await click(main, branch.canvasID, 'Apply to original');
   content = await frame(main, canvas.id, content.url);
   await until(
     () => content.evaluate(pageCall(() => document.querySelector('#status')?.textContent)),
     (text) => text === 'Drag to orbit · scroll to zoom',
     'bundled Three loads GLB',
   );
+  assert.equal((await canvases.read(1, canvas.id)).state.budget, 84);
+  assert.equal((await canvases.read(1, branch.canvasID)).state.budget, 300);
+  checks.push('compare and apply retain the original latest inputs and independent alternative');
+  const applied = (await canvases.read(1, canvas.id)).revision;
+  await click(main, branch.canvasID, 'Apply to original');
+  await until(
+    () =>
+      main!.evaluate(
+        pageCall(
+          (id) => document.querySelector(`[data-canvas-id="${id}"] [role="alert"]`)?.textContent,
+          branch.canvasID!,
+        ),
+      ),
+    (text) => text?.includes('original canvas has changed'),
+    'conflicting apply refused visibly',
+  );
+  assert.equal((await canvases.read(1, canvas.id)).revision, applied);
+  checks.push('applying an out-of-date alternative leaves the original unchanged');
   assert.ok(await content.evaluate(pageCall(() => document.querySelector('canvas')?.width)));
   await content.evaluate(
     pageCall(() => {
@@ -428,7 +476,7 @@ try {
   content = await frame(main, canvas.id, content.url);
   await until(
     () => content.evaluate(pageCall(() => document.querySelector('input')?.value)),
-    (value) => value === '42',
+    (value) => value === '84',
     'Undo restores previous app and inputs',
   );
   await application.close(main);
@@ -441,7 +489,7 @@ try {
     path.join(exported, 'canvas.viewer.json'),
     randomUUID(),
   );
-  assert.equal(imported.state.budget, 42);
+  assert.equal(imported.state.budget, 84);
   assert.equal(imported.html, html);
   checks.push('exported manifest reopens saved state without a model');
   await writeFile(

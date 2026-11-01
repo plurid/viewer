@@ -244,19 +244,20 @@ run its commands from that package.
 
 ```sh
 VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm exec vitest run \
-  tests/canvases.test.ts tests/canvas-productivity.test.ts \
-  tests/chat.test.ts tests/model-providers.test.ts --maxWorkers=2
+  tests/canvases.test.ts tests/canvas-productivity.test.ts tests/canvas-writes.test.ts \
+  tests/chat.test.ts tests/chat-ui.test.ts tests/model-providers.test.ts --maxWorkers=2
 ```
 
 These cover input retention, revisions, source snapshots, quote branches, result validation and the
 provider protocol with fixtures. They make no paid model requests and do not qualify robot motion or
 native file dialogs.
 
-`tests/native/canvas-productivity.ts` uses a hand-authored calculator to exercise saved inputs,
-source-driven totals, result review and restart in an isolated packaged profile.
-`tests/native/canvases.ts` uses fixtures for sandbox isolation, quote branches, portable content and
-bundled 3D rendering. Set `VIEWER_TEST_BINARY` to the candidate being tested and retain both
-preservation variables. Neither fixture is model-generation evidence.
+`tests/native/canvas-productivity.ts` uses a hand-authored calculator to exercise startup and rapid
+input updates, source-driven totals, result review and restart in an isolated packaged profile.
+`tests/native/canvases.ts` uses fixtures for sandbox isolation, quote branches, comparison,
+conflict-aware application, portable content and bundled 3D rendering. Set `VIEWER_TEST_BINARY` to
+the candidate being tested and retain both preservation variables. Neither fixture is
+model-generation evidence.
 
 ### Supplier sample and arithmetic
 

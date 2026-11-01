@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -187,15 +187,31 @@ try {
         inputs: [...document.querySelectorAll('input')].map((x) => ({ id: x.id, value: x.value })),
       })),
     );
-  const exportResult = async (button: string, filename: string, reviewUntil: number) => {
-    await frame.evaluate(pageCall((id) => document.getElementById(id)!.click(), button));
+  const exportResult = async (
+    button: string | null,
+    filename: string,
+    reviewUntil: number,
+    nextButton?: string,
+  ) => {
+    if (button)
+      await frame.evaluate(pageCall((id) => document.getElementById(id)!.click(), button));
     const content = await until(
       () =>
-        main!.evaluate(pageCall(() => document.querySelector('.canvas-result pre')?.textContent)),
+        main!.evaluate(
+          pageCall((name) => {
+            const review = document.querySelector('.canvas-result');
+            const save = review?.querySelector<HTMLButtonElement>('button.primary');
+            return review?.querySelector('strong')?.textContent === name && save && !save.disabled
+              ? review.querySelector('pre')?.textContent
+              : undefined;
+          }, filename),
+        ),
       (x) => !!x,
       'result review',
     );
     assert.ok(content);
+    const saved = path.join(bundle, filename);
+    await assert.rejects(lstat(saved), { code: 'ENOENT' });
     await screenshot(main!, path.join(root, filename + '.review.png'));
     await beat(reviewUntil);
     await main!.evaluate(
@@ -203,7 +219,18 @@ try {
         document.querySelector<HTMLButtonElement>('.canvas-result button.primary')!.click(),
       ),
     );
-    await execute(
+    if (nextButton) {
+      await frame.evaluate(pageCall((id) => document.getElementById(id)!.click(), nextButton));
+      await until(
+        () =>
+          main!.evaluate(
+            pageCall(() => document.querySelector('.canvas-result strong')?.textContent),
+          ),
+        (name) => !!name && name !== filename,
+        'next export arrives while native save is pending',
+      );
+    }
+    const picker = await execute(
       '/usr/bin/osascript',
       [
         '-e',
@@ -226,13 +253,25 @@ end run`,
         String(app!.child.pid),
       ],
       { timeout: 20000 },
+    ).then(
+      () => 'owned Save button clicked',
+      async (error: unknown) => {
+        // The sheet may finish closing before System Events can inspect it.
+        // Accept that only when this run's new file already matches the review.
+        if (
+          !String(error).includes('Owned Save sheet not found') ||
+          (await readFile(saved, 'utf8').catch(() => undefined)) !== content
+        )
+          throw error;
+        return 'sheet closed before automation; exact new file verified';
+      },
     );
-    const saved = path.join(bundle, filename);
     await until(
       () => readFile(saved, 'utf8').catch(() => ''),
       (text) => text === content,
       'native picker saves exact reviewed result',
     );
+    observations.push({ export: filename, picker });
     return { file: saved, content };
   };
   const actions = async () => {
@@ -330,16 +369,17 @@ end run`,
           .click(),
       ),
     );
-    const csv = await exportResult('csvBtn', 'supplier-comparison.csv', 118);
+    const csv = await exportResult('csvBtn', 'supplier-comparison.csv', 118, 'mdBtn');
     assert.match(csv.content, /North,40,42,180,7,1860/);
     assert.match(csv.content, /East,40,48,40,2,1960/);
     checks.push('CSV saved through native picker matches the reviewed generated output');
     await beat(125);
-    const markdown = await exportResult('mdBtn', 'decision-report.md', 148);
+    const markdown = await exportResult(null, 'decision-report.md', 148);
     assert.match(markdown.content, /100/);
     checks.push(
       'Markdown report saved through native picker matches the reviewed generated output',
     );
+    checks.push('an export requested during a native save remains available for the next review');
     await beat(152);
     await main!.evaluate(
       pageCall(() =>

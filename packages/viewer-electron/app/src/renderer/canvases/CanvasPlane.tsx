@@ -1,5 +1,5 @@
 import { ReconstructionPanel } from './ReconstructionPanel';
-import { flushCanvasWrites, trackCanvasWrite } from './writes';
+import { canvasInputWriter, flushCanvasWrites } from './writes';
 import { acceptsDrop, droppedPaths } from '../explorer/sections';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CanvasPane as Pane } from '../../domain/contracts';
@@ -33,15 +33,16 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
   const [saved, setSaved] = useState('');
   const iframe = useRef<HTMLIFrameElement>(null);
   const current = useRef(document);
-  current.current = document;
-  const receive = useCallback((value: CanvasDocument) => {
-    setDocument((previous) =>
+  const receive = useCallback((value: CanvasDocument, render = true) => {
+    const previous = current.current;
+    if (
       !previous ||
       value.revision > previous.revision ||
       (value.revision === previous.revision && value.stateRevision >= previous.stateRevision)
-        ? value
-        : previous,
-    );
+    ) {
+      current.current = value;
+      if (render) setDocument(value);
+    }
   }, []);
   const fail = (value: unknown) => setError(errorMessage(value));
   useEffect(() => {
@@ -78,7 +79,35 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
     let capability: string | undefined;
     let port: MessagePort | undefined;
     let writes = Promise.resolve();
-    let queued = 0;
+    const saveInput = canvasInputWriter(
+      async (patch) => {
+        const latest = current.current;
+        if (!latest || latest.revision !== revision) return;
+        const reply = await window.viewer.canvas({
+          kind: 'state',
+          id: pane.canvasID,
+          revision: latest.stateRevision,
+          contentRevision: revision,
+          patch,
+        });
+        receive(reply.document, live);
+      },
+      async (value) => {
+        if (live) {
+          fail(value);
+          port?.postMessage({ kind: 'error', message: errorMessage(value) });
+        }
+        try {
+          const saved = await window.viewer.canvas({ kind: 'read', id: pane.canvasID });
+          receive(saved.document, live);
+          if (live) {
+            port?.postMessage({ kind: 'state', state: saved.document.state });
+          }
+        } catch {
+          /* Keep the failed revision visible for review. */
+        }
+      },
+    );
     let observationSent = false;
     let errorObserved = false;
     const observe = (status: 'ready' | 'error', message?: string) => {
@@ -132,45 +161,15 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
             .catch(fail);
         } else if (value.kind === 'state') {
           const patch = canvasStateSchema.safeParse(value.patch);
-          if (!patch.success || queued >= 64) {
-            setError('The canvas sent too many updates or invalid saved values.');
+          if (!patch.success) {
+            setError('The canvas sent invalid saved values.');
             return;
           }
-          queued++;
-          writes = writes
-            .then(async () => {
-              const latest = current.current;
-              if (!latest || latest.revision !== revision) return;
-              const reply = await window.viewer.canvas({
-                kind: 'state',
-                id: pane.canvasID,
-                revision: latest.stateRevision,
-                contentRevision: revision,
-                patch: patch.data,
-              });
-              current.current = reply.document;
-              if (live) receive(reply.document);
-            })
-            .catch(async (value: unknown) => {
-              if (live) {
-                fail(value);
-                port?.postMessage({ kind: 'error', message: errorMessage(value) });
-              }
-              try {
-                const saved = await window.viewer.canvas({ kind: 'read', id: pane.canvasID });
-                current.current = saved.document;
-                if (live) {
-                  receive(saved.document);
-                  port?.postMessage({ kind: 'state', state: saved.document.state });
-                }
-              } catch {
-                /* Keep the failed revision visible for review. */
-              }
-            })
-            .finally(() => {
-              queued--;
-            });
-          trackCanvasWrite(writes);
+          try {
+            writes = saveInput(patch.data);
+          } catch (value) {
+            fail(value);
+          }
         } else if (value.kind === 'source' && typeof value.assetID === 'string') {
           if (current.current?.sources.some((item) => item.id === value.assetID)) {
             setSourcesOpen(true);
@@ -272,8 +271,10 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           onChoose={(choice) => {
             if (choice === 'source') setSource(!source);
             if (choice === 'reload') {
-              setStopped(false);
-              setReload((value) => value + 1);
+              void act(async () => {
+                setStopped(false);
+                setReload((value) => value + 1);
+              });
             }
             if (choice === '3d') setReconstruct(!reconstruct);
             if (choice === 'undo')
@@ -409,7 +410,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
               });
               if (reply.saved) {
                 setSaved(reply.saved);
-                setResult(undefined);
+                setResult((pending) => (pending === result ? undefined : pending));
               }
             })
           }

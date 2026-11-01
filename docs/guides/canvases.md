@@ -6,7 +6,8 @@
    change quantity, budget and deadline. Include a CSV export.” Send the request.
 3. Use **Canvas** to open the linked app. Generated revisions appear in that same plane.
 4. Change its controls, then ask the conversation to improve the app. Saved input values stay
-   separate from the generated design.
+   separate from the generated design. Viewer finishes pending input saves before sending a
+   follow-up or creating a quote branch.
 
 A canvas uses selectable HTML text, ordinary controls, SVG and JavaScript. You can also start in an
 empty Chat plane. Under **Tools**, **Source code** shows the current code and **Undo revision**

@@ -13,6 +13,7 @@ import { Transcript } from './Transcript';
 import { useConversation } from './useConversation';
 import './chat.css';
 import { useWorkspace } from '../workspace/context';
+import { flushCanvasWrites } from '../canvases/writes';
 
 export default function ChatPlane({ pane }: { pane: Pane }) {
   const workspace = useWorkspace();
@@ -166,6 +167,7 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
         messages={document.messages}
         onQuote={(selection) =>
           void (async () => {
+            await flushCanvasWrites();
             const reply = await window.viewer.chat({
               kind: 'branch',
               id: document.id,

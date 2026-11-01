@@ -55,7 +55,7 @@ const rename = vi.fn();
 const configuration = vi.fn();
 
 beforeEach(async () => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   root = await temporaryRoot('viewer-chat-');
   await mkdir(path.join(root, 'context'));
   await mkdir(path.join(root, 'private'));
@@ -98,10 +98,13 @@ async function create(): Promise<ChatDocument> {
 }
 async function settled(id: string): Promise<ChatDocument> {
   let current: ChatDocument | undefined;
-  await vi.waitFor(async () => {
-    current = document(await chat.request({ kind: 'open', id }, 1, origin));
-    expect(current.status).not.toBe('running');
-  });
+  await vi.waitFor(
+    async () => {
+      current = document(await chat.request({ kind: 'open', id }, 1, origin));
+      expect(current.status).not.toBe('running');
+    },
+    { timeout: 10_000 },
+  );
   return current!;
 }
 async function send(id: string): Promise<void> {

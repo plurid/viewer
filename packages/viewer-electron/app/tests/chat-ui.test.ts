@@ -13,6 +13,8 @@ import { chatSelection } from '../src/renderer/chat/selection';
 import { initialize } from '../src/renderer/state/store';
 import { getState, replaceState } from '../src/renderer/state/core';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
+import { trackCanvasWrite } from '../src/renderer/canvases/writes';
+import { deferred } from './support/deferred';
 
 const providers: ModelProvider[] = ['Alpha', 'Beta'].map((name) => ({
   id: name.toLowerCase(),
@@ -167,6 +169,64 @@ describe('files a reply names', () => {
 });
 
 describe('Chat controls and state', () => {
+  it('waits for current canvas inputs before sending a refinement', async () => {
+    providerPermissionGet.mockResolvedValue({
+      providerID: 'alpha',
+      kind: 'openai',
+      endpoint: providers[0]!.endpoint,
+      level: 'names',
+    });
+    mount();
+    const field = await screen.findByRole('textbox', { name: 'Chat message' });
+    fireEvent.change(field, { target: { value: 'Keep these inputs and add a chart' } });
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    const save = deferred();
+    trackCanvasWrite(save.promise);
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      await act(async () => {});
+      expect(chat.mock.calls.some(([request]) => request.kind === 'send')).toBe(false);
+    } finally {
+      await act(async () => save.resolve());
+    }
+    await waitFor(() =>
+      expect(chat.mock.calls.some(([request]) => request.kind === 'send')).toBe(true),
+    );
+  });
+
+  it('waits for current canvas inputs before forking a quoted alternative', async () => {
+    const openChat = vi.fn(async () => {});
+    render(
+      createElement(
+        WorkspaceContext.Provider,
+        { value: { openChat } as unknown as WorkspaceController },
+        createElement(ChatPlane, {
+          pane: { id: 'chat', type: 'chat', path: '/fixtures', conversationID: document.id },
+        }),
+      ),
+    );
+    const branch = await screen.findByRole('button', { name: 'Branch from this message' });
+    const save = deferred();
+    trackCanvasWrite(save.promise);
+    try {
+      fireEvent.click(branch);
+      await act(async () => {});
+      expect(chat.mock.calls.some(([request]) => request.kind === 'branch')).toBe(false);
+    } finally {
+      await act(async () => save.resolve());
+    }
+    await waitFor(() => expect(openChat).toHaveBeenCalledWith(document.id, 'chat'));
+    expect(chat.mock.calls.find(([request]) => request.kind === 'branch')?.[0]).toMatchObject({
+      kind: 'branch',
+      start: 0,
+      end: document.messages[0]!.text.length,
+    });
+  });
+
   it('keeps the draft editable while checking permission and preserves the consent wording', async () => {
     let permissionLoaded!: (permission: ModelDataPermission | null) => void;
     providerPermissionGet.mockReturnValue(

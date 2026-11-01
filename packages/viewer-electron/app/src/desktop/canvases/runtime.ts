@@ -18,7 +18,15 @@ function runtime(initial: {
   const pending: Record<string, unknown>[] = [];
   const send = (value: Record<string, unknown>) => {
     if (port) port.postMessage(value);
-    else if (pending.length < 32) pending.push(value);
+    else {
+      const previous = pending.at(-1);
+      if (value.kind === 'state' && previous?.kind === 'state') {
+        previous.patch = {
+          ...(previous.patch as Record<string, unknown>),
+          ...(value.patch as Record<string, unknown>),
+        };
+      } else if (pending.length < 32) pending.push(value);
+    }
   };
   const announce = () => listeners.forEach((listener) => listener(structuredClone(state)));
   const api = Object.freeze({
