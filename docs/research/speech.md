@@ -5,6 +5,13 @@ model setup, provider-specific audio consent, microphone/language choices, push-
 insertion into Ask Viewer, notes and chat. Use the [dictation guide](../guides/speech.md) and
 [current limits](../reference/speech.md). The directions below are proposals, not shipped features.
 
+## Transcribe files and identify speaker turns
+
+Long-file transcription, subtitle export and optional diarization are planned in the
+[format expansion roadmap](formats.md#priority-video-audio-transcripts-and-subtitles). That track
+reuses speech setup and providers while adding a durable file-job lifecycle, timed text and review.
+It does not broaden microphone permissions or imply that current dictation accepts media files.
+
 ## Further hosted setup
 
 Non-recording connection and catalog checks are available in Speech settings. Further discovery

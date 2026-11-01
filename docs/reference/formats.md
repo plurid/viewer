@@ -323,4 +323,4 @@ selectors and property names use theme syntax roles.
 
 **Related:** [Read and inspect files](../guides/previews.md) · [Office documents](office.md) ·
 [PDF tools](pdf.md) · [Media](media.md) · [Models and drawings](models.md) ·
-[Platform status](platforms.md)
+[Platform status](platforms.md) · [Proposed format expansion](../research/formats.md)
