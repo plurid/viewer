@@ -12,7 +12,7 @@ import { ChatDocumentStore } from '../../src/desktop/chat/documents';
 import { temporaryRoot } from '../../tools/temporary';
 import { ownedApp, until } from '../owned-app';
 import { pageCall } from './runtime/page-function';
-import type { PageExpression } from './runtime/page-function';
+import { canvasFrame as frame } from './runtime/canvas';
 
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
@@ -129,60 +129,38 @@ await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state
 type Application = Awaited<ReturnType<typeof ownedApp>>;
 type Connection = Awaited<ReturnType<Application['connect']>>;
 const checks: string[] = [];
-async function frame(main: Connection, id: string, previousURL?: string) {
-  const url = await until(
-    () =>
-      main.evaluate(
-        pageCall(
-          (id) =>
-            document.querySelector(`[data-canvas-id="${id}"] iframe`)?.getAttribute('src') ?? '',
-          id,
-        ),
+const click = async (main: Connection, id: string, label: string) => {
+  if (['Reload', 'Undo'].includes(label)) {
+    await main.evaluate(
+      pageCall(
+        (id) =>
+          document
+            .querySelector<HTMLButtonElement>(
+              `[data-canvas-id="${id}"] [aria-label="Canvas tools"]`,
+            )!
+            .click(),
+        id,
       ),
-    (url) => !!url && url !== previousURL,
-    'canvas frame',
-  );
-  const target = await until(
-    async () => {
-      const all = await main.command<{
-        targetInfos: { type: string; url: string; targetId: string }[];
-      }>('Target.getTargets');
-      return all.targetInfos.find((item) => item.type === 'iframe' && item.url === url);
-    },
-    Boolean,
-    'separate canvas renderer',
-  );
-  assert.ok(target);
-  const { sessionId } = await main.command<{ sessionId: string }>('Target.attachToTarget', {
-    targetId: target.targetId,
-    flatten: true,
-  });
-  const tree = await main.command<{ frameTree: { frame: { id: string } } }>(
-    'Page.getFrameTree',
-    {},
-    sessionId,
-  );
-  const { executionContextId } = await main.command<{ executionContextId: number }>(
-    'Page.createIsolatedWorld',
-    { frameId: tree.frameTree.frame.id, worldName: 'canvas-rehearsal', grantUniveralAccess: false },
-    sessionId,
-  );
-  return {
-    url,
-    sessionId,
-    async evaluate<T>(expression: PageExpression<T>): Promise<T> {
-      const result = await main.command<{ result: { value: T }; exceptionDetails?: unknown }>(
-        'Runtime.evaluate',
-        { expression, contextId: executionContextId, returnByValue: true, awaitPromise: true },
-        sessionId,
-      );
-      assert.equal(result.exceptionDetails, undefined);
-      return result.result.value;
-    },
-  };
-}
-const click = (main: Connection, id: string, label: string) =>
-  main.evaluate(
+    );
+    await until(
+      () =>
+        main.evaluate(
+          pageCall((label) => {
+            const option = [
+              ...document.querySelectorAll<HTMLElement>('[role="menuitem"], .context-menu button'),
+            ].find(
+              (item) => item.textContent?.trim() === (label === 'Undo' ? 'Undo revision' : label),
+            );
+            option?.click();
+            return !!option;
+          }, label),
+        ),
+      Boolean,
+      'canvas tools choice',
+    );
+    return;
+  }
+  await main.evaluate(
     pageCall(
       (id, label) => {
         const section = document.querySelector(`[data-canvas-id="${id}"]`)!;
@@ -196,11 +174,13 @@ const click = (main: Connection, id: string, label: string) =>
       label,
     ),
   );
+};
 let application: Application | undefined;
 let main: Connection | undefined;
 try {
   application = await ownedApp(binary, profile, {
     label: 'canvas-rehearsal',
+    mockKeychain: true,
     mode: process.env.VIEWER_NATIVE_FOREGROUND === '1' ? 'foreground' : 'hidden',
   });
   main = await application.connect();
@@ -288,6 +268,7 @@ try {
   main = undefined;
   application = await ownedApp(binary, profile, {
     label: 'canvas-restart',
+    mockKeychain: true,
     mode: process.env.VIEWER_NATIVE_FOREGROUND === '1' ? 'foreground' : 'hidden',
   });
   main = await application.connect();

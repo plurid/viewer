@@ -16,6 +16,7 @@ feature owner before introducing another registry, cache, mutation path or persi
 - [Adding a preview](previews.md)
 - [Runtime dependencies](dependencies.md)
 - [Sample playground](playground.md)
+- [Canvas evaluation and saved-response replay](testing.md#canvas-evaluation-and-replay)
 - [Performance and resource audits](performance.md)
 - [Native and distribution release gates](releases.md)
 - [Architecture decisions](../adr/README.md)

@@ -1,4 +1,4 @@
-# Ecosystem review and Workshop implementation plan
+# Fabrication workflow: Job 1042
 
 Viewer Workshop connects a fabrication request, drawing and CAD parts to a reviewed correction and
 an exported handoff. This page records the design decisions from the ecosystem audit. Current
@@ -6,19 +6,24 @@ behavior belongs in the [fabrication reference](../reference/fabrication.md); ru
 with the retained test and evaluation artifacts. Implementation does not establish live-model
 accuracy, registry publication or submission readiness.
 
+This is the fabrication implementation plan from the earlier ecosystem review. It is not the current
+film scenario or a prerequisite for the selected robot workbench. The
+[Workshop strategy](workshop.md) owns the current hackathon direction and implementation audit; the
+[screenplay](../release/hackathon-demo.md) owns the video.
+
 ## Product direction
 
 Plurid keeps spatial planes in the DOM. Viewer uses that foundation for file browsing, creative work
 and development. Workshop should prove why keeping related sources together helps a person finish a
 concrete job.
 
-The demonstration uses generated Job 1042. Its drawing specifies a 50 mm hole pitch; its original
+The fabrication case uses generated Job 1042. Its drawing specifies a 50 mm hole pitch; its original
 DXF measures 48 mm. The person can inspect both, review a corrected copy, remeasure it and export a
 handoff. Do not present generated files as a customer job or invent production savings.
 
-The selected direction is **Viewer Workshop**: an inspectable path from documents to physical work.
-Coding-agent coordination and robotics integrations remain separate research. The demonstration must
-finish this workflow before adding another product category.
+The fabrication scope is an inspectable path from documents to physical work. Its requirement
+verification, durable checks and reviewed output remain applicable to Job 1042. Robotics needs its
+own model semantics and numerical checks; this workflow does not supply them.
 
 ## Findings that change the implementation
 
@@ -80,7 +85,7 @@ without a sibling checkout or development overlay.
 
 The owner commits and pushes reviewed changes. Agents do not create commits for this work.
 
-## Delivery order and acceptance
+## Fabrication acceptance
 
 | Stage                 | Acceptance                                                                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -90,7 +95,7 @@ The owner commits and pushes reviewed changes. Agents do not create commits for 
 | Evidence review       | Exact drawing, DXF and request are readable; review is explicit; comparison, stack, Undo/Redo and restore preserve unrelated planes                    |
 | Live evaluation       | Run J1 and clean control J7 first, then eight jobs three times; retain all failures, retries, timing and usage, with no fixture results labeled live   |
 | Published integration | Exact engine artifacts, CI and registry integrity pass; Viewer passes from registry dependencies in a fresh install                                    |
-| Demonstration         | Complete Job 1042, reopen exported files, record an accurate video under three minutes, then produce the event contribution receipt                    |
+| Workflow rehearsal    | Complete Job 1042, reopen exported files and retain fabrication evidence separately from qualification of the current film                             |
 
 Existing profiles keep their onboarding choices. New profiles learn **Frame all planes** using the
 configured shortcut. Pin, place, collapse, expand, stack and unstack are discoverable commands; this
@@ -138,13 +143,9 @@ retries and provider-reported usage. A retry does not erase the failed attempt. 
 human confirmation, the result must say so. Compare recorded fixtures and live runs as different
 evidence.
 
-The Indie track's first prize is $150,000; that is a competition target, not a predicted outcome.
-The published criteria weight impact 30%, Meta tooling 25%, technical execution 20% and demo 25%.
-The submission deadline is November 4, 2026 at 9 PM Eastern, November 5 at 4 AM in Bucharest. Verify
-the [event guide](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details) and
-[official terms](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/waiver) before submission.
-
-Use the [three-minute shooting script](../release/hackathon-demo.md). Show a real request, readable
-evidence and a completed handoff. Retain the full take and label elapsed waits. Final public source,
-registry versions, live evaluation, video and event contribution boundaries are separate gates; none
-is implied by a passing local test.
+Retain the real request, readable evidence and completed handoff. A fabrication recording must label
+fixture responses and elapsed waits. It does not qualify the robot story in the
+[current screenplay](../release/hackathon-demo.md). Final public source, registry versions, live
+evaluation and event contribution boundaries are separate gates; none is implied by a passing local
+test. Current submission requirements belong to the
+[Workshop strategy](workshop.md#submission-gates).

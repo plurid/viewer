@@ -61,10 +61,24 @@ export async function record(
   accept(last.data);
   await Promise.all(writes);
   assert.ok(frames.length >= 3, 'The app delivered actual recording frames.');
+  const seconds = (frames.at(-1)!.time - frames[0]!.time) / 1000;
+  await writeFile(
+    path.join(directory, 'timestamps.json'),
+    JSON.stringify(
+      frames.map((frame) => ({
+        file: path.basename(frame.file),
+        milliseconds: frame.time - frames[0]!.time,
+      })),
+    ),
+    { flag: 'wx' },
+  );
+  // JPEG demuxing defaults to a 25 Hz time base. Preserve sub-frame arrival times before
+  // resampling, so a burst of compositor frames does not lengthen the recording.
   const lines = frames.flatMap((frame, index) => [
     "file '" + path.basename(frame.file) + "'",
+    'option framerate 1000',
     'duration ' +
-      Math.max(0.04, ((frames[index + 1]?.time ?? frame.time + 800) - frame.time) / 1000).toFixed(
+      Math.max(0.001, ((frames[index + 1]?.time ?? frame.time + 800) - frame.time) / 1000).toFixed(
         3,
       ),
   ]);
@@ -97,6 +111,8 @@ export async function record(
       'yuv420p',
       '-movflags',
       '+faststart',
+      '-t',
+      String(seconds),
       video,
     ],
     { timeout: 120000, maxBuffer: 1024 * 1024 },
@@ -122,6 +138,6 @@ export async function record(
     video,
     animation,
     frames: frames.length,
-    seconds: (frames.at(-1)!.time - frames[0]!.time) / 1000,
+    seconds,
   };
 }

@@ -1,14 +1,33 @@
 # Build a canvas with a conversation
 
-1. Open a Chat plane and choose a configured model. Approve the data it may receive.
-2. Ask for a tool, for example: “Build a trip budget canvas with editable expenses and a total.”
+1. Select files and choose **Build tool from selection** from commands or their context menu. Choose
+   a configured model and approve the data it may receive.
+2. Complete the draft with the tool you need, for example: “Compare these supplier quotes. Let me
+   change quantity, budget and deadline. Include a CSV export.” Send the request.
 3. Use **Canvas** to open the linked app. Generated revisions appear in that same plane.
 4. Change its controls, then ask the conversation to improve the app. Saved input values stay
    separate from the generated design.
 
-A canvas uses selectable HTML text, ordinary controls, SVG and JavaScript. **Source** shows its
-current code. **Undo** returns to the previous content revision while retaining compatible inputs.
-**Stop** stops the running page; **Reload** opens the saved revision again.
+A canvas uses selectable HTML text, ordinary controls, SVG and JavaScript. You can also start in an
+empty Chat plane. Under **Tools**, **Source code** shows the current code and **Undo revision**
+returns to the previous design while retaining compatible inputs. **Stop** stops the page; **Tools →
+Reload** opens the saved revision again.
+
+## Check sources and save a result
+
+1. Open **Sources** to see the evidence snapshots used by the tool. **Open source** returns to the
+   file or cited passage. **Inspect captured data** shows the data the tool received.
+2. When a file changes, choose **Refresh snapshot**. The tool receives a new snapshot and keeps your
+   saved inputs. A partial label means some content was omitted or could not be read.
+3. Check calculations against the source evidence. A running preview does not verify conclusions.
+   Confirm missing units, dimensions and assumptions before relying on them.
+4. Choose the tool's export action. Viewer shows its proposed filename and exact text for review.
+   Choose **Save result…** and a new destination. Existing files are not replaced. If the inputs
+   change during review, prepare the result again.
+5. Choose **Open saved file** to inspect the output in Viewer.
+
+Tools can propose CSV, JSON, Markdown and plain-text results. Canceling the review or save picker
+leaves the result unsaved. Source snapshots and saved inputs survive restarting Viewer.
 
 ## Explore an alternative
 
@@ -27,7 +46,7 @@ conversation** returns to the selected passage.
 
 1. Add a Meta model that supports object selection in **Settings → Models**.
 2. Under **3D reconstruction**, enter your separate fal API key and choose **Save key**.
-3. Drop a photo on the canvas toolbar and choose **Photo to 3D**.
+3. Drop a photo on the canvas toolbar and choose **Tools → Photo to 3D**.
 4. Choose the photo and selection model, describe the object, then choose **Find object**.
 5. Inspect the highlighted object. If it is wrong, change the description and find it again.
 6. Choose **Generate 3D…** and review the native confirmation before sending the photo and mask to
@@ -42,10 +61,12 @@ does not automatically pay for another generation.
 
 ## Export and reopen
 
-Choose **Export…** and a destination folder. Viewer creates a new folder containing `index.html`,
-assets, bundled runtime libraries and `canvas.viewer.json`. To continue with the saved values,
-choose **Open canvas…** from a Chat plane and select that exported folder. Reopening does not call a
-model.
+Choose **Export canvas…** and a destination folder. Viewer creates a new folder containing
+`index.html`, assets, bundled runtime libraries and `canvas.viewer.json`. To continue with the saved
+values, choose **Open canvas…** from a Chat plane and select that exported folder. Reopening does
+not call a model. Exports include captured sources and inputs but grant no access to original source
+paths. Imported snapshots remain readable; refresh requires attaching the source again in a
+conversation.
 
 Personal backups include canvases and their attached assets within the backup size limit. For large
 canvases, use their individual export. Keep exports and backups private when their contents are

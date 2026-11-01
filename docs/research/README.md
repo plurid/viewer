@@ -11,8 +11,8 @@ instructions or a list of shipped features. Current behavior is in the [guides](
 - [Spatial development and review](spatial-development.md)
 - [File workflows: interfaces, batch work, delivery profiles and reusable tools](actions.md)
 - [Sharing and plurid.link](sharing.md)
-- [Viewer Workshop and hackathon strategy](workshop.md)
-- [Ecosystem review, technical audit and hackathon plan](audit-and-hackathon-plan.md)
+- [Task-built interfaces, robot showcase and implementation audit](workshop.md)
+- [Job 1042 fabrication audit and implementation plan](audit-and-hackathon-plan.md)
 - [Earlier Viewer app](history.md)
 
 Promote an idea into the guides only after its implementation and limits are clear. Keep useful

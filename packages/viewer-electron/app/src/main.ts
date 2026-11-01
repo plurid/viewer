@@ -230,7 +230,7 @@ if (!headless) {
         .filter(
           (argument) =>
             !renderTest ||
-            !/^--(?:remote-debugging-port|remote-debugging-address|remote-allow-origins|disable-features|disable-renderer-backgrounding|disable-background-timer-throttling)(?:=|$)/.test(
+            !/^--(?:remote-debugging-port|remote-debugging-address|remote-allow-origins|disable-features|disable-renderer-backgrounding|disable-background-timer-throttling|use-mock-keychain)(?:=|$)/.test(
               argument,
             ),
         ),

@@ -13,6 +13,7 @@ import { noteSchema } from '../../domain/editing/notes';
 import { mediaDraftSchema } from '../../domain/media/documents';
 import { chatDocumentSchema, storedChatDocumentSchema } from '../../domain/models/chat';
 import { canvasDocumentSchema } from '../../domain/canvases/document';
+import { portableCanvasSources } from '../../domain/canvases/sources';
 import { receiptSchema } from '../../domain/automation/receipts';
 import { checkDocumentSchema } from '../../domain/fabrication/check-document';
 import type { CheckDocument } from '../../domain/fabrication/check-document';
@@ -514,9 +515,11 @@ export class PersonalBackups {
         path: map(doc.path),
         fork: doc.fork && { ...doc.fork, id: id(doc.fork.id) },
         assets: doc.assets.map(({ source: _source, ...asset }) => asset),
+        sources: portableCanvasSources(doc.sources),
         history: doc.history.map((entry) => ({
           ...entry,
           assets: entry.assets.map(({ source: _source, ...asset }) => asset),
+          sources: portableCanvasSources(entry.sources),
         })),
       })),
       receipts: item.backup.documents.receipts.map((doc) => ({

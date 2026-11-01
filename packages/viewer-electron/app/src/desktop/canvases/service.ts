@@ -14,10 +14,18 @@ import {
 } from '../../domain/canvases/document';
 import { DocumentStore } from '../persistence/document-store';
 import { canvasHTML } from './runtime';
+import type { InspectionResult } from '../../domain/files/inspection';
+import type { CanvasResult } from '../../domain/canvases/results';
+import { canvasResultSchema } from '../../domain/canvases/results';
+import { portableCanvasSources } from '../../domain/canvases/sources';
+import { sourceHash, sourceSnapshot } from './sources';
+import { CanvasObservations } from './observations';
+import type { CanvasObservation } from './observations';
 
 interface CanvasPorts {
   changed(owner: number, document: CanvasDocument): void;
   libraries?: () => ReadonlyMap<string, string>;
+  observe?: boolean;
 }
 
 async function readBounded(file: string, limit: number): Promise<Buffer> {
@@ -47,6 +55,7 @@ async function readBounded(file: string, limit: number): Promise<Buffer> {
 }
 
 export class Canvases {
+  private observations = new CanvasObservations();
   private stores = new Map<string, DocumentStore<CanvasDocument>>();
   private owners = new Map<string, number>();
   private queue: Promise<unknown> = Promise.resolve();
@@ -76,6 +85,9 @@ export class Canvases {
       throw new Error('This canvas is open in another window.');
     const document = await this.store(id).load();
     if (!document) throw new Error('This canvas is unavailable.');
+    for (const source of [...document.sources, ...document.history.flatMap((item) => item.sources)])
+      if (source.hash !== sourceHash(source.data))
+        throw new Error('A canvas source snapshot changed.');
     this.owners.set(id, owner);
     return document;
   }
@@ -92,7 +104,7 @@ export class Canvases {
   create(owner: number, conversationID: string, directory: string): Promise<CanvasDocument> {
     return this.serial(() =>
       this.save(owner, {
-        version: 1,
+        version: 2,
         id: randomUUID(),
         conversationID,
         path: directory,
@@ -103,21 +115,23 @@ export class Canvases {
         defaults: {},
         stateRevision: 0,
         assets: [],
+        sources: [],
         history: [],
         at: Date.now(),
       }),
     );
   }
   private revise(document: CanvasDocument, update: Partial<CanvasDocument>): CanvasDocument {
-    const { revision, title, html, defaults, assets, at } = document;
+    const { revision, title, html, defaults, assets, sources, at } = document;
     return {
       ...document,
       ...update,
       revision: revision + 1,
       at: Date.now(),
-      history: [...document.history, { revision, title, html, defaults, assets, at }].slice(
-        -canvasLimits.history,
-      ),
+      history: [
+        ...document.history,
+        { revision, title, html, defaults, assets, sources, at },
+      ].slice(-canvasLimits.history),
     };
   }
   write(
@@ -196,6 +210,7 @@ export class Canvases {
           title: branch.title,
           defaults: branch.defaults,
           assets: branch.assets,
+          sources: branch.sources,
           state,
           stateRevision: current.stateRevision + 1,
         }),
@@ -222,6 +237,75 @@ export class Canvases {
   async attachFile(owner: number, id: string, file: string): Promise<CanvasAsset> {
     const data = await readBounded(file, canvasLimits.assetBytes);
     return this.attach(owner, id, path.basename(file), data, file);
+  }
+  source(
+    owner: number,
+    id: string,
+    expected: number,
+    inspection: InspectionResult,
+    sourceID?: string,
+  ) {
+    return this.serial(async () => {
+      const document = await this.load(owner, id);
+      if (document.revision !== expected)
+        throw new Error('The canvas changed. Review its current sources.');
+      const existing = document.sources.find(
+        (source) => source.id === sourceID || source.path === inspection.path,
+      );
+      if (sourceID && !existing) throw new Error('This source is no longer attached.');
+      if (existing && !sourceID) return { source: existing, revision: document.revision };
+      const source = sourceSnapshot(inspection, existing?.id);
+      const sources = existing
+        ? document.sources.map((item) => (item.id === existing.id ? source : item))
+        : [...document.sources, source];
+      const updated = await this.save(owner, this.revise(document, { sources }));
+      return { source, revision: updated.revision };
+    });
+  }
+  async observe(owner: number, id: string, revision: number, value: CanvasObservation) {
+    const document = await this.read(owner, id);
+    if (document.revision === revision) this.observations.record(id, revision, value);
+    return document;
+  }
+  previewObservation(id: string, revision: number) {
+    return this.observations.read(id, revision);
+  }
+  async waitForPreview(id: string, revision: number, signal: AbortSignal) {
+    return this.ports.observe
+      ? this.observations.wait(id, revision, signal)
+      : this.observations.read(id, revision);
+  }
+  async saveResult(
+    owner: number,
+    id: string,
+    revision: number,
+    stateRevision: number,
+    input: CanvasResult,
+    choose: () => Promise<string | undefined>,
+  ): Promise<string | undefined> {
+    const result = canvasResultSchema.parse(input);
+    const check = async () => {
+      const document = await this.read(owner, id);
+      if (document.revision !== revision || document.stateRevision !== stateRevision)
+        throw new Error('The canvas or its inputs changed. Prepare the result again.');
+    };
+    await check();
+    const destination = await choose();
+    if (!destination) return;
+    return this.serial(async () => {
+      const document = await this.load(owner, id);
+      if (document.revision !== revision || document.stateRevision !== stateRevision)
+        throw new Error('The canvas or its inputs changed. Prepare the result again.');
+      // Exclusive creation preserves existing destinations, including links. A failed write is kept.
+      const handle = await open(destination, 'wx', 0o600);
+      try {
+        await handle.writeFile(result.content, 'utf8');
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      return destination;
+    });
   }
   attach(
     owner: number,
@@ -303,6 +387,7 @@ export class Canvases {
         ...document,
         path: directory,
         assets: document.assets.map(({ source: _source, ...asset }) => asset),
+        sources: portableCanvasSources(document.sources),
         history: [],
       }),
       { flag: 'wx', mode: 0o600 },
@@ -314,6 +399,9 @@ export class Canvases {
       JSON.parse((await readBounded(file, 16_000_000)).toString('utf8')),
     );
     const directory = await realpath(path.dirname(file));
+    for (const source of imported.sources)
+      if (source.hash !== sourceHash(source.data))
+        throw new Error('An exported source snapshot changed.');
     const assetDirectory = path.join(directory, 'assets');
     if (imported.assets.length && (await realpath(assetDirectory)) !== assetDirectory)
       throw new Error('Canvas assets must be inside the exported folder, without links.');
@@ -341,11 +429,16 @@ export class Canvases {
         history: [],
         fork: undefined,
         assets: imported.assets.map(({ source: _source, ...asset }) => asset),
+        sources: portableCanvasSources(imported.sources),
       }),
     );
   }
   release(owner: number): void {
-    for (const [id, value] of this.owners) if (value === owner) this.owners.delete(id);
+    for (const [id, value] of this.owners)
+      if (value === owner) {
+        this.owners.delete(id);
+        this.observations.forget(id);
+      }
   }
   async flush(): Promise<void> {
     await this.queue;

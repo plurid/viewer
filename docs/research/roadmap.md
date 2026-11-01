@@ -71,6 +71,9 @@ SVG/DXF, independently remeasure it, then deepen into fitted surfaces and review
 is a reference and an optional interoperability candidate, not a required dependency. Distinguish
 measured geometry, inferred reconstruction and generated visual assets.
 
-Viewer Workshop connects source documents, CAD, images and verified evidence around assembly or
-fabrication tasks. [The hackathon strategy](workshop.md) describes the demonstration direction and
-what must be new work. It does not replace the broader everyday and professional suite.
+Viewer Workshop connects source documents, models, generated tools and verification around a task.
+The selected hackathon prototype is a robot workbench that evolves from joint exploration to target
+reach checks and a quoted alternative. Its robotics support remains proposed. The
+[strategy and implementation audit](workshop.md) separate current canvas capabilities from the work
+needed to demonstrate it. [Job 1042](audit-and-hackathon-plan.md) remains a separate fabrication
+workflow. The broader format and conversion suite is future product work, outside the current film.

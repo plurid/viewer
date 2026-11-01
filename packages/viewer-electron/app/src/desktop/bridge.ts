@@ -127,6 +127,7 @@ import { NativeSelections } from './native/native-selections';
 import { Pasteboard } from './native/pasteboard';
 import { confirmAgentProposal, confirmNatively } from './native/native-confirmation';
 import { chooseRemembered, chooseRememberedFiles, openOnce, saveOnce } from './native/dialogs';
+import { canvasResultName } from '../domain/canvases/results';
 import { AgentAccess } from './agents/agent-access';
 import { fileCoordination } from './files/file-coordination';
 import { FileInformationService } from './files/file-information';
@@ -1105,6 +1106,7 @@ export class Desktop {
     );
     this.watchers = new Watchers(emit);
     this.canvases = new Canvases(dataPath, {
+      observe: true,
       libraries: () => canvasLibraries,
       changed: (owner, document) => {
         const window = this.windows.get(owner)?.window;
@@ -2209,6 +2211,44 @@ export class Desktop {
       reconstruction: ([request], owner) => this.reconstructions.handle(owner, request),
       canvas: async ([request], owner) => {
         let document = await this.canvases.read(owner, request.id);
+        if (request.kind === 'observe')
+          return {
+            document: await this.canvases.observe(owner, request.id, request.revision, {
+              status: request.status,
+              message: request.message,
+            }),
+          };
+        if (request.kind === 'refresh-source') {
+          const source = document.sources.find((item) => item.id === request.sourceID);
+          if (!source?.path)
+            throw new Error(
+              'This is a portable snapshot. Attach the original file in Chat to use a current source.',
+            );
+          await this.fileAccess.require([source.path]);
+          const file = await realpath(source.path);
+          if (containsPath(await realpath(this.dataPath), file))
+            throw new Error('Viewer private data cannot be a canvas source.');
+          await this.fileAccess.require([file]);
+          const inspection = await this.files.inspect(file, true, false);
+          await this.canvases.source(owner, document.id, request.revision, inspection, source.id);
+          document = await this.canvases.read(owner, document.id);
+        }
+        if (request.kind === 'save-result') {
+          const saved = await this.canvases.saveResult(
+            owner,
+            document.id,
+            request.revision,
+            request.stateRevision,
+            request.result,
+            () =>
+              saveOnce(this.fileAccess, this.windows.get(owner)?.window, {
+                title: 'Save canvas result as a new file',
+                defaultPath: path.join(document.path, canvasResultName(request.result)),
+              }),
+          );
+          if (saved) this.emit({ type: 'folder-changed', path: path.dirname(saved) });
+          return { document: await this.canvases.read(owner, document.id), saved };
+        }
         if (request.kind === 'attach') {
           await this.fileAccess.require([request.path]);
           const file = await realpath(request.path);

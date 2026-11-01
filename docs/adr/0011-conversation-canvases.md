@@ -12,6 +12,15 @@ MessageChannel carries bounded state patches and user-reviewed proposals. It doe
 methods, file access, provider keys or shell execution. The host can remove the frame when its
 renderer becomes unresponsive.
 
+Source snapshots belong to content revisions and are hashed at the desktop boundary. Generated code
+reads bounded evidence through the runtime, never local paths. Refresh is explicit and Undo restores
+the earlier snapshot. Portable exports and backups strip source-path authority.
+
+Result export is a request for host review. The host binds that review to both content and input
+revisions, checks them again after the native picker and creates only a new file. A frame cannot
+silently write a result or replace an existing file. Preview observations report loading and runtime
+errors; they do not certify calculation correctness. Repair attempts remain bounded.
+
 Quote branches capture transcript context at an exact passage. Their canvases fork independently.
 Applying content back checks the original revision and retains the person's newest original inputs.
 Conflicts require comparison, not a silent overwrite.

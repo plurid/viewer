@@ -364,6 +364,106 @@ describe('model provider presets and adapters', () => {
 
 describe('Meta and pictures', () => {
   const metaProvider = () => ({ ...newModelProvider('meta', 'meta'), model: 'muse-spark-1.3' });
+
+  it('uses one native step call for chat instead of accepting a simulated tool transcript', async () => {
+    const provider = metaProvider();
+    await keyed(provider);
+    const call = { type: 'function', function: { name: 'viewer_step', arguments: '{"rows":[]}' } };
+    const request = reply({
+      choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [call] } }],
+    });
+    const models = await allowedAt(provider, request, 'full-text');
+    const steps = [
+      {
+        arguments: { kind: 'canvas_source', path: '/sample.csv' },
+        result: '{"revision":1,"source":{"name":"sample.csv"}}',
+      },
+    ];
+    expect(
+      await models.generate(
+        provider,
+        'One step.',
+        {},
+        schema,
+        new AbortController().signal,
+        'full-text',
+        'user',
+        { tool: 'viewer_step', steps },
+      ),
+    ).toEqual({ rows: [] });
+    const body = JSON.parse(String(request.mock.calls[0]![1]!.body));
+    expect(body).not.toHaveProperty('response_format');
+    expect(body.parallel_tool_calls).toBe(false);
+    expect(body.tool_choice).toBe('auto');
+    expect(body.tools[0].function.parameters).toEqual(schema);
+    const finalReply = { kind: 'reply', text: 'The comparison is ready.' };
+    const final = await allowedAt(
+      provider,
+      reply({
+        choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(finalReply) } }],
+      }),
+      'full-text',
+    );
+    expect(
+      await final.generate(
+        provider,
+        '',
+        {},
+        schema,
+        new AbortController().signal,
+        'full-text',
+        'user',
+        { tool: 'viewer_step' },
+      ),
+    ).toEqual(finalReply);
+    expect(body.messages.slice(2)).toEqual([
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'viewer-step-0',
+            type: 'function',
+            function: { name: 'viewer_step', arguments: JSON.stringify(steps[0]!.arguments) },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'viewer-step-0', content: steps[0]!.result },
+    ]);
+    const malformed = [
+      { finish_reason: 'stop', message: { content: '{"rows":[]} GBPAL{"rows":[]}' } },
+      { finish_reason: 'tool_calls', message: { tool_calls: [call, call] } },
+      {
+        finish_reason: 'tool_calls',
+        message: { tool_calls: [{ ...call, function: { ...call.function, name: 'execute' } }] },
+      },
+      { finish_reason: 'length', message: { tool_calls: [call] } },
+      { finish_reason: 'tool_calls', message: { refusal: 'refused', tool_calls: [call] } },
+      {
+        finish_reason: 'tool_calls',
+        message: {
+          tool_calls: [
+            { ...call, function: { ...call.function, arguments: '{"rows":[]} GBPAL{"rows":[]}' } },
+          ],
+        },
+      },
+    ];
+    for (const choice of malformed) {
+      const refused = await allowedAt(provider, reply({ choices: [choice] }), 'full-text');
+      await expect(
+        refused.generate(
+          provider,
+          '',
+          {},
+          schema,
+          new AbortController().signal,
+          'full-text',
+          'user',
+          { tool: 'viewer_step' },
+        ),
+      ).rejects.toThrow('No changes were applied.');
+    }
+  });
   const picture = {
     type: 'image/jpeg' as const,
     data: Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]),
@@ -424,6 +524,8 @@ describe('Meta and pictures', () => {
     expect(url).toBe('https://api.meta.ai/v1/chat/completions');
     expect(options!.headers).toMatchObject({ authorization: 'Bearer test-only-key' });
     const body = JSON.parse(String(options!.body));
+    expect(body.messages[0].content).toContain('Return only a JSON object');
+    expect(body.messages[0].content).toContain(JSON.stringify(schema));
     expect(body.messages[1].content).toEqual([
       { type: 'text', text: '{"job":"Job 1042"}' },
       { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,/9j/2Q==' } },

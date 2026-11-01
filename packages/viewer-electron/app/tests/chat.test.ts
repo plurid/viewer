@@ -109,6 +109,71 @@ async function send(id: string): Promise<void> {
 }
 
 describe('quoted conversations and canvases', () => {
+  it('binds inspected sources once and exposes snapshots and preview observations to the next round', async () => {
+    const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
+    ports.canvases = canvases;
+    const file = path.join(root, 'context', 'notes.txt');
+    inspect.mockResolvedValue({
+      path: file,
+      version: { identity: 'a', modified: 1, size: 16 },
+      availability: 'available',
+      facts: {},
+      evidence: [{ source: 'text', text: 'Original content' }],
+      coverage: { content: 'complete' },
+    });
+    const conversation = await create();
+    generate
+      .mockResolvedValueOnce(step('canvas_source', { path: file }))
+      .mockResolvedValueOnce(step('canvas_source', { path: file }))
+      .mockResolvedValueOnce(step('canvas_write', { text: '<main>Tool</main>', commandID: '1' }))
+      .mockResolvedValueOnce(step('reply', { text: 'Use the tool.' }));
+    await send(conversation.id);
+    const saved = await settled(conversation.id);
+    expect(saved.status).toBe('idle');
+    expect(inspect).toHaveBeenCalledTimes(1);
+    expect((await canvases.read(1, saved.canvasID!)).sources[0]!.path).toBe(file);
+    const context = generate.mock.calls.at(-1)![2];
+    expect(context.canvas.sources[0].path).toBeUndefined();
+    expect(context.canvas.sources[0].data.evidence[0].text).toBe('Original content');
+    expect(context.canvas.preview.status).toBe('not-observed');
+  });
+
+  it('gives one runtime repair and refuses a second repair in the same request', async () => {
+    const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
+    ports.canvases = canvases;
+    vi.spyOn(canvases, 'waitForPreview').mockResolvedValue({
+      status: 'error',
+      message: 'Missing button',
+    });
+    const conversation = await create();
+    for (let revision = 0; revision < 3; revision++)
+      generate.mockResolvedValueOnce(
+        step('canvas_write', {
+          text: '<main>Broken tool</main>',
+          commandID: String(revision),
+        }),
+      );
+    await send(conversation.id);
+    const saved = await settled(conversation.id);
+    expect(saved.status).toBe('failed');
+    expect(saved.error).toContain('after one repair');
+    expect((await canvases.read(1, saved.canvasID!)).revision).toBe(2);
+    expect(
+      saved.messages.some(
+        (message) => message.role === 'tool' && message.text.includes('Missing button'),
+      ),
+    ).toBe(true);
+  });
+
+  it('refuses canvas source paths outside the conversation before inspecting them', async () => {
+    ports.canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
+    const conversation = await create();
+    generate.mockResolvedValueOnce(step('canvas_source', { path: path.join(root, 'private') }));
+    await send(conversation.id);
+    expect((await settled(conversation.id)).status).toBe('failed');
+    expect(inspect).not.toHaveBeenCalled();
+  });
+
   it('freezes context at the selected message and forks its canvas without sending a request', async () => {
     const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
     ports.canvases = canvases;

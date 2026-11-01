@@ -10,6 +10,11 @@ import { useWorkspace } from '../workspace/context';
 import { updatePane, report } from '../state/store';
 import { Empty, Loading } from '../ui/primitives';
 import { Disclosure } from '../ui/Disclosure';
+import { ChoiceButton } from '../ui/ChoiceMenu';
+import { CanvasSources } from './CanvasSources';
+import { ResultReview } from './ResultReview';
+import type { PendingCanvasResult } from './ResultReview';
+import { canvasResultSchema } from '../../domain/canvases/results';
 import './canvas.css';
 
 export default function CanvasPlane({ pane }: { pane: Pane }) {
@@ -23,6 +28,9 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
   const [stopped, setStopped] = useState(false);
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [result, setResult] = useState<PendingCanvasResult>();
+  const [saved, setSaved] = useState('');
   const iframe = useRef<HTMLIFrameElement>(null);
   const current = useRef(document);
   current.current = document;
@@ -71,6 +79,23 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
     let port: MessagePort | undefined;
     let writes = Promise.resolve();
     let queued = 0;
+    let observationSent = false;
+    let errorObserved = false;
+    const observe = (status: 'ready' | 'error', message?: string) => {
+      if (!live || (observationSent && status === 'ready')) return;
+      if (status === 'error' && errorObserved) return;
+      if (status === 'error') errorObserved = true;
+      observationSent = true;
+      void window.viewer
+        .canvas({ kind: 'observe', id: pane.canvasID, revision, status, message })
+        .catch(report);
+    };
+    const timeout = setTimeout(() => {
+      if (!observationSent) {
+        setError('The canvas did not finish loading. Reload or ask the conversation to repair it.');
+        observe('error', 'Canvas loading timed out.');
+      }
+    }, 4500);
     setError('');
     setURL('');
     const connect = (event: MessageEvent) => {
@@ -87,7 +112,25 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
       port.onmessage = (message) => {
         const value = message.data;
         if (!live || !value || typeof value !== 'object') return;
-        if (value.kind === 'state') {
+        if (value.kind === 'ready') observe('ready');
+        else if (value.kind === 'export') {
+          const parsed = canvasResultSchema.safeParse(value.result);
+          if (!parsed.success) {
+            setError(parsed.error.issues[0]?.message ?? 'Invalid result.');
+            return;
+          }
+          void writes
+            .then(() => {
+              const latest = current.current;
+              if (!live || !latest || latest.revision !== revision) return;
+              if (JSON.stringify(latest.state) !== JSON.stringify(value.state))
+                throw new Error(
+                  'The inputs changed or could not be saved. Prepare the result again.',
+                );
+              setResult({ result: parsed.data, revision, stateRevision: latest.stateRevision });
+            })
+            .catch(fail);
+        } else if (value.kind === 'state') {
           const patch = canvasStateSchema.safeParse(value.patch);
           if (!patch.success || queued >= 64) {
             setError('The canvas sent too many updates or invalid saved values.');
@@ -129,13 +172,19 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
             });
           trackCanvasWrite(writes);
         } else if (value.kind === 'source' && typeof value.assetID === 'string') {
+          if (current.current?.sources.some((item) => item.id === value.assetID)) {
+            setSourcesOpen(true);
+            return;
+          }
           const asset = current.current?.assets.find((asset) => asset.id === value.assetID);
           // A generated frame requests a review; it never opens files or performs actions itself.
           if (asset?.source) setProposal('Open source: ' + asset.source);
         } else if (value.kind === 'proposal' && typeof value.text === 'string')
           setProposal(value.text.slice(0, 4000));
-        else if (value.kind === 'error' && typeof value.message === 'string')
+        else if (value.kind === 'error' && typeof value.message === 'string') {
           setError(value.message.slice(0, 1000));
+          observe('error', value.message.slice(0, 1000));
+        }
       };
       port.start();
       iframe.current!.contentWindow!.postMessage({ kind: 'viewer-canvas-connect' }, '*', [
@@ -158,6 +207,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
       });
     return () => {
       live = false;
+      clearTimeout(timeout);
       window.removeEventListener('message', connect);
       port?.close();
       if (capability) void window.viewer.htmlPreviewClose(capability).catch(report);
@@ -207,39 +257,39 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
         >
           Conversation
         </button>
-        <button aria-pressed={source} onClick={() => setSource(!source)}>
-          Source
-        </button>
-        <button onClick={() => setReconstruct(!reconstruct)} aria-expanded={reconstruct}>
-          Photo to 3D
-        </button>
         <span className="canvas-revision">Revision {document.revision}</span>
-        <button
-          disabled={busy || !document.history.length}
-          onClick={() =>
-            void act(async () =>
-              receive(
-                (
-                  await window.viewer.canvas({
-                    kind: 'undo',
-                    id: document.id,
-                    revision: document.revision,
-                  })
-                ).document,
-              ),
-            )
-          }
-        >
-          Undo
-        </button>
-        <button
-          onClick={() => {
-            setStopped(false);
-            setReload((value) => value + 1);
+        <ChoiceButton
+          label="Canvas tools"
+          value=""
+          placeholder="Tools"
+          disabled={busy}
+          choices={[
+            { value: 'source', label: source ? 'Hide source code' : 'Source code' },
+            { value: 'reload', label: 'Reload' },
+            ...(document.history.length ? [{ value: 'undo', label: 'Undo revision' }] : []),
+            { value: '3d', label: 'Photo to 3D' },
+          ]}
+          onChoose={(choice) => {
+            if (choice === 'source') setSource(!source);
+            if (choice === 'reload') {
+              setStopped(false);
+              setReload((value) => value + 1);
+            }
+            if (choice === '3d') setReconstruct(!reconstruct);
+            if (choice === 'undo')
+              void act(async () =>
+                receive(
+                  (
+                    await window.viewer.canvas({
+                      kind: 'undo',
+                      id: document.id,
+                      revision: document.revision,
+                    })
+                  ).document,
+                ),
+              );
           }}
-        >
-          Reload
-        </button>
+        />
         <button disabled={stopped} onClick={() => setStopped(true)}>
           Stop
         </button>
@@ -257,7 +307,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
             })
           }
         >
-          Export…
+          Export canvas…
         </button>
         {document.fork && (
           <>
@@ -284,6 +334,35 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           </>
         )}
       </header>
+      {!!document.sources.length && (
+        <Disclosure
+          variant="compact"
+          summary={`Sources (${document.sources.length})`}
+          open={sourcesOpen}
+          onOpenChange={setSourcesOpen}
+        >
+          <CanvasSources
+            sources={document.sources}
+            paneID={pane.id}
+            busy={busy}
+            onError={fail}
+            onRefresh={(sourceID) =>
+              void act(async () =>
+                receive(
+                  (
+                    await window.viewer.canvas({
+                      kind: 'refresh-source',
+                      id: document.id,
+                      sourceID,
+                      revision: document.revision,
+                    })
+                  ).document,
+                ),
+              )
+            }
+          />
+        </Disclosure>
+      )}
       <Disclosure
         variant="compact"
         summary={`Assets (${document.assets.length}) · drop files here`}
@@ -312,6 +391,43 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
         <p className="canvas-message" role="alert">
           {error}
         </p>
+      )}
+      {result && (
+        <ResultReview
+          pending={result}
+          busy={busy}
+          stale={
+            result.revision !== document.revision || result.stateRevision !== document.stateRevision
+          }
+          onCancel={() => setResult(undefined)}
+          onSave={() =>
+            void act(async () => {
+              const reply = await window.viewer.canvas({
+                kind: 'save-result',
+                id: document.id,
+                ...result,
+              });
+              if (reply.saved) {
+                setSaved(reply.saved);
+                setResult(undefined);
+              }
+            })
+          }
+        />
+      )}
+      {saved && (
+        <div className="canvas-message" role="status">
+          <button
+            onClick={() =>
+              void workspace
+                .openPath(saved, { paneID: pane.id, linked: true, activate: true })
+                .catch(fail)
+            }
+          >
+            Open saved file
+          </button>
+          <span>{saved.split(/[\\/]/).at(-1)}</span>
+        </div>
       )}
       {proposal && (
         <div className="canvas-message">

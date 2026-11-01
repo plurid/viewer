@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { canvasSourcesSchema } from './sources';
+import { canvasResultSchema } from './results';
 
 export const canvasLimits = {
   html: 512_000,
@@ -42,10 +44,11 @@ const content = {
       'Canvas assets must have unique IDs and total at most 96 MiB.',
     ),
   at: z.number().finite(),
+  sources: canvasSourcesSchema.default([]),
 };
 export const canvasDocumentSchema = z
   .object({
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]).transform(() => 2 as const),
     id: z.uuid(),
     conversationID: z.uuid(),
     path: z.string().min(1).max(32768),
@@ -65,6 +68,32 @@ export const canvasAssetFile = (asset: Pick<CanvasAsset, 'id' | 'name'>) =>
   '.' +
   (asset.name.match(/\.([a-z0-9]{1,12})$/i)?.[1]?.toLowerCase() ?? 'bin');
 export const canvasRequestSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('refresh-source'),
+      id: z.uuid(),
+      sourceID: z.uuid(),
+      revision: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('save-result'),
+      id: z.uuid(),
+      revision: z.number().int().nonnegative(),
+      stateRevision: z.number().int().nonnegative(),
+      result: canvasResultSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('observe'),
+      id: z.uuid(),
+      revision: z.number().int().nonnegative(),
+      status: z.enum(['ready', 'error']),
+      message: z.string().max(1000).optional(),
+    })
+    .strict(),
   z
     .object({ kind: z.literal('attach'), id: z.uuid(), path: z.string().min(1).max(32768) })
     .strict(),
@@ -100,6 +129,7 @@ export type CanvasReply = {
   document: CanvasDocument;
   preview?: { id: string; url: string };
   exported?: string;
+  saved?: string;
 };
 
 /** Existing values belong to the person, even when the app no longer displays their controls. */

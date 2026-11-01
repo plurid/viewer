@@ -16,6 +16,8 @@ export interface OwnedApplicationOptions {
   evidenceRoot: string;
   environment?: NodeJS.ProcessEnv;
   startupTimeoutMs?: number;
+  /** Chromium's ephemeral key store for generated profiles containing no real credentials. */
+  mockKeychain?: boolean;
 }
 
 export interface OwnedLaunch {
@@ -143,6 +145,7 @@ async function prepareApplication(
         }),
     );
     const args = [
+      ...(options.mockKeychain ? ['--use-mock-keychain'] : []),
       '--remote-debugging-port=0',
       '--remote-debugging-address=127.0.0.1',
       '--disable-features=MacWebContentsOcclusion',

@@ -20,6 +20,8 @@ function fixture() {
   const owner = () => ({ close: vi.fn(async () => {}), flush: vi.fn(async () => {}) });
   for (const name of [
     'chats',
+    'canvases',
+    'reconstructions',
     'agentSessions',
     'gitActions',
     'gitReviews',

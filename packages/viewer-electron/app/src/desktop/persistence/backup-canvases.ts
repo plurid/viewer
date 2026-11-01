@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { CanvasDocument } from '../../domain/canvases/document';
 import { canvasLimits } from '../../domain/canvases/document';
 import { inspectReviewedFile } from '../native/reviewed-file';
+import { sourceHash } from '../canvases/sources';
 
 export const canvasBackupAssetSchema = z
   .object({
@@ -31,6 +32,10 @@ export function validateCanvasBackupAssets(
   assets: readonly BackupAsset[],
 ) {
   const expected = referencedAssets(documents);
+  for (const document of documents)
+    for (const source of [...document.sources, ...document.history.flatMap((item) => item.sources)])
+      if (source.hash !== sourceHash(source.data))
+        throw new Error('A canvas source snapshot changed.');
   const seen = new Set<string>();
   for (const asset of assets) {
     const bytes = Buffer.from(asset.data, 'base64');

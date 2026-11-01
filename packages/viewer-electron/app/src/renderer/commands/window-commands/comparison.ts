@@ -20,6 +20,19 @@ export function comparisonCommands({
 }: WindowScopes): CommandDefinition[] {
   return [
     {
+      id: 'build-canvas',
+      label: 'Build tool from selection',
+      group: 'Files',
+      icon: 'chat',
+      aliases: ['canvas', 'interactive', 'agent tool', 'build app'],
+      when: (context) => paneScope(context) && context.selection.length > 0,
+      run: (context) =>
+        actions.workspace.newChat(
+          context.selection.map((file) => file.path),
+          'Build an interactive canvas from these files. I want to ',
+        ),
+    },
+    {
       id: 'new-chat',
       label: 'Chat about files',
       group: 'Files',

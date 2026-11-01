@@ -233,6 +233,87 @@ and revocation. The native Allow decision belongs to the operator. Test grants a
 end; the original configuration, encrypted credentials and sharing permissions must remain
 unchanged.
 
+## Canvas evaluation and replay
+
+The **Workshop kits** supplier case is a regression and evaluation sample, not the current
+[hackathon screenplay](../release/hackathon-demo.md). It keeps independently calculable results for
+the generic canvas foundation. Paths in this section are relative to `packages/viewer-electron/app`;
+run its commands from that package.
+
+### Source and service checks
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm exec vitest run \
+  tests/canvases.test.ts tests/canvas-productivity.test.ts \
+  tests/chat.test.ts tests/model-providers.test.ts --maxWorkers=2
+```
+
+These cover input retention, revisions, source snapshots, quote branches, result validation and the
+provider protocol with fixtures. They make no paid model requests and do not qualify robot motion or
+native file dialogs.
+
+`tests/native/canvas-productivity.ts` uses a hand-authored calculator to exercise saved inputs,
+source-driven totals, result review and restart in an isolated packaged profile.
+`tests/native/canvases.ts` uses fixtures for sandbox isolation, quote branches, portable content and
+bundled 3D rendering. Set `VIEWER_TEST_BINARY` to the candidate being tested and retain both
+preservation variables. Neither fixture is model-generation evidence.
+
+### Supplier sample and arithmetic
+
+`tools/canvases/sample.ts` exports `canvasProject` and `canvasGoldenCases`; it is not a standalone
+generator command. The evaluator and native replay call it to create **Request.pdf**, **North.csv**
+and **East.csv** in their retained folders. The request identifies the suppliers and prices as
+fictional, with CC0-1.0 sample provenance. Shipping is charged once per order; all prices are EUR
+and include tax.
+
+| Quantity | Budget | Deadline | North: 42 × quantity + 180, 7 days | East: 48 × quantity + 40, 2 days | Cheapest eligible |
+| -------- | ------ | -------- | ---------------------------------- | -------------------------------- | ----------------- |
+| 20       | 2,000  | 10 days  | 1,020, eligible                    | 1,000, eligible                  | East              |
+| 40       | 2,000  | 3 days   | 1,860, late                        | 1,960, eligible                  | East              |
+| 40       | 2,000  | 7 days   | 1,860, eligible                    | 1,960, eligible                  | North             |
+
+Changing the allowed deadline from three to seven days adds four days. North's delivery itself is
+five days slower than East's. Check both arithmetic and eligibility, not just whether a canvas
+loads.
+
+### Reuse saved responses first
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm exec tsx \
+  tests/native/canvas-live.ts /path/to/retained/evaluation
+```
+
+The current driver expects `session-7.json` and `session-8.json` from the retained supplier
+evaluation. It is not a generic session selector or a robot rehearsal. It imports the actual saved
+HTML and source snapshots into a separate credential-free profile without changing the generated
+HTML or contacting a provider.
+
+The replay changes inputs, checks the visible totals, saves CSV and Markdown through the native
+picker, reads back the files, reopens the report and checks state after restart. On macOS, System
+Events targets only the owned test application's Save sheet. Retain inputs, failures and results.
+
+Add `--record` to retain frames, MP4, GIF and screenshots with the result report. This captures
+existing output, not a fresh model call or a newly generated branch. The renderer recording excludes
+the native Save sheet; restart is checked after that capture. Do not imply either appears in the
+video without recording it separately. Inspect captures at their delivery resolution and remove
+personal information from the public edit, while preserving the original evidence.
+
+### Fresh provider evaluation
+
+For a manual run, select the sample files and choose **Build tool from selection**. A configured
+Meta model needs the appropriate data approval. Credentials stay outside the recording.
+
+The automated entry is `tools/canvases/evaluate.mjs`, which loads `evaluate-main.ts` inside Electron
+without a main-process debugger. It requires `--live`; `--profile` selects the local Viewer profile.
+The default limit is three sessions, each bounded to eight model rounds. Run it only with an
+explicitly approved budget. Extensions and recovery sessions consume that budget; prior approval
+does not reset it for another case.
+
+Retain actual requests, replies, failures, canceled requests and provider-reported usage. A
+successful supplier evaluation says nothing about a robot solver. Use
+[the implementation audit](../research/workshop.md#implementation-audit) to identify the additional
+qualification required for the proposed film.
+
 ## What evidence means
 
 | Check                     | Establishes                                            |

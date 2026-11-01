@@ -40,6 +40,7 @@ export async function ownedApp(
     environment?: NodeJS.ProcessEnv;
     /** Names the run's evidence folder: lowercase letters, numbers and hyphens. */
     label?: string;
+    mockKeychain?: boolean;
   } = {},
 ) {
   const owned = await adoptGeneratedProfile({
@@ -47,6 +48,7 @@ export async function ownedApp(
     profile,
     mode: options.mode ?? 'hidden',
     environment: options.environment,
+    mockKeychain: options.mockKeychain,
     label: options.label ?? 'native-supplemental',
     evidenceRoot: path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
