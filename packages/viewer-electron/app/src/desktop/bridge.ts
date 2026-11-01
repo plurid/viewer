@@ -1,3 +1,12 @@
+import { realpath } from 'node:fs/promises';
+import { containsPath } from './files/containment';
+import { Reconstructions } from './canvases/reconstruction';
+import { reconstructionCredentialID } from '../domain/canvases/reconstruction';
+import { modelCanvasHTML } from './canvases/model-app';
+import { validateReconstructedGLB } from './canvases/glb';
+import { preparePhoto } from './fabrication/inputs';
+import { canvasLibraries } from 'virtual:viewer-canvas-libraries';
+import { Canvases } from './canvases/service';
 import { createGitHandlers } from './ipc/git-handlers';
 import { createEditingHandlers } from './ipc/editing-handlers';
 import { createModelHandlers } from './ipc/model-handlers';
@@ -215,6 +224,8 @@ export class Desktop {
   readonly receipts: CommandReceipts;
   readonly resources: Resources;
   readonly webPreviews: WebPreviews;
+  readonly canvases: Canvases;
+  readonly reconstructions: Reconstructions;
   readonly transforms: Transforms;
   readonly optimizationReviews: OptimizationReviews;
   readonly mediaDocuments: MediaDocuments;
@@ -334,7 +345,7 @@ export class Desktop {
     return newPlaneFolder(this.settings.snapshot().settings.browsing, this.home, undefined, true);
   }
   constructor(
-    dataPath: string,
+    private dataPath: string,
     private allowedURL: (url: string) => boolean,
     private options: {
       openSettings(focus?: string): Promise<void>;
@@ -1093,13 +1104,60 @@ export class Desktop {
       },
     );
     this.watchers = new Watchers(emit);
+    this.canvases = new Canvases(dataPath, {
+      libraries: () => canvasLibraries,
+      changed: (owner, document) => {
+        const window = this.windows.get(owner)?.window;
+        if (window && !window.isDestroyed())
+          sendEvent(window.webContents, { type: 'canvas', document });
+      },
+    });
+    this.reconstructions = new Reconstructions(dataPath, {
+      canvases: this.canvases,
+      configured: async () => {
+        await this.credentials.load();
+        return this.credentials.ids().includes(reconstructionCredentialID);
+      },
+      secret: () => this.credentials.get(reconstructionCredentialID),
+      prepare: (bytes, signal) =>
+        preparePhoto(
+          'Photo',
+          bytes,
+          (input, stop) =>
+            imageProcess(
+              path.join(path.dirname(options.worker), 'image-worker.cjs'),
+              processorRoot,
+              input,
+              photoPlan,
+              stop,
+              options.fileBackend,
+            ),
+          undefined,
+          signal,
+        ),
+      segment: (id, picture, prompt, signal) => {
+        const provider = this.settings.snapshot().settings.providers.find((item) => item.id === id);
+        if (!provider || !providerSegmentation(provider))
+          throw new Error('Choose a model with SAM segmentation in Settings → Models.');
+        return this.providers.segment(provider, picture, prompt, signal);
+      },
+      confirm: (owner, job) =>
+        confirmNatively(
+          this.windows.get(owner)?.window,
+          'Generate a 3D model with fal?',
+          'Send the reviewed photo and object mask to fal.ai for Meta SAM 3D Objects. This is a paid generation using your fal account. Only these two images are sent. Selection: ' +
+            job.prompt,
+          'Generate 3D',
+        ),
+    });
     this.chats = new Chats(dataPath, {
+      canvases: this.canvases,
       settings: () => this.settings.snapshot().settings,
       access,
       inspect: (file, signal) => this.files.inspect(file, true, false, signal),
       generate: (...args) => this.providers.generate(...args),
-      permit: (provider, signal, work) =>
-        this.modelPermissions.run(provider, 'excerpts', signal, work, 'user'),
+      permit: (provider, signal, work, level = 'excerpts') =>
+        this.modelPermissions.run(provider, level, signal, work, 'user'),
       command: (id, target, title) => this.agentRequests.command(id, target, title),
       configuration: (patches, target) => this.agentRequests.configuration(patches, target),
       rename: async (title, intents) => {
@@ -1150,7 +1208,7 @@ export class Desktop {
           ),
         );
         // a backup also copies the command receipts
-        await Promise.all([this.flushWindowStores(), this.receipts.flush()]);
+        await Promise.all([this.flushWindowStores(), this.receipts.flush(), this.canvases.flush()]);
       },
       state: async () => (await this.storage.load()).state,
       settings: () => ({ ...this.settings.snapshot(), credentials: this.credentials.ids() }),
@@ -1513,6 +1571,7 @@ export class Desktop {
         .catch((error) => this.options.diagnose?.(String(error)));
       this.flushes.disconnected(sender);
       this.chats.retain(sender, new Set());
+      this.canvases.release(sender);
       this.gitActions.stopOwner(sender);
       this.worktrees.stopOwner(sender);
       this.agentTaskWorkflows.stopOwner(sender);
@@ -1667,6 +1726,8 @@ export class Desktop {
   }
   private async disposeServices(): Promise<void> {
     await this.chats.close();
+    await this.reconstructions.close();
+    await this.canvases.flush();
     await this.agentSessions.flush();
     await this.gitActions.close();
     await this.gitReviews.close();
@@ -2141,6 +2202,65 @@ export class Desktop {
       createTask: ([input], owner) => this.taskRequests.create(input, owner),
       chooseFolder: (args, senderID) => this.chooseFolder(senderID, args[0]),
       // window records, the selected window and pending agent commands stay with the bridge
+      reconstructionKey: async ([key]) => {
+        await this.credentials.set(reconstructionCredentialID, key);
+        this.settings.announce();
+      },
+      reconstruction: ([request], owner) => this.reconstructions.handle(owner, request),
+      canvas: async ([request], owner) => {
+        let document = await this.canvases.read(owner, request.id);
+        if (request.kind === 'attach') {
+          await this.fileAccess.require([request.path]);
+          const file = await realpath(request.path);
+          if (containsPath(await realpath(this.dataPath), file))
+            throw new Error('Viewer private data cannot be attached to a canvas.');
+          await this.fileAccess.require([file]);
+          await this.canvases.attachFile(owner, document.id, file);
+          document = await this.canvases.read(owner, document.id);
+        }
+        if (request.kind === 'model') {
+          const asset = document.assets.find(
+            (item) => item.id === request.assetID && /\.glb$/i.test(item.name),
+          );
+          if (!asset) throw new Error('Choose an attached GLB model.');
+          validateReconstructedGLB(await this.canvases.assetBytes(asset));
+          document = await this.canvases.write(
+            owner,
+            document.id,
+            request.revision,
+            'Object studio',
+            modelCanvasHTML(asset.id),
+            { ...document.defaults, modelLight: 1, modelWire: false, modelBackground: '#20242c' },
+          );
+        }
+        if (request.kind === 'preview')
+          return {
+            document,
+            preview: await this.webPreviews.openCanvas(
+              owner,
+              'canvas:' + request.id,
+              await this.canvases.files(document),
+            ),
+          };
+        if (request.kind === 'state')
+          document = await this.canvases.state(
+            owner,
+            request.id,
+            request.revision,
+            request.contentRevision,
+            request.patch,
+          );
+        if (request.kind === 'undo')
+          document = await this.canvases.undo(owner, request.id, request.revision);
+        if (request.kind === 'apply')
+          document = await this.canvases.apply(owner, request.id, request.revision);
+        if (request.kind === 'export') {
+          const folder = await this.chooseFolder(owner, document.path);
+          if (folder)
+            return { document, exported: await this.canvases.export(owner, request.id, folder) };
+        }
+        return { document };
+      },
       chat: ([request], sender) => {
         const work = () => this.chats.request(request, sender, this.windows.get(sender)?.catalog);
         return request.kind === 'send' ? this.activity.send(request.id, work) : work();

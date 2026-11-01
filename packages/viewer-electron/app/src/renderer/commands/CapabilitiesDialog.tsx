@@ -34,6 +34,7 @@ const planeNames: Record<Pane['type'], string> = {
   diff: 'Diff',
   'git-changes': 'Git changes',
   chat: 'Conversation',
+  canvas: 'Agent canvas',
   server: 'Local server',
   browser: 'Browser',
   media: 'Media editor',

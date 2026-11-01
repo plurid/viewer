@@ -2,6 +2,7 @@
 import { flushBuffers } from '../editing/buffers';
 import { flushMediaDrafts } from '../media/drafts';
 import { flushChatDrafts } from '../chat/drafts';
+import { flushCanvasWrites } from '../canvases/writes';
 import { flushNotes, trimNoteSessions } from '../notes/sessions';
 import { CURRENT_STATE_VERSION, type Pane, type SavedState } from '../../domain/contracts';
 import { previewValuesSchema, type JSONValue } from '../../domain/workspaces/project';
@@ -94,6 +95,7 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
   trimNoteSessions(retainedPaneIDs());
   await flushMediaDrafts();
   await flushChatDrafts();
+  await flushCanvasWrites();
   // After the engine's synchronous flush: a save it scheduled is covered by this one.
   clearTimeout(persistTimer);
   await flushPreferences();

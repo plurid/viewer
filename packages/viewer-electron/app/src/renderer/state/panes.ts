@@ -10,6 +10,7 @@ import type {
   DiffPane,
   GitChangesPane,
   ChatPane,
+  CanvasPane,
   ServerPane,
   JournalPane,
   OverviewPane,
@@ -240,6 +241,7 @@ export function addContentPane(
     | DiffPane
     | GitChangesPane
     | ChatPane
+    | CanvasPane
     | JournalPane
     | OverviewPane
     | ServerPane

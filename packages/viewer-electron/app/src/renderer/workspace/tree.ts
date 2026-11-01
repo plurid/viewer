@@ -22,6 +22,7 @@ const routeKinds: Record<Pane['type'], string> = {
   diff: 'diffs',
   'git-changes': 'git-changes',
   chat: 'chats',
+  canvas: 'canvases',
   server: 'servers',
   browser: 'browsers',
   media: 'media',

@@ -193,10 +193,10 @@ it again with **File → Open Project…**; **File → Save Project** records la
 3. On the other computer, choose **Open backup…**, relink any folder that moved, then choose
    **Restore copies**.
 
-The backup holds your notes, drafts, conversations, file paths and command history, so keep it
-private. It does not hold your files, keys, folder permissions or browser sessions. Restored
-terminals, servers and conversations stay stopped until you start them.
-[Personal backups](../reference/configuration.md#personal-backups) lists the exact contents.
+The backup holds your notes, drafts, conversations, canvases, attached canvas assets, file paths and
+command history, so keep it private. It does not hold other source files, keys, folder permissions
+or browser sessions. Restored terminals, servers and conversations stay stopped until you start
+them. [Personal backups](../reference/configuration.md#personal-backups) lists the exact contents.
 
 ## What closing a plane does
 

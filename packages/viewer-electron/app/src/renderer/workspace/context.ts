@@ -5,7 +5,7 @@ import type { GitActionIntent } from '../../domain/comparison/git-actions';
 import type { PlaneLayoutEdit, PlaneLayoutTarget } from '../../domain/workspaces/plane-layout';
 import { createContext, useContext } from 'react';
 import type { DiffSource } from '../../domain/comparison/diff';
-import type { FileEntry, NewRootFolderTarget } from '../../domain/contracts';
+import type { ChatPane, FileEntry, NewRootFolderTarget } from '../../domain/contracts';
 import type { Tiling } from '../../domain/workspaces/tiling';
 import type { JournalFilter } from '../../domain/journal/events';
 import type { WorktreeSelection } from '../../domain/comparison/worktrees';
@@ -37,7 +37,12 @@ export interface WorkspaceController {
   openOverview(): void;
   /** With `send`, the draft goes to the model at once when its permission already allows it. */
   newChat(paths: string[], draft?: string, send?: boolean): Promise<void>;
-  openChat(id: string): Promise<void>;
+  openChat(
+    id: string,
+    parentPaneID?: string,
+    focusMessage?: ChatPane['focusMessage'],
+  ): Promise<void>;
+  openCanvas(id: string, parentPaneID?: string, activate?: boolean): Promise<void>;
   openAgentSession(id: string, parentPaneID?: string): Promise<string>;
   openDiff(left: DiffSource, right: DiffSource, parentPaneID?: string): void;
   openGitDiff(file: string, parentPaneID?: string): Promise<void>;

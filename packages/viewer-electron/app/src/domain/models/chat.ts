@@ -49,7 +49,7 @@ const chatDocumentFields = {
   revision: z.number().int().nonnegative(),
   updated: z.number().finite(),
   status: z.enum(['idle', 'running', 'stopped', 'failed']),
-  level: z.enum(['names', 'excerpts']),
+  level: z.enum(['names', 'excerpts', 'full-text', 'images']),
   error: z.string().max(2000).optional(),
 } as const;
 
@@ -67,11 +67,33 @@ export const legacyChatDocumentSchema = z
   .strict()
   .refine(withinDocumentBudget, { message: documentLimitMessage });
 
-export const chatDocumentSchema = z
+const chatV3Schema = z
   .object({
     ...chatDocumentFields,
     version: z.literal(3),
     messages: z.array(chatMessageSchema).max(1000),
+  })
+  .strict()
+  .refine(withinDocumentBudget, { message: documentLimitMessage });
+
+export const chatDocumentSchema = z
+  .object({
+    ...chatDocumentFields,
+    version: z.literal(4),
+    messages: z.array(chatMessageSchema).max(1000),
+    canvasID: z.uuid().optional(),
+    branch: z
+      .object({
+        conversationID: z.uuid(),
+        messageID: z.uuid(),
+        revision: z.number().int().nonnegative(),
+        quote: z.string().min(1).max(16000),
+        start: z.number().int().nonnegative(),
+        end: z.number().int().positive(),
+        context: z.array(chatMessageSchema).max(1000),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .refine(withinDocumentBudget, { message: documentLimitMessage });
@@ -87,6 +109,7 @@ const chatV2Schema = z
 export const storedChatDocumentSchema = z.union([
   legacyChatDocumentSchema,
   chatV2Schema,
+  chatV3Schema,
   chatDocumentSchema,
 ]);
 
@@ -107,7 +130,19 @@ const patch = z
 /** The same structured turn protocol works with every existing provider adapter. */
 export const chatStepSchema = z
   .object({
-    kind: z.enum(['reply', 'list', 'search', 'metadata', 'read', 'command', 'settings', 'rename']),
+    kind: z.enum([
+      'reply',
+      'list',
+      'search',
+      'metadata',
+      'read',
+      'command',
+      'settings',
+      'rename',
+      'canvas_read',
+      'canvas_write',
+      'canvas_asset',
+    ]),
     text: z.string().max(32000),
     path: z.string().max(32768).nullable(),
     query: z.string().max(300).nullable(),
@@ -153,6 +188,20 @@ export const chatRequestSchema = z.discriminatedUnion('kind', [
       text: z.string().trim().min(1).max(chatDraftLimit),
       providerID: z.string().max(200),
     })
+    .strict(),
+  z.object({ kind: z.literal('canvas'), id: z.uuid() }).strict(),
+  z
+    .object({
+      kind: z.literal('branch'),
+      id: z.uuid(),
+      messageID: z.uuid(),
+      start: z.number().int().nonnegative(),
+      end: z.number().int().positive(),
+      revision: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal('import-canvas'), id: z.uuid(), path: z.string().min(1).max(32768) })
     .strict(),
   z.object({ kind: z.literal('stop'), id: z.uuid() }).strict(),
 ]);

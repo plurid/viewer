@@ -11,7 +11,8 @@ import type { BackupRequest, BackupReply, BackupReview } from '../../domain/pers
 import { backupRequestSchema } from '../../domain/persistence/backup';
 import { noteSchema } from '../../domain/editing/notes';
 import { mediaDraftSchema } from '../../domain/media/documents';
-import { chatDocumentSchema } from '../../domain/models/chat';
+import { chatDocumentSchema, storedChatDocumentSchema } from '../../domain/models/chat';
+import { canvasDocumentSchema } from '../../domain/canvases/document';
 import { receiptSchema } from '../../domain/automation/receipts';
 import { checkDocumentSchema } from '../../domain/fabrication/check-document';
 import type { CheckDocument } from '../../domain/fabrication/check-document';
@@ -22,13 +23,23 @@ import { textBufferSchema } from '../editing/text-buffers';
 import { settingsSchema, validateCustomProfiles } from '../preferences/settings-schema';
 import { stateSchema } from './storage';
 import { backupIdentityMap, backupRoots, restoreBackupState } from './backup-state';
+import {
+  canvasBackupAssetSchema,
+  readCanvasBackupAssets,
+  restoreCanvasBackupAssets,
+  validateCanvasBackupAssets,
+} from './backup-canvases';
 
 const maximumBackupBytes = 64 * 1024 * 1024;
+const backupChatSchema = storedChatDocumentSchema.transform((value) =>
+  chatDocumentSchema.parse({ ...value, version: 4 }),
+);
 const documentKinds = {
   notes: { directory: 'notes', schema: noteSchema },
   drafts: { directory: 'text-buffers', schema: textBufferSchema },
   media: { directory: 'media-drafts', schema: mediaDraftSchema },
-  conversations: { directory: 'chat-documents', schema: chatDocumentSchema },
+  conversations: { directory: 'chat-documents', schema: backupChatSchema },
+  canvases: { directory: 'canvas-documents', schema: canvasDocumentSchema },
   receipts: { directory: 'command-receipts', schema: receiptSchema },
   checks: { directory: 'fabrication-checks', schema: checkDocumentSchema },
 } as const;
@@ -66,12 +77,14 @@ export const backupSchema = z
     privateRoot: z.string().min(1).max(32768),
     state: stateSchema,
     preferences: portablePreferencesSchema,
+    canvasAssets: z.array(canvasBackupAssetSchema).max(10000).default([]),
     documents: z
       .object({
         notes: z.array(noteSchema).max(2000),
         drafts: z.array(textBufferSchema).max(2000),
         media: z.array(mediaDraftSchema).max(1000),
-        conversations: z.array(chatDocumentSchema).max(1000),
+        conversations: z.array(backupChatSchema).max(1000),
+        canvases: z.array(canvasDocumentSchema).max(1000).default([]),
         receipts: z.array(receiptSchema).max(1000),
         checks: z.array(checkDocumentSchema).max(1000).default([]),
       })
@@ -118,6 +131,7 @@ function validate(value: unknown): Backup {
   )
     throw new Error('These workspaces need a newer Viewer. The backup was left unchanged.');
   const backup = backupSchema.parse(value);
+  validateCanvasBackupAssets(backup.documents.canvases, backup.canvasAssets);
   const ids = new Set<string>();
   const members = Object.fromEntries(
     documentKeys.map((kind) => [
@@ -131,6 +145,18 @@ function validate(value: unknown): Backup {
         throw new Error('The backup contains duplicate document identities.');
       ids.add(document.id);
     }
+  for (const chat of backup.documents.conversations)
+    if (
+      (chat.canvasID && !members.canvases.has(chat.canvasID)) ||
+      (chat.branch && !members.conversations.has(chat.branch.conversationID))
+    )
+      throw new Error('The backup is incomplete: a conversation reference is missing.');
+  for (const canvas of backup.documents.canvases)
+    if (
+      !members.conversations.has(canvas.conversationID) ||
+      (canvas.fork && !members.canvases.has(canvas.fork.id))
+    )
+      throw new Error('The backup is incomplete: a canvas reference is missing.');
   const spaces = new Set<string>(),
     panes = new Set<string>();
   for (const space of backup.state.workspaces) {
@@ -150,11 +176,13 @@ function validate(value: unknown): Backup {
               ? { kind: 'media', id: pane.draftID }
               : pane.type === 'chat' && !pane.externalSessionID
                 ? { kind: 'conversations', id: pane.conversationID }
-                : pane.type === 'receipt'
-                  ? { kind: 'receipts', id: pane.receiptID }
-                  : pane.type === 'check'
-                    ? { kind: 'checks', id: pane.checkID }
-                    : undefined;
+                : pane.type === 'canvas'
+                  ? { kind: 'canvases', id: pane.canvasID }
+                  : pane.type === 'receipt'
+                    ? { kind: 'receipts', id: pane.receiptID }
+                    : pane.type === 'check'
+                      ? { kind: 'checks', id: pane.checkID }
+                      : undefined;
       if (reference && !members[reference.kind].has(reference.id))
         throw new Error(
           'The backup is incomplete: a plane’s private document is missing. Current work was left unchanged.',
@@ -196,6 +224,7 @@ export class PersonalBackups {
       drafts: [],
       media: [],
       conversations: [],
+      canvases: [],
       receipts: [],
       checks: [],
     };
@@ -218,7 +247,7 @@ export class PersonalBackups {
         if (!name.endsWith('.json') || !z.uuid().safeParse(name.slice(0, -5)).success) continue;
         const inspected = await inspectReviewedFile(
           path.join(directory, name),
-          (kind === 'checks' ? 16 : 4) * 1024 * 1024,
+          (kind === 'checks' || kind === 'canvases' ? 16 : 4) * 1024 * 1024,
         );
         bytes += inspected.bytes.length;
         if (bytes > maximumBackupBytes)
@@ -249,6 +278,7 @@ export class PersonalBackups {
           drafts: item.backup.documents.drafts.length,
           media: item.backup.documents.media.length,
           conversations: item.backup.documents.conversations.length,
+          canvases: item.backup.documents.canvases.length,
           receipts: item.backup.documents.receipts.length,
           checks: item.backup.documents.checks.length,
         },
@@ -306,6 +336,12 @@ export class PersonalBackups {
         await this.host.flush();
         const state = await this.host.state();
         if (!state) throw new Error('Save a workspace before making a backup.');
+        const documents = await this.readDocuments();
+        const canvasAssets = await readCanvasBackupAssets(
+          this.root,
+          documents.canvases,
+          maximumBackupBytes,
+        );
         backup = validate({
           format: 'viewer-personal-backup',
           version: 1,
@@ -320,7 +356,8 @@ export class PersonalBackups {
               ]),
             ),
           ),
-          documents: await this.readDocuments(),
+          documents,
+          canvasAssets,
         });
       } else {
         const file = await this.host.choose(owner, 'import');
@@ -338,6 +375,7 @@ export class PersonalBackups {
           item.sources.map((source) => path.dirname(source.path)),
         ),
         ...backup.documents.conversations.map((item) => item.path),
+        ...backup.documents.canvases.map((item) => item.path),
         ...backup.documents.receipts.map((item) => item.directory),
         ...backup.documents.checks.flatMap((item) => [
           item.folder,
@@ -455,9 +493,30 @@ export class PersonalBackups {
         path: map(doc.path),
         status: 'stopped' as const,
         scopes: [],
+        canvasID: doc.canvasID && id(doc.canvasID),
+        branch: doc.branch && {
+          ...doc.branch,
+          conversationID: id(doc.branch.conversationID),
+          context: doc.branch.context.map(({ proposal: _proposal, ...message }) => ({
+            ...message,
+            links: message.links?.map((link) => ({ ...link, path: map(link.path) })),
+          })),
+        },
         messages: doc.messages.map(({ proposal: _proposal, ...message }) => ({
           ...message,
           links: message.links?.map((link) => ({ ...link, path: map(link.path) })),
+        })),
+      })),
+      canvases: item.backup.documents.canvases.map((doc) => ({
+        ...doc,
+        id: id(doc.id),
+        conversationID: id(doc.conversationID),
+        path: map(doc.path),
+        fork: doc.fork && { ...doc.fork, id: id(doc.fork.id) },
+        assets: doc.assets.map(({ source: _source, ...asset }) => asset),
+        history: doc.history.map((entry) => ({
+          ...entry,
+          assets: entry.assets.map(({ source: _source, ...asset }) => asset),
         })),
       })),
       receipts: item.backup.documents.receipts.map((doc) => ({
@@ -513,6 +572,7 @@ export class PersonalBackups {
       }
     for (const kind of documentKeys)
       for (const doc of documents[kind]) documentKinds[kind].schema.parse(doc);
+    await restoreCanvasBackupAssets(this.root, item.backup.canvasAssets);
     for (const kind of documentKeys) {
       if (!documents[kind].length) continue;
       const directory = path.join(this.root, documentKinds[kind].directory);

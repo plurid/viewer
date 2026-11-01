@@ -31,6 +31,7 @@ owner-bound capability, not a raw filesystem or process channel.
 | Workspaces and tasks     | `domain/workspaces`                  | `desktop/workspaces`, windows                  | Workspace adapter and task controller             |
 | Actions and workflows    | `domain/automation`                  | `desktop/actions`, `desktop/automation`        | Contextual commands and review                    |
 | Agents and models        | `domain/agents`, `domain/models`     | Agent/model/chat services                      | Explicit permissions, proposals and conversations |
+| Conversation canvases    | `domain/canvases`                    | `desktop/canvases`, private web previews       | `renderer/canvases`, quote branches in Chat       |
 | Runtimes and diagnostics | Shared contracts                     | Terminals, browsers, servers, Journal          | Feature views and recovery                        |
 
 Shared UI primitives live at the UI root; business dialogs belong to their feature. Architecture

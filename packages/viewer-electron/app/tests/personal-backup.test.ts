@@ -16,6 +16,9 @@ import { temporaryRoot } from '../tools/temporary';
 import { CheckStore } from '../src/desktop/fabrication/check-store';
 import { checkDocumentSchema } from '../src/domain/fabrication/check-document';
 import { CURRENT_STATE_VERSION } from '../src/domain/contracts';
+import { Canvases } from '../src/desktop/canvases/service';
+import { ChatDocumentStore } from '../src/desktop/chat/documents';
+import { chatDocumentSchema } from '../src/domain/models/chat';
 
 const saved = (folder: string): SavedState => ({
   version: 11,
@@ -57,6 +60,122 @@ const snapshot = (home: string): SettingsSnapshot => ({
   ui: normalizePreferences(),
   look: 'dark',
   credentials: ['secret-provider'],
+});
+
+it('backs up independent canvas branches, saved values and assets with no imported file authority', async () => {
+  const root = await temporaryRoot('viewer-backup-canvases-');
+  const first = path.join(root, 'First'),
+    second = path.join(root, 'Second');
+  const archive = path.join(root, 'canvas-backup.json');
+  const source = path.join(root, 'source.svg');
+  await writeFile(source, '<svg xmlns="http://www.w3.org/2000/svg"/>', { flag: 'wx' });
+  const chatID = randomUUID(),
+    branchID = randomUUID(),
+    messageID = randomUUID();
+  const canvases = new Canvases(first, { changed: () => {} });
+  const original = await canvases.create(1, chatID, root);
+  const asset = await canvases.attachFile(1, original.id, source);
+  const content = await canvases.write(1, original.id, 1, 'Budget', '<p>Budget</p>', {
+    budget: 25,
+  });
+  await canvases.state(1, original.id, content.stateRevision, content.revision, { budget: 42 });
+  const branch = await canvases.fork(1, original.id, branchID);
+  const chat = chatDocumentSchema.parse({
+    version: 4,
+    id: chatID,
+    title: 'Budget',
+    path: root,
+    providerID: '',
+    scopes: [],
+    messages: [{ id: messageID, role: 'assistant', text: 'Budget', at: 1 }],
+    draft: '',
+    draftRevision: 0,
+    revision: 1,
+    updated: 1,
+    status: 'idle',
+    level: 'images',
+    canvasID: original.id,
+  });
+  await new ChatDocumentStore(path.join(first, 'chat-documents', chatID + '.json')).save(chat);
+  await new ChatDocumentStore(path.join(first, 'chat-documents', branchID + '.json')).save({
+    ...chat,
+    id: branchID,
+    canvasID: branch.id,
+    messages: [],
+    branch: {
+      conversationID: chatID,
+      messageID,
+      revision: 1,
+      quote: 'Budget',
+      start: 0,
+      end: 6,
+      context: chat.messages,
+    },
+  });
+  const state = saved(root);
+  state.workspaces[0]!.panes.push({
+    id: 'canvas',
+    type: 'canvas',
+    path: root,
+    canvasID: original.id,
+    title: 'Budget',
+  });
+  const host = {
+    flush: async () => {},
+    state: async () => state,
+    settings: () => snapshot(root),
+    apply: async () => snapshot(root),
+    choose: async () => archive,
+  };
+  const exporter = new PersonalBackups(first, host);
+  const prepared = review(await exporter.request({ kind: 'prepare-export' }, 1));
+  expect(prepared.documents.canvases).toBe(2);
+  await exporter.request({ kind: 'write', id: prepared.id }, 1);
+  const bundle = backupSchema.parse(JSON.parse(await readFile(archive, 'utf8')));
+  expect(bundle.canvasAssets).toHaveLength(1);
+  const importer = new PersonalBackups(second, { ...host, state: async () => null });
+  const incoming = review(await importer.request({ kind: 'choose-import' }, 2));
+  const restored = await importer.request(
+    { kind: 'restore', id: incoming.id, preferences: false },
+    2,
+  );
+  if (restored.kind !== 'restored') throw new Error('Expected restored work');
+  const pane = restored.state.workspaces[0]!.panes.find((pane) => pane.type === 'canvas')!;
+  if (pane.type !== 'canvas') throw new Error('Expected canvas');
+  expect(pane.canvasID).not.toBe(original.id);
+  const copies = new Canvases(second, { changed: () => {} });
+  const copy = await copies.read(2, pane.canvasID);
+  expect(copy.state.budget).toBe(42);
+  expect(copy.assets[0]!.id).toBe(asset.id);
+  expect(copy.assets[0]!.source).toBeUndefined();
+  expect(await copies.assetBytes(copy.assets[0]!)).toEqual(await readFile(source));
+  const conversations = await Promise.all(
+    (await readdir(path.join(second, 'chat-documents'))).map(async (file) =>
+      chatDocumentSchema.parse(
+        JSON.parse(await readFile(path.join(second, 'chat-documents', file), 'utf8')),
+      ),
+    ),
+  );
+  const child = conversations.find((item) => item.branch)!;
+  expect(child.branch!.conversationID).toBe(copy.conversationID);
+  const fork = await copies.read(2, child.canvasID!);
+  expect(fork.fork!.id).toBe(copy.id);
+  expect(fork.assets[0]!.source).toBeUndefined();
+  await copies.write(2, fork.id, fork.revision, 'Alternative', '<p>Alternative</p>', {
+    budget: 25,
+  });
+  const applied = await copies.apply(2, fork.id, fork.revision + 1);
+  expect(applied.state.budget).toBe(42);
+  expect(await readFile(source, 'utf8')).toContain('<svg');
+
+  const invalid = path.join(root, 'invalid-backup.json');
+  bundle.canvasAssets[0]!.data = Buffer.from('changed').toString('base64');
+  await writeFile(invalid, JSON.stringify(bundle), { flag: 'wx' });
+  const refused = new PersonalBackups(path.join(root, 'Refused'), {
+    ...host,
+    choose: async () => invalid,
+  });
+  await expect(refused.request({ kind: 'choose-import' }, 3)).rejects.toThrow('invalid');
 });
 
 it('round trips private work as independent copies, relinks paths, and preserves source files', async () => {

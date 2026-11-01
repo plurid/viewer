@@ -148,10 +148,27 @@ const pane = z.discriminatedUnion('type', [
   z
     .object({
       id,
+      type: z.literal('canvas'),
+      path: localPath,
+      canvasID: z.uuid(),
+      title: z.string().max(200),
+    })
+    .strict(),
+  z
+    .object({
+      id,
       type: z.literal('chat'),
       path: localPath,
       conversationID: z.uuid(),
       externalSessionID: z.uuid().optional(),
+      focusMessage: z
+        .object({
+          id: z.uuid(),
+          start: z.number().int().nonnegative(),
+          end: z.number().int().positive(),
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
   z

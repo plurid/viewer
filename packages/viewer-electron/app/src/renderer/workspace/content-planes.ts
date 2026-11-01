@@ -20,6 +20,7 @@ type ContentPlaneActions = Pick<
   | 'newChat'
   | 'openAgentSession'
   | 'openChat'
+  | 'openCanvas'
   | 'openDiff'
   | 'openGitDiff'
   | 'openGitChanges'
@@ -216,12 +217,13 @@ export function contentPlaneActions({
       controller().focusPane(pane.id, { activate: true });
       return pane.id;
     },
-    async openChat(conversationID) {
+    async openChat(conversationID, parentPaneID, focusMessage) {
       const owner = activeWorkspace().id;
       const existing = activeWorkspace().panes.find(
         (pane) => pane.type === 'chat' && pane.conversationID === conversationID,
       );
       if (existing) {
+        if (focusMessage) updatePane(existing.id, { focusMessage });
         controller().focusPane(existing.id, { activate: true });
         return;
       }
@@ -229,8 +231,36 @@ export function contentPlaneActions({
       if (Array.isArray(document)) throw new Error('The conversation could not be opened.');
       if (owner !== activeWorkspace().id) return;
       const id = crypto.randomUUID();
-      addContentPane({ id, type: 'chat', path: document.path, conversationID });
+      registerContent(
+        { id, type: 'chat', path: document.path, conversationID, focusMessage },
+        parentPaneID,
+      );
       controller().focusPane(id, { activate: true });
+    },
+    async openCanvas(canvasID, parentPaneID, activate = true) {
+      const origin = activeWorkspace().id;
+      const existing = activeWorkspace().panes.find(
+        (pane) => pane.type === 'canvas' && pane.canvasID === canvasID,
+      );
+      if (existing) {
+        if (activate) controller().focusPane(existing.id, { activate: true });
+        return;
+      }
+      const { document } = await window.viewer.canvas({ kind: 'read', id: canvasID });
+      if (activeWorkspace().id !== origin) return;
+      const opened = activeWorkspace().panes.find(
+        (pane) => pane.type === 'canvas' && pane.canvasID === canvasID,
+      );
+      if (opened) {
+        if (activate) controller().focusPane(opened.id, { activate: true });
+        return;
+      }
+      const id = crypto.randomUUID();
+      registerContent(
+        { id, type: 'canvas', path: document.path, canvasID, title: document.title },
+        parentPaneID,
+      );
+      if (activate) controller().focusPane(id, { activate: true });
     },
     openDiff(left, right, parentPaneID) {
       const id = crypto.randomUUID();

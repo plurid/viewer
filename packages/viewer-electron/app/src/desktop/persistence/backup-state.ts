@@ -115,6 +115,8 @@ export function restoreBackupState(
         return { ...base, draftID: id(base.draftID) };
       case 'layout':
         return { ...base, sources: base.sources.map(map) };
+      case 'canvas':
+        return { ...base, canvasID: id(base.canvasID) };
       case 'chat':
         return { ...runtime(base), conversationID: id(base.conversationID) };
       case 'receipt':

@@ -24,6 +24,7 @@ export interface BackupReview {
     drafts: number;
     media: number;
     conversations: number;
+    canvases: number;
     receipts: number;
     checks: number;
   };

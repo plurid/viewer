@@ -608,12 +608,12 @@ authority.
 `viewer-personal-backup` format, version `1`. It is readable JSON of at most 64 MiB (67,108,864
 bytes), formatting included. Export creates a new file and never overwrites an existing one.
 
-| Part        | Contents                                                                                                                                                                                                                     |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workspaces  | The saved workspace state                                                                                                                                                                                                    |
-| Documents   | Up to 2,000 notes and checklists, 2,000 unsaved text buffers, 1,000 media editing drafts, 1,000 conversations and 1,000 command receipts                                                                                     |
-| Preferences | Optional: `appearance`, `browsing`, `folders`, `editor`, `terminalFont`, `tiling`, `tour`, `theme`, `themes`, `profiles`, `layouts`, `shortcuts`, `keymap`, `savedSearches`, `recipes`, `optimizationRecipes` and `toolbars` |
-| Never       | Original files, caches, model credentials, provider permissions, agent grants, custom actions, terminal profiles, browser cookies, live terminal sessions and server processes                                               |
+| Part        | Contents                                                                                                                                                                                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workspaces  | The saved workspace state                                                                                                                                                                                                                |
+| Documents   | Up to 2,000 notes and checklists, 2,000 unsaved text buffers, and 1,000 each of media editing drafts, conversations, canvases, fabrication checks and command receipts; includes canvas assets referenced by current content and history |
+| Preferences | Optional: `appearance`, `browsing`, `folders`, `editor`, `terminalFont`, `tiling`, `tour`, `theme`, `themes`, `profiles`, `layouts`, `shortcuts`, `keymap`, `savedSearches`, `recipes`, `optimizationRecipes` and `toolbars`             |
+| Never       | Original files, caches, model credentials, provider permissions, agent grants, custom actions, terminal profiles, browser cookies, live terminal sessions and server processes                                                           |
 
 Import assigns new identities and adds independent workspaces, up to the limit of 1,000 workspaces
 in all. It refuses a backup from a newer Viewer and symbolic-link inputs, validates the whole file
@@ -625,6 +625,10 @@ Relinking rewrites typed file and folder references; document text, commands and
 as written. Shared project associations and external agent connections need reconnecting. A restored
 conversation is stopped and its saved context scopes are cleared. A command receipt that was running
 becomes interrupted.
+
+Canvas content, inputs and history are copied together. Canvas assets are size- and hash-checked;
+source-file authority is removed. Reconstruction requests are not restored or resubmitted. If assets
+exceed the backup size limit, export individual canvases separately.
 
 **Related:** [Keep your work together](../guides/workspaces.md) ·
 [Get back to your work](../guides/troubleshooting.md) · [Shortcuts](shortcuts.md) ·

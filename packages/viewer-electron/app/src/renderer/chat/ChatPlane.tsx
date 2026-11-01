@@ -1,4 +1,7 @@
-import { useId } from 'react';
+import { modelDataLabels } from '../../domain/models/permissions';
+import { Disclosure } from '../ui/Disclosure';
+import '../canvases/canvas.css';
+import { useEffect, useId, useRef } from 'react';
 import type { ChatPane as Pane } from '../../domain/contracts';
 import { acceptsDrop, droppedPaths } from '../explorer/sections';
 import { report } from '../state/store';
@@ -28,6 +31,19 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
     running,
     error,
   } = state;
+  const seenCanvas = useRef<{ conversation: string; canvas?: string }>(undefined);
+  useEffect(() => {
+    if (!document) return;
+    const previous = seenCanvas.current;
+    seenCanvas.current = { conversation: document.id, canvas: document.canvasID };
+    if (
+      previous?.conversation === document.id &&
+      previous.canvas !== document.canvasID &&
+      document.canvasID &&
+      document.status === 'running'
+    )
+      void workspace.openCanvas(document.canvasID, pane.id, false).catch(report);
+  }, [document, pane.id, workspace]);
   if (!document)
     return error ? (
       <Empty icon="warning" title="Chat unavailable" detail={error} />
@@ -37,6 +53,7 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
   return (
     <section
       className="chat-plane"
+      data-conversation-id={pane.conversationID}
       aria-label="Conversation"
       onDragOver={(event) => {
         if (acceptsDrop(event) && !running && !busy) event.preventDefault();
@@ -63,6 +80,26 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
         />
         <button type="button" disabled={busy || running} onClick={() => void actions.addFolder()}>
           Add folder…
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            void (async () => {
+              const reply = await window.viewer.chat({ kind: 'canvas', id: document.id });
+              if (!Array.isArray(reply) && reply.canvasID)
+                await workspace.openCanvas(reply.canvasID, pane.id);
+            })().catch(actions.reportError)
+          }
+        >
+          Canvas
+        </button>
+        <button
+          type="button"
+          disabled={busy || running}
+          onClick={() => void actions.importCanvas()}
+        >
+          Open canvas…
         </button>
         <button type="button" disabled={busy} onClick={() => void actions.loadRecent()}>
           Conversations
@@ -98,8 +135,46 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
           <p>Drop files or folders here to add context.</p>
         )}
       </div>
+      {document.branch && (
+        <div className="chat-branch">
+          <button
+            onClick={() =>
+              void workspace
+                .openChat(document.branch!.conversationID, pane.id, {
+                  id: document.branch!.messageID,
+                  start: document.branch!.start,
+                  end: document.branch!.end,
+                })
+                .catch(actions.reportError)
+            }
+          >
+            Source conversation
+          </button>
+          <blockquote>{document.branch.quote}</blockquote>
+          <Disclosure variant="compact" summary="Inherited context">
+            <p>Captured through the quoted message. Later parent messages are not included.</p>
+            {document.branch.context.map((message) => (
+              <p key={message.id}>
+                {message.role}: {message.text}
+              </p>
+            ))}
+          </Disclosure>
+        </div>
+      )}
       <Transcript
+        focusMessage={pane.focusMessage}
         messages={document.messages}
+        onQuote={(selection) =>
+          void (async () => {
+            const reply = await window.viewer.chat({
+              kind: 'branch',
+              id: document.id,
+              revision: document.revision,
+              ...selection,
+            });
+            if (!Array.isArray(reply)) await workspace.openChat(reply.id, pane.id);
+          })().catch(actions.reportError)
+        }
         running={running}
         onReview={actions.review}
         onOpen={(path) =>
@@ -133,7 +208,7 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
           <div className="chat-permission">
             <p>
               <span className="chat-endpoint">{provider.endpoint}</span> needs permission to receive{' '}
-              {level === 'excerpts' ? 'bounded file excerpts' : 'file names and your request'}.
+              {level === 'names' ? 'file names and your request' : modelDataLabels[level]}.
             </p>
             <button type="button" disabled={busy} onClick={() => void actions.grantPermission()}>
               Allow {level}

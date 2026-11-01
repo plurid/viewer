@@ -20,6 +20,13 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  canvas: (request) => invoke('canvas', request),
+  reconstruction: async () => {
+    throw new Error('Reconstruction requires the desktop app.');
+  },
+  reconstructionKey: async () => {
+    throw new Error('Credentials require the desktop app.');
+  },
   createTask: async () => ({
     kind: 'failed',
     error: 'Branch task creation is unavailable in the browser fixture.',

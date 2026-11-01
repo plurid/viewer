@@ -14,3 +14,4 @@ These records explain decisions that still shape the application. Feature usage 
 
 - [Window-owned speech](0009-window-owned-speech.md)
 - [Spoken requests](0010-spoken-requests.md)
+- [Conversation canvases and independent input state](0011-conversation-canvases.md)

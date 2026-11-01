@@ -171,6 +171,21 @@ export function useConversation(pane: ChatPane) {
           const path = await window.viewer.chooseFolder(pane.path);
           if (path) await attachPaths([path]);
         }),
+      importCanvas: () =>
+        run(async () => {
+          const folder = await window.viewer.chooseFolder(pane.path);
+          if (!folder) return;
+          await attachPaths([folder]);
+          const imported = documentReply(
+            await window.viewer.chat({
+              kind: 'import-canvas',
+              id: pane.conversationID,
+              path: folder.replace(/\/$/, '') + '/canvas.viewer.json',
+            }),
+          );
+          receive(imported);
+          if (imported.canvasID) await workspace.openCanvas(imported.canvasID, pane.id);
+        }),
       loadRecent: () =>
         run(async () => {
           const reply = await window.viewer.chat({ kind: 'list' });

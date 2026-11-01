@@ -1,7 +1,8 @@
+import { canvasLibraries } from './tools/canvas-libraries.ts';
 import { defineConfig } from 'vitest/config';
 import { threeRendererOwnership } from './tools/three-renderer.ts';
 export default defineConfig({
-  plugins: [threeRendererOwnership()],
+  plugins: [threeRendererOwnership(), canvasLibraries()],
   test: {
     include: ['tests/**/*.test.{ts,tsx}'],
     environment: 'node',

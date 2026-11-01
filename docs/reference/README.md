@@ -32,6 +32,7 @@ Look up current behavior, exact syntax and limits. For a walkthrough, use the
 - [Custom actions and sequences](actions.md)
 - [Workflows and watch rules](automation.md)
 - [Models, local agents and session reports](agents.md)
+- [Canvases, quote branches and photo reconstruction](canvases.md)
 
 ## Preferences and availability
 

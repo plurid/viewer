@@ -65,16 +65,23 @@ completed matching data. Desktop extraction and in-flight deduplication remain d
 
 ## Documents and runtimes
 
-| Concept               | Lifetime and owner                                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Scratch / text buffer | Private unsaved text, managed by `desktop/editing` and renderer editing sessions                                   |
-| Note / checklist      | A revisioned private document independent of its open views; `domain/editing/notes.ts`, `desktop/editing/notes.ts` |
-| Task area             | A checkout context with durable tool references; `domain/workspaces/tasks.ts`, `renderer/tasks/controller.ts`      |
-| Terminal              | A desktop-owned PTY plus a renderer xterm session; survives culling, ends when its view closes                     |
-| Server                | A window-owned listener independent of its controls plane; restored stopped                                        |
-| Browser               | An isolated Chromium guest rendered into a plane; `desktop` browser services and `renderer/browser`                |
-| Media draft           | Private versioned editing decisions; a transform publishes new output through operations                           |
-| Command receipt       | Private process evidence independent of the output view; `desktop/actions/receipts.ts`                             |
+| Concept               | Lifetime and owner                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Scratch / text buffer | Private unsaved text, managed by `desktop/editing` and renderer editing sessions                                         |
+| Note / checklist      | A revisioned private document independent of its open views; `domain/editing/notes.ts`, `desktop/editing/notes.ts`       |
+| Task area             | A checkout context with durable tool references; `domain/workspaces/tasks.ts`, `renderer/tasks/controller.ts`            |
+| Terminal              | A desktop-owned PTY plus a renderer xterm session; survives culling, ends when its view closes                           |
+| Server                | A window-owned listener independent of its controls plane; restored stopped                                              |
+| Browser               | An isolated Chromium guest rendered into a plane; `desktop` browser services and `renderer/browser`                      |
+| Media draft           | Private versioned editing decisions; a transform publishes new output through operations                                 |
+| Command receipt       | Private process evidence independent of the output view; `desktop/actions/receipts.ts`                                   |
+| Conversation canvas   | Generated HTML, independent input state and immutable assets; `domain/canvases`, `desktop/canvases`, `renderer/canvases` |
+
+Quote branches in `desktop/chat` capture context through an exact message passage and fork a linked
+canvas. Applying content back checks the original revision and preserves its latest inputs.
+`desktop/canvases/reconstruction.ts` owns durable fal generation requests, native confirmation and
+GLB validation. The sandbox runtime uses the existing private web-preview capability service. See
+[conversation canvases](docs/adr/0011-conversation-canvases.md).
 
 Different worktrees have different working files and indices. Two views of one checkout share those
 files and staging. A view ID is never checkout identity. Cold restoration does not replay terminal

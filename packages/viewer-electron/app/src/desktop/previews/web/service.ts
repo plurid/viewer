@@ -12,6 +12,7 @@ import { LoopbackServer } from './loopback-server';
 import { errorResponse, htmlFile, webLimits, WebPreviewError } from './policy';
 import { StaticRoot, type ReadBudget, type WebAccess } from './static-root';
 import { SavedPageReader } from './saved-page';
+import { CanvasPageReader } from './canvas-page';
 import { containsPath } from '../../files/containment';
 import type { SavedPage } from '../../../domain/previews/saved-page';
 import { savedPageName } from '../../../domain/previews/saved-page';
@@ -21,7 +22,7 @@ interface HtmlGrant {
   resourceID: string;
   file: string;
   preview: HtmlPreview;
-  reader: StaticRoot | SavedPageReader;
+  reader: StaticRoot | SavedPageReader | CanvasPageReader;
   /** The folder a file's page reads its companions from; a saved page reads none. */
   root?: string;
 }
@@ -206,7 +207,10 @@ export class WebPreviews {
           const reader = new SavedPageReader(page);
           const held = [...this.previews.values()].reduce(
             (size, grant) =>
-              size + (grant.reader instanceof SavedPageReader ? grant.reader.size : 0),
+              size +
+              (grant.reader instanceof SavedPageReader || grant.reader instanceof CanvasPageReader
+                ? grant.reader.size
+                : 0),
             0,
           );
           if (full() || held + reader.size > savedPageBudget) {
@@ -230,6 +234,41 @@ export class WebPreviews {
     const capability = htmlCapability(value);
     const grant = capability ? this.previews.get(capability) : undefined;
     return !!grant && grant.owner === owner && !this.abort.signal.aborted;
+  }
+
+  openCanvas(
+    owner: number,
+    resourceID: string,
+    files: ReadonlyMap<string, Uint8Array<ArrayBuffer>>,
+  ): Promise<HtmlPreview> {
+    return this.track(
+      owner,
+      [],
+      async () => {
+        if (
+          this.previews.size >= webLimits.previews ||
+          [...this.previews.values()].filter((grant) => grant.owner === owner).length >=
+            webLimits.ownerPreviews
+        )
+          throw new WebPreviewError(429, 'Close a preview before opening another.');
+        const reader = new CanvasPageReader(files);
+        const held = [...this.previews.values()].reduce(
+          (size, grant) =>
+            size +
+            (grant.reader instanceof CanvasPageReader || grant.reader instanceof SavedPageReader
+              ? grant.reader.size
+              : 0),
+          0,
+        );
+        if (held + reader.size > savedPageBudget)
+          throw new WebPreviewError(429, 'Close a preview before opening another.');
+        const id = randomUUID();
+        const preview = { id, url: `viewer-html://${id}/index.html` };
+        this.previews.set(id, { owner, resourceID, file: '', preview, reader });
+        return preview;
+      },
+      resourceID,
+    );
   }
 
   async response(request: Request): Promise<Response> {

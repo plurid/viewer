@@ -1,3 +1,4 @@
+import { ReconstructionSettings } from './ReconstructionSettings';
 import { useRef, useState } from 'react';
 import type { ModelProvider, SettingsSnapshot } from '../../../domain/services';
 import {
@@ -97,6 +98,7 @@ export function ModelSettings({
     ) ?? snapshot.settings.providers[0];
   return (
     <>
+      <ReconstructionSettings snapshot={snapshot} error={error} />
       <div className="models-introduction">
         <p className="settings-note">Manage the models you use for Ask Viewer and actions.</p>
         <button onClick={() => setAdding((value) => !value)} aria-expanded={adding}>

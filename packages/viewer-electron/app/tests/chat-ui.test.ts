@@ -8,6 +8,8 @@ import type { ModelDataPermission } from '../src/domain/models/permissions';
 import type { ModelProvider } from '../src/domain/services';
 import ChatPlane from '../src/renderer/chat/ChatPlane';
 import { Composer } from '../src/renderer/chat/Composer';
+import { Transcript } from '../src/renderer/chat/Transcript';
+import { chatSelection } from '../src/renderer/chat/selection';
 import { initialize } from '../src/renderer/state/store';
 import { getState, replaceState } from '../src/renderer/state/core';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
@@ -21,7 +23,7 @@ const providers: ModelProvider[] = ['Alpha', 'Beta'].map((name) => ({
   allowContent: true,
 }));
 const conversation = (): ChatDocument => ({
-  version: 3,
+  version: 4,
   id: crypto.randomUUID(),
   title: 'Example',
   path: '/fixtures',
@@ -73,6 +75,38 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+
+it('quotes exact text within one message and leaves unrelated selection alone after navigation', () => {
+  const scroll = vi.fn();
+  const before = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = scroll;
+  const message = document.messages[0]!;
+  const focusMessage = { id: message.id, start: 7, end: 15 };
+  const onQuote = vi.fn();
+  const props = {
+    messages: document.messages,
+    running: false,
+    onReview: vi.fn(),
+    onQuote,
+    focusMessage,
+  };
+  const view = render(createElement(Transcript, props));
+  const root = view.container.querySelector<HTMLElement>('.chat-transcript')!;
+  expect(window.getSelection()!.toString()).toBe('produced');
+  expect(chatSelection(root, window.getSelection())).toEqual({
+    messageID: message.id,
+    start: 7,
+    end: 15,
+  });
+  fireEvent.mouseUp(root);
+  fireEvent.click(screen.getByRole('button', { name: 'Ask about selection' }));
+  expect(onQuote).toHaveBeenCalledWith({ messageID: message.id, start: 7, end: 15 });
+  window.getSelection()!.removeAllRanges();
+  view.rerender(createElement(Transcript, { ...props, messages: [...document.messages] }));
+  expect(window.getSelection()!.isCollapsed).toBe(true);
+  expect(scroll).toHaveBeenCalledTimes(1);
+  Element.prototype.scrollIntoView = before;
+});
 
 function mount() {
   return render(

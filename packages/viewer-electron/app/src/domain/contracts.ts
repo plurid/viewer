@@ -1,3 +1,5 @@
+import type { ReconstructionRequest, ReconstructionReply } from './canvases/reconstruction';
+import type { CanvasDocument, CanvasRequest, CanvasReply } from './canvases/document';
 import type { PromptAnswer, PromptRequest, PromptHistoryEntry } from './command-line/prompt';
 import type { SpokenAnswer, SpokenRequest } from './command-line/spoken';
 import type { ModelSuggestionRequest, ModelSuggestions } from './suggestions/model';
@@ -247,6 +249,13 @@ export interface GitChangesPane {
   /** Agent-created views wait for the person: Git status can execute clean filters. */
   activation?: 'manual';
 }
+export interface CanvasPane {
+  id: string;
+  type: 'canvas';
+  path: string;
+  canvasID: string;
+  title: string;
+}
 export interface ChatPane {
   id: string;
   type: 'chat';
@@ -254,6 +263,7 @@ export interface ChatPane {
   conversationID: string;
   /** Read-only transcript from an authenticated local agent adapter. */
   externalSessionID?: string;
+  focusMessage?: { id: string; start: number; end: number };
 }
 /** A local server's folder reference; listening sockets and logs remain runtime state. */
 export interface BrowserPane {
@@ -330,6 +340,7 @@ export type Pane =
   | DiffPane
   | GitChangesPane
   | ChatPane
+  | CanvasPane
   | ServerPane
   | BrowserPane
   | MediaPane
@@ -351,6 +362,7 @@ export const paneTypes = {
   diff: 'diff',
   'git-changes': 'git-changes',
   chat: 'chat',
+  canvas: 'canvas',
   server: 'server',
   browser: 'browser',
   media: 'media',
@@ -661,6 +673,7 @@ export type DesktopEvent =
   | { type: 'journal-changed' }
   | { type: 'local-servers'; servers: LocalServer[] }
   | { type: 'chat'; document: ChatDocument }
+  | { type: 'canvas'; document: CanvasDocument }
   | { type: 'agent-session'; id: string }
   | { type: 'launch'; request: LaunchRequest }
   | { type: 'workspaces'; state: SavedState }
@@ -731,6 +744,9 @@ export interface ViewerAPI {
   localServerInspect(id: string): Promise<LocalServerDetail>;
   localServerAction(id: string, action: LocalServerAction): Promise<void>;
   chat(request: ChatRequest): Promise<ChatReply>;
+  canvas(request: CanvasRequest): Promise<CanvasReply>;
+  reconstruction(request: ReconstructionRequest): Promise<ReconstructionReply>;
+  reconstructionKey(key: string): Promise<void>;
   shellCommand(action: 'status' | 'install' | 'uninstall'): Promise<ShellCommandStatus>;
   hotkeyStatus(): Promise<{ registered: boolean; shortcut: string; problem?: string }>;
   restoreWindow(): Promise<void>;

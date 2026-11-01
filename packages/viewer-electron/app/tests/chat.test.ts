@@ -12,6 +12,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Chats } from '../src/desktop/chat/service';
 import { ChatDocumentStore } from '../src/desktop/chat/documents';
+import { Canvases } from '../src/desktop/canvases/service';
 import { defaultSettings, type ModelProvider } from '../src/domain/services';
 import type { ChatDocument, ChatReply, ChatStep } from '../src/domain/models/chat';
 import type { CapturedTarget } from '../src/domain/automation/actions';
@@ -107,6 +108,104 @@ async function send(id: string): Promise<void> {
   await chat.request({ kind: 'send', id, text: 'Inspect these files', providerID: provider.id }, 1);
 }
 
+describe('quoted conversations and canvases', () => {
+  it('freezes context at the selected message and forks its canvas without sending a request', async () => {
+    const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
+    ports.canvases = canvases;
+    const conversation = await create();
+    const withCanvas = document(await chat.request({ kind: 'canvas', id: conversation.id }, 1));
+    await canvases.write(1, withCanvas.canvasID!, 0, 'Budget', '<input>', { amount: 25 });
+    generate.mockResolvedValueOnce(step('reply', { text: 'Compare the two budgets.' }));
+    await send(conversation.id);
+    const first = await settled(conversation.id);
+    const selected = first.messages.at(-1)!;
+    generate.mockResolvedValueOnce(step('reply', { text: 'A later answer.' }));
+    await send(conversation.id);
+    const latest = await settled(conversation.id);
+    const branch = document(
+      await chat.request(
+        {
+          kind: 'branch',
+          id: latest.id,
+          revision: latest.revision,
+          messageID: selected.id,
+          start: 12,
+          end: 23,
+        },
+        1,
+      ),
+    );
+    expect(branch.branch?.quote).toBe('two budgets');
+    expect(branch.branch?.context).toEqual(first.messages);
+    expect(branch.messages).toEqual([]);
+    expect(branch.draft).toBe('');
+    expect(branch.canvasID).not.toBe(latest.canvasID);
+    expect((await canvases.read(1, branch.canvasID!)).state.amount).toBe(25);
+    expect(generate).toHaveBeenCalledTimes(2);
+    generate.mockResolvedValueOnce(step('reply', { text: 'An independent answer.' }));
+    await send(branch.id);
+    await settled(branch.id);
+    const input = generate.mock.calls.at(-1)![2];
+    expect(JSON.stringify(input)).not.toContain('A later answer.');
+    expect(JSON.stringify(input)).toContain('Compare the two budgets.');
+    expect(
+      document(await chat.request({ kind: 'open', id: latest.id }, 1, origin)).messages,
+    ).toEqual(latest.messages);
+  });
+
+  it('publishes complete canvas revisions through the model tool and preserves user state', async () => {
+    const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
+    ports.canvases = canvases;
+    const conversation = await create();
+    generate
+      .mockResolvedValueOnce(
+        step('canvas_write', {
+          query: 'Budget',
+          text: '<input aria-label="Amount">',
+          commandID: '0',
+          patches: [{ path: 'amount', value: 25 }],
+        }),
+      )
+      .mockResolvedValueOnce(step('reply', { text: 'The canvas is ready.' }));
+    await send(conversation.id);
+    const first = await settled(conversation.id);
+    expect(first.status).toBe('idle');
+    const canvas = await canvases.read(1, first.canvasID!);
+    await canvases.state(1, canvas.id, canvas.stateRevision, canvas.revision, { amount: 89 });
+    generate
+      .mockResolvedValueOnce(
+        step('canvas_write', {
+          query: 'Chart',
+          text: '<main>Chart</main>',
+          commandID: '1',
+          patches: [{ path: 'amount', value: 0 }],
+        }),
+      )
+      .mockResolvedValueOnce(step('reply', { text: 'Updated.' }));
+    await send(conversation.id);
+    await settled(conversation.id);
+    expect((await canvases.read(1, canvas.id)).state.amount).toBe(89);
+  });
+
+  it('rejects stale and out-of-range quote requests without creating a branch', async () => {
+    const conversation = await create();
+    generate.mockResolvedValueOnce(step('reply', { text: 'A short reply.' }));
+    await send(conversation.id);
+    const latest = await settled(conversation.id);
+    const request = {
+      kind: 'branch' as const,
+      id: latest.id,
+      revision: latest.revision,
+      messageID: latest.messages.at(-1)!.id,
+      start: 0,
+      end: 5,
+    };
+    await expect(chat.request({ ...request, revision: 0 }, 1)).rejects.toThrow('changed');
+    await expect(chat.request({ ...request, end: 1000 }, 1)).rejects.toThrow('passage');
+    expect(await chat.request({ kind: 'list' }, 1)).toHaveLength(1);
+  });
+});
+
 describe('read-only Chat', () => {
   it.each(['patches', 'renames', 'text'] as const)(
     'rejects generated %s beyond local limits before inspecting or proposing anything',
@@ -155,7 +254,7 @@ describe('read-only Chat', () => {
         name: provider.name,
         model: provider.model,
       });
-    expect(result.version).toBe(3);
+    expect(result.version).toBe(4);
   });
 
   it('links the files a reply names inside its context, and no others', async () => {
@@ -175,7 +274,7 @@ describe('read-only Chat', () => {
     expect(reply.links).toEqual([{ kind: 'file', path: await realpath(inside) }]);
   });
 
-  it.each([1, 2])(
+  it.each([1, 2, 3])(
     'preserves exact v%s bytes before migrating and leaves old attribution unknown',
     async (version) => {
       const conversation = await create();
@@ -197,16 +296,16 @@ describe('read-only Chat', () => {
       const migrated = document(
         await chat.request({ kind: 'open', id: conversation.id }, 1, origin),
       );
-      expect(migrated.version).toBe(3);
+      expect(migrated.version).toBe(4);
       expect(migrated.messages[0]?.provider).toBeUndefined();
-      const backups = (await readdir(folder)).filter((name) => name.includes('.before-chat-v3-'));
+      const backups = (await readdir(folder)).filter((name) => name.includes('.before-chat-v4-'));
       expect(backups).toHaveLength(1);
       const backup = path.join(folder, backups[0]!);
       expect(await readFile(backup)).toEqual(original);
       expect((await stat(backup)).mode & 0o777).toBe(0o600);
-      expect(JSON.parse(await readFile(file, 'utf8')).version).toBe(3);
+      expect(JSON.parse(await readFile(file, 'utf8')).version).toBe(4);
       await chat.request({ kind: 'open', id: conversation.id }, 1, origin);
-      expect((await readdir(folder)).filter((name) => name.includes('.before-chat-v3-'))).toEqual(
+      expect((await readdir(folder)).filter((name) => name.includes('.before-chat-v4-'))).toEqual(
         backups,
       );
     },
@@ -280,7 +379,7 @@ describe('read-only Chat', () => {
       chat = new Chats(path.join(root, 'private'), ports);
       expect(
         document(await chat.request({ kind: 'open', id: conversation.id }, 1, origin)).version,
-      ).toBe(3);
+      ).toBe(4);
     },
   );
 

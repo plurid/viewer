@@ -1,3 +1,5 @@
+import type { Canvases } from '../canvases/service';
+import { canvasInstructions } from '../canvases/runtime';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { lstat, opendir, readdir, realpath } from 'node:fs/promises';
@@ -40,6 +42,7 @@ interface Principal extends Origin {
 }
 
 interface ChatPorts {
+  canvases?: Canvases;
   settings(): ApplicationSettings;
   access(paths: readonly string[]): Promise<void>;
   inspect(file: string, signal: AbortSignal): Promise<InspectionResult>;
@@ -48,6 +51,7 @@ interface ChatPorts {
     provider: ModelProvider,
     signal: AbortSignal,
     work: (signal: AbortSignal) => Promise<T>,
+    level?: 'excerpts' | 'full-text' | 'images',
   ): Promise<T>;
   command(id: string, target: CapturedTarget, title: string): Promise<{ id: string }>;
   configuration(patches: SettingsPatch[], target: CapturedTarget): { id: string };
@@ -255,7 +259,7 @@ export class Chats {
           if (!origin) throw new Error('Focus a folder or file plane before opening Chat.');
           const scopes = await this.scopes(request.paths);
           const document: ChatDocument = {
-            version: 3,
+            version: 4,
             id: randomUUID(),
             title: 'Chat',
             path: origin.target.directory,
@@ -293,7 +297,67 @@ export class Chats {
         }
         const principal = this.principal(request.id, owner);
         const document = await this.load(request.id);
-        if (request.kind === 'draft') {
+        if (request.kind === 'branch') {
+          if (request.revision !== document.revision)
+            throw new Error('This conversation changed. Select the passage again.');
+          const index = document.messages.findIndex(
+            (message) => message.id === request.messageID && message.role !== 'tool',
+          );
+          const source = document.messages[index];
+          if (
+            !source ||
+            request.end > source.text.length ||
+            request.start >= request.end ||
+            request.end - request.start > 16000
+          )
+            throw new Error('Select a passage within one message.');
+          const id = randomUUID();
+          const canvas =
+            document.canvasID && this.ports.canvases
+              ? await this.ports.canvases.fork(owner, document.canvasID, id)
+              : undefined;
+          const branch: ChatDocument = {
+            ...document,
+            id,
+            title: 'About ' + source.text.slice(request.start, request.end).slice(0, 80),
+            messages: [],
+            draft: '',
+            draftRevision: 0,
+            revision: 0,
+            status: 'idle',
+            error: undefined,
+            canvasID: canvas?.id,
+            branch: {
+              conversationID: document.id,
+              messageID: source.id,
+              revision: document.revision,
+              start: request.start,
+              end: request.end,
+              quote: source.text.slice(request.start, request.end),
+              context: [
+                ...(document.branch?.context ?? []),
+                ...document.messages.slice(0, index + 1),
+              ],
+            },
+          };
+          this.principals.set(id, { ...principal, owner, document: branch });
+          await this.save(branch);
+          return structuredClone(this.documents.get(id)!);
+        }
+        if (request.kind === 'canvas' || request.kind === 'import-canvas') {
+          if (!this.ports.canvases) throw new Error('Canvases are unavailable.');
+          const canvas =
+            request.kind === 'import-canvas'
+              ? await this.ports.canvases.import(
+                  owner,
+                  await this.authorize(principal, request.path),
+                  document.id,
+                )
+              : document.canvasID
+                ? await this.ports.canvases.read(owner, document.canvasID)
+                : await this.ports.canvases.create(owner, document.id, document.path);
+          await this.edit(document.id, (current) => ({ ...current, canvasID: canvas.id }));
+        } else if (request.kind === 'draft') {
           if (request.revision > document.draftRevision)
             await this.edit(request.id, (current) =>
               request.revision > current.draftRevision
@@ -322,8 +386,13 @@ export class Chats {
             .settings()
             .providers.find((item) => item.id === request.providerID);
           if (!provider) throw new Error('Choose a model in Settings → Models.');
+          const canvas =
+            document.canvasID && this.ports.canvases
+              ? await this.ports.canvases.read(owner, document.canvasID)
+              : undefined;
           await this.edit(request.id, (current) => ({
             ...current,
+            level: canvas?.assets.length ? 'images' : current.level,
             title: current.messages.length ? current.title : request.text.slice(0, 100),
             providerID: provider.id,
             draft: '',
@@ -378,10 +447,30 @@ export class Chats {
       for (let round = 0; round < 8; round++) {
         signal.throwIfAborted();
         const document = await this.load(id);
+        const canvas =
+          document.canvasID && this.ports.canvases
+            ? await this.ports.canvases.read(principal.owner, document.canvasID)
+            : undefined;
+        if (canvas?.assets.length && document.level !== 'images') {
+          document.level = 'images';
+          await this.edit(id, (current) => ({ ...current, level: 'images' }));
+        }
         const input = {
           context: document.scopes,
           commands: principal.commands.map(({ id, label }) => ({ id, label })),
-          messages: document.messages,
+          messages: [...(document.branch?.context ?? []), ...document.messages],
+          quote: document.branch?.quote,
+          canvas: canvas
+            ? {
+                id: canvas.id,
+                revision: canvas.revision,
+                title: canvas.title,
+                html: canvas.html,
+                state: canvas.state,
+                defaults: canvas.defaults,
+                assets: canvas.assets,
+              }
+            : null,
         };
         if (Buffer.byteLength(JSON.stringify(input)) > 256 * 1024)
           throw new Error(
@@ -389,7 +478,7 @@ export class Chats {
           );
         const raw = await this.ports.generate(
           provider,
-          instructions,
+          instructions + '\n' + canvasInstructions,
           input,
           z.toJSONSchema(chatStepSchema),
           signal,
@@ -449,6 +538,55 @@ export class Chats {
     signal: AbortSignal,
   ): Promise<unknown> {
     const id = principal.document.id;
+    if (step.kind.startsWith('canvas_')) {
+      const canvases = this.ports.canvases;
+      if (!canvases) throw new Error('Canvases are unavailable.');
+      const document = await this.load(id);
+      const canvas = document.canvasID
+        ? await canvases.read(principal.owner, document.canvasID)
+        : await canvases.create(principal.owner, id, document.path);
+      if (!document.canvasID)
+        await this.edit(id, (current) => ({ ...current, canvasID: canvas.id }));
+      if (step.kind === 'canvas_read')
+        return {
+          id: canvas.id,
+          revision: canvas.revision,
+          html: canvas.html,
+          state: canvas.state,
+          defaults: canvas.defaults,
+          assets: canvas.assets,
+        };
+      if (step.kind === 'canvas_asset') {
+        await this.edit(id, (current) => ({ ...current, level: 'images' }));
+        return this.ports.permit(
+          provider,
+          signal,
+          async () =>
+            canvases.attachFile(
+              principal.owner,
+              canvas.id,
+              await this.authorize(principal, step.path ?? ''),
+            ),
+          'images',
+        );
+      }
+      if (!step.text.trim() || !/^\d+$/.test(step.commandID ?? ''))
+        throw new Error('Write complete HTML and provide the current canvas revision.');
+      const updated = await canvases.write(
+        principal.owner,
+        canvas.id,
+        Number(step.commandID),
+        step.query || canvas.title,
+        step.text,
+        Object.fromEntries(step.patches.map((patch) => [patch.path, patch.value])),
+      );
+      return {
+        canvasID: updated.id,
+        revision: updated.revision,
+        title: updated.title,
+        savedState: updated.state,
+      };
+    }
     if (step.kind === 'command' || step.kind === 'settings') {
       if (!this.ports.valid(principal.owner, principal.target))
         throw new Error(
@@ -543,7 +681,10 @@ export class Chats {
       result = await this.search(principal, file, step.query ?? '', signal);
     } else if (step.kind === 'read') {
       // The next attempt must ask for excerpts before resending any file contents.
-      await this.edit(id, (current) => ({ ...current, level: 'excerpts' }));
+      await this.edit(id, (current) => ({
+        ...current,
+        level: current.level === 'names' ? 'excerpts' : current.level,
+      }));
       result = await this.ports.permit(provider, signal, async (authorized) => {
         const inspection = await this.ports.inspect(file, authorized);
         const evidence = inspection.evidence

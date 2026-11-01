@@ -1,0 +1,117 @@
+import { z } from 'zod';
+
+export const canvasLimits = {
+  html: 512_000,
+  state: 128_000,
+  history: 16,
+  assets: 24,
+  assetBytes: 32 * 1024 * 1024,
+  totalAssetBytes: 96 * 1024 * 1024,
+} as const;
+export const canvasStateSchema = z
+  .record(z.string().min(1).max(200), z.json())
+  .refine(
+    (value) =>
+      new TextEncoder().encode(JSON.stringify(value)).length <= canvasLimits.state &&
+      !Object.keys(value).some((key) => ['__proto__', 'constructor', 'prototype'].includes(key)),
+    'Canvas state exceeds its limit or contains a reserved key.',
+  );
+export const canvasAssetSchema = z
+  .object({
+    id: z.uuid(),
+    name: z.string().min(1).max(255),
+    mime: z.string().max(100),
+    bytes: z.number().int().nonnegative().max(canvasLimits.assetBytes),
+    hash: z.string().regex(/^[a-f0-9]{64}$/),
+    source: z.string().max(32768).optional(),
+    provenance: z.string().max(1000).optional(),
+  })
+  .strict();
+const content = {
+  revision: z.number().int().nonnegative(),
+  title: z.string().min(1).max(200),
+  html: z.string().max(canvasLimits.html),
+  defaults: canvasStateSchema,
+  assets: z
+    .array(canvasAssetSchema)
+    .max(canvasLimits.assets)
+    .refine(
+      (assets) =>
+        new Set(assets.map((asset) => asset.id)).size === assets.length &&
+        assets.reduce((sum, asset) => sum + asset.bytes, 0) <= canvasLimits.totalAssetBytes,
+      'Canvas assets must have unique IDs and total at most 96 MiB.',
+    ),
+  at: z.number().finite(),
+};
+export const canvasDocumentSchema = z
+  .object({
+    version: z.literal(1),
+    id: z.uuid(),
+    conversationID: z.uuid(),
+    path: z.string().min(1).max(32768),
+    ...content,
+    state: canvasStateSchema,
+    stateRevision: z.number().int().nonnegative(),
+    history: z.array(z.object(content).strict()).max(canvasLimits.history),
+    fork: z.object({ id: z.uuid(), revision: z.number().int().nonnegative() }).strict().optional(),
+  })
+  .strict();
+export type CanvasDocument = z.infer<typeof canvasDocumentSchema>;
+export type CanvasAsset = z.infer<typeof canvasAssetSchema>;
+export type CanvasState = z.infer<typeof canvasStateSchema>;
+export const canvasAssetFile = (asset: Pick<CanvasAsset, 'id' | 'name'>) =>
+  'assets/' +
+  asset.id +
+  '.' +
+  (asset.name.match(/\.([a-z0-9]{1,12})$/i)?.[1]?.toLowerCase() ?? 'bin');
+export const canvasRequestSchema = z.discriminatedUnion('kind', [
+  z
+    .object({ kind: z.literal('attach'), id: z.uuid(), path: z.string().min(1).max(32768) })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('model'),
+      id: z.uuid(),
+      assetID: z.uuid(),
+      revision: z.number().int().nonnegative(),
+    })
+    .strict(),
+  z.object({ kind: z.literal('read'), id: z.uuid() }).strict(),
+  z.object({ kind: z.literal('preview'), id: z.uuid() }).strict(),
+  z
+    .object({
+      kind: z.literal('state'),
+      id: z.uuid(),
+      revision: z.number().int().nonnegative(),
+      contentRevision: z.number().int().nonnegative(),
+      patch: canvasStateSchema,
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal('undo'), id: z.uuid(), revision: z.number().int().nonnegative() })
+    .strict(),
+  z
+    .object({ kind: z.literal('apply'), id: z.uuid(), revision: z.number().int().nonnegative() })
+    .strict(),
+  z.object({ kind: z.literal('export'), id: z.uuid() }).strict(),
+]);
+export type CanvasRequest = z.infer<typeof canvasRequestSchema>;
+export type CanvasReply = {
+  document: CanvasDocument;
+  preview?: { id: string; url: string };
+  exported?: string;
+};
+
+/** Existing values belong to the person, even when the app no longer displays their controls. */
+export function retainedCanvasState(state: CanvasState, defaults: CanvasState): CanvasState {
+  for (const key of Object.keys(defaults)) {
+    if (!(key in state)) continue;
+    const kind = (value: unknown) =>
+      value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+    if (kind(state[key]) !== kind(defaults[key]))
+      throw new Error(
+        `The new canvas changes the type of saved value “${key}”. Use a new state key to keep the original value.`,
+      );
+  }
+  return canvasStateSchema.parse({ ...defaults, ...state });
+}
