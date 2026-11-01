@@ -15,6 +15,11 @@ Start with an explicit snapshot manifest and a useful recipient preview. Show wh
 total size, audience, expiration and revocation. Files, folder listings, source context and saved
 camera/view state need separate choices.
 
+The [file workflow specification](actions.md#delivery-packages-and-a-recipient-preview) owns the
+proposed local delivery package, its chosen dependencies and isolated recipient check. Publishing
+that package is a separate action with the service requirements below; preparing a local handoff
+does not imply uploading it.
+
 ## Share a view, not just bytes
 
 A recipient might receive a model at a chosen camera, a PDF on a marked page, a comparison, or a

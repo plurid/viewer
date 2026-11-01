@@ -6,6 +6,16 @@ The exact current limits remain in [preview formats](../reference/formats.md),
 [media tools](../reference/media.md), [Office](../reference/office.md),
 [PDF tools](../reference/pdf.md) and [speech](../reference/speech.md).
 
+Use this page for format coverage, transformation capabilities and qualification. The companion
+[file workflows specification](actions.md) owns the proposed interfaces, typed connections, recipes,
+batch behavior and delivery packages. Neither page changes current command or workflow syntax.
+
+Start with [the baseline](#where-viewer-stands), [projected scale](#projected-scale),
+[the service catalog](#file-service-catalog),
+[media and transcription](#priority-video-audio-transcripts-and-subtitles),
+[scan-to-CAD](#priority-scans-to-cad-and-dimensional-inspection),
+[conversion routes](#directional-conversion-backlog) or [optimization](#optimization-expansion).
+
 ## Product goal
 
 Make Viewer the place to open, understand, transform and hand off the files people encounter in
@@ -99,6 +109,60 @@ Keep Intel macOS, Windows, Linux and Store-build results separate; see
 | Archives                     | ZIP, TAR, TAR.GZ/TGZ, ZIP-based packages and bounded standalone GZip content; file operations create ZIPs.                                                  | 7z, RAR, broader compression/encryption variants and semantic package inspection remain gaps. APK archive browsing is not an Android application reader.              |
 | 3D and CAD                   | 17 model labels including STEP/IGES geometry and common meshes/scenes. ASCII DXF inspection, measurement, reviewed corrections and nesting.                 | Tessellated CAD is not editable solid geometry. No general mesh/CAD conversion service, native DWG reader, BIM reader or scan reconstruction workflow.                |
 | Fonts and metadata           | TTF/OTF/WOFF/WOFF2 specimens; certificates, keys, shortcuts, torrents and provisioning metadata. Binary identification/hex fallback.                        | Not every font collection, credential container or executable structure is understood. Metadata inspection does not execute, install or establish trust.              |
+
+## Projected scale
+
+If the full format roadmap is implemented, the planning envelope is approximately **600 to 650
+preview format labels**, **2,000 to 3,000 directed conversion routes**, and **several dozen formats
+with meaningful optimization**. These figures are estimates of scope, not release claims or measured
+coverage percentages.
+
+| Measure                    | Current inventory | Full-roadmap projection | Basis and limitation                                                                                                                                                      |
+| -------------------------- | ----------------: | ----------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preview format labels      |               338 |               About 625 | Expanding the named ecosystems into representative extensions/package forms gives about 287 additional labels after deduplication. Includes aliases and source languages. |
+| Directed conversion routes |               242 |    About 2,000 to 3,000 | A planning range for selected image, media, document, archive, data and specialist outputs. The complete validated route graph has not been enumerated.                   |
+| Optimize formats           |        5 families |           Several dozen | Expand only where a qualified writer and a meaningful preservation contract exist. This is not an exact count yet.                                                        |
+
+The preview estimate normalizes named ecosystems into file labels; it is not a count of 625
+independent semantic engines. Several meanings share extensions, and some new readers deepen an
+existing label without adding one. Open-ended vendor families also need their versions enumerated.
+
+For scale, 40 supported media input labels with five transcript destinations would produce up to 200
+directed file-to-text routes. Timing and export qualification determine which actually ship.
+Diarization on/off, three quality presets, multiple menu entry points and different operating
+systems do not multiply this count. A chained path is not an additional direct conversion.
+
+Keep deterministic conversion, extraction, model inference and reconstruction as separate classes in
+inventories. Do not count a summary, inferred CAD model, report or successful metadata inspection as
+an interchangeable encoding of the original. New ideas below are not automatically added to the
+projection; update it from the explicit capability graph when routes are designed.
+
+## File service catalog
+
+The suite should support these verbs through a common review and output experience. A service may
+produce files, typed selections, an editable project or a report. Its output type and actual
+consequences must be clear before it runs.
+
+| Service              | Existing foundation                                                      | Proposed complete experience                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Identify and inspect | Format routing, metadata and selected semantic readers.                  | Explain the actual variant, its contents, missing dependencies and available actions.                                              |
+| Preview and navigate | Document, image, media, model and source views.                          | Consistent full-content navigation with appropriate pages, sheets, frames, tracks, layers and entities.                            |
+| Convert and export   | Scoped 242-route inventory and specialized exports.                      | Choose a valid target or delivery purpose, inspect losses and save verified copies.                                                |
+| Extract              | Archive entries, page tools and selected content/attachment readers.     | Extract selected pages, tracks, subtitles, images, attachments, tables, layers, meshes, entities or data slices.                   |
+| Assemble and split   | PDF assembly, media segments, layout and nesting.                        | Merge or split typed selections while preserving ordering, timing, units and provenance.                                           |
+| Optimize             | Five families and media export presets.                                  | Meet a size, quality or runtime budget with measured results and a preservation contract.                                          |
+| Normalize            | Format-specific resize, orientation and media transforms.                | Explicit encoding, units, CRS, color, sample rate, schema, timezone or metadata normalization.                                     |
+| Recognize            | OCR-related reading and short speech dictation.                          | Reviewed OCR, long-form transcription, subtitle timing and optional speaker labeling.                                              |
+| Compare and verify   | Folder comparison, Git review and specialized fabrication checks.        | Semantic comparison across versions or formats, plus independent output checks.                                                    |
+| Diagnose and repair  | Reader errors and selected editing/correction tools.                     | Explain specific damage or missing resources, propose a copy and verify what was recovered or changed.                             |
+| Reconstruct          | Generated visual assets and specialized CAD evidence are distinct today. | Calibrated scan-to-vector/CAD and document/table reconstruction with measured versus inferred facts.                               |
+| Enrich and generate  | Notes, model-assisted work and conversation canvases.                    | Captions, descriptions, indexes, chapters, plots and explanations linked to evidence, without relabeling them as original content. |
+| Prepare for delivery | Existing layout, nesting and fabrication handoffs.                       | Purpose-specific export sets with dependency checks, manifests and a recipient preview.                                            |
+| Reuse and refresh    | Custom actions, reviewed workflows and watch rules.                      | Save the reviewed transformation as a reusable recipe; refresh only affected descendants after a source changes.                   |
+
+The proposed [file-to-file interfaces](actions.md#file-to-file-interfaces) must make a one-step
+conversion quick and keep complex work inspectable. Users should not have to build a graph to
+extract audio or resize a photograph.
 
 ## What counts as support
 
@@ -229,13 +293,14 @@ This deserves its own workflow, not another input/output pair. Separate three ta
 | Mesh or point-cloud scan               | Align, segment surfaces, fit features, inspect deviations and reconstruct selected geometry. | A fitted model or editable reconstruction with an error report and explicit unsupported regions.     |
 | Ordinary photo or generated 3D asset   | Perspective correction where possible, or visual reconstruction.                             | A visual approximation unless scale, geometry and critical dimensions are independently established. |
 
-[ScanRuler](https://github.com/CNCKitchen/scanruler) is a concrete candidate to evaluate. It
+[ScanRuler](https://github.com/CNCKitchen/scanruler) is a reference for this class of workflow. It
 documents browser-local 2D calibration and fitting, 3D feature measurement, deviation inspection,
 mesh tools and reverse engineering with STEP output. Its 2D workflow exports SVG/DXF/CSV, and its
 project format keeps an editable session. Its
 [MCP bridge](https://github.com/CNCKitchen/scanruler/blob/main/mcp/README.md) provides a possible
 agent integration path. These are upstream capabilities; none establishes a Viewer integration or
-Viewer accuracy result.
+Viewer accuracy result. The product goal is Viewer's own calibrated scan-to-CAD experience. It does
+not require embedding ScanRuler or making that application a runtime dependency.
 
 ### Proposed first slice
 
@@ -260,19 +325,21 @@ measured, manually constrained or inferred. Unknown hidden geometry and ambiguou
 need human confirmation. Compare with the physical reference where accuracy matters; agreement with
 a noisy scan alone cannot prove fit.
 
-### Integration options
+### Implementation choices
 
 | Option                    | Proposed use                                                                                                        | Gate before implementation                                                                                                                                 |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Viewer-owned workflow     | Build calibration, fitting, editable constraints and export/review around qualified geometry components.            | Define numerical contracts, bounded processing, source evidence and independent dimensional checks; the UI and saved project belong to Viewer.             |
 | External handoff          | Export selected resources, open a user-selected ScanRuler session, reimport reviewed outputs.                       | Verify file/project interoperability and a repeatable measurement case without bundling upstream code.                                                     |
 | MCP adapter               | Drive a paired session through typed operations and return measurements, project and output files to linked planes. | Inspect the tool surface, source grants, cancellation, model data exposure and exact scope of mutations. A bridge must not bypass Viewer's removal policy. |
 | Embedded engine/workspace | An integrated Viewer experience for fitting and reconstruction.                                                     | Validate API boundaries, worker lifecycle, packaged dependencies and license compatibility before copying or distributing code.                            |
 
-Recommendation: investigate external/MCP interoperability first, then decide whether a licensed
-embedding or a smaller native Viewer implementation produces the better experience. Do not load a
-remote web app into a privileged document frame or give it unrestricted filesystem access.
-ScanRuler's [commercial terms](https://github.com/CNCKitchen/scanruler/blob/main/COMMERCIAL.md)
-state AGPL-3.0-only with a commercial exception available; its CAD-kernel terms remain separate. The
+Recommendation: define and prototype the calibrated 2D Viewer workflow first. Use upstream tools as
+references and comparison candidates. External/MCP interoperability or licensed embedding may
+accelerate selected capabilities, but neither is a prerequisite. Do not load a remote web app into a
+privileged document frame or give it unrestricted filesystem access. ScanRuler's
+[commercial terms](https://github.com/CNCKitchen/scanruler/blob/main/COMMERCIAL.md) state
+AGPL-3.0-only with a commercial exception available; its CAD-kernel terms remain separate. The
 distribution choice is unresolved, so this roadmap does not select an embedding license.
 
 Initial acceptance cases: a flat gasket with known hole spacing, a scanned bracket with planes and
@@ -465,6 +532,44 @@ Use lossless at the correct level: identical file bytes, identical decoded sampl
 preserved document/geometry semantics are different promises. Never use one label for all three.
 Keep before/after size, duration, parameters and any measured differences with the output operation.
 
+### Optimize for a purpose
+
+Add purpose-based profiles without multiplying format counts. A profile declares constraints and
+preserved properties; it is not a hidden sequence of arbitrary quality reductions. The controls and
+batch review belong to [delivery profiles](actions.md#delivery-profiles).
+
+| Purpose                         | Proposed controls                                                                             | Success evidence                                                                                      |
+| ------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Fit an attachment budget        | User-entered maximum size per file or for a package; dimensions and quality floor.            | Actual final bytes, readable/decodable output and an explicit unmet target when constraints conflict. |
+| Publish images on the web       | Sizes, crop policy, format fallbacks, color space and metadata choice.                        | Correct dimensions/orientation/alpha, visual comparison and all declared variants present.            |
+| Deliver a recording             | Compatible container/codec, resolution, audio tracks, subtitles and chapters.                 | Complete decode, duration/A/V sync, retained tracks and reopened captions.                            |
+| Keep an archival copy           | Supported lossless representation, metadata and dependency preservation.                      | Reopened content and a manifest; no promise that a lossy source becomes lossless evidence.            |
+| Use a 3D asset interactively    | Triangle, texture, draw-call or transfer-size budgets with geometry/material tolerances.      | Dimensions, bounded deviation, preserved UV/material behavior and renderer measurements.              |
+| Work with large scientific data | Compression, chunking and spatial/column indexes appropriate to the requested access pattern. | Identical logical data where promised and measured access/memory improvement.                         |
+| Prepare print or manufacturing  | Physical size, resolution, color and defined geometry requirements.                           | Units and dimensions checked; calibrated/qualified output, with unresolved issues visible.            |
+
+Distinguish making bytes smaller from making a file faster to view or query. Adding an index or
+tiles can increase size while improving interaction. Such an operation reports that tradeoff and is
+not counted as a size-reduction success.
+
+Use bounded candidate searches with a resource budget and a stop rule. Show the original beside
+candidate output and expose changes that matter for its domain. No optimization should silently drop
+animation, pages, subtitles, channels, precision, formulas, coordinate metadata or CAD detail.
+Content hashes, decoded equality, perceptual comparison and geometric tolerance are different checks
+and must be named accurately.
+
+### Repair, restoration and reconstruction boundaries
+
+Separate damaged-format recovery from content-changing enhancement. Candidate repair tools include
+missing companion relinking, recoverable archive/document structure, media indexes, mesh normals or
+holes and malformed encodings. Each needs an explicit supported failure mode and a new output copy;
+"repair anything" is not a capability.
+
+Denoising, deblurring, super-resolution, colorization, audio separation, inpainting and inferred
+surface completion are optional content-changing services to investigate. Preserve the original,
+label synthetic content and allow comparison. These must not quietly become an optimizer fallback or
+provide evidence for a dimension, text passage or sound absent from the source.
+
 ## Shared architecture and adapter strategy
 
 Extend the existing owners rather than adding a second file-access, job or permission service. This
@@ -510,20 +615,20 @@ Reuse bundled engines before adding overlapping dependencies. An upstream's feat
 candidate list; the shipped build, licensing, resource behavior and Viewer integration determine
 actual support.
 
-| Track                        | Starting point or candidate                                                    | Decision required                                                                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Images                       | Existing sharp/libvips, system decoding and LibRaw processors.                 | Reader/encoder variants, animation, metadata, color and platform parity.                                                                |
-| Audio/video                  | Existing bundled FFmpeg/ffprobe.                                               | Actual enabled demuxers, decoders and encoders; network stays out of file conversion. New codecs require build and distribution review. |
-| Office/PDF                   | Existing sandboxed ZetaOffice/LibreOffice layout, PDF.js and qpdf.             | Reuse layout/export paths; qualify any additional conversion filters or writers individually.                                           |
-| Structured publishing        | Evaluate Pandoc alongside existing document rendering.                         | Structure-preserving routes versus exact layout, math/assets/fonts and bounded external-tool use.                                       |
-| Archives                     | Evaluate libarchive against current archive ownership.                         | Read/write asymmetry, encryption, multipart support and extraction bounds.                                                              |
-| Speech                       | Existing Whisper/provider services; evaluate an optional diarization pipeline. | Timed contracts, local footprint, model conditions and provider-specific capabilities.                                                  |
-| Scan reconstruction          | ScanRuler interoperability and existing geometry/layout owners.                | License/API suitability, deterministic measurements, calibration and independent output verification.                                   |
-| CAD/BIM                      | Existing OCCT importer; evaluate richer OCCT and IFC-specific adapters.        | Topology/semantics, version/PMI support, native distribution and licensed formats.                                                      |
-| GIS                          | Evaluate GDAL/OGR drivers.                                                     | Distinct read/write drivers, CRS handling, sidecars and disabled automatic remote access.                                               |
-| Arrays/tables                | Evaluate Arrow/DuckDB/HDF5 and format-specific scientific readers.             | Typed windowed reads, compression/layout variants, runtime footprint and safe deserialization.                                          |
-| Volumes/CAE                  | Evaluate domain readers and dedicated volume/field rendering.                  | Orientation/units/fields, multi-file behavior and version-specific correctness.                                                         |
-| Native creative/vendor files | Documented export APIs or qualified licensed adapters.                         | Actual demand, supported versions, fidelity and redistribution terms before a delivery promise.                                         |
+| Track                        | Starting point or candidate                                                                                | Decision required                                                                                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Images                       | Existing sharp/libvips, system decoding and LibRaw processors.                                             | Reader/encoder variants, animation, metadata, color and platform parity.                                                                |
+| Audio/video                  | Existing bundled FFmpeg/ffprobe.                                                                           | Actual enabled demuxers, decoders and encoders; network stays out of file conversion. New codecs require build and distribution review. |
+| Office/PDF                   | Existing sandboxed ZetaOffice/LibreOffice layout, PDF.js and qpdf.                                         | Reuse layout/export paths; qualify any additional conversion filters or writers individually.                                           |
+| Structured publishing        | Evaluate Pandoc alongside existing document rendering.                                                     | Structure-preserving routes versus exact layout, math/assets/fonts and bounded external-tool use.                                       |
+| Archives                     | Evaluate libarchive against current archive ownership.                                                     | Read/write asymmetry, encryption, multipart support and extraction bounds.                                                              |
+| Speech                       | Existing Whisper/provider services; evaluate an optional diarization pipeline.                             | Timed contracts, local footprint, model conditions and provider-specific capabilities.                                                  |
+| Scan reconstruction          | Viewer-owned calibration/fitting with existing geometry/layout owners; optional upstream interoperability. | License/API suitability, deterministic measurements, calibration and independent output verification.                                   |
+| CAD/BIM                      | Existing OCCT importer; evaluate richer OCCT and IFC-specific adapters.                                    | Topology/semantics, version/PMI support, native distribution and licensed formats.                                                      |
+| GIS                          | Evaluate GDAL/OGR drivers.                                                                                 | Distinct read/write drivers, CRS handling, sidecars and disabled automatic remote access.                                               |
+| Arrays/tables                | Evaluate Arrow/DuckDB/HDF5 and format-specific scientific readers.                                         | Typed windowed reads, compression/layout variants, runtime footprint and safe deserialization.                                          |
+| Volumes/CAE                  | Evaluate domain readers and dedicated volume/field rendering.                                              | Orientation/units/fields, multi-file behavior and version-specific correctness.                                                         |
+| Native creative/vendor files | Documented export APIs or qualified licensed adapters.                                                     | Actual demand, supported versions, fidelity and redistribution terms before a delivery promise.                                         |
 
 References for these investigations include
 [LibreOffice's conversion filters](https://help.libreoffice.org/latest/en-US/text/shared/guide/convertfilters.html),
@@ -560,9 +665,10 @@ identification is inconclusive, offer the known representations and explain the 
 | P2 domain packs            | Science volumes/arrays, robotics/CAE, PCB/toolpaths and deeper creative readers.                   | Each discipline has a meaningful complete workflow and its own quality/resource evidence.                                           |
 | P3 native breadth          | Selected proprietary CAD, creative projects, mail stores and disk formats.                         | Decoder/version coverage, licensing and performance settled before advertising support.                                             |
 
-Diarization evaluation and ScanRuler interoperability can start early, but neither should block the
-first reliable audio-extraction and timed-transcript release. DWG feasibility should also start
-early because of engineering demand, while implementation depends on a qualified decoder decision.
+Diarization evaluation and a Viewer-owned scan-calibration prototype can start early, but neither
+should block the first reliable audio-extraction and timed-transcript release. ScanRuler integration
+is optional. DWG feasibility should also start early because of engineering demand, while
+implementation depends on a qualified decoder decision.
 
 For every promoted capability:
 
