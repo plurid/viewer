@@ -358,6 +358,71 @@ successful supplier evaluation says nothing about a robot solver. Use
 [the implementation audit](../research/workshop.md#implementation-audit) to identify the additional
 qualification required for the proposed film.
 
+### Robot creation, revision and quoted alternative
+
+The robot runner is separate from the supplier evaluation. Prepare an isolated project from the
+retained pinned SO-101 corpus. Preparation copies and checks only the manifest files plus the fixed
+world-target task; it reads no credentials and sends no requests.
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec node --import tsx tools/robotics/prepare-rehearsal.ts --corpus /path/to/retained/so101
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec electron tools/robotics/rehearse.mjs --check --run /path/to/prepared/run
+```
+
+The second command checks Electron startup and the desktop URDF reader without loading credentials.
+The prepared `plan.json` contains the exact prompts and source hashes. Inspect it before authorizing
+paid work. There is no default live allowance. For example, after explicit approval for three
+sessions of at most eight provider requests each:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec electron tools/robotics/rehearse.mjs --live --run /path/to/prepared/run --profile /path/to/credential/profile --stage create --sessions 3 --requests-per-session 8
+```
+
+Use `--provider <id>` when several Meta models are configured. Credentials are read only in
+Electron's main process, without an inspector. The attached project is public and bounded; terminal,
+command, rename and configuration proposals are unavailable. The copied meshes are local canvas
+assets, not pictures sent to the provider. Source snapshots, tool metadata and the generated
+conversation are sent through the normal Chat protocol.
+
+Each invocation runs one stage and stops. `sessions/NN` retains the prompt, transport requests,
+provider envelopes including usage, failures, generated documents and a review workspace. Headers
+and the captured API key are excluded from retained records. Failed, rejected and canceled requests
+consume the allowance. An interrupted session blocks automatic continuation. Restarting cannot
+increase `budget.json`; inspect saved responses before considering a separately approved recovery.
+
+The runner prepares its own `Profile` with no configured models. Quit the live runner before opening
+this profile in the candidate Viewer:
+
+```sh
+VIEWER_DATA_DIRECTORY=/path/to/prepared/run/Profile /path/to/Viewer.app/Contents/MacOS/Viewer
+```
+
+Review the actual generated HTML in its sandbox. Move a joint, confirm its source limit, change a
+saved input, inspect errors and capture the result. Quit that isolated Viewer before starting
+another runner invocation. Read the current saved state and its review token:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec node --import tsx tools/robotics/prepare-rehearsal.ts --status /path/to/prepared/run
+```
+
+Run `--stage refine` with the same budget flags and `--reviewed <token>` only after the native
+review passes. The token binds the exact saved conversation and canvas; it does not execute tests or
+prove the geometry correct. Existing inputs may change during review; edited HTML or source
+snapshots cannot be passed off as the model's original output.
+
+For `--stage branch`, first verify the refined targets, candidate poses and Viewer-owned checks.
+Provide the latest review token plus
+`--quote-message <id> --quote-start <offset> --quote-end <offset>`. Offsets use JavaScript string
+indexing, with an exclusive end. Select a meaningful passage from the actual attributed assistant
+reply printed by the status command. The runner uses Chat's branch operation and verifies that the
+original canvas remains unchanged. It never supplies a fictional assistant passage.
+
+Generation alone is recorded as `generated`, not qualified. Native checks of the actual output, base
+comparison, pose replay, exported results and cold restart remain required. The runner's
+`tests/robot-rehearsal.test.ts` uses an explicitly labeled offline provider fixture to test
+ownership, input retention, quote selection and budget enforcement. Those tests are not live Meta
+evidence.
+
 ## What evidence means
 
 | Check                     | Establishes                                            |

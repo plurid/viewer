@@ -638,6 +638,31 @@ References for these investigations include
 [vector](https://gdal.org/en/stable/drivers/vector/index.html) driver tables. Availability in these
 projects does not imply that all their features belong in Viewer's default package.
 
+#### Precise solid editing and OpenUSD
+
+[NVIDIA USD BRep](https://github.com/NVIDIA-Omniverse/usd-brep) is a candidate for solid modeling,
+geometry repair and exact-geometry interchange with OpenUSD. Its SMLib kernel operates on boundary
+representations with analytic and NURBS geometry. This is distinct from Viewer's current OCCT
+STEP/IGES importer, which supplies preview meshes.
+
+The community [smlib-wasm port](https://github.com/RandoTechNerd/smlib-wasm) exposes a subset of
+SMLib for browser workers, including booleans, extrusion, revolution and fillets. It is not an
+NVIDIA-maintained package. Its documented API omits STEP/USD import and export, shell operations and
+path sweeps. Do not count upstream format capabilities as supported by this wrapper. Its reported
+tests and performance results have not been reproduced in Viewer.
+
+Evaluate this port against a fuller OCCT integration using the same parts and operations. A first
+candidate task is a robot mounting plate with editable dimensions, drilled holes and measured
+clearances. Keep exact solids as the editable artifact and tessellated meshes as their display.
+Check topology, dimensions, tolerances and export/reopen results independently. Run expensive kernel
+calls in a disposable worker with cancellation, time and memory budgets; the port documents a heap
+that grows without shrinking until its worker is recycled.
+
+This could support robot fixtures and manufacturing geometry. It does not provide robot dynamics,
+collision-safe motion planning, CAM toolpaths or a CAE solver. Those need separate qualified owners.
+Precise solid editing remains a research candidate, not a dependency of the current URDF canvas
+rehearsal or a shipped conversion route.
+
 ### Ambiguous suffixes
 
 Use content signatures, manifests, schema roots and format versions to resolve these cases. When

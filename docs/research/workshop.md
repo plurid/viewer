@@ -93,7 +93,10 @@ foundation. The [target-check decision](../adr/0014-robot-target-checks.md) reco
 endpoint-check boundary. The local comparison fixture exercises a meaningful alternative-base
 arrangement and candidate-pose replay. The next gate is the separately approved live Meta creation,
 refinement and quoted-branch run. A supplied HTML fixture cannot qualify generated controls or a
-model explanation.
+model explanation. The
+[staged robot runner](../development/testing.md#robot-creation-revision-and-quoted-alternative)
+prepares pinned public inputs, records the paid allowance across restarts and stops between stages
+for native review. Its offline provider tests establish harness behavior, not live generation.
 
 ## Model and human responsibilities
 
