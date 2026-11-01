@@ -54,6 +54,26 @@ viewcube (**Show space toolbar**, **Show viewcube**).
 **⌥⌘Z** only undoes arrangement. File changes have their own **⌘Z**; see
 [Browse and organize](files.md#copy-move-and-rename).
 
+## Keep notes and checks visible
+
+Focus a note or check, then choose **⌘K → Pin plane**. It stays beside the space while you move
+between files. **Collapse pinned plane** leaves its title visible; **Expand pinned plane** brings
+its contents back. **Place in space** returns it to the canvas.
+
+A laser-job check opens pinned. Choose **Compare evidence** in the check to arrange its sources
+beside it. Finishing a check leaves your existing arrangement in place until you ask to compare.
+
+## Stack related planes
+
+Select two to twelve planes by **Shift**, **⌘** or **Ctrl**-clicking their title bars, then choose
+**⌘K → Stack selected planes**. Pinned planes must first be placed in the space. To separate a
+stack, focus one of its planes and choose **Unstack planes**. Each plane returns to its previous
+position.
+
+**⌥⌘Z** undoes stacking and **⌥⇧⌘Z** redoes it. Viewer saves pins, collapsed titles, stack
+membership and return positions across restarts. In a check, **Restore arrangement** returns the
+evidence planes to where they were before the comparison.
+
 ## Choose the title bar icons
 
 Open **Settings → Space → Title bar icons**. Toggle **Window navigation**, **New folder plane**,
@@ -184,6 +204,7 @@ terminals, servers and conversations stay stopped until you start them.
 | -------------- | --------------------------------------------------------------------- |
 | A preview      | Keeps the file                                                        |
 | A note         | Keeps the note; reopen it from **Notes…**                             |
+| A check        | Keeps its result; reopen it with **Check laser job…** for that job    |
 | A terminal     | Ends its shell                                                        |
 | A local server | Keeps the server running; reopen its controls from **Local servers…** |
 

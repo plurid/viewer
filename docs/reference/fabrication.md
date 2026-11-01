@@ -634,6 +634,22 @@ score of every run; `truth.json` holds what each job plants and where its text a
 `jobs/` holds the jobs as sent. A report describes only the runs that completed, including failed
 attempts, and records why an evaluation stopped. Offline stub tests do not count as live results.
 
+Each retained run includes `requirements`, with a separate `verification.status` for each claim:
+`source-verified`, `human-confirmed` or `unverified`. Count these separately from problem detection
+and quoted-text matches. The unattended evaluator does not confirm requirements on a person's
+behalf. An unverified dimension can be correctly identified as a mismatch while its correction stays
+unavailable for human review.
+
+To recheck retained answers after an extraction or verification change, use a new output folder:
+
+```sh
+node node_modules/electron/cli.js packages/viewer-electron/app/tools/fabrication/evaluate-profile.mjs -- --replay <answers.json> --out <replay-folder>
+```
+
+Replay uses the recorded responses and makes no network request. It opens no credential profile and
+preserves the original report. Its report is labeled **Recorded response replay**. Token counts come
+from the original responses; replay timing is local processing time, not provider latency.
+
 | Option                     | Effect                                                                                            |
 | -------------------------- | ------------------------------------------------------------------------------------------------- |
 | `--jobs J1,J7`             | Only these jobs                                                                                   |

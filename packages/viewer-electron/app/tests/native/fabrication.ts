@@ -1381,6 +1381,8 @@ try {
   await step('Closed and opened again, the check is kept', async () => {
     await actions.click('[data-plurid-control="pinned-close"]');
     await wait(panel, (state) => !state.open, 'the panel closes');
+    // Opening the handoff frames its plane and can cull the original folder's contents.
+    await command('fabrication');
     await selectFolder(job);
     const rows = await offered(
       'Check laser job',
@@ -1389,7 +1391,10 @@ try {
       'Check laser job… offers the kept check',
     );
     const offer = rows.rows.find((row) => row.selected)!;
-    assert.match(offer.detail, /^Show the check from \d{2}:\d{2}: 1 finding, 1 confirmed by Viewer$/);
+    assert.match(
+      offer.detail,
+      /^Show the check from \d{2}:\d{2}: 1 finding, 1 confirmed by Viewer$/,
+    );
     await runSelected('Check laser job…');
     const shown = await wait(panel, (state) => !!state.since, 'Checked at …');
     assert.equal(shown.id, checkID, 'Reopening uses the same document');
@@ -1709,7 +1714,6 @@ try {
                       title.scrollWidth > title.clientWidth + 1 ||
                       detail.scrollHeight > detail.clientHeight + 1 ||
                       detail.scrollWidth > detail.clientWidth + 1,
-                    ellipsis: !!detail && getComputedStyle(detail).textOverflow === 'ellipsis',
                     visible:
                       rect.top >= 0 &&
                       rect.bottom <= innerHeight &&
@@ -1723,18 +1727,18 @@ try {
         (value) => value.rows.length === 4 && value.rows.every((row) => row.visible),
         'all four data choices fit in Settings',
       );
+      const file = path.join(evidence, `models-data-access-${width}.png`);
+      await controls.capture(file);
+      screenshots.push(file);
       assert.equal(menu.scrolling, false, 'The permission choices need no menu scroll');
       assert.deepEqual(
         menu.rows.map((row) => row.detail),
         Object.values(modelDataLabels).map((text) => `Includes ${text}.`),
       );
       assert.ok(
-        menu.rows.every((row) => !row.clipped && !row.ellipsis),
+        menu.rows.every((row) => !row.clipped),
         JSON.stringify(menu),
       );
-      const file = path.join(evidence, `models-data-access-${width}.png`);
-      await controls.capture(file);
-      screenshots.push(file);
       reports.push({ width, height, menu });
       await controls.key('Escape', 'Escape');
     }

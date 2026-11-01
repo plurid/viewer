@@ -41,10 +41,13 @@ hands the engine the pose and the motion, never the sequence.
 
 A **fabrication check** (`domain/fabrication`, `desktop/fabrication/service.ts`,
 `renderer/fabrication`) reads a laser job as an inventory of opaque refs, asks a model once at the
-`images` data level, and grades the answer against Viewer's own DXF measurement; the renderer only
-draws PDF pages, which the desktop checks again. The check's record stays in the desktop until a
-handoff, a `fabrication-handoff` transform through operations, writes it. SAM 3.1 runs on the
-reading model's provider, under the same approval (`desktop/models/segmentation.ts`).
+`images` data level, and grades the answer against Viewer's own DXF measurement and independently
+extracted source requirements. A private **check document** persists its result, version-bound human
+confirmations, correction and handoff receipts. Closing a check plane detaches a view; reopening
+reads the document without another model request. Only explicit cancellation stops a running check.
+The desktop validates current sources and corrected output before a `fabrication-handoff` transform
+publishes the handoff through operations. SAM 3.1 runs on the reading model's provider, under the
+same approval (`desktop/models/segmentation.ts`); its outlines do not verify dimensions.
 
 An **explorer session** owns selection, cursor, range anchor, scroll and column trail. **Folder
 presentation** is shared by path and owns view/sort/column choices. Navigation and operation
