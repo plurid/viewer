@@ -2285,6 +2285,26 @@ export class Desktop {
           );
         if (request.kind === 'robot-report' || request.kind === 'check-robot')
           return { document, robotReport: canvasRobotReport(document) };
+        if (request.kind === 'robot-comparison')
+          return {
+            document,
+            robotComparison: await this.canvases.robotComparison(owner, document.id),
+          };
+        if (request.kind === 'save-robot-comparison') {
+          const saved = await this.canvases.saveRobotComparison(
+            owner,
+            document.id,
+            request.revision,
+            request.stateRevision,
+            () =>
+              saveOnce(this.fileAccess, this.windows.get(owner)?.window, {
+                title: 'Save robot comparison as a new file',
+                defaultPath: path.join(document.path, 'robot-comparison.json'),
+              }),
+          );
+          if (saved) this.emit({ type: 'folder-changed', path: path.dirname(saved) });
+          return { document: await this.canvases.read(owner, document.id), saved };
+        }
         if (request.kind === 'save-robot-check') {
           const saved = await this.canvases.saveRobotCheck(
             owner,

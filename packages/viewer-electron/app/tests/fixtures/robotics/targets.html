@@ -117,6 +117,16 @@
       monospace;
     color: #bac6d3;
   }
+  select {
+    color: inherit;
+    background: #30363f;
+    padding: 6px;
+    border: 1px solid #5b626e;
+    border-radius: 4px;
+  }
+  #replay-cursor {
+    width: 100%;
+  }
   #target-inputs {
     display: flex;
     gap: 8px;
@@ -183,15 +193,28 @@
     </div>
   </section>
   <aside>
-    <h2>Target <small>world coordinates · m</small></h2>
+    <h2>Targets <small>world coordinates · m</small></h2>
+    <label
+      >Selected target
+      <select id="target-select" aria-label="Selected target"></select
+    ></label>
     <div id="target-inputs"></div>
     <div class="actions">
-      <button id="solve">Find pose</button><button id="check">Check with Viewer</button>
+      <button id="solve">Find poses</button><button id="check">Check with Viewer</button>
     </div>
     <p id="solve-result" role="status">
       Place a target or drag its marker. Find a pose, then check it with Viewer.
     </p>
-    <h2>Joint positions <small>rad</small></h2>
+    <h2>Pose replay</h2>
+    <input id="replay-cursor" type="range" min="0" step="0.001" aria-label="Pose replay position" />
+    <div class="actions">
+      <button id="play">Play poses</button><button id="reset-replay">Selected pose</button
+      ><button id="fit">Fit robot</button>
+    </div>
+    <p id="replay-status" role="status">
+      Paused. Visual interpolation only; motion between poses is not checked.
+    </p>
+    <h2>Selected pose joints <small>rad</small></h2>
     <div id="joints"></div>
     <label class="base"
       >Base X
@@ -211,6 +234,7 @@
     originTransform,
     multiplyTransforms,
     solvePosition,
+    createPoseReplay,
   } from 'viewer/robotics';
   const api = window.viewerCanvas;
   const source = api.getSources().find((source) => source.data.robot);
@@ -218,7 +242,7 @@
   const robot = source.data.robot;
   const saved = api.getState();
   const resources = saved.robotResources;
-  const positions = Object.fromEntries(
+  let positions = Object.fromEntries(
     robot.joints
       .filter((joint) => joint.type !== 'fixed')
       .map((joint) => [
@@ -237,13 +261,20 @@
     targets: [{ id: 'A', position: initial.links.gripper_frame_link.slice(12, 15) }],
     poses: [{ targetID: 'A', positions }],
   };
-  task.poses[0].positions = positions;
+  let selected = Math.min(Math.max(0, saved.selectedTarget ?? 0), task.targets.length - 1);
+  function currentPose() {
+    return task.poses.find((pose) => pose.targetID === task.targets[selected].id);
+  }
+  positions = currentPose().positions;
   let solving;
   const solverStatus = document.querySelector('#solve-result');
   function saveTask() {
-    api.setState({ robotTask: task });
+    stopReplay();
+    cursor = task.poses.indexOf(currentPose());
+    replayInput.value = cursor;
+    api.setState({ robotTask: task, replayCursor: cursor });
   }
-  if (!saved.robotTask) saveTask();
+
   function cancelSolve() {
     solving?.abort();
     solving = undefined;
@@ -257,10 +288,11 @@
   stage.prepend(renderer.domElement);
   const camera = new THREE.PerspectiveCamera(36, 1, 0.001, 10);
   camera.up.set(0, 0, 1);
-  camera.position.fromArray(saved.cameraPosition ?? [0.65, -0.7, 0.5]);
+  camera.position.fromArray(saved.cameraPosition ?? [0.85, -0.85, 0.6]);
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.fromArray(saved.cameraTarget ?? [0, -0.07, 0.17]);
+  controls.target.fromArray(saved.cameraTarget ?? [0.2, -0.07, 0.22]);
   controls.update();
+  let autoFit = !saved.cameraPosition;
   scene.add(new THREE.HemisphereLight(0xeaf3ff, 0x515964, 2.2));
   const light = new THREE.DirectionalLight(0xfff6e5, 3);
   light.position.set(1, -1, 2);
@@ -269,12 +301,16 @@
   grid.rotation.x = Math.PI / 2;
   grid.position.z = -0.003;
   scene.add(grid);
-  const marker = new THREE.Mesh(
-    new THREE.SphereGeometry(0.009, 20, 12),
-    new THREE.MeshBasicMaterial({ color: '#f4b969' }),
-  );
-  marker.position.fromArray(task.targets[0].position);
-  scene.add(marker);
+  const markers = task.targets.map((target) => {
+    const marker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.009, 20, 12),
+      new THREE.MeshBasicMaterial({ color: '#f4b969' }),
+    );
+    marker.position.fromArray(target.position);
+    scene.add(marker);
+    return marker;
+  });
+  let marker = markers[selected];
   const geometry = new Map();
   const loader = new STLLoader();
   for (const resource of resources) {
@@ -300,11 +336,30 @@
       scene.add(mesh);
       visuals.push({ mesh, link: link.name, visual });
     }
+  function fitRobot() {
+    const box = new THREE.Box3();
+    for (const { mesh } of visuals) box.expandByObject(mesh);
+    for (const marker of markers) box.expandByObject(marker);
+    const radius = box.getSize(new THREE.Vector3()).length() / 2;
+    const vertical = THREE.MathUtils.degToRad(camera.fov);
+    const angle = Math.min(vertical, 2 * Math.atan(Math.tan(vertical / 2) * camera.aspect));
+    const direction = camera.position.clone().sub(controls.target).normalize();
+    controls.target.copy(box.getCenter(new THREE.Vector3()));
+    camera.position
+      .copy(controls.target)
+      .addScaledVector(direction, (radius / Math.sin(angle / 2)) * 1.6);
+    controls.update();
+    render();
+  }
+  document.querySelector('#fit').onclick = () => {
+    autoFit = true;
+    fitRobot();
+  };
   function render() {
     renderer.render(scene, camera);
   }
-  function update() {
-    const pose = forwardKinematics(robot, positions, { xyz: [baseX, 0, 0], rpy: [0, 0, 0] });
+  function update(displayPositions = positions) {
+    const pose = forwardKinematics(robot, displayPositions, task.base);
     for (const { mesh, link, visual } of visuals) {
       mesh.matrix.fromArray(multiplyTransforms(pose.links[link], originTransform(visual.origin)));
       mesh.matrix.scale(new THREE.Vector3(...visual.geometry.scale));
@@ -375,6 +430,7 @@
       task.base.xyz[0] = baseX;
       saveTask();
       update();
+      if (autoFit) fitRobot();
     }
   };
   const targetInputs = [0, 1, 2].map((axis) => {
@@ -383,13 +439,13 @@
     const input = document.createElement('input');
     input.type = 'number';
     input.step = '0.01';
-    input.value = task.targets[0].position[axis];
+    input.value = task.targets[selected].position[axis];
     input.setAttribute('aria-label', 'Target ' + ['X', 'Y', 'Z'][axis] + ' in metres');
     input.oninput = () => {
       if (!Number.isFinite(input.valueAsNumber)) return;
       cancelSolve();
-      task.targets[0].position[axis] = input.valueAsNumber;
-      marker.position.fromArray(task.targets[0].position);
+      task.targets[selected].position[axis] = input.valueAsNumber;
+      marker.position.fromArray(task.targets[selected].position);
       solverStatus.textContent = 'Target changed. Find a new pose or check the current one.';
       saveTask();
       render();
@@ -398,39 +454,135 @@
     document.querySelector('#target-inputs').append(label);
     return input;
   });
+  function syncJoints() {
+    for (const joint of robot.joints.filter((joint) => joint.type !== 'fixed')) {
+      document.querySelector('input[aria-label="' + joint.name + ' radians"]').value =
+        positions[joint.name];
+      document.querySelector('input[aria-label="' + joint.name + '"]').value =
+        positions[joint.name];
+    }
+  }
+  const selector = document.querySelector('#target-select');
+  for (const [index, target] of task.targets.entries()) selector.add(new Option(target.id, index));
+  selector.value = selected;
+  selector.onchange = () => {
+    cancelSolve();
+    stopReplay();
+    selected = Number(selector.value);
+    positions = currentPose().positions;
+    marker = markers[selected];
+    targetInputs.forEach((input, i) => (input.value = task.targets[selected].position[i]));
+    cursor = task.poses.indexOf(currentPose());
+    replayInput.value = cursor;
+    api.setState({ selectedTarget: selected, replayCursor: cursor });
+    syncJoints();
+    update();
+  };
+  const replayInput = document.querySelector('#replay-cursor');
+  const play = document.querySelector('#play');
+  const replayStatus = document.querySelector('#replay-status');
+  replayInput.max = task.poses.length - 1;
+  replayInput.disabled = play.disabled = task.poses.length < 2;
+  let cursor = Math.min(Math.max(0, saved.replayCursor ?? 0), task.poses.length - 1);
+  let animation;
+  let clock;
+  let replay;
+  replayInput.value = cursor;
+  function showReplay() {
+    const sample = replay.sample(cursor);
+    update(sample.positions);
+    replayInput.value = cursor;
+    document.documentElement.dataset.replayCursor = cursor;
+    replayStatus.textContent = `${animation ? 'Playing' : 'Paused'}: ${sample.from}${sample.fraction ? ' → ' + sample.to : ''}. Visual interpolation only; motion between poses is not checked.`;
+  }
+  function stopReplay() {
+    if (animation !== undefined) cancelAnimationFrame(animation);
+    animation = undefined;
+    play.textContent = 'Play poses';
+    document.documentElement.dataset.replay = 'paused';
+    replayStatus.textContent =
+      'Paused. Visual interpolation only; motion between poses is not checked.';
+  }
+  function tick(now) {
+    cursor = Math.min(task.poses.length - 1, cursor + (now - clock) / 2000);
+    clock = now;
+    if (cursor === task.poses.length - 1) {
+      stopReplay();
+      api.setState({ replayCursor: cursor });
+    } else animation = requestAnimationFrame(tick);
+    showReplay();
+  }
+  play.onclick = () => {
+    cancelSolve();
+    if (animation !== undefined) {
+      stopReplay();
+      showReplay();
+      api.setState({ replayCursor: cursor });
+      return;
+    }
+    replay = createPoseReplay(robot, task.poses);
+    if (cursor === task.poses.length - 1) cursor = 0;
+    clock = performance.now();
+    play.textContent = 'Pause replay';
+    document.documentElement.dataset.replay = 'playing';
+    animation = requestAnimationFrame(tick);
+  };
+  replayInput.oninput = () => {
+    cancelSolve();
+    stopReplay();
+    cursor = replayInput.valueAsNumber;
+    replay = createPoseReplay(robot, task.poses);
+    showReplay();
+    api.setState({ replayCursor: cursor });
+  };
+  document.querySelector('#reset-replay').onclick = () => {
+    stopReplay();
+    cursor = task.poses.indexOf(currentPose());
+    replay = createPoseReplay(robot, task.poses);
+    showReplay();
+    api.setState({ replayCursor: cursor });
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && animation !== undefined) {
+      stopReplay();
+      showReplay();
+      api.setState({ replayCursor: cursor });
+    }
+  });
   document.querySelector('#solve').onclick = async () => {
     cancelSolve();
+    stopReplay();
     const controller = new AbortController();
     solving = controller;
     document.querySelector('#solve').disabled = true;
-    solverStatus.textContent = 'Finding a candidate pose…';
+    solverStatus.textContent = 'Finding candidate poses…';
     try {
-      const solution = await solvePosition(
-        robot,
-        {
-          ...task.tool,
-          target: task.targets[0].position,
-          base: task.base,
-          positions,
-          tolerance: task.tolerance,
-        },
-        controller.signal,
-      );
+      const solutions = [];
+      for (const pose of task.poses)
+        solutions.push(
+          await solvePosition(
+            robot,
+            {
+              ...task.tool,
+              target: task.targets.find((target) => target.id === pose.targetID).position,
+              base: task.base,
+              positions: pose.positions,
+              tolerance: task.tolerance,
+            },
+            controller.signal,
+          ),
+        );
       if (solving !== controller) return;
-      Object.assign(positions, solution.positions);
-      for (const joint of robot.joints.filter((joint) => joint.type !== 'fixed')) {
-        document.querySelector('input[aria-label="' + joint.name + ' radians"]').value =
-          positions[joint.name];
-        document.querySelector('input[aria-label="' + joint.name + '"]').value =
-          positions[joint.name];
-      }
-      solverStatus.textContent =
-        solution.outcome === 'candidate'
-          ? 'Candidate found. Check this pose with Viewer.'
-          : 'Unresolved: best position error ' +
-            (solution.residual * 1000).toFixed(2) +
-            ' mm. This search does not prove the target unreachable.';
-      document.documentElement.dataset.solve = solution.outcome;
+      solutions.forEach((solution, i) => (task.poses[i].positions = solution.positions));
+      positions = currentPose().positions;
+      syncJoints();
+      const complete = solutions.every((solution) => solution.outcome === 'candidate');
+      solverStatus.textContent = complete
+        ? 'Candidates found. Check these poses with Viewer.'
+        : 'Unresolved: best position error ' +
+          (Math.max(...solutions.map((solution) => solution.residual)) * 1000).toFixed(2) +
+          ' mm. This search does not prove the target unreachable.';
+      document.documentElement.dataset.solve = complete ? 'candidate' : 'unresolved';
       saveTask();
       update();
     } catch (error) {
@@ -456,6 +608,7 @@
     rayFrom(event);
     if (!ray.intersectObject(marker).length) return;
     cancelSolve();
+    stopReplay();
     dragging = true;
     controls.enabled = false;
     plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1), marker.position);
@@ -466,7 +619,7 @@
     rayFrom(event);
     const point = ray.ray.intersectPlane(plane, new THREE.Vector3());
     if (!point) return;
-    task.targets[0].position = point.toArray();
+    task.targets[selected].position = point.toArray();
     marker.position.copy(point);
     targetInputs.forEach((input, i) => {
       input.value = point.toArray()[i].toFixed(4);
@@ -483,18 +636,23 @@
   renderer.domElement.addEventListener('pointerup', endDrag);
   renderer.domElement.addEventListener('pointercancel', endDrag);
   controls.addEventListener('change', render);
-  controls.addEventListener('end', () =>
+  controls.addEventListener('end', () => {
+    autoFit = false;
     api.setState({
       cameraPosition: camera.position.toArray(),
       cameraTarget: controls.target.toArray(),
-    }),
-  );
+    });
+  });
   new ResizeObserver(() => {
     renderer.setSize(stage.clientWidth, stage.clientHeight, false);
     camera.aspect = stage.clientWidth / stage.clientHeight;
     camera.updateProjectionMatrix();
-    render();
+    if (autoFit) fitRobot();
+    else render();
   }).observe(stage);
-  update();
+  replay = createPoseReplay(robot, task.poses);
+  stopReplay();
+  showReplay();
+  if (!saved.robotTask) saveTask();
   document.documentElement.dataset.loaded = String(visuals.length);
 </script>

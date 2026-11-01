@@ -22,7 +22,8 @@ import { sourceHash, sourceSnapshot } from './sources';
 import { CanvasObservations } from './observations';
 import type { CanvasObservation } from './observations';
 import { robotTaskSchema } from '../../domain/robotics/task';
-import { canvasRobotReport, robotInputHash } from './robot-check';
+import { canvasRobotReport, compareCanvasRobots, robotInputHash } from './robot-check';
+import type { RobotComparisonReport } from '../../domain/robotics/task';
 import { checkRobotTask } from '../robotics/check';
 
 interface CanvasPorts {
@@ -291,14 +292,14 @@ export class Canvases {
     stateRevision: number,
     input: CanvasResult,
     choose: () => Promise<string | undefined>,
-    validate?: (document: CanvasDocument) => void,
+    validate?: (document: CanvasDocument) => void | Promise<void>,
   ): Promise<string | undefined> {
     const result = canvasResultSchema.parse(input);
     const check = async () => {
       const document = await this.read(owner, id);
       if (document.revision !== revision || document.stateRevision !== stateRevision)
         throw new Error('The canvas or its inputs changed. Prepare the result again.');
-      validate?.(document);
+      await validate?.(document);
     };
     await check();
     const destination = await choose();
@@ -307,7 +308,7 @@ export class Canvases {
       const document = await this.load(owner, id);
       if (document.revision !== revision || document.stateRevision !== stateRevision)
         throw new Error('The canvas or its inputs changed. Prepare the result again.');
-      validate?.(document);
+      await validate?.(document);
       // Exclusive creation preserves existing destinations, including links. A failed write is kept.
       const handle = await open(destination, 'wx', 0o600);
       try {
@@ -385,6 +386,44 @@ export class Canvases {
       (current) => {
         if (JSON.stringify(current.robotCheck) !== JSON.stringify(document.robotCheck))
           throw new Error('The selected robot check changed. Review the current result.');
+      },
+    );
+  }
+  robotComparison(owner: number, id: string): Promise<RobotComparisonReport> {
+    return this.serial(async () => {
+      const alternative = await this.load(owner, id);
+      if (!alternative.fork)
+        return { status: 'unavailable', reason: 'This canvas has no original to compare.' };
+      return compareCanvasRobots(await this.load(owner, alternative.fork.id), alternative);
+    });
+  }
+  async saveRobotComparison(
+    owner: number,
+    id: string,
+    revision: number,
+    stateRevision: number,
+    choose: () => Promise<string | undefined>,
+  ) {
+    const comparison = await this.robotComparison(owner, id);
+    if (comparison.status !== 'compared') throw new Error(comparison.reason);
+    return this.saveResult(
+      owner,
+      id,
+      revision,
+      stateRevision,
+      {
+        format: 'json',
+        name: 'robot-comparison.json',
+        content: JSON.stringify({ version: 1, checker: 'position-v1', ...comparison }, null, 2),
+      },
+      choose,
+      async (current) => {
+        if (
+          !current.fork ||
+          JSON.stringify(compareCanvasRobots(await this.load(owner, current.fork.id), current)) !==
+            JSON.stringify(comparison)
+        )
+          throw new Error('One of the compared tasks changed. Review the comparison again.');
       },
     );
   }

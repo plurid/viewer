@@ -112,6 +112,14 @@ chain. Its cap is six attempts of 96 iterations, at most 16 moving chain joints.
 eight iterations and accepts an AbortSignal. Inputs are copied before yielding. Tolerance is
 0.000001 to 0.005 metres. Orientation is not a search objective.
 
+`createPoseReplay(robot,poses)` copies 1 to 16 complete poses, each `{targetID,positions}`. It
+returns `{length,sample(cursor)}`. The cursor is a finite number from zero to `length-1`; integer
+cursors return the supplied endpoints. Fractional cursors linearly interpolate explicit joint values
+and return `{from,to,fraction,positions}`. Continuous joints retain explicit revolutions; values are
+not wrapped or clamped. The function owns no animation clock and changes no saved inputs. It does
+not validate a trajectory. Generated controls must keep sampled poses separate from the task,
+provide pause and scrubbing, stop at the last pose, and pause when hidden or reopened.
+
 ### Check target poses in Viewer
 
 Save the task under one stable canvas state key, then call `requestRobotCheck(sourceID,stateKey)`.
@@ -151,6 +159,25 @@ frame exports remain proposed content; JSON parsing does not certify them as che
 These checks cover endpoint positions and hard position limits only. Orientation, intervals between
 poses, collision, dynamics and hardware calibration remain unchecked. No physical operation is
 implied.
+
+### Compare base placements
+
+A quoted alternative can request `robot-comparison` through the host. Viewer resolves its saved fork
+reference, enforces window ownership and recomputes both current checks. The model snapshot hash and
+parsed model must match. Units, tool link and local point, tolerance, ordered world targets and pose
+target order must match exactly. Base transforms and candidate joint positions may differ. Missing
+or stale checks and unequal fixed inputs produce `status: 'unavailable'` with a reason.
+
+A `compared` result includes `sourceHash`, `original` and `alternative`. Each side records canvas
+ID, title, content and input revisions, task hash and its independently recomputed endpoint report.
+`canvas_read` and conversation context include `robotComparison` for a fork. The Viewer panel
+refreshes when either canvas changes. A compared result can contain failed endpoints; it is not an
+unreachability proof.
+
+**Save comparison JSON…** exports both measured tasks with checker version `position-v1`. Changes to
+either side during save review cancel the new-file write. Comparison results are recomputed after
+restart. A portable canvas import drops the fork link and retains its own task and check; the
+separately saved comparison JSON retains both measured tasks as a snapshot.
 
 ## Branches
 

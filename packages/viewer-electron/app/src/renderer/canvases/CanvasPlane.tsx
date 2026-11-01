@@ -407,6 +407,18 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
               if (reply.saved) setSaved(reply.saved);
             })
           }
+          onSaveComparison={() =>
+            void act(async () => {
+              const latest = current.current!;
+              const reply = await window.viewer.canvas({
+                kind: 'save-robot-comparison',
+                id: latest.id,
+                revision: latest.revision,
+                stateRevision: latest.stateRevision,
+              });
+              if (reply.saved) setSaved(reply.saved);
+            })
+          }
         />
       )}
       {!!document.sources.length && (

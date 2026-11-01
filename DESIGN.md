@@ -404,7 +404,11 @@ and stale reasons in the report. Bound and scroll the report; let actions and de
 desktop widths. Show target positions, measured error, tolerance and units together. Link hard joint
 limit violations to their source definitions. Keep Check poses and Save check JSON… in the Viewer
 report; enable export only for a current check. State that checks cover endpoint positions and hard
-joint limits only.
+joint limits only. Keep Compare base placements in a separate disclosure that starts closed. Show
+original and alternative bases with measured target errors, keeping the model, world targets, tool
+point and tolerance fixed. Invalidate the comparison when either canvas changes. Keep Save
+comparison JSON… in the native Viewer report and enable it only for current, comparable checks.
+Never present visual replay as trajectory verification.
 
 Show source imagery in creative tools. Tie export, progress, optimization savings and output links
 to real jobs. Label camera previews, RAW renditions and video compatibility copies accurately.

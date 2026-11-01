@@ -31,6 +31,15 @@ constructs the exported report and checks revisions and the selected binding aft
 existing new-file save preserves originals. Generic canvas exports do not become trusted robot
 reports merely because they contain similarly named fields.
 
+Base comparisons resolve the existing quoted fork and recompute both checks. They require identical
+model snapshots, world targets, target order, tool point and tolerance. Only base placement and
+candidate joints vary. The comparison panel observes changes to either canvas, and saving validates
+both tasks again after destination review. No comparison success flag is persisted.
+
+The offline replay helper interpolates copied joint positions. Generated controls own the clock and
+keep display samples separate from saved candidates. Literal joint interpolation preserves explicit
+rotations and out-of-limit values. Playback is visual inspection, not trajectory verification.
+
 ## Scope
 
 Verification covers the supplied endpoint positions and hard joint limits. It does not cover

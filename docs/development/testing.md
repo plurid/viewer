@@ -94,6 +94,15 @@ reopens the saved work. It records both unresolved and successful searches. This
 qualification, not a model-generated robot session. `tests/robot-targets.test.ts` compares the
 independent checker with SciPy reference poses, exercises invalidation and refuses stale saves.
 
+`tests/native/robot-comparison.ts` uses the same environment and supplied fixture. It branches from
+an exact fixture passage, keeps two world targets fixed, changes the alternative base, solves both
+poses and compares their independently measured errors. It checks play/pause, scrubbing without
+candidate mutation, original-change invalidation, Viewer JSON saving, cold restart and portable
+reopening. The fixed targets are in `tests/fixtures/robotics/base-placement.json`: target A is the
+second SciPy reference gripper position translated 0.55 m along X; B adds 0.04 m along Y and
+subtracts 0.04 m along Z. Neither the fixture passage nor HTML is a live model response. Replay does
+not qualify collision safety or motion between endpoints.
+
 Use a new absolute corpus path for each download. `tests/robotics.test.ts` compares every link at
 three pinned poses against separately generated NumPy/SciPy matrices, and covers malformed trees,
 unsupported semantics, scoped resource attachment and snapshot round trips. The retained reference

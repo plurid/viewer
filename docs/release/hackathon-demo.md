@@ -26,7 +26,7 @@ generation waits.
 | 0:47–1:18 | Open the robot files. Choose **Build tool from selection**, send the first prompt and show the canvas being created. Move one joint with its control. Keep the arm and its stated limit readable.         | “These files describe a machine. I ask the agent to build the tool I need to understand it.”                                                                                                                               |
 | 1:18–1:46 | Send the second prompt. Show the workbench gaining target controls. Drag a target, display the actual check result and open the joint definition behind a constraint.                                     | “My question changes. The tool changes with it. The model’s constraints remain attached to their sources.”                                                                                                                 |
 | 1:46–2:16 | Select the explanation of that constraint and choose **Ask about selection**. Send the third prompt. Show the independent alternative beside the original, with the same targets.                         | “A question about one detail becomes another line of investigation. I can compare both without losing where I started.”                                                                                                    |
-| 2:16–2:45 | Run the independent check, inspect its result and replay the candidate motion. Review and save the JSON result. Reopen the exported canvas and replay the saved motion. Mark any cut between these steps. | “The agent proposes the motion. A separate calculation checks it against the model. I inspect the result, save it and reopen the work.”                                                                                    |
+| 2:16–2:45 | Run the endpoint check, inspect its result and replay the candidate poses. Review and save the comparison JSON. Reopen the exported canvas and replay the saved motion. Mark any cut between these steps. | “The agent proposes the motion. A separate calculation checks each proposed pose against the model. I inspect the result, save it and reopen the work.”                                                                    |
 | 2:45–3:00 | Briefly pull back to show the connected files, conversations and alternatives. End on the working result, then the Viewer title and contribution card.                                                    | “The project stays. The tools change. Viewer. The interface your task needs, when you need it.”                                                                                                                            |
 
 The line counts are the creator's personal estimate, not repository measurements or a productivity
@@ -97,7 +97,9 @@ recording requires all of the following:
 5. Create the quoted alternative and compare both placements without changing the original.
 6. Independently check the proposed poses and the stated scope of the motion sequence. A check of
    sampled poses must not be presented as continuous collision or physical safety validation.
-7. Save the reviewed JSON, read it back, export and reopen the canvas, and replay its saved motion.
+7. Use **Save comparison JSON…**, read back both measured tasks, then export and reopen the
+   alternative canvas and replay its saved poses. Show that the exported canvas keeps its own check;
+   the comparison JSON retains both tasks.
 8. Verify persistence after a cold restart. Show that restart only if it is actually recorded.
 
 First qualify a short prototype: load the arm, move a target, expose a checked constraint, change

@@ -3,18 +3,21 @@ import type { CanvasDocument } from '../../domain/canvases/document';
 import type { RobotCheckReport } from '../../domain/robotics/task';
 import { errorMessage } from '../../domain/errors';
 import { Disclosure } from '../ui/Disclosure';
+import { RobotComparisonPanel } from './RobotComparisonPanel';
 
 export function RobotCheckPanel({
   document,
   busy,
   onCheck,
   onSave,
+  onSaveComparison,
   onDefinition,
 }: {
   document: CanvasDocument;
   busy: boolean;
   onCheck(): void;
   onSave(): void;
+  onSaveComparison(): void;
   onDefinition(sourceID: string, joint: string): void;
 }) {
   const binding = document.robotCheck!;
@@ -133,6 +136,9 @@ export function RobotCheckPanel({
           )}
         </div>
       </Disclosure>
+      {document.fork && (
+        <RobotComparisonPanel document={document} busy={busy} onSave={onSaveComparison} />
+      )}
     </section>
   );
 }

@@ -36,7 +36,7 @@ export function canvasLibraries(): Plugin {
           return [name, name === 'three.module.js' ? ownRendererLookup(text) : text];
         }),
       );
-      for (const module of ['kinematics', 'solver']) {
+      for (const module of ['kinematics', 'solver', 'replay']) {
         const file = fileURLToPath(new URL(`../src/domain/robotics/${module}.ts`, import.meta.url));
         this.addWatchFile(file);
         const compiled = transpileModule(await readFile(file, 'utf8'), {
@@ -44,7 +44,10 @@ export function canvasLibraries(): Plugin {
         });
         parts.push([module + '.js', compiled.outputText]);
       }
-      parts.push(['robotics.js', "export * from './kinematics.js'; export * from './solver.js';"]);
+      parts.push([
+        'robotics.js',
+        "export * from './kinematics.js'; export * from './solver.js'; export * from './replay.js';",
+      ]);
       return `export const canvasLibraries = new Map(${JSON.stringify(parts)});`;
     },
   };

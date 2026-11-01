@@ -95,6 +95,22 @@ private.
    the canvas to retain the model snapshot, meshes, controls, inputs and check binding. Viewer
    recomputes the check when reopening it.
 
+### Compare another base placement
+
+1. Select the relevant passage in the conversation and choose **Ask about selection**. The branch
+   keeps an independent copy of the canvas and its saved inputs.
+2. Ask for another base placement while keeping the world targets, their order, tool point and
+   tolerance fixed. Find candidate poses and request a Viewer check in each canvas.
+3. Expand **Compare base placements** in the alternative. Viewer measures both saved tasks and shows
+   their position errors beside one another. A changed original updates the comparison too.
+4. Choose **Save comparison JSON…** to retain both checked inputs and results. Use **Compare
+   original** to return to the original canvas.
+5. Ask the generated tool for pose replay with play, pause and a scrub control. Replay interpolates
+   the saved joint values for inspection. It must keep the candidate poses intact and reopen paused.
+
+A standalone exported canvas retains its own task and check. It does not import a link to the
+original canvas. Keep the comparison JSON with the exported work to retain both measured tasks.
+
 The controls are generated for the conversation. A working page does not establish that the arm can
 reach a target or move without collisions. The checker measures the listed endpoint positions and
 hard joint limits. It does not check orientation or movement between those poses. Confirm the file's

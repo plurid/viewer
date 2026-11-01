@@ -74,3 +74,20 @@ export type RobotCheckReport =
       scope: 'Endpoint positions and hard joint limits only';
       unchecked: 'Orientation, intervals between poses, collision, dynamics and hardware calibration';
     };
+
+export interface RobotComparisonSide {
+  id: string;
+  title: string;
+  revision: number;
+  stateRevision: number;
+  inputHash: string;
+  report: Extract<RobotCheckReport, { status: 'checked' }>;
+}
+export type RobotComparisonReport =
+  | { status: 'unavailable'; reason: string }
+  | {
+      status: 'compared';
+      sourceHash: string;
+      original: RobotComparisonSide;
+      alternative: RobotComparisonSide;
+    };

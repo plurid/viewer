@@ -4,8 +4,9 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseRobotURDF } from '../src/domain/robotics/urdf';
 import { solvePosition } from '../src/domain/robotics/solver';
+import { createPoseReplay } from '../src/domain/robotics/replay';
 import { checkRobotTask } from '../src/desktop/robotics/check';
-import { canvasRobotReport } from '../src/desktop/canvases/robot-check';
+import { canvasRobotReport, compareCanvasRobots } from '../src/desktop/canvases/robot-check';
 import { Canvases } from '../src/desktop/canvases/service';
 import { robotTaskSchema } from '../src/domain/robotics/task';
 import type { RobotTask } from '../src/domain/robotics/task';
@@ -241,5 +242,171 @@ describe('durable checks owned by Viewer', () => {
       }),
     ).rejects.toThrow('changed');
     await expect(access(destination)).rejects.toThrow();
+  });
+});
+
+describe('fixed-target base comparisons', () => {
+  it('measures both placements, preserves the original, and recomputes after restart', async () => {
+    const { root, canvases, doc, sourceID } = await setup();
+    const arrangement = JSON.parse(
+      await readFile(new URL('./fixtures/robotics/base-placement.json', import.meta.url), 'utf8'),
+    );
+    const input = task();
+    input.targets = arrangement.targets;
+    input.poses = input.targets.map((target) => ({
+      targetID: target.id,
+      positions: { ...golden.cases[0]!.positions },
+    }));
+    const solve = async (value: RobotTask) => {
+      for (const pose of value.poses) {
+        const result = await solvePosition(model, {
+          ...value.tool,
+          base: value.base,
+          target: value.targets.find((t) => t.id === pose.targetID)!.position,
+          positions: pose.positions,
+          tolerance: value.tolerance,
+        });
+        pose.positions = result.positions;
+      }
+    };
+    await solve(input);
+    let original = await canvases.state(1, doc.id, doc.stateRevision, doc.revision, {
+      robotTask: input,
+    });
+    original = await canvases.checkRobot(
+      1,
+      doc.id,
+      doc.revision,
+      original.stateRevision,
+      sourceID,
+      'robotTask',
+    );
+    let alternative = await canvases.fork(1, doc.id, randomUUID());
+    const changed = structuredClone(input);
+    changed.base = arrangement.alternativeBase;
+    await solve(changed);
+    alternative = await canvases.state(
+      1,
+      alternative.id,
+      alternative.stateRevision,
+      alternative.revision,
+      { robotTask: changed },
+    );
+    alternative = await canvases.checkRobot(
+      1,
+      alternative.id,
+      alternative.revision,
+      alternative.stateRevision,
+      sourceID,
+      'robotTask',
+    );
+    const comparison = await canvases.robotComparison(1, alternative.id);
+    expect(comparison.status).toBe('compared');
+    if (comparison.status !== 'compared') throw new Error(comparison.reason);
+    expect(comparison.original.report.passed).toBe(false);
+    expect(comparison.original.report.poses.every((p) => p.residual > 0.1)).toBe(true);
+    expect(comparison.alternative.report.passed).toBe(true);
+    expect((await canvases.read(1, original.id)).state.robotTask).toEqual(input);
+    const output = path.join(root, 'comparison.json');
+    await canvases.saveRobotComparison(
+      1,
+      alternative.id,
+      alternative.revision,
+      alternative.stateRevision,
+      async () => output,
+    );
+    expect(JSON.parse(await readFile(output, 'utf8'))).toMatchObject(comparison);
+    await canvases.flush();
+    expect(await new Canvases(root, { changed() {} }).robotComparison(1, alternative.id)).toEqual(
+      comparison,
+    );
+    await expect(canvases.robotComparison(2, alternative.id)).rejects.toThrow('another window');
+    await expect(
+      canvases.saveRobotComparison(
+        1,
+        alternative.id,
+        alternative.revision,
+        alternative.stateRevision,
+        async () => {
+          await canvases.state(1, original.id, original.stateRevision, original.revision, {
+            robotTask: { ...input, tolerance: 0.002 },
+          });
+          return path.join(root, 'stale-comparison.json');
+        },
+      ),
+    ).rejects.toThrow('changed');
+    await expect(access(path.join(root, 'stale-comparison.json'))).rejects.toThrow();
+    expect(await canvases.robotComparison(1, alternative.id)).toMatchObject({
+      status: 'unavailable',
+    });
+  });
+  it.each(['targets', 'tool', 'tolerance', 'source'])(
+    'refuses comparing a different %s even when both checks are current',
+    async (field) => {
+      const { canvases, doc, sourceID } = await setup();
+      let alternative = await canvases.fork(1, doc.id, randomUUID());
+      const input = task();
+      if (field === 'targets') input.targets[0]!.position[0] += 0.01;
+      if (field === 'tool') input.tool.point[0] += 0.01;
+      if (field === 'tolerance') input.tolerance = 0.002;
+      alternative = await canvases.state(
+        1,
+        alternative.id,
+        alternative.stateRevision,
+        alternative.revision,
+        { robotTask: input },
+      );
+      alternative = await canvases.checkRobot(
+        1,
+        alternative.id,
+        alternative.revision,
+        alternative.stateRevision,
+        sourceID,
+        'robotTask',
+      );
+      if (field === 'source') {
+        alternative.sources[0]!.hash = 'c'.repeat(64);
+        alternative.robotCheck!.sourceHash = 'c'.repeat(64);
+      }
+      expect(canvasRobotReport(alternative)?.status).toBe('checked');
+      expect(compareCanvasRobots(doc, alternative)).toMatchObject({ status: 'unavailable' });
+    },
+  );
+});
+
+describe('visual pose replay', () => {
+  it('samples endpoints and literal joint interpolation without altering the saved candidates', () => {
+    const poses = golden.cases
+      .slice(0, 3)
+      .map((value, i) => ({ targetID: String(i), positions: { ...value.positions } }));
+    const before = structuredClone(poses);
+    const replay = createPoseReplay(model, poses);
+    expect(replay.length).toBe(3);
+    expect(replay.sample(0).positions).toEqual(poses[0]!.positions);
+    expect(replay.sample(2).positions).toEqual(poses[2]!.positions);
+    for (const [joint, value] of Object.entries(replay.sample(0.5).positions))
+      expect(value).toBeCloseTo(
+        (poses[0]!.positions[joint]! + poses[1]!.positions[joint]!) / 2,
+        12,
+      );
+    replay.sample(1).positions.shoulder_pan = 100;
+    expect(poses).toEqual(before);
+    poses[0]!.positions.shoulder_pan = 100;
+    expect(replay.sample(0).positions).toEqual(before[0]!.positions);
+    for (const cursor of [-1, 3, NaN, Infinity]) expect(() => replay.sample(cursor)).toThrow();
+  });
+  it('keeps explicit continuous rotations and refuses incomplete poses', () => {
+    const continuous = parseRobotURDF(
+      '<robot name="turn"><link name="base"/><link name="tip"/><joint name="turn" type="continuous"><parent link="base"/><child link="tip"/></joint></robot>',
+    );
+    const replay = createPoseReplay(continuous, [
+      { targetID: 'A', positions: { turn: 0 } },
+      { targetID: 'B', positions: { turn: 4 * Math.PI } },
+    ]);
+    expect(replay.sample(0.5).positions.turn).toBe(2 * Math.PI);
+    expect(() => createPoseReplay(model, [{ targetID: 'A', positions: {} }])).toThrow(
+      'exactly one',
+    );
+    expect(() => createPoseReplay(model, [])).toThrow();
   });
 });

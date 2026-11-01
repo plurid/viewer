@@ -484,6 +484,9 @@ export class Chats {
                 assets: canvas.assets,
                 sources: portableCanvasSources(canvas.sources),
                 robotReport: canvasRobotReport(canvas),
+                robotComparison: canvas.fork
+                  ? await this.ports.canvases!.robotComparison(principal.owner, canvas.id)
+                  : undefined,
                 preview: this.ports.canvases!.previewObservation(canvas.id, canvas.revision),
               }
             : null,
@@ -590,6 +593,9 @@ export class Chats {
           assets: canvas.assets,
           sources: portableCanvasSources(canvas.sources),
           robotReport: canvasRobotReport(canvas),
+          robotComparison: canvas.fork
+            ? await canvases.robotComparison(principal.owner, canvas.id)
+            : undefined,
           preview: canvases.previewObservation(canvas.id, canvas.revision),
         };
       if (step.kind === 'canvas_source') {

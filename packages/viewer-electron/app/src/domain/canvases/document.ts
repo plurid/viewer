@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { canvasSourcesSchema } from './sources';
 import { canvasResultSchema } from './results';
 import { robotCheckBindingSchema } from '../robotics/task';
-import type { RobotCheckReport } from '../robotics/task';
+import type { RobotCheckReport, RobotComparisonReport } from '../robotics/task';
 
 export const canvasLimits = {
   html: 512_000,
@@ -82,6 +82,15 @@ export const canvasRequestSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   z.object({ kind: z.literal('robot-report'), id: z.uuid() }).strict(),
+  z.object({ kind: z.literal('robot-comparison'), id: z.uuid() }).strict(),
+  z
+    .object({
+      kind: z.literal('save-robot-comparison'),
+      id: z.uuid(),
+      revision: z.number().int().nonnegative(),
+      stateRevision: z.number().int().nonnegative(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('save-robot-check'),
@@ -153,6 +162,7 @@ export type CanvasReply = {
   exported?: string;
   saved?: string;
   robotReport?: RobotCheckReport;
+  robotComparison?: RobotComparisonReport;
 };
 
 /** Existing values belong to the person, even when the app no longer displays their controls. */
