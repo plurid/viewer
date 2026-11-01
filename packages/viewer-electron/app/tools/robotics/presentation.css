@@ -1,0 +1,359 @@
+:root {
+  --surface: #31353d;
+  --field: #292d34;
+  --line: #454b55;
+  --ink: #f2f4f6;
+  --muted: #b1bac6;
+  --accent: #82b3cf;
+}
+body {
+  background: var(--field);
+  color: var(--ink);
+  font:
+    13px/1.45 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+::selection {
+  background: #3a5368;
+  color: var(--ink);
+}
+* {
+  scrollbar-color: #59616d transparent;
+  scrollbar-width: thin;
+}
+.wrap {
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 332px;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+.presentation-stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.view {
+  flex: 1;
+  height: auto;
+  min-height: 200px;
+}
+.panel {
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  background: var(--surface);
+  border-color: var(--line);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.hud {
+  inset: 16px 16px auto;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  pointer-events: none;
+}
+.hud h1 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+  max-width: 24ch;
+}
+.hud .btnrow {
+  pointer-events: auto;
+  margin: 0;
+  flex-shrink: 0;
+}
+.card {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+.card h2,
+h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.presentation-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.presentation-section .btnrow {
+  margin-top: 12px;
+}
+.presentation-section > h2 + .btnrow {
+  margin-top: 0;
+}
+.presentation-details {
+  border-bottom: 1px solid var(--line);
+}
+.presentation-section > .presentation-details {
+  border: 0;
+  margin-top: 12px;
+}
+.presentation-details summary {
+  list-style: none;
+  padding: 12px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+.presentation-details summary::-webkit-details-marker {
+  display: none;
+}
+.presentation-details summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-45deg);
+  flex-shrink: 0;
+}
+.presentation-details[open] > summary::before {
+  transform: rotate(45deg);
+}
+.presentation-details summary:hover,
+.presentation-details summary:focus-visible {
+  background: #393e47;
+}
+.presentation-section > .presentation-details > summary {
+  padding: 8px 0;
+  color: var(--muted);
+}
+.presentation-detail-body {
+  padding: 0 16px 16px;
+}
+.presentation-section .presentation-detail-body {
+  padding: 8px 0 0;
+}
+.presentation-detail-body .card + .card {
+  margin-top: 16px;
+}
+.sub,
+.badge,
+.lim {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.jname {
+  font-size: 13px;
+  font-weight: 500;
+}
+.jval {
+  font-size: 12px;
+  color: var(--accent);
+}
+.joint {
+  padding: 12px 0;
+  border-color: var(--line);
+}
+.joint .btnrow {
+  margin-top: 6px;
+}
+.joint button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.row,
+.btnrow {
+  gap: 6px;
+}
+.btnrow:empty {
+  display: none;
+}
+button {
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 6px 10px;
+  font: inherit;
+  color: var(--ink);
+  user-select: none;
+}
+button:hover {
+  background: #393e47;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.presentation-primary {
+  background: var(--accent);
+  color: #202733;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.presentation-primary:hover {
+  background: #99c5dd;
+}
+input {
+  caret-color: var(--accent);
+  accent-color: var(--accent);
+}
+input[type='number'] {
+  width: 86px;
+  min-width: 0;
+  padding: 6px 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  border-radius: 2px;
+  background: var(--field);
+  color: var(--ink);
+  border-color: var(--line);
+}
+input.xyz {
+  width: 100%;
+}
+input[type='range'] {
+  min-width: 0;
+  min-height: 28px;
+}
+label.small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 6px;
+}
+#targetBox > div + div {
+  margin-top: 16px !important;
+}
+#targetBox .jname {
+  color: var(--ink);
+}
+#solveLine {
+  padding-top: 4px;
+}
+#poseTable {
+  overflow: auto;
+}
+table.poses {
+  min-width: 510px;
+  font-size: 12px;
+}
+table.poses th,
+table.poses td {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 8px;
+}
+table.poses th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.presentation-replay {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+  flex: 0 0 auto;
+  background: var(--field);
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+.presentation-replay h2 {
+  margin: 0;
+}
+.presentation-replay > .presentation-transport {
+  grid-column: 2;
+  justify-content: flex-end;
+  margin: 0;
+}
+.presentation-replay .row {
+  flex-wrap: wrap;
+}
+.presentation-replay .row:has(#scrub) {
+  grid-column: 1 / -1;
+}
+.presentation-replay #scrub {
+  flex: 1;
+}
+#replayLine {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  max-width: 72ch;
+}
+.presentation-model-status {
+  padding: 12px 16px 0;
+}
+.presentation-scope,
+.presentation-credit {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 8px 16px 16px;
+}
+.presentation-credit {
+  margin: 16px 0 0;
+}
+.warn {
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  font-size: 12px;
+}
+.warn b {
+  color: var(--ink);
+}
+#srcLine {
+  margin-bottom: 12px;
+}
+@media (max-width: 760px) {
+  .wrap {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(260px, 55%) minmax(0, 1fr);
+  }
+  .presentation-stage {
+    min-height: 0;
+  }
+  .view {
+    min-height: 120px;
+  }
+  .panel {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .presentation-replay {
+    padding: 8px 12px;
+  }
+  .presentation-replay h2 {
+    display: inline;
+    margin-inline-end: 8px;
+  }
+  .presentation-replay .row {
+    margin-top: 4px;
+  }
+  #replayLine {
+    max-height: 3em;
+    overflow: auto;
+  }
+  .hud {
+    inset: 12px 12px auto;
+  }
+  .hud h1 {
+    font-size: 13px;
+  }
+}

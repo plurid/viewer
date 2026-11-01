@@ -14,6 +14,11 @@ empty Chat plane. Under **Tools**, **Source code** shows the current code and **
 returns to the previous design while retaining compatible inputs. **Stop** stops the page; **Tools →
 Reload** opens the saved revision again.
 
+Expand **Sources** or **Assets** above the canvas to inspect its inputs. File rows keep the source
+action beside the filename; long lists scroll within the details area. Opening another details
+section closes the previous one and leaves the canvas visible. Press **Escape** while working in an
+open section to close it and return focus to its heading.
+
 ## Check sources and save a result
 
 1. Open **Sources** to see the evidence snapshots used by the tool. **Open source** returns to the

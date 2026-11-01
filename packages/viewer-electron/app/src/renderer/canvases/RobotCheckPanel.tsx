@@ -8,6 +8,7 @@ import { RobotComparisonPanel } from './RobotComparisonPanel';
 export function RobotCheckPanel({
   document,
   busy,
+  group,
   onCheck,
   onSave,
   onSaveComparison,
@@ -15,6 +16,7 @@ export function RobotCheckPanel({
 }: {
   document: CanvasDocument;
   busy: boolean;
+  group?: string;
   onCheck(): void;
   onSave(): void;
   onSaveComparison(): void;
@@ -59,7 +61,13 @@ export function RobotCheckPanel({
   const millimetres = (value: number) => (value * 1000).toFixed(3) + ' mm';
   return (
     <section className="canvas-robot-check" aria-label="Robot check" data-state={state}>
-      <Disclosure variant="compact" summary={`Robot check · ${label}`}>
+      <Disclosure
+        variant="compact"
+        className="canvas-inspector"
+        group={group}
+        closeOnEscape
+        summary={`Robot check · ${label}`}
+      >
         <div className="canvas-robot-report">
           <header>
             <strong>Checked by Viewer</strong>
@@ -137,7 +145,12 @@ export function RobotCheckPanel({
         </div>
       </Disclosure>
       {document.fork && (
-        <RobotComparisonPanel document={document} busy={busy} onSave={onSaveComparison} />
+        <RobotComparisonPanel
+          document={document}
+          busy={busy}
+          group={group}
+          onSave={onSaveComparison}
+        />
       )}
     </section>
   );

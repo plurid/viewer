@@ -19,6 +19,40 @@
   font-size: var(--text-compact);
   margin-inline-end: auto;
 }
+.canvas-inspectors {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--gap-panel);
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--gap-inline) var(--gap-panel);
+  border-bottom: 1px solid var(--line);
+  scrollbar-gutter: stable;
+}
+.canvas-inspectors .canvas-robot-check,
+.canvas-inspectors .canvas-robot-comparison,
+.canvas-inspector {
+  display: contents;
+}
+.canvas-inspector::details-content {
+  order: 1;
+  flex: 1 0 100%;
+  min-width: 0;
+  max-height: 240px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.canvas-inspector > summary {
+  padding: var(--gap-small) var(--gap-inline);
+  margin-inline: calc(-1 * var(--gap-inline));
+}
+.canvas-inspector[open] > summary {
+  font-weight: 500;
+  background: var(--field);
+}
 .canvas-body {
   flex: 1;
   min-height: 0;
@@ -117,8 +151,27 @@
   opacity: 0.25;
 }
 .canvas-assets {
+  list-style: none;
   margin: 0;
-  padding: var(--gap-content) var(--gap-panel);
+  padding: 0;
+  max-width: 800px;
+}
+.canvas-assets li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--gap-content);
+  padding: var(--gap-small) 0;
+  border-top: 1px solid var(--line);
+}
+.canvas-asset-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.canvas-assets-hint {
+  margin: var(--gap-small) 0 var(--gap-content);
+  color: var(--muted);
+  font-size: var(--text-compact);
 }
 .canvas-assets small {
   display: block;
@@ -127,10 +180,8 @@
 }
 .canvas-sources {
   list-style: none;
-  padding: var(--gap-content);
+  padding: var(--gap-content) 0;
   margin: 0;
-  max-height: 240px;
-  overflow: auto;
 }
 .canvas-sources li + li {
   margin-top: var(--gap-panel);
@@ -160,10 +211,8 @@
   max-height: 180px;
 }
 .canvas-robot-report {
-  max-height: 240px;
   overflow: auto;
-  padding: var(--gap-content);
-  border-bottom: 1px solid var(--line);
+  padding: var(--gap-content) 0;
 }
 .canvas-robot-report header {
   display: flex;
@@ -204,6 +253,9 @@
   color: var(--muted);
   font-size: var(--text-compact);
   text-align: start;
+}
+.canvas-robot-report caption {
+  padding-block: 0 var(--gap-inline);
 }
 .canvas-robot-report [role='alert'] {
   color: var(--danger);

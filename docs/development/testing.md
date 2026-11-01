@@ -465,6 +465,25 @@ It preserves the failed result and raw response, records the response hash in
 `recovered-result.json`, and adds a tool recovery note without inventing an assistant reply. The
 recovered HTML still needs native review. An interrupted recovery blocks further paid sessions.
 
+### Prepare a presentation copy
+
+After all three robot stages pass native review, prepare a separate profile for layout refinement:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec node --import tsx tools/robotics/prepare-presentation.ts --run /path/to/qualified/run
+```
+
+This offline command preserves the provider responses and canonical profile. It copies the qualified
+creation, refinement and branch into a new retained profile, then applies the static layout in
+`tools/robotics/presentation.ts` and `presentation.css`. Generated scripts stay byte-for-byte
+unchanged. Saved target inputs and candidate poses are retained, camera framing is adjusted, and
+Viewer recomputes both robot checks and their comparison.
+
+The resulting `presentation.json` records the original and edited HTML hashes, unchanged script
+hashes, revisions and zero provider requests. The generated interface identifies the layout as
+locally refined. A presentation copy is not evidence that the model authored those edits. Exercise
+its controls, inspector scrolling, narrow layout and pose replay in the rebuilt app before filming.
+
 ## What evidence means
 
 | Check                     | Establishes                                            |

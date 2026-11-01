@@ -48,20 +48,27 @@ export function Disclosure({
     const element = details.current;
     if (!closeOnEscape || !element) return;
     const page = element.ownerDocument;
-    // On the document, the key arrives after the page's own handlers, which can claim it first;
-    // preventing it here keeps the dialog from closing with it.
+    // Descendant controls can claim Escape first; otherwise the disclosure closes before its
+    // containing plane or dialog.
     const close = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented || !element.open) return;
       const scope = element.closest('dialog') ?? element;
       if (!(event.target instanceof Node) || !scope.contains(event.target)) return;
       event.preventDefault();
+      if (element.contains(event.target)) event.stopPropagation();
       // focus inside would be left on hidden content: the summary keeps the keyboard's place
       const inside = element.contains(page.activeElement);
       element.open = false;
       if (inside) element.querySelector<HTMLElement>(':scope > summary')?.focus();
     };
+    // Own Escape inside the section before a containing spatial plane handles it. The page
+    // listener also covers focus elsewhere in a dialog that contains this disclosure.
+    element.addEventListener('keydown', close);
     page.addEventListener('keydown', close);
-    return () => page.removeEventListener('keydown', close);
+    return () => {
+      element.removeEventListener('keydown', close);
+      page.removeEventListener('keydown', close);
+    };
   }, [closeOnEscape]);
   const toggled = (event: SyntheticEvent<HTMLDetailsElement>) => {
     const element = event.currentTarget;

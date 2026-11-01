@@ -410,6 +410,11 @@ point and tolerance fixed. Invalidate the comparison when either canvas changes.
 comparison JSON… in the native Viewer report and enable it only for current, comparable checks.
 Never present visual replay as trajectory verification.
 
+Canvas details share a compact row above the workbench. Open one inspector at a time, bound its
+height and scroll its contents so the canvas stays visible. Inset summaries and file rows from the
+plane edges. Align asset source actions, allow long names to wrap and keep keyboard focus on the
+summary when Escape closes its section.
+
 Show source imagery in creative tools. Tie export, progress, optimization savings and output links
 to real jobs. Label camera previews, RAW renditions and video compatibility copies accurately.
 Failed renders retain retry and alternative-open actions. A stale retained preview identifies its

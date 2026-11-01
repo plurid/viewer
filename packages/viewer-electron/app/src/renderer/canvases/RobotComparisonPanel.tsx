@@ -13,10 +13,12 @@ function measured(side: RobotComparisonSide, targetID: string) {
 export function RobotComparisonPanel({
   document,
   busy,
+  group,
   onSave,
 }: {
   document: CanvasDocument;
   busy: boolean;
+  group?: string;
   onSave(): void;
 }) {
   const originalID = document.fork!.id;
@@ -69,7 +71,13 @@ export function RobotComparisonPanel({
       className="canvas-robot-comparison"
       data-state={report?.status ?? 'checking'}
     >
-      <Disclosure variant="compact" summary="Compare base placements">
+      <Disclosure
+        variant="compact"
+        className="canvas-inspector"
+        group={group}
+        closeOnEscape
+        summary="Compare base placements"
+      >
         <div className="canvas-robot-report">
           <header>
             <strong>Base placements</strong>

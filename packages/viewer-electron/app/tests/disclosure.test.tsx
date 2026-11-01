@@ -140,3 +140,21 @@ it('closes on Escape before the dialog around it, unless a control inside took t
   escape(screen.getByLabelText('Find an action'));
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+it('handles Escape before a containing workspace can undock the plane', async () => {
+  const workspaceKey = vi.fn();
+  render(
+    <section onKeyDown={workspaceKey}>
+      <Disclosure variant="compact" summary="Assets" closeOnEscape defaultOpen>
+        <button>Open source</button>
+      </Disclosure>
+    </section>,
+  );
+  const source = screen.getByText('Open source');
+  source.focus();
+  fireEvent.keyDown(source, { key: 'Escape', code: 'Escape' });
+  await settle();
+  expect(details('Assets').open).toBe(false);
+  expect(workspaceKey).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(details('Assets').querySelector('summary'));
+});

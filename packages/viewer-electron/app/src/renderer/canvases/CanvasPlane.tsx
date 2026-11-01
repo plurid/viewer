@@ -1,7 +1,7 @@
 import { ReconstructionPanel } from './ReconstructionPanel';
 import { canvasInputWriter, flushCanvasWrites } from './writes';
 import { acceptsDrop, droppedPaths } from '../explorer/sections';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { CanvasPane as Pane } from '../../domain/contracts';
 import type { CanvasDocument } from '../../domain/canvases/document';
 import { canvasStateSchema } from '../../domain/canvases/document';
@@ -20,6 +20,7 @@ import './canvas.css';
 
 export default function CanvasPlane({ pane }: { pane: Pane }) {
   const workspace = useWorkspace();
+  const inspectorGroup = useId();
   const [document, setDocument] = useState<CanvasDocument>();
   const [url, setURL] = useState('');
   const [error, setError] = useState('');
@@ -370,111 +371,124 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           </>
         )}
       </header>
-      {document.robotCheck && (
-        <RobotCheckPanel
-          document={document}
-          busy={busy}
-          onDefinition={(id, name) => {
-            setSourceJoint({ id, name });
-            setSourcesOpen(true);
-          }}
-          onCheck={() =>
-            void act(async () => {
-              const latest = current.current!;
-              receive(
-                (
-                  await window.viewer.canvas({
-                    kind: 'check-robot',
-                    id: latest.id,
-                    revision: latest.revision,
-                    stateRevision: latest.stateRevision,
-                    sourceID: latest.robotCheck!.sourceID,
-                    stateKey: latest.robotCheck!.stateKey,
-                  })
-                ).document,
-              );
-            })
-          }
-          onSave={() =>
-            void act(async () => {
-              const latest = current.current!;
-              const reply = await window.viewer.canvas({
-                kind: 'save-robot-check',
-                id: latest.id,
-                revision: latest.revision,
-                stateRevision: latest.stateRevision,
-              });
-              if (reply.saved) setSaved(reply.saved);
-            })
-          }
-          onSaveComparison={() =>
-            void act(async () => {
-              const latest = current.current!;
-              const reply = await window.viewer.canvas({
-                kind: 'save-robot-comparison',
-                id: latest.id,
-                revision: latest.revision,
-                stateRevision: latest.stateRevision,
-              });
-              if (reply.saved) setSaved(reply.saved);
-            })
-          }
-        />
-      )}
-      {!!document.sources.length && (
-        <Disclosure
-          variant="compact"
-          summary={`Sources (${document.sources.length})`}
-          open={sourcesOpen}
-          onOpenChange={setSourcesOpen}
-        >
-          <CanvasSources
-            joint={sourceJoint}
-            sources={document.sources}
-            paneID={pane.id}
+      <div className="canvas-inspectors" aria-label="Canvas details">
+        {document.robotCheck && (
+          <RobotCheckPanel
+            document={document}
+            group={inspectorGroup}
             busy={busy}
-            onError={fail}
-            onRefresh={(sourceID) =>
-              void act(async () =>
+            onDefinition={(id, name) => {
+              setSourceJoint({ id, name });
+              setSourcesOpen(true);
+            }}
+            onCheck={() =>
+              void act(async () => {
+                const latest = current.current!;
                 receive(
                   (
                     await window.viewer.canvas({
-                      kind: 'refresh-source',
-                      id: document.id,
-                      sourceID,
-                      revision: document.revision,
+                      kind: 'check-robot',
+                      id: latest.id,
+                      revision: latest.revision,
+                      stateRevision: latest.stateRevision,
+                      sourceID: latest.robotCheck!.sourceID,
+                      stateKey: latest.robotCheck!.stateKey,
                     })
                   ).document,
-                ),
-              )
+                );
+              })
+            }
+            onSave={() =>
+              void act(async () => {
+                const latest = current.current!;
+                const reply = await window.viewer.canvas({
+                  kind: 'save-robot-check',
+                  id: latest.id,
+                  revision: latest.revision,
+                  stateRevision: latest.stateRevision,
+                });
+                if (reply.saved) setSaved(reply.saved);
+              })
+            }
+            onSaveComparison={() =>
+              void act(async () => {
+                const latest = current.current!;
+                const reply = await window.viewer.canvas({
+                  kind: 'save-robot-comparison',
+                  id: latest.id,
+                  revision: latest.revision,
+                  stateRevision: latest.stateRevision,
+                });
+                if (reply.saved) setSaved(reply.saved);
+              })
             }
           />
+        )}
+        {!!document.sources.length && (
+          <Disclosure
+            variant="compact"
+            className="canvas-inspector"
+            group={inspectorGroup}
+            closeOnEscape
+            summary={`Sources (${document.sources.length})`}
+            open={sourcesOpen}
+            onOpenChange={setSourcesOpen}
+          >
+            <CanvasSources
+              joint={sourceJoint}
+              sources={document.sources}
+              paneID={pane.id}
+              busy={busy}
+              onError={fail}
+              onRefresh={(sourceID) =>
+                void act(async () =>
+                  receive(
+                    (
+                      await window.viewer.canvas({
+                        kind: 'refresh-source',
+                        id: document.id,
+                        sourceID,
+                        revision: document.revision,
+                      })
+                    ).document,
+                  ),
+                )
+              }
+            />
+          </Disclosure>
+        )}
+        <Disclosure
+          variant="compact"
+          className="canvas-inspector"
+          group={inspectorGroup}
+          closeOnEscape
+          summary={`Assets (${document.assets.length})`}
+        >
+          <p className="canvas-assets-hint">Drop files onto the canvas to add assets.</p>
+          <ul className="canvas-assets">
+            {document.assets.map((asset) => (
+              <li key={asset.id}>
+                <div className="canvas-asset-name">
+                  <span>{asset.name}</span>
+                  {asset.provenance && <small>{asset.provenance}</small>}
+                </div>
+                {asset.source && (
+                  <button
+                    onClick={() =>
+                      void workspace
+                        .openPath(asset.source!, { paneID: pane.id, linked: true, activate: true })
+                        .catch(fail)
+                    }
+                    aria-label={`Open source for ${asset.name}`}
+                  >
+                    Open source
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         </Disclosure>
-      )}
-      <Disclosure
-        variant="compact"
-        summary={`Assets (${document.assets.length}) · drop files here`}
-      >
-        <ul className="canvas-assets">
-          {document.assets.map((asset) => (
-            <li key={asset.id}>
-              {asset.name}
-              {asset.provenance && <small>{asset.provenance}</small>}
-              {asset.source && (
-                <button
-                  onClick={() =>
-                    void workspace
-                      .openPath(asset.source!, { paneID: pane.id, linked: true, activate: true })
-                      .catch(fail)
-                  }
-                >
-                  Open source
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </Disclosure>
+      </div>
       {error && (
         <p className="canvas-message" role="alert">
           {error}
