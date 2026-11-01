@@ -370,9 +370,17 @@ VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron ex
 ```
 
 The second command checks Electron startup and the desktop URDF reader without loading credentials.
-The prepared `plan.json` contains the exact prompts and source hashes. Inspect it before authorizing
-paid work. There is no default live allowance. For example, after explicit approval for three
-sessions of at most eight provider requests each:
+Check access to the configured credential without contacting the provider:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec electron tools/robotics/rehearse.mjs --check-credentials --run /path/to/prepared/run --profile /path/to/credential/profile
+```
+
+This reads the endpoint-bound key inside Electron and reports only readiness. The entry sets the app
+name before asynchronous imports so macOS selects Viewer's keychain service. The prepared
+`plan.json` contains the exact prompts and source hashes. Inspect it before authorizing paid work.
+There is no default live allowance. For example, after explicit approval for three sessions of at
+most eight provider requests each:
 
 ```sh
 VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec electron tools/robotics/rehearse.mjs --live --run /path/to/prepared/run --profile /path/to/credential/profile --stage create --sessions 3 --requests-per-session 8
@@ -422,6 +430,14 @@ comparison, pose replay, exported results and cold restart remain required. The 
 `tests/robot-rehearsal.test.ts` uses an explicitly labeled offline provider fixture to test
 ownership, input retention, quote selection and budget enforcement. Those tests are not live Meta
 evidence.
+
+If a generated revision fails native review, retain the observed error in a JSON file with
+`canvasID`, `revision`, `htmlHash` (SHA-256 of the generated HTML) and `message`. Repeat the same
+stage with `--repair /path/to/error.json` and its current `--reviewed` token. This sends the
+diagnostic to the same conversation, preserves the failed output and consumes another approved
+session. It does not extend the budget or permit progression to later stages. Review the repaired
+output in Viewer before continuing. The standalone runner does not execute a preview while the model
+is generating; `not-observed` is not successful execution.
 
 ## What evidence means
 

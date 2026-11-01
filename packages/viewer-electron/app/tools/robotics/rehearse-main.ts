@@ -11,7 +11,13 @@ import {
 import { setAssetRoot } from '../../src/desktop/native/assets';
 import { inspectFile } from '../../src/desktop/files/inspection';
 import { sourceSnapshot } from '../../src/desktop/canvases/sources';
-import { robotStageSchema, saveEvidence, verifyRobotRehearsal } from './rehearsal';
+import {
+  robotStageSchema,
+  robotRepairSchema,
+  readJSON,
+  saveEvidence,
+  verifyRobotRehearsal,
+} from './rehearsal';
 import { runRobotSession } from './rehearsal-session';
 import { recordRobotRequests } from './rehearsal-transport';
 
@@ -20,6 +26,7 @@ const { values } = parseArgs({
   options: {
     live: { type: 'boolean' },
     check: { type: 'boolean' },
+    'check-credentials': { type: 'boolean' },
     run: { type: 'string' },
     profile: { type: 'string' },
     provider: { type: 'string' },
@@ -27,26 +34,23 @@ const { values } = parseArgs({
     sessions: { type: 'string' },
     'requests-per-session': { type: 'string' },
     reviewed: { type: 'string' },
+    repair: { type: 'string' },
     'quote-message': { type: 'string' },
     'quote-start': { type: 'string' },
     'quote-end': { type: 'string' },
   },
 });
-if (values.check && values.live)
-  throw new Error('Choose an offline check or an approved live session.');
+if ([values.check, values['check-credentials'], values.live].filter(Boolean).length !== 1)
+  throw new Error('Choose an offline check, a credential check or an approved live session.');
 if (
   !values.run ||
-  (!values.check &&
-    (!values.live ||
-      !values.profile ||
-      !values.stage ||
-      !values.sessions ||
-      !values['requests-per-session']))
+  (!values.check && !values.profile) ||
+  (values.live && (!values.stage || !values.sessions || !values['requests-per-session']))
 )
   throw new Error(
     'An approved run requires --live --run <prepared run> --profile <Viewer profile> --stage create|refine|branch --sessions <approved total> --requests-per-session <approved maximum>.',
   );
-const stage = values.check ? undefined : robotStageSchema.parse(values.stage);
+const stage = values.live ? robotStageSchema.parse(values.stage) : undefined;
 const budget = {
   sessions: Number(values.sessions),
   requestsPerSession: Number(values['requests-per-session']),
@@ -57,7 +61,6 @@ if (profile && (root === profile || profile.startsWith(root + path.sep)))
   throw new Error('Use the real credential profile separately from the rehearsal.');
 process.env.VIEWER_TEST_PRESERVE = '1';
 process.env.VIEWER_TEST_NO_REMOVAL = '1';
-app.setName('Viewer');
 app.setPath('userData', path.join(root, 'Electron'));
 if (process.platform === 'darwin') app.setActivationPolicy('accessory');
 const abort = new AbortController();
@@ -101,6 +104,18 @@ async function main() {
     values.provider,
   );
   redact = authentication.publicText;
+  if (values['check-credentials']) {
+    console.log(
+      JSON.stringify({
+        root,
+        status: 'credentials-ready',
+        model: authentication.provider.model,
+        providerRequests: 0,
+      }),
+    );
+    app.exit(0);
+    return;
+  }
   const result = await runRobotSession(root, {
     stage: stage!,
     budget,
@@ -109,6 +124,7 @@ async function main() {
     signal: abort.signal,
     publicText: redact,
     reviewed: values.reviewed,
+    repair: values.repair ? robotRepairSchema.parse(await readJSON(values.repair)) : undefined,
     quote: values['quote-message']
       ? {
           messageID: values['quote-message'],

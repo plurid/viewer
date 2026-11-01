@@ -98,6 +98,11 @@ model explanation. The
 prepares pinned public inputs, records the paid allowance across restarts and stops between stages
 for native review. Its offline provider tests establish harness behavior, not live generation.
 
+Live robot creation has exposed generated JavaScript and camera-interaction failures. The native
+review must exercise every movable joint, source navigation, camera changes and cold restart;
+loading the meshes alone is insufficient. Keep diagnostic edits separate from the provider output. A
+locally corrected copy does not qualify the live creation/refinement/branch sequence.
+
 ## Model and human responsibilities
 
 - **Meta:** interpret approved source material, generate and revise the interactive tool, and

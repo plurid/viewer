@@ -203,6 +203,87 @@ async function localProject() {
 }
 
 describe('staged real Chat ownership with an offline provider fixture', () => {
+  it('binds native repair feedback to the generated revision and spends another approved session', async () => {
+    const { urdf } = await localProject();
+    const options = {
+      execution: 'scripted-test' as const,
+      budget: { sessions: 2, requestsPerSession: 8 },
+      provider,
+      publicText: (text: string) => text,
+    };
+    const created = await runRobotSession(root, {
+      ...options,
+      stage: 'create',
+      generate: scripted([
+        step('canvas_source', { path: urdf }),
+        step('canvas_robot_assets', { path: urdf }),
+        step('canvas_write', {
+          commandID: '2',
+          text: '<script>const broken = )</script>',
+          patches: [{ path: 'joint', value: 0.25 }],
+        }),
+        step('reply', { text: 'An unverified fixture revision.' }),
+      ]),
+    });
+    expect(created.result.status).toBe('generated');
+    const canvas = created.result.canvas!;
+    const repair = {
+      canvasID: canvas.id,
+      revision: canvas.revision,
+      htmlHash: rehearsal.digest(canvas.html),
+      message: "Uncaught SyntaxError: Unexpected token ')'",
+    };
+    await expect(
+      runRobotSession(root, {
+        ...options,
+        stage: 'create',
+        repair: { ...repair, htmlHash: '0'.repeat(64) },
+        reviewed: created.result.reviewToken,
+        generate: scripted([]),
+      }),
+    ).rejects.toThrow('exact generated revision');
+    expect(await new rehearsal.RobotRehearsalLedger(root).sessions()).toHaveLength(1);
+    const inputs: unknown[] = [];
+    const recovered = await runRobotSession(root, {
+      ...options,
+      stage: 'create',
+      repair,
+      reviewed: created.result.reviewToken,
+      generate: (session) => {
+        const generate = scripted([
+          step('canvas_write', {
+            commandID: String(canvas.revision),
+            text: '<p>Repaired fixture</p>',
+            patches: [{ path: 'joint', value: 0 }],
+          }),
+          step('reply', { text: 'Repaired fixture; native review is still required.' }),
+        ])(session);
+        return async (...args) => {
+          inputs.push(args[2]);
+          return generate(...args);
+        };
+      },
+    });
+    expect(recovered.result.status, recovered.result.failure).toBe('generated');
+    expect(inputs[0]).toMatchObject({
+      canvas: { preview: { status: 'error', message: repair.message } },
+    });
+    expect(recovered.result.canvas!.state.joint).toBe(0.25);
+    expect(recovered.result.conversation!.id).toBe(created.result.conversation!.id);
+    expect(await rehearsal.readJSON(path.join(created.folder, 'result.json'))).toEqual(
+      created.result,
+    );
+    expect((await currentRobotSession(root, 'create')).canvas.html).toBe('<p>Repaired fixture</p>');
+    await expect(
+      runRobotSession(root, {
+        ...options,
+        stage: 'refine',
+        reviewed: recovered.result.reviewToken,
+        generate: scripted([]),
+      }),
+    ).rejects.toThrow('session budget');
+  });
+
   it('requires review, retains edited inputs through refinement, and forks an exact attributed quote', async () => {
     const { urdf } = await localProject();
     const options = {

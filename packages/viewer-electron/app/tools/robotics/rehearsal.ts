@@ -12,6 +12,15 @@ export const robotStages = ['create', 'refine', 'branch'] as const;
 export type RobotStage = (typeof robotStages)[number];
 export const robotStageSchema = z.enum(robotStages);
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);
+export const robotRepairSchema = z
+  .object({
+    canvasID: z.uuid(),
+    revision: z.number().int().nonnegative(),
+    htmlHash: hashSchema,
+    message: z.string().trim().min(1).max(1000),
+  })
+  .strict();
+export type RobotRepair = z.infer<typeof robotRepairSchema>;
 const relativePath = z
   .string()
   .refine(
