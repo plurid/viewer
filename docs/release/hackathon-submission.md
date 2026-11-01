@@ -1,9 +1,11 @@
 # Hackathon submission draft
 
 This copy describes the selected film and distinguishes it from implemented behavior. The actual
-Meta-generated robot workflow has passed native functional checks. Presentation polish, foreground
-rehearsal and the finished film remain outstanding. Public source and video URLs, team details and
-the contribution window remain to be supplied. This page does not record a published entry.
+Meta-generated robot workflow has passed native functional checks. A separate presentation copy
+refines layout and camera framing while preserving the provider scripts. The foreground rehearsal
+passes and continuous saved-session takes are captured. The narrated three-minute film remains
+outstanding. Public source and video URLs, team details and the contribution window remain to be
+supplied. This page does not record a published entry.
 
 ## Project
 
@@ -67,9 +69,9 @@ success claims from the supplier or fabrication examples to the robot demonstrat
 ## Claims requiring qualification
 
 The film must visibly demonstrate the qualified creation, refinement, quoted alternative and saved
-result. Native functional tests do not establish that every control works well with pointer input or
-that a viewer can understand the result. Complete the foreground rehearsal and show restart only if
-it is recorded.
+result. The foreground rehearsal exercises the filmed controls, but does not establish that the
+finished story is understandable. Review the actual cut with its narration. Restart is verified
+separately; show it only if it is recorded.
 
 Ambiguous units, dimensions and source associations require human confirmation. An unresolved
 numerical solve is not proof of unreachability. Kinematic checks do not establish collision safety,

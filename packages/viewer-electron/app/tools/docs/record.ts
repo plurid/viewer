@@ -21,7 +21,12 @@ export async function record(
   directory: string,
   ffmpeg: string,
   actions: () => Promise<void>,
+  options: { width?: number; height?: number; fps?: number; bitrate?: string; gif?: boolean } = {},
 ) {
+  const { width = 1280, height = 800, fps = 12, bitrate = '1200k', gif = true } = options;
+  assert.ok([width, height, fps].every((value) => Number.isInteger(value) && value > 0));
+  assert.ok(width <= 1920 && height <= 1200 && fps <= 30, 'Bound capture resources.');
+  assert.match(bitrate, /^\d+k$/);
   await mkdir(directory);
   const frames: { file: string; time: number }[] = [];
   const writes: Promise<void>[] = [];
@@ -43,8 +48,8 @@ export async function record(
   await connection.command('Page.startScreencast', {
     format: 'jpeg',
     quality: 88,
-    maxWidth: 1280,
-    maxHeight: 800,
+    maxWidth: width,
+    maxHeight: height,
     everyNthFrame: 1,
   });
   try {
@@ -93,6 +98,10 @@ export async function record(
       '-hide_banner',
       '-loglevel',
       'error',
+      // Electron can deliver a different frame size around a dialog or resize. Reinitializing
+      // the fps filter would reset its timeline and discard part of the recorded wait.
+      '-reinit_filter',
+      '0',
       '-f',
       'concat',
       '-safe',
@@ -100,13 +109,13 @@ export async function record(
       '-i',
       timeline,
       '-vf',
-      'fps=12,scale=1280:800:force_original_aspect_ratio=decrease,pad=1280:800:(ow-iw)/2:(oh-ih)/2',
+      `fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
       '-c:v',
       'h264_videotoolbox',
       '-allow_sw',
       '1',
       '-b:v',
-      '1200k',
+      bitrate,
       '-pix_fmt',
       'yuv420p',
       '-movflags',
@@ -117,26 +126,27 @@ export async function record(
     ],
     { timeout: 120000, maxBuffer: 1024 * 1024 },
   );
-  await execute(
-    ffmpeg,
-    [
-      '-n',
-      '-hide_banner',
-      '-loglevel',
-      'error',
-      '-i',
-      video,
-      '-filter_complex',
-      'fps=5,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3',
-      '-loop',
-      '0',
-      animation,
-    ],
-    { timeout: 120000, maxBuffer: 1024 * 1024 },
-  );
+  if (gif)
+    await execute(
+      ffmpeg,
+      [
+        '-n',
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-i',
+        video,
+        '-filter_complex',
+        'fps=5,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3',
+        '-loop',
+        '0',
+        animation,
+      ],
+      { timeout: 120000, maxBuffer: 1024 * 1024 },
+    );
   return {
     video,
-    animation,
+    animation: gif ? animation : undefined,
     frames: frames.length,
     seconds,
   };

@@ -2,9 +2,12 @@
 
 This is the proposed three-minute film for Viewer. The screenplay is selected. The actual
 Meta-generated robot workflow has passed native creation, refinement, quoted-alternative,
-comparison-save, export/reopen and restart checks. Visual polish and a foreground rehearsal remain
-before filming. The [implementation audit](../research/workshop.md#implementation-audit) separates
-functional qualification from the unfinished presentation.
+comparison-save, export/reopen and restart checks. A separate presentation copy now has grouped
+controls, bounded inspectors and camera framing; its executable provider scripts are unchanged. The
+foreground interaction rehearsal passes, and continuous saved-session takes are captured. The
+narrated three-minute edit remains unfinished. The
+[implementation audit](../research/workshop.md#implementation-audit) separates functional
+qualification from the unfinished presentation.
 
 The thesis is that the project persists while an agent creates the interface needed for the next
 task. The person's work moves toward architecture, dependencies and consequences. The phrase “there
@@ -26,7 +29,7 @@ generation waits.
 | 0:09–0:25 | Your narration begins over actual code and project navigation. Brief number overlays read **~1,000,000 lines written** and **≤10,000 lines edited since 2025**.                                           | “By 2025, I’d written roughly a million lines of code. Since then, I’ve edited at most ten thousand. Mostly configuration. I still build projects. What changed is where I spend my attention.”                            |
 | 0:25–0:47 | Use the short shots below to connect source, result and consequence. End with browser, editor and terminal planes belonging to the same project.                                                          | “How the pieces fit together. What depends on what. What happens when something changes. I became the file manager. Browser. Editor. Terminal. Different views of the same project. So why should the interface be fixed?” |
 | 0:47–1:18 | Open the robot files. Choose **Build tool from selection**, send the first prompt and show the canvas being created. Move one joint with its control. Keep the arm and its stated limit readable.         | “These files describe a machine. I ask the agent to build the tool I need to understand it.”                                                                                                                               |
-| 1:18–1:46 | Send the second prompt. Show the workbench gaining target controls. Drag a target, display the actual check result and open the joint definition behind a constraint.                                     | “My question changes. The tool changes with it. The model’s constraints remain attached to their sources.”                                                                                                                 |
+| 1:18–1:46 | Send the second prompt. Show the workbench gaining target controls. Edit a target coordinate, display the actual check result and open the joint definition behind a constraint.                          | “My question changes. The tool changes with it. The model’s constraints remain attached to their sources.”                                                                                                                 |
 | 1:46–2:16 | Select the explanation of that constraint and choose **Ask about selection**. Send the third prompt. Show the independent alternative beside the original, with the same targets.                         | “A question about one detail becomes another line of investigation. I can compare both without losing where I started.”                                                                                                    |
 | 2:16–2:45 | Run the endpoint check, inspect its result and replay the candidate poses. Review and save the comparison JSON. Reopen the exported canvas and replay the saved motion. Mark any cut between these steps. | “The agent proposes the motion. A separate calculation checks each proposed pose against the model. I inspect the result, save it and reopen the work.”                                                                    |
 | 2:45–3:00 | Briefly pull back to show the connected files, conversations and alternatives. End on the working result, then the Viewer title and contribution card.                                                    | “The project stays. The tools change. Viewer. The interface your task needs, when you need it.”                                                                                                                            |
@@ -104,11 +107,13 @@ recording requires all of the following:
    the comparison JSON retains both tasks.
 8. Verify persistence after a cold restart. Show that restart only if it is actually recorded.
 
-The functional prototype is qualified. Before capture, frame the arm at both base placements,
-simplify the dense controls and rehearse target placement, source navigation and every filmed action
-with real pointer input. Keep any presentation edits separate from the original provider output. The
-film remains unfinished until these actions are clear in the recording. Do not replace them with
-fabricated success panels or a prerecorded animation labeled as computation.
+The functional prototype and presentation copy have passed the foreground rehearsal: joint inputs,
+camera orbit, a captured definition, target coordinates, comparison save, export/import and restart.
+Continuous takes cover the controls and handoff. Restart was checked separately, not filmed. The
+retained tool edits targets through coordinate fields; do not depict a 3D drag control it does not
+provide. Keep any presentation edits separate from the original provider output. The film remains
+unfinished until these actions are clear in the recording. Do not replace them with fabricated
+success panels or a prerecorded animation labeled as computation.
 
 ## Capture and edit
 

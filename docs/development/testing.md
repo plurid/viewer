@@ -484,6 +484,27 @@ hashes, revisions and zero provider requests. The generated interface identifies
 locally refined. A presentation copy is not evidence that the model authored those edits. Exercise
 its controls, inspector scrolling, narrow layout and pose replay in the rebuilt app before filming.
 
+Run the foreground interaction rehearsal against a qualified packaged binary:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec node --import tsx tools/robotics/rehearse-presentation.ts --run /path/to/qualified/run --binary /path/to/Viewer.app/Contents/MacOS/Viewer --record
+```
+
+This makes another presentation copy without contacting a provider. Plane framing is setup outside
+the recorded takes. It drives the visible controls with pointer and keyboard input: all six joints,
+camera orbit, a captured joint definition, target coordinates, independent checks, comparison save,
+portable export and import. It restarts its owned app to verify the task and paused replay. Outputs
+go into the new copy's **Handoff** folder. The folder chooser must display that destination before a
+save proceeds.
+
+`--record` retains continuous renderer clips at 1440 × 900 and 30 output frames per second, plus
+delivered-frame timestamps and input traces. Idle frames may repeat; the timestamps retain actual
+elapsed time. It includes Viewer file pickers, but not operating-system dialogs or an
+operating-system restart recording. Omitting the flag runs the same interaction checks without video
+encoding. `foreground-review.json` retains partial results after a failure; only `completed.json`
+marks the whole run passed. Keep the recordings, source hashes and failures. These silent rehearsal
+takes are saved-session evidence, not a finished film or live model-generation footage.
+
 ## What evidence means
 
 | Check                     | Establishes                                            |
