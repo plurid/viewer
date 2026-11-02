@@ -1,172 +1,125 @@
 # There Is No Interface
 
-This proposed three-minute film starts with the creator's change in work: about a million lines of
-code written up to 2025, then at most ten thousand lines modified from 2025 to today, mostly
-configuration. The work has moved toward managing a project's files, folders, structure and
-relationships across code, CAD and other contents. The agent works on those contents and generates
-the interface needed for the current task, on the spot. This is the argument behind the title.
+This three-minute film follows a request becoming a working interface. The creator's personal
+account introduces why that matters: about a million lines of code written up to 2025, then at most
+ten thousand lines modified from 2025 to today, mostly configuration. The work now centers on how a
+project fits together, what should change and what those changes affect. The browser, editor and
+terminal are views into that work. The agent builds controls around the current task.
 
-That personal account and the statement **I am the file manager** are required parts of the
-narration. Give them moving footage in Viewer. Introduce Viewer and Plurid as existing projects,
-then show the hackathon additions through one example. The robot case demonstrates the broader
-argument; it must not turn the film into a tour of a fixed robot application.
+Keep the numerical account and its qualifications. Describe the shift naturally. Do not turn the
+files-and-folders example into the literal claim “I am the file manager” or a list of file formats.
 
-The robot workflow has passed native functional checks. That establishes working behavior, not a
-finished demonstration. The [implementation audit](../research/workshop.md#implementation-audit)
-owns those boundaries. The [contribution inventory](hackathon-contributions.md) now compares both
-repositories with the owner's **27 October 2026** development baseline.
+Viewer and Plurid are existing projects. Introduce both while navigating the real workspace, then
+identify the additions made during the hackathon. The robot demonstrates the generated interface;
+its engineering details must not take over the story. The
+[contribution inventory](hackathon-contributions.md) uses the owner's **27 October 2026** baseline.
 
 ## What the audience must understand
 
-1. **The person's role has changed.** Preserve the million-lines-versus-ten-thousand account and
-   explain managing files and folders, regardless of whether they contain code, CAD, images or
-   documents. The person directs their architecture, relationships, workflows and the consequences
-   of changes. The browser, editor and terminal can be understood as views into that same project.
-2. **The interface is generated for the task.** The person asks for the work they need done. The
-   agent creates the controls around the relevant files and revises them as the question changes.
-   State this explicitly; a canvas beside a chat does not communicate it on its own.
-3. **Viewer is an existing file workspace.** A person opens project files, tools and conversations
-   together. Show a folder and a linked file opening while the pointer and surrounding space remain
-   visible.
-4. **Plurid is the existing spatial engine underneath it.** Explain what a plane is by opening and
-   following one. The camera moves because the person follows a link or frames a view.
-5. **The hackathon adds agent-built tools and ways to keep working with them.** Generated HTML,
-   retained inputs, quoted alternatives, bound sources and reviewed results were added after the
-   baseline. Ordinary chat, file browsing and spatial navigation already existed.
-6. **The person has a specific question.** Compare two base placements for a robot arm while keeping
-   two target points fixed. The generated tool must change in response to that question.
-7. **The result remains usable.** Save the measured comparison, reopen the exported tool and return
-   to the original in the same workspace.
+1. Viewer is a file workspace, built on the existing Plurid spatial engine. Opening and following
+   linked planes keeps sources and related work together.
+2. The hackathon adds an agent canvas, retained inputs, quoted alternatives and reviewed results.
+   Ordinary chat, file browsing and spatial navigation already existed.
+3. The person asks for a tool around their files. Meta generates an interactive interface. A changed
+   question changes its controls.
+4. A quoted conversation can open an alternative without replacing the original investigation.
+5. The tool and its inputs can be saved, reopened and used again.
 
-The robot is one project the person is working on. Introduce the generated interface through its
-creation request and revision before spending time on its controls. Otherwise it reads as a built-in
-robot application, and the central contribution is invisible.
+## Story structure
 
-## Build toward visible changes
+The causal sequence is **files → request → interface → changed question → changed interface →
+alternative → saved result**. Give each request a visible consequence before introducing another
+idea. Start with one task: explore this robot. Then add one question: can it reach these two points?
+The alternative investigates a different base position while keeping the targets fixed.
 
-The reveal is a change in what the person can do. A robot definition and separate mesh files become
-a working tool. A new question adds target controls. A quoted passage opens an alternative while the
-original remains available. The comparison produces a result the person can save and reopen. Give
-each of those changes its cause and consequence in the same passage.
-
-Keep the personal account over actual file navigation. Let the spatial pullback explain Viewer and
-Plurid, then move into the creation request. When the question changes, show the new controls
-clearly. When the base changes, hold the robot camera fixed so the targets visibly stay put. Let the
-measured result land before opening the save dialog. Finish by returning to the project and its
-alternatives, with the creator's original argument intact.
-
-Build energy through that progression and the creator's performance. Avoid ornamental camera
-rotations, fabricated generation progress, feature montages and slogans that replace the argument.
-Any input sounds added in editing must follow the recorded presses. A temporary system voice is for
-timing; the creator's final recording supplies the emphasis and pauses.
+Use native moving footage for the demonstration. Reuse the strongest opening navigation, then show
+typing, saved replies and a staged reveal of the actual canvas. This is an edited replay of retained
+Meta sessions, not a new live model call. The
+[media production guide](../media/README.md#replay-a-retained-session-for-a-film) describes the
+capture-only presentation layer.
 
 ## Timeline and narration
 
-These approximate beats follow the story cut. Retain the source takes and exact edit timings
-separately. Leave pauses for actions and reading. If the cut needs shortening, reduce repeated robot
-controls and technical explanation. Preserve the personal account, the files-and-folders argument
-and the interface generated on the spot. The final end card has no slogan or voice-over.
+These are target intervals. Retain exact takes, cuts, message excerpts and input timestamps in the
+production manifest. Keep the final cut within three minutes, including credits. Shorten repeated
+controls and chooser navigation before compressing the requests or their results.
 
-| Time      | Picture and action                                                                                                                    | Spoken words                                                                                                                                                                                                                                                                    |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0:00–0:08 | Opening study, separate from the recorded app. Replace the marked typography with the final opening footage.                          | Do not try and use the interface. That's impossible. Realize the truth. There is no interface.                                                                                                                                                                                  |
-| 0:08–0:20 | Open the robot definition as a linked plane. Keep its folder and the triggering pointer visible.                                      | Until 2025, I'd written about a million lines of code. From 2025 to today, I've modified ten thousand at most, mostly configuration files.                                                                                                                                      |
-| 0:20–0:41 | Return to the folder, open its document, then expand the assets and open a 3D part. Pull back to their relationships.                 | I still have projects to make. But now I'm managing files and folders: their structure, their relationships, their workflows, what a change here will affect over there. Code, CAD, images, documents. The contents vary; I manage how they fit together. I'm the file manager. |
-| 0:41–0:52 | Hold the established space, then focus its conversation. Identify the existing Viewer and Plurid projects.                            | This is Viewer, my file workspace. It runs on Plurid, my spatial interface engine. Both are projects I started before this hackathon.                                                                                                                                           |
-| 0:52–1:02 | Read the actual creation request and open Canvas. Identify the capability added for the hackathon.                                    | For the hackathon, I gave the agent a canvas. It generates the interface on the spot, around my files.                                                                                                                                                                          |
-| 1:02–1:18 | Move the shoulder and follow its source definition. Label the retained session and local layout refinements.                          | I asked Meta to build controls from these robot files. Here's the saved result. This slider moves the shoulder. This link opens the joint definition it used.                                                                                                                   |
-| 1:18–1:26 | Resume the saved refinement request and open the revision with target controls.                                                       | Now I want the arm to reach two points. I ask for target inputs. The interface changes.                                                                                                                                                                                         |
-| 1:26–1:40 | Show both target coordinates and the independent check of the original candidates.                                                    | These saved poses miss both points. That doesn't prove the arm can't reach them. I keep this attempt and try another base position.                                                                                                                                             |
-| 1:40–1:48 | Select the actual passage and use Ask about selection. Show the linked branch opening.                                                | I branch from that passage. The original stays. Here's the alternative from that saved session.                                                                                                                                                                                 |
-| 1:48–1:56 | Explicitly resume the retained Meta alternative, then open its canvas.                                                                | Same two targets. Same project. A separate tool to try another base position.                                                                                                                                                                                                   |
-| 1:56–2:14 | Use Original base and Alternative base in a fixed camera view. Replay the proposed poses and request the independent check.           | Move the base fifty-five centimetres. The targets stay fixed. Now replay the proposed poses and run Viewer's separate checker.                                                                                                                                                  |
-| 2:14–2:20 | Hold the actual comparison table with both original and alternative errors.                                                           | Both errors are under half a millimetre. Positions and joint limits checked; collisions and hardware still need checking.                                                                                                                                                       |
-| 2:20–2:31 | Save the comparison and export the canvas through the visible file chooser.                                                           | I save the comparison and the tool with its inputs and assets.                                                                                                                                                                                                                  |
-| 2:31–2:43 | Reopen the exported canvas and replay its retained poses.                                                                             | Open it again: the proposed poses are still here.                                                                                                                                                                                                                               |
-| 2:43–2:52 | Use Commands to frame the related planes and return to the established project.                                                       | I've kept the files and both alternatives. The agent built the interface for what I needed to do.                                                                                                                                                                               |
-| 2:52–2:58 | Credit the existing projects, event additions, model and robot asset source. Add the receipt link when its public destination exists. | No narration.                                                                                                                                                                                                                                                                   |
+| Time      | Picture and action                                                                                                                    | Narration direction                                                                                                                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0:00–0:08 | Keep the opening study distinct from the app.                                                                                         | Do not try and use the interface. That's impossible. Realize the truth. There is no interface.                                                                                                                                                                                            |
+| 0:08–0:34 | Follow project files into linked planes. Keep the triggering pointer visible.                                                         | Until 2025, I'd written about a million lines of code. From 2025 to today, I've modified ten thousand at most, mostly configuration files. I still have projects to build. But my attention has moved to how the pieces fit together, what needs to change, and what that change affects. |
+| 0:34–0:49 | Show the relationship between files and their views, then focus the conversation.                                                     | The browser, editor and terminal are different views into that same work. This is Viewer, my file workspace. Plurid is the spatial engine underneath it. I started both before this hackathon.                                                                                            |
+| 0:49–1:22 | Type the retained request. Reveal the saved reply, then the real model and controls. Move a joint.                                    | For the hackathon, I gave Meta a canvas to build the interface around the task. I ask for a way to explore this arm. The files become a tool I can use.                                                                                                                                   |
+| 1:22–1:48 | Replay the refinement request. Reveal target controls and markers. Check the first candidate poses.                                   | Now I ask whether the arm can reach these two points. The interface gains the controls for that question. This attempt misses them.                                                                                                                                                       |
+| 1:48–2:18 | Select the actual passage and open the linked branch. Replay the alternative request. Keep the targets fixed while changing the base. | I keep this attempt and try a different base position in a linked conversation. The original stays available.                                                                                                                                                                             |
+| 2:18–2:31 | Run the separate checker and hold the measured result.                                                                                | Both endpoint errors are under half a millimetre. Viewer checks the positions and joint limits. Collisions and hardware still need checking.                                                                                                                                              |
+| 2:31–2:48 | Save and reopen the real tool. Show the restored inputs and working controls.                                                         | I can reopen this and keep working, with the inputs and both alternatives intact.                                                                                                                                                                                                         |
+| 2:48–2:54 | Return to the established workspace. Show the sources, original and alternative.                                                      | Leave room for the visible result. No new slogan.                                                                                                                                                                                                                                         |
+| 2:54–3:00 | Credit existing projects, event additions, Meta, source assets and presentation editing.                                              | No narration.                                                                                                                                                                                                                                                                             |
 
 The opening remains the creator's proposed homage. Label generated character footage **AI-generated
-homage** if it is produced. A typography placeholder is only an editing aid and cannot be presented
-as completed footage.
+homage** if it is produced. The marked typography study and system voice are editing aids until the
+creator supplies final footage and narration.
 
-The million and ten-thousand figures are the creator's personal estimates. Say **from 2025 to
-today**, and retain **modified**, **at most** and **mostly configuration files**. Do not change this
-into ten thousand lines newly written, an annual rate or a measured repository statistic. Keep this
-account in the main narration. Follow it immediately with the person's role as manager of files,
-folders and their relationships, then the agent generating an interface on the spot.
+The million and ten-thousand figures are personal estimates. Retain **from 2025 to today**,
+**modified**, **at most** and **mostly configuration files**. Do not present them as measured
+repository statistics or ten thousand newly written lines.
+
+## Requests and replies in the film
+
+Use the actual retained messages. The short spoken descriptions explain the task; they are not
+substitute prompts. The film overlay types the original request and reveals an exact excerpt from an
+attributed assistant message. Keep the original transcript, source references and excerpt positions
+in the evidence. Redact private paths in public presentation copies when necessary.
+
+Condense long typing, tool output and repair history explicitly. Keep a restrained **Saved session ·
+edited playback** label visible during reconstructed passages. Where qualified output follows repair
+rounds, disclose that the session is condensed, including those rounds. Do not associate an invented
+assistant response with a saved generated document.
+
+The capture-only replay does not send a model request, alter stored messages or change generated
+scripts. The native **Canvas** action opens the real tool. A temporary presentation mask reveals its
+viewport, model and controls in sequence, then releases them for actual interaction. This staged
+reveal is an editing treatment; Viewer currently publishes complete canvas revisions. Do not claim
+production token streaming or incremental HTML generation.
+
+The recorded quote uses the model's actual passage about retaining candidate positions when a search
+is unresolved. The real **Ask about selection** action opens a linked conversation. The film then
+resumes the retained alternative in that plane. This action is not a fresh provider response.
 
 ## Spatial continuity and visible actions
 
-Use one public project workspace through the main demonstration. Establish where the folder,
-conversation, original tool and alternative sit. Return through those relationships. Do not reset
-the viewer into a different workspace or dock every plane between steps.
+Use one public project workspace. Establish the folder, source view, conversation, original tool and
+alternative, then navigate through those relationships. Keep related planes visible at key
+transitions, and focus the active plane when text or controls need to be read.
 
-- Keep a visible pointer. Move it to the real control before clicking and leave time to see the
-  consequence. Renderer screencasts currently omit the system cursor; capture it or add a restrained
-  pointer annotation driven by recorded input positions.
-- Show shortcuts as separate, readable keycaps with the action beside them. Keep their position
-  consistent, hold them briefly after release and avoid showing ordinary typed content. Use the
-  [recorded input overlay](../media/README.md#make-recorded-input-visible) so the displayed keys
-  correspond to actual inputs. Keep subtitles clear of that area.
-- Follow actual links into planes. Use **Frame plane**, **Back to parent plane** and **Frame all
-  planes** where those actions explain the next view. Do not add a camera rotation as decoration.
-- Keep camera movement and input timestamps in each source take. Do not replace live actions with
-  still images, synthetic pans or a fabricated progress animation.
-- Keep the robot camera stable while comparing base positions. The same targets must remain in the
-  same world frame. Orbit the arm only when that movement helps inspect it.
-- Use full-size framing when reading a request or measurement. Start the move from its known place
-  in the workspace and show the return. A cropped detail may supplement a take, but cannot replace
-  the action that opened it.
-- Keep labels short and outside important controls. Explain **existing project**, **new capability**
-  and **saved model output** when each first appears. Do not cover the workspace with technical
-  caveats, feature lists or decorative panels.
+- Retain the visible pointer and [shortcut overlay](../media/README.md#make-recorded-input-visible).
+  Keycaps describe actual dispatched inputs. Ordinary typing is visible in the composer.
+- Hold the camera during reading. Introduce one idea at a time and pause briefly after a result.
+- Follow links and use **Frame plane**, **Back to parent plane** and **Frame all planes** when they
+  explain the next view. Do not add decorative rotations.
+- Keep the robot camera stable when comparing placements. The target positions must stay fixed in
+  the same world frame.
+- Reveal new control groups without hiding the model's continuity. Use the established colors, flat
+  surfaces and readable type. Do not replace the working tool with a mockup.
+- Keep source takes and their actual frame timestamps. Mark edits that condense waits or resume
+  saved revisions. No artificial speed claim follows from the replay timing.
+- Keep result tables and caveats out of the foreground until the person requests the check. The film
+  teaches the task before showing its technical verification.
 
-The opening spatial shot and the final return should be continuous. Cuts are appropriate when
-resuming a saved model revision or omitting a wait; identify that transition. A viewer must be able
-to say what was clicked, what opened, and where the previous view went.
+## Establish the request-to-tool sequence
 
-## Establish the movement
+Build and inspect this passage before assembling the full film:
 
-Use a 30–45 second movement study to establish the capture language before the full edit. Use an
-isolated copy of the qualified profile with no configured providers. This is a recording test, not a
-new model evaluation.
+1. Start in the established conversation plane with an empty replay composer.
+2. Type the retained request and hold it long enough to identify the task.
+3. Replay the saved reply excerpt with condensed-session attribution.
+4. Follow **Open canvas**, which delegates to Viewer's existing **Canvas** action.
+5. Reveal the real model and control group, then move the shoulder using actual input.
 
-1. Start in a public project folder in space, with a visible pointer. Use real source, CAD/model and
-   document files to support the opening's point about different contents in one project.
-2. Open project files as linked planes. Pause while their names and relationships are readable. Show
-   existing Viewer previews as existing capabilities; they are not agent-generated tools.
-3. Navigate to the retained project conversation through a visible command or link.
-4. Follow **Canvas** to its saved generated tool and move one joint.
-5. Frame the related planes so the folder, source, conversation and tool can be located again.
-
-Inspect the take at delivery resolution, first without narration. If the spatial relationship or
-cause of a camera move is unclear, adjust the action or framing and record that passage again. Do
-not proceed merely because encoding, frame-count and audio checks pass. This study supplies the
-missing visual language; it is not a replacement for the complete story.
-
-## The three requests
-
-These short phrases are editorial summaries, not the submitted prompts. When the conversation is
-visible, retain its actual text. Keep the full requests, failed attempts, repair instructions and
-provider responses in the saved evidence.
-
-**1. Understand the mechanism**
-
-> Build a workbench for this arm. Let me explore its joints and keep their limits visible.
-
-**2. Change the task**
-
-> Add editable target positions and check the proposed poses against the model.
-
-**3. Explore an alternative**
-
-> Explore moving the base while keeping the targets fixed.
-
-The recorded branch comes from the model's actual statement about retaining candidate positions when
-a search is unresolved. A local **Ask about selection** interaction does not create a fresh provider
-response. Identify the transition to the previously generated alternative. Do not send another
-request within the exhausted model allowance or substitute a scripted assistant message.
+Inspect the passage without narration. It must show what was requested, what appeared and that the
+tool works. The final sequence must also make clear what changed after the second request and why a
+linked alternative exists. Technical encoding checks alone do not establish comprehension.
 
 ## Inputs, attribution and measurements
 
@@ -203,8 +156,8 @@ coordinates through fields. Do not depict direct 3D target dragging that it does
 
 Before finishing the film:
 
-1. Review the complete story cut with someone seeing Viewer for the first time. They must be able to
-   identify the request, changed controls, alternative, measured result and saved output.
+1. Review the complete replay cut with someone seeing Viewer for the first time. They must be able
+   to identify the request, changed controls, alternative, measured result and saved output.
 2. Check shortcut legibility, narration timing and the distinction between existing projects and
    hackathon additions at the delivered video size.
 3. Record the creator’s narration to the actual actions and replace the marked opening study.

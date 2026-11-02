@@ -10,8 +10,9 @@ It preserves the provider scripts; these local layout edits are attributed separ
 foreground rehearsal passes, with saved-session takes retained. The review film failed to introduce
 the existing Viewer and Plurid projects, explain the event additions or make spatial navigation
 understandable. The [screenplay](../release/hackathon-demo.md) is being rebuilt around visible
-actions in one workspace. New continuous footage, a clear story and a concrete ending are needed
-before final narration and submission. The
+actions in one workspace. The next cut uses edited playback of retained requests and replies, a
+staged reveal of the actual canvas and fewer competing details. This is film presentation, not a
+product streaming feature. Final narration and the opening remain separate production work. The
 [contribution inventory](../release/hackathon-contributions.md) uses the owner's 27 October 2026
 development baseline to distinguish prior work.
 
@@ -19,10 +20,9 @@ development baseline to distinguish prior work.
 
 The creator's account is central: about a million lines of code written up to 2025, then at most ten
 thousand modified from 2025 to today, mostly configuration files. These are personal estimates. The
-work has shifted toward managing a project's files and folders: their structure, relationships,
-workflows and the consequences of a change. Code, CAD, images and documents have different contents;
-the person still directs how the project fits together. **I am the file manager** describes that
-role.
+work has shifted toward understanding how the project fits together, choosing what should change and
+following the consequences of those changes. Files remain the material of the project. The film
+explains this shift in natural language without turning the file-manager example into a slogan.
 
 The film's “there is no interface” hook means the agent generates the interface needed for the task,
 on the spot. The person asks what they need to do with the project, and the agent builds controls

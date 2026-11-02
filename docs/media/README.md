@@ -60,6 +60,31 @@ Call `reset()` at the start of a take, save `events` beside the frame timestamps
 capture attribution. Review keycaps at the delivered video's actual size and keep captions out of
 their area. Preserve native camera movement and its triggering input in the same shot.
 
+## Replay a retained session for a film
+
+Use `sessionReplay` from `packages/viewer-electron/app/tools/docs/session-replay.ts` for an
+explicitly edited playback of saved model output. This is a recording tool, not a shipped chat or
+streaming feature. Run it in an isolated profile without configured providers.
+
+1. Call `mount()` with the visible conversation selector, retained user message and a public context
+   label. The overlay identifies itself as **Saved session · edited playback**.
+2. Call `type()` to enter that exact request through recorded input. Dispatch **Enter** to advance
+   the replay. This composer never sends a provider request.
+3. Call `answer()` with an assistant message and the exact start/end offsets of its excerpt. Keep
+   the condensed repair-history disclosure when the qualified canvas follows repairs.
+4. Call `coverCanvas()` before following **Open canvas**. That button delegates to the existing
+   native **Canvas** action. Wait for the real canvas and assets to load, then call `revealCanvas()`
+   with its frame connection. The temporary mask reveals the actual model and control group.
+5. Exercise the real controls. Call `dismiss()` when returning to the original transcript or closing
+   the take. Save `events`, which identifies message hashes and excerpt offsets, with the input and
+   frame logs.
+
+The controller changes presentation DOM only. It does not rewrite transcripts, change generated
+scripts or add native APIs. Assembly timing is editorial, not measured model latency. Retain the
+original messages and the qualified revision mapping, including omitted repairs, outside the cut.
+Attribute static layout refinements separately. Inspect prompt legibility, the staged reveal and the
+first working interaction together before assembling the full film.
+
 ## Attribution
 
 `source.jpg`, the sample PDF image, the image-conversion demonstration and the three collage

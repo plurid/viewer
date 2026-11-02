@@ -1,23 +1,22 @@
 # Hackathon submission draft
 
 This is working entry copy. The actual Meta-generated robot workflow has passed native functional
-checks. The current [story cut](hackathon-demo.md) follows native file navigation, generated tools,
-quoted alternatives and a saved result, with visible input cues. It still needs a first-time-viewer
-review, the creator's narration and final opening footage before becoming a submission film. The
-owner supplied 27 October 2026 as the development baseline. The
-[contribution inventory](hackathon-contributions.md) records the source comparison. Public URLs,
-team credits and organizer eligibility remain to be confirmed.
+checks. The [film](hackathon-demo.md) follows native file navigation, an edited replay of retained
+Meta requests and replies, staged canvas reveals, quoted alternatives and a saved result. Input cues
+follow the actual controls. It still needs a first-time-viewer review, the creator's narration and
+final opening footage before becoming a submission film. The owner supplied 27 October 2026 as the
+development baseline. The [contribution inventory](hackathon-contributions.md) records the source
+comparison. Public URLs, team credits and organizer eligibility remain to be confirmed.
 
 ## Project
 
 **The person manages the project. The agent generates the interface for the task, on the spot.**
 
 The creator describes writing about a million lines of code up to 2025, then modifying at most ten
-thousand from 2025 to today, mostly configuration files. The projects still need to be made, but the
-person's work has shifted toward managing their files and folders: architecture, relationships,
-workflows and the consequences of changes. This applies across code, CAD, images and documents.
-Whatever their contents, the person directs how the project fits together. In the creator's words,
-**I am the file manager**. The line counts are personal estimates.
+thousand from 2025 to today, mostly configuration files. The projects still need to be made. The
+person's attention has shifted toward how the pieces fit together, what should change and what those
+changes affect. Browser, editor and terminal are different views into that work. The line counts are
+personal estimates.
 
 Viewer gives an agent the project context and a canvas where it can generate the interface needed
 for the current task. The request drives the controls; a changed question can produce a changed
@@ -33,10 +32,10 @@ credit those separately from the existing spatial foundation.
 
 The proposed film, **There Is No Interface**, makes that argument explicit: the interface is
 generated on the spot from the project and the person's request. Keep the personal account and the
-files-and-folders argument in the main narration. Introduce Viewer and Plurid as existing projects
-while exploring their space, then identify the hackathon additions. The robot is one demonstration
-of the idea. An optional synthetic homage must remain distinct from the real app. The film does not
-claim full replacement of established creative and engineering applications.
+change in how the creator works in the main narration. Introduce Viewer and Plurid as existing
+projects while exploring their space, then identify the hackathon additions. The robot is one
+demonstration of the idea. An optional synthetic homage must remain distinct from the real app. The
+film does not claim full replacement of established creative and engineering applications.
 
 ## Proposed demonstration
 
@@ -111,8 +110,9 @@ and supporting libraries independently of Viewer's generated interface.
    source availability, asset use, synthetic portrayals and eligibility of prior work.
 3. Review the story cut using the [production handoff](hackathon-demo.md#final-production-handoff).
    Check whether a first-time viewer can follow the actions before recording final narration and
-   finishing the opening. Keep saved-session and local-refinement attribution; retain source takes
-   and the edit decision list.
+   finishing the opening. Identify edited saved-session playback and staged reveals; retain source
+   takes, exact message excerpts and the edit decision list. Attribute local layout refinements
+   separately.
 4. Complete the [contribution inventory](hackathon-contributions.md) from the confirmed development
    baseline. Fill in authors and final source references, then check the organizer's eligibility
    rules. Keep the existing Viewer and Plurid foundation distinct from the post-baseline additions.
