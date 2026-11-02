@@ -1,27 +1,42 @@
 # Hackathon submission draft
 
-This copy describes the selected film and distinguishes it from implemented behavior. The actual
-Meta-generated robot workflow has passed native functional checks. A separate presentation copy
-refines layout and camera framing while preserving the provider scripts. The foreground rehearsal
-passes. A 2:55 review cut has actual interaction footage, captions, a marked opening placeholder and
-a temporary system voice. The final opening, creator narration and attribution remain. Public source
-and video URLs, team details and the contribution window remain to be supplied. This page does not
-record a published entry.
+This is working entry copy. The actual Meta-generated robot workflow has passed native functional
+checks. The current [story cut](hackathon-demo.md) follows native file navigation, generated tools,
+quoted alternatives and a saved result, with visible input cues. It still needs a first-time-viewer
+review, the creator's narration and final opening footage before becoming a submission film. The
+owner supplied 27 October 2026 as the development baseline. The
+[contribution inventory](hackathon-contributions.md) records the source comparison. Public URLs,
+team credits and organizer eligibility remain to be confirmed.
 
 ## Project
 
-**Viewer: the interface your task needs, when you need it.**
+**The person manages the project. The agent generates the interface for the task, on the spot.**
 
-A project's files, dependencies and decisions persist while the questions around it change. People
-repeatedly translate that context into the controls of another application. Viewer gives an agent a
-canvas beside the sources and conversation, where it can create a tool for the current task. Inputs
-persist through design revisions, and a question about a passage can become an independent
-conversation and alternative tool in the same workspace.
+The creator describes writing about a million lines of code up to 2025, then modifying at most ten
+thousand from 2025 to today, mostly configuration files. The projects still need to be made, but the
+person's work has shifted toward managing their files and folders: architecture, relationships,
+workflows and the consequences of changes. This applies across code, CAD, images and documents.
+Whatever their contents, the person directs how the project fits together. In the creator's words,
+**I am the file manager**. The line counts are personal estimates.
 
-The proposed film, **There Is No Interface**, begins with a short synthetic homage and the creator's
-experience moving from manual coding toward architecture, dependencies and consequences. “No
-interface” means freedom from a fixed interface. It does not claim the absence of software or full
-replacement of established creative and engineering applications.
+Viewer gives an agent the project context and a canvas where it can generate the interface needed
+for the current task. The request drives the controls; a changed question can produce a changed
+interface. Inputs persist through revisions, and a question about a passage can become an
+independent conversation and alternative tool. The file workspace and generated interfaces serve
+this way of working across different kinds of content.
+
+Viewer and its spatial engine, Plurid, existed before this hackathon. The prior Viewer already had
+file browsing, previews, linked planes, model configuration and ordinary chat. The additions include
+generated canvases, saved inputs, exact quote branches, file snapshots, reviewed results and the
+robot model/checking capabilities used in the demonstration. Plurid also gained engine improvements;
+credit those separately from the existing spatial foundation.
+
+The proposed film, **There Is No Interface**, makes that argument explicit: the interface is
+generated on the spot from the project and the person's request. Keep the personal account and the
+files-and-folders argument in the main narration. Introduce Viewer and Plurid as existing projects
+while exploring their space, then identify the hackathon additions. The robot is one demonstration
+of the idea. An optional synthetic homage must remain distinct from the real app. The film does not
+claim full replacement of established creative and engineering applications.
 
 ## Proposed demonstration
 
@@ -70,9 +85,11 @@ success claims from the supplier or fabrication examples to the robot demonstrat
 ## Claims requiring qualification
 
 The film must visibly demonstrate the qualified creation, refinement, quoted alternative and saved
-result. The foreground rehearsal exercises the filmed controls, but does not establish that the
-finished story is understandable. Review the cut for pacing and replace its guide voice and opening
-placeholder. Restart is verified separately; show it only if it is recorded.
+result. The foreground rehearsal exercises controls; it does not establish an understandable story.
+The story cut must distinguish a generated tool from a built-in robot application and make the
+spatial relationships understandable. Its continuous passages and input cues support that review;
+technical capture checks alone do not establish audience comprehension. Restart is verified
+separately; show it only if it is recorded.
 
 Ambiguous units, dimensions and source associations require human confirmation. An unresolved
 numerical solve is not proof of unreachability. Kinematic checks do not establish collision safety,
@@ -92,13 +109,13 @@ and supporting libraries independently of Viewer's generated interface.
    [official event guide](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details) and
    [terms](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/waiver), including duration,
    source availability, asset use, synthetic portrayals and eligibility of prior work.
-3. Replace the marked opening and temporary narration using the
-   [production handoff](hackathon-demo.md#final-production-handoff). Retime captions to the
-   creator's voice and review the complete cut. Keep the saved-session and local-refinement labels;
-   retain the source takes and edit decision list.
-4. Review the [contribution inventory](hackathon-contributions.md) against the accepted event
-   baseline. Fill in authors, dates and exact source references without attributing the existing
-   Viewer or Plurid foundation to this event.
+3. Review the story cut using the [production handoff](hackathon-demo.md#final-production-handoff).
+   Check whether a first-time viewer can follow the actions before recording final narration and
+   finishing the opening. Keep saved-session and local-refinement attribution; retain source takes
+   and the edit decision list.
+4. Complete the [contribution inventory](hackathon-contributions.md) from the confirmed development
+   baseline. Fill in authors and final source references, then check the organizer's eligibility
+   rules. Keep the existing Viewer and Plurid foundation distinct from the post-baseline additions.
 5. Replace proposed claims with only those established by the final demonstration. Add public
    source, reproduction instructions, video and team details to the organizer's form. Inspect public
    materials for credentials and personal data.

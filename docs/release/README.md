@@ -8,9 +8,9 @@ publication.
 | [Store listing](app-store-metadata.md)               | Product description and App Store metadata.                   |
 | [Privacy policy](privacy-policy.md)                  | Local storage, optional services and data handling.           |
 | [Support page](support.md)                           | Help and contact information for a published build.           |
-| [There Is No Interface](hackathon-demo.md)           | Selected screenplay, shots and robot readiness gates.         |
+| [There Is No Interface](hackathon-demo.md)           | Revised story, continuous capture plan and readiness gates.   |
 | [Hackathon submission](hackathon-submission.md)      | Proposed entry copy, evidence limits and publication details. |
-| [Contribution inventory](hackathon-contributions.md) | Boundaries for the final event receipt.                       |
+| [Contribution inventory](hackathon-contributions.md) | Confirmed development baseline and event changes.             |
 
 Build instructions and qualification requirements are in
 [release engineering](../development/releases.md). Platform availability is recorded in

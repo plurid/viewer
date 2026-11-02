@@ -42,6 +42,24 @@ Review the retained captures before using `--publish` to copy a new capture set 
 Review changes alongside the corresponding instructions. The demo should use readable, meaningful
 files and actual completed actions.
 
+## Make recorded input visible
+
+For a walkthrough that needs a pointer and keyboard cues, use `inputOverlay` from
+`packages/viewer-electron/app/tools/docs/input-overlay.ts`. Give the returned connection to both the
+recording function and the input controls. The overlay follows the mouse coordinates and keyboard
+chords actually dispatched to Viewer. It does not invoke application actions.
+
+Use `cue()` to name the current action, such as **Open linked plane** or **Back to parent plane**.
+Modifier keys and navigation keys appear as separate keycaps. Click feedback stays neutral, and the
+cue remains briefly after release. Ordinary typed text is excluded from the overlay and its input
+log; only its character count is retained. This avoids displaying private paths or credentials as
+keystroke annotations.
+
+Call `reset()` at the start of a take, save `events` beside the frame timestamps, and call
+`dispose()` before closing the owned app. Keep the annotation separate from product functionality in
+capture attribution. Review keycaps at the delivered video's actual size and keep captions out of
+their area. Preserve native camera movement and its triggering input in the same shot.
+
 ## Attribution
 
 `source.jpg`, the sample PDF image, the image-conversion demonstration and the three collage

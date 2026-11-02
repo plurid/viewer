@@ -7,22 +7,32 @@ and visual pose replay are implemented. Actual Meta-generated creation, refineme
 alternative have passed native workflow checks, including comparison save, export/reopen and cold
 restart. A separate presentation copy groups controls, bounds inspector height and frames the arm.
 It preserves the provider scripts; these local layout edits are attributed separately. The
-foreground rehearsal passes, with continuous saved-session takes retained. A 2:55 review cut now has
-actual interactions, captions, a marked opening placeholder and a temporary system voice. The
-[screenplay](../release/hackathon-demo.md) owns narration, timing and capture requirements. The
-final opening, creator narration and attribution remain before submission.
+foreground rehearsal passes, with saved-session takes retained. The review film failed to introduce
+the existing Viewer and Plurid projects, explain the event additions or make spatial navigation
+understandable. The [screenplay](../release/hackathon-demo.md) is being rebuilt around visible
+actions in one workspace. New continuous footage, a clear story and a concrete ending are needed
+before final narration and submission. The
+[contribution inventory](../release/hackathon-contributions.md) uses the owner's 27 October 2026
+development baseline to distinguish prior work.
 
 ## Product thesis
 
-A project outlives the interface used for a particular task. Viewer keeps its files, sources,
-conversations, alternatives and saved results together while an agent creates the controls needed
-for the next question. The person directs structure, dependencies and consequences without having to
-edit every file personally.
+The creator's account is central: about a million lines of code written up to 2025, then at most ten
+thousand modified from 2025 to today, mostly configuration files. These are personal estimates. The
+work has shifted toward managing a project's files and folders: their structure, relationships,
+workflows and the consequences of a change. Code, CAD, images and documents have different contents;
+the person still directs how the project fits together. **I am the file manager** describes that
+role.
 
-The film's “there is no interface” hook means there is no single predetermined interface the person
-must learn before working. The agent generates a task-specific tool on top of dependable Viewer
-capabilities. File formats alone do not supply editing semantics, geometry or verification. This is
-not a claim that Viewer can generate complete Photoshop or AutoCAD replacements.
+The film's “there is no interface” hook means the agent generates the interface needed for the task,
+on the spot. The person asks what they need to do with the project, and the agent builds controls
+around its files. The controls can change when the question changes. Viewer keeps sources,
+conversations, alternatives and saved results together throughout that work.
+
+The robot demonstrates this broader idea through one qualified workflow. The generated tool uses
+Viewer capabilities for source access, geometry and verification. File formats alone do not supply
+those capabilities. Broad replacement of complete Photoshop or AutoCAD applications remains outside
+what this demonstration establishes.
 
 Plurid makes the relationships navigable. Quote branches keep another investigation beside its
 source; independent canvases retain both alternatives. Spatial proximity does not grant access or
@@ -71,7 +81,7 @@ evidence. Keep run-specific results outside this page and follow
 | Independently check robot results         | Implemented for endpoint positions and hard joint limits, with saved-input and source bindings.                                    | [Desktop checker](../../packages/viewer-electron/app/src/desktop/robotics/check.ts) uses separate point propagation. [Target tests](../../packages/viewer-electron/app/tests/robot-targets.test.ts) cover SciPy reference agreement, stale inputs and restart. No interval, orientation or collision verification is provided.                                                             |
 | Compare base placements and replay poses  | Implemented: native comparison requires equal model, world targets, tool and tolerance; offline replay interpolates copied joints. | [Comparison owner](../../packages/viewer-electron/app/src/desktop/canvases/robot-check.ts), [replay module](../../packages/viewer-electron/app/src/domain/robotics/replay.ts), [native comparison fixture](../../packages/viewer-electron/app/tests/native/robot-comparison.ts). Both tasks are checked again after restart. Visual interpolation does not check intervals.                |
 | Qualify the generated robot workflow      | Verified in native replay of actual Meta output: articulated creation, target-solving refinement and an exact quoted alternative.  | The alternative keeps the original unchanged and passes independent endpoint checks. Comparison save, paused replay, export/reopen and cold restart passed. A valid response rejected by a local parser was recovered unchanged; failures remain retained. This is functional qualification, not finished footage.                                                                         |
-| Complete the robot film                   | Presentation and foreground workflow qualified; a 2:55 review cut has actual footage and a guide voice.                            | Review the cut and replace the marked opening, temporary voice and draft attribution. Saved sessions and local layout edits are identified. The review cut is not a completed submission.                                                                                                                                                                                                  |
+| Complete the robot film                   | Functional rehearsal qualified; the review edit did not explain the product or spatial workflow.                                   | Rebuild the introduction and story. Record a continuous movement study with a visible pointer, then the missing spatial passages and saved-result ending. Final narration, opening footage and credits follow that review.                                                                                                                                                                 |
 
 The [canvas reference](../reference/canvases.md) owns current APIs and limits. The SDK exposes
 state, sources, assets and reviewed proposals/exports. The offline motion library computes supplied
@@ -99,10 +109,10 @@ checks and saves the comparison. This does not prove the original placement unre
 [robot snapshot decision](../adr/0013-robot-model-snapshots.md) records the implemented foundation.
 The [target-check decision](../adr/0014-robot-target-checks.md) records the solving and
 endpoint-check boundary. The work items above remain the acceptance checklist; their implementation
-is complete for this bounded case. The presentation copy has passed a foreground input rehearsal and
-retained continuous takes of the controls and handoff. The narrated review cut now covers that
-workflow; final opening footage, creator narration and attribution remain. A supplied HTML fixture
-cannot qualify generated controls or a model explanation. The
+is complete for this bounded case. The presentation copy has passed a foreground input rehearsal.
+Retained footage covers the controls and handoff, but the review film does not make the task or
+workspace understandable. Rebuild the recording sequence before final production. A supplied HTML
+fixture cannot qualify generated controls or a model explanation. The
 [staged robot runner](../development/testing.md#robot-creation-revision-and-quoted-alternative)
 prepares pinned public inputs, records the paid allowance across restarts and stops between stages
 for native review. Its offline provider tests establish harness behavior, not live generation.

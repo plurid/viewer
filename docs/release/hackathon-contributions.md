@@ -1,24 +1,42 @@
 # Hackathon contribution inventory
 
-Use this inventory to prepare the final contribution receipt. It describes feature boundaries; it
-does not establish event eligibility or authorship dates. Confirm the event's accepted baseline and
-each contributor before turning it into the submitted receipt. Keep run-specific test counts, model
-usage and artifact paths in the retained evaluation report.
+Use this inventory to prepare the final contribution receipt. The owner supplied **27 October 2026**
+as the development start date. The comparison below uses the last committed state before midnight at
+the start of that date in Europe/Bucharest (`2026-10-27T00:00:00+02:00`). This is the development
+baseline for attribution; organizer eligibility and contributor credits still need final review.
+Keep run-specific test counts, model usage and artifact paths in the retained evaluation report.
+
+## Source baseline
+
+| Repository | Last revision before the start date        | Reviewed revision |
+| ---------- | ------------------------------------------ | ----------------- |
+| Viewer     | `c8c973f82f9473a3b8819f61e2b5edfb9466e6cf` | `7c972f5b`        |
+| Plurid     | `9929887f90e6635552097f8a0466261ce92fc5c1` | `a27510396`       |
+
+The Viewer baseline was committed on 26 October; the Plurid baseline on 23 October. Reproduce each
+selection in its repository with `git rev-list -1 --before=2026-10-27T00:00:00+02:00 HEAD`, then
+compare that revision with the reviewed source. Refresh the reviewed revision or attach the final
+patch before submission. Commit history establishes what changed between repository states; it does
+not establish the exact time every line was written.
 
 ## Existing foundation
 
-Viewer already provides a desktop file workspace, previews, commands, settings, model configuration,
-permission checks, native file operations and persistent planes. Plurid provides the spatial engine.
-Describe these as the foundation of the entry, not as software created entirely during the event.
+Before the baseline, Viewer already provided a desktop file workspace, previews, commands, settings,
+model configuration, permission checks, native file operations, persistent planes and ordinary
+conversations. Plurid already provided the spatial engine, linked planes and camera navigation.
+Introduce both as existing projects in the film.
 
-The conversation/canvas foundation also predates the current source-snapshot and result-export
-changes. Attribute its event eligibility from its own history, not from the latest working diff.
+Generated conversation canvases and exact quote branches were absent from the Viewer baseline. Their
+first committed implementation is `4cee7ad0`, on 1 November. Ordinary chat predates the hackathon;
+the ability to generate a tool and branch it from a selected passage belongs in the post-baseline
+changes.
 
 ## Implemented candidate contributions
 
-These source boundaries identify existing implementations. Their inclusion here does not establish
-that every behavior was filmed, that the robot case works, or that all of this code falls within the
-event window.
+These are additions or extensions relative to the Viewer baseline. The source boundaries identify
+the implementation; the film and retained verification establish which behaviors were exercised.
+Existing provider adapters, conversation storage and file services are supporting foundations, even
+where a row extends them.
 
 | Area                           | Concrete behavior                                                                                                                    | Primary source boundary                                                                                |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
@@ -39,11 +57,28 @@ Paths in this table are relative to `packages/viewer-electron/app`. The
 [canvas reference](../reference/canvases.md) defines the contracts and limits. The
 [ownership decision](../adr/0011-conversation-canvases.md) explains persistence and isolation.
 
+The source-snapshot, reviewed-result and runtime-observation files first appear in `e8953828`. The
+robot reader appears in `ced1b0c5`, the independent checker and comparison owner in `d734681b`, and
+pose replay in `d00d4fa7`. These are all 1 November commits. Quote branch fields and canvas
+operations were added to the existing chat schema in `4cee7ad0`.
+
+## Plurid changes after the baseline
+
+The engine comparison adds plane-relative camera anchors and tours; pinned and stacked planes;
+arrangement history for those states; and fading of planes that obscure the current view. It also
+changes modifier selection to title bars by default, preserves text selection in content, respects
+custom title-bar height and bounds the camera transform cache. The engine's `docs/MIGRATION.md`
+describes the prepared 30 and 31 October releases and their source contracts.
+
+Credit these as improvements to an existing engine. Do not describe spatial navigation or Plurid
+itself as invented during this hackathon, or imply every new engine feature is demonstrated in the
+robot film. Package publication is a separate status from source implementation.
+
+## Work outside the qualified case
+
 The supplier case remains
 [evaluation material](../development/testing.md#canvas-evaluation-and-replay). Its outputs and tests
 are not evidence for the selected robot demonstration.
-
-## Work outside the qualified case
 
 The [implementation audit](../research/workshop.md#implementation-audit) owns the qualification
 boundary and remaining presentation work. The generated SO-101 workflow has native evidence for
@@ -52,14 +87,16 @@ save, replay, export/reopen and restart. This does not establish collision check
 trajectory validation, dynamics, device calibration or physical operation. Keep these absent
 capabilities out of the completed contribution list.
 
-The [screenplay](hackathon-demo.md) is publication preparation. The review cut shows actual native
-interactions with saved Meta output; it does not depict a fresh model generation. Its opening is a
-marked placeholder and its narration is temporary. Attribute public robot assets, supporting
-libraries, generated UI and human-authored Viewer capabilities separately.
+The [screenplay](hackathon-demo.md) is being revised after the review cut failed to explain the
+product, its spatial relationships and its contribution. Existing footage shows actual native
+interactions with saved Meta output; it does not depict a fresh model generation. A replacement film
+still needs a clear introduction, continuous spatial footage and a concrete ending. Attribute public
+robot assets, supporting libraries, model-generated UI and the Viewer implementation separately.
 
 ## Attach to the final receipt
 
-1. The event baseline revision and final source revision or patch, with contributor attribution.
+1. The baseline revisions above and the final source revision or patch, with contributor attribution
+   and confirmation that the organizer accepts the declared window.
 2. A feature-by-feature distinction between prior work, event changes and third-party components.
 3. The supplier sample's CC0 statement if included; pinned provenance and notices for each robot
    asset, supporting library and media element used in the final entry.
