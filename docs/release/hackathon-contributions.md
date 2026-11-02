@@ -52,8 +52,9 @@ save, replay, export/reopen and restart. This does not establish collision check
 trajectory validation, dynamics, device calibration or physical operation. Keep these absent
 capabilities out of the completed contribution list.
 
-The [screenplay](hackathon-demo.md) is publication preparation. Its synthetic opening and planned
-robot scenes do not establish implemented behavior. Attribute public robot assets, supporting
+The [screenplay](hackathon-demo.md) is publication preparation. The review cut shows actual native
+interactions with saved Meta output; it does not depict a fresh model generation. Its opening is a
+marked placeholder and its narration is temporary. Attribute public robot assets, supporting
 libraries, generated UI and human-authored Viewer capabilities separately.
 
 ## Attach to the final receipt

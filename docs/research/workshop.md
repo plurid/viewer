@@ -7,9 +7,10 @@ and visual pose replay are implemented. Actual Meta-generated creation, refineme
 alternative have passed native workflow checks, including comparison save, export/reopen and cold
 restart. A separate presentation copy groups controls, bounds inspector height and frames the arm.
 It preserves the provider scripts; these local layout edits are attributed separately. The
-foreground rehearsal passes, with continuous saved-session takes retained. The narrated film remains
-unfinished. The [screenplay](../release/hackathon-demo.md) owns narration, timing and capture
-requirements; the finished film remains outstanding.
+foreground rehearsal passes, with continuous saved-session takes retained. A 2:55 review cut now has
+actual interactions, captions, a marked opening placeholder and a temporary system voice. The
+[screenplay](../release/hackathon-demo.md) owns narration, timing and capture requirements. The
+final opening, creator narration and attribution remain before submission.
 
 ## Product thesis
 
@@ -70,7 +71,7 @@ evidence. Keep run-specific results outside this page and follow
 | Independently check robot results         | Implemented for endpoint positions and hard joint limits, with saved-input and source bindings.                                    | [Desktop checker](../../packages/viewer-electron/app/src/desktop/robotics/check.ts) uses separate point propagation. [Target tests](../../packages/viewer-electron/app/tests/robot-targets.test.ts) cover SciPy reference agreement, stale inputs and restart. No interval, orientation or collision verification is provided.                                                             |
 | Compare base placements and replay poses  | Implemented: native comparison requires equal model, world targets, tool and tolerance; offline replay interpolates copied joints. | [Comparison owner](../../packages/viewer-electron/app/src/desktop/canvases/robot-check.ts), [replay module](../../packages/viewer-electron/app/src/domain/robotics/replay.ts), [native comparison fixture](../../packages/viewer-electron/app/tests/native/robot-comparison.ts). Both tasks are checked again after restart. Visual interpolation does not check intervals.                |
 | Qualify the generated robot workflow      | Verified in native replay of actual Meta output: articulated creation, target-solving refinement and an exact quoted alternative.  | The alternative keeps the original unchanged and passes independent endpoint checks. Comparison save, paused replay, export/reopen and cold restart passed. A valid response rejected by a local parser was recovered unchanged; failures remain retained. This is functional qualification, not finished footage.                                                                         |
-| Complete the robot film                   | Presentation and foreground workflow qualified; continuous takes captured. Narration and the final edit remain.                    | The presentation copy frames both placements and groups controls without changing provider scripts. Native screenshots do not qualify the complete three-minute film.                                                                                                                                                                                                                      |
+| Complete the robot film                   | Presentation and foreground workflow qualified; a 2:55 review cut has actual footage and a guide voice.                            | Review the cut and replace the marked opening, temporary voice and draft attribution. Saved sessions and local layout edits are identified. The review cut is not a completed submission.                                                                                                                                                                                                  |
 
 The [canvas reference](../reference/canvases.md) owns current APIs and limits. The SDK exposes
 state, sources, assets and reviewed proposals/exports. The offline motion library computes supplied
@@ -99,8 +100,9 @@ checks and saves the comparison. This does not prove the original placement unre
 The [target-check decision](../adr/0014-robot-target-checks.md) records the solving and
 endpoint-check boundary. The work items above remain the acceptance checklist; their implementation
 is complete for this bounded case. The presentation copy has passed a foreground input rehearsal and
-retained continuous takes of the controls and handoff. Next, make the result understandable in the
-narrated edit. A supplied HTML fixture cannot qualify generated controls or a model explanation. The
+retained continuous takes of the controls and handoff. The narrated review cut now covers that
+workflow; final opening footage, creator narration and attribution remain. A supplied HTML fixture
+cannot qualify generated controls or a model explanation. The
 [staged robot runner](../development/testing.md#robot-creation-revision-and-quoted-alternative)
 prepares pinned public inputs, records the paid allowance across restarts and stops between stages
 for native review. Its offline provider tests establish harness behavior, not live generation.

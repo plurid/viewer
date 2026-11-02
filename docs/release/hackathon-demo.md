@@ -4,8 +4,9 @@ This is the proposed three-minute film for Viewer. The screenplay is selected. T
 Meta-generated robot workflow has passed native creation, refinement, quoted-alternative,
 comparison-save, export/reopen and restart checks. A separate presentation copy now has grouped
 controls, bounded inspectors and camera framing; its executable provider scripts are unchanged. The
-foreground interaction rehearsal passes, and continuous saved-session takes are captured. The
-narrated three-minute edit remains unfinished. The
+foreground interaction rehearsal passes. A 2:55 review cut combines actual recorded interactions,
+captions and a temporary system voice. Its opening is a marked placeholder. The creator's voice,
+opening footage and final attribution remain before submission. The
 [implementation audit](../research/workshop.md#implementation-audit) separates functional
 qualification from the unfinished presentation.
 
@@ -19,42 +20,62 @@ example; the product is creating tools around a person's project.
 
 ## Timeline and narration
 
-The synthetic scene lasts nine seconds. Your voice carries the rest. All product shots are actual
-Viewer footage. The demonstration starts at 0:47 and remains one task, with labeled cuts past
-generation waits.
+The review cut uses a nine-second opening placeholder and a temporary system voice. Replace both
+before submission. The final opening may use the proposed Matrix-inspired scene with a child, a
+visitor and a floating interface losing its rigid outline. Label that scene **AI-generated homage**.
+The placeholder is labeled **Opening placeholder**, not generated footage.
 
-| Time      | Picture and action                                                                                                                                                                                        | Spoken words                                                                                                                                                                                                               |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0:00–0:09 | A brief Matrix-inspired synthetic scene: a child and a visitor, a floating interface losing its rigid outline. On-screen caption: **AI-generated homage**. Cut directly into Viewer.                      | Character: “Do not try and use the interface. That’s impossible. Realize the truth. There is no interface.”                                                                                                                |
-| 0:09–0:25 | Your narration begins over actual code and project navigation. Brief number overlays read **~1,000,000 lines written** and **≤10,000 lines edited since 2025**.                                           | “By 2025, I’d written roughly a million lines of code. Since then, I’ve edited at most ten thousand. Mostly configuration. I still build projects. What changed is where I spend my attention.”                            |
-| 0:25–0:47 | Use the short shots below to connect source, result and consequence. End with browser, editor and terminal planes belonging to the same project.                                                          | “How the pieces fit together. What depends on what. What happens when something changes. I became the file manager. Browser. Editor. Terminal. Different views of the same project. So why should the interface be fixed?” |
-| 0:47–1:18 | Open the robot files. Choose **Build tool from selection**, send the first prompt and show the canvas being created. Move one joint with its control. Keep the arm and its stated limit readable.         | “These files describe a machine. I ask the agent to build the tool I need to understand it.”                                                                                                                               |
-| 1:18–1:46 | Send the second prompt. Show the workbench gaining target controls. Edit a target coordinate, display the actual check result and open the joint definition behind a constraint.                          | “My question changes. The tool changes with it. The model’s constraints remain attached to their sources.”                                                                                                                 |
-| 1:46–2:16 | Select the explanation of that constraint and choose **Ask about selection**. Send the third prompt. Show the independent alternative beside the original, with the same targets.                         | “A question about one detail becomes another line of investigation. I can compare both without losing where I started.”                                                                                                    |
-| 2:16–2:45 | Run the endpoint check, inspect its result and replay the candidate poses. Review and save the comparison JSON. Reopen the exported canvas and replay the saved motion. Mark any cut between these steps. | “The agent proposes the motion. A separate calculation checks each proposed pose against the model. I inspect the result, save it and reopen the work.”                                                                    |
-| 2:45–3:00 | Briefly pull back to show the connected files, conversations and alternatives. End on the working result, then the Viewer title and contribution card.                                                    | “The project stays. The tools change. Viewer. The interface your task needs, when you need it.”                                                                                                                            |
+All product shots are actual Viewer interactions. The film reviews the saved Meta session, including
+repaired revisions. It does not stage a fresh generation or imply that the first request worked
+without iteration. Local layout refinements are identified separately.
+
+| Time          | Picture and action                                                                                                                            | Spoken words                                                                                                                                                                                                                    |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0:00–0:09     | Marked typography placeholder. No synthetic character footage.                                                                                | “Do not try and use the interface. That's impossible. Realize the truth. There is no interface.”                                                                                                                                |
+| 0:09–0:24     | Actual project files and linked source navigation. Line counts are the creator's personal estimates.                                          | “By twenty twenty-five, I'd written roughly a million lines of code. Since then, I've edited at most ten thousand, mostly configuration. My work moved to architecture, dependencies and decisions. I became the file manager.” |
+| 0:24–0:33     | Actual arm and two fixed target markers. Establish the question before the first request.                                                     | “Take this robot project. I want the arm to reach two fixed points. What tool do I need to work that out?”                                                                                                                      |
+| 0:33–0:45     | Actual retained creation request, with a fixed detail crop, then its saved canvas. Label Saved Meta session and local layout refinements.     | “I ask Meta to turn the robot description and meshes into a workbench. You're seeing the saved session after testing and repairs, with local layout refinements.”                                                               |
+| 0:45–1:00.4   | Move a joint, orbit the actual mesh and inspect its captured definition.                                                                      | “First, explore. I move a joint, orbit the arm, and inspect its declared limit. The workbench gives me controls for this particular model.”                                                                                     |
+| 1:00.4–1:06.4 | Open the linked URDF definition. Preserve source context and declared limits.                                                                 | “Open the definition behind that joint. The source stays connected to the tool.”                                                                                                                                                |
+| 1:06.4–1:15.6 | Actual retained refinement request, then the canvas with added target controls. The detail crop retains the submitted text.                   | “I change the question: add targets and check the proposed poses. The tool gains new controls, while keeping my saved inputs.”                                                                                                  |
+| 1:15.6–1:21   | Open task.json with the fixed world coordinates. No inferred values or invented dependency graph.                                             | “Both alternatives will use the same target coordinates from this task file.”                                                                                                                                                   |
+| 1:21–1:37     | Edit and restore a target coordinate, run the host checker and inspect both original errors. Tolerance is one millimetre.                     | “With the original base, the saved candidates miss by one hundred sixty-seven and one hundred twenty-seven millimetres. A failed search does not prove those targets unreachable. So I keep this attempt and explore another.”  |
+| 1:37–1:47.3   | Select the exact retained passage and click Ask about selection. Label the local quote interaction replay and the following saved result.     | “I select that passage and branch the conversation. Try moving the base. Keep the targets fixed, and leave the original tool intact.”                                                                                           |
+| 1:47.3–1:55   | Actual saved alternative request, then its canvas. No new model request during filming.                                                       | “Meta's saved alternative shifts the base fifty-five centimetres. Same targets. Same tolerance.”                                                                                                                                |
+| 1:55–2:06     | Replay the proposed poses and run the independent checker. Visual motion does not validate the intervening path.                              | “The alternative lets me replay its proposed poses. I run Viewer's checker, separately from the generated interface.”                                                                                                           |
+| 2:06–2:15.6   | Hold the actual comparison table. The editorial measurement caption repeats its measured values: 167.436 to 0.388 mm and 127.165 to 0.290 mm. | “Both errors are below point four millimetres, within tolerance. The check covers endpoint positions and joint limits, not collisions or hardware safety.”                                                                      |
+| 2:15.6–2:27.4 | Save comparison JSON and export the portable canvas through Viewer's pickers. Keep the complete controls above the caption strip.             | “I save the measured comparison, then export the tool with its assets and state. This leaves me with a result I can carry forward.”                                                                                             |
+| 2:27.4–2:40.7 | Reopen the exported canvas, recheck and replay its saved poses. Cold restart was verified separately, not filmed.                             | “Open the exported workbench. Its inputs are still here. Recheck the poses and play them again. The work survives beyond the conversation.”                                                                                     |
+| 2:40.7–2:47.2 | Frame the original, alternative and conversation together in the actual Plurid workspace.                                                     | “The original and alternative stay connected. The project stays. The tools change.”                                                                                                                                             |
+| 2:47.2–2:55   | Title and draft attribution card. Contribution receipt and public submission links remain separate.                                           | “Viewer. The interface your task needs, when you need it.”                                                                                                                                                                      |
 
 The line counts are the creator's personal estimate, not repository measurements or a productivity
-benchmark. Record the voice-over at a natural pace and fit the edit to the three-minute ceiling.
+benchmark. Replace the guide voice with the creator's narration at a natural pace while retaining
+the three-minute ceiling. The problem appears at 0:24 and the first agent request at 0:33. The three
+stages are explicit: explore the arm, add target checking and investigate an alternative. Captions
+occupy a separate strip below the complete visible controls. Fixed detail crops enlarge actual
+recorded requests; no text is rewritten inside the application footage.
 
-### Short shots during the personal story
+### Editing priorities
 
-Keep each shot four to six seconds, with readable content and one visible action:
-
-1. **Structure:** navigate from a project file to a linked view of its contents.
-2. **Dependency:** put an actual source beside the result that uses it. Do not draw an inferred
-   dependency graph and imply Viewer has analyzed the whole project.
-3. **Consequence:** change a saved canvas input and show the resulting calculation or visual change.
-4. **One project:** move through its browser, editor and terminal views. Use the three-part rhythm
-   associated with the iPhone presentation, without depicting Steve Jobs or implying endorsement.
-
-These shots explain the narration. They are not a separate feature tour or evidence for capabilities
-outside the demonstrated task.
+1. Make the question readable before showing its solution: **Can this arm reach both fixed points
+   from this base?**
+2. Show a visible action and its consequence: move a joint, inspect its definition, change a target,
+   run the check, branch, compare and reopen.
+3. Keep the failed original candidates visible. Their misses do not prove the targets unreachable.
+4. Give the comparison table enough reading time. Original errors are about 167.436 mm and 127.165
+   mm; the alternative errors are about 0.388 mm and 0.290 mm at a 1 mm tolerance.
+5. Use project and source shots during the personal story. A separate browser/editor/terminal tour
+   is outside this cut. Do not draw an inferred dependency graph or imply Viewer analyzed the whole
+   project.
+6. Use hard cuts between retained stages. Label the quote interaction replay and its subsequent
+   saved alternative so a local fork is not mistaken for a new model response.
 
 ## The three requests
 
-Show the submitted text clearly. The requests introduce new controls in the same workbench before
-the final request creates an independent alternative.
+These short phrases are editorial summaries, not the submitted prompts. When the conversation is
+visible, retain its actual text. The full requests and repair instructions remain with the saved
+session evidence.
 
 **1. Understand the mechanism**
 
@@ -62,15 +83,16 @@ the final request creates an independent alternative.
 
 **2. Change the task**
 
-> Let me place target points and check whether the arm can reach them.
+> Add editable target positions and check the proposed poses against the model.
 
 **3. Explore an alternative**
 
 > Explore moving the base while keeping the targets fixed.
 
-Choose the third request from an exact passage in the model's actual response. Do not substitute a
-scripted assistant message. If the response does not establish a constraint, resolve that in the
-workbench before recording the branch.
+The recorded branch comes from the model's actual statement about retaining candidate positions when
+a search is unresolved. Use **Ask about selection** on that passage. The film may replay that local
+interaction, then cut to the previously generated alternative. Label this cut; do not send a new
+prompt or substitute a scripted assistant message for filming.
 
 ## Inputs and continuity
 
@@ -109,11 +131,28 @@ recording requires all of the following:
 
 The functional prototype and presentation copy have passed the foreground rehearsal: joint inputs,
 camera orbit, a captured definition, target coordinates, comparison save, export/import and restart.
-Continuous takes cover the controls and handoff. Restart was checked separately, not filmed. The
-retained tool edits targets through coordinate fields; do not depict a 3D drag control it does not
-provide. Keep any presentation edits separate from the original provider output. The film remains
-unfinished until these actions are clear in the recording. Do not replace them with fabricated
-success panels or a prerecorded animation labeled as computation.
+Continuous takes cover the controls, native quote selection and handoff. Restart was checked
+separately, not filmed. The retained tool edits targets through coordinate fields; do not depict a
+3D drag control it does not provide. Keep any presentation edits separate from the original provider
+output. Review the cut for story and pacing before replacing its opening and voice. Do not replace
+actions with fabricated success panels or a prerecorded animation labeled as computation.
+
+## Final production handoff
+
+Use the timeline above as the recording script. Record the creator narration in short sections,
+leaving room to pause on the joint controls and measured comparison. Supply a clean voice track,
+preferably WAV at 48 kHz, without music. The guide voice establishes timing; it is not the intended
+final performance. Confirm the personal line-count estimates before recording them.
+
+The opening occupies exactly nine seconds. Deliver it at 1920 × 1080 and 30 fps, with its dialogue
+separate when available. The first beat shows a child and visitor facing a rigid floating interface.
+The second lets its boundaries dissolve while the project remains. End on a hard cut to the actual
+project files. This is the proposed homage, not footage already produced; label synthetic footage
+**AI-generated homage**.
+
+Replace the marked opening and guide voice, then retime captions against the actual recording. Keep
+cuts around the original native actions. Retain the raw takes and edit decision list. Confirm the
+final model, robot and contribution attribution before replacing the draft end card.
 
 ## Capture and edit
 
@@ -123,8 +162,9 @@ success panels or a prerecorded animation labeled as computation.
   Meta session**. Keep failed requests in evaluation evidence.
 - Existing inputs can survive an agent revision. Show the person changing a control when needed; a
   response claiming to have changed it is not evidence of a changed value.
-- Capture the full application window, including Viewer Save dialogs when shown. Renderer-only
-  recordings omit those dialogs and cannot stand in for that footage.
+- Capture the actual application controls. The renderer recorder includes Viewer's own file pickers
+  and dialogs. It does not capture an operating-system dialog; use full-window capture if one is
+  needed. Keep the raw takes and their frame timestamps.
 - Use your narration and original or cleared audio. Keep the synthetic homage visibly separate from
   the real application. Confirm applicable event and asset requirements before production.
 - Record a voice-over and captions after the task succeeds. Check their legibility and timing at

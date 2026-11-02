@@ -3,9 +3,10 @@
 This copy describes the selected film and distinguishes it from implemented behavior. The actual
 Meta-generated robot workflow has passed native functional checks. A separate presentation copy
 refines layout and camera framing while preserving the provider scripts. The foreground rehearsal
-passes and continuous saved-session takes are captured. The narrated three-minute film remains
-outstanding. Public source and video URLs, team details and the contribution window remain to be
-supplied. This page does not record a published entry.
+passes. A 2:55 review cut has actual interaction footage, captions, a marked opening placeholder and
+a temporary system voice. The final opening, creator narration and attribution remain. Public source
+and video URLs, team details and the contribution window remain to be supplied. This page does not
+record a published entry.
 
 ## Project
 
@@ -26,9 +27,9 @@ replacement of established creative and engineering applications.
 
 A maker or student opens an SO-101 robot project and asks for a workbench to understand its joints.
 A second request adds target placement and reach checking. The person inspects a constraint,
-branches from its explanation and investigates moving the base without changing the targets. A
-separate checker validates the proposed kinematic result before the person saves and reopens the
-work.
+branches from the actual discussion of unresolved candidates and investigates moving the base
+without changing the targets. A separate checker validates the proposed kinematic result before the
+person saves and reopens the work.
 
 The [screenplay](hackathon-demo.md) owns the exact narration and shots. The
 [implementation audit](../research/workshop.md#implementation-audit) records the implemented robot
@@ -70,8 +71,8 @@ success claims from the supplier or fabrication examples to the robot demonstrat
 
 The film must visibly demonstrate the qualified creation, refinement, quoted alternative and saved
 result. The foreground rehearsal exercises the filmed controls, but does not establish that the
-finished story is understandable. Review the actual cut with its narration. Restart is verified
-separately; show it only if it is recorded.
+finished story is understandable. Review the cut for pacing and replace its guide voice and opening
+placeholder. Restart is verified separately; show it only if it is recorded.
 
 Ambiguous units, dimensions and source associations require human confirmation. An unresolved
 numerical solve is not proof of unreachability. Kinematic checks do not establish collision safety,
@@ -84,15 +85,17 @@ and supporting libraries independently of Viewer's generated interface.
 
 ## Before submitting
 
-1. Polish the qualified robot prototype and complete the screenplay's foreground readiness checks.
-   Keep evidence of failures as well as successful runs; obtain a new explicit budget before further
-   paid model sessions.
+1. Retain the completed foreground checks and the actual recorded workflow. Keep evidence of
+   failures as well as successful runs; obtain a new explicit budget before further paid model
+   sessions.
 2. Confirm the current requirements in the
    [official event guide](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details) and
    [terms](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/waiver), including duration,
    source availability, asset use, synthetic portrayals and eligibility of prior work.
-3. Record and inspect the actual task. Label synthetic material, saved-response replay and cuts past
-   generation waits. Complete narration and captions; retain the source take.
+3. Replace the marked opening and temporary narration using the
+   [production handoff](hackathon-demo.md#final-production-handoff). Retime captions to the
+   creator's voice and review the complete cut. Keep the saved-session and local-refinement labels;
+   retain the source takes and edit decision list.
 4. Review the [contribution inventory](hackathon-contributions.md) against the accepted event
    baseline. Fill in authors, dates and exact source references without attributing the existing
    Viewer or Plurid foundation to this event.
