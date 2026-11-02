@@ -150,46 +150,66 @@ that a point is unreachable. Keep the problem understandable before introducing 
 
 > Move the base fifty-five centimetres, and solve again.
 >
-> Both endpoints are now within one millimetre of their targets. The result is checked outside the
-> generated interface.
+> Both points are within a millimetre.
+>
+> That gives me a base position.
 
 **Picture:** Open **Coordinates and tolerance**, set **base x** to **0.55 m**, then use **Solve
-both** and **Check poses**. The robot moves while the world targets remain fixed. Display the new
-measured endpoint errors. Replay the candidate poses briefly after the check, with the same tool and
-target coordinates. The native checker must confirm the result before the narration claims it
-passed.
+both** and **Check poses**. Show the native report briefly, then close it so the robot fills the
+view. Sample the first saved pose, hold it, and replay to the second. Give these actions several
+seconds without narration. Display each checked endpoint's error beside its target only while that
+endpoint is sampled. The labels come from Viewer's report, not a generated assertion or a live
+measurement of the movement between poses. Keep the tool and target coordinates fixed throughout.
+The native checker must confirm the result before the narration claims it passed.
 
 This is the practical result: a tested base position for the stated endpoint task. The check covers
 endpoint positions and hard joint limits. It does not check the intervening path, collisions or
 physical hardware. Keep that scope visible in the tool and credits without interrupting the task
 with unrelated warnings.
 
-### 2:10–2:30 · Keep working beyond the conversation
+### 2:10–2:15 · Keep the working tool
 
-**Voice**
-
-> Save the tool with its sources and inputs. Open it again, and continue working.
+**Voice:** None. Let the action carry this short passage.
 
 **Picture:** Export the actual canvas through Viewer's picker. Reopen that export and operate its
-replay controls. Verify that the reopened task matches the one just checked. This is a retained
-working tool, not an image of a generated screen.
+replay controls immediately. Verify that the reopened task matches the one just checked. Cut the
+folder navigation between the export and reopening; retain both actions and the first interaction
+with the reopened tool. Keep the complete capture and omitted range in the edit evidence.
 
-### 2:30–2:40 · Return to the project
+### 2:15–2:36 · See what changed
 
 **Voice**
 
-> I opened a project. I asked for a way to work on it. The interface grew with the task.
+> When I started, I could inspect the robot. Then I needed to test where to put it. So I asked for
+> those controls.
+>
+> I want to work like this: open my project, explain what I need, and use the tool as it takes
+> shape.
 
 **Picture:** Use **Frame all planes** to reveal the connected source, conversation, model and saved
-tool. Preserve the triggering input and camera motion. Hold the workspace long enough to recognize
-what was added during the sequence.
+tool. Focus the earlier inspector and move a joint. Pull back, then focus the saved version with
+target controls and replay its poses. The same project now has a tool for answering the mounting
+question. Preserve the triggering input and camera motion. Finish on the working interface.
+
+### 2:36–2:43 · Closing callback
+
+**Voice**
+
+> There is no interface.
+>
+> Until you need one.
+
+**Picture:** Cut cleanly from the working tool to the title. Pause before the second line appears.
+Keep the delivery quiet and leave a brief hold after it. Include attribution below the title; do not
+add another spoken conclusion or a second outro.
 
 ### Credits
 
 Credit Viewer and Plurid as existing projects, then the hackathon additions. Identify Meta
 `muse-spark-1.3`, TheRobotStudio / SO-ARM100, saved-session playback, condensed repairs, staged
-reveals and local layout refinements. Temporary narration and the opening study are production
-placeholders. The existing contribution inventory owns implementation attribution.
+reveals, local layout and playback repairs, checked measurement labels and edited navigation.
+Temporary narration and the opening study are production placeholders. The existing contribution
+inventory owns implementation attribution.
 
 ## Capture and narrative requirements
 

@@ -14,6 +14,7 @@ import { temporaryRoot } from '../temporary';
 import { digest, readJSON, saveEvidence, verifyRobotRehearsal } from './rehearsal';
 import { currentRobotSession, robotRehearsalStatus } from './rehearsal-session';
 import { presentRobotDocument } from './presentation';
+import { repairReplayClock } from './replay-clock';
 
 const require = createRequire(import.meta.url);
 // Parsing only: scripts, resources and provider requests are never executed here.
@@ -143,6 +144,17 @@ export async function prepareRobotPresentation(directory: string) {
     } finally {
       dom.window.close();
     }
+    const replayClock = repairReplayClock(html);
+    html = replayClock.html;
+    const presented = new JSDOM(html);
+    let presentationModuleHash: string;
+    try {
+      presentationModuleHash = digest(
+        [...presented.window.document.scripts].map((script) => script.outerHTML).join('\n'),
+      );
+    } finally {
+      presented.window.close();
+    }
     const written = await canvases.write(
       1,
       before.id,
@@ -178,11 +190,21 @@ export async function prepareRobotPresentation(directory: string) {
       ...definition,
       originalHTMLHash: digest(before.html),
       presentationHTMLHash: digest(html),
-      unchangedModuleHash: moduleHash,
+      originalModuleHash: moduleHash,
+      presentationModuleHash,
       originalRevision: before.revision,
       presentationRevision: framed.revision,
-      changes: ['Static layout and styles', 'Control grouping and labels', 'Saved camera framing'],
-      computations: 'Original provider scripts retained byte for byte',
+      changes: [
+        'Static layout and styles',
+        'Control grouping and labels',
+        'Saved camera framing',
+        ...(replayClock.repaired
+          ? ['Local replay repair: prevent negative first-frame elapsed time']
+          : []),
+      ],
+      computations: replayClock.repaired
+        ? 'Robot calculations and saved poses preserved; replay elapsed time clamped at zero'
+        : 'Original provider scripts retained byte for byte',
     });
   }
   const stateFile = path.join(profile, 'viewer-state-v1.json');

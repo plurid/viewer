@@ -59,7 +59,8 @@ def verify_png(file):
 source = pathlib.Path(sys.argv[1]).resolve()
 assert json.loads((source / 'story-completed.json').read_text())['status'] == 'passed'
 capture = json.loads((source / 'story-capture.json').read_text())
-assert capture['providerRequests'] == 0 and len(capture['clips']) == 8
+assert capture['providerRequests'] == 0 and len(capture['clips']) in (8, 9)
+closing_callback = capture['clips'][-1]['name'] == '08-closing'
 assert (capture['width'], capture['height']) == SIZE
 root = pathlib.Path(tempfile.mkdtemp(prefix='viewer-interface-review-', dir='/private/tmp'))
 for name in ['Voice', 'Captions', 'Review']:
@@ -96,41 +97,94 @@ for clip in capture['clips']:
         milliseconds = 0 if index == 0 else frame['milliseconds']
         assert milliseconds >= previous
         previous = milliseconds
-        next_time = frames[index + 1]['milliseconds'] / 1000 if index + 1 < len(frames) else clip['seconds']
-        length = next_time - milliseconds / 1000
-        assert length >= 0
-        file = directory / frame['file']
-        verify_png(file)
-        picture.extend(concat_entry(file, max(.001, length)))
-    source_frames += len(frames)
+        verify_png(directory / frame['file'])
+    assert previous / 1000 <= clip['seconds']
+    keep_from = 0
+    ranges = []
+    omissions = set(clip.get('omitActions', []))
+    assert omissions <= {mark['action'] for mark in clip['marks']}
     for index, mark in enumerate(clip['marks']):
-        end = clip['marks'][index + 1]['seconds'] if index + 1 < len(clip['marks']) else clip['seconds']
-        slots.append({'start': cursor + mark['seconds'], 'end': cursor + end,
-                      'text': mark['narration'], 'action': mark['action']})
-        samples.append({'time': cursor + mark['seconds'] + min(3, (end - mark['seconds']) * .6),
-                        'action': mark['action']})
-    clip.update(editStart=cursor, editEnd=cursor + clip['seconds'])
-    cursor += clip['seconds']
+        if mark['action'] not in omissions:
+            continue
+        if mark['seconds'] > keep_from:
+            ranges.append((keep_from, mark['seconds']))
+        keep_from = clip['marks'][index + 1]['seconds'] if index + 1 < len(clip['marks']) else clip['seconds']
+    if keep_from < clip['seconds']:
+        ranges.append((keep_from, clip['seconds']))
+    clip['editStart'] = cursor
+    clip['selectedRanges'] = []
+    included = set()
+    for start, end in ranges:
+        assert 0 <= start < end <= clip['seconds']
+        clip['selectedRanges'].append({'sourceStart': start, 'sourceEnd': end, 'editStart': cursor})
+        selected_seconds = 0
+        for index, frame in enumerate(frames):
+            frame_start = frames[index]['milliseconds'] / 1000 if index else 0
+            frame_end = frames[index + 1]['milliseconds'] / 1000 if index + 1 < len(frames) else clip['seconds']
+            length = min(end, frame_end) - max(start, frame_start)
+            if length <= 0:
+                continue
+            picture.extend(concat_entry(directory / frame['file'], length))
+            included.add(index)
+            selected_seconds += length
+        assert abs(selected_seconds - (end - start)) < .000001
+        for index, mark in enumerate(clip['marks']):
+            mark_end = clip['marks'][index + 1]['seconds'] if index + 1 < len(clip['marks']) else clip['seconds']
+            if not start <= mark['seconds'] < end:
+                continue
+            available = min(mark_end, end) - mark['seconds']
+            offset = cursor + mark['seconds'] - start
+            if mark['narration']:
+                assert mark_end <= end, 'Never cut off a spoken cue.'
+                slots.append({'start': offset, 'end': offset + available,
+                              'text': mark['narration'], 'action': mark['action']})
+            samples.append({'time': offset + min(3, available * .6), 'action': mark['action']})
+        cursor += end - start
+    source_frames += len(included)
+    clip['editEnd'] = cursor
 
 picture_end = cursor
 duration = math.ceil((picture_end + 7) * 30) / 30
 assert duration <= 180, ('Keep the full cut under three minutes', duration)
-image = Image.new('RGB', SIZE, '#22262c')
-draw = ImageDraw.Draw(image)
-draw.text((160, 380), 'Viewer / There Is No Interface', font=ImageFont.truetype(FONT, 76), fill='#f3f4f6')
 credits = [
     'Viewer + Plurid: existing projects',
     'Hackathon: generated canvases, revisions, saved inputs and source-based checks',
     'Meta muse-spark-1.3 · Robot: TheRobotStudio / SO-ARM100',
-    'Saved responses · Condensed repairs · Staged reveals and local layout refinements',
+    ('Saved responses · Condensed repairs · Local layout, replay repair and measurement labels · Edited navigation and reveals'
+     if closing_callback else 'Saved responses · Condensed repairs · Staged reveals and local layout refinements'),
     'Temporary opening and voice · Kinematic endpoints, no path or hardware simulation',
 ]
-for index, text in enumerate(credits):
-    draw.text((160, 580 + index * 88), text, font=ImageFont.truetype(FONT, 39), fill='#b8c0cc')
-credits_file = root / 'credits.png'
-image.save(credits_file)
-picture.extend(concat_entry(credits_file, duration - picture_end))
-picture.extend(concat_entry(credits_file, .001)[:2])
+if closing_callback:
+    for index, text in enumerate(['There is no interface.', 'Until you need one.']):
+        image = Image.new('RGB', SIZE, '#22262c')
+        draw = ImageDraw.Draw(image)
+        draw.text((1440, 690), 'There is no interface.', anchor='mm',
+                  font=ImageFont.truetype(FONT, 88), fill='#f3f4f6')
+        if index:
+            draw.text((1440, 810), text, anchor='mm',
+                      font=ImageFont.truetype(FONT, 68), fill='#f3f4f6')
+        draw.text((1440, 1050), 'Viewer / Plurid', anchor='mm',
+                  font=ImageFont.truetype(FONT, 36), fill='#b8c0cc')
+        for row, credit in enumerate(credits):
+            draw.text((1440, 1440 + row * 48), credit, anchor='mm',
+                      font=ImageFont.truetype(FONT, 28), fill='#b8c0cc')
+        file = root / f'closing-{index}.png'
+        image.save(file)
+        start = picture_end + (3 if index else 0)
+        end = duration if index else picture_end + 3
+        picture.extend(concat_entry(file, end - start))
+        slots.append({'start': start, 'end': end, 'text': text, 'opening': True})
+    samples.append({'time': picture_end + 4, 'action': 'final-title'})
+else:
+    image = Image.new('RGB', SIZE, '#22262c')
+    draw = ImageDraw.Draw(image)
+    draw.text((160, 380), 'Viewer / There Is No Interface', font=ImageFont.truetype(FONT, 76), fill='#f3f4f6')
+    for index, text in enumerate(credits):
+        draw.text((160, 580 + index * 88), text, font=ImageFont.truetype(FONT, 34), fill='#b8c0cc')
+    file = root / 'credits.png'
+    image.save(file)
+    picture.extend(concat_entry(file, duration - picture_end))
+picture.extend(concat_entry(file, .001)[:2])
 (root / 'picture.concat').write_text('\n'.join(picture) + '\n')
 
 cues = []
@@ -231,5 +285,8 @@ store(root / 'verification.json', {'status': 'technical-checks-passed', 'duratio
       'sourceCapture': str(source), 'video': str(output), 'sha256': digest, 'resolution': SIZE,
       'sourceFrames': source_frames, 'sourceEncoding': 'PNG', 'videoEncodes': 1,
       'providerRequests': 0, 'voice': 'Temporary system voice', 'playbackSpeed': 1,
+      'reusedOpening': capture.get('reusedOpening'),
+      'navigationEdits': [{'clip': c['name'], 'ranges': c['selectedRanges']}
+                          for c in capture['clips'] if c.get('omitActions')],
       'inputs': sum(len(c['inputs']) for c in capture['clips'])})
 print(json.dumps({'video': str(output), 'script': str(root / 'Narration.txt'), 'seconds': duration}), flush=True)

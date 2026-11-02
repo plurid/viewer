@@ -114,6 +114,22 @@ export/reopen. It checks the actual endpoint reports and restored task before ma
 complete. The local browser page introduces the project; it is demonstration material, not model
 output or an external service.
 
+To keep an approved opening while revising the ending, pass `--opening-from <completed-capture>`.
+The recorder reuses that capture's first six clips without re-encoding them, recreates the workspace
+relationships, and records the remaining sequence. Both captures must use the same retained robot
+run. The new manifest identifies the opening's source.
+
+The endpoint annotations use checked report values and the recorded camera projection. Show a value
+only while its corresponding saved pose is sampled, and hide it during interpolation. These are film
+annotations, not generated controls or measurements of the path between endpoints. The recorder
+preserves the report and asserts that replay does not alter the task.
+
+Presentation preparation retains the provider HTML and records script hashes before and after its
+local playback repair. It clamps a negative first-frame elapsed time to zero when an animation
+timestamp predates the click handler's clock reading. Robot calculations and saved poses remain
+unchanged. The recording observes the playback status throughout the motion and rejects even a
+temporary error. Credit this repair with the other local edits.
+
 Use a 1440 × 900 logical viewport with `deviceScaleFactor: 2` and an explicit viewport of the same
 logical size at scale 1. Setting only the device scale can leave compositor recordings at the
 logical resolution. `recordFrames` verifies that every PNG contains 2880 × 1800 native pixels. It
@@ -125,6 +141,11 @@ After the native sequence passes, assemble the full review cut:
 ```sh
 python3 tools/robotics/assemble-story.py <capture-folder>
 ```
+
+The capture can identify a navigation passage to omit. Assembly retains the original timestamps,
+input log and selected source ranges, cuts only that passage, and keeps the included actions at
+their original speed. It generates the closing title and its narration from the same cues as the
+delivered script. Review the final title along with the native shots.
 
 The assembler uses Pillow, macOS's Daniel voice and Homebrew FFmpeg. It encodes once from the PNG
 sources, at the original playback speed, with bounded encoding threads. Timed capture cues produce

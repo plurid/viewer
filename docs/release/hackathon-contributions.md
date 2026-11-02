@@ -90,7 +90,9 @@ capabilities out of the completed contribution list.
 The selected [screenplay](hackathon-demo.md) shows a robot inspector gaining target-testing and
 base-placement controls in response to a new requirement. Its practical result is a saved tool and
 checked endpoint candidates for two fixed work points. Attribute saved-response replay, condensed
-repair rounds, staged reveals and local layout refinements in the film credits.
+repair rounds, staged reveals, local layout refinements and the replay-clock repair in the film
+credits. The presentation manifest records the script hashes before and after that local repair; the
+original provider output remains retained.
 
 The separate mounting example's Meta-generated controls have native evidence for width editing,
 measured DXF export, source-bound quote selection, save/reopen and restart. The supplier remains a

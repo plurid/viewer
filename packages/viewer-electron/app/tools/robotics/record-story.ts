@@ -19,7 +19,13 @@ import { sessionReplay } from '../docs/session-replay';
 import { prepareRobotPresentation } from './prepare-presentation';
 import { presentationControls } from './presentation-controls';
 
-const { values } = parseArgs({ options: { run: { type: 'string' }, binary: { type: 'string' } } });
+const { values } = parseArgs({
+  options: {
+    run: { type: 'string' },
+    binary: { type: 'string' },
+    'opening-from': { type: 'string' },
+  },
+});
 assert.ok(values.run && values.binary, 'Pass --run and --binary.');
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -30,6 +36,27 @@ const project = path.join(values.run, 'SO-101/Simulation/SO101');
 const handoff = path.join(root, 'Handoff');
 await mkdir(handoff);
 const readJSON = async (file: string): Promise<unknown> => JSON.parse(await readFile(file, 'utf8'));
+const opening = values['opening-from']
+  ? (JSON.parse(
+      await readFile(path.join(values['opening-from'], 'story-capture.json'), 'utf8'),
+    ) as {
+      sourceRun: string;
+      providerRequests: number;
+      clips: { name: string }[];
+    })
+  : undefined;
+if (opening) {
+  assert.equal(opening.sourceRun, values.run);
+  assert.equal(opening.providerRequests, 0);
+  assert.equal(
+    (
+      (await readJSON(path.join(values['opening-from']!, 'story-completed.json'))) as {
+        status: string;
+      }
+    ).status,
+    'passed',
+  );
+}
 const documents = await Promise.all(
   presentation.edits.map(async (edit) => ({
     stage: edit.stage,
@@ -151,6 +178,7 @@ const clips: unknown[] = [],
 let marks: { seconds: number; action: string; narration: string }[] = [];
 let started = 0;
 let recording = false;
+let recreatingOpening = false;
 const scope = (id: string) => `[data-canvas-id="${id}"]`;
 const chat = (id: string) => `[data-conversation-id="${id}"]`;
 const mark = (action: string, narration: string) => {
@@ -168,6 +196,7 @@ const save = () =>
         sourceRun: values.run,
         binary,
         presentation,
+        reusedOpening: values['opening-from'],
         providerRequests: 0,
         clips,
         evidence,
@@ -305,10 +334,24 @@ async function frame(id: string) {
     'framed ' + id,
   );
 }
-async function take(name: string, actions: () => Promise<void>) {
+async function take(name: string, actions: () => Promise<void>, omitActions: string[] = []) {
   marks = [];
   overlay.reset();
   started = performance.now();
+  const retained = opening?.clips.find((clip, index) => index < 6 && clip.name === name);
+  if (retained) {
+    // Recreate the workspace relationships, but retain the approved opening's exact source frames.
+    recreatingOpening = true;
+    try {
+      await actions();
+    } finally {
+      recreatingOpening = false;
+    }
+    clips.push(retained);
+    await save();
+    console.log(JSON.stringify({ name, reused: values['opening-from'] }));
+    return;
+  }
   console.log('Recording ' + name);
   recording = true;
   const result = await recordFrames(main, path.join(root, name), actions, {
@@ -316,7 +359,7 @@ async function take(name: string, actions: () => Promise<void>) {
     height: 1800,
   });
   recording = false;
-  clips.push({ name, ...result, marks, inputs: overlay.events.slice() });
+  clips.push({ name, ...result, marks, omitActions, inputs: overlay.events.slice() });
   await save();
   console.log(JSON.stringify({ name, seconds: result.seconds, frames: result.frames }));
 }
@@ -324,7 +367,7 @@ async function beat(action: string, narration: string, seconds: number, work = a
   mark(action, narration);
   const time = performance.now();
   await work();
-  await delay(Math.max(0, seconds * 1000 - (performance.now() - time)));
+  if (!recreatingOpening) await delay(Math.max(0, seconds * 1000 - (performance.now() - time)));
 }
 async function readCanvas(id: string) {
   const result = await main.evaluate(
@@ -332,6 +375,91 @@ async function readCanvas(id: string) {
   );
   assert.ok(result.document);
   return result.document;
+}
+async function endpointLabel(
+  canvas: Awaited<ReturnType<typeof ui.canvas>>,
+  endpoint?: { id: string; position: number[]; error: number },
+) {
+  const { state } = await readCanvas(refinement.id);
+  const camera = {
+    position: [Number(state.cam_px), Number(state.cam_py), Number(state.cam_pz)],
+    target: [Number(state.cam_tx), Number(state.cam_ty), Number(state.cam_tz)],
+  };
+  assert.ok([...camera.position, ...camera.target].every(Number.isFinite));
+  await canvas.frame.evaluate(
+    pageCall(
+      (endpoint, camera) => {
+        let label = document.querySelector<HTMLDivElement>('#capture-endpoint');
+        if (!endpoint) {
+          if (label) label.hidden = true;
+          return;
+        }
+        const view = document.querySelector<HTMLElement>('#viewBox')!;
+        const normalize = (v: number[]) => {
+          const length = Math.hypot(...v);
+          return v.map((n) => n / length);
+        };
+        const cross = (a: number[], b: number[]) => [
+          a[1]! * b[2]! - a[2]! * b[1]!,
+          a[2]! * b[0]! - a[0]! * b[2]!,
+          a[0]! * b[1]! - a[1]! * b[0]!,
+        ];
+        const dot = (a: number[], b: number[]) => a.reduce((sum, n, i) => sum + n * b[i]!, 0);
+        const forward = normalize(camera.target.map((n, i) => n - camera.position[i]!));
+        const right = normalize(cross(forward, [0, 0, 1]));
+        const up = cross(right, forward);
+        const relative = endpoint.position.map((n, i) => n - camera.position[i]!);
+        const depth = dot(relative, forward);
+        if (depth <= 0) throw Error('Endpoint is behind the recorded camera.');
+        // The retained canvas uses a 45-degree perspective camera with Z up.
+        const focal = view.clientHeight / (2 * Math.tan(Math.PI / 8));
+        const x = view.clientWidth / 2 + (dot(relative, right) * focal) / depth;
+        const y = view.clientHeight / 2 - (dot(relative, up) * focal) / depth;
+        if (x < 0 || y < 0 || x > view.clientWidth - 180 || y > view.clientHeight - 60)
+          throw Error('Checked endpoint label would leave the recorded view.');
+        if (!label) {
+          label = document.createElement('div');
+          label.id = 'capture-endpoint';
+          label.style.cssText =
+            'position:absolute;pointer-events:none;padding:8px 12px;border-left:1px solid #b1bac6;' +
+            'background:rgba(11,14,17,.9);color:#f2f4f6;font:500 15px/1.5 -apple-system,sans-serif;z-index:3;';
+          view.append(label);
+        }
+        label.hidden = false;
+        label.style.left = x + 20 + 'px';
+        label.style.top = y + 12 + 'px';
+        label.textContent = endpoint.id + ' · ' + (endpoint.error * 1000).toFixed(3) + ' mm';
+      },
+      endpoint ?? null,
+      camera,
+    ),
+  );
+}
+async function watchPlayback(canvas: Awaited<ReturnType<typeof ui.canvas>>) {
+  await canvas.frame.evaluate(
+    pageCall(() => {
+      const status = document.querySelector<HTMLElement>('#replayLine')!;
+      const observer = new MutationObserver((records) => {
+        const values = [
+          status.textContent,
+          ...records.flatMap((record) =>
+            [...record.addedNodes, ...record.removedNodes].map((node) => node.textContent),
+          ),
+        ];
+        const error = values.find((value) => value && /failed|unavailable|missing/i.test(value));
+        if (error) status.dataset.capturePlaybackError = error;
+      });
+      observer.observe(status, { childList: true, characterData: true, subtree: true });
+    }),
+  );
+}
+async function verifyPlayback(canvas: Awaited<ReturnType<typeof ui.canvas>>) {
+  const error = await canvas.frame.evaluate(
+    pageCall(
+      () => document.querySelector<HTMLElement>('#replayLine')?.dataset.capturePlaybackError,
+    ),
+  );
+  assert.equal(error, undefined, 'The recorded replay must not flash an error.');
 }
 try {
   await start();
@@ -518,10 +646,11 @@ try {
       },
     );
     const canvas = await ui.canvas(refinement.id);
+    await watchPlayback(canvas);
     await beat(
       'new-controls',
       'The same tool gains target controls, a solver, and a check against the robot model.',
-      7,
+      6,
       async () => {
         overlay.cue('Check the candidate poses');
         await canvas.press('#checkBtn');
@@ -537,7 +666,7 @@ try {
     await beat(
       'missed',
       'At this base position, the candidate poses miss both points.',
-      6,
+      4,
       async () => {
         const label = await main.evaluate(
           pageCall(
@@ -553,7 +682,7 @@ try {
           label,
           'Inspect the measured result',
         );
-        await delay(2300);
+        await delay(1300);
         await click(scope(refinement.id) + ' .canvas-inspector > summary', label);
       },
     );
@@ -607,8 +736,8 @@ try {
     evidence.push({ alternative: checked, targetsUnchanged: true });
     await beat(
       'result',
-      'Both endpoints are now within one millimetre of their targets. The result is checked outside the generated interface.',
-      9,
+      'Both points are within a millimetre. That gives me a base position.',
+      5.5,
       async () => {
         const label = await main.evaluate(
           pageCall(
@@ -625,76 +754,161 @@ try {
           'Inspect the checked result',
         );
         await screenshot(main, path.join(root, 'checked-result.png'));
-        await delay(3600);
+        await delay(1300);
         await click(scope(refinement.id) + ' .canvas-inspector > summary', label);
-        await canvas.press('#playBtn');
-        await delay(1500);
-        await canvas.press('#pauseBtn');
       },
     );
+    await beat('endpoints', '', 7, async () => {
+      const taskBeforeReplay = (await readCanvas(refinement.id)).state.robotTask;
+      overlay.cue('Show target A');
+      await canvas.press('#scrub');
+      await ui.key('Home', 'Home', 36, 0, canvas.frame.sessionId);
+      overlay.cue('');
+      await until(
+        async () => (await readCanvas(refinement.id)).state.replayIdx,
+        (position) => position === 0,
+        'replay starts at target A',
+      );
+      const show = async (id: string) => {
+        const target = checked.input.targets.find((target) => target.id === id)!;
+        const pose = checked.poses.find((pose) => pose.targetID === id)!;
+        assert.ok(pose.withinTolerance && pose.violations.length === 0);
+        await endpointLabel(canvas, { id, position: target.position, error: pose.residual });
+      };
+      await show('A');
+      await delay(1300);
+      await endpointLabel(canvas);
+      overlay.cue('Replay to target B');
+      await canvas.press('#playBtn');
+      overlay.cue('');
+      await until(
+        async () => (await readCanvas(refinement.id)).state.replayIdx,
+        (position) => position === 1,
+        'replay arrives at target B',
+      );
+      await show('B');
+      await delay(1500);
+      await endpointLabel(canvas);
+      assert.deepEqual((await readCanvas(refinement.id)).state.robotTask, taskBeforeReplay);
+      await verifyPlayback(canvas);
+      evidence.push({
+        endpointLabels: checked.poses,
+        annotation: 'Checked values at sampled endpoints only',
+      });
+    });
   });
-  await take('07-keep-working', async () => {
-    const before = await readCanvas(refinement.id);
-    await beat(
-      'save-tool',
-      'Save the tool with its sources and inputs. Open it again, and continue working.',
-      12,
-      async () => {
-        const earlierExports = new Set(await readdir(handoff));
-        await click(scope(refinement.id) + ' button', 'Export canvas…', 'Save the working tool');
-        await click('.viewer-file-picker footer .primary', undefined, 'Export canvas');
-        const exported = await until(
-          () => readdir(handoff),
-          (names) => names.some((n) => n.startsWith('Viewer canvas ') && !earlierExports.has(n)),
-          'export saved',
-        ).then((names) =>
-          path.join(
-            handoff,
-            names.find((n) => n.startsWith('Viewer canvas ') && !earlierExports.has(n))!,
-          ),
-        );
-        await key('Back to the tool', 'ArrowUp', 'ArrowUp', 38, 5);
-        await click(scope(refinement.id) + ' button', 'Conversation');
-        await click(
-          chat(refinement.conversationID) + ' .chat-toolbar button',
-          'Open canvas…',
-          'Reopen saved tool',
-        );
-        await ui.folder(exported);
-        await click('.viewer-file-picker footer .primary', undefined, 'Open saved canvas');
-        const known = documents.map((d) => d.canvas.id);
-        const importedID = await until(
-          () =>
-            main.evaluate(
-              pageCall(
-                (known) =>
-                  [...document.querySelectorAll<HTMLElement>('[data-canvas-id]')]
-                    .map((e) => e.dataset.canvasId!)
-                    .find((id) => !known.includes(id)),
-                known,
-              ),
+  let importedID = '';
+  await take(
+    '07-keep-working',
+    async () => {
+      const before = await readCanvas(refinement.id);
+      mark('save-tool', '');
+      const earlierExports = new Set(await readdir(handoff));
+      await click(scope(refinement.id) + ' button', 'Export canvas…', 'Save the working tool');
+      await click('.viewer-file-picker footer .primary', undefined, 'Export canvas');
+      const exported = await until(
+        () => readdir(handoff),
+        (names) => names.some((n) => n.startsWith('Viewer canvas ') && !earlierExports.has(n)),
+        'export saved',
+      ).then((names) =>
+        path.join(
+          handoff,
+          names.find((n) => n.startsWith('Viewer canvas ') && !earlierExports.has(n))!,
+        ),
+      );
+      mark('handoff-navigation', '');
+      await key('Back to the tool', 'ArrowUp', 'ArrowUp', 38, 5);
+      await click(scope(refinement.id) + ' button', 'Conversation');
+      await click(
+        chat(refinement.conversationID) + ' .chat-toolbar button',
+        'Open canvas…',
+        'Reopen saved tool',
+      );
+      await ui.folder(exported);
+      mark('reopen-tool', '');
+      await click('.viewer-file-picker footer .primary', undefined, 'Open saved canvas');
+      const known = documents.map((d) => d.canvas.id);
+      const found = await until(
+        () =>
+          main.evaluate(
+            pageCall(
+              (known) =>
+                [...document.querySelectorAll<HTMLElement>('[data-canvas-id]')]
+                  .map((e) => e.dataset.canvasId!)
+                  .find((id) => !known.includes(id)),
+              known,
             ),
-          Boolean,
-          'imported canvas',
-        );
-        assert.ok(importedID);
-        const imported = await ui.canvas(importedID);
-        assert.deepEqual((await readCanvas(importedID)).state.robotTask, before.state.robotTask);
-        overlay.cue('Continue in the saved tool');
-        await imported.press('#playBtn');
-        await delay(1400);
-        await imported.press('#pauseBtn');
+          ),
+        Boolean,
+        'imported canvas',
+      );
+      assert.ok(found);
+      importedID = found;
+      const imported = await ui.canvas(importedID);
+      await watchPlayback(imported);
+      assert.deepEqual((await readCanvas(importedID)).state.robotTask, before.state.robotTask);
+      overlay.cue('Continue in the saved tool');
+      await imported.press('#scrub');
+      await ui.key('Home', 'Home', 36, 0, imported.frame.sessionId);
+      await until(
+        async () => (await readCanvas(importedID)).state.replayIdx,
+        (position) => position === 0,
+        'reopened replay starts at target A',
+      );
+      overlay.cue('');
+      await delay(500);
+      evidence.push({ exported, importedID, restoredTask: true });
+    },
+    ['handoff-navigation'],
+  );
+  await take('08-closing', async () => {
+    const planeFor = (id: string) =>
+      main.evaluate(
+        pageCall((id) => {
+          let element = document.querySelector(`[data-canvas-id="${id}"]`);
+          while (element) {
+            const header = element.querySelector<HTMLElement>('[data-viewer-plane]');
+            if (header) return header.dataset.viewerPlane;
+            element = element.parentElement;
+          }
+        }, id),
+      );
+    await beat(
+      'tool-evolution',
+      'When I started, I could inspect the robot. Then I needed to test where to put it. So I asked for those controls.',
+      11,
+      async () => {
+        await all();
+        const originalPlane = await planeFor(creation.id);
+        assert.ok(originalPlane);
+        await frame(originalPlane);
+        const inspector = await ui.canvas(creation.id);
+        overlay.cue('The first tool: joint controls');
+        await inspector.drag('[data-jkey="jpos_shoulder_pan"]', 0.72, 0.57);
         overlay.cue('');
-        evidence.push({ exported, importedID, restoredTask: true });
+        await delay(600);
+        await all();
       },
     );
     await beat(
       'closing',
-      'I opened a project. I asked for a way to work on it. The interface grew with the task.',
-      9,
+      'I want to work like this: open my project, explain what I need, and use the tool as it takes shape.',
+      10,
       async () => {
-        await all();
-        await screenshot(main, path.join(root, 'project.png'));
+        const savedPlane = await planeFor(importedID);
+        assert.ok(savedPlane);
+        await frame(savedPlane);
+        const canvas = await ui.canvas(importedID);
+        overlay.cue('The added tool: target testing');
+        await canvas.press('#playBtn');
+        overlay.cue('');
+        await until(
+          async () => (await readCanvas(importedID)).state.replayIdx,
+          (position) => position === 1,
+          'reopened tool reaches its saved endpoint',
+        );
+        await verifyPlayback(canvas);
+        await screenshot(main, path.join(root, 'final-tool.png'));
       },
     );
   });
