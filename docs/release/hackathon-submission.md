@@ -1,12 +1,12 @@
 # Hackathon submission draft
 
-This is working entry copy. The actual Meta-generated robot workflow has passed native functional
-checks. The [film](hackathon-demo.md) follows native file navigation, an edited replay of retained
-Meta requests and replies, staged canvas reveals, quoted alternatives and a saved result. Input cues
-follow the actual controls. It still needs a first-time-viewer review, the creator's narration and
-final opening footage before becoming a submission film. The owner supplied 27 October 2026 as the
-development baseline. The [contribution inventory](hackathon-contributions.md) records the source
-comparison. Public URLs, team credits and organizer eligibility remain to be confirmed.
+This is working entry copy for the selected [film](hackathon-demo.md): prepare a robot mounting
+plate and choose a cutting quote. It connects a generated model inspector, cutting view and
+quotation comparison in one spatial project. The supplier conversation is a local two-agent
+simulation. Review the script, then qualify the combined workflow before recording. The owner
+supplied 27 October 2026 as the development baseline. The
+[contribution inventory](hackathon-contributions.md) records the source comparison. Public URLs,
+team credits and organizer eligibility remain to be confirmed.
 
 ## Project
 
@@ -15,8 +15,8 @@ comparison. Public URLs, team credits and organizer eligibility remain to be con
 The creator describes writing about a million lines of code up to 2025, then modifying at most ten
 thousand from 2025 to today, mostly configuration files. The projects still need to be made. The
 person's attention has shifted toward how the pieces fit together, what should change and what those
-changes affect. Browser, editor and terminal are different views into that work. The line counts are
-personal estimates.
+changes affect. The film introduces browser, editor and terminal with a repeated keynote-style
+sequence, then reveals their shared workspace. The line counts are personal estimates.
 
 Viewer gives an agent the project context and a canvas where it can generate the interface needed
 for the current task. The request drives the controls; a changed question can produce a changed
@@ -27,28 +27,40 @@ this way of working across different kinds of content.
 Viewer and its spatial engine, Plurid, existed before this hackathon. The prior Viewer already had
 file browsing, previews, linked planes, model configuration and ordinary chat. The additions include
 generated canvases, saved inputs, exact quote branches, file snapshots, reviewed results and the
-robot model/checking capabilities used in the demonstration. Plurid also gained engine improvements;
-credit those separately from the existing spatial foundation.
+robot model/checking capabilities qualified in the retained rehearsal. Plurid also gained engine
+improvements; credit those separately from the existing spatial foundation.
 
 The proposed film, **There Is No Interface**, makes that argument explicit: the interface is
 generated on the spot from the project and the person's request. Keep the personal account and the
 change in how the creator works in the main narration. Introduce Viewer and Plurid as existing
-projects while exploring their space, then identify the hackathon additions. The robot is one
-demonstration of the idea. An optional synthetic homage must remain distinct from the real app. The
-film does not claim full replacement of established creative and engineering applications.
+projects while exploring their space, then identify the hackathon additions. The mounting job shows
+different kinds of interfaces taking shape around the work: inspecting a model, preparing a drawing
+and acting on a service reply. Generated tools use the host's capabilities for those tasks. An
+optional synthetic homage must remain distinct from the real app.
 
 ## Proposed demonstration
 
-A maker or student opens an SO-101 robot project and asks for a workbench to understand its joints.
-A second request adds target placement and reach checking. The person inspects a constraint,
-branches from the actual discussion of unresolved candidates and investigates moving the base
-without changing the targets. A separate checker validates the proposed kinematic result before the
-person saves and reopens the work.
+In the fictional job, the person needs a plate to mount the robot to a workbench. They ask Meta for
+an inspection interface, view the source robot and existing clamps, then request a plate using the
+assigned demo specification. They edit its dimensions and measure the saved cutting file against the
+values shown in the generated interface.
 
-The [screenplay](hackathon-demo.md) owns the exact narration and shots. The
-[implementation audit](../research/workshop.md#implementation-audit) records the implemented robot
-reader, articulated motion, solver, source links and independent checker, alongside the remaining
-recording work.
+A browser plane shows a local conversation between Viewer's agent and a fictional cutting-service
+agent. The service offers economy and express delivery for the same plate. Its reply becomes the
+source for a generated comparison: changing the deadline changes which options qualify. The person
+chooses an option and saves the reviewed cutting file with the selected simulated quotation.
+
+Actual Meta-generated mounting and quote interfaces pass native width editing, independently
+measured DXF export, source-bound quote selection, save/reopen and restart checks. Physical
+fabrication is outside this fictional scenario and does not block the demo. Existing browser planes
+do not grant an agent access to their page content or signed-in sessions. The simulation sends no
+external messages and places no order. Job 1042's separate 48/50 mm fixture does not describe this
+robot's mounting points.
+
+The [screenplay](hackathon-demo.md) owns the proposed narration and shots. The
+[implementation audit](../research/workshop.md#implementation-audit) records current canvas and
+robot capabilities. The [fabrication reference](../reference/fabrication.md) owns that workflow's
+behavior.
 
 ## Meta's role
 
@@ -68,9 +80,10 @@ operates outside generated HTML and reports the limits of what it checked.
   independent quote branches and reviewed text results.
 - Automated service and native fixture scenarios cover those contracts and their stated runtime
   behaviors. Their results do not establish an arbitrary generated tool's correctness.
-- The retained supplier evaluation and replay concern fictional quotations with known arithmetic.
-  The [testing guide](../development/testing.md#canvas-evaluation-and-replay) records reproduction
-  and the distinction between model generation, fixtures and saved-output replay.
+- The retained supplier evaluation and replay concern fictional quotations with known arithmetic,
+  separate from the planned cutting-service conversation and plate quote. The
+  [testing guide](../development/testing.md#canvas-evaluation-and-replay) records reproduction and
+  the distinction between model generation, fixtures and saved-output replay.
 - The actual Meta-generated robot creation, refinement and quoted alternative passed native checks.
   Moving the alternative base produced endpoint candidates within the task's tolerance while the
   original remained unchanged. Comparison save, pose replay, export/reopen and cold restart passed.
@@ -78,26 +91,27 @@ operates outside generated HTML and reports the limits of what it checked.
   UI uses those capabilities; Three.js supplies rendering, not robot semantics or physical
   simulation. Visual replay does not check the path between poses.
 
-Keep run-specific evidence, failures, retries and usage in the evaluation report. Do not transfer
-success claims from the supplier or fabrication examples to the robot demonstration.
+Keep run-specific evidence, failures, retries and usage in the evaluation report. Qualification of
+one example does not qualify another example or the combined workflow proposed in the film.
 
 ## Claims requiring qualification
 
-The film must visibly demonstrate the qualified creation, refinement, quoted alternative and saved
-result. The foreground rehearsal exercises controls; it does not establish an understandable story.
-The story cut must distinguish a generated tool from a built-in robot application and make the
-spatial relationships understandable. Its continuous passages and input cues support that review;
-technical capture checks alone do not establish audience comprehension. Restart is verified
-separately; show it only if it is recorded.
+The film must visibly demonstrate the generated inspection, cutting and quotation interfaces, their
+working controls and saved output. Existing robot rehearsal qualifies a different task. The story
+cut must make the spatial relationships understandable and show the supplier reply driving the
+comparison. Identify the service as fictional and credit the local exchange simulation. Its
+continuous passages and input cues support review; technical capture checks alone do not establish
+audience comprehension. Restart is verified separately; show it only if it is recorded.
 
 Ambiguous units, dimensions and source associations require human confirmation. An unresolved
 numerical solve is not proof of unreachability. Kinematic checks do not establish collision safety,
 physical grasping, load capacity or calibrated hardware control. The demonstration must say which
 poses or intervals were checked.
 
-Photo-to-3D, SAM segmentation, Job 1042 fabrication and broad format expansion are separate
-capabilities or proposals. Do not credit them as exercised by this film. Attribute the robot files
-and supporting libraries independently of Viewer's generated interface.
+Photo-to-3D, SAM segmentation and broad format expansion remain separate capabilities or proposals.
+Job 1042 retains its own fabrication evidence. Verify the mounting plate from its actual attachment
+sources and accepted requirements. Attribute source assets and supporting libraries independently of
+Viewer's generated interface.
 
 ## Before submitting
 

@@ -415,6 +415,11 @@ height and scroll its contents so the canvas stays visible. Inset summaries and 
 plane edges. Align asset source actions, allow long names to wrap and keep keyboard focus on the
 summary when Escape closes its section.
 
+**The Canvas Drawing Review Rule.** Put cutting geometry beside measured width, height, outline and
+hole counts, and hole diameters. Keep millimetre units visible and mark approximate diameters. Use
+the shared field and ink roles. Bound the preview height and scroll measurements so the canvas,
+Cancel and Save drawing… remain reachable.
+
 Show source imagery in creative tools. Tie export, progress, optimization savings and output links
 to real jobs. Label camera previews, RAW renditions and video compatibility copies accurately.
 Failed renders retain retry and alternative-open actions. A stale retained preview identifies its

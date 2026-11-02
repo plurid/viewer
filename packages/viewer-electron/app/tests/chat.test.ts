@@ -127,12 +127,13 @@ describe('quoted conversations and canvases', () => {
     ).toBe(false);
     const conversation = await create();
     generate
-      .mockResolvedValueOnce(step('canvas_write', { text: html, commandID: '0' }))
+      .mockResolvedValueOnce(step('canvas_write', { text: html, commandID: '0', query: 'null' }))
       .mockResolvedValueOnce(step('reply', { text: 'Inspect the complete canvas.' }));
     await send(conversation.id);
     const saved = await settled(conversation.id);
     expect(saved.status, saved.error).toBe('idle');
     expect((await canvases.read(1, saved.canvasID!)).html).toBe(html);
+    expect((await canvases.read(1, saved.canvasID!)).title).not.toBe('null');
     expect(saved.messages.at(-1)?.text).toBe('Inspect the complete canvas.');
   });
 

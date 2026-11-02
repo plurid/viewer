@@ -22,3 +22,35 @@ export function pathAncestry(path: string): string[] {
   }
   return trail;
 }
+
+/** Display only: navigation must retain the resolved absolute path. */
+export function relativePathLabel(folder: string, file: string): string {
+  const windows = /^[A-Za-z]:[\\/]|^\\\\/.test(folder);
+  const split = (value: string) => {
+    const normalized = windows ? value.replace(/\\/g, '/') : value;
+    const root = windows
+      ? normalized.match(/^(?:[A-Za-z]:|\/\/[^/]+\/[^/]+)(?=\/|$)/)?.[0]
+      : normalized.startsWith('/')
+        ? '/'
+        : undefined;
+    return root
+      ? { root, parts: normalized.slice(root.length).split('/').filter(Boolean) }
+      : undefined;
+  };
+  const base = split(folder),
+    target = split(file);
+  const equal = (a: string, b: string) => (windows ? a.toLowerCase() === b.toLowerCase() : a === b);
+  if (!base || !target || !equal(base.root, target.root)) return file;
+  let common = 0;
+  while (
+    common < base.parts.length &&
+    common < target.parts.length &&
+    equal(base.parts[common]!, target.parts[common]!)
+  )
+    common++;
+  return (
+    [...Array<string>(base.parts.length - common).fill('..'), ...target.parts.slice(common)].join(
+      windows ? '\\' : '/',
+    ) || '.'
+  );
+}

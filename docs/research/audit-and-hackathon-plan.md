@@ -6,10 +6,11 @@ behavior belongs in the [fabrication reference](../reference/fabrication.md); ru
 with the retained test and evaluation artifacts. Implementation does not establish live-model
 accuracy, registry publication or submission readiness.
 
-This is the fabrication implementation plan from the earlier ecosystem review. It is not the current
-film scenario or a prerequisite for the selected robot workbench. The
-[Workshop strategy](workshop.md) owns the current hackathon direction and implementation audit; the
-[screenplay](../release/hackathon-demo.md) owns the video.
+This is the fabrication implementation plan from the earlier ecosystem review. The selected film
+follows a robot mounting plate and a simulated cutting quote. Job 1042 remains a separate fixture;
+its 48/50 mm discrepancy does not describe the robot's mounting dimensions. The
+[Workshop strategy](workshop.md) owns the connected workflow's integration and qualification gaps;
+the [screenplay](../release/hackathon-demo.md) owns its narration and shots.
 
 ## Product direction
 
@@ -144,7 +145,7 @@ human confirmation, the result must say so. Compare recorded fixtures and live r
 evidence.
 
 Retain the real request, readable evidence and completed handoff. A fabrication recording must label
-fixture responses and elapsed waits. It does not qualify the robot story in the
+fixture responses and elapsed waits. It does not qualify the generated interface proposed in the
 [current screenplay](../release/hackathon-demo.md). Final public source, registry versions, live
 evaluation and event contribution boundaries are separate gates; none is implied by a passing local
 test. Current submission requirements belong to the

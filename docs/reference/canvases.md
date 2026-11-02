@@ -38,12 +38,26 @@ source paths are not exposed to the frame. `openSource(id)` opens the host's sou
 Refreshing replaces the snapshot under its existing ID in a new content revision and preserves saved
 inputs. Undo restores the previous snapshot as well as HTML.
 
-Result formats are `csv`, `json`, `markdown` and `text`. `content` is UTF-8 text; JSON must parse.
-`name` is a basename without path separators. The host adds the extension if missing. It captures
-content and state revisions when preparing review and checks both again after the save picker.
-Saving creates an exclusive new file; it never overwrites a destination or follows a destination
-link. Canceling writes nothing. Completing a save closes only its own review. A newer result
-requested while the picker is open remains available for a separate review and save.
+Result formats are `csv`, `json`, `markdown`, `text` and `dxf`. `content` is UTF-8 text, limited to
+1 MB; JSON must parse. `name` is a basename without path separators. The host adds the extension if
+missing. It captures content and state revisions when preparing review and checks both again after
+the save picker. Saving creates an exclusive new file; it never overwrites a destination or follows
+a destination link. Canceling writes nothing. Completing a save closes only its own review. A newer
+result requested while the picker is open remains available for a separate review and save.
+
+### Cutting DXF results
+
+`dxf` accepts ASCII DXF with `$INSUNITS` set to `4` (millimetres). Supported sections are `HEADER`,
+`TABLES` and `ENTITIES`. Cuts use `LINE`, `ARC`, `CIRCLE`, `LWPOLYLINE` or planar `POLYLINE`
+entities. Polylines have zero width. Cuts must form closed outlines; hidden entities, paper-space
+entities, blocks, annotations, loose paths, duplicates and repaired gaps are refused. All geometry
+lies in XY with zero elevation and thickness.
+
+The limits are 256 cut entities, 2,048 vertices, 15,000 DXF groups, 8,192 preview points at 0.01 mm
+chord tolerance, and numeric geometry values within 10,000 of the origin. Viewer rewrites accepted
+geometry as R12 DXF through its fabrication writer, then reads and measures those bytes for review.
+The desktop repeats validation before saving. The preview reports geometry dimensions; it does not
+certify attachment requirements, material, tool clearance or manufacturing readiness.
 
 ## Model tools
 
@@ -66,6 +80,9 @@ Preview observations are tied to a content revision. `ready` means the page load
 calculations were verified. `error` includes a bounded runtime message. `not-observed` means no
 renderer report arrived. The agent may make one repair after a runtime error, within the same
 eight-round request budget; remaining errors stop further automatic repairs.
+
+A canvas turn has an eight-minute overall deadline. Each model request retains its own two-minute
+timeout, and **Stop** cancels the turn. Ordinary Chat turns keep their two-minute overall deadline.
 
 ## Robot sources and motion
 

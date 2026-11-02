@@ -73,6 +73,25 @@ app.
 
 ## Focused native scenarios
 
+`tests/native/mounting-flow.ts` checks canvas DXF review and save, reopening in the drawing preview,
+the local supplier page in a real browser plane, a reply-backed deadline comparison, selected-quote
+Markdown saving and cold restart. Set `VIEWER_TEST_BINARY` and both preservation variables above. It
+uses supplied HTML and illustrative plate dimensions, with no provider calls. It qualifies the host
+workflow, not generated controls or the robot's physical mounting fit.
+
+The supplier fixture can also run against a saved drawing:
+
+```sh
+cd packages/viewer-electron/app
+VIEWER_TEST_PRESERVE=1 node --import tsx tools/mounting/serve-supplier.ts /tmp/mounting-plate.dxf Aluminium 6
+```
+
+Open the printed loopback URL in a Viewer browser plane and choose **Request quote**. The server
+creates `supplier-reply.json` at the printed output path, only after that action. Attach the file to
+the comparison conversation; browser access does not grant agent access. The reply includes the
+exact drawing hash, material, thickness, quantity and fictional totals. A changed drawing requires a
+new quote. The server has no external messaging or ordering route. Its temporary files are kept.
+
 `tests/native/robotics.ts` loads the pinned SO-101 follower and all visual meshes through canvas
 snapshots and assets. It checks articulated motion, hard-limit reporting, exact joint source review,
 base translation, cold restart and portable export/import. Its HTML is an explicitly labeled local
@@ -357,6 +376,48 @@ Retain actual requests, replies, failures, canceled requests and provider-report
 successful supplier evaluation says nothing about a robot solver. Use
 [the implementation audit](../research/workshop.md#implementation-audit) to identify the additional
 qualification required for the proposed film.
+
+### Mounting and quote generation
+
+`tools/mounting/rehearse.mjs` runs the real Chat service with an isolated profile and an explicit
+allowance of two sessions, at most eight provider requests per session. Obtain approval before
+`--live`. Preparation and credential checks make no provider requests:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec electron tools/mounting/rehearse.mjs --prepare /path/to/pinned/SO-101
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec electron tools/mounting/rehearse.mjs --check-credentials --run /path/to/prepared/run --profile /path/to/credential/profile
+```
+
+Run `--live` with the same run and credential profile, first with `--stage mounting`. Qualify that
+canvas in Viewer, save its draft drawing and request the local simulated supplier reply. Then use
+`--stage comparison --reply /path/to/supplier-reply.json`. The reply is hashed before model access.
+The review profile contains no credentials or configured providers.
+
+Requests are reserved before network access, including cancellations, timeouts and rejected output.
+`--resume-same-session` continues the same interrupted conversation using only its unspent request
+allowance. It retains every earlier result and continuation record; it cannot refund requests, add a
+session or continue an extended budget. A generated result still requires native interaction,
+save/reopen and restart checks. It does not establish physical mounting fit or a real supplier
+offer.
+
+Qualify each generated stage with
+`tools/mounting/qualify.ts --run <run> --binary <executable> --stage mounting|comparison`. It copies
+the profile, exercises the generated controls and retains screenshots and a result report. Mounting
+checks edit the width, review and save the DXF, reopen it in the native preview and restart.
+Comparison checks deadline eligibility, selected-offer export and input persistence. These checks
+make no provider requests.
+
+Between stages,
+`tools/mounting/request-supplier.ts --binary <executable> --drawing <saved.dxf> --material <material> --thickness <mm> --quantity <count>`
+opens an isolated browser plane, requests the local simulated quote and reports its saved JSON path.
+Supply the reviewed stock values explicitly; a DXF outline does not establish material or thickness.
+
+After qualification,
+`tools/mounting/prepare-review.ts --run <run> --mounting-profile <profile> --comparison-profile <profile> --binary <executable>`
+assembles a separate review copy. It verifies that the qualified HTML, sources and assets match the
+retained provider output, keeps the edited inputs and copies the saved files. The two workspaces
+open directly on their canvas; **Conversation** opens the retained exchange. The report lists local
+metadata changes and request counts. It does not start another generation session.
 
 ### Robot creation, revision and quoted alternative
 

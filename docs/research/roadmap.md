@@ -72,8 +72,9 @@ is a reference and an optional interoperability candidate, not a required depend
 measured geometry, inferred reconstruction and generated visual assets.
 
 Viewer Workshop connects source documents, models, generated tools and verification around a task.
-The selected hackathon prototype is a robot workbench that evolves from joint exploration to target
-reach checks and a quoted alternative. Its robotics support remains proposed. The
-[strategy and implementation audit](workshop.md) separate current canvas capabilities from the work
-needed to demonstrate it. [Job 1042](audit-and-hackathon-plan.md) remains a separate fabrication
-workflow. The broader format and conversion suite is future product work, outside the current film.
+The selected film follows a robot mounting plate through inspection, a cutting drawing and a
+simulated supplier quote. Bounded robot controls, target checks and comparison are implemented; the
+mounting-specific geometry, generated fabrication controls and mock service handoff need integration
+or qualification. The [strategy and implementation audit](workshop.md) records those boundaries.
+[Job 1042](audit-and-hackathon-plan.md) remains a separate fabrication workflow. The broader format
+and conversion suite is future product work, outside the current film.

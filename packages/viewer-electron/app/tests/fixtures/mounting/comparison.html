@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Compare delivery options</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --surface: #31353d;
+      --field: #292d34;
+      --ink: #f2f4f6;
+      --muted: #b1bac6;
+      --line: #454b55;
+      --accent: #82b3cf;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--ink);
+      font:
+        14px -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        sans-serif;
+      line-height: 1.5;
+      accent-color: var(--accent);
+    }
+    main {
+      max-width: 840px;
+      padding: 24px;
+      margin: auto;
+    }
+    ::selection {
+      background: var(--accent);
+      color: var(--field);
+    }
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 8px;
+    }
+    p {
+      color: var(--muted);
+      margin: 0 0 24px;
+      overflow-wrap: anywhere;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 0;
+      border-block: 1px solid var(--line);
+    }
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    input,
+    button {
+      font: inherit;
+      color: inherit;
+      background: var(--field);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 6px 10px;
+    }
+    input[type='number'] {
+      width: 72px;
+    }
+    input[type='radio'] {
+      margin: 0;
+    }
+    button {
+      cursor: pointer;
+    }
+    button:hover {
+      background: #393e47;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+    .toolbar button {
+      margin-left: auto;
+    }
+    .table-scroll {
+      overflow: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-variant-numeric: tabular-nums;
+    }
+    th,
+    td {
+      text-align: start;
+      padding: 16px 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    th {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    th:first-child,
+    td:first-child {
+      padding-left: 0;
+    }
+    th:last-child,
+    td:last-child {
+      padding-right: 0;
+      text-align: end;
+    }
+    tr[data-late='true'] {
+      color: var(--muted);
+    }
+    footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    footer button {
+      margin-left: auto;
+    }
+    small {
+      color: var(--muted);
+    }
+    [role='alert'] {
+      margin-top: 16px;
+    }
+  </style>
+  <main>
+    <h1>Compare delivery options</h1>
+    <p id="attachment"></p>
+    <div class="toolbar">
+      <label
+        >Deliver within
+        <input
+          id="deadline"
+          type="number"
+          min="1"
+          max="365"
+          step="1"
+          aria-label="Delivery deadline in days"
+        />
+        days</label
+      ><button id="source">Supplier reply</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Total</th>
+            <th>Delivery</th>
+            <th>Deadline</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <footer>
+      <small>Cutting, delivery and tax included</small
+      ><button id="save" disabled>Review selected quote</button>
+    </footer>
+    <p id="error" role="alert"></p>
+  </main>
+  <script>
+    const api = window.viewerCanvas,
+      deadline = document.querySelector('#deadline'),
+      save = document.querySelector('#save'),
+      error = document.querySelector('#error');
+    let source, quote;
+    try {
+      source = api.getSources().find((s) => s.name === 'supplier-reply.json');
+      if (!source || source.data.coverage.content !== 'complete')
+        throw new Error('Attach the complete supplier-reply.json before comparing quotes.');
+      quote = JSON.parse(
+        source.data.evidence
+          .filter((e) => e.source === 'text')
+          .map((e) => e.text)
+          .join('\n'),
+      );
+      if (
+        quote.version !== 1 ||
+        quote.simulation !== true ||
+        quote.currency !== 'EUR' ||
+        !quote.attachment?.sha256 ||
+        !Array.isArray(quote.options) ||
+        !quote.options.length ||
+        quote.options.length > 20 ||
+        quote.options.some(
+          (o) =>
+            typeof o.id !== 'string' ||
+            typeof o.label !== 'string' ||
+            !Number.isFinite(o.total) ||
+            o.total < 0 ||
+            !Number.isInteger(o.deliveryDays) ||
+            o.deliveryDays < 1,
+        ) ||
+        new Set(quote.options.map((o) => o.id)).size !== quote.options.length
+      )
+        throw new Error('This reply does not contain complete quote options.');
+      document.querySelector('#attachment').textContent =
+        quote.attachment.name +
+        ' · ' +
+        quote.stock.material +
+        ' · ' +
+        quote.stock.thicknessMm +
+        ' mm · ' +
+        quote.supplier;
+      const initial = api.getState();
+      deadline.value = String(initial.deadlineDays ?? 3);
+      document.querySelector('#source').onclick = () => api.openSource(source.id);
+      function render() {
+        const days = Number(deadline.value),
+          valid = Number.isInteger(days) && days >= 1 && days <= 365,
+          selected = api.getState().selectedOption;
+        const body = document.querySelector('tbody');
+        body.replaceChildren();
+        for (const option of quote.options) {
+          const late = !valid || option.deliveryDays > days;
+          const row = body.insertRow();
+          row.dataset.late = String(late);
+          const label = document.createElement('label'),
+            radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.name = 'quote';
+          radio.value = option.id;
+          radio.checked = selected === option.id;
+          radio.disabled = late;
+          radio.onchange = () => {
+            api.setState({ selectedOption: option.id });
+            render();
+          };
+          label.append(radio, document.createTextNode(option.label));
+          row.insertCell().append(label);
+          row.insertCell().textContent = new Intl.NumberFormat(undefined, {
+            style: 'currency',
+            currency: quote.currency,
+            maximumFractionDigits: 0,
+          }).format(option.total);
+          row.insertCell().textContent = option.deliveryDays + ' days';
+          row.insertCell().textContent = !valid
+            ? 'Set a deadline'
+            : late
+              ? option.deliveryDays - days + ' days late'
+              : 'On time';
+        }
+        save.disabled =
+          !valid || !quote.options.some((o) => o.id === selected && o.deliveryDays <= days);
+        error.textContent = valid ? '' : 'Enter a whole number from 1 to 365 days.';
+      }
+      deadline.oninput = () => {
+        api.setState({ deadlineDays: Number(deadline.value) });
+        render();
+      };
+      render();
+      save.onclick = () => {
+        const state = api.getState(),
+          option = quote.options.find((o) => o.id === state.selectedOption),
+          days = Number(deadline.value);
+        if (!option || !Number.isInteger(days) || option.deliveryDays > days) return;
+        const content = [
+          '# Selected cutting quote',
+          '',
+          'Supplier: ' + quote.supplier,
+          'Local simulation. No order placed.',
+          '',
+          'Drawing: ' + quote.attachment.name,
+          'Drawing SHA-256: ' + quote.attachment.sha256,
+          'Material: ' + quote.stock.material,
+          'Thickness: ' + quote.stock.thicknessMm + ' mm',
+          'Quantity: ' + quote.stock.quantity,
+          '',
+          'Option: ' + option.label,
+          'Total: EUR ' + option.total + ' (cutting, delivery and tax included)',
+          'Delivery: ' + option.deliveryDays + ' days',
+          'Deadline: ' + days + ' days',
+          '',
+          'Source reply: ' + source.name,
+          'Source snapshot SHA-256: ' + source.hash,
+          '',
+        ].join('\n');
+        api.requestExport({ format: 'markdown', name: 'mounting-plate-quote', content });
+      };
+    } catch (e) {
+      error.textContent = e.message;
+      deadline.disabled = true;
+      document.querySelector('#source').disabled = true;
+    }
+  </script>
+</html>

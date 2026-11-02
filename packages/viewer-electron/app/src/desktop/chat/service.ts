@@ -446,7 +446,9 @@ export class Chats {
     stop: AbortSignal,
   ): Promise<void> {
     const id = principal.document.id;
-    const signal = AbortSignal.any([stop, AbortSignal.timeout(120000)]);
+    // Source binding and a complete interface can span several individually timed model requests.
+    const initial = await this.load(id);
+    const signal = AbortSignal.any([stop, AbortSignal.timeout(initial.canvasID ? 480000 : 120000)]);
     let bytes = 0;
     let needsRepair = false;
     let repaired = false;
@@ -657,11 +659,15 @@ export class Chats {
       }
       if (!step.text.trim() || !/^\d+$/.test(step.commandID ?? ''))
         throw new Error('Write complete HTML and provide the current canvas revision.');
+      const title =
+        step.query && !['null', 'undefined'].includes(step.query.trim().toLowerCase())
+          ? step.query
+          : canvas.title;
       const updated = await canvases.write(
         principal.owner,
         canvas.id,
         Number(step.commandID),
-        step.query || canvas.title,
+        title,
         step.text,
         Object.fromEntries(step.patches.map((patch) => [patch.path, patch.value])),
       );

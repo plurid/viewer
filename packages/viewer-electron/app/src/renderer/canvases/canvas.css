@@ -58,6 +58,13 @@
   min-height: 0;
   display: flex;
 }
+.canvas-body > .empty-state,
+.canvas-body > .loading {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+}
 .canvas-body iframe {
   flex: 1;
   min-width: 0;
@@ -267,4 +274,37 @@
 .canvas-result pre {
   background: var(--field);
   padding: var(--gap-content);
+}
+.canvas-drawing-result {
+  display: flex;
+  gap: var(--gap-panel);
+  margin: var(--gap-content) 0 0;
+  height: 180px;
+}
+.canvas-drawing-result svg {
+  flex: 1;
+  min-width: 0;
+  background: var(--field);
+  color: var(--ink);
+}
+.canvas-drawing-result figcaption {
+  flex: 0 1 240px;
+  overflow: auto;
+  font-size: var(--text-compact);
+}
+.canvas-drawing-result dl {
+  margin: var(--gap-inline) 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.canvas-drawing-result dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap-content);
+  padding-block: var(--gap-tight);
+}
+.canvas-drawing-result dt {
+  color: var(--muted);
+}
+.canvas-drawing-result dd {
+  margin: 0;
 }

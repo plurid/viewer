@@ -97,6 +97,17 @@ export const readJSON = async (file: string | URL): Promise<unknown> =>
   JSON.parse((await readEvidence(file)).toString('utf8'));
 
 export async function readRobotSessionResult(folder: string): Promise<unknown> {
+  try {
+    const names = (await readdir(path.join(folder, 'continuations'))).sort();
+    if (names.some((name, index) => name !== String(index + 1).padStart(2, '0')))
+      throw new Error('The continuation ledger is incomplete.');
+    if (names.length)
+      return readJSON(path.join(folder, 'continuations', names.at(-1)!, 'result.json'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    // A missing result inside an existing continuation must not release another attempt.
+    if ((await readdir(folder)).includes('continuations')) throw error;
+  }
   let recovered = false;
   try {
     await readJSON(path.join(folder, 'recovery-started.json'));
@@ -417,6 +428,75 @@ export class RobotRehearsalLedger {
       Math.min(budget.requestsPerSession, maximumRequests - usage.requests),
     );
   }
+
+  /** Continue the same interrupted conversation without refunding its requests or adding a session. */
+  async resume(stage: RobotStage, repair?: RobotRepair) {
+    robotStageSchema.parse(stage);
+    if (
+      (await readdir(this.root)).some((name) =>
+        ['budget-extension.json', 'budget-reallocation.json'].includes(name),
+      )
+    )
+      throw new Error('Continuation requires the original unextended session budget.');
+    const sessions = await this.sessions();
+    const folder = sessions.at(-1);
+    if (!folder) throw new Error('No interrupted session is available.');
+    const started = await readJSON(path.join(folder, 'started.json'));
+    const result = await readRobotSessionResult(folder);
+    const nativeRepair = repair ? robotRepairSchema.parse(repair) : undefined;
+    const canvas =
+      result && typeof result === 'object' && 'canvas' in result
+        ? (result.canvas as { id?: string; revision?: number; html?: string })
+        : undefined;
+    if (
+      nativeRepair &&
+      (!canvas ||
+        canvas.id !== nativeRepair.canvasID ||
+        canvas.revision !== nativeRepair.revision ||
+        typeof canvas.html !== 'string' ||
+        digest(canvas.html) !== nativeRepair.htmlHash)
+    )
+      throw new Error('Repair evidence must identify this exact generated canvas.');
+    if (
+      !started ||
+      typeof started !== 'object' ||
+      !('stage' in started) ||
+      started.stage !== stage ||
+      !result ||
+      typeof result !== 'object' ||
+      !('status' in result) ||
+      !['failed', 'stopped', ...(nativeRepair ? ['generated'] : [])].includes(String(result.status))
+    )
+      throw new Error('Only the last interrupted session can resume.');
+    const usage = await this.completedUsage();
+    const budget = budgetSchema.parse(await readJSON(path.join(this.root, 'budget.json')));
+    const requests = (await readdir(folder)).filter((name) =>
+      /^request-\d{2}\.json$/.test(name),
+    ).length;
+    if (requests >= budget.requestsPerSession)
+      throw new Error('The session request allowance is exhausted.');
+    const continuations = path.join(folder, 'continuations');
+    await mkdir(continuations, { recursive: true, mode: 0o700 });
+    const number = (await readdir(continuations)).length + 1;
+    const continuation = path.join('continuations', String(number).padStart(2, '0'));
+    await mkdir(path.join(folder, continuation), { mode: 0o700 });
+    await saveEvidence(path.join(folder, continuation, 'started.json'), {
+      kind: 'same-session-continuation',
+      stage,
+      at: Date.now(),
+      requests,
+      usage,
+      previousResult: fingerprint(result),
+      maximumRequests: budget.requestsPerSession,
+      repair: nativeRepair,
+    });
+    return new RobotRehearsalSession(
+      folder,
+      budget.requestsPerSession,
+      requests,
+      path.join(continuation, 'result.json'),
+    );
+  }
 }
 
 export class RobotRehearsalSession {
@@ -425,7 +505,11 @@ export class RobotRehearsalSession {
   constructor(
     readonly folder: string,
     private limit: number,
-  ) {}
+    alreadyUsed = 0,
+    private resultName = 'result.json',
+  ) {
+    this.next = alreadyUsed;
+  }
   get remainingRequests() {
     return this.limit - this.next;
   }
@@ -440,6 +524,6 @@ export class RobotRehearsalSession {
   }
   finish(result: unknown) {
     this.finished = true;
-    return saveEvidence(path.join(this.folder, 'result.json'), result);
+    return saveEvidence(path.join(this.folder, this.resultName), result);
   }
 }

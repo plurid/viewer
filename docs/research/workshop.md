@@ -1,20 +1,20 @@
 # Viewer Workshop: interfaces built around a task
 
-This is the selected hackathon direction and its implementation audit. The canvas foundation is
-implemented. The robot foundation now reads URDF, attaches scoped STL assets and computes forward
-kinematics. Bounded target solving, independent endpoint verification, fixed-target base comparisons
-and visual pose replay are implemented. Actual Meta-generated creation, refinement and a quoted
-alternative have passed native workflow checks, including comparison save, export/reopen and cold
-restart. A separate presentation copy groups controls, bounds inspector height and frames the arm.
-It preserves the provider scripts; these local layout edits are attributed separately. The
-foreground rehearsal passes, with saved-session takes retained. The review film failed to introduce
-the existing Viewer and Plurid projects, explain the event additions or make spatial navigation
-understandable. The [screenplay](../release/hackathon-demo.md) is being rebuilt around visible
-actions in one workspace. The next cut uses edited playback of retained requests and replies, a
-staged reveal of the actual canvas and fewer competing details. This is film presentation, not a
-product streaming feature. Final narration and the opening remain separate production work. The
-[contribution inventory](../release/hackathon-contributions.md) uses the owner's 27 October 2026
-development baseline to distinguish prior work.
+This page records the hackathon direction and implementation audit. The canvas foundation is
+implemented. The robot workflow has passed native qualification for articulated controls, target
+solving, independent endpoint checks, comparison and export/reopen. Those checks establish the
+mechanics of the generated tool; the two-point exercise does not explain a practical job.
+
+The selected [screenplay](../release/hackathon-demo.md) follows a robot mounting plate from model
+inspection through a cutting drawing to a price-and-delivery decision. A local conversation between
+Viewer's agent and a fictional cutting-service agent supplies the quotation. The model inspector,
+cutting view and quote comparison demonstrate different interfaces in one spatial project. The
+mounting workflow now has reviewed canvas DXF output and a local supplier fixture. Actual
+Meta-generated mounting and quote interfaces pass native width editing, drawing measurement,
+save/reopen, deadline selection and restart checks. The mounting job is fictional; physical adapter
+qualification is outside the demo and does not block recording. Final narration and the opening
+remain separate production work. The [contribution inventory](../release/hackathon-contributions.md)
+uses the owner's 27 October 2026 baseline to distinguish prior work.
 
 ## Product thesis
 
@@ -29,18 +29,43 @@ on the spot. The person asks what they need to do with the project, and the agen
 around its files. The controls can change when the question changes. Viewer keeps sources,
 conversations, alternatives and saved results together throughout that work.
 
-The robot demonstrates this broader idea through one qualified workflow. The generated tool uses
-Viewer capabilities for source access, geometry and verification. File formats alone do not supply
-those capabilities. Broad replacement of complete Photoshop or AutoCAD applications remains outside
-what this demonstration establishes.
+The mounting job gives those interfaces a shared purpose. The robot's attachment geometry informs
+the plate; the reviewed drawing informs the quote; the reply informs the person's delivery choice.
+Generated tools use Viewer capabilities for source access, geometry and verification. File formats
+alone do not supply those capabilities. The demonstration establishes the selected operations across
+different interfaces, not complete replacement of Photoshop or AutoCAD.
 
 Plurid makes the relationships navigable. Quote branches keep another investigation beside its
 source; independent canvases retain both alternatives. Spatial proximity does not grant access or
-prove a dependency. Browser, editor and terminal remain different capabilities viewing the same
-project. See [spatial development](spatial-development.md) and the
+prove a dependency. The film's browser/editor/terminal repetition ends by revealing those views in
+one workspace. See [spatial development](spatial-development.md) and the
 [product principles](../../PRODUCT.md).
 
-## Selected case: can this arm reach the targets?
+## Selected task and retained robot evidence
+
+The selected job is to prepare a plate for attaching the robot to a workbench and choose its cutting
+quote. This is a fictional job using a real source model, an assigned adapter-plate specification
+and a simulated supplier. The outputs are a reviewed cutting file and a selected simulated
+quotation. The controls, drawing, measurements and quote must agree with the scenario inputs.
+
+The supplier mock presents two delivery options for the same part. The generated comparison reads
+that reply and lets the person change the deadline. The screenplay owns the exact sample values and
+dialogue. Real service messaging, browser session access and order submission are outside this local
+simulation.
+
+The accepted attachment approach uses the existing two table clamps with an adapter plate. The
+pinned SO-ARM100 parts list identifies those clamps. The base STEP is
+[`STEP/SO101/Base_SO101.step`](https://github.com/TheRobotStudio/SO-ARM100/blob/a758567c3978dfeefe282ede0500085a48fe8f78/STEP/SO101/Base_SO101.step).
+Its source-frame envelope measures 110.925 × 72 × 87 mm; this is an envelope, not a bolt pattern.
+The STEP's axes differ from the assembled URDF frame. The demo starts with a 160 × 140 × 6 mm
+aluminium plate and four 6.5 mm holes on a 120 × 100 mm pitch, then changes its width to 180 mm.
+These are assigned scenario inputs, not dimensions measured from the robot. Physical fit and
+fabrication are outside the fictional job; they require no confirmation before filming.
+
+The retained robot exercise below qualifies generation, revision and comparison mechanics. It does
+not qualify the mounting plate or the connected design-to-quote workflow.
+
+### Can this arm reach the targets?
 
 Use the [SO-101 project](https://github.com/TheRobotStudio/SO-ARM100), with the exact follower
 model, meshes and documentation pinned before qualification. Its
@@ -81,7 +106,10 @@ evidence. Keep run-specific results outside this page and follow
 | Independently check robot results         | Implemented for endpoint positions and hard joint limits, with saved-input and source bindings.                                    | [Desktop checker](../../packages/viewer-electron/app/src/desktop/robotics/check.ts) uses separate point propagation. [Target tests](../../packages/viewer-electron/app/tests/robot-targets.test.ts) cover SciPy reference agreement, stale inputs and restart. No interval, orientation or collision verification is provided.                                                             |
 | Compare base placements and replay poses  | Implemented: native comparison requires equal model, world targets, tool and tolerance; offline replay interpolates copied joints. | [Comparison owner](../../packages/viewer-electron/app/src/desktop/canvases/robot-check.ts), [replay module](../../packages/viewer-electron/app/src/domain/robotics/replay.ts), [native comparison fixture](../../packages/viewer-electron/app/tests/native/robot-comparison.ts). Both tasks are checked again after restart. Visual interpolation does not check intervals.                |
 | Qualify the generated robot workflow      | Verified in native replay of actual Meta output: articulated creation, target-solving refinement and an exact quoted alternative.  | The alternative keeps the original unchanged and passes independent endpoint checks. Comparison save, paused replay, export/reopen and cold restart passed. A valid response rejected by a local parser was recovered unchanged; failures remain retained. This is functional qualification, not finished footage.                                                                         |
-| Complete the robot film                   | Functional rehearsal qualified; the review edit did not explain the product or spatial workflow.                                   | Rebuild the introduction and story. Record a continuous movement study with a visible pointer, then the missing spatial passages and saved-result ending. Final narration, opening footage and credits follow that review.                                                                                                                                                                 |
+| Browse a service page                     | Implemented: the local supplier runs in a real browser plane and saves a reply for the exact drawing hash.                         | [Browser owner](../../packages/viewer-electron/app/src/desktop/browser/browser-planes.ts), [supplier fixture](../../packages/viewer-electron/app/tools/mounting/supplier.ts). The exchange is a local simulation; browser access does not grant agent access.                                                                                                                              |
+| Prepare the mounting plate                | Generated plate controls pass width editing, measured DXF export, native reopen and input persistence.                             | [Drawing validator](../../packages/viewer-electron/app/src/domain/canvases/drawing.ts), [native qualification](../../packages/viewer-electron/app/tools/mounting/qualify.ts). Source meshes are displayed with assigned dimensions for the fictional job. Physical fabrication is outside the demo.                                                                                        |
+| Compare a simulated cutting quote         | The generated comparison reads the saved reply, changes deadline eligibility and saves the selected quote with the drawing hash.   | Native qualification covers the three-to-seven-day transition, Economy selection, Markdown save and restart. The model repaired an unsupported import after native execution exposed it. No external supplier or order is involved.                                                                                                                                                        |
+| Complete the mounting-plate film          | The selected workflow now has generated controls and saved-output evidence.                                                        | Review the narration, then rehearse and record the integrated workflow with the assigned demo dimensions. No new film is implied by passing the tool checks.                                                                                                                                                                                                                               |
 
 The [canvas reference](../reference/canvases.md) owns current APIs and limits. The SDK exposes
 state, sources, assets and reviewed proposals/exports. The offline motion library computes supplied
@@ -93,6 +121,11 @@ development evidence, not the completed movie.
 
 Use existing document, canvas, preview, operation and conversation owners. Extend their capabilities
 where needed; avoid a parallel application or a hardcoded success demonstration.
+
+### Retained robot qualification
+
+The following checklist describes the qualified two-target exercise. It is supporting evidence for
+the mounting story, not its completion checklist.
 
 | Order | Required work                                                                                                         | Acceptance                                                                                                                                                               |
 | ----- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -110,9 +143,9 @@ checks and saves the comparison. This does not prove the original placement unre
 The [target-check decision](../adr/0014-robot-target-checks.md) records the solving and
 endpoint-check boundary. The work items above remain the acceptance checklist; their implementation
 is complete for this bounded case. The presentation copy has passed a foreground input rehearsal.
-Retained footage covers the controls and handoff, but the review film does not make the task or
-workspace understandable. Rebuild the recording sequence before final production. A supplied HTML
-fixture cannot qualify generated controls or a model explanation. The
+Retained footage covers that exercise's controls and handoff. Review the selected mounting-plate
+script before further recording. A supplied HTML fixture cannot qualify generated controls or a
+model explanation. The
 [staged robot runner](../development/testing.md#robot-creation-revision-and-quoted-alternative)
 prepares pinned public inputs, records the paid allowance across restarts and stops between stages
 for native review. Its offline provider tests establish harness behavior, not live generation.
@@ -123,6 +156,24 @@ foreground rehearsal covers every movable joint, a captured joint definition, ca
 editing/restoring a target coordinate. Keep later visual edits identifiable and separate from the
 retained provider output. Native loading and selected automated interactions do not establish every
 control's quality.
+
+### Mounting-plate workflow before recording
+
+1. Use the existing clamps and assigned plate specification as the fictional brief. Introduce that
+   job clearly before showing its generated controls.
+2. Rehearse the 160-to-180 mm width edit. Viewer measures the saved DXF independently; compare those
+   measurements with the displayed demo dimensions.
+3. Rehearse the implemented local cutting-service conversation and explicit reply handoff. Browser
+   access does not grant agent access. The quote records the exact saved drawing hash.
+4. Film the qualified deadline transition and saved quote together with the cutting file. Keep mock
+   service behavior distinct from actual model output.
+
+The [screenplay readiness table](../release/hackathon-demo.md#implementation-and-evidence) separates
+the implemented workflow from the remaining presentation and recording work. The
+[mounting runner](../development/testing.md#mounting-and-quote-generation) retains request counts,
+failed responses, native repair evidence and the original model output. Only the demonstrated
+controls and file operations are qualified; camera persistence, arbitrary inputs and physical fit
+are not established by those checks. Further paid generation must fit an explicit allowance.
 
 ## Model and human responsibilities
 
@@ -141,9 +192,10 @@ the selected case and must not be credited as exercised unless separately demons
 ## Other workflows and references
 
 The [supplier regression](../development/testing.md#canvas-evaluation-and-replay) remains a small
-case with known arithmetic, retained model responses and native export/restart checks. It is not the
-film's central task. The [Job 1042 plan](audit-and-hackathon-plan.md) remains the fabrication
-workflow; its requirement-verification and durable-check decisions still apply there.
+case with known arithmetic, retained model responses and native export/restart checks. The
+[Job 1042 plan](audit-and-hackathon-plan.md) describes a separate fabrication workflow. Its
+requirement-verification and durable-check decisions still apply. Its 48/50 mm mismatch and the
+supplier regression's quotes do not establish the mounting job or new service conversation.
 
 [RP1](https://github.com/Roboparty/RP1) and Forge informed the earlier investigation of physical
 projects and connected artifacts. RP1 is not the selected demonstration asset. The RP Hand

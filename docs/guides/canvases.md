@@ -14,6 +14,9 @@ empty Chat plane. Under **Tools**, **Source code** shows the current code and **
 returns to the previous design while retaining compatible inputs. **Stop** stops the page; **Tools →
 Reload** opens the saved revision again.
 
+In Chat, **Context** shows attached paths relative to the conversation's folder. Click a file or
+folder to open it in a linked plane. Hover over an entry to see its full path.
+
 Expand **Sources** or **Assets** above the canvas to inspect its inputs. File rows keep the source
 action beside the filename; long lists scroll within the details area. Opening another details
 section closes the previous one and leaves the canvas visible. Press **Escape** while working in an
@@ -32,8 +35,13 @@ open section to close it and return focus to its heading.
    change during review, prepare the result again.
 5. Choose **Open saved file** to inspect the output in Viewer.
 
-Tools can propose CSV, JSON, Markdown and plain-text results. Canceling the review or save picker
-leaves the result unsaved. Source snapshots and saved inputs survive restarting Viewer.
+Tools can propose CSV, JSON, Markdown, plain text and cutting DXF results. For a DXF, Viewer shows
+the drawing and measured width, height and hole diameters. Inspect these, then choose **Save
+drawing…**. Open the saved file to measure it in the drawing preview. The export check does not
+confirm a mounting fit, material choice or load capacity; confirm those requirements separately.
+
+Canceling the review or save picker leaves the result unsaved. Source snapshots and saved inputs
+survive restarting Viewer.
 
 ## Explore an alternative
 

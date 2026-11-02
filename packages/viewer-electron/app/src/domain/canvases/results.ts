@@ -1,14 +1,16 @@
 import { z } from 'zod';
+import { prepareCanvasDrawing } from './drawing';
 
 export const canvasResultFormats = {
   csv: 'csv',
   json: 'json',
   markdown: 'md',
   text: 'txt',
+  dxf: 'dxf',
 } as const;
 export const canvasResultSchema = z
   .object({
-    format: z.enum(['csv', 'json', 'markdown', 'text']),
+    format: z.enum(['csv', 'json', 'markdown', 'text', 'dxf']),
     name: z
       .string()
       .min(1)
@@ -32,6 +34,18 @@ export const canvasResultSchema = z
       } catch {
         context.addIssue({ code: 'custom', message: 'The result is not valid JSON.' });
       }
+    }
+  })
+  .transform((value, context) => {
+    if (value.format !== 'dxf') return value;
+    try {
+      return { ...value, content: prepareCanvasDrawing(value.content).content };
+    } catch (error) {
+      context.addIssue({
+        code: 'custom',
+        message: error instanceof Error ? error.message : 'The drawing could not be read.',
+      });
+      return z.NEVER;
     }
   });
 export type CanvasResult = z.infer<typeof canvasResultSchema>;

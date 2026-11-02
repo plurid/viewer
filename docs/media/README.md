@@ -67,14 +67,15 @@ explicitly edited playback of saved model output. This is a recording tool, not 
 streaming feature. Run it in an isolated profile without configured providers.
 
 1. Call `mount()` with the visible conversation selector, retained user message and a public context
-   label. The overlay identifies itself as **Saved session · edited playback**.
-2. Call `type()` to enter that exact request through recorded input. Dispatch **Enter** to advance
-   the replay. This composer never sends a provider request.
+   label. It uses the native toolbar, transcript and composer markup, with the app's existing
+   styles. The cloned composer has no provider send handler.
+2. Call `type()` to enter that exact request through recorded input. Dispatch **Command+Enter** or
+   **Control+Enter** to advance the replay. This composer never sends a provider request.
 3. Call `answer()` with an assistant message and the exact start/end offsets of its excerpt. Keep
-   the condensed repair-history disclosure when the qualified canvas follows repairs.
-4. Call `coverCanvas()` before following **Open canvas**. That button delegates to the existing
-   native **Canvas** action. Wait for the real canvas and assets to load, then call `revealCanvas()`
-   with its frame connection. The temporary mask reveals the actual model and control group.
+   the source IDs, excerpt offsets and condensed repair history in the capture evidence.
+4. Call `coverCanvas()` before following the native **Canvas** action. Wait for the real canvas and
+   assets to load, then call `revealCanvas()` with its frame connection. The temporary mask reveals
+   the actual model and control group.
 5. Exercise the real controls. Call `dismiss()` when returning to the original transcript or closing
    the take. Save `events`, which identifies message hashes and excerpt offsets, with the input and
    frame logs.
@@ -82,8 +83,14 @@ streaming feature. Run it in an isolated profile without configured providers.
 The controller changes presentation DOM only. It does not rewrite transcripts, change generated
 scripts or add native APIs. Assembly timing is editorial, not measured model latency. Retain the
 original messages and the qualified revision mapping, including omitted repairs, outside the cut.
-Attribute static layout refinements separately. Inspect prompt legibility, the staged reveal and the
+Credit saved-session replay, staged reveals and local layout refinements once in the film credits.
+Keep editorial labels out of the chat controls. Inspect prompt legibility, the staged reveal and the
 first working interaction together before assembling the full film.
+
+Generate the delivered narration transcript and captions from the same timed cues used to assemble
+the audio. Put spoken words, on-screen titles and scene directions in separate fields of the full
+script. Check the delivered audio against those cues; an earlier story outline is not its
+transcript.
 
 ## Attribution
 

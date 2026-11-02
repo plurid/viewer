@@ -108,6 +108,11 @@
 }
 
 .chat-context-items li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-context-items button {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -118,11 +123,17 @@
   background: var(--field);
 }
 
+.chat-context-items button:hover,
+.chat-context-items button:focus-visible {
+  color: var(--ink);
+  background: var(--raised);
+}
+
 .chat-context-items svg {
   flex: none;
 }
 
-.chat-context-items li > span {
+.chat-context-items button > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

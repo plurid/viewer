@@ -35,72 +35,80 @@ export function sessionReplay(main: Connection) {
     });
     await main.evaluate(
       pageCall(
-        (selector, label) => {
+        (selector, requestID, label) => {
           const plane = document.querySelector<HTMLElement>(selector);
-          if (!plane || plane.querySelector('[data-session-replay]'))
-            throw Error('Replay needs one visible conversation plane.');
-          const host = document.createElement('section');
-          host.dataset.sessionReplay = 'composing';
-          host.setAttribute('aria-label', 'Edited playback of a saved Meta session');
-          host.style.cssText = 'position:absolute;inset:0;z-index:10;background:#31353d';
-          const previousPosition = plane.style.position;
-          plane.dataset.replayPosition = previousPosition;
-          plane.style.position = 'relative';
-          host.innerHTML = `<style>
-          [data-session-replay] { color:#f2f4f6; font:18px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
-          [data-session-replay] * { box-sizing:border-box; }
-          [data-session-replay] .replay-bar { height:56px; padding:0 30px; border-bottom:1px solid #454b55; display:flex; align-items:center; justify-content:space-between; gap:20px; font-size:14px; }
-          [data-session-replay] .replay-bar span:last-child { color:#b8c2cd; }
-          [data-session-replay] .replay-body { max-width:960px; margin:0 auto; padding:40px 44px 30px; }
-          [data-session-replay] .replay-context { color:#b8c2cd; font-size:15px; padding-bottom:26px; }
-          [data-session-replay] .replay-label { font-size:15px; font-weight:600; margin-bottom:12px; }
-          [data-session-replay] textarea { display:block; width:100%; height:210px; resize:none; padding:17px 19px; border:1px solid #697381; border-radius:3px; background:#292d34; color:#f2f4f6; font:inherit; caret-color:#a9cfeb; box-shadow:none; }
-          [data-session-replay] textarea:focus { outline:1px solid #9ec4dd; outline-offset:2px; }
-          [data-session-replay] .replay-hint { color:#b8c2cd; font-size:14px; padding-top:14px; }
-          [data-session-replay] .replay-request { margin:0; white-space:pre-wrap; max-height:185px; overflow:auto; font-size:18px; }
-          [data-session-replay] .replay-answer { margin-top:29px; padding-top:25px; border-top:1px solid #454b55; }
-          [data-session-replay] .replay-answer p { margin:0; font-size:22px; line-height:1.5; min-height:65px; white-space:pre-wrap; }
-          [data-session-replay] .replay-history { margin:22px 0 0; color:#b8c2cd; font-size:14px; }
-          [data-session-replay] .replay-open { margin-top:22px; padding:9px 15px; color:#f2f4f6; background:#3c4652; border:1px solid #697381; border-radius:3px; font:500 16px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; cursor:pointer; }
-          [data-session-replay] ::selection { background:#3a5368; color:white; }
-          [data-session-replay] [hidden] { display:none!important; }
-          @media (prefers-reduced-motion:reduce) { [data-session-replay] * { scroll-behavior:auto; } }
-        </style>
-        <div class="replay-bar"><strong>Meta</strong><span>Saved session · edited playback</span></div>
-        <div class="replay-body">
-          <div class="replay-context"></div>
-          <div class="replay-label">You</div>
-          <textarea aria-label="Replay the saved request" spellcheck="false"></textarea>
-          <div class="replay-hint">Enter to replay the saved response</div>
-          <p class="replay-request" hidden></p>
-          <div class="replay-answer" hidden><div class="replay-label">Meta</div><p></p></div>
-          <p class="replay-history" hidden>Saved session condensed, including repair rounds. Full messages retained.</p>
-          <button class="replay-open" type="button" hidden>Open canvas</button>
-        </div>`;
-          host.querySelector('.replay-context')!.textContent = label;
-          const input = host.querySelector('textarea')!;
-          input.addEventListener('keydown', (event) => {
-            if (event.key !== 'Enter' || event.shiftKey) return;
+          const nativeForm = plane?.querySelector<HTMLFormElement>('.chat-composer');
+          const transcript = plane?.querySelector<HTMLElement>('.chat-transcript');
+          const paragraph = plane?.querySelector<HTMLElement>(
+            `[data-chat-text="${CSS.escape(requestID)}"]`,
+          );
+          if (!plane || !nativeForm || !transcript || !paragraph || plane.dataset.sessionReplay)
+            throw Error('Replay requires the retained message and native chat controls.');
+          plane.dataset.sessionReplay = 'composing';
+          plane.dataset.replayContext = label;
+          const style = document.createElement('style');
+          style.dataset.replayStyle = '';
+          style.textContent = `
+            [data-session-replay] .chat-transcript > :not([data-replay-visible]),
+            [data-session-replay] .chat-footer > :not([data-replay-composer]) { display:none; }
+            [data-session-replay] .chat-model { opacity:1; }
+          `;
+          plane.append(style);
+          const rememberText = (element: HTMLElement, text: string) => {
+            element.dataset.replayOriginalText = element.textContent ?? '';
+            element.textContent = text;
+          };
+          const author = plane.querySelector<HTMLElement>(
+            '.chat-message[data-role="assistant"] > strong',
+          );
+          const model = plane.querySelector<HTMLElement>('.chat-model > span');
+          if (model && author) rememberText(model, author.textContent ?? 'Meta');
+          for (const item of plane.querySelectorAll<HTMLElement>('.chat-context-items li > span'))
+            rememberText(item, (item.textContent ?? '').split('/').filter(Boolean).at(-1) ?? '');
+
+          // Clone native markup so the film uses its styles without reaching the send handler.
+          const form = nativeForm.cloneNode(true) as HTMLFormElement;
+          form.dataset.replayComposer = '';
+          const input = form.querySelector('textarea')!;
+          const send = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+          const hint = form.querySelector<HTMLElement>('.chat-composer-hint')!;
+          for (const element of form.querySelectorAll('[id]')) element.removeAttribute('id');
+          input.removeAttribute('aria-describedby');
+          input.disabled = false;
+          input.value = '';
+          send.disabled = true;
+          hint.textContent = 'Command or Control + Enter to send.';
+          const submit = () => {
+            if (!input.value.trim() || plane.dataset.sessionReplay !== 'composing') return;
+            if (input.value !== paragraph.textContent)
+              throw Error('Replay request differs from the retained native message.');
+            plane.dataset.sessionReplay = 'submitted';
+            paragraph.closest<HTMLElement>('.chat-message')!.dataset.replayVisible = '';
+            input.value = '';
+            send.disabled = true;
+            transcript.scrollTop = transcript.scrollHeight;
+          };
+          form.addEventListener('submit', (event) => {
             event.preventDefault();
             event.stopPropagation();
-            host.dataset.sessionReplay = 'submitted';
-            const request = host.querySelector<HTMLElement>('.replay-request')!;
-            request.textContent = input.value;
-            request.hidden = false;
-            input.hidden = true;
-            host.querySelector<HTMLElement>('.replay-hint')!.hidden = true;
+            submit();
           });
-          host.querySelector('.replay-open')!.addEventListener('click', () => {
-            const native = [
-              ...plane.querySelectorAll<HTMLButtonElement>('.chat-toolbar button'),
-            ].find((button) => button.textContent?.trim() === 'Canvas');
-            if (!native) throw Error('Native Canvas action is unavailable.');
-            native.click();
+          input.addEventListener('input', () => {
+            send.disabled = !input.value.trim();
           });
-          plane.append(host);
+          input.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey) || event.isComposing)
+              return;
+            event.preventDefault();
+            event.stopPropagation();
+            submit();
+          });
+          nativeForm.parentElement!.append(form);
+          transcript.scrollTop = 0;
           input.focus();
         },
         selector,
+        request.id,
         label,
       ),
     );
@@ -114,7 +122,7 @@ export function sessionReplay(main: Connection) {
     }
     const value = await main.evaluate(
       pageCall(
-        () => document.querySelector<HTMLTextAreaElement>('[data-session-replay] textarea')?.value,
+        () => document.querySelector<HTMLTextAreaElement>('[data-replay-composer] textarea')?.value,
       ),
     );
     assert.equal(value, request.text, 'Replay must type the retained request exactly.');
@@ -135,31 +143,38 @@ export function sessionReplay(main: Connection) {
       end: passage.end,
       sha256: createHash('sha256').update(passage.message.text).digest('hex'),
     });
+    mark('session-condensed', { messageID: passage.message.id });
     await main.evaluate(
       pageCall(
-        (text, milliseconds, repairs) => {
-          const host = document.querySelector<HTMLElement>('[data-session-replay]');
-          if (host?.dataset.sessionReplay !== 'submitted')
+        (messageID, text, milliseconds, repairs) => {
+          const plane = document.querySelector<HTMLElement>('[data-session-replay]');
+          if (plane?.dataset.sessionReplay !== 'submitted')
             throw Error('Replay request was not submitted.');
-          const section = host.querySelector<HTMLElement>('.replay-answer')!;
-          const paragraph = section.querySelector('p')!;
-          section.hidden = false;
-          host.querySelector<HTMLElement>('.replay-history')!.hidden = !repairs;
+          const paragraph = plane.querySelector<HTMLElement>(
+            `[data-chat-text="${CSS.escape(messageID)}"]`,
+          );
+          if (!paragraph) throw Error('The retained native reply is unavailable.');
+          paragraph.dataset.replayOriginalText = paragraph.textContent ?? '';
+          paragraph.textContent = '';
+          paragraph.closest<HTMLElement>('.chat-message')!.dataset.replayVisible = '';
+          plane.dataset.replayRepairs = String(repairs);
+          const transcript = plane.querySelector<HTMLElement>('.chat-transcript')!;
           const words = text.match(/\S+\s*/g) ?? [];
           let index = 0;
           return new Promise<void>((resolve) => {
             const tick = () => {
               paragraph.textContent = words.slice(0, ++index).join('');
+              transcript.scrollTop = transcript.scrollHeight;
               if (index >= words.length) {
                 paragraph.textContent = text;
-                host.dataset.sessionReplay = 'answered';
-                host.querySelector<HTMLButtonElement>('.replay-open')!.hidden = false;
+                plane.dataset.sessionReplay = 'answered';
                 resolve();
               } else setTimeout(tick, milliseconds / Math.max(1, words.length));
             };
             tick();
           });
         },
+        passage.message.id,
         text,
         milliseconds,
         repairs,
@@ -171,12 +186,22 @@ export function sessionReplay(main: Connection) {
   async function dismiss() {
     await main.evaluate(
       pageCall(() => {
-        const host = document.querySelector('[data-session-replay]');
-        const plane = host?.parentElement;
-        host?.remove();
-        if (plane) {
-          plane.style.position = plane.dataset.replayPosition ?? '';
-          delete plane.dataset.replayPosition;
+        for (const plane of document.querySelectorAll<HTMLElement>('[data-session-replay]')) {
+          for (const element of plane.querySelectorAll<HTMLElement>(
+            '[data-replay-original-text]',
+          )) {
+            element.textContent = element.dataset.replayOriginalText ?? '';
+            delete element.dataset.replayOriginalText;
+          }
+          for (const element of plane.querySelectorAll(
+            '[data-replay-composer], [data-replay-style]',
+          ))
+            element.remove();
+          for (const element of plane.querySelectorAll('[data-replay-visible]'))
+            element.removeAttribute('data-replay-visible');
+          delete plane.dataset.sessionReplay;
+          delete plane.dataset.replayContext;
+          delete plane.dataset.replayRepairs;
         }
       }),
     );
@@ -193,14 +218,9 @@ export function sessionReplay(main: Connection) {
           message.closest('article')!.setAttribute('data-replay-quote', 'true');
           const style = document.createElement('style');
           style.textContent = `
-        ${selector} .chat-toolbar, ${selector} .chat-context, ${selector} .chat-footer { display:none; }
-        ${selector} .chat-transcript { padding:40px 44px; }
         ${selector} .chat-tool, ${selector} .chat-message:not([data-replay-quote]) { display:none; }
-        ${selector} .chat-message[data-replay-quote] { max-width:900px; margin:60px auto 0; }
-        ${selector} .chat-message[data-replay-quote] > strong { font-size:16px; }
-        ${selector} .chat-message[data-replay-quote] p { font-size:20px; line-height:1.6; }
-        ${selector} .chat-quote-action { font-size:16px; padding:10px 15px; }
-        ${selector} .chat-message[data-replay-quote]::before { content:'Saved Meta reply · select a passage to explore separately'; display:block; font-size:15px; color:#b8c2cd; margin-bottom:28px; }
+        ${selector} .chat-message[data-replay-quote] { margin:24px auto; }
+        ${selector} .chat-message[data-replay-quote] p { font-size:18px; line-height:1.6; }
       `;
           plane.append(style);
           plane.querySelector('.chat-transcript')!.scrollTop = 0;

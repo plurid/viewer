@@ -1,4 +1,5 @@
 import { modelDataLabels } from '../../domain/models/permissions';
+import { relativePathLabel } from '../../domain/files/paths';
 import { Disclosure } from '../ui/Disclosure';
 import '../canvases/canvas.css';
 import { useEffect, useId, useRef } from 'react';
@@ -125,12 +126,30 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
         <span className="chat-context-label">Context</span>
         {document.scopes.length ? (
           <ul className="chat-context-items">
-            {document.scopes.map((scope) => (
-              <li key={scope.path} title={scope.path}>
-                <Icon name={scope.directory ? 'folder' : 'file'} size={14} />
-                <span>{scope.path}</span>
-              </li>
-            ))}
+            {document.scopes.map((scope) => {
+              const label = relativePathLabel(document.path, scope.path);
+              return (
+                <li key={scope.path}>
+                  <button
+                    type="button"
+                    title={scope.path}
+                    aria-label={`Open ${label}`}
+                    onClick={() =>
+                      void workspace
+                        .openPath(scope.path, {
+                          paneID: pane.id,
+                          linked: true,
+                          activate: true,
+                        })
+                        .catch(actions.reportError)
+                    }
+                  >
+                    <Icon name={scope.directory ? 'folder' : 'file'} size={14} />
+                    <span>{label}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p>Drop files or folders here to add context.</p>

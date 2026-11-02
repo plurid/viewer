@@ -110,17 +110,45 @@ it('quotes exact text within one message and leaves unrelated selection alone af
   Element.prototype.scrollIntoView = before;
 });
 
-function mount() {
+function mount(workspace = {} as WorkspaceController) {
   return render(
     createElement(
       WorkspaceContext.Provider,
-      { value: {} as WorkspaceController },
+      { value: workspace },
       createElement(ChatPlane, {
         pane: { id: 'chat', type: 'chat', path: '/fixtures', conversationID: document.id },
       }),
     ),
   );
 }
+
+describe('attached context', () => {
+  it('labels context relative to the conversation and opens files and folders as linked planes', async () => {
+    document.path = '/fixtures/project';
+    document.scopes = [
+      { path: '/fixtures/project/SO-101', directory: true },
+      { path: '/fixtures/project/Inputs/mounting-brief.json', directory: false },
+      { path: '/fixtures/shared/notes.txt', directory: false },
+    ];
+    const openPath = vi.fn(async () => {});
+    mount({ openPath } as unknown as WorkspaceController);
+    for (const [index, label] of [
+      'SO-101',
+      'Inputs/mounting-brief.json',
+      '../shared/notes.txt',
+    ].entries()) {
+      const button = await screen.findByRole('button', { name: `Open ${label}` });
+      expect(button.textContent).toBe(label);
+      expect(button.title).toBe(document.scopes[index]!.path);
+      fireEvent.click(button);
+      expect(openPath).toHaveBeenLastCalledWith(document.scopes[index]!.path, {
+        paneID: 'chat',
+        linked: true,
+        activate: true,
+      });
+    }
+  });
+});
 
 describe('conversation identity', () => {
   it('keeps the generating model attribution when the next model is selected', async () => {
@@ -365,8 +393,10 @@ describe('Chat controls and state', () => {
     await screen.findByRole('textbox', { name: 'Chat message' });
     const context = screen.getByRole('group', { name: 'Attached context' });
     expect(context.querySelectorAll('li')).toHaveLength(2);
-    expect(context.querySelector('li')?.title).toBe(path);
-    expect(context.querySelector('li > span')?.textContent).toBe(path);
+    expect(context.querySelector('button')?.title).toBe(path);
+    expect(context.querySelector('button > span')?.textContent).toBe(
+      'a-very-long-folder-name/another-folder/notes.txt',
+    );
     expect(context.querySelector('[data-viewer-overlay-protected]')).toBeNull();
     expect(view.container.querySelectorAll('[data-viewer-overlay-protected]')).toHaveLength(2);
   });

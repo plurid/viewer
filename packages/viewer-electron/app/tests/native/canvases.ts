@@ -263,6 +263,25 @@ try {
     'stop removes runaway frame',
   );
   checks.push('host stays responsive and Stop removes a runaway canvas');
+  const stoppedLayout = await main.evaluate(
+    pageCall((id) => {
+      const body = document
+        .querySelector(`[data-canvas-id="${id}"] .canvas-body`)!
+        .getBoundingClientRect();
+      const empty = document
+        .querySelector(`[data-canvas-id="${id}"] .empty-state`)!
+        .getBoundingClientRect();
+      return {
+        x: empty.x + empty.width / 2 - body.x - body.width / 2,
+        y: empty.y + empty.height / 2 - body.y - body.height / 2,
+      };
+    }, canvas.id),
+  );
+  assert.ok(
+    Math.abs(stoppedLayout.x) < 2 && Math.abs(stoppedLayout.y) < 2,
+    'Stopped canvas is centered across the available canvas body.',
+  );
+  checks.push('stopped canvas is centered');
   await application.close(main);
   application = undefined;
   main = undefined;

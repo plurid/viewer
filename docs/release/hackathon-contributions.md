@@ -43,7 +43,7 @@ where a row extends them.
 | Conversation canvases          | Generated selectable HTML in an isolated plane; content revisions separate from saved input state                                    | `src/domain/canvases`, `src/desktop/canvases`, `src/renderer/canvases`                                 |
 | Quote branches                 | Exact quoted range and frozen conversation context; independent canvas; conflict-aware application to the original                   | `src/domain/models/chat.ts`, `src/desktop/chat`, `src/renderer/chat`                                   |
 | File-backed tools              | Bound inspection snapshots with hashes and coverage; explicit refresh; portable data without source-file authority                   | `src/desktop/canvases/sources.ts`, `src/domain/canvases/sources.ts`, `CanvasSources.tsx`               |
-| Reviewed results               | CSV, JSON, Markdown and text proposal review; content/state revision checks; exclusive new-file save; open the saved result          | `src/domain/canvases/results.ts`, `src/desktop/canvases/service.ts`, `ResultReview.tsx`                |
+| Reviewed results               | CSV, JSON, Markdown, text and cutting DXF review; content/state revision checks; exclusive new-file save; open the saved result      | `src/domain/canvases/results.ts`, `src/desktop/canvases/service.ts`, `ResultReview.tsx`                |
 | Runtime feedback               | Revision-bound loading/error observations and one bounded repair attempt                                                             | `src/desktop/canvases/observations.ts`, `src/desktop/chat/service.ts`                                  |
 | Meta tool protocol             | Paired assistant calls and actual tool results; validated single-step arguments and final replies                                    | `src/desktop/models/providers.ts`, `src/desktop/chat/service.ts`                                       |
 | Entry point                    | **Build tool from selection** opens a contextual draft without sending it automatically                                              | `src/renderer/commands/window-commands/comparison.ts`                                                  |
@@ -78,7 +78,7 @@ robot film. Package publication is a separate status from source implementation.
 
 The supplier case remains
 [evaluation material](../development/testing.md#canvas-evaluation-and-replay). Its outputs and tests
-are not evidence for the selected robot demonstration.
+are not evidence for the selected mounting-plate job or its new cutting-service simulation.
 
 The [implementation audit](../research/workshop.md#implementation-audit) owns the qualification
 boundary and remaining presentation work. The generated SO-101 workflow has native evidence for
@@ -87,11 +87,14 @@ save, replay, export/reopen and restart. This does not establish collision check
 trajectory validation, dynamics, device calibration or physical operation. Keep these absent
 capabilities out of the completed contribution list.
 
-The [screenplay](hackathon-demo.md) is being revised after the review cut failed to explain the
-product, its spatial relationships and its contribution. Existing footage shows actual native
-interactions with saved Meta output; it does not depict a fresh model generation. A replacement film
-still needs a clear introduction, continuous spatial footage and a concrete ending. Attribute public
-robot assets, supporting libraries, model-generated UI and the Viewer implementation separately.
+The selected [screenplay](hackathon-demo.md) connects robot inspection, plate preparation and a
+simulated cutting quote. Actual Meta-generated controls now have native evidence for width editing,
+measured DXF export, source-bound quote selection, save/reopen and restart. The supplier remains a
+local simulation, and the plate dimensions are illustrative. Physical mounting fit remains outside
+the completed contribution list. Existing footage shows actual native interactions with saved Meta
+output; it does not depict fresh generation for this new job. Attribute public robot assets,
+supporting libraries, model-generated UI and Viewer implementation separately. Credit the local
+two-agent supplier simulation as presentation work, not a real service integration.
 
 ## Attach to the final receipt
 

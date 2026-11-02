@@ -22,6 +22,83 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('robot rehearsal budgets and retained responses', () => {
+  it('continues an interrupted session without refunding requests or adding a session', async () => {
+    const ledger = new rehearsal.RobotRehearsalLedger(root);
+    await ledger.authorize({ sessions: 2, requestsPerSession: 2 });
+    const original = await ledger.begin('create', {});
+    await original.reserveRequest({ canceled: true });
+    await original.finish({ status: 'failed' });
+    await expect(ledger.resume('refine')).rejects.toThrow('last interrupted');
+    const resumed = await ledger.resume('create');
+    expect(resumed.remainingRequests).toBe(1);
+    expect(await resumed.reserveRequest({ continued: true })).toContain('request-02');
+    await expect(resumed.reserveRequest({})).rejects.toThrow('request budget');
+    await resumed.finish({ status: 'generated' });
+    expect(await ledger.sessions()).toHaveLength(1);
+    expect(await rehearsal.readJSON(path.join(original.folder, 'result.json'))).toEqual({
+      status: 'failed',
+    });
+    expect(await rehearsal.readRobotSessionResult(original.folder)).toEqual({
+      status: 'generated',
+    });
+    await expect(ledger.resume('create')).rejects.toThrow('last interrupted');
+    const second = await ledger.begin('refine', {});
+    expect(second.remainingRequests).toBe(2);
+    await second.finish({ status: 'generated' });
+    await expect(ledger.begin('branch', {})).rejects.toThrow('session budget');
+  });
+
+  it('does not resume a session under an extended or reallocated budget', async () => {
+    const ledger = new rehearsal.RobotRehearsalLedger(root);
+    await ledger.authorize({ sessions: 1, requestsPerSession: 8 });
+    await (await ledger.begin('create', {})).finish({ status: 'failed' });
+    await ledger.extend(1, 1, 'One additional request');
+    await (await ledger.begin('refine', {})).finish({ status: 'failed' });
+    await expect(ledger.resume('refine')).rejects.toThrow('unextended');
+  });
+
+  it('retains every continuation and stops when the original per-session cap is reached', async () => {
+    const ledger = new rehearsal.RobotRehearsalLedger(root);
+    await ledger.authorize({ sessions: 1, requestsPerSession: 3 });
+    const first = await ledger.begin('create', {});
+    await first.reserveRequest({});
+    await first.finish({ status: 'stopped' });
+    const second = await ledger.resume('create');
+    await second.reserveRequest({});
+    await second.finish({ status: 'failed' });
+    const third = await ledger.resume('create');
+    expect(third.remainingRequests).toBe(1);
+    await expect(ledger.begin('refine', {})).rejects.toThrow();
+    await third.reserveRequest({});
+    await third.finish({ status: 'stopped' });
+    await expect(ledger.resume('create')).rejects.toThrow('allowance is exhausted');
+    expect(await readdir(path.join(first.folder, 'continuations'))).toEqual(['01', '02']);
+    expect(await ledger.sessions()).toHaveLength(1);
+  });
+
+  it('binds a same-session native repair to the exact generated HTML and keeps its request count', async () => {
+    const ledger = new rehearsal.RobotRehearsalLedger(root);
+    await ledger.authorize({ sessions: 1, requestsPerSession: 2 });
+    const first = await ledger.begin('create', {});
+    await first.reserveRequest({});
+    const canvas = { id: randomUUID(), revision: 3, html: '<main>Broken tool</main>' };
+    await first.finish({ status: 'generated', canvas });
+    const repair = {
+      canvasID: canvas.id,
+      revision: 3,
+      htmlHash: rehearsal.digest(canvas.html),
+      message: 'Native runtime failed.',
+    };
+    await expect(ledger.resume('create', { ...repair, htmlHash: '0'.repeat(64) })).rejects.toThrow(
+      'exact generated canvas',
+    );
+    const second = await ledger.resume('create', repair);
+    expect(second.remainingRequests).toBe(1);
+    await second.reserveRequest({});
+    await second.finish({ status: 'generated', canvas });
+    await expect(ledger.resume('create', repair)).rejects.toThrow('allowance is exhausted');
+  });
+
   it('counts failures across restarts, refuses expansion, and stops at the approved number', async () => {
     const ledger = new rehearsal.RobotRehearsalLedger(root);
     await ledger.authorize({ sessions: 2, requestsPerSession: 2 });
