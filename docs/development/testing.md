@@ -321,6 +321,102 @@ conflict-aware application, portable content and bundled 3D rendering. Set `VIEW
 the candidate being tested and retain both preservation variables. Neither fixture is
 model-generation evidence.
 
+### Shared canvas actions and station study
+
+Run the service, protocol and independent placement checks without a provider:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec vitest run tests/canvas-actions.test.ts tests/robot-placement.test.ts tests/chat.test.ts
+```
+
+From the app directory, point the native test at a current preserved app and the pinned SO-101
+corpus used by the robot rehearsal:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
+VIEWER_TEST_BINARY=/path/to/Viewer.app/Contents/MacOS/Viewer \
+VIEWER_ROBOT_CORPUS=/path/to/SO-101 \
+node --import tsx tests/native/station-actions.ts
+```
+
+The test verifies every corpus file against the pinned manifest, creates an isolated profile and
+retains all outputs. It exercises real registered handlers, a visible control using the same action,
+independent checks, takeover, an exact quote branch, compatible comparison, saved JSON, portable
+reopen and a native cold restart. `summary.json` records outcomes and `providerRequests: 0`.
+Screenshots cover the wide tool, its report, a narrow view, the alternative and the reopened tool.
+
+The interface in `tests/fixtures/robotics/station.html` is supplied test code. These checks qualify
+the action mechanism and station calculations, not Meta generation. Use the
+[station generation gates](../research/workshop.md#station-generation-and-acceptance) and an
+explicit new allowance before paid creation, revision or branching.
+
+The live station runner starts with attached public source snapshots and meshes, without the
+supplied HTML. Build a separately named qualification app so its main-process transport records and
+caps actual provider requests before calling the unchanged desktop entry:
+
+```sh
+VIEWER_QUALIFICATION_BOOTSTRAP=tools/robotics/station-bootstrap.ts \
+node --import tsx tools/build-preserving.ts /path/to/seed/Viewer.app out/station-live/Viewer.app
+
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
+node --import tsx tools/robotics/station-live.ts --serve \
+  --corpus /path/to/SO-101 --binary /path/to/station-live/Viewer.app/Contents/MacOS/Viewer
+```
+
+Only use this runner after approval for three sessions of at most eight requests each. It copies the
+selected Meta provider's encrypted credential, endpoint binding and existing data permission into an
+isolated profile. It does not modify the original profile. In the runner, enter `create`, review the
+retained native result, then enter `refine` and `branch` separately after each preceding gate
+passes. `quit` ends the runner. Its process retains ownership of the generated profile across
+stages. Failed and canceled outgoing requests consume the allowance; restarting the request
+transport cannot reset it. Request headers are omitted and the API key is redacted from retained
+bodies and responses. This instrumented build is for qualification only.
+
+For separate invocations, use `--prepare --corpus <folder>`, then
+`--live --run <run> --stage create|refine|branch --binary <executable>`. `--guidance <file>` appends
+recorded instructions to the frozen stage prompt. `--resume <prompt-file>` continues the existing
+stage and conversation within its remaining request allowance. A native repair of an already
+generated result additionally needs `--repair-reason <reason>`; its saved canvas ID, revision and
+HTML hash must still match. Neither continuation route starts another session or refunds failed
+calls.
+
+`--verify-selection` exercises the initial Central selection through the generated user control. Its
+evidence attributes that action to the operator, not the model. Do not use it to claim an autonomous
+model selection.
+
+After all stages pass, run the actual generated artifacts through export and restart using an
+ordinary packaged app:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
+node --import tsx tools/robotics/station-handoff.ts --run /path/to/live-run \
+  --binary /path/to/Viewer.app/Contents/MacOS/Viewer
+```
+
+This creates another retained profile with no configured providers. It exports Front and Rear, saves
+and reads back their independently checked JSON, imports the exact generated HTML and assets, and
+checks both tools before and after restarting Viewer. Inputs must match exactly. Recomputed
+floating-point measurements may differ by at most `1e-12` metres between Node and Electron; pass
+counts, selected mounts and constraints must agree. No model requests are made. Native captures wait
+for the framed plane to be inside the viewport and fully opaque.
+
+Add `--presentation` to prepare a separate copy with the station's local visual corrections. The
+runner first verifies the unchanged imported artifact, then applies `station-presentation.ts` to
+that copy. It adds readable scene annotations, the fictional-station label, saved-state wording and
+accessible control labels. Evaluation and action code must remain byte-for-byte identical; saved
+inputs must match. The resulting copy is independently checked and exercised before and after
+restart.
+
+Each alternative retains `provider.html`, `presentation.html` and `presentation-edits.json` with
+both hashes, plus an export in its `Presentation` folder. These are local presentation edits, not
+model-authored improvements. This transformation accepts the qualified station HTML; it is not a
+general styling pass for arbitrary canvases.
+
+The chat regression covers a quoted canvas with repeated historical snapshots larger than the
+model-context limit. Identical snapshot data can reference the current canvas; changed values and
+check failures remain present. Saved transcripts and exact quote context remain unchanged. Meta's
+current-turn results stay paired with native calls without a second copy in message history.
+
 ### Supplier sample and arithmetic
 
 `tools/canvases/sample.ts` exports `canvasProject` and `canvasGoldenCases`; it is not a standalone

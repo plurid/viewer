@@ -22,6 +22,20 @@ action beside the filename; long lists scroll within the details area. Opening a
 section closes the previous one and leaves the canvas visible. Press **Escape** while working in an
 open section to close it and return focus to its heading.
 
+## Let the agent use its tool
+
+1. Ask the conversation to register actions for the tool's controls and run the needed calculation.
+2. Keep its canvas open. The activity row names the model and action while it runs. The model
+   receives the handler's actual result before continuing its answer.
+3. Choose **Take over** to cancel pending work and stop that model turn. You can then use the
+   controls yourself. **Stop** stops the entire page; **Tools → Reload** starts it again.
+4. Inspect the output. **Completed** means the action ran. Use a separate Viewer check when the tool
+   supports one; a generated result is not an independent measurement.
+
+Controls and agent calls use the same registered handler. Inputs are held while an action runs and
+its saved changes appear together when it finishes. Closing or revising the canvas cancels pending
+work. Reopening the saved tool does not make a provider request.
+
 ## Check sources and save a result
 
 1. Open **Sources** to see the evidence snapshots used by the tool. **Open source** returns to the
@@ -123,6 +137,21 @@ private.
 
 A standalone exported canvas retains its own task and check. It does not import a link to the
 original canvas. Keep the comparison JSON with the exported work to retain both measured tasks.
+
+### Compare mounting points for a station
+
+1. Attach the robot folder and a JSON station brief with targets, candidate mounting points, tool
+   and tolerance. Ask for a mounting study using those captured sources.
+2. Ask the agent to run its registered evaluation action and request an independent placement check.
+3. Expand **Station study**. Compare passing endpoints, allowed mounting points, maximum error and
+   distance from the reference position. A reserved rectangle restricts mounting points only.
+4. Change the constraint in the tool or ask for a revision, then check again. Choose a quoted
+   alternative to compare a second selection against the same robot, brief and reserved regions.
+5. Choose **Save check JSON…**, then **Export canvas…** to keep the working tool. Reopen it to
+   recompute the saved check and inspect the selected poses.
+
+The [mounting-study reference](../reference/canvases.md#mounting-studies) defines the brief and the
+scope of checking.
 
 The controls are generated for the conversation. A working page does not establish that the arm can
 reach a target or move without collisions. The checker measures the listed endpoint positions and

@@ -93,6 +93,30 @@ for (const target of [
 const unpacked = path.join(work, 'source');
 asar.extractAll(path.join(source, 'Contents/Resources/app.asar'), unpacked);
 await cp(path.resolve('.vite'), path.join(unpacked, '.vite'), { recursive: true });
+// A separately named qualification build can record and cap provider requests before the
+// unchanged application entry starts. This bootstrap is never added to ordinary packages.
+const bootstrap = process.env.VIEWER_QUALIFICATION_BOOTSTRAP;
+if (bootstrap) {
+  const entry = path.resolve(bootstrap);
+  if (!entry.startsWith(path.resolve('tools') + path.sep) || !(await lstat(entry)).isFile())
+    throw new Error('A qualification bootstrap must be a regular tool inside this checkout.');
+  await build({
+    configFile: false,
+    logLevel: 'warn',
+    build: {
+      emptyOutDir: false,
+      outDir: path.join(unpacked, '.vite/build'),
+      lib: { entry, formats: ['cjs'], fileName: () => 'qualification-main.cjs' },
+      rollupOptions: { external: (id) => id === 'electron' || id.startsWith('node:') },
+    },
+  });
+  const manifestPath = path.join(unpacked, 'package.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  if (manifest.main !== '.vite/build/main.cjs')
+    throw new Error('Qualification bootstrap requires the known main entry.');
+  manifest.main = '.vite/build/qualification-main.cjs';
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+}
 await mkdir(path.dirname(output), { recursive: true });
 await cloneTree(source, output);
 // Current committed notices supplement inherited runtime notices in this new
@@ -264,6 +288,7 @@ await writeFile(
       sourceBefore,
       sourceAfter: await sourceHash(process.cwd()),
       lockHash,
+      ...(bootstrap ? { qualificationBootstrap: path.resolve(bootstrap) } : {}),
       seed: source,
       scope: imageHelper
         ? 'Local direct rebuild with a fresh isolated image helper. Seed and intermediates preserved. Not a Store/distribution build.'

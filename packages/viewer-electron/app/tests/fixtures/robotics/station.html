@@ -1,0 +1,610 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Six-slot station</title>
+<style>
+  :root {
+    color-scheme: dark;
+    font: 13px system-ui;
+    color: #f2f4f6;
+    background: #272a30;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+  button,
+  select {
+    background: #31353d;
+    border: 1px solid #454b55;
+    border-radius: 3px;
+    padding: 7px 10px;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:hover {
+    background: #393e47;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  :focus-visible {
+    outline: 2px solid #82b3cf;
+    outline-offset: 3px;
+  }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 328px;
+    height: 100vh;
+    min-height: 440px;
+  }
+  #scene {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #scene header {
+    position: absolute;
+    left: 24px;
+    top: 20px;
+    pointer-events: none;
+  }
+  h1 {
+    font-size: 21px;
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+  p {
+    line-height: 1.5;
+    margin: 8px 0;
+  }
+  header p,
+  .muted,
+  small {
+    color: #b1bac6;
+  }
+  aside {
+    border-left: 1px solid #454b55;
+    background: #31353d;
+    padding: 20px;
+    overflow: auto;
+  }
+  h2 {
+    font-size: 14px;
+    margin: 0 0 12px;
+    font-weight: 600;
+  }
+  section + section {
+    border-top: 1px solid #454b55;
+    margin-top: 20px;
+    padding-top: 20px;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.5;
+  }
+  input[type='checkbox'] {
+    accent-color: #82b3cf;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  th,
+  td {
+    padding: 9px 0;
+    text-align: left;
+    border-bottom: 1px solid #454b55;
+    font-weight: 400;
+  }
+  thead {
+    color: #b1bac6;
+  }
+  td:last-child,
+  th:last-child {
+    text-align: right;
+  }
+  td button {
+    padding: 3px 0;
+    background: none;
+    border: 0;
+    text-align: left;
+  }
+  tr[data-selected='true'] td {
+    color: #82b3cf;
+  }
+  tr[data-reserved='true'] td {
+    color: #b1bac6;
+  }
+  #result {
+    font-size: 16px;
+    line-height: 1.45;
+    margin: 12px 0;
+  }
+  #progress {
+    min-height: 40px;
+    color: #b1bac6;
+  }
+  #scene footer {
+    position: absolute;
+    left: 24px;
+    bottom: 20px;
+    right: 24px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  #scene footer span {
+    margin-left: auto;
+    background: #272a30d9;
+    padding: 5px 8px;
+  }
+  .target-label {
+    position: absolute;
+    padding: 2px 5px;
+    background: #272a30;
+    pointer-events: none;
+    font-size: 12px;
+  }
+  .sources {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+  }
+  .sources button {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: #82b3cf;
+  }
+  select {
+    max-width: 100%;
+  }
+  .scope {
+    font-size: 12px;
+    color: #b1bac6;
+  }
+  @media (max-width: 760px) {
+    main {
+      grid-template-columns: minmax(0, 1fr);
+      height: auto;
+      grid-template-rows: 440px auto;
+    }
+    aside {
+      border-left: 0;
+      border-top: 1px solid #454b55;
+    }
+  }
+</style>
+<main>
+  <section id="scene" aria-label="Robot, bench and six tray targets">
+    <header>
+      <h1>Reach every tray slot</h1>
+      <p>SO-101 · 600 × 400 mm bench</p>
+    </header>
+    <footer>
+      <button id="fit">Reset view</button><span id="pose-label">Existing mount · A1</span>
+    </footer>
+  </section>
+  <aside>
+    <section>
+      <h2>Mounting study</h2>
+      <p class="muted">Find a position with a passing pose at each of the six targets.</p>
+      <label><input id="reserved" type="checkbox" />Reserve the central mounting area</label>
+      <div class="actions">
+        <button id="evaluate">Evaluate placements</button
+        ><button id="check">Check with Viewer</button>
+      </div>
+      <p id="progress" role="status">Ready to calculate 24 candidate poses.</p>
+      <div id="result" role="status">No placement checked yet.</div>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Mount</th>
+            <th scope="col">Poses found</th>
+            <th scope="col">Move</th>
+          </tr>
+        </thead>
+        <tbody id="mounts"></tbody>
+      </table>
+      <p id="selection" class="muted">Select a mounting point to inspect its poses.</p>
+    </section>
+    <section>
+      <h2>Inspect a target</h2>
+      <label
+        >Tray slot
+        <select id="target" aria-label="Tray slot"></select
+      ></label>
+      <p id="endpoint" class="muted"></p>
+      <p class="scope">
+        Endpoint positions and joint limits. Travel between poses and physical clearances are
+        outside this study.
+      </p>
+    </section>
+    <div class="sources">
+      <button id="robot-source">Robot definition</button
+      ><button id="brief-source">Station brief</button>
+    </div>
+    <p class="scope">Local qualification fixture. No model call.</p>
+  </aside>
+</main>
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+  import {
+    forwardKinematics,
+    originTransform,
+    multiplyTransforms,
+    solvePosition,
+  } from 'viewer/robotics';
+  const api = window.viewerCanvas;
+  const source = api.getSources().find((s) => s.data.robot);
+  const briefSource = api.getSources().find((s) => s.name === 'station.json');
+  if (!source || !briefSource) throw new Error('Attach the robot and station.json snapshots.');
+  const robot = source.data.robot;
+  const brief = JSON.parse(briefSource.data.evidence.map((e) => e.text ?? '').join('\n'));
+  const zero = Object.fromEntries(
+    robot.joints.filter((j) => j.type !== 'fixed').map((j) => [j.name, 0]),
+  );
+  const region = { min: [0.14, 0.12], max: [0.26, 0.24] };
+  let current = api.getState();
+  let targetIndex = 0;
+  const $ = (id) => document.getElementById(id);
+  const progress = $('progress');
+  const schema = (properties) => ({
+    type: 'object',
+    properties,
+    required: Object.keys(properties),
+    additionalProperties: false,
+  });
+  api.registerAction(
+    {
+      id: 'evaluatePlacements',
+      label: 'Evaluate 24 candidate poses',
+      inputSchema: schema({ reserveCentral: { type: 'boolean' } }),
+    },
+    async (input, { state, signal }) => {
+      const candidates = [];
+      let count = 0;
+      for (const mount of brief.mounts) {
+        const poses = [];
+        for (const target of brief.targets) {
+          signal.throwIfAborted();
+          progress.textContent = `${mount.label} · ${target.id} · ${++count} / 24`;
+          const solved = await solvePosition(
+            robot,
+            {
+              ...brief.tool,
+              base: mount.base,
+              target: target.position,
+              tolerance: brief.tolerance,
+              positions: zero,
+            },
+            signal,
+          );
+          poses.push({ targetID: target.id, positions: solved.positions });
+        }
+        candidates.push({ id: mount.id, poses });
+      }
+      const study = {
+        version: 1,
+        reserved: input.reserveCentral ? [region] : [],
+        candidates,
+        selected: state.study?.selected ?? 'existing',
+      };
+      return {
+        result: {
+          candidates: candidates.map((c) => ({ id: c.id, ...measure(c, study) })),
+          next: 'Request an independent placement check.',
+        },
+        patch: { study },
+      };
+    },
+  );
+  api.registerAction(
+    {
+      id: 'selectMount',
+      label: 'Select a mounting point',
+      inputSchema: schema({ mount: { type: 'string', enum: brief.mounts.map((m) => m.id) } }),
+    },
+    (input, { state }) => {
+      if (!state.study?.candidates?.length) throw new Error('Evaluate placements first.');
+      return {
+        result: { selected: input.mount },
+        patch: { study: { ...state.study, selected: input.mount } },
+      };
+    },
+  );
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#272a30');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  $('scene').prepend(renderer.domElement);
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.001, 10);
+  camera.up.set(0, 0, 1);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  function resetView() {
+    camera.position.set(0.85, -0.62, 0.73);
+    controls.target.set(0.3, 0.18, 0.08);
+    controls.update();
+  }
+  resetView();
+  if (current.cameraPosition) {
+    camera.position.fromArray(current.cameraPosition);
+    controls.target.fromArray(current.cameraTarget);
+    controls.update();
+  }
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x414954, 2.8));
+  const light = new THREE.DirectionalLight(0xffffff, 2);
+  light.position.set(1, -1, 2);
+  scene.add(light);
+  const bench = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 0.4, 0.008),
+    new THREE.MeshStandardMaterial({ color: '#393e47', roughness: 0.9 }),
+  );
+  bench.position.set(0.3, 0.2, -0.006);
+  scene.add(bench);
+  const outline = new THREE.LineSegments(
+    new THREE.EdgesGeometry(bench.geometry),
+    new THREE.LineBasicMaterial({ color: '#737e8c' }),
+  );
+  outline.position.copy(bench.position);
+  scene.add(outline);
+  for (const x of [0.44, 0.52]) {
+    const tray = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(0.06, 0.18, 0.014)),
+      new THREE.LineBasicMaterial({ color: '#82909e' }),
+    );
+    tray.position.set(x, 0.16, 0.001);
+    scene.add(tray);
+  }
+  const markers = brief.targets.map((t) => {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.006, 16, 12),
+      new THREE.MeshBasicMaterial({ color: '#82b3cf' }),
+    );
+    mesh.position.fromArray(t.position);
+    scene.add(mesh);
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(...t.position),
+        new THREE.Vector3(t.position[0], t.position[1], 0),
+      ]),
+      new THREE.LineBasicMaterial({ color: '#59616d' }),
+    );
+    scene.add(line);
+    return mesh;
+  });
+  const labels = brief.targets.map((target) => {
+    const label = document.createElement('span');
+    label.className = 'target-label';
+    label.textContent = target.id;
+    $('scene').append(label);
+    return label;
+  });
+  function renderScene() {
+    renderer.render(scene, camera);
+    labels.forEach((label, index) => {
+      const point = markers[index].position.clone().project(camera);
+      label.style.left = ((point.x + 1) * $('scene').clientWidth) / 2 + 10 + 'px';
+      label.style.top = ((1 - point.y) * $('scene').clientHeight) / 2 - 14 + 'px';
+      label.hidden = point.z > 1 || point.z < -1;
+    });
+  }
+  const reserved = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.12, 0.12),
+    new THREE.MeshBasicMaterial({
+      color: '#aa8a62',
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+    }),
+  );
+  reserved.position.set(0.2, 0.18, 0);
+  scene.add(reserved);
+  const mountMarkers = brief.mounts.map((m) => {
+    const marker = new THREE.Mesh(
+      new THREE.RingGeometry(0.008, 0.01, 32),
+      new THREE.MeshBasicMaterial({ color: '#b1bac6', side: THREE.DoubleSide }),
+    );
+    marker.position.fromArray(m.base.xyz);
+    marker.position.z = 0.002;
+    scene.add(marker);
+    return marker;
+  });
+  const loader = new STLLoader(),
+    geometry = new Map();
+  for (const resource of current.robotResources) {
+    const asset = api.assets.find((a) => a.id === resource.assetID);
+    if (!asset) throw new Error('Missing approved mesh.');
+    const response = await fetch(asset.url);
+    if (!response.ok) throw new Error('Mesh unavailable.');
+    geometry.set(resource.resource, loader.parse(await response.arrayBuffer()));
+  }
+  const visuals = [];
+  for (const link of robot.links)
+    for (const visual of link.visuals) {
+      if (visual.geometry.kind !== 'mesh') continue;
+      const shape = geometry.get(visual.geometry.resource);
+      if (!shape) throw new Error('Missing robot geometry.');
+      const mesh = new THREE.Mesh(
+        shape,
+        new THREE.MeshStandardMaterial({ color: '#b8bec7', roughness: 0.7 }),
+      );
+      mesh.matrixAutoUpdate = false;
+      scene.add(mesh);
+      visuals.push({ mesh, link: link.name, visual });
+    }
+  function poseAt(candidate, index) {
+    const mount = brief.mounts.find((m) => m.id === candidate.id);
+    return forwardKinematics(robot, candidate.poses[index].positions, mount.base);
+  }
+  function measure(candidate, study) {
+    const errors = candidate.poses.map((p, i) => {
+      const pose = poseAt(candidate, i);
+      return pose.violations.length
+        ? Infinity
+        : Math.hypot(
+            ...brief.targets[i].position.map((v, k) => v - pose.links[brief.tool.link][12 + k]),
+          );
+    });
+    const mount = brief.mounts.find((m) => m.id === candidate.id);
+    const allowed = !study.reserved.some((a) =>
+      mount.base.xyz.slice(0, 2).every((v, i) => v >= a.min[i] && v <= a.max[i]),
+    );
+    return {
+      reached: errors.filter((e) => e <= brief.tolerance).length,
+      maximumError: Math.max(...errors),
+      allowed,
+    };
+  }
+  function render() {
+    const study = current.study ?? { reserved: [], candidates: [], selected: 'existing' };
+    const selected = brief.mounts.find((m) => m.id === study.selected) ?? brief.mounts[0];
+    const candidate = study.candidates.find((c) => c.id === selected.id);
+    const pose = candidate
+      ? poseAt(candidate, targetIndex)
+      : forwardKinematics(robot, zero, selected.base);
+    for (const { mesh, link, visual } of visuals) {
+      mesh.matrix.fromArray(multiplyTransforms(pose.links[link], originTransform(visual.origin)));
+      mesh.matrix.scale(new THREE.Vector3(...visual.geometry.scale));
+      mesh.matrixWorldNeedsUpdate = true;
+    }
+    reserved.visible = study.reserved.length > 0;
+    $('reserved').checked = reserved.visible;
+    mountMarkers.forEach((m, i) =>
+      m.material.color.set(brief.mounts[i].id === selected.id ? '#82b3cf' : '#b1bac6'),
+    );
+    markers.forEach((m, i) => {
+      m.material.color.set(i === targetIndex ? '#f2f4f6' : '#82b3cf');
+      m.scale.setScalar(i === targetIndex ? 1.5 : 1);
+    });
+    $('mounts').replaceChildren(
+      ...brief.mounts.map((m) => {
+        const row = document.createElement('tr'),
+          name = document.createElement('td'),
+          poses = document.createElement('td'),
+          distance = document.createElement('td'),
+          button = document.createElement('button');
+        const c = study.candidates.find((c) => c.id === m.id),
+          measurement = c && measure(c, study);
+        button.textContent = m.label;
+        button.disabled = !c;
+        button.onclick = () => run('selectMount', { mount: m.id });
+        name.append(button);
+        row.dataset.selected = String(m.id === selected.id);
+        row.dataset.reserved = String(measurement?.allowed === false);
+        poses.textContent = measurement
+          ? measurement.allowed
+            ? `${measurement.reached} / 6`
+            : 'Reserved'
+          : 'Pending';
+        distance.textContent =
+          Math.round(Math.hypot(...m.base.xyz.map((v, i) => v - brief.reference[i])) * 1000) +
+          ' mm';
+        row.append(name, poses, distance);
+        return row;
+      }),
+    );
+    $('selection').textContent = `Selected: ${selected.label} · ${selected.base.xyz
+      .slice(0, 2)
+      .map((v) => Math.round(v * 1000))
+      .join(', ')} mm`;
+    $('pose-label').textContent = `${selected.label} mount · ${brief.targets[targetIndex].id}`;
+    $('endpoint').textContent =
+      `Target ${brief.targets[targetIndex].position.map((v) => Math.round(v * 1000)).join(', ')} mm`;
+    $('result').textContent = candidate
+      ? `${measure(candidate, study).reached} / ${brief.targets.length} candidate poses at ${selected.label}.`
+      : 'No candidate poses yet.';
+    renderScene();
+  }
+  async function check() {
+    try {
+      await api.requestPlacementCheck(source.id, briefSource.id, 'study');
+      render();
+      progress.textContent = 'Open Station study for Viewer’s current check.';
+    } catch (e) {
+      progress.textContent = e.message;
+    }
+  }
+  async function run(action, input) {
+    try {
+      await api.invokeAction(action, input);
+      await check();
+    } catch (e) {
+      progress.textContent = e.message;
+    }
+  }
+  $('evaluate').onclick = () =>
+    run('evaluatePlacements', { reserveCentral: $('reserved').checked });
+  $('check').onclick = check;
+  $('reserved').onchange = () => {
+    progress.textContent = 'Run Evaluate placements to apply this constraint.';
+  };
+  $('fit').onclick = () => {
+    resetView();
+    render();
+  };
+  $('robot-source').onclick = () => api.openSource(source.id);
+  $('brief-source').onclick = () => api.openSource(briefSource.id);
+  for (const [index, target] of brief.targets.entries()) {
+    const option = document.createElement('option');
+    option.value = index;
+    option.textContent = target.id;
+    $('target').append(option);
+  }
+  $('target').onchange = (e) => {
+    targetIndex = Number(e.target.value);
+    render();
+  };
+  api.subscribe((state) => {
+    if (JSON.stringify(current.study) !== JSON.stringify(state.study)) {
+      progress.textContent =
+        'Candidate poses saved. Open Station study for Viewer’s current check.';
+    }
+    current = state;
+    render();
+  });
+  controls.addEventListener('change', renderScene);
+  controls.addEventListener('end', () =>
+    api.setState({
+      cameraPosition: camera.position.toArray(),
+      cameraTarget: controls.target.toArray(),
+    }),
+  );
+  new ResizeObserver(() => {
+    const bounds = $('scene').getBoundingClientRect();
+    renderer.setSize(bounds.width, bounds.height, false);
+    camera.aspect = bounds.width / bounds.height;
+    camera.updateProjectionMatrix();
+    render();
+  }).observe($('scene'));
+  render();
+  if (current.study?.candidates?.length) await check();
+  document.documentElement.dataset.loaded = String(visuals.length);
+</script>

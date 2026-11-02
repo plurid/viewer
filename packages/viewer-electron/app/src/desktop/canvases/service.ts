@@ -25,9 +25,21 @@ import { robotTaskSchema } from '../../domain/robotics/task';
 import { canvasRobotReport, compareCanvasRobots, robotInputHash } from './robot-check';
 import type { RobotComparisonReport } from '../../domain/robotics/task';
 import { checkRobotTask } from '../robotics/check';
+import { CanvasActions } from './actions';
+import type { CanvasActionEvent } from '../../domain/canvases/actions';
+import { errorMessage } from '../../domain/errors';
+import { placementStudySchema } from '../../domain/robotics/placement';
+import { checkPlacements } from '../robotics/placement';
+import {
+  placementBrief,
+  placementInputHash,
+  canvasPlacementReport,
+  comparePlacements,
+} from './placement-check';
 
 interface CanvasPorts {
   changed(owner: number, document: CanvasDocument): void;
+  action?(owner: number, event: CanvasActionEvent): void;
   libraries?: () => ReadonlyMap<string, string>;
   observe?: boolean;
 }
@@ -59,6 +71,7 @@ async function readBounded(file: string, limit: number): Promise<Buffer> {
 }
 
 export class Canvases {
+  readonly actions: CanvasActions;
   private observations = new CanvasObservations();
   private stores = new Map<string, DocumentStore<CanvasDocument>>();
   private owners = new Map<string, number>();
@@ -66,7 +79,9 @@ export class Canvases {
   constructor(
     private root: string,
     private ports: CanvasPorts,
-  ) {}
+  ) {
+    this.actions = new CanvasActions((owner, event) => this.ports.action?.(owner, event));
+  }
 
   private store(id: string) {
     z.uuid().parse(id);
@@ -98,9 +113,14 @@ export class Canvases {
   read(owner: number, id: string): Promise<CanvasDocument> {
     return this.serial(() => this.load(owner, id));
   }
-  private async save(owner: number, value: CanvasDocument): Promise<CanvasDocument> {
+  private async save(
+    owner: number,
+    value: CanvasDocument,
+    invocationID?: string,
+  ): Promise<CanvasDocument> {
     const document = canvasDocumentSchema.parse(value);
     await this.store(document.id).save(document);
+    this.actions.invalidate(document, invocationID);
     this.owners.set(document.id, owner);
     this.ports.changed(owner, structuredClone(document));
     return document;
@@ -172,6 +192,8 @@ export class Canvases {
   ): Promise<CanvasDocument> {
     return this.serial(async () => {
       const current = await this.load(owner, id);
+      if (this.actions.busy(id))
+        throw new Error('An action is running. Choose Take over to edit its inputs.');
       if (current.revision !== contentRevision || current.stateRevision !== expected)
         throw new Error('This canvas changed. Reload its saved values before trying again.');
       return this.save(owner, {
@@ -285,6 +307,75 @@ export class Canvases {
       ? this.observations.wait(id, revision, signal)
       : this.observations.read(id, revision);
   }
+  registerActions(owner: number, id: string, revision: number, frameID: string, actions: unknown) {
+    return this.serial(async () => {
+      const document = await this.load(owner, id);
+      if (document.revision !== revision)
+        throw new Error('This canvas revision is no longer current.');
+      this.actions.register(owner, document, frameID, actions);
+      return document;
+    });
+  }
+  async invoke(
+    owner: number,
+    id: string,
+    revision: number,
+    stateRevision: number,
+    action: string,
+    input: unknown,
+    actor: string,
+    signal: AbortSignal,
+    conversationID?: string,
+  ) {
+    const pending = await this.serial(async () => {
+      const document = await this.load(owner, id);
+      if (conversationID && document.conversationID !== conversationID)
+        throw new Error('This action belongs to another conversation.');
+      if (document.revision !== revision || document.stateRevision !== stateRevision)
+        throw new Error('The canvas inputs changed. Read them before running an action.');
+      return this.actions.start(
+        owner,
+        document,
+        action,
+        input,
+        actor,
+        signal,
+        conversationID ? 'model' : 'user',
+      );
+    });
+    try {
+      const output = await pending.result;
+      const document = await this.serial(async () => {
+        this.actions.assertCurrent(id, pending.run.id);
+        signal.throwIfAborted();
+        const current = await this.load(owner, id);
+        if (current.revision !== revision || current.stateRevision !== stateRevision)
+          throw new Error('The canvas changed while the action ran. Its result was not applied.');
+        if (!output.patch || !Object.keys(output.patch).length) {
+          this.actions.commit(id, pending.run.id, signal);
+          return current;
+        }
+        const patch = canvasStateSchema.parse(output.patch);
+        retainedCanvasState(current.state, patch);
+        this.actions.commit(id, pending.run.id, signal);
+        return this.save(
+          owner,
+          {
+            ...current,
+            state: canvasStateSchema.parse({ ...current.state, ...patch }),
+            stateRevision: current.stateRevision + 1,
+          },
+          pending.run.id,
+        );
+      });
+      this.actions.finish(id, pending.run.id, 'completed', output.result);
+      return { document, actionRun: this.actions.activity(id)! };
+    } catch (error) {
+      this.actions.finish(id, pending.run.id, 'failed', undefined, errorMessage(error));
+      if (signal.aborted) throw error;
+      return { document: await this.read(owner, id), actionRun: this.actions.activity(id)! };
+    }
+  }
   async saveResult(
     owner: number,
     id: string,
@@ -349,6 +440,89 @@ export class Canvases {
         },
       });
     });
+  }
+  checkPlacements(
+    owner: number,
+    id: string,
+    revision: number,
+    stateRevision: number,
+    sourceID: string,
+    briefSourceID: string,
+    stateKey: string,
+  ) {
+    return this.serial(async () => {
+      const document = await this.load(owner, id);
+      if (document.revision !== revision || document.stateRevision !== stateRevision)
+        throw new Error('The study changed. Check its current saved inputs.');
+      const source = document.sources.find((s) => s.id === sourceID);
+      const brief = document.sources.find((s) => s.id === briefSourceID);
+      if (!source?.data.robot || !brief)
+        throw new Error('Bind the robot and placement brief first.');
+      const input = placementStudySchema.parse(document.state[stateKey]);
+      checkPlacements(source.data.robot, placementBrief(brief), input);
+      return this.save(owner, {
+        ...document,
+        placementCheck: {
+          sourceID,
+          briefSourceID,
+          stateKey,
+          revision,
+          sourceHash: source.hash,
+          briefHash: brief.hash,
+          inputHash: placementInputHash(input),
+          checker: 'placement-v1',
+          at: Date.now(),
+        },
+      });
+    });
+  }
+  placementComparison(owner: number, id: string) {
+    return this.serial(async () => {
+      const alternative = await this.load(owner, id);
+      if (!alternative.fork)
+        return { status: 'unavailable' as const, reason: 'This study has no quoted original.' };
+      return comparePlacements(await this.load(owner, alternative.fork.id), alternative);
+    });
+  }
+  async savePlacementCheck(
+    owner: number,
+    id: string,
+    revision: number,
+    stateRevision: number,
+    choose: () => Promise<string | undefined>,
+  ) {
+    const document = await this.read(owner, id);
+    const report = canvasPlacementReport(document);
+    if (report?.status !== 'checked')
+      throw new Error('Check the current placements before saving.');
+    const binding = document.placementCheck!;
+    return this.saveResult(
+      owner,
+      id,
+      revision,
+      stateRevision,
+      {
+        format: 'json',
+        name: 'placement-check.json',
+        content: JSON.stringify(
+          {
+            version: 1,
+            checker: binding.checker,
+            sourceHash: binding.sourceHash,
+            briefHash: binding.briefHash,
+            inputHash: binding.inputHash,
+            ...report,
+          },
+          null,
+          2,
+        ),
+      },
+      choose,
+      (current) => {
+        if (JSON.stringify(current.placementCheck) !== JSON.stringify(binding))
+          throw new Error('The placement check changed during save review.');
+      },
+    );
   }
   async saveRobotCheck(
     owner: number,
@@ -554,6 +728,7 @@ export class Canvases {
     );
   }
   release(owner: number): void {
+    this.actions.release(owner);
     for (const [id, value] of this.owners)
       if (value === owner) {
         this.owners.delete(id);
@@ -561,7 +736,8 @@ export class Canvases {
       }
   }
   async flush(): Promise<void> {
-    await this.queue;
+    // Rejected requests were reported to their callers; still flush later persisted work.
+    await this.queue.catch(() => {});
     await Promise.all([...this.stores.values()].map((store) => store.flush()));
   }
 }

@@ -38,20 +38,23 @@ the implementation; the film and retained verification establish which behaviors
 Existing provider adapters, conversation storage and file services are supporting foundations, even
 where a row extends them.
 
-| Area                           | Concrete behavior                                                                                                                    | Primary source boundary                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| Conversation canvases          | Generated selectable HTML in an isolated plane; content revisions separate from saved input state                                    | `src/domain/canvases`, `src/desktop/canvases`, `src/renderer/canvases`                                 |
-| Quote branches                 | Exact quoted range and frozen conversation context; independent canvas; conflict-aware application to the original                   | `src/domain/models/chat.ts`, `src/desktop/chat`, `src/renderer/chat`                                   |
-| File-backed tools              | Bound inspection snapshots with hashes and coverage; explicit refresh; portable data without source-file authority                   | `src/desktop/canvases/sources.ts`, `src/domain/canvases/sources.ts`, `CanvasSources.tsx`               |
-| Reviewed results               | CSV, JSON, Markdown, text and cutting DXF review; content/state revision checks; exclusive new-file save; open the saved result      | `src/domain/canvases/results.ts`, `src/desktop/canvases/service.ts`, `ResultReview.tsx`                |
-| Runtime feedback               | Revision-bound loading/error observations and one bounded repair attempt                                                             | `src/desktop/canvases/observations.ts`, `src/desktop/chat/service.ts`                                  |
-| Meta tool protocol             | Paired assistant calls and actual tool results; validated single-step arguments and final replies                                    | `src/desktop/models/providers.ts`, `src/desktop/chat/service.ts`                                       |
-| Entry point                    | **Build tool from selection** opens a contextual draft without sending it automatically                                              | `src/renderer/commands/window-commands/comparison.ts`                                                  |
-| Supplier regression            | Fictional request/quotes with known arithmetic; retained live responses; native replay and result/restart checks                     | `tools/canvases`, `tests/native/canvas-live.ts`, `tests/native/canvas-productivity.ts`                 |
-| Robot sources and motion       | Bounded URDF joint tree, scoped STL meshes, exact source definitions, articulated motion and bounded target solving                  | `src/domain/robotics`, `src/desktop/canvases/robot.ts`, `src/desktop/canvases/sources.ts`              |
-| Independent robot checks       | Endpoint positions and hard joint limits checked outside generated HTML; version-bound results and fixed-target base comparison      | `src/desktop/robotics/check.ts`, `src/desktop/canvases/robot-check.ts`                                 |
-| Robot replay and handoff       | Visual pose interpolation; reviewed comparison JSON; portable canvas export/reopen with saved state and recomputed check             | `src/domain/robotics/replay.ts`, `src/desktop/canvases/service.ts`, `tests/native/robot-comparison.ts` |
-| Robot generation qualification | Budgeted Meta creation, refinement and exact quoted alternative; retained failures, saved-response recovery and native output review | `tools/robotics`, `tests/robot-rehearsal.test.ts`                                                      |
+| Area                           | Concrete behavior                                                                                                                             | Primary source boundary                                                                                            |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Conversation canvases          | Generated selectable HTML in an isolated plane; content revisions separate from saved input state                                             | `src/domain/canvases`, `src/desktop/canvases`, `src/renderer/canvases`                                             |
+| Quote branches                 | Exact quoted range and frozen conversation context; independent canvas; conflict-aware application to the original                            | `src/domain/models/chat.ts`, `src/desktop/chat`, `src/renderer/chat`                                               |
+| File-backed tools              | Bound inspection snapshots with hashes and coverage; explicit refresh; portable data without source-file authority                            | `src/desktop/canvases/sources.ts`, `src/domain/canvases/sources.ts`, `CanvasSources.tsx`                           |
+| Reviewed results               | CSV, JSON, Markdown, text and cutting DXF review; content/state revision checks; exclusive new-file save; open the saved result               | `src/domain/canvases/results.ts`, `src/desktop/canvases/service.ts`, `ResultReview.tsx`                            |
+| Runtime feedback               | Revision-bound loading/error observations and one bounded repair attempt                                                                      | `src/desktop/canvases/observations.ts`, `src/desktop/chat/service.ts`                                              |
+| Shared canvas actions          | Registered handlers used by both controls and model tools; actual results, atomic state patches, frame/revision guards and takeover           | `src/domain/canvases/actions.ts`, `src/desktop/canvases/actions.ts`, `CanvasPlane.tsx`                             |
+| Station placement study        | Fixed brief targets and candidate mounts; reserved mounting-point regions; independent endpoint checks, comparison and durable report binding | `src/domain/robotics/placement.ts`, `src/desktop/robotics/placement.ts`, `src/desktop/canvases/placement-check.ts` |
+| Meta tool protocol             | Paired assistant calls and actual tool results; validated single-step arguments and final replies                                             | `src/desktop/models/providers.ts`, `src/desktop/chat/service.ts`                                                   |
+| Canvas model context           | Identical historical snapshots reference current data; different values remain; saved transcripts and exact quotes stay unchanged             | `src/desktop/chat/model-context.ts`, `tests/chat.test.ts`                                                          |
+| Entry point                    | **Build tool from selection** opens a contextual draft without sending it automatically                                                       | `src/renderer/commands/window-commands/comparison.ts`                                                              |
+| Supplier regression            | Fictional request/quotes with known arithmetic; retained live responses; native replay and result/restart checks                              | `tools/canvases`, `tests/native/canvas-live.ts`, `tests/native/canvas-productivity.ts`                             |
+| Robot sources and motion       | Bounded URDF joint tree, scoped STL meshes, exact source definitions, articulated motion and bounded target solving                           | `src/domain/robotics`, `src/desktop/canvases/robot.ts`, `src/desktop/canvases/sources.ts`                          |
+| Independent robot checks       | Endpoint positions and hard joint limits checked outside generated HTML; version-bound results and fixed-target base comparison               | `src/desktop/robotics/check.ts`, `src/desktop/canvases/robot-check.ts`                                             |
+| Robot replay and handoff       | Visual pose interpolation; reviewed comparison JSON; portable canvas export/reopen with saved state and recomputed check                      | `src/domain/robotics/replay.ts`, `src/desktop/canvases/service.ts`, `tests/native/robot-comparison.ts`             |
+| Robot generation qualification | Budgeted Meta creation, refinement and exact quoted alternative; retained failures, saved-response recovery and native output review          | `tools/robotics`, `tests/robot-rehearsal.test.ts`                                                                  |
 
 Paths in this table are relative to `packages/viewer-electron/app`. The
 [canvas reference](../reference/canvases.md) defines the contracts and limits. The
@@ -74,7 +77,7 @@ Credit these as improvements to an existing engine. Do not describe spatial navi
 itself as invented during this hackathon, or imply every new engine feature is demonstrated in the
 robot film. Package publication is a separate status from source implementation.
 
-## Work outside the qualified case
+## Qualification boundaries
 
 The supplier case remains
 [evaluation material](../development/testing.md#canvas-evaluation-and-replay). Its outputs and tests
@@ -87,12 +90,22 @@ save, replay, export/reopen and restart. This does not establish collision check
 trajectory validation, dynamics, device calibration or physical operation. Keep these absent
 capabilities out of the completed contribution list.
 
-The selected [screenplay](hackathon-demo.md) shows a robot inspector gaining target-testing and
-base-placement controls in response to a new requirement. Its practical result is a saved tool and
-checked endpoint candidates for two fixed work points. Attribute saved-response replay, condensed
-repair rounds, staged reveals, local layout refinements and the replay-clock repair in the film
-credits. The presentation manifest records the script hashes before and after that local repair; the
-original provider output remains retained.
+The selected [screenplay](hackathon-demo.md) follows a separate six-slot station. Meta generated the
+placement interface, invoked its evaluation, added a reserved-area constraint and selected Front. An
+exact quote branch selected and checked Rear. The operator completed the initial Central selection
+after Meta recommended it; do not attribute that selection to Meta. The actual exported tools passed
+native reopening and cold restart with no provider configured. Saved inputs and independently
+recomputed checks agreed.
+
+The local station presentation copy improves scene annotations, identifies the fictional station,
+describes restored state and labels controls. Its manifest retains the provider and edited HTML
+hashes. Evaluation and action code, saved inputs and measured results remain unchanged. Attribute
+these visual and accessibility edits to local presentation work, not Meta.
+
+The earlier two-target film retains its own presentation manifest and replay-clock repair. The next
+station film must use its own source messages, actual interactions and edit evidence. Attribute
+saved-response replay, condensed repair rounds, staged reveals and local presentation changes
+separately from model generation. The original provider output remains retained.
 
 The separate mounting example's Meta-generated controls have native evidence for width editing,
 measured DXF export, source-bound quote selection, save/reopen and restart. The supplier remains a

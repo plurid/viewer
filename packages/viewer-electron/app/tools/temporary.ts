@@ -24,6 +24,7 @@ import path from 'node:path';
 // Synchronous node:fs keeps these checks independent of tests that mock node:fs/promises.
 export const keptManifest = path.join(os.tmpdir(), 'viewer-kept-test-folders.log');
 const owned = new Map<string, { dev: number; ino: number }>();
+const retainedNative = new Map<string, { dev: number; ino: number }>();
 const preserve = () =>
   process.env.VIEWER_TEST_PRESERVE === '1' || process.env.VIEWER_TEST_NO_REMOVAL === '1';
 /** This run's folder: one directly inside a system temporary folder, named as a run. */
@@ -124,11 +125,29 @@ export async function ownedDirectory(directory: string): Promise<string> {
   return directory;
 }
 
-/** Read-only proof that this directory belongs to a root created by this process. */
+/** Reopen a retained native fixture without granting this process any cleanup authority. */
+export function adoptRetainedNativeFixture(root: string): void {
+  if (!preserve()) throw new Error('Retained native fixtures require preservation.');
+  const actual = canonical(root);
+  const info = lstatSync(root);
+  if (
+    actual !== root ||
+    !systemParents().includes(path.dirname(actual)) ||
+    !path.basename(actual).startsWith('viewer-') ||
+    info.isSymbolicLink() ||
+    !info.isDirectory() ||
+    info.uid !== process.getuid?.() ||
+    (info.mode & 0o077) !== 0
+  )
+    throw new Error('Reopen only a private retained fixture directly in a temporary folder.');
+  retainedNative.set(actual, { dev: info.dev, ino: info.ino });
+}
+
+/** Read-only proof that this directory belongs to a generated or explicitly retained fixture. */
 export function assertOwnedFixtureDirectory(directory: string): string {
   const requested = path.resolve(directory);
   const actual = canonical(requested);
-  const owner = [...owned.entries()]
+  const owner = [...owned.entries(), ...retainedNative.entries()]
     .filter(([root]) => actual === root || actual.startsWith(root + path.sep))
     .sort(([left], [right]) => right.length - left.length)[0];
   if (!owner) throw new Error(`The native profile is not inside a generated fixture: ${directory}`);

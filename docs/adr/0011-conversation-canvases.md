@@ -21,6 +21,17 @@ revisions, checks them again after the save dialog and creates only a new file. 
 silently write a result or replace an existing file. Preview observations report loading and runtime
 errors; they do not certify calculation correctness. Repair attempts remain bounded.
 
+Generated tools can register bounded named actions. The same handler serves a visible control and a
+model invocation. The desktop binds each invocation to its window, conversation, live frame, content
+revision and saved input revision. It validates scalar arguments, accepts one result and commits a
+valid state patch once. The 30-second deadline, frame changes and user takeover cancel pending
+execution. Cancellation cannot undo a result already accepted into the persistence queue.
+
+The action broker is ephemeral. A portable canvas carries code and state, never a live registration.
+Reopening creates new registrations. Chat records the actual tool result; execution status does not
+assert mathematical correctness. Domain checks remain desktop-owned and recompute from saved source
+snapshots. No action registry entry authorizes native execution or file removal.
+
 Quote branches capture transcript context at an exact passage. Their canvases fork independently.
 Applying content back checks the original revision and retains the person's newest original inputs.
 Conflicts require comparison, not a silent overwrite.

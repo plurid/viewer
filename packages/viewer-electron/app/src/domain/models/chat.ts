@@ -145,6 +145,8 @@ export const chatStepSchema = z
       'canvas_asset',
       'canvas_source',
       'canvas_robot_assets',
+      'canvas_invoke',
+      'canvas_check_placements',
     ]),
     text: z.string().max(canvasLimits.html),
     path: z.string().max(32768).nullable(),

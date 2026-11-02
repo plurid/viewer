@@ -17,6 +17,13 @@ import { ResultReview } from './ResultReview';
 import type { PendingCanvasResult } from './ResultReview';
 import { canvasResultSchema } from '../../domain/canvases/results';
 import './canvas.css';
+import {
+  canvasActionsSchema,
+  canvasActionInputSchema,
+  canvasActionOutputSchema,
+} from '../../domain/canvases/actions';
+import type { CanvasActionRun } from '../../domain/canvases/actions';
+import { PlacementCheckPanel } from './PlacementCheckPanel';
 
 export default function CanvasPlane({ pane }: { pane: Pane }) {
   const workspace = useWorkspace();
@@ -34,6 +41,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
   const [sourceJoint, setSourceJoint] = useState<{ id: string; name: string }>();
   const [result, setResult] = useState<PendingCanvasResult>();
   const [saved, setSaved] = useState('');
+  const [actionRun, setActionRun] = useState<CanvasActionRun>();
   const iframe = useRef<HTMLIFrameElement>(null);
   const current = useRef(document);
   const receive = useCallback((value: CanvasDocument, render = true) => {
@@ -81,6 +89,23 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
     let live = true;
     let capability: string | undefined;
     let port: MessagePort | undefined;
+    const frameID = crypto.randomUUID();
+    const unsubscribeActions = window.viewer.onEvent((event) => {
+      if (!live) return;
+      if (
+        event.type === 'canvas' &&
+        event.document.id === pane.canvasID &&
+        event.document.revision === revision
+      )
+        port?.postMessage({ kind: 'state', state: event.document.state });
+      if (event.type !== 'canvas-action' || event.event.run.canvasID !== pane.canvasID) return;
+      const action = event.event;
+      setActionRun(action.run);
+      if (action.run.frameID !== frameID) return;
+      if (action.kind === 'invoke')
+        port?.postMessage({ kind: 'invoke-action', run: action.run, state: action.state });
+      else port?.postMessage({ kind: 'cancel-action', runID: action.run.id });
+    });
     let writes = Promise.resolve();
     let checkingRobot = false;
     const saveInput = canvasInputWriter(
@@ -146,7 +171,107 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
         const value = message.data;
         if (!live || !value || typeof value !== 'object') return;
         if (value.kind === 'ready') observe('ready');
-        else if (value.kind === 'export') {
+        else if (value.kind === 'actions') {
+          const parsed = canvasActionsSchema.safeParse(value.actions);
+          if (!parsed.success) {
+            observe('error', 'Invalid canvas action definitions.');
+            return;
+          }
+          writes = writes
+            .then(async () => {
+              if (live)
+                await window.viewer.canvas({
+                  kind: 'register-actions',
+                  id: pane.canvasID,
+                  revision,
+                  frameID,
+                  actions: parsed.data,
+                });
+            })
+            .catch(fail);
+        } else if (value.kind === 'action-result' && typeof value.runID === 'string') {
+          const output = canvasActionOutputSchema.safeParse(value.output);
+          void window.viewer
+            .canvas({
+              kind: 'complete-action',
+              id: pane.canvasID,
+              frameID,
+              runID: value.runID,
+              ...(output.success ? { output: output.data } : {}),
+              error:
+                typeof value.error === 'string'
+                  ? value.error.slice(0, 1000)
+                  : output.success
+                    ? undefined
+                    : 'The action returned an invalid result.',
+            })
+            .catch(report);
+        } else if (
+          value.kind === 'invoke-action' &&
+          typeof value.action === 'string' &&
+          typeof value.id === 'string'
+        ) {
+          void writes
+            .then(async () => {
+              const latest = current.current;
+              if (!live || !latest) throw new Error('The canvas was closed.');
+              const reply = await window.viewer.canvas({
+                kind: 'invoke-action',
+                id: pane.canvasID,
+                revision,
+                stateRevision: latest.stateRevision,
+                action: value.action,
+                input: canvasActionInputSchema.parse(value.input),
+              });
+              receive(reply.document);
+              const run = reply.actionRun;
+              port?.postMessage({
+                kind: 'action-response',
+                id: value.id,
+                result: run?.result,
+                error:
+                  run?.status === 'completed'
+                    ? undefined
+                    : run?.error || 'Action did not complete.',
+              });
+            })
+            .catch((error: unknown) => {
+              port?.postMessage({
+                kind: 'action-response',
+                id: value.id,
+                error: errorMessage(error),
+              });
+            });
+        } else if (value.kind === 'placement-check' && typeof value.id === 'string') {
+          void writes
+            .then(async () => {
+              const latest = current.current;
+              if (!live || !latest || JSON.stringify(latest.state) !== JSON.stringify(value.state))
+                throw new Error('Save the current study before requesting its check.');
+              const reply = await window.viewer.canvas({
+                kind: 'check-placements',
+                id: pane.canvasID,
+                revision,
+                stateRevision: latest.stateRevision,
+                sourceID: value.sourceID,
+                briefSourceID: value.briefSourceID,
+                stateKey: value.stateKey,
+              });
+              receive(reply.document);
+              port?.postMessage({
+                kind: 'action-response',
+                id: value.id,
+                result: reply.placementReport,
+              });
+            })
+            .catch((error: unknown) => {
+              port?.postMessage({
+                kind: 'action-response',
+                id: value.id,
+                error: errorMessage(error),
+              });
+            });
+        } else if (value.kind === 'export') {
           const parsed = canvasResultSchema.safeParse(value.result);
           if (!parsed.success) {
             setError(parsed.error.issues[0]?.message ?? 'Invalid result.');
@@ -244,6 +369,10 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
       live = false;
       clearTimeout(timeout);
       window.removeEventListener('message', connect);
+      unsubscribeActions();
+      void window.viewer
+        .canvas({ kind: 'detach-actions', id: pane.canvasID, frameID })
+        .catch(report);
       port?.close();
       if (capability) void window.viewer.htmlPreviewClose(capability).catch(report);
     };
@@ -327,7 +456,14 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
               );
           }}
         />
-        <button disabled={stopped} onClick={() => setStopped(true)}>
+        <button
+          disabled={stopped}
+          onClick={() => {
+            if (actionRun?.status === 'running' && actionRun.actorKind === 'model')
+              void window.viewer.chat({ kind: 'stop', id: document.conversationID }).catch(fail);
+            setStopped(true);
+          }}
+        >
           Stop
         </button>
         <button
@@ -371,7 +507,72 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           </>
         )}
       </header>
+      {actionRun && (
+        <div className="canvas-action-status" role="status" data-status={actionRun.status}>
+          <span>
+            {actionRun.actor} · {actionRun.label}
+          </span>
+          <span>
+            {actionRun.status === 'running'
+              ? 'Running…'
+              : actionRun.status === 'completed'
+                ? 'Completed'
+                : actionRun.error}
+          </span>
+          {actionRun.status === 'running' && (
+            <button
+              onClick={() => {
+                void window.viewer.canvas({ kind: 'cancel-action', id: document.id }).catch(fail);
+                if (actionRun.actorKind === 'model')
+                  void window.viewer
+                    .chat({ kind: 'stop', id: document.conversationID })
+                    .catch(fail);
+              }}
+            >
+              Take over
+            </button>
+          )}
+        </div>
+      )}
       <div className="canvas-inspectors" aria-label="Canvas details">
+        {document.placementCheck && (
+          <PlacementCheckPanel
+            document={document}
+            group={inspectorGroup}
+            busy={busy}
+            onCheck={() =>
+              void act(async () => {
+                const latest = current.current!;
+                const binding = latest.placementCheck!;
+                receive(
+                  (
+                    await window.viewer.canvas({
+                      kind: 'check-placements',
+                      id: latest.id,
+                      revision: latest.revision,
+                      stateRevision: latest.stateRevision,
+                      sourceID: binding.sourceID,
+                      briefSourceID: binding.briefSourceID,
+                      stateKey: binding.stateKey,
+                    })
+                  ).document,
+                );
+              })
+            }
+            onSave={() =>
+              void act(async () => {
+                const latest = current.current!;
+                const reply = await window.viewer.canvas({
+                  kind: 'save-placement-check',
+                  id: latest.id,
+                  revision: latest.revision,
+                  stateRevision: latest.stateRevision,
+                });
+                if (reply.saved) setSaved(reply.saved);
+              })
+            }
+          />
+        )}
         {document.robotCheck && (
           <RobotCheckPanel
             document={document}
@@ -558,7 +759,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           <button onClick={() => setProposal('')}>Dismiss</button>
         </div>
       )}
-      <div className="canvas-body">
+      <div className="canvas-body" inert={actionRun?.status === 'running'}>
         {reconstruct && (
           <ReconstructionPanel document={document} onClose={() => setReconstruct(false)} />
         )}

@@ -19,6 +19,21 @@
   font-size: var(--text-compact);
   margin-inline-end: auto;
 }
+.canvas-action-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap-inline);
+  padding: var(--gap-inline) var(--gap-panel);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-compact);
+}
+.canvas-action-status > span:first-child {
+  margin-inline-end: auto;
+}
+.canvas-action-status[data-status='failed'] {
+  color: var(--danger);
+}
 .canvas-inspectors {
   display: flex;
   flex-wrap: wrap;

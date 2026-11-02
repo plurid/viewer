@@ -1,6 +1,7 @@
 import type { ReconstructionRequest, ReconstructionReply } from './canvases/reconstruction';
 import type { DialogPrompt, DialogRequest, DialogReply } from './dialogs';
 import type { CanvasDocument, CanvasRequest, CanvasReply } from './canvases/document';
+import type { CanvasActionEvent } from './canvases/actions';
 import type { PromptAnswer, PromptRequest, PromptHistoryEntry } from './command-line/prompt';
 import type { SpokenAnswer, SpokenRequest } from './command-line/spoken';
 import type { ModelSuggestionRequest, ModelSuggestions } from './suggestions/model';
@@ -676,6 +677,7 @@ export type DesktopEvent =
   | { type: 'local-servers'; servers: LocalServer[] }
   | { type: 'chat'; document: ChatDocument }
   | { type: 'canvas'; document: CanvasDocument }
+  | { type: 'canvas-action'; event: CanvasActionEvent }
   | { type: 'agent-session'; id: string }
   | { type: 'launch'; request: LaunchRequest }
   | { type: 'workspaces'; state: SavedState }

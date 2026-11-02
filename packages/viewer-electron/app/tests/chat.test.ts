@@ -17,6 +17,7 @@ import { defaultSettings, type ModelProvider } from '../src/domain/services';
 import type { ChatDocument, ChatReply, ChatStep } from '../src/domain/models/chat';
 import { chatStepSchema } from '../src/domain/models/chat';
 import { canvasLimits } from '../src/domain/canvases/document';
+import { canvasModelMessages } from '../src/desktop/chat/model-context';
 import type { CapturedTarget } from '../src/domain/automation/actions';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
@@ -114,6 +115,199 @@ async function send(id: string): Promise<void> {
 }
 
 describe('quoted conversations and canvases', () => {
+  it.each(['meta', 'openai'] as const)(
+    'continues a large quoted canvas without duplicating snapshots (%s)',
+    async (kind) => {
+      const settings = ports.settings();
+      settings.providers = [{ ...provider, kind }];
+      ports.settings = () => settings;
+      const canvases = new Canvases(path.join(root, 'private'), { changed() {} });
+      ports.canvases = canvases;
+      const parent = await create();
+      const saved = document(await chat.request({ kind: 'canvas', id: parent.id }, 1));
+      let canvas = await canvases.write(
+        1,
+        saved.canvasID!,
+        0,
+        'Comparison',
+        '<main>' + '<p>Measured target</p>'.repeat(1700) + '</main>',
+        {},
+      );
+      canvas = await canvases.state(1, canvas.id, canvas.stateRevision, canvas.revision, {
+        selected: 'front',
+        observations: 'Saved measurements. '.repeat(1400),
+      });
+      generate
+        .mockResolvedValueOnce(step('canvas_read'))
+        .mockResolvedValueOnce(step('reply', { text: 'Compare Front and Rear.' }));
+      await send(parent.id);
+      const first = await settled(parent.id);
+      expect(first.status, first.error).toBe('idle');
+      const history = first.messages.find((message) => message.role === 'tool')!;
+      const selected = first.messages.at(-1)!;
+      // Imported/reopened conversations can contain several large earlier snapshots.
+      const stored: ChatDocument = {
+        ...first,
+        messages: [
+          ...first.messages.slice(0, 1),
+          ...Array.from({ length: 4 }, (_, index) => ({
+            ...history,
+            id: `00000000-0000-4000-8000-00000000000${index}`,
+          })),
+          selected,
+        ],
+      };
+      expect(Buffer.byteLength(JSON.stringify(stored.messages))).toBeGreaterThan(256 * 1024);
+      await chat.close();
+      await new ChatDocumentStore(
+        path.join(root, 'private', 'chat-documents', first.id + '.json'),
+      ).save(stored);
+      chat = new Chats(path.join(root, 'private'), ports);
+      await chat.request({ kind: 'open', id: first.id }, 1, origin);
+      const branch = document(
+        await chat.request(
+          {
+            kind: 'branch',
+            id: first.id,
+            revision: stored.revision,
+            messageID: selected.id,
+            start: 8,
+            end: 22,
+          },
+          1,
+        ),
+      );
+      generate.mockClear();
+      const requests: unknown[][] = [];
+      generate.mockImplementation((...args) => {
+        requests.push(structuredClone(args.filter((_, index) => index === 2 || index === 7)));
+        return Promise.resolve(
+          requests.length === 1 ? step('canvas_read') : step('reply', { text: 'Compared.' }),
+        );
+      });
+      await send(branch.id);
+      const result = await settled(branch.id);
+      expect(result.status, result.error).toBe('idle');
+      expect(generate).toHaveBeenCalledTimes(2);
+      const input = generate.mock.calls.at(-1)![2];
+      expect(input.quote).toBe('Front and Rear');
+      expect(input.canvas.html).toBe(canvas.html);
+      expect(input.canvas.state).toEqual(canvas.state);
+      expect(Buffer.byteLength(JSON.stringify(input))).toBeLessThan(256 * 1024);
+      expect(result.branch?.context).toEqual(stored.messages);
+      expect(
+        document(await chat.request({ kind: 'open', id: first.id }, 1, origin)).messages,
+      ).toEqual(stored.messages);
+      const currentTool = result.messages.find((message) => message.role === 'tool')!;
+      expect(JSON.parse(currentTool.text).html).toBe(canvas.html);
+      expect(input.messages.some((message: { id: string }) => message.id === currentTool.id)).toBe(
+        kind !== 'meta',
+      );
+      const paired = generate.mock.calls.at(-1)![7].steps;
+      expect(paired).toHaveLength(1);
+      expect(paired[0].arguments.kind).toBe('canvas_read');
+      expect(paired[0].result).toBe(currentTool.text);
+    },
+  );
+
+  it('preserves changed historical values, check failures and ordinary file evidence', () => {
+    const repeated = 'Measured data. '.repeat(200);
+    const old = {
+      canvasID: 'canvas',
+      revision: 2,
+      savedState: { 'positions/a~b': repeated, selected: 'front' },
+      status: 'failed',
+      error: 'A3 violates its joint limit.',
+      result: { reached: 3, total: 6, residual: 0.08 },
+    };
+    const messages = [
+      { id: 'historical', role: 'tool' as const, at: 1, text: JSON.stringify(old) },
+      { id: 'file', role: 'tool' as const, at: 2, text: JSON.stringify({ evidence: repeated }) },
+    ];
+    const before = structuredClone(messages);
+    const current = { state: { 'positions/a~b': repeated, selected: 'rear' } };
+    const projected = canvasModelMessages(messages, current, new Set());
+    const encoded = JSON.parse(projected[0]!.text);
+    expect(encoded.savedState['positions/a~b']).toEqual({
+      $viewerContext: '#/canvas/state/positions~1a~0b',
+    });
+    expect(encoded.savedState.selected).toBe('front');
+    expect(encoded.status).toBe('failed');
+    expect(encoded.error).toBe(old.error);
+    expect(encoded.result).toEqual(old.result);
+    expect(projected[1]).toEqual(messages[1]);
+    expect(messages).toEqual(before);
+    expect(canvasModelMessages(messages, null, new Set())).toEqual(before);
+  });
+
+  it.each([false, true])(
+    'feeds the real canvas action result back to the model (failure: %s)',
+    async (fails) => {
+      const frame = 'qualified-frame';
+      const canvases = new Canvases(path.join(root, 'private'), {
+        changed() {},
+        action(owner, event) {
+          if (event.kind !== 'invoke') return;
+          queueMicrotask(() =>
+            canvases.actions.complete(
+              owner,
+              event.run.canvasID,
+              frame,
+              event.run.id,
+              fails
+                ? undefined
+                : { result: { sum: Number(event.run.input.value) + 4 }, patch: { total: 11 } },
+              fails ? 'The input table is missing.' : undefined,
+            ),
+          );
+        },
+      });
+      ports.canvases = canvases;
+      const conversation = await create();
+      const saved = document(await chat.request({ kind: 'canvas', id: conversation.id }, 1));
+      const canvas = await canvases.write(1, saved.canvasID!, 0, 'Sum', '<p>Fixture</p>', {
+        total: 0,
+      });
+      await canvases.registerActions(1, canvas.id, canvas.revision, frame, [
+        {
+          id: 'sum',
+          label: 'Sum values',
+          inputSchema: {
+            type: 'object',
+            properties: { value: { type: 'number' } },
+            required: ['value'],
+            additionalProperties: false,
+          },
+        },
+      ]);
+      generate
+        .mockResolvedValueOnce(
+          step('canvas_invoke', {
+            text: JSON.stringify({
+              action: 'sum',
+              input: { value: 7 },
+              revision: canvas.revision,
+              stateRevision: canvas.stateRevision,
+            }),
+          }),
+        )
+        .mockResolvedValueOnce(step('reply', { text: 'Result received.' }));
+      await send(conversation.id);
+      const result = await settled(conversation.id);
+      expect(result.status).toBe('idle');
+      const context = generate.mock.calls.at(-1)![2];
+      expect(context.canvas.lastAction.status).toBe(fails ? 'failed' : 'completed');
+      expect(context.canvas.lastAction.result).toEqual(fails ? undefined : { sum: 11 });
+      expect(
+        result.messages.some(
+          (message) =>
+            message.role === 'tool' &&
+            message.text.includes(fails ? 'The input table is missing.' : '"sum":11'),
+        ),
+      ).toBe(true);
+      expect((await canvases.read(1, canvas.id)).state.total).toBe(fails ? 0 : 11);
+    },
+  );
   it('accepts complete canvas HTML beyond the reply limit without expanding other text limits', async () => {
     const canvases = new Canvases(path.join(root, 'private'), { changed: () => {} });
     ports.canvases = canvases;

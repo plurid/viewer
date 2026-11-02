@@ -76,28 +76,35 @@ describe('robot rehearsal budgets and retained responses', () => {
     expect(await ledger.sessions()).toHaveLength(1);
   });
 
-  it('binds a same-session native repair to the exact generated HTML and keeps its request count', async () => {
-    const ledger = new rehearsal.RobotRehearsalLedger(root);
-    await ledger.authorize({ sessions: 1, requestsPerSession: 2 });
-    const first = await ledger.begin('create', {});
-    await first.reserveRequest({});
-    const canvas = { id: randomUUID(), revision: 3, html: '<main>Broken tool</main>' };
-    await first.finish({ status: 'generated', canvas });
-    const repair = {
-      canvasID: canvas.id,
-      revision: 3,
-      htmlHash: rehearsal.digest(canvas.html),
-      message: 'Native runtime failed.',
-    };
-    await expect(ledger.resume('create', { ...repair, htmlHash: '0'.repeat(64) })).rejects.toThrow(
-      'exact generated canvas',
-    );
-    const second = await ledger.resume('create', repair);
-    expect(second.remainingRequests).toBe(1);
-    await second.reserveRequest({});
-    await second.finish({ status: 'generated', canvas });
-    await expect(ledger.resume('create', repair)).rejects.toThrow('allowance is exhausted');
-  });
+  it.each([false, true])(
+    'binds a native repair to exact HTML and keeps its request count (separate evidence: %s)',
+    async (separate) => {
+      const ledger = new rehearsal.RobotRehearsalLedger(root);
+      await ledger.authorize({ sessions: 1, requestsPerSession: 2 });
+      const first = await ledger.begin('create', {});
+      await first.reserveRequest({});
+      const canvas = { id: randomUUID(), revision: 3, html: '<main>Broken tool</main>' };
+      if (separate) await rehearsal.saveEvidence(path.join(first.folder, 'canvas.json'), canvas);
+      await first.finish({
+        status: 'generated',
+        ...(separate ? { canvasID: canvas.id } : { canvas }),
+      });
+      const repair = {
+        canvasID: canvas.id,
+        revision: 3,
+        htmlHash: rehearsal.digest(canvas.html),
+        message: 'Native runtime failed.',
+      };
+      await expect(
+        ledger.resume('create', { ...repair, htmlHash: '0'.repeat(64) }),
+      ).rejects.toThrow('exact generated canvas');
+      const second = await ledger.resume('create', repair);
+      expect(second.remainingRequests).toBe(1);
+      await second.reserveRequest({});
+      await second.finish({ status: 'generated', canvas });
+      await expect(ledger.resume('create', repair)).rejects.toThrow('allowance is exhausted');
+    },
+  );
 
   it('counts failures across restarts, refuses expansion, and stops at the approved number', async () => {
     const ledger = new rehearsal.RobotRehearsalLedger(root);

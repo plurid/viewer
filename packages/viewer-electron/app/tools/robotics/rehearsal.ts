@@ -444,10 +444,20 @@ export class RobotRehearsalLedger {
     const started = await readJSON(path.join(folder, 'started.json'));
     const result = await readRobotSessionResult(folder);
     const nativeRepair = repair ? robotRepairSchema.parse(repair) : undefined;
-    const canvas =
+    let canvas =
       result && typeof result === 'object' && 'canvas' in result
         ? (result.canvas as { id?: string; revision?: number; html?: string })
         : undefined;
+    // Station runs retain large canvas evidence separately from their compact result.
+    if (
+      !canvas &&
+      nativeRepair &&
+      result &&
+      typeof result === 'object' &&
+      'canvasID' in result &&
+      result.canvasID === nativeRepair.canvasID
+    )
+      canvas = (await readJSON(path.join(folder, 'canvas.json'))) as typeof canvas;
     if (
       nativeRepair &&
       (!canvas ||

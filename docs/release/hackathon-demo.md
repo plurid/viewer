@@ -1,24 +1,23 @@
 # There Is No Interface
 
-**Reading draft: a project acquires the tools its task needs.** The delivered edit generates its
-exact spoken transcript and captions from the timed capture cues. This page describes the story and
-the actions that must support it.
+**Reading draft for the next film. This is not the transcript of the previously delivered MP4.**
+Actual Meta-generated station tools now have native evidence for evaluation, a changed constraint,
+an exact quoted alternative and portable restart. The first Central selection was completed through
+the user control after Meta recommended it. The film must preserve that attribution. The local HTML
+fixture remains separate development evidence.
 
-The concrete question is where to place a robot so its gripper can reach two fixed work points.
-Start with project files. Ask Meta for an inspector, then ask it to add target testing. Use the new
-controls to change the base position and check the result. The transformation of the tool is the
-main event. The mounting drawing and supplier comparison remain separate examples of the same
-foundation; they are not the centre of this film.
-
-Keep the film under three minutes, including credits. These are approximate scene allocations;
-`Narration.txt` beside a delivered video is its exact transcript. Reuse retained Meta sessions with
-their source messages and repair history. No new paid call is needed to record this sequence.
+The task is concrete: choose a mounting point for an SO-101 arm serving six slots in two trays. Meta
+builds the tool, invokes its registered actions, reads independent measurements from Viewer and
+adapts it to a new constraint. Plurid keeps the sources, conversation, alternatives and result in
+one navigable project. The drawing and supplier examples remain supporting work.
 
 ## Script
 
-### 0:00–0:08 · Opening
+Aim for 180 seconds including credits. Spoken paragraphs below are the proposed narration. Requests
+are on-screen typing, not extra voiceover. Leave calculation, comparison and reopening passages room
+to be understood. If a take runs long, shorten navigation before cutting the causal steps.
 
-**Voice**
+### 0:00–0:08 · Opening
 
 > Do not try and use the interface.
 >
@@ -28,226 +27,185 @@ their source messages and repair history. No new paid call is needed to record t
 >
 > There is no interface.
 
-**Picture:** The proposed Matrix-style opening, followed by a cut into Viewer. Final opening footage
-and voice are still to be made. Keep any synthetic homage distinct from the app footage.
+**Picture:** The proposed Matrix-style opening, followed by a clean cut into Viewer. Opening footage
+and the creator's final voice remain production work. A synthetic homage stays distinct from the
+real product recording.
 
-### 0:08–0:22 · What changed
-
-**Voice**
+### 0:08–0:28 · The creator's reason
 
 > Until 2025, I'd written about a million lines of code. Since then, I've modified ten thousand at
 > most, mostly configuration files.
-
-**Picture:** Begin in the robot project's folder. Open its model definition, then follow a related
-file into another plane. Keep the pointer visible so each new view follows an action.
-
-### 0:22–0:29 · Directing the project
-
-**Voice**
-
-> Now I spend more time deciding how a project fits together, what changes, and what that affects.
-
-**Picture:** Pull back far enough to see the source, model and project notes together. Follow one
-relationship between them. The files are the material of the project; their connections explain the
-person's work.
-
-### 0:29–0:43 · The keynote reveal
-
-**Voice**
-
-> A browser.
 >
-> An editor.
->
-> A terminal.
+> I still have projects to build. More of my work is deciding how the pieces fit together, what
+> should change, and what that change affects.
+
+**Picture:** Begin in a project folder. Open its definition, notes and a related file with visible
+pointer actions. Follow a link between planes. These are the creator's estimates; do not turn them
+into a measured productivity claim or a literal “I am a file manager” slogan.
+
+### 0:28–0:48 · The workspace reveal
+
+> A browser. An editor. A terminal.
 >
 > A browser. An editor. A terminal.
 >
 > Are you getting it?
 >
 > One workspace.
-
-**Picture:** Focus each corresponding plane on its first mention. Repeat the sequence a little
-faster, pause on the question, then pull back on “one workspace.” The three views are visibly part
-of the same project. Use the cadence of the iPhone reveal; the spatial reveal in Viewer carries the
-joke. Any Jobs homage belongs to the opening treatment, separate from the product recording.
-
-### 0:43–0:51 · Viewer and Plurid
-
-**Voice**
-
-> This is Viewer. Plurid is its spatial engine. I was building both before this hackathon.
-
-**Picture:** Hold the workspace, then follow the model's link back to the project folder. Let the
-movement explain Plurid instead of adding an abstract diagram.
-
-**On-screen text:** “Viewer + Plurid · Existing projects”
-
-### 0:51–1:00 · The hackathon addition
-
-**Voice**
-
-> For the hackathon, I gave Meta a canvas. It builds working interfaces from the project's files.
-
-**Picture:** Select the robot sources and open the native Viewer chat. Keep the empty area where the
-generated tool will appear visible beside it.
-
-**On-screen text:** “Built for the hackathon · Agent-generated interfaces”
-
-### 1:00–1:22 · Ask for an inspector
-
-**Voice**
-
-> I need to choose where to mount this arm so its gripper can reach two fixed points. First, let me
-> explore the model.
 >
-> The files become an interactive model. I can move a joint and open the definition behind it.
+> This is Viewer. Plurid is its spatial engine. Both started before this hackathon.
 
-**Typed request**
+**Picture:** Focus the three real planes in sequence, then pull back to reveal their shared space.
+Use the keynote cadence and let the spatial reveal carry the joke. Show the navigation keys as they
+are pressed. Keep “Viewer + Plurid · Existing projects” legible during the final sentence.
 
-> Build an interactive tool from the attached SO-101 robot folder.
+### 0:48–1:08 · Give Meta a job
 
-**Picture:** Type the exact first sentence of the retained request in the native composer. Open the
-resulting canvas. Reveal the actual model and joint controls. Move the shoulder, then follow its
-source control into the model definition. Keep the request and the working result in the same
-passage. The full retained request and repair history remain in the capture evidence.
-
-### 1:22–1:40 · Change the requirement
-
-**Voice**
-
-> Now add the two work points, and let me test the base position.
+> For the hackathon, I gave Meta a canvas where it can build a tool and use it.
 >
-> The same tool gains target controls, a solver, and a check against the robot model.
+> This arm needs to reach six tray slots. Where should I put its base?
 
-**Typed request**
+**Typed request, from the qualified run:**
 
-> Read task.json and add editable world-coordinate targets A and B, base placement controls, and
-> position solving for the stated tool and tolerance.
+> Build a placement tool from this robot and station brief. Test the mounting points and tell me
+> which one needs the smallest move.
 
-**Picture:** Return to the same conversation plane. Type this exact excerpt of the saved refinement
-request. Open the revised tool. Keep the robot visible while the target and base controls appear.
-Show both markers in world space. The new requirement produces new capabilities; changing a value in
-a form alone would not demonstrate that.
+**Picture:** Select the two sources and send in Viewer's actual chat. Open the generated canvas
+beside that conversation. Introduce one thing at a time: bench, robot, two trays, six labeled
+targets. Keep the input and result in the same passage. Do not insert a hand-authored reply or
+fixture as the model's work.
 
-The two points are assigned work positions for a kinematic study. Their coordinates come from the
-retained task. Do not add a pick-and-place success, collision-free route or physical robot action
-that was never implemented.
+**On-screen attribution:** “Hackathon additions · Generated tools + agent actions + checked results”
 
-### 1:40–1:48 · Establish the problem
+### 1:08–1:34 · Let the model run its tool
 
-**Voice**
-
-> At this base position, the candidate poses miss both points.
-
-**Picture:** Run **Check poses** and open Viewer's report. The existing candidate errors are about
-167 mm and 127 mm. Identify the two points through their A/B labels. A failed candidate is not proof
-that a point is unreachable. Keep the problem understandable before introducing the next action.
-
-### 1:48–2:10 · Use the capability just added
-
-**Voice**
-
-> Move the base fifty-five centimetres, and solve again.
+> Meta builds the controls, then runs the experiment through them.
 >
-> Both points are within a millimetre.
+> Viewer checks the saved poses against the robot definition. The existing position has three of
+> six. The central position has all six, and needs the smallest move.
+
+**Picture:** The host activity row shows Meta invoking the named action. Candidate rows populate as
+the handler computes poses. The real tool result returns to the conversation; Meta requests the
+independent placement check and recommends Central. Show the host report with 3/6 and 6/6, then
+select Central through the user control and inspect one target. The operator completed this initial
+selection in the qualified run; do not depict it as a model invocation.
+
+Keep the phrase “has three of six” tied to the supplied candidate poses. The calculation does not
+prove the remaining targets unreachable. Do not show a transported object, grasp, motion planner or
+collision-free path. This is the placement decision before those tasks.
+
+### 1:34–1:59 · Change the job
+
+> That area is needed for another fixture. Keep it clear.
 >
-> That gives me a base position.
+> Meta adds the constraint to the tool and runs it again. Central is excluded. Front now gives the
+> smallest move with all six targets checked.
 
-**Picture:** Open **Coordinates and tolerance**, set **base x** to **0.55 m**, then use **Solve
-both** and **Check poses**. Show the native report briefly, then close it so the robot fills the
-view. Sample the first saved pose, hold it, and replay to the second. Give these actions several
-seconds without narration. Display each checked endpoint's error beside its target only while that
-endpoint is sampled. The labels come from Viewer's report, not a generated assertion or a live
-measurement of the movement between poses. Keep the tool and target coordinates fixed throughout.
-The native checker must confirm the result before the narration claims it passed.
+**Typed request:**
 
-This is the practical result: a tested base position for the stated endpoint task. The check covers
-endpoint positions and hard joint limits. It does not check the intervening path, collisions or
-physical hardware. Keep that scope visible in the tool and credits without interrupting the task
-with unrelated warnings.
+> Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm. Add a control and bench
+> overlay for this mounting-point restriction.
 
-### 2:10–2:15 · Keep the working tool
+**Picture:** Return to the same chat. The next real generated revision adds a reserved-area control
+and outline. Preserve the camera and prior inputs. Show the second invocation, the central row
+becoming ineligible and the host's new recommendation. Let the viewer see why the answer changed.
 
-**Voice:** None. Let the action carry this short passage.
+The fictional constraint is a mounting-point rectangle, not a collision obstacle. Use the actual
+qualified run's input rectangle: X 140–260 mm, Y 120–240 mm. Do not imply a full robot footprint
+check.
 
-**Picture:** Export the actual canvas through Viewer's picker. Reopen that export and operate its
-replay controls immediately. Verify that the reopened task matches the one just checked. Cut the
-folder navigation between the export and reopening; retain both actions and the first interaction
-with the reopened tool. Keep the complete capture and omitted range in the edit evidence.
+### 1:59–2:24 · Explore the other answer
 
-### 2:15–2:36 · See what changed
-
-**Voice**
-
-> When I started, I could inspect the robot. Then I needed to test where to put it. So I asked for
-> those controls.
+> What about the rear position?
 >
-> I want to work like this: open my project, explain what I need, and use the tool as it takes
-> shape.
+> I can ask about that exact answer in another plane. Same robot, same targets, same constraint.
+> Both options work for these endpoints. Front moves the base less.
 
-**Picture:** Use **Frame all planes** to reveal the connected source, conversation, model and saved
-tool. Focus the earlier inspector and move a joint. Pull back, then focus the saved version with
-target controls and replay its poses. The same project now has a tool for answering the mounting
-question. Preserve the triggering input and camera motion. Finish on the working interface.
+**Picture:** Select the actual sentence recommending Front and use **Ask about this…**. Show the new
+linked chat and canvas. Meta selects Rear and checks it. Frame the two alternatives together. Focus
+one, then the other, with a visible initiating click. Keep the shared source in view and the
+comparison to selected mount, 6/6 and movement distance. No generic second dashboard or unexplained
+camera rotation.
 
-### 2:36–2:43 · Closing callback
+### 2:24–2:44 · Save the decision
 
-**Voice**
-
-> There is no interface.
+> I'll use Front. Save the placement and the check.
 >
-> Until you need one.
+> The working tool comes with the result. I can reopen it and inspect any of the six poses.
 
-**Picture:** Cut cleanly from the working tool to the title. Pause before the second line appears.
-Keep the delivery quiet and leave a brief hold after it. Include attribution below the title; do not
-add another spoken conclusion or a second outro.
+**Picture:** Save the independently recomputed JSON, export the actual canvas and reopen it. Inspect
+another target in the reopened tool. Leave time for the controls to respond. The check must still
+recompute from the included sources after restart; show a restart only if this take records one.
 
-### Credits
+### 2:44–3:00 · End on the mechanism
 
-Credit Viewer and Plurid as existing projects, then the hackathon additions. Identify Meta
-`muse-spark-1.3`, TheRobotStudio / SO-ARM100, saved-session playback, condensed repairs, staged
-reveals, local layout and playback repairs, checked measurement labels and edited navigation.
-Temporary narration and the opening study are production placeholders. The existing contribution
-inventory owns implementation attribution.
+> Meta wrote the tool, used it, and revised it when the job changed.
+>
+> I didn't open a robotics application. I opened my project and asked for what I needed.
+
+**Picture:** Pull back once to the connected project: source, original question, generated tool,
+quoted alternative and saved decision. Hold the relationships long enough to read them. Cut to
+**There Is No Interface · Viewer / Plurid**. End there, with compact credits. No second manifesto,
+quote table, list of imagined replacement applications or extra spoken conclusion.
+
+## What each part contributes
+
+| Part             | Observable responsibility                                                                                                                 |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Meta             | Generates and revises the interface; invokes its registered actions; uses actual results to choose its next step and explain the decision |
+| Generated canvas | Renders the robot and task; provides the same working handlers to the person and agent                                                    |
+| Viewer           | Owns source access, action execution, cancellation, independent checks, saved state and reviewed output                                   |
+| Plurid           | Connects source, conversation and alternatives spatially; keeps both investigations accessible during comparison                          |
+
+An invocation marked **Completed** only means the handler ran. The endpoint claim belongs to the
+separate Viewer report. The station study checks endpoint positions, hard joint limits and mounting
+points. Orientation, swept motion, collisions, physical clamp fit and hardware are outside this
+fictional example.
 
 ## Capture and narrative requirements
 
 - Record native 2880 × 1800 PNG frames with a 1440 × 900 logical viewport and double pixel density.
-  Verify each frame's dimensions. Encode the delivery once from those sources; never enlarge the old
-  1440 × 900 cut to claim higher-resolution capture.
-- Use actual Viewer chat and controls. Keep input cues clear and captions outside the working area.
-- Introduce Viewer, Plurid and the hackathon addition before the technical example.
-- Show the initial tool before the request that changes its capabilities. Preserve the visible cause
-  and result of each action.
-- Keep the full retained request, selected excerpt offsets, generated revisions and omitted repair
-  rounds in the capture evidence. Reveal timing is editorial, not measured model latency.
-- The drawing and quotation examples are supporting capabilities. Do not make choosing a cheap quote
-  the payoff of this film.
+  Verify the source pixels. Encode once; do not enlarge an older low-resolution film.
+- Use the real Viewer chat. Keep the actor, action, result and next decision readable. Do not add a
+  second fake chat or typography that competes with the app.
+- Preserve input cues for shortcuts and movements. Every camera move follows a visible action.
+- Reveal capabilities as the question requires them. The first interface must not already contain
+  the reserved-area controls that the second request supposedly adds.
+- Retain exact requests, responses, usage, failures, repair history and generated revisions. Typed
+  excerpts need their source-message offsets. Condensed waits and staged reveals belong in credits
+  and edit evidence; do not describe replay timing as live model latency.
+- Credit Viewer and Plurid as prior projects. Attribute the model name recorded by the qualified
+  run, TheRobotStudio / SO-ARM100, bundled calculation/rendering libraries and local presentation
+  edits. The station presentation copy adds scene labels, the fictional-station designation,
+  saved-state wording and accessible control labels locally. Keep its edit manifest with the
+  capture. The contribution inventory owns implementation attribution.
 
 ## Implementation and evidence
 
-The [Workshop audit](../research/workshop.md#implementation-audit) records the generated robot
-interfaces, target solving, independent endpoint checks, comparison, export/reopen and restart. The
-recording must exercise the selected revision's controls and record the resulting measurements.
-Earlier qualification does not prove a new take completed its actions.
+The generic action API and mounting-study contract are documented in the
+[canvas reference](../reference/canvases.md). The
+[Workshop audit](../research/workshop.md#implementation-audit) separates previous live-model
+evidence from the new local station qualification. The
+[station native test](../../packages/viewer-electron/app/tests/native/station-actions.ts) exercises
+real handlers, constraint changes, takeover, exact quote branching, comparison and portable reopen.
+Its supplied HTML is explicitly a fixture. It is not evidence that Meta generated or operated it.
 
-The [canvas reference](../reference/canvases.md) owns current APIs and limits. Viewer supplies
-source access, motion calculations, verification, persistence and exports. The agent creates the
-interface and connects those capabilities to the task. The film demonstrates this example, not
-complete replacement of every specialist application.
-
-The separate mounting demonstration retains native evidence for measured DXF export and a
-source-bound simulated supplier reply. Its assigned plate dimensions do not describe this reach
-study, and its fictional service is not a real ordering integration.
+The separate six-slot run starts from public source snapshots and meshes with a blank canvas. Meta
+generated and repaired the HTML, invoked evaluation, selected Front after the constraint change and
+selected Rear in the exact quoted branch. Native checks confirmed the original stayed unchanged.
+Both actual tools were exported, reopened and restarted without a configured provider; their saved
+inputs and independently recomputed checks survived. The retained evidence includes failed calls,
+host fixes and the operator's initial Central selection. The
+[frozen prompts and acceptance](../research/workshop.md#station-generation-and-acceptance) define
+the scope. These are qualified artifacts, not a completed new film.
 
 ## Final production handoff
 
-Review the delivered video with its generated `Narration.txt` and `Captions.srt`. Those files share
-the exact cues used to synthesize the review audio. Confirm that a first-time viewer can explain
-what Viewer is, what changed in the interface, and what decision the new controls enabled.
+Produce the next timed edit only from qualified artifacts. Generate `Narration.txt` and
+`Captions.srt` from the same cues that create its audio, and deliver them beside that MP4. This
+reading draft must never be described as the transcript of an older video. Check that a first-time
+viewer can identify the task, what Meta did and what decision changed.
 
-Replace the temporary voice and opening study after that review. Retain the native source frames,
-input log, source-message attribution and measured outputs. Verify the final duration and encoded
-resolution, then prepare the contribution receipt and submission materials from the demonstrated
-behavior. A restart qualified outside the recording must not be described as a filmed action.
+Replace the temporary voice and opening study after reviewing that edit. Preserve native source
+frames, input logs, attribution and measured outputs. Prepare the contribution receipt from the
+actual demonstrated behavior and attach the final uncommitted patch when no Git commit is requested.

@@ -7,6 +7,7 @@ import { validateReconstructedGLB } from './canvases/glb';
 import { preparePhoto } from './fabrication/inputs';
 import { canvasLibraries } from 'virtual:viewer-canvas-libraries';
 import { Canvases } from './canvases/service';
+import { canvasPlacementReport } from './canvases/placement-check';
 import { canvasRobotReport } from './canvases/robot-check';
 import { createGitHandlers } from './ipc/git-handlers';
 import { createEditingHandlers } from './ipc/editing-handlers';
@@ -1110,6 +1111,11 @@ export class Desktop {
     this.watchers = new Watchers(emit);
     this.canvases = new Canvases(dataPath, {
       observe: true,
+      action: (owner, event) => {
+        const window = this.windows.get(owner)?.window;
+        if (window && !window.isDestroyed())
+          sendEvent(window.webContents, { type: 'canvas-action', event });
+      },
       libraries: () => canvasLibraries,
       changed: (owner, document) => {
         const window = this.windows.get(owner)?.window;
@@ -2252,6 +2258,71 @@ export class Desktop {
       reconstruction: ([request], owner) => this.reconstructions.handle(owner, request),
       canvas: async ([request], owner) => {
         let document = await this.canvases.read(owner, request.id);
+        if (request.kind === 'register-actions')
+          return {
+            document: await this.canvases.registerActions(
+              owner,
+              request.id,
+              request.revision,
+              request.frameID,
+              request.actions,
+            ),
+          };
+        if (request.kind === 'detach-actions')
+          this.canvases.actions.detach(owner, request.id, request.frameID);
+        if (request.kind === 'cancel-action') this.canvases.actions.cancel(request.id);
+        if (request.kind === 'complete-action')
+          this.canvases.actions.complete(
+            owner,
+            request.id,
+            request.frameID,
+            request.runID,
+            request.output,
+            request.error,
+          );
+        if (request.kind === 'invoke-action')
+          return this.canvases.invoke(
+            owner,
+            request.id,
+            request.revision,
+            request.stateRevision,
+            request.action,
+            request.input,
+            'You',
+            new AbortController().signal,
+          );
+        if (request.kind === 'check-placements')
+          document = await this.canvases.checkPlacements(
+            owner,
+            document.id,
+            request.revision,
+            request.stateRevision,
+            request.sourceID,
+            request.briefSourceID,
+            request.stateKey,
+          );
+        if (request.kind === 'check-placements' || request.kind === 'placement-report')
+          return { document, placementReport: canvasPlacementReport(document) };
+        if (request.kind === 'placement-comparison')
+          return {
+            document,
+            placementComparison: await this.canvases.placementComparison(owner, document.id),
+          };
+        if (request.kind === 'save-placement-check') {
+          const saved = await this.canvases.savePlacementCheck(
+            owner,
+            document.id,
+            request.revision,
+            request.stateRevision,
+            () =>
+              saveOnce(this.fileAccess, this.windows.get(owner)?.window, {
+                title: 'Save placement check as a new file',
+                defaultPath: path.join(document.path, 'placement-check.json'),
+              }),
+          );
+          if (saved) this.emit({ type: 'folder-changed', path: path.dirname(saved) });
+          return { document: await this.canvases.read(owner, document.id), saved };
+        }
         if (request.kind === 'observe')
           return {
             document: await this.canvases.observe(owner, request.id, request.revision, {

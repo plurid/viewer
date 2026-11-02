@@ -7,21 +7,30 @@ updates retain the latest value for each changed key while a save is in flight. 
 quote branches, reload and export wait for pending input saves. Content and state revision checks
 still reject stale changes.
 
+Model requests include the current canvas and its evidence. Historical tool snapshots reference
+identical large values in that current context through `$viewerContext` JSON Pointers. Different
+historical values, action results and check failures remain present. This projection does not alter
+the saved transcript or frozen quote context. Meta receives each current-turn result once, paired
+with its native tool call. The existing context and inspection limits still apply.
+
 ## Runtime API
 
 Generated HTML receives `window.viewerCanvas`:
 
-| Member                                 | Behavior                                                 |
-| -------------------------------------- | -------------------------------------------------------- |
-| `getSources()`                         | Return copies of bound evidence snapshots                |
-| `requestRobotCheck(sourceID,stateKey)` | Ask Viewer to check the task saved under that state key  |
-| `requestExport(result)`                | Request host review of `{format,name,content}`           |
-| `getState()`                           | Return a copy of saved input state                       |
-| `setState({ key: value })`             | Merge values and request a desktop save                  |
-| `subscribe(listener)`                  | Observe state updates; returns an unsubscribe function   |
-| `assets`                               | Attached assets as `{ id, name, mime, url }` records     |
-| `openSource(id, joint?)`               | Request source review, optionally for a named URDF joint |
-| `propose(text)`                        | Prepare text for review in the conversation              |
+| Member                                            | Behavior                                                       |
+| ------------------------------------------------- | -------------------------------------------------------------- |
+| `getSources()`                                    | Return copies of bound evidence snapshots                      |
+| `requestRobotCheck(sourceID,stateKey)`            | Ask Viewer to check the task saved under that state key        |
+| `requestExport(result)`                           | Request host review of `{format,name,content}`                 |
+| `getState()`                                      | Return a copy of saved input state                             |
+| `setState({ key: value })`                        | Merge values and request a desktop save                        |
+| `subscribe(listener)`                             | Observe state updates; returns an unsubscribe function         |
+| `assets`                                          | Attached assets as `{ id, name, mime, url }` records           |
+| `openSource(id, joint?)`                          | Request source review, optionally for a named URDF joint       |
+| `propose(text)`                                   | Prepare text for review in the conversation                    |
+| `registerAction(definition, handler)`             | Register a named operation in this live frame                  |
+| `invokeAction(id, input)`                         | Run a registered operation through the host; returns a promise |
+| `requestPlacementCheck(robotID,briefID,stateKey)` | Recompute a saved mounting study in Viewer; returns the report |
 
 Use stable state keys. A new content revision cannot change the type of an existing saved value.
 HTML, CSS and scripts run in an opaque sandbox through `viewer-html`. The page has no desktop
@@ -31,6 +40,58 @@ preview. Workers, nested frames, forms and plugins are disabled.
 The import map supplies `three` and bundled `three/addons/` modules for `OrbitControls`,
 `GLTFLoader`, `STLLoader`, `BufferGeometryUtils` and `SkeletonUtils`. Other dependencies must be
 included in the document; remote CDNs are unavailable.
+
+### Actions shared by the person and agent
+
+Register a handler once per frame. Use the same action from a visible button and from the model's
+`canvas_invoke` tool. The handler receives copied inputs, captured saved state and an AbortSignal.
+Return `{result,patch?}`; the host validates and saves the patch as one state revision. Calling
+`setState` inside a running handler is refused. Observe the host's saved state through `subscribe`.
+
+```js
+const api = window.viewerCanvas;
+api.registerAction(
+  {
+    id: 'calculateTotal',
+    label: 'Calculate total',
+    inputSchema: {
+      type: 'object',
+      properties: { quantity: { type: 'number', minimum: 1, maximum: 1000 } },
+      required: ['quantity'],
+      additionalProperties: false,
+    },
+  },
+  ({ quantity }, { state, signal }) => {
+    signal.throwIfAborted();
+    const total = quantity * state.unitPrice;
+    return { result: { total }, patch: { quantity, total } };
+  },
+);
+// A visible control receives the handler's result after its patch is saved.
+const { total } = await api.invokeAction('calculateTotal', { quantity: 20 });
+```
+
+`invokeAction` resolves to the handler's `result` value directly. It does not return the
+`{result,patch}` handler envelope or the model tool's execution record. Failed or canceled actions
+reject the promise.
+
+There are at most 16 actions per frame and 24 scalar inputs per action. Inputs accept strings up to
+1,000 characters, finite numbers or booleans. Optional enum, minimum, maximum and description fields
+constrain them. Action IDs start with a letter and contain at most 80 letters, digits, dots,
+underscores or hyphens. Labels are at most 120 characters. Results must be JSON within 32,000 UTF-8
+bytes. Patches share the 128,000-byte canvas-state limit and cannot change an existing value's type.
+
+One action runs per canvas, with a 30-second deadline. Its activity row names the actor and action.
+**Take over** cancels pending work and stops the associated model turn. **Stop** removes the frame.
+An action holds input editing while it runs. Revision changes, frame closure and cancellation
+discard pending results. Once a validated result starts its atomic save, that save settles as
+completed or failed; late cancellation cannot relabel a saved result as discarded.
+
+Registrations and activity are live-frame state, not portable authority. Reloading or reopening must
+register handlers again. Window, conversation, frame, content revision and input revision are
+checked before invocation; duplicate and late replies are rejected. A completed action means its
+handler ran. Its returned claims are generated content until a separate checker validates them.
+Actions gain no file-write, shell, network or provider capability.
 
 Snapshots contain `{id,name,version,hash,data}`. `data` contains bounded `facts`, `evidence`,
 `coverage`, and optionally `table: {rows,malformed}` for CSV/TSV. Rows include the header. Local
@@ -59,6 +120,40 @@ geometry as R12 DXF through its fabrication writer, then reads and measures thos
 The desktop repeats validation before saving. The preview reports geometry dimensions; it does not
 certify attachment requirements, material, tool clearance or manufacturing readiness.
 
+## Mounting studies
+
+A station brief is a complete JSON source snapshot. It supplies `version: 1`, metre/radian `units`,
+`tool: {link,point}`, `tolerance`, `bench: {min:[x,y],max:[x,y]}`, reference position `[x,y,z]`,
+fixed `targets: [{id,position}]` and `mounts: [{id,label,base:{xyz,rpy}}]`. Mount IDs and target IDs
+are unique. There are at most eight mounts and sixteen targets. The
+[station fixture](../../packages/viewer-electron/app/tests/fixtures/robotics/station.json) is a
+complete example with assigned scenario dimensions.
+
+Save a study as `{version:1,reserved:[{min,max}],candidates:[{id,poses}],selected?}` under one
+stable state key. Every brief mount needs a candidate, and every candidate needs one pose per
+target. Poses are `{targetID,positions}`, with every movable joint named. Up to eight reserved
+rectangles restrict mounting points in the bench XY plane; their edges count as reserved. They do
+not describe collision obstacles or the footprint of the robot.
+
+Keep the returned positions for every target, including an `unresolved` solver outcome. The checker
+needs the full candidate to measure each endpoint. Count passing targets from their checked
+residuals and limits, not from the number of stored poses.
+
+The host derives targets, tool, tolerance and mounting transforms from the bound brief, not the
+handler's claimed results. It recomputes endpoint errors and hard joint limits. A candidate passes
+when all supplied poses meet tolerance and its mounting point lies in the bench outside the reserved
+regions. The recommendation minimizes Euclidean distance from the brief's reference among passing
+candidates, with mount ID as the tie breaker. A failed candidate is not proof of unreachability.
+
+The saved `placementCheck` binds robot and brief hashes, the study hash, content revision, checker
+version and time. Reports are recomputed after reopen; changed inputs or snapshots make the binding
+stale. Camera changes alone do not. Quote comparisons require the same robot, brief and reserved
+areas. **Save check JSON…** creates a new file through the host picker. Canvas export includes the
+study and its binding; import strips local source paths and retains enough data to recompute.
+
+This is a mounting-point and endpoint study. It does not check orientation, robot or tray
+footprints, travel between poses, collisions, clamp fit, loads or calibrated hardware.
+
 ## Model tools
 
 `canvas_read` obtains current content, saved state and revision. `canvas_write` supplies complete
@@ -75,6 +170,16 @@ shell operations.
 `canvas_source` inspects an authorized attached file and returns `{source,revision}`. Repeating it
 returns the saved snapshot unchanged; refresh is a user action. Source context requires the
 provider's document-excerpts permission.
+
+`canvas_read` and the next model round include `actions`, `lastAction`, `stateRevision` and
+`placementReport`. `canvas_invoke` takes JSON in `text`:
+`{"action":"calculateTotal","input":{"quantity":20},"revision":1,"stateRevision":0}`. It invokes
+only the current conversation's live canvas and returns its actual status, result and saved state.
+It cannot invoke a handler in another conversation or an unopened frame.
+
+`canvas_check_placements` takes JSON in `text` with `sourceID`, `briefSourceID`, `stateKey`,
+`revision` and `stateRevision`. It recomputes the study outside the generated document and returns
+the current report, plus a comparison for a quoted alternative when both studies are compatible.
 
 Preview observations are tied to a content revision. `ready` means the page loaded, not that its
 calculations were verified. `error` includes a bounded runtime message. `not-observed` means no

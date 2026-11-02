@@ -415,10 +415,22 @@ height and scroll its contents so the canvas stays visible. Inset summaries and 
 plane edges. Align asset source actions, allow long names to wrap and keep keyboard focus on the
 summary when Escape closes its section.
 
+**The Canvas Action Status Rule.** Keep the actor, action and current outcome together in a compact,
+wrapping row above the canvas. Keep Take over reachable while an action runs. Action completion
+describes execution; checked robot results remain in Viewer's independent report.
+
 **The Canvas Drawing Review Rule.** Put cutting geometry beside measured width, height, outline and
 hole counts, and hole diameters. Keep millimetre units visible and mark approximate diameters. Use
 the shared field and ink roles. Bound the preview height and scroll measurements so the canvas,
 Cancel and Save drawing… remain reachable.
+
+**The Local Station Presentation Rule.** Limit the station presentation patch to imported local
+copies of actual Meta output and retain the provider HTML unchanged. Preserve flat controls, system
+type, neutral robot and bench, and restrained blue accents. Keep scene labels legible and distinct
+in screen space, Fictional station quiet and Mounting point visibly labeled. Expose status changes
+through polite live regions. Describe the saved evaluation and selection accurately on reopen.
+Preserve evaluation and action code, saved inputs and measured outcomes. The canvas host does not
+apply these edits to other generated canvases.
 
 Show source imagery in creative tools. Tie export, progress, optimization savings and output links
 to real jobs. Label camera previews, RAW renditions and video compatibility copies accurately.

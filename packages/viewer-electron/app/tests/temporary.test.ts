@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
   keptManifest,
+  adoptRetainedNativeFixture,
+  assertOwnedFixtureDirectory,
   ownedDirectory,
   temporaryRoot,
   trashFixtureEntry,
@@ -42,6 +44,22 @@ describe('owned test folders', () => {
   });
 });
 describe('temporary test folders', () => {
+  it('reopens a private retained native root without gaining cleanup ownership', async () => {
+    const root = realpathSync.native(
+      await mkdtemp(path.join(os.tmpdir(), 'viewer-retained-native-')),
+    );
+    const profile = path.join(root, 'Profile');
+    await mkdir(profile);
+    expect(() => assertOwnedFixtureDirectory(profile)).toThrow('generated fixture');
+    adoptRetainedNativeFixture(root);
+    expect(assertOwnedFixtureDirectory(profile)).toBe(profile);
+    await trashTemporary(root);
+    expect(existsSync(profile)).toBe(true);
+    expect(readFileSync(keptManifest, 'utf8')).toContain(
+      root + '\tnot created by temporaryRoot in this process',
+    );
+    expect(() => adoptRetainedNativeFixture(profile)).toThrow('private retained fixture');
+  });
   it('lists a folder kept by VIEWER_TEST_PRESERVE=1 once, whether or not its test cleans it up', async () => {
     // A folder a test made and never handed to `trashTemporary` (an extra root) was kept unlisted:
     // 657 of them in one session's runs.

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "units": { "length": "m", "angle": "rad" },
+  "tool": { "link": "gripper_frame_link", "point": [0, 0, 0] },
+  "tolerance": 0.001,
+  "bench": { "min": [0, 0], "max": [0.6, 0.4] },
+  "reference": [0.04, 0.18, 0],
+  "targets": [
+    { "id": "A1", "position": [0.44, 0.1, 0.08] },
+    { "id": "A2", "position": [0.44, 0.16, 0.08] },
+    { "id": "A3", "position": [0.44, 0.22, 0.08] },
+    { "id": "B1", "position": [0.52, 0.1, 0.08] },
+    { "id": "B2", "position": [0.52, 0.16, 0.08] },
+    { "id": "B3", "position": [0.52, 0.22, 0.08] }
+  ],
+  "mounts": [
+    { "id": "existing", "label": "Existing", "base": { "xyz": [0.04, 0.18, 0], "rpy": [0, 0, 0] } },
+    { "id": "central", "label": "Central", "base": { "xyz": [0.2, 0.18, 0], "rpy": [0, 0, 0] } },
+    { "id": "front", "label": "Front", "base": { "xyz": [0.22, 0.04, 0], "rpy": [0, 0, 0] } },
+    { "id": "rear", "label": "Rear", "base": { "xyz": [0.3, 0.32, 0], "rpy": [0, 0, 0] } }
+  ]
+}

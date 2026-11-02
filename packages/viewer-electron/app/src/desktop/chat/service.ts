@@ -2,6 +2,11 @@ import type { Canvases } from '../canvases/service';
 import { canvasInstructions } from '../canvases/runtime';
 import { attachRobotMeshes } from '../canvases/robot';
 import { canvasRobotReport } from '../canvases/robot-check';
+import { canvasPlacementReport } from '../canvases/placement-check';
+import {
+  canvasInvocationSchema,
+  canvasPlacementRequestSchema,
+} from '../../domain/canvases/actions';
 import { portableCanvasSources } from '../../domain/canvases/sources';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
@@ -29,6 +34,7 @@ import { agentCommandID } from '../../domain/agents/safety';
 import { promptLineProblem } from '../../domain/command-line/prompt';
 import type { Providers } from '../models/providers';
 import { ChatDocumentStore } from './documents';
+import { canvasModelMessages } from './model-context';
 import { absolute, entry, validName } from '../files/filesystem';
 import { Search } from '../search/search';
 import { containsPath } from '../files/containment';
@@ -453,6 +459,7 @@ export class Chats {
     let needsRepair = false;
     let repaired = false;
     const steps: { arguments: ChatStep; result: string }[] = [];
+    const pairedMessages = new Set<string>();
     try {
       for (let round = 0; round < 8; round++) {
         signal.throwIfAborted();
@@ -473,12 +480,18 @@ export class Chats {
           stepsRemaining: 8 - round,
           context: document.scopes,
           commands: principal.commands.map(({ id, label }) => ({ id, label })),
-          messages: [...(document.branch?.context ?? []), ...document.messages],
+          messages: [] as ChatMessage[],
           quote: document.branch?.quote,
+          contextEncoding:
+            'In historical tool messages, {$viewerContext: "#/canvas/..."} references the identical value at that JSON Pointer in this request. Resolve the reference when reading it. All other values are unchanged.',
           canvas: canvas
             ? {
                 id: canvas.id,
                 revision: canvas.revision,
+                stateRevision: canvas.stateRevision,
+                actions: this.ports.canvases!.actions.list(canvas.id, canvas.revision),
+                lastAction: this.ports.canvases!.actions.activity(canvas.id),
+                placementReport: canvasPlacementReport(canvas),
                 title: canvas.title,
                 html: canvas.html,
                 state: canvas.state,
@@ -493,6 +506,11 @@ export class Chats {
               }
             : null,
         };
+        input.messages = canvasModelMessages(
+          [...(document.branch?.context ?? []), ...document.messages],
+          input.canvas,
+          pairedMessages,
+        );
         if (input.canvas?.preview.status === 'error') needsRepair = true;
         if (Buffer.byteLength(JSON.stringify(input)) > 256 * 1024)
           throw new Error(
@@ -541,6 +559,8 @@ export class Chats {
             'This request reached its inspection budget. Continue with a narrower question.',
           );
         const message = this.message('tool', text);
+        // Meta receives these results once, paired with their actual native tool calls.
+        if (provider.kind === 'meta') pairedMessages.add(message.id);
         if (step.path && ['list', 'metadata', 'read'].includes(step.kind))
           message.links = [{ kind: 'file', path: await this.authorize(principal, step.path) }];
         await this.append(id, message);
@@ -589,6 +609,10 @@ export class Chats {
         return {
           id: canvas.id,
           revision: canvas.revision,
+          stateRevision: canvas.stateRevision,
+          actions: canvases.actions.list(canvas.id, canvas.revision),
+          lastAction: canvases.actions.activity(canvas.id),
+          placementReport: canvasPlacementReport(canvas),
           html: canvas.html,
           state: canvas.state,
           defaults: canvas.defaults,
@@ -600,6 +624,46 @@ export class Chats {
             : undefined,
           preview: canvases.previewObservation(canvas.id, canvas.revision),
         };
+      if (step.kind === 'canvas_invoke') {
+        const request = canvasInvocationSchema.parse(JSON.parse(step.text));
+        const reply = await canvases.invoke(
+          principal.owner,
+          canvas.id,
+          request.revision,
+          request.stateRevision,
+          request.action,
+          request.input,
+          provider.name,
+          signal,
+          document.id,
+        );
+        return {
+          ...reply.actionRun,
+          stateRevision: reply.document.stateRevision,
+          savedState: reply.document.state,
+          placementReport: canvasPlacementReport(reply.document),
+        };
+      }
+      if (step.kind === 'canvas_check_placements') {
+        const request = canvasPlacementRequestSchema.parse(JSON.parse(step.text));
+        const updated = await canvases.checkPlacements(
+          principal.owner,
+          canvas.id,
+          request.revision,
+          request.stateRevision,
+          request.sourceID,
+          request.briefSourceID,
+          request.stateKey,
+        );
+        return {
+          revision: updated.revision,
+          stateRevision: updated.stateRevision,
+          report: canvasPlacementReport(updated),
+          comparison: updated.fork
+            ? await canvases.placementComparison(principal.owner, updated.id)
+            : undefined,
+        };
+      }
       if (step.kind === 'canvas_source') {
         const file = await this.authorize(principal, step.path ?? '');
         await this.edit(id, (current) => ({
@@ -671,12 +735,15 @@ export class Chats {
         step.text,
         Object.fromEntries(step.patches.map((patch) => [patch.path, patch.value])),
       );
+      const preview = await canvases.waitForPreview(updated.id, updated.revision, signal);
       return {
         canvasID: updated.id,
         revision: updated.revision,
+        stateRevision: updated.stateRevision,
+        actions: canvases.actions.list(updated.id, updated.revision),
         title: updated.title,
         savedState: updated.state,
-        preview: await canvases.waitForPreview(updated.id, updated.revision, signal),
+        preview,
       };
     }
     if (step.kind === 'command' || step.kind === 'settings') {

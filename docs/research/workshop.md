@@ -1,21 +1,20 @@
 # Viewer Workshop: interfaces built around a task
 
-This page records the hackathon direction and implementation audit. The canvas foundation is
-implemented. The robot workflow has passed native qualification for articulated controls, target
-solving, independent endpoint checks, comparison and export/reopen. Those checks establish the
-mechanics of the generated tool. The film must connect those mechanics to the decision being made:
-where to place the arm so its gripper can reach two fixed work points.
+This page records the hackathon direction and implementation audit. The selected film follows a
+six-slot robot station: Meta builds a tool, runs registered actions, reads independent checks and
+revises the tool when a mounting area becomes unavailable. A quoted alternative lets the person
+compare a second position beside the first.
 
-The selected [screenplay](../release/hackathon-demo.md) follows a project acquiring the tools needed
-for that decision. Meta first produces a model inspector, then adds target testing in response to a
-changed requirement. The person uses the new controls to move the base, solve and independently
-check the endpoints. The generated interface's transformation is the main event. The separate
-mounting workflow has reviewed canvas DXF output and a local supplier fixture. Actual Meta-generated
-mounting and quote interfaces pass native width editing, drawing measurement, save/reopen, deadline
-selection and restart checks. The mounting job is fictional; physical adapter qualification is
-outside the demo and does not block recording. Final narration and the opening remain separate
-production work. The [contribution inventory](../release/hackathon-contributions.md) uses the
-owner's 27 October 2026 baseline to distinguish prior work.
+The generic action loop and station checker pass local service and native fixture qualification.
+Actual Meta-generated station tools also pass native evaluation, constraint revision, exact quote
+comparison and portable cold restart. The operator completed the first Central selection after Meta
+recommended it; Meta invoked the later Front and Rear selections. The earlier two-target and
+mounting/quote runs remain evidence for their own tasks. The supplied station HTML is a fixture.
+
+The [screenplay](../release/hackathon-demo.md) is a reading draft for the next edit, not the
+transcript of an existing video. Final narration and the opening remain production work. The
+[contribution inventory](../release/hackathon-contributions.md) uses the owner's 27 October 2026
+baseline to distinguish prior work.
 
 ## Product thesis
 
@@ -44,9 +43,23 @@ one workspace. See [spatial development](spatial-development.md) and the
 
 ## Selected task and related mounting example
 
-The selected task is a base-placement study using a real robot description and two assigned fixed
-work points. Its output is a saved working tool with a checked set of endpoint poses. The filmed
-requirement change must visibly add target testing to the initial inspector.
+The selected task uses the real SO-101 definition with assigned station geometry: a 600 × 400 mm
+bench, two trays and six tool targets at Z 80 mm. The targets have X 440/520 mm and Y 100/160/220
+mm. Four candidate mounting points are Existing (40,180), Central (200,180), Front (220,40) and Rear
+(300,320), in millimetres with zero rotation. The tool is the gripper-frame origin. Endpoint
+tolerance is 1 mm.
+
+The local solver produces passing candidates for 3/6 targets at Existing and 6/6 at the other three
+points. Central requires the least movement. A new reserved mounting-point rectangle, X 140–260 mm
+and Y 120–240 mm, excludes Central. Front becomes the least-movement passing choice. Rear remains a
+valid endpoint alternative for a quote branch. The actual Meta-generated tool reproduces these
+independently checked results. Front moves the base 228.04 mm and Rear 295.30 mm. The canonical
+input is [station.json](../../packages/viewer-electron/app/tests/fixtures/robotics/station.json).
+
+The output is a selected mounting point, independently recomputed JSON and a portable working
+canvas. The study does not model tray or robot footprints, orientation, collisions, intervening
+motion or physical mounting. The fictional dimensions are assigned; no physical-fit confirmation
+blocks the demo. Ambiguous real source dimensions still require review in real work.
 
 The related mounting example prepares an adapter plate and compares fictional cutting quotes. It
 uses an assigned plate specification and a simulated supplier. Its controls, drawing, measurements
@@ -66,10 +79,11 @@ aluminium plate and four 6.5 mm holes on a 120 × 100 mm pitch, then changes its
 These are assigned scenario inputs, not dimensions measured from the robot. Physical fit and
 fabrication are outside the fictional job; they require no confirmation before filming.
 
-The retained robot exercise below qualifies generation, revision and comparison mechanics for the
-selected base-placement study. It does not qualify the mounting plate or physical fabrication.
+The retained two-target exercise below qualifies its own generation, revision and comparison
+mechanics. It does not qualify the six-slot action sequence. It does not qualify the mounting plate
+or physical fabrication.
 
-### Can this arm reach the targets?
+### Earlier two-target exercise
 
 Use the [SO-101 project](https://github.com/TheRobotStudio/SO-ARM100), with the exact follower
 model, meshes and documentation pinned before qualification. Its
@@ -95,36 +109,94 @@ fixture-based native scenarios and native replay of actual provider output are d
 evidence. Keep run-specific results outside this page and follow
 [testing](../development/testing.md).
 
-| Film capability                           | Current implementation                                                                                                             | Evidence and remaining boundary                                                                                                                                                                                                                                                                                                                                                            |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Build a tool from selected files          | Implemented: the command creates a contextual draft; sending is explicit.                                                          | [Command entry](../../packages/viewer-electron/app/src/renderer/commands/window-commands/comparison.ts). This does not inspect an entire robot package automatically.                                                                                                                                                                                                                      |
-| Generate and revise selectable HTML       | Implemented: complete revisions, revision checks, saved state and bounded runtime-error repair.                                    | [Chat owner](../../packages/viewer-electron/app/src/desktop/chat/service.ts), [runtime](../../packages/viewer-electron/app/src/desktop/canvases/runtime.ts), [chat tests](../../packages/viewer-electron/app/tests/chat.test.ts). A loaded page does not establish correct calculations.                                                                                                   |
-| Bind files as evidence                    | Implemented: bounded facts, excerpts, coverage and table snapshots; explicit refresh.                                              | [Snapshot builder](../../packages/viewer-electron/app/src/desktop/canvases/sources.ts), [source tests](../../packages/viewer-electron/app/tests/canvas-productivity.test.ts). Large text excerpts can be partial. Complete URDF inputs now also carry a bounded semantic joint tree; incomplete definitions are refused.                                                                   |
-| Preserve inputs and branch from a passage | Implemented: exact quote offsets, frozen context, independent canvas state and conflict-aware application.                         | [Chat tests](../../packages/viewer-electron/app/tests/chat.test.ts), [canvas tests](../../packages/viewer-electron/app/tests/canvases.test.ts). Robot alternatives use this foundation without changing the original task.                                                                                                                                                                 |
-| Render a 3D model                         | Implemented: bundled Three.js, OrbitControls, GLTFLoader, STLLoader and a pure forward-kinematics module.                          | [Bundled libraries](../../packages/viewer-electron/app/tools/canvas-libraries.ts), [model viewer](../../packages/viewer-electron/app/src/desktop/canvases/model-app.ts), [native fixture](../../packages/viewer-electron/app/tests/native/canvases.ts). URDF joint transforms are available through `viewer/robotics`; bounded position solving is available; collision checks are absent. |
-| Open source evidence                      | Implemented for generic snapshots and their captured anchors.                                                                      | [Source controls](../../packages/viewer-electron/app/src/renderer/canvases/CanvasSources.tsx). URDF joints retain exact captured definitions. `openSource(sourceID,jointName)` selects one for host review and source navigation; it cannot supply arbitrary paths.                                                                                                                        |
-| Review and save output                    | Implemented for CSV, JSON, Markdown and text, with revision checks and exclusive new-file saves.                                   | [Canvas service](../../packages/viewer-electron/app/src/desktop/canvases/service.ts), [result tests](../../packages/viewer-electron/app/tests/canvas-productivity.test.ts). JSON syntax validation is not robot motion validation.                                                                                                                                                         |
-| Export, reopen and retain state           | Implemented for canvas HTML, state, assets and portable snapshots.                                                                 | [Canvas tests](../../packages/viewer-electron/app/tests/canvases.test.ts), [native productivity fixture](../../packages/viewer-electron/app/tests/native/canvas-productivity.ts). The robot comparison fixture covers saved candidates and paused visual replay; portable imports retain their own check and drop the fork link.                                                           |
-| Read robot structure and linked meshes    | Implemented for a bounded URDF subset and scoped binary STL visual meshes. MJCF is not supported.                                  | [Robot reader](../../packages/viewer-electron/app/src/domain/robotics/urdf.ts), [mesh attachment](../../packages/viewer-electron/app/src/desktop/canvases/robot.ts). The SO-101 fixture pins the follower definition and all visual assets. Publication rights still need final review.                                                                                                    |
-| Move joints and solve targets             | Implemented: forward kinematics, bounded position-only solving and hard position-limit reporting.                                  | [Motion library](../../packages/viewer-electron/app/src/domain/robotics/kinematics.ts), [independent pose tests](../../packages/viewer-electron/app/tests/robotics.test.ts) and [native robot fixture](../../packages/viewer-electron/app/tests/native/robotics.ts). The fixture UI is supplied test code, not live Meta evidence.                                                         |
-| Independently check robot results         | Implemented for endpoint positions and hard joint limits, with saved-input and source bindings.                                    | [Desktop checker](../../packages/viewer-electron/app/src/desktop/robotics/check.ts) uses separate point propagation. [Target tests](../../packages/viewer-electron/app/tests/robot-targets.test.ts) cover SciPy reference agreement, stale inputs and restart. No interval, orientation or collision verification is provided.                                                             |
-| Compare base placements and replay poses  | Implemented: native comparison requires equal model, world targets, tool and tolerance; offline replay interpolates copied joints. | [Comparison owner](../../packages/viewer-electron/app/src/desktop/canvases/robot-check.ts), [replay module](../../packages/viewer-electron/app/src/domain/robotics/replay.ts), [native comparison fixture](../../packages/viewer-electron/app/tests/native/robot-comparison.ts). Both tasks are checked again after restart. Visual interpolation does not check intervals.                |
-| Qualify the generated robot workflow      | Verified in native replay of actual Meta output: articulated creation, target-solving refinement and an exact quoted alternative.  | The alternative keeps the original unchanged and passes independent endpoint checks. Comparison save, paused replay, export/reopen and cold restart passed. A valid response rejected by a local parser was recovered unchanged; failures remain retained. This is functional qualification, not finished footage.                                                                         |
-| Browse a service page                     | Implemented: the local supplier runs in a real browser plane and saves a reply for the exact drawing hash.                         | [Browser owner](../../packages/viewer-electron/app/src/desktop/browser/browser-planes.ts), [supplier fixture](../../packages/viewer-electron/app/tools/mounting/supplier.ts). The exchange is a local simulation; browser access does not grant agent access.                                                                                                                              |
-| Prepare the mounting plate                | Generated plate controls pass width editing, measured DXF export, native reopen and input persistence.                             | [Drawing validator](../../packages/viewer-electron/app/src/domain/canvases/drawing.ts), [native qualification](../../packages/viewer-electron/app/tools/mounting/qualify.ts). Source meshes are displayed with assigned dimensions for the fictional job. Physical fabrication is outside the demo.                                                                                        |
-| Compare a simulated cutting quote         | The generated comparison reads the saved reply, changes deadline eligibility and saves the selected quote with the drawing hash.   | Native qualification covers the three-to-seven-day transition, Economy selection, Markdown save and restart. The model repaired an unsupported import after native execution exposed it. No external supplier or order is involved.                                                                                                                                                        |
-| Show the interface acquiring capabilities | The selected robot study has generated controls and saved-output evidence.                                                         | Record the initial inspector, changed request, added target controls and the resulting checked base position. Match narration to actual actions. Tool qualification does not establish audience comprehension.                                                                                                                                                                             |
+| Film capability                           | Current implementation                                                                                                                                   | Evidence and remaining boundary                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Build a tool from selected files          | Implemented: the command creates a contextual draft; sending is explicit.                                                                                | [Command entry](../../packages/viewer-electron/app/src/renderer/commands/window-commands/comparison.ts). This does not inspect an entire robot package automatically.                                                                                                                                                                                                                      |
+| Generate and revise selectable HTML       | Implemented: complete revisions, revision checks, saved state and bounded runtime-error repair.                                                          | [Chat owner](../../packages/viewer-electron/app/src/desktop/chat/service.ts), [runtime](../../packages/viewer-electron/app/src/desktop/canvases/runtime.ts), [chat tests](../../packages/viewer-electron/app/tests/chat.test.ts). A loaded page does not establish correct calculations.                                                                                                   |
+| Bind files as evidence                    | Implemented: bounded facts, excerpts, coverage and table snapshots; explicit refresh.                                                                    | [Snapshot builder](../../packages/viewer-electron/app/src/desktop/canvases/sources.ts), [source tests](../../packages/viewer-electron/app/tests/canvas-productivity.test.ts). Large text excerpts can be partial. Complete URDF inputs now also carry a bounded semantic joint tree; incomplete definitions are refused.                                                                   |
+| Preserve inputs and branch from a passage | Implemented: exact quote offsets, frozen context, independent canvas state and conflict-aware application.                                               | [Chat tests](../../packages/viewer-electron/app/tests/chat.test.ts), [canvas tests](../../packages/viewer-electron/app/tests/canvases.test.ts). Robot alternatives use this foundation without changing the original task.                                                                                                                                                                 |
+| Render a 3D model                         | Implemented: bundled Three.js, OrbitControls, GLTFLoader, STLLoader and a pure forward-kinematics module.                                                | [Bundled libraries](../../packages/viewer-electron/app/tools/canvas-libraries.ts), [model viewer](../../packages/viewer-electron/app/src/desktop/canvases/model-app.ts), [native fixture](../../packages/viewer-electron/app/tests/native/canvases.ts). URDF joint transforms are available through `viewer/robotics`; bounded position solving is available; collision checks are absent. |
+| Open source evidence                      | Implemented for generic snapshots and their captured anchors.                                                                                            | [Source controls](../../packages/viewer-electron/app/src/renderer/canvases/CanvasSources.tsx). URDF joints retain exact captured definitions. `openSource(sourceID,jointName)` selects one for host review and source navigation; it cannot supply arbitrary paths.                                                                                                                        |
+| Review and save output                    | Implemented for CSV, JSON, Markdown and text, with revision checks and exclusive new-file saves.                                                         | [Canvas service](../../packages/viewer-electron/app/src/desktop/canvases/service.ts), [result tests](../../packages/viewer-electron/app/tests/canvas-productivity.test.ts). JSON syntax validation is not robot motion validation.                                                                                                                                                         |
+| Export, reopen and retain state           | Implemented for canvas HTML, state, assets and portable snapshots.                                                                                       | [Canvas tests](../../packages/viewer-electron/app/tests/canvases.test.ts), [native productivity fixture](../../packages/viewer-electron/app/tests/native/canvas-productivity.ts). The robot comparison fixture covers saved candidates and paused visual replay; portable imports retain their own check and drop the fork link.                                                           |
+| Read robot structure and linked meshes    | Implemented for a bounded URDF subset and scoped binary STL visual meshes. MJCF is not supported.                                                        | [Robot reader](../../packages/viewer-electron/app/src/domain/robotics/urdf.ts), [mesh attachment](../../packages/viewer-electron/app/src/desktop/canvases/robot.ts). The SO-101 fixture pins the follower definition and all visual assets. Publication rights still need final review.                                                                                                    |
+| Move joints and solve targets             | Implemented: forward kinematics, bounded position-only solving and hard position-limit reporting.                                                        | [Motion library](../../packages/viewer-electron/app/src/domain/robotics/kinematics.ts), [independent pose tests](../../packages/viewer-electron/app/tests/robotics.test.ts) and [native robot fixture](../../packages/viewer-electron/app/tests/native/robotics.ts). The fixture UI is supplied test code, not live Meta evidence.                                                         |
+| Independently check robot results         | Implemented for endpoint positions and hard joint limits, with saved-input and source bindings.                                                          | [Desktop checker](../../packages/viewer-electron/app/src/desktop/robotics/check.ts) uses separate point propagation. [Target tests](../../packages/viewer-electron/app/tests/robot-targets.test.ts) cover SciPy reference agreement, stale inputs and restart. No interval, orientation or collision verification is provided.                                                             |
+| Compare base placements and replay poses  | Implemented: native comparison requires equal model, world targets, tool and tolerance; offline replay interpolates copied joints.                       | [Comparison owner](../../packages/viewer-electron/app/src/desktop/canvases/robot-check.ts), [replay module](../../packages/viewer-electron/app/src/domain/robotics/replay.ts), [native comparison fixture](../../packages/viewer-electron/app/tests/native/robot-comparison.ts). Both tasks are checked again after restart. Visual interpolation does not check intervals.                |
+| Invoke generated actions                  | Implemented and exercised by Meta: one named handler serves a visible control and model invocation, with actual results, revision guards and takeover.   | [Action broker](../../packages/viewer-electron/app/src/desktop/canvases/actions.ts), [protocol tests](../../packages/viewer-electron/app/tests/chat.test.ts), [live runner](../../packages/viewer-electron/app/tools/robotics/station-live.ts). Meta invoked evaluation and the Front and Rear selections. The operator selected Central after its recommendation.                         |
+| Check the six-slot station                | Actual generated tools pass native checks for four candidates, reserved-point constraint, exact quote comparison, saved report and cold portable reopen. | [Independent placement checker](../../packages/viewer-electron/app/src/desktop/robotics/placement.ts), [handoff runner](../../packages/viewer-electron/app/tools/robotics/station-handoff.ts). The separate native fixture qualifies the host contracts. Actual exported tools reopen in a provider-free profile with unchanged inputs and recomputed reports.                             |
+| Qualify the generated robot workflow      | Verified in native replay of actual Meta output: articulated creation, target-solving refinement and an exact quoted alternative.                        | The alternative keeps the original unchanged and passes independent endpoint checks. Comparison save, paused replay, export/reopen and cold restart passed. A valid response rejected by a local parser was recovered unchanged; failures remain retained. This is functional qualification, not finished footage.                                                                         |
+| Browse a service page                     | Implemented: the local supplier runs in a real browser plane and saves a reply for the exact drawing hash.                                               | [Browser owner](../../packages/viewer-electron/app/src/desktop/browser/browser-planes.ts), [supplier fixture](../../packages/viewer-electron/app/tools/mounting/supplier.ts). The exchange is a local simulation; browser access does not grant agent access.                                                                                                                              |
+| Prepare the mounting plate                | Generated plate controls pass width editing, measured DXF export, native reopen and input persistence.                                                   | [Drawing validator](../../packages/viewer-electron/app/src/domain/canvases/drawing.ts), [native qualification](../../packages/viewer-electron/app/tools/mounting/qualify.ts). Source meshes are displayed with assigned dimensions for the fictional job. Physical fabrication is outside the demo.                                                                                        |
+| Compare a simulated cutting quote         | The generated comparison reads the saved reply, changes deadline eligibility and saves the selected quote with the drawing hash.                         | Native qualification covers the three-to-seven-day transition, Economy selection, Markdown save and restart. The model repaired an unsupported import after native execution exposed it. No external supplier or order is involved.                                                                                                                                                        |
+| Show the interface acquiring capabilities | The selected robot study has generated controls and saved-output evidence.                                                                               | Record the initial inspector, changed request, added target controls and the resulting checked base position. Match narration to actual actions. Tool qualification does not establish audience comprehension.                                                                                                                                                                             |
 
 The [canvas reference](../reference/canvases.md) owns current APIs and limits. The SDK exposes
-state, sources, assets and reviewed proposals/exports. The offline motion library computes supplied
-joint poses. It supplies a bounded position solver and a request for independent endpoint checks in
-Viewer. It does not expose arbitrary native execution. The current native robot fixture is
-development evidence, not the completed movie.
+state, sources, assets, registered actions and reviewed proposals/exports. The offline motion
+library computes supplied joint poses. It supplies a bounded position solver and a request for
+independent endpoint checks in Viewer. It does not expose arbitrary native execution. The current
+native robot fixture is development evidence, not the completed movie.
 
 ## Qualification and work before filming
 
 Use existing document, canvas, preview, operation and conversation owners. Extend their capabilities
 where needed; avoid a parallel application or a hardcoded success demonstration.
+
+### Station generation and acceptance
+
+Complete the local prototype first. Keep the actual source snapshots, attached meshes and the blank
+canvas ready in an isolated profile. Do not send the supplied station HTML to the model as a pretend
+generated result. The live experiment starts from the real model and assigned station brief. A
+separate allowance covers three sessions of at most eight provider requests each, 24 total. Count
+canceled, failed and repair requests. Record approval and usage in the run ledger. Stop between
+stages for native review; do not spend another session to hide a failed stage.
+
+**Creation request**
+
+> Build a placement tool from this robot and station brief. Test the mounting points and tell me
+> which one needs the smallest move. Use the attached snapshots and meshes. Show the bench, two
+> trays, six labeled targets and the articulated robot. Register actions to evaluate all four
+> mounting points and select one; wire the visible buttons to those same handlers. Invoke the
+> evaluation yourself, request Viewer's independent placement check, then select and recheck the
+> least-movement passing candidate. Keep one stable study state key and preserve camera inputs. Do
+> not add reserved-area controls yet. Explain only results you received from the tools.
+
+**Changed-requirement request**
+
+> Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm. Add a control and bench
+> overlay for this mounting-point restriction. Keep the same robot, tray targets and 1 mm endpoint
+> tolerance. Revise the existing tool, run its evaluation, request the independent check, then
+> select and check the least-movement passing candidate. Preserve the camera and other inputs.
+
+**Quoted-alternative request**
+
+Select the actual sentence recommending Front. Use **Ask about this…**, retaining the exact text and
+range, then send:
+
+> Compare the rear mounting point with the front mounting point. Use the same robot, targets and
+> reserved area. Select Rear in this alternative through its registered action, check the saved
+> poses in Viewer and explain the measured tradeoff. Do not change the source brief or the original
+> conversation's inputs.
+
+| Gate        | Required evidence                                                                                                                            |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Creation    | Actual Meta HTML and handlers; a recorded `canvas_invoke`; Viewer report for all four mounts; Central selected; native controls respond      |
+| Revision    | Actual Meta revision adds the constraint control; state and camera persist; another invocation; Central excluded; Front selected and checked |
+| Branch      | Exact quote range; separate canvas; Rear selected; compatible host comparison against Front; original inputs unchanged                       |
+| Handoff     | Checked JSON saved and read back; portable canvas reopened; native cold restart recomputes the check                                         |
+| Attribution | Provider envelopes, usage, rejected responses and local edits retained; supplied fixtures never attributed to Meta                           |
+
+Use the same live handlers in the person's controls and the agent calls. A fixture passing these
+mechanics is necessary preparation, but it does not establish that the model uses them successfully.
+Only after all gates pass should the new film present the sequence as Meta behavior.
+
+The retained live run establishes these gates with one attribution boundary: Meta recommended
+Central but did not complete its selection before the creation request limit. Native acceptance
+selected Central through the generated control. Meta's later Front and Rear selections are recorded
+invocations. Preserve this distinction in the film. The revised tool retains camera and joint
+inputs; the quoted alternative leaves the original unchanged. Handoff checks use the actual
+generated HTML, saved state and assets, with no provider configured. Generation failures, repair
+prompts and host context repairs remain in the run evidence.
 
 ### Retained robot qualification
 
@@ -181,8 +253,9 @@ are not established by those checks. Further paid generation must fit an explici
 
 ## Model and human responsibilities
 
-- **Meta:** interpret approved source material, generate and revise the interactive tool, and
-  investigate the quoted alternative. Verify the actual configured model before recording.
+- **Meta:** interpret approved source material, generate and revise the interactive tool, invoke its
+  registered actions, and investigate the quoted alternative. Verify the actual configured model
+  before recording.
 - **Viewer:** own source access, persistent state, assets, revision checks and reviewed output. The
   URDF reader owns model interpretation. The desktop endpoint checker binds its inputs to the
   source, targets, base placement, tool point and candidate poses.
@@ -194,6 +267,22 @@ would produce inferred geometry and is outside this film. SAM and photo-to-3D ar
 the selected case and must not be credited as exercised unless separately demonstrated.
 
 ## Other workflows and references
+
+### Investigating neural artifacts
+
+The [weight-space programming experiments](https://github.com/RikiyaT/lm_understand-logs) suggest
+another application of generated instruments: inspect a small controller's weights and recorded
+failure, construct a diagnostic interface, propose an edit and compare both controllers on fixed
+test episodes. Connected planes could hold the source tensors, generated controls, behavioral replay
+and measured differences. This is a research proposal, not an implemented Viewer capability or
+evidence about Meta's weight-editing ability. The reported experiments used GPT-6 Astra.
+
+Keep the independent evaluator and held-out episodes outside the generated tool's authority. A local
+evaluator would own architecture validation, bounded inference and recorded scores. Start with a
+small controller and an offline reproduction before requesting a separate model allowance. The
+larger Qwen experiment used 158 turns over about 20 hours; its results do not justify promising a
+quick model-improvement feature. The current station qualification remains the selected film
+workflow.
 
 The [supplier regression](../development/testing.md#canvas-evaluation-and-replay) remains a small
 case with known arithmetic, retained model responses and native export/restart checks. The
