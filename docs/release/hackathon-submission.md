@@ -1,10 +1,9 @@
 # Hackathon submission draft
 
-This is working entry copy for the selected [film](hackathon-demo.md): prepare a robot mounting
-plate and choose a cutting quote. It connects a generated model inspector, cutting view and
-quotation comparison in one spatial project. The supplier conversation is a local two-agent
-simulation. Review the script, then qualify the combined workflow before recording. The owner
-supplied 27 October 2026 as the development baseline. The
+This is working entry copy for the selected [film](hackathon-demo.md): a project acquires the tools
+needed to answer a new question. Start with a robot inspector, ask for target testing, then use the
+new controls to choose a base position for two fixed work points. Review the script and the recorded
+measurements together. The owner supplied 27 October 2026 as the development baseline. The
 [contribution inventory](hackathon-contributions.md) records the source comparison. Public URLs,
 team credits and organizer eligibility remain to be confirmed.
 
@@ -33,29 +32,27 @@ improvements; credit those separately from the existing spatial foundation.
 The proposed film, **There Is No Interface**, makes that argument explicit: the interface is
 generated on the spot from the project and the person's request. Keep the personal account and the
 change in how the creator works in the main narration. Introduce Viewer and Plurid as existing
-projects while exploring their space, then identify the hackathon additions. The mounting job shows
-different kinds of interfaces taking shape around the work: inspecting a model, preparing a drawing
-and acting on a service reply. Generated tools use the host's capabilities for those tasks. An
+projects while exploring their space, then identify the hackathon additions. The robot study shows
+an interface gaining capabilities in response to a changed requirement: joint inspection becomes
+target testing and base placement. Generated tools use the host's capabilities for those tasks. An
 optional synthetic homage must remain distinct from the real app.
 
 ## Proposed demonstration
 
-In the fictional job, the person needs a plate to mount the robot to a workbench. They ask Meta for
-an inspection interface, view the source robot and existing clamps, then request a plate using the
-assigned demo specification. They edit its dimensions and measure the saved cutting file against the
-values shown in the generated interface.
+The person needs to place an arm so its gripper can reach two fixed work points. They ask Meta to
+build an interactive inspector from the robot definition and meshes. They move a joint and follow
+its source link. Then they ask the same tool to add targets, base controls and position solving.
 
-A browser plane shows a local conversation between Viewer's agent and a fictional cutting-service
-agent. The service offers economy and express delivery for the same plate. Its reply becomes the
-source for a generated comparison: changing the deadline changes which options qualify. The person
-chooses an option and saves the reviewed cutting file with the selected simulated quotation.
+The revised interface makes the new task possible. The initial candidate poses miss the targets.
+Moving the base and solving again produces new candidates; Viewer's separate checker measures their
+endpoint errors against the unchanged targets and one-millimetre tolerance. The person exports the
+working tool, reopens it and operates its retained controls. The result is a tested base position
+for this endpoint study, not physical robot operation or a checked motion path.
 
-Actual Meta-generated mounting and quote interfaces pass native width editing, independently
-measured DXF export, source-bound quote selection, save/reopen and restart checks. Physical
-fabrication is outside this fictional scenario and does not block the demo. Existing browser planes
-do not grant an agent access to their page content or signed-in sessions. The simulation sends no
-external messages and places no order. Job 1042's separate 48/50 mm fixture does not describe this
-robot's mounting points.
+The mounting plate and cutting-service comparison remain supporting examples. Their generated
+interfaces pass native width editing, measured DXF export, source-bound quote selection, save/reopen
+and restart checks. The service is a local simulation; it sends no external messages and places no
+order. Those examples establish additional operations but do not carry this film's main argument.
 
 The [screenplay](hackathon-demo.md) owns the proposed narration and shots. The
 [implementation audit](../research/workshop.md#implementation-audit) records current canvas and
@@ -96,12 +93,11 @@ one example does not qualify another example or the combined workflow proposed i
 
 ## Claims requiring qualification
 
-The film must visibly demonstrate the generated inspection, cutting and quotation interfaces, their
-working controls and saved output. Existing robot rehearsal qualifies a different task. The story
-cut must make the spatial relationships understandable and show the supplier reply driving the
-comparison. Identify the service as fictional and credit the local exchange simulation. Its
-continuous passages and input cues support review; technical capture checks alone do not establish
-audience comprehension. Restart is verified separately; show it only if it is recorded.
+The film must visibly connect the request, the added capabilities, the controls being used and the
+measured result. A generated screen alone does not establish that progression. Record actual native
+pixels at the delivery resolution, keep text readable and preserve the input that triggers spatial
+movement. Continuous passages and input cues support review; technical capture checks alone do not
+establish audience comprehension. Restart is verified separately; show it only if it is recorded.
 
 Ambiguous units, dimensions and source associations require human confirmation. An unresolved
 numerical solve is not proof of unreachability. Kinematic checks do not establish collision safety,
@@ -109,9 +105,8 @@ physical grasping, load capacity or calibrated hardware control. The demonstrati
 poses or intervals were checked.
 
 Photo-to-3D, SAM segmentation and broad format expansion remain separate capabilities or proposals.
-Job 1042 retains its own fabrication evidence. Verify the mounting plate from its actual attachment
-sources and accepted requirements. Attribute source assets and supporting libraries independently of
-Viewer's generated interface.
+Job 1042 and the mounting plate retain their own fabrication evidence. Attribute source assets and
+supporting libraries independently of Viewer's generated interface.
 
 ## Before submitting
 

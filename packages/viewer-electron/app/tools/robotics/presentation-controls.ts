@@ -7,34 +7,52 @@ import { until } from '../../tests/owned-app';
 import type { Connection } from '../docs/record';
 
 /** Native input goes through the visible, spatially transformed plane. */
-export function presentationControls(main: Connection) {
+export function presentationControls(
+  main: Connection,
+  mapPointer?: (
+    session: string,
+    projection: { x: number; y: number; scaleX: number; scaleY: number },
+  ) => void,
+) {
   const events: { milliseconds: number; action: string }[] = [];
   const started = performance.now();
   const mark = (action: string) =>
     events.push({ milliseconds: performance.now() - started, action });
-  async function pointer(x: number, y: number, pressed = false) {
-    await main.command('Input.dispatchMouseEvent', {
-      type: 'mouseMoved',
-      x,
-      y,
-      buttons: pressed ? 1 : 0,
-    });
+  async function pointer(x: number, y: number, pressed = false, session?: string) {
+    await main.command(
+      'Input.dispatchMouseEvent',
+      {
+        type: 'mouseMoved',
+        x,
+        y,
+        buttons: pressed ? 1 : 0,
+      },
+      session,
+    );
   }
-  async function clickPoint(x: number, y: number) {
-    await pointer(x, y);
+  async function clickPoint(x: number, y: number, session?: string) {
+    await pointer(x, y, false, session);
     for (const type of ['mousePressed', 'mouseReleased'])
-      await main.command('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
+      await main.command(
+        'Input.dispatchMouseEvent',
+        { type, x, y, button: 'left', clickCount: 1 },
+        session,
+      );
     await delay(180);
   }
-  async function key(key: string, code: string, virtual: number, modifiers = 0) {
+  async function key(key: string, code: string, virtual: number, modifiers = 0, session?: string) {
     for (const type of ['keyDown', 'keyUp'])
-      await main.command('Input.dispatchKeyEvent', {
-        type,
-        key,
-        code,
-        windowsVirtualKeyCode: virtual,
-        modifiers,
-      });
+      await main.command(
+        'Input.dispatchKeyEvent',
+        {
+          type,
+          key,
+          code,
+          windowsVirtualKeyCode: virtual,
+          modifiers,
+        },
+        session,
+      );
     await delay(120);
   }
   async function point(selector: string, text?: string) {
@@ -68,22 +86,30 @@ export function presentationControls(main: Connection) {
     mark('Click ' + (text ?? selector));
     await clickPoint(p.x, p.y);
   }
-  async function type(value: string) {
-    await main.command('Input.dispatchKeyEvent', {
-      type: 'keyDown',
-      key: 'a',
-      code: 'KeyA',
-      windowsVirtualKeyCode: 65,
-      modifiers: process.platform === 'darwin' ? 4 : 2,
-      commands: ['selectAll'],
-    });
-    await main.command('Input.dispatchKeyEvent', {
-      type: 'keyUp',
-      key: 'a',
-      code: 'KeyA',
-      windowsVirtualKeyCode: 65,
-    });
-    await main.command('Input.insertText', { text: value });
+  async function type(value: string, session?: string) {
+    await main.command(
+      'Input.dispatchKeyEvent',
+      {
+        type: 'keyDown',
+        key: 'a',
+        code: 'KeyA',
+        windowsVirtualKeyCode: 65,
+        modifiers: process.platform === 'darwin' ? 4 : 2,
+        commands: ['selectAll'],
+      },
+      session,
+    );
+    await main.command(
+      'Input.dispatchKeyEvent',
+      {
+        type: 'keyUp',
+        key: 'a',
+        code: 'KeyA',
+        windowsVirtualKeyCode: 65,
+      },
+      session,
+    );
+    await main.command('Input.insertText', { text: value }, session);
   }
   async function fill(selector: string, value: string) {
     await click(selector);
@@ -175,49 +201,64 @@ export function presentationControls(main: Connection) {
         }, scope),
       );
       assert.ok(local.width > 0 && local.height > 0, 'Canvas control is visible.');
+      mapPointer?.(frame.sessionId, {
+        x: parent.x,
+        y: parent.y,
+        scaleX: parent.width / local.frameWidth,
+        scaleY: parent.height / local.frameHeight,
+      });
       return {
-        x: parent.x + (local.x * parent.width) / local.frameWidth,
-        y: parent.y + (local.y * parent.height) / local.frameHeight,
-        width: (local.width * parent.width) / local.frameWidth,
-        height: (local.height * parent.height) / local.frameHeight,
+        x: local.x,
+        y: local.y,
+        width: local.width,
+        height: local.height,
       };
     }
     async function press(selector: string) {
       const r = await box(selector);
       mark('Canvas click ' + selector);
-      await clickPoint(r.x + r.width / 2, r.y + r.height / 2);
+      await clickPoint(r.x + r.width / 2, r.y + r.height / 2, frame.sessionId);
     }
     async function input(selector: string, value: string) {
       await press(selector);
-      await type(value);
-      await key('Tab', 'Tab', 9);
+      await type(value, frame.sessionId);
+      await key('Tab', 'Tab', 9, 0, frame.sessionId);
     }
     async function drag(selector: string, from: number, to: number, vertical = 0) {
       const r = await box(selector);
       const start = { x: r.x + r.width * from, y: r.y + r.height / 2 };
       mark('Canvas drag ' + selector);
-      await pointer(start.x, start.y);
-      await main.command('Input.dispatchMouseEvent', {
-        type: 'mousePressed',
-        ...start,
-        button: 'left',
-        clickCount: 1,
-      });
+      await pointer(start.x, start.y, false, frame.sessionId);
+      await main.command(
+        'Input.dispatchMouseEvent',
+        {
+          type: 'mousePressed',
+          ...start,
+          button: 'left',
+          clickCount: 1,
+        },
+        frame.sessionId,
+      );
       for (let step = 1; step <= 40; step++) {
         await pointer(
           start.x + (r.width * (to - from) * step) / 40,
           start.y + (vertical * step) / 40,
           true,
+          frame.sessionId,
         );
         await delay(25);
       }
-      await main.command('Input.dispatchMouseEvent', {
-        type: 'mouseReleased',
-        x: r.x + r.width * to,
-        y: start.y + vertical,
-        button: 'left',
-        clickCount: 1,
-      });
+      await main.command(
+        'Input.dispatchMouseEvent',
+        {
+          type: 'mouseReleased',
+          x: r.x + r.width * to,
+          y: start.y + vertical,
+          button: 'left',
+          clickCount: 1,
+        },
+        frame.sessionId,
+      );
       await delay(300);
     }
     return { frame, scope, press, input, drag };

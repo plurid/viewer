@@ -49,6 +49,9 @@ For a walkthrough that needs a pointer and keyboard cues, use `inputOverlay` fro
 recording function and the input controls. The overlay follows the mouse coordinates and keyboard
 chords actually dispatched to Viewer. It does not invoke application actions.
 
+For a canvas in a separate renderer, use `mapPointer()` to project its local input coordinates onto
+the recorded window. Dispatch the input to that renderer; the overlay records both coordinate sets.
+
 Use `cue()` to name the current action, such as **Open linked plane** or **Back to parent plane**.
 Modifier keys and navigation keys appear as separate keycaps. Click feedback stays neutral, and the
 cue remains briefly after release. Ordinary typed text is excluded from the overlay and its input
@@ -67,15 +70,19 @@ explicitly edited playback of saved model output. This is a recording tool, not 
 streaming feature. Run it in an isolated profile without configured providers.
 
 1. Call `mount()` with the visible conversation selector, retained user message and a public context
-   label. It uses the native toolbar, transcript and composer markup, with the app's existing
+   label. An optional `start`/`end` range selects an exact excerpt; the event log retains its
+   offsets and the complete message hash. A supplied `providerName` must match the retained run's
+   attribution. It uses the native toolbar, transcript and composer markup, with the app's existing
    styles. The cloned composer has no provider send handler.
-2. Call `type()` to enter that exact request through recorded input. Dispatch **Command+Enter** or
-   **Control+Enter** to advance the replay. This composer never sends a provider request.
+2. Call `type()` to enter that exact request or selected excerpt through recorded input. Dispatch
+   **Command+Enter** or **Control+Enter** to advance the replay. This composer never sends a
+   provider request.
 3. Call `answer()` with an assistant message and the exact start/end offsets of its excerpt. Keep
    the source IDs, excerpt offsets and condensed repair history in the capture evidence.
 4. Call `coverCanvas()` before following the native **Canvas** action. Wait for the real canvas and
-   assets to load, then call `revealCanvas()` with its frame connection. The temporary mask reveals
-   the actual model and control group.
+   assets to load, then call `revealCanvas()` with its frame connection. Selectors can identify the
+   working view and inspector in the qualified generated layout. The temporary mask reveals those
+   actual elements.
 5. Exercise the real controls. Call `dismiss()` when returning to the original transcript or closing
    the take. Save `events`, which identifies message hashes and excerpt offsets, with the input and
    frame logs.
@@ -91,6 +98,71 @@ Generate the delivered narration transcript and captions from the same timed cue
 the audio. Put spoken words, on-screen titles and scene directions in separate fields of the full
 script. Check the delivered audio against those cues; an earlier story outline is not its
 transcript.
+
+## Record the evolving interface
+
+From `packages/viewer-electron/app`, use the retained robot session and a tested packaged app:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 node --import tsx tools/robotics/record-story.ts \
+  --run <retained-robot-run> --binary <packaged-Viewer-executable>
+```
+
+The recorder creates an isolated profile without providers. It records project navigation, native
+chat request excerpts, the generated inspector, target testing, changed base placement and canvas
+export/reopen. It checks the actual endpoint reports and restored task before marking the capture
+complete. The local browser page introduces the project; it is demonstration material, not model
+output or an external service.
+
+Use a 1440 × 900 logical viewport with `deviceScaleFactor: 2` and an explicit viewport of the same
+logical size at scale 1. Setting only the device scale can leave compositor recordings at the
+logical resolution. `recordFrames` verifies that every PNG contains 2880 × 1800 native pixels. It
+keeps compositor timing and input logs. Idle passages can contain fewer frames because the picture
+has not changed. Preserve the source frames; do not enlarge a lower-resolution movie.
+
+After the native sequence passes, assemble the full review cut:
+
+```sh
+python3 tools/robotics/assemble-story.py <capture-folder>
+```
+
+The assembler uses Pillow, macOS's Daniel voice and Homebrew FFmpeg. It encodes once from the PNG
+sources, at the original playback speed, with bounded encoding threads. Timed capture cues produce
+the exact narration, transcript and captions. The output includes an opening study, attribution,
+sample frames and technical decode checks. Review the complete story and its input-to-result
+transitions before replacing the temporary voice and opening.
+
+## Record the mounting job
+
+From `packages/viewer-electron/app`, use the qualified review copy and its retained source run:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 node --import tsx tools/mounting/record.ts \
+  --review <review-folder> --run <retained-mounting-run> --binary <packaged-Viewer-executable>
+```
+
+The recorder creates an isolated profile, copies the inputs and preserves every take. It uses no
+configured provider. Native inputs replay request excerpts, open the generated tools, edit the plate
+width, save and reopen the measured DXF, request a local supplier quote, change the deadline and
+save the selected offer. Before using the retained quote interface, it checks that the new simulated
+reply equals its captured source and identifies the newly saved drawing.
+
+`capture.json` records the clips, timed actions, input cues, source excerpts and file checks. Review
+the footage before assembling narration. The mounting session published its canvas without a final
+assistant message; the capture shows its actual canvas output without inventing a reply. Keep local
+review corrections and the supplier simulation identified in the edit's credits.
+
+Assemble a passed capture with temporary narration on macOS:
+
+```sh
+python3 tools/mounting/assemble.py <capture-folder>
+```
+
+The assembler uses Python with Pillow, macOS's Daniel voice and Homebrew FFmpeg. It preserves the
+capture's playback speed, places narration between recorded actions and writes a new output folder.
+`Narration.txt` and `Captions.srt` come from the exact spoken cues. The output includes credits,
+sample frames and decode verification. Review the video and transcript together before replacing the
+temporary voice or incorporating this scene into the full film.
 
 ## Attribution
 

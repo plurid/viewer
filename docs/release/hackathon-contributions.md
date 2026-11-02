@@ -78,7 +78,7 @@ robot film. Package publication is a separate status from source implementation.
 
 The supplier case remains
 [evaluation material](../development/testing.md#canvas-evaluation-and-replay). Its outputs and tests
-are not evidence for the selected mounting-plate job or its new cutting-service simulation.
+are not evidence for the robot endpoint study or the separate mounting and cutting-service example.
 
 The [implementation audit](../research/workshop.md#implementation-audit) owns the qualification
 boundary and remaining presentation work. The generated SO-101 workflow has native evidence for
@@ -87,8 +87,12 @@ save, replay, export/reopen and restart. This does not establish collision check
 trajectory validation, dynamics, device calibration or physical operation. Keep these absent
 capabilities out of the completed contribution list.
 
-The selected [screenplay](hackathon-demo.md) connects robot inspection, plate preparation and a
-simulated cutting quote. Actual Meta-generated controls now have native evidence for width editing,
+The selected [screenplay](hackathon-demo.md) shows a robot inspector gaining target-testing and
+base-placement controls in response to a new requirement. Its practical result is a saved tool and
+checked endpoint candidates for two fixed work points. Attribute saved-response replay, condensed
+repair rounds, staged reveals and local layout refinements in the film credits.
+
+The separate mounting example's Meta-generated controls have native evidence for width editing,
 measured DXF export, source-bound quote selection, save/reopen and restart. The supplier remains a
 local simulation, and the plate dimensions are illustrative. Physical mounting fit remains outside
 the completed contribution list. Existing footage shows actual native interactions with saved Meta

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pageCall } from '../../tests/native/runtime/page-function';
+import type { PageExpression } from '../../tests/native/runtime/page-function';
 import type { ChatMessage } from '../../src/domain/models/chat';
 import type { Connection } from './record';
 
@@ -23,19 +24,31 @@ export interface ReplayEvent {
 /** Film annotations only. Retained messages, native APIs and generated scripts stay untouched. */
 export function sessionReplay(main: Connection) {
   const events: ReplayEvent[] = [];
+  let requestPassage: { id: string; text: string } | undefined;
   const started = performance.now();
   const mark = (kind: string, extra: Omit<ReplayEvent, 'milliseconds' | 'kind'> = {}) =>
     events.push({ milliseconds: performance.now() - started, kind, ...extra });
 
-  async function mount(selector: string, request: ChatMessage, label: string) {
+  async function mount(
+    selector: string,
+    request: ChatMessage,
+    label: string,
+    options: { start?: number; end?: number; providerName?: string } = {},
+  ) {
     assert.equal(request.role, 'user');
+    const { start = 0, end = request.text.length } = options;
+    assert.ok(Number.isInteger(start) && Number.isInteger(end));
+    assert.ok(start >= 0 && end > start && end <= request.text.length);
+    requestPassage = { id: request.id, text: request.text.slice(start, end) };
     mark('request-source', {
       messageID: request.id,
       sha256: createHash('sha256').update(request.text).digest('hex'),
+      start,
+      end,
     });
     await main.evaluate(
       pageCall(
-        (selector, requestID, label) => {
+        (selector, requestID, label, text, providerName) => {
           const plane = document.querySelector<HTMLElement>(selector);
           const nativeForm = plane?.querySelector<HTMLFormElement>('.chat-composer');
           const transcript = plane?.querySelector<HTMLElement>('.chat-transcript');
@@ -62,9 +75,9 @@ export function sessionReplay(main: Connection) {
             '.chat-message[data-role="assistant"] > strong',
           );
           const model = plane.querySelector<HTMLElement>('.chat-model > span');
-          if (model && author) rememberText(model, author.textContent ?? 'Meta');
-          for (const item of plane.querySelectorAll<HTMLElement>('.chat-context-items li > span'))
-            rememberText(item, (item.textContent ?? '').split('/').filter(Boolean).at(-1) ?? '');
+          if (model && (providerName || author))
+            rememberText(model, providerName || author!.textContent || '');
+          rememberText(paragraph, text);
 
           // Clone native markup so the film uses its styles without reaching the send handler.
           const form = nativeForm.cloneNode(true) as HTMLFormElement;
@@ -105,19 +118,23 @@ export function sessionReplay(main: Connection) {
           });
           nativeForm.parentElement!.append(form);
           transcript.scrollTop = 0;
-          input.focus();
+          input.focus({ preventScroll: true });
         },
         selector,
         request.id,
         label,
+        requestPassage.text,
+        options.providerName ?? '',
       ),
     );
   }
 
   async function type(request: ChatMessage, milliseconds = 7200) {
-    const chunks = request.text.match(/.{1,6}/gs) ?? [];
-    for (const text of chunks) {
-      await main.command('Input.insertText', { text });
+    assert.equal(request.id, requestPassage?.id, 'Type the mounted retained request.');
+    const text = requestPassage!.text;
+    const chunks = text.match(/.{1,6}/gs) ?? [];
+    for (const chunk of chunks) {
+      await main.command('Input.insertText', { text: chunk });
       await delay(milliseconds / Math.max(1, chunks.length));
     }
     const value = await main.evaluate(
@@ -125,7 +142,7 @@ export function sessionReplay(main: Connection) {
         () => document.querySelector<HTMLTextAreaElement>('[data-replay-composer] textarea')?.value,
       ),
     );
-    assert.equal(value, request.text, 'Replay must type the retained request exactly.');
+    assert.equal(value, text, 'Replay must type the retained passage exactly.');
     mark('request-typed', { messageID: request.id });
   }
 
@@ -247,44 +264,53 @@ export function sessionReplay(main: Connection) {
   }
 
   async function revealCanvas(
-    frame: Pick<Connection, 'evaluate'>,
+    frame: { evaluate<T>(expression: PageExpression<T>): Promise<T> },
     mode: 'create' | 'refine' | 'branch',
+    selectors = { stage: '.presentation-stage', panel: '.panel' },
   ) {
     await frame.evaluate(
-      pageCall((mode) => {
-        const stage = document.querySelector<HTMLElement>('.presentation-stage');
-        const panel = document.querySelector<HTMLElement>('.panel');
-        if (!stage || !panel) throw Error('The qualified presentation layout is required.');
-        stage.style.opacity = mode === 'create' ? '0' : '1';
-        panel.style.opacity = '0';
-        panel.style.pointerEvents = 'none';
-      }, mode),
+      pageCall(
+        (mode, selectors) => {
+          const stage = document.querySelector<HTMLElement>(selectors.stage);
+          const panel = document.querySelector<HTMLElement>(selectors.panel);
+          if (!stage || !panel) throw Error('The qualified presentation layout is required.');
+          stage.style.opacity = mode === 'create' ? '0' : '1';
+          panel.style.opacity = '0';
+          panel.style.pointerEvents = 'none';
+        },
+        mode,
+        selectors,
+      ),
     );
     await main.evaluate(pageCall(() => document.querySelector('#capture-canvas-cover')?.remove()));
     await delay(450);
     mark('canvas-reveal-start');
     await frame.evaluate(
-      pageCall(async (mode) => {
-        const stage = document.querySelector<HTMLElement>('.presentation-stage')!;
-        const panel = document.querySelector<HTMLElement>('.panel')!;
-        const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (mode === 'create') {
-          stage.style.opacity = '1';
-          await stage.animate(
-            reduced
-              ? [{ opacity: 0 }, { opacity: 1 }]
-              : [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)' }],
-            { duration: reduced ? 160 : 650, easing: 'cubic-bezier(.16,1,.3,1)' },
-          ).finished;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 650));
-        panel.style.opacity = '1';
-        await panel.animate([{ opacity: 0 }, { opacity: 1 }], { duration: reduced ? 120 : 450 })
-          .finished;
-        panel.style.pointerEvents = '';
-        stage.style.opacity = '';
-        panel.style.opacity = '';
-      }, mode),
+      pageCall(
+        async (mode, selectors) => {
+          const stage = document.querySelector<HTMLElement>(selectors.stage)!;
+          const panel = document.querySelector<HTMLElement>(selectors.panel)!;
+          const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+          if (mode === 'create') {
+            stage.style.opacity = '1';
+            await stage.animate(
+              reduced
+                ? [{ opacity: 0 }, { opacity: 1 }]
+                : [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)' }],
+              { duration: reduced ? 160 : 650, easing: 'cubic-bezier(.16,1,.3,1)' },
+            ).finished;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 650));
+          panel.style.opacity = '1';
+          await panel.animate([{ opacity: 0 }, { opacity: 1 }], { duration: reduced ? 120 : 450 })
+            .finished;
+          panel.style.pointerEvents = '';
+          stage.style.opacity = '';
+          panel.style.opacity = '';
+        },
+        mode,
+        selectors,
+      ),
     );
     mark('canvas-reveal-complete');
   }

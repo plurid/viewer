@@ -10,6 +10,9 @@ type Input = {
   y?: number;
   clickCount?: number;
   characters?: number;
+  target?: string;
+  displayX?: number;
+  displayY?: number;
 };
 
 /** Capture annotations follow dispatched inputs; they never invoke application actions. */
@@ -18,6 +21,7 @@ export async function inputOverlay(source: Connection) {
   let started = performance.now();
   let label = '';
   let position = { x: 130, y: 100 };
+  const projections = new Map<string, { x: number; y: number; scaleX: number; scaleY: number }>();
   await source.evaluate(
     pageCall(() => {
       if (document.querySelector('#capture-inputs')) throw Error('Input overlay already installed');
@@ -114,6 +118,7 @@ export async function inputOverlay(source: Connection) {
         const event: Input = {
           milliseconds: performance.now() - started,
           type: String(params.type ?? method),
+          ...(sessionId ? { target: sessionId } : {}),
         };
         for (const field of ['modifiers', 'x', 'y', 'clickCount'] as const)
           if (typeof params[field] === 'number') event[field] = params[field];
@@ -141,7 +146,17 @@ export async function inputOverlay(source: Connection) {
           if (params.type === 'keyUp') release();
         }
         if (method === 'Input.dispatchMouseEvent' && typeof params.x === 'number') {
-          position = { x: params.x, y: Number(params.y) };
+          const projection = sessionId ? projections.get(sessionId) : undefined;
+          position = projection
+            ? {
+                x: projection.x + params.x * projection.scaleX,
+                y: projection.y + Number(params.y) * projection.scaleY,
+              }
+            : { x: params.x, y: Number(params.y) };
+          if (projection) {
+            event.displayX = position.x;
+            event.displayY = position.y;
+          }
           await source.evaluate(
             pageCall(
               (x, y, pressed) => {
@@ -161,8 +176,8 @@ export async function inputOverlay(source: Connection) {
                   );
                 }
               },
-              params.x,
-              Number(params.y),
+              position.x,
+              position.y,
               params.type === 'mousePressed',
             ),
           );
@@ -182,6 +197,12 @@ export async function inputOverlay(source: Connection) {
     connection,
     events,
     position: () => position,
+    mapPointer(
+      sessionId: string,
+      projection: { x: number; y: number; scaleX: number; scaleY: number },
+    ) {
+      projections.set(sessionId, projection);
+    },
     cue(action: string) {
       label = action;
     },
