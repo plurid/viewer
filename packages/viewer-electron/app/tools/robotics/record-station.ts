@@ -1,4 +1,4 @@
-import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
+import type { CanvasActionInput } from '../../src/domain/canvases/actions';
 /** Film retained Meta decisions through native Viewer actions, without a cloud request. */
 import assert from 'node:assert/strict';
 import { readdir, writeFile } from 'node:fs/promises';
@@ -15,6 +15,8 @@ import { sessionReplay } from '../docs/session-replay';
 import { screenshot } from '../docs/record';
 import { digest, saveEvidence } from './rehearsal';
 import { stationFilmSession } from './station-film-session';
+import { stationStudySchema } from './station-contract';
+import { reviewStationPlugin } from './station-review';
 
 const { values } = parseArgs({ options: { run: { type: 'string' }, binary: { type: 'string' } } });
 assert.ok(values.run && values.binary);
@@ -73,7 +75,7 @@ const save = () =>
     path.join(root, 'story-capture.json'),
     JSON.stringify(
       {
-        film: 'station',
+        film: 'plugin',
         root,
         profile,
         binary,
@@ -89,7 +91,7 @@ const save = () =>
         sourceFormat: 'png',
         continuousNavigation: true,
         presentationNote:
-          'Retained Meta responses through local JSON replay. Repair rounds condensed. Final generated revisions have separately retained presentation edits. Native controls and independent checks execute during capture.',
+          'Retained Meta responses through local JSON replay. Repair rounds condensed. Exact qualified plugin code and attached library. The creation turn has no closing reply. Calculations run in the plugin; external qualification is separate from the product.',
       },
       null,
       2,
@@ -99,7 +101,7 @@ const scope = (id: string) => `[data-canvas-id="${id}"]`;
 const chat = (id: string) => `[data-conversation-id="${id}"]`;
 try {
   app = await ownedApp(binary, profile, {
-    mode: 'hidden',
+    mode: 'foreground',
     mockKeychain: true,
     label: 'station-film',
     environment: { SHELL: '/bin/sh', ENV: '/dev/null', PS1: 'SO-101 $ ' },
@@ -117,28 +119,17 @@ try {
     Boolean,
     'project workspace',
   );
-  film = await filmControls(raw, root);
+  film = await filmControls(raw, root, {
+    ready: '#target option',
+    readyText: 'A1',
+    scroll: 'aside',
+  });
   const { main, ui, overlay, click, key, all, frame, take, beat, type } = film;
   const reveal = sessionReplay(main);
   const readCanvas = async (id: string) =>
-    (
-      await main.evaluate(
-        pageCall(
-          (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
-          id,
-        ),
-      )
-    ).document;
-  const report = async (id: string) =>
-    (
-      await main.evaluate(
-        pageCall(
-          (id) =>
-            (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'placement-report', id }),
-          id,
-        ),
-      )
-    ).placementReport;
+    (await main.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'read', id }), id)))
+      .document;
+  const study = async (id: string) => stationStudySchema.parse((await readCanvas(id)).state.study);
   const readChat = (id: string) =>
     main.evaluate(pageCall((id) => window.viewer.chat({ kind: 'open', id }), id));
   const pending = () => until(async () => session.pending, Boolean, 'next retained response');
@@ -154,18 +145,6 @@ try {
       (d) => !Array.isArray(d) && d.status === 'idle',
       'conversation complete',
     );
-  const select = async (
-    canvas: Awaited<ReturnType<typeof ui.canvas>>,
-    selector: string,
-    index: number,
-  ) => {
-    await canvas.press(selector);
-    await ui.key('Home', 'Home', 36, 0, canvas.frame.sessionId);
-    for (let i = 0; i < index; i++)
-      await ui.key('ArrowDown', 'ArrowDown', 40, 0, canvas.frame.sessionId);
-    await ui.key('Enter', 'Enter', 13, 0, canvas.frame.sessionId);
-    await delay(400);
-  };
   const planeFor = (selector: string) =>
     main.evaluate(
       pageCall((selector) => {
@@ -177,43 +156,16 @@ try {
         }
       }, selector),
     );
-  const inspector = async (id: string, open: boolean) => {
-    const current = await main.evaluate(
-      pageCall((selector) => {
-        const summary = [...document.querySelectorAll<HTMLElement>(selector + ' summary')].find(
-          (s) => s.textContent?.startsWith('Station study'),
-        );
-        return summary
-          ? {
-              label: summary.textContent!.trim(),
-              open: summary.parentElement?.hasAttribute('open'),
-            }
-          : null;
-      }, scope(id)),
-    );
-    assert.ok(current);
-    if (current.open !== open)
-      await click(scope(id) + ' summary', current.label, 'Viewer checks the result');
-  };
-  const conclusion = async (id: string) => {
-    await main.evaluate(
-      pageCall((selector) => {
-        const rows = [
-          ...document.querySelectorAll<HTMLElement>(selector + ' .canvas-robot-report p'),
-        ];
-        const conclusion =
-          rows.find((p) => p.textContent?.startsWith('Compared with')) ??
-          rows.find((p) => p.textContent?.startsWith('Least movement'));
-        if (!conclusion) throw Error('Missing comparison conclusion');
-        conclusion.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-      }, scope(id)),
-    );
-    await delay(1000);
-  };
-  function excerpt(message: ChatMessage, end: number) {
-    assert.ok(end > 0);
-    const text = message.text.slice(0, end);
-    prompts.push({ messageID: message.id, sourceHash: digest(message.text), start: 0, end, text });
+  function excerpt(message: ChatMessage, text: string) {
+    const start = message.text.lastIndexOf(text);
+    assert.ok(start >= 0, 'Typed words must be an exact retained request excerpt.');
+    prompts.push({
+      messageID: message.id,
+      sourceHash: digest(message.text),
+      start,
+      end: start + text.length,
+      text,
+    });
     return text;
   }
   async function send(id: string, stage: 'create' | 'refine' | 'branch', text: string) {
@@ -223,14 +175,14 @@ try {
     await key('Send · ⌘↵', 'Enter', 'Enter', 13, 4);
     await pending();
   }
-  const createRequest = session.creationChat.messages.find(
-    (m) => m.id === 'd8f4c4e7-86d7-4867-ba09-496b95d9226a',
+  const createRequest = session.creationChat.messages.findLast(
+    (m) => m.role === 'user' && m.text.includes('Add a compact per-target results table'),
   )!;
-  const refineRequest = session.refinementChat.messages.find(
-    (m) => m.id === '1951a9dd-9624-4b82-822b-53caa37d7de8',
+  const refineRequest = session.refinementChat.messages.findLast(
+    (m) => m.role === 'user' && m.text.includes('Reserve the central mounting area:'),
   )!;
   const branchRequest = session.branchChat.messages.find(
-    (m) => m.id === 'ee1524da-632b-4b41-b385-48db69b0f9be',
+    (m) => m.role === 'user' && m.text.includes('Compare the rear mounting point'),
   )!;
   assert.ok(createRequest && refineRequest && branchRequest);
   await frame('files');
@@ -319,82 +271,88 @@ try {
   });
   await take('06-create', async () => {
     await beat(
-      'ask-meta',
-      'For the hackathon, I gave Meta tools of its own. Here, it must place a robot that can reach six tray slots.',
-      9,
+      'existing-plugin',
+      'The new agent tools start from working code. Here, Meta must place a robot to reach six tray slots.',
+      7.5,
       async () => {
-        await send(
-          initial.conversationID,
-          'create',
-          excerpt(createRequest, createRequest.text.indexOf(' Use the attached')),
-        );
-        await release();
-        await pending();
-        await reveal.coverCanvas();
         await click(
           chat(initial.conversationID) + ' .chat-toolbar button',
           'Canvas',
-          'Open the generated tool',
+          'Open the existing plugin',
         );
         const canvas = await ui.canvas(initial.id);
-        await reveal.revealCanvas(canvas.frame, 'create', { stage: '#viewWrap', panel: '#panel' });
+        assert.equal(
+          await canvas.frame.evaluate(pageCall(() => !!document.querySelector('#perTarget'))),
+          false,
+        );
+        await canvas.drag('#scene canvas', 0.5, 0.58, 12);
       },
     );
     await beat(
-      'tool-appears',
-      'It turns the robot files and station brief into this working interface.',
-      5.5,
+      'ask-meta',
+      'I need to see which targets pass, and click a result to inspect the robot pose. I ask Meta to add that.',
+      9,
+      async () => {
+        await click(scope(initial.id) + ' button', 'Conversation', 'Ask for a change');
+        await send(
+          initial.conversationID,
+          'create',
+          excerpt(
+            createRequest,
+            'Add a compact per-target results table for the selected mounting point, showing target name, measured residual in mm and whether it meets the tolerance.',
+          ),
+        );
+        await release();
+        await pending();
+        await click(
+          chat(initial.conversationID) + ' .chat-toolbar button',
+          'Canvas',
+          'Use the revised plugin',
+        );
+        await ui.canvas(initial.id);
+        assert.equal(digest((await readCanvas(initial.id)).html), digest(session.creation.html));
+      },
     );
-    // The saved creation repair evaluates an incomplete study once on initialization.
-    await until(
-      async () => (await readCanvas(initial.id)).state.study,
-      (study) => JSON.stringify(study).includes('B3'),
-      'initialization repair completes',
-    );
-    await screenshot(main, path.join(root, 'creation.png'));
   });
   await take('07-evaluate', async () => {
     await beat(
       'model-evaluates',
-      'Meta runs the tool. Four mounting points. Six targets each. Viewer checks the computed poses against the source robot.',
-      10,
+      'Meta adds the controls and runs the plugin. Four mounting points. Six targets. The calculations live in this plugin.',
+      8.5,
       async () => {
         await release();
         await pending();
-        await delay(300);
         await release();
-        await pending();
-        const result = await report(initial.id);
-        assert.equal(result?.status, 'checked');
-        evidence.push({ creation: result });
-        await inspector(initial.id, true);
-        await release();
-        await idle(initial.conversationID);
+        await until(
+          () => readCanvas(initial.id),
+          (d) => d.state.selected === 'central',
+          'Meta selects Central',
+        );
+        const measured = await study(initial.id);
+        assert.equal(measured.recommended, 'central');
+        assert.equal(
+          measured.candidates
+            .find((c) => c.id === 'central')!
+            .poses.filter((p) => p.withinTolerance).length,
+          6,
+        );
+        evidence.push({ creation: measured });
       },
     );
     await beat(
       'central-result',
-      'Central reaches all six with the shortest move. I select it.',
-      6,
+      'Central reaches all six with the smallest move. Each row takes me to its measured pose.',
+      6.5,
       async () => {
-        await inspector(initial.id, false);
         const canvas = await ui.canvas(initial.id);
-        overlay.cue('Select Central');
-        await select(canvas, '#selMount', 1);
-        await canvas.press('#bSelect');
-        await select(canvas, '#selView', 1);
-        await select(canvas, '#selTarget', 5);
-        await canvas.press('#bCheck');
+        overlay.cue('Inspect target B3');
+        await canvas.press('#perTarget tr:nth-child(6) button');
         await until(
-          () => report(initial.id),
-          (result) => result?.status === 'checked' && result.input.selected === 'central',
-          'selected Central is checked',
+          () => readCanvas(initial.id),
+          (d) => (d.state.ui as { targetIndex: number }).targetIndex === 5,
+          'selected target',
         );
         overlay.cue('');
-        assert.equal(
-          ((await readCanvas(initial.id)).state.study as { selected?: string }).selected,
-          'central',
-        );
         await screenshot(main, path.join(root, 'central.png'));
       },
     );
@@ -402,63 +360,68 @@ try {
   await take('08-change', async () => {
     await beat(
       'changed-constraint',
-      'Now the central area is needed for something else. I ask Meta to reserve it.',
+      'Now this central area is needed for something else. Same project, new constraint.',
       8,
       async () => {
         await click(scope(initial.id) + ' button', 'Conversation', 'Return to the conversation');
+        // The retained creation ends after an action, without a closing assistant message.
+        await until(async () => session.exhausted, Boolean, 'end of retained creation');
+        await click(chat(initial.conversationID) + ' .chat-stop', undefined, 'Finish this replay');
+        await until(
+          () => readChat(initial.conversationID),
+          (d) => !Array.isArray(d) && d.status === 'stopped',
+          'conversation stopped',
+        );
+        session.finishStoppedTurn();
+        await until(
+          async () => session.exhausted,
+          (v) => !v,
+          'local replay canceled',
+        );
         await send(
           initial.conversationID,
           'refine',
-          excerpt(refineRequest, refineRequest.text.indexOf(' Keep the same')),
+          excerpt(
+            refineRequest,
+            'Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm, including its boundary. Use the existing control and bench overlay, and add an explanation of which candidates this restriction excludes.',
+          ),
         );
         await release();
         await pending();
         await click(
           chat(initial.conversationID) + ' .chat-toolbar button',
           'Canvas',
-          'Use the revised tool',
+          'Use the changed tool',
         );
         await ui.canvas(initial.id);
       },
     );
     await beat(
       'meta-revises',
-      'It adds the restriction to the interface, evaluates again, and selects Front.',
+      'Meta explains the restriction, runs the calculation again, and selects Front. The tool changes with the question.',
       8,
-      async () => {
-        for (let i = 0; i < 3; i++) {
-          await release();
-          await pending();
-        }
-        await delay(400);
-      },
-    );
-    await beat(
-      'front-result',
-      'The choice changes for a reason: six targets reached, within a millimetre, with the central mounting point excluded.',
-      8.5,
       async () => {
         await release();
         await pending();
         await release();
+        await pending();
+        await release();
         await idle(initial.conversationID);
-        const result = await report(initial.id);
-        assert.ok(result?.status === 'checked');
+        const current = await readCanvas(initial.id);
+        assert.equal(digest(current.html), digest(session.refinement.html));
+        assert.equal(current.state.selected, 'front');
+        assert.equal(current.state.reserved, true);
+        const result = await study(initial.id);
         assert.equal(result.recommended, 'front');
-        assert.equal(result.input.selected, 'front');
         evidence.push({ refinement: result });
-        await inspector(initial.id, true);
-        await conclusion(initial.id);
-        await screenshot(main, path.join(root, 'front-checked.png'));
-        await delay(1000);
-        await inspector(initial.id, false);
+        await screenshot(main, path.join(root, 'front.png'));
       },
     );
   });
   const currentChat = await readChat(initial.conversationID);
   assert.ok(!Array.isArray(currentChat));
   const answer = currentChat.messages.findLast((m) => m.role === 'assistant')!;
-  const quote = 'Recommended: front.';
+  const quote = 'Recommended and selected: Front';
   const offset = answer.text.indexOf(quote);
   assert.ok(offset >= 0);
   let alternativeID = '',
@@ -467,7 +430,7 @@ try {
   await take('09-alternative', async () => {
     await beat(
       'quote',
-      'What about the rear mounting point? I branch from that recommendation and ask Meta to test it.',
+      'What about the rear? I quote the recommendation and open a second conversation beside it.',
       9,
       async () => {
         await click(scope(initial.id) + ' button', 'Conversation', 'Return to the recommendation');
@@ -506,7 +469,11 @@ try {
             'quoted conversation',
           )) ?? '';
         assert.ok(branchID);
-        await send(branchID, 'branch', excerpt(branchRequest, branchRequest.text.indexOf('.') + 1));
+        await send(
+          branchID,
+          'branch',
+          excerpt(branchRequest, 'Compare the rear mounting point with the front mounting point.'),
+        );
         await click(chat(branchID) + ' .chat-toolbar button', 'Canvas', 'Open the alternative');
         const branchDocument = await readChat(branchID);
         assert.ok(!Array.isArray(branchDocument) && branchDocument.canvasID);
@@ -518,28 +485,32 @@ try {
     );
     await beat(
       'comparison',
-      'Rear passes too. But it needs a sixty-seven millimetre longer move. Front wins this comparison.',
-      8.5,
+      'Meta checks Rear using the plugin. It passes, but needs sixty-seven millimetres more movement. I keep Front.',
+      8,
       async () => {
         await release();
         await pending();
         await release();
+        await pending();
+        await release();
         await idle(branchID);
-        const comparison = await main.evaluate(
-          pageCall(
-            (id) =>
-              (window.viewer as unknown as ExperimentAPI).canvas({
-                kind: 'placement-comparison',
-                id,
-              }),
-            alternativeID,
+        const result = await study(alternativeID);
+        const front = result.candidates.find((c) => c.id === 'front')!;
+        const rear = result.candidates.find((c) => c.id === 'rear')!;
+        assert.ok(front.eligible && rear.eligible);
+        assert.ok(Math.abs((rear.movement - front.movement) * 1000 - 67.261376) < 0.001);
+        assert.equal((await readCanvas(alternativeID)).state.selected, 'rear');
+        evidence.push({ alternative: result });
+        const canvas = await ui.canvas(alternativeID);
+        await canvas.frame.evaluate(
+          pageCall(() =>
+            document
+              .querySelector('#mounts')!
+              .scrollIntoView({ block: 'center', behavior: 'smooth' }),
           ),
         );
-        assert.equal(comparison.placementComparison?.status, 'compared');
-        evidence.push({ comparison: comparison.placementComparison });
-        await inspector(alternativeID, true);
-        await conclusion(alternativeID);
-        await screenshot(main, path.join(root, 'comparison.png'));
+        await delay(650);
+        await screenshot(main, path.join(root, 'rear.png'));
       },
     );
   });
@@ -551,27 +522,22 @@ try {
   await take('10-handoff', async () => {
     await all();
     await frame(originalPlane);
-    await inspector(initial.id, true);
-    await beat(
-      'save-check',
-      'I keep the checked result and the working tool together.',
-      5.5,
-      async () => {
-        await click(
-          scope(initial.id) + ' button',
-          'Save check JSON…',
-          'Save independent measurements',
-        );
-        await ui.folder(path.join(root, 'Handoff'));
-        await click('.viewer-file-picker footer .primary', undefined, 'Save check');
-      },
-    );
+    await beat('save-check', 'I save the decision and export the working tool.', 5, async () => {
+      const canvas = await ui.canvas(initial.id);
+      await canvas.press('#export');
+      await click(
+        scope(initial.id) + ' .canvas-result button',
+        'Save result…',
+        'Review and save the result',
+      );
+      await ui.folder(path.join(root, 'Handoff'));
+      await click('.viewer-file-picker footer .primary', undefined, 'Save the result');
+    });
     await beat('export-tool', '', 0, async () => {
-      await inspector(initial.id, false);
       await click(scope(initial.id) + ' button', 'Export canvas…', 'Export the working tool');
       await ui.folder(path.join(root, 'Handoff'));
       await click('.viewer-file-picker footer .primary', undefined, 'Export');
-      const files = await until(
+      const names = await until(
         () => readdir(path.join(root, 'Handoff')),
         (names) => names.some((n) => n.startsWith('Viewer canvas ')),
         'export folder',
@@ -579,7 +545,7 @@ try {
       exported = path.join(
         root,
         'Handoff',
-        files.find((n) => n.startsWith('Viewer canvas '))!,
+        names.find((n) => n.startsWith('Viewer canvas '))!,
       );
     });
     await beat('reopen-navigation', '', 0, async () => {
@@ -590,8 +556,8 @@ try {
     });
     await beat(
       'reopen',
-      'Reopen it, and the inputs, controls and checked decision come with it.',
-      6.5,
+      'Reopen it. The code, files, controls and saved inputs travel together.',
+      5.5,
       async () => {
         await click('.viewer-file-picker footer .primary', undefined, 'Reopen the saved tool');
         importedID =
@@ -611,29 +577,66 @@ try {
           )) ?? '';
         assert.ok(importedID);
         const canvas = await ui.canvas(importedID);
-        assert.deepEqual((await readCanvas(importedID)).state.study, beforeBranch.study);
-        overlay.cue('Inspect another target');
-        await select(canvas, '#selTarget', 5);
-        overlay.cue('');
-        const saved = await report(importedID);
-        assert.equal(saved?.status, 'checked');
-        evidence.push({ exported, importedID, reopened: saved });
+        const reopened = await readCanvas(importedID);
+        assert.deepEqual(reopened.state, beforeBranch);
+        assert.equal(digest(reopened.html), digest(session.refinement.html));
+        await canvas.press('#perTarget tr:nth-child(1) button');
+        evidence.push({ exported, importedID, reopened: reopened.state });
         await screenshot(main, path.join(root, 'reopened.png'));
       },
     );
   });
-  await take('11-ending', () =>
-    beat(
-      'ending',
-      "Meta wrote the tool, used it, and revised it when the job changed. I didn't open a robotics application. I opened my project and asked for what I needed.",
-      12.5,
+  await take('11-ending', async () => {
+    await beat(
+      'manage-tools',
+      'These are project tools. I can reopen them, duplicate them, or ask Meta to change them again.',
+      8,
       async () => {
-        await delay(8500);
-        await all();
+        await click(scope(importedID) + ' button', 'Tool library', 'Manage project tools');
+        await click('.tool-library tbody th button', undefined, 'Inspect a saved tool');
+        await screenshot(main, path.join(root, 'tool-library.png'));
       },
-    ),
-  );
+    );
+    await beat(
+      'ending',
+      'I open the project. I ask for what I need. The interface follows the work.',
+      6.5,
+      all,
+    );
+  });
+  const invoke = async (action: string, input: CanvasActionInput) => {
+    const current = await readCanvas(importedID);
+    const reply = await main.evaluate(
+      pageCall(
+        (id, revision, stateRevision, action, input) =>
+          window.viewer.canvas({
+            kind: 'invoke-action',
+            id,
+            revision,
+            stateRevision,
+            action,
+            input,
+          }),
+        importedID,
+        current.revision,
+        current.stateRevision,
+        action,
+        input,
+      ),
+    );
+    assert.equal(reply.actionRun?.status, 'completed');
+    return reply.actionRun!.result;
+  };
+  const reopenedDocument = await readCanvas(importedID);
+  const urdf = reopenedDocument.sources
+    .find((s) => s.name.endsWith('.urdf'))!
+    .data.evidence.find((e) => e.source === 'text')!.text!;
+  const brief = reopenedDocument.sources
+    .find((s) => s.name === 'station.json')!
+    .data.evidence.find((e) => e.source === 'text')!.text!;
+  const externalReview = await reviewStationPlugin(invoke, urdf, JSON.parse(brief), true);
   evidence.push({
+    externalReview,
     originalInputsPreservedByBranch: true,
     quote: { messageID: answer.id, start: offset, end: offset + quote.length, text: quote },
     presentation: reveal.events,
@@ -648,6 +651,7 @@ try {
   console.log(JSON.stringify({ status: 'passed', root }));
 } catch (error) {
   const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  if (film) await screenshot(film.main, path.join(root, 'failure.png')).catch(() => {});
   await writeFile(path.join(root, 'story-failure.txt'), message, { flag: 'wx' });
   console.error(message);
   throw error;

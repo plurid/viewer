@@ -59,7 +59,8 @@ def verify_png(file):
 source = pathlib.Path(sys.argv[1]).resolve()
 assert json.loads((source / 'story-completed.json').read_text())['status'] == 'passed'
 capture = json.loads((source / 'story-capture.json').read_text())
-station = capture.get('film') == 'station'
+plugin = capture.get('film') == 'plugin'
+station = capture.get('film') in ('station', 'plugin')
 continuous_navigation = capture.get('continuousNavigation', False)
 if continuous_navigation:
     assert not any(clip.get('omitActions') for clip in capture['clips']), 'Keep every navigation action.'
@@ -170,6 +171,14 @@ if station:
         'Saved Meta responses · Condensed repairs · Local presentation edits and staged reveals',
         'Fictional station · Endpoint checks · Temporary opening and voice',
     ]
+if plugin:
+    credits = [
+        'Viewer + Plurid: existing projects',
+        'Hackathon: agent canvases, actions, quoted branches and tool management',
+        'Meta muse-spark-1.3: interface edits and decisions · Reused robotics plugin',
+        'Saved Meta responses · Repairs condensed · First turn has no closing reply',
+        'SO-ARM100 / TheRobotStudio · Fictional station · Temporary opening and voice',
+    ]
 if closing_callback:
     for index, text in enumerate(['There is no interface.', 'Until you need one.']):
         image = Image.new('RGB', SIZE, '#22262c')
@@ -261,6 +270,20 @@ if station:
         'reopen': 'Reopen the exported tool and inspect another target using its controls.',
         'ending': 'Hold the reopened Front tool, then pull back into the project before the title.',
     }
+    if plugin:
+        directions.update({
+            'existing-plugin': 'Open the existing robotics plugin and orbit its model before requesting an edit.',
+            'ask-meta': 'Type an exact retained request excerpt and open the revised plugin.',
+            'model-evaluates': 'Meta invokes the plugin evaluation and selects Central. The activity row names its actor.',
+            'central-result': 'Click the new target table and inspect the measured pose in the viewport.',
+            'changed-constraint': 'Finish the first saved turn, then type the retained reserved-area request.',
+            'meta-revises': 'The plugin shows the restriction explanation. Meta evaluates and selects Front.',
+            'comparison': 'Meta invokes the plugin checks and selects Rear in the quoted alternative.',
+            'save-check': 'Save the plugin result through the Viewer file picker.',
+            'reopen': 'Reopen the unchanged exported plugin and use its target table.',
+            'manage-tools': 'Open the Tool library and show the saved tool controls.',
+            'ending': 'Pull back to the shared project space at the recorded camera speed.',
+        })
     prompt_by_action = dict(zip(['ask-meta', 'changed-constraint', 'quote'], capture['prompts']))
     with (root / 'Script.md').open('x') as text:
         text.write('# There Is No Interface\n\nExact script of this review cut. Temporary opening and system voice. '

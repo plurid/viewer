@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { copyFile, lstat, mkdir, readdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { z } from 'zod';
 import { chatDocumentSchema, chatStepSchema } from '../../src/domain/models/chat';
 import type { ChatStep } from '../../src/domain/models/chat';
 import { canvasDocumentSchema } from '../../src/domain/canvases/document';
@@ -10,8 +11,8 @@ import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { ModelPermissions } from '../../src/desktop/models/model-permissions';
 import { temporaryRoot } from '../temporary';
-import { digest, saveEvidence } from './rehearsal';
-import { presentInitialStationHTML, presentStationHTML } from './station-presentation';
+import { digest, readRobotSessionResult, saveEvidence } from './rehearsal';
+import { readQualifiedStation } from './station-evidence';
 
 async function copyTree(source: string, destination: string) {
   const info = await lstat(source);
@@ -31,9 +32,18 @@ export async function stationFilmSession(runPath: string) {
   assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
   assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
   const run = await realpath(runPath);
-  const summary = await json(path.join(run, 'qualification-summary.json'));
-  assert.equal(summary.status, 'functionally-qualified-with-operator-selection');
-  const root = await realpath(await temporaryRoot('viewer-station-film-', '/private/tmp'));
+  const plan = await json(path.join(run, 'plan.json'));
+  assert.equal(plan.contract, 'generated-domain-v1');
+  const stages = await Promise.all(
+    ['01', '02', '03'].map((stage) => readQualifiedStation(path.join(run, 'sessions', stage))),
+  );
+  const resultSchema = z.object({ canvas: canvasDocumentSchema });
+  const results = await Promise.all(
+    ['01', '02', '03'].map(async (stage) =>
+      resultSchema.parse(await readRobotSessionResult(path.join(run, 'sessions', stage))),
+    ),
+  );
+  const root = await realpath(await temporaryRoot('viewer-plugin-film-', '/private/tmp'));
   const profile = path.join(root, 'Profile');
   const project = path.join(root, 'Six-slot station');
   await mkdir(profile);
@@ -42,24 +52,29 @@ export async function stationFilmSession(runPath: string) {
   await mkdir(path.join(profile, 'canvas-documents'));
   await mkdir(path.join(profile, 'chat-documents'));
   await mkdir(path.join(root, 'Handoff'));
-  const creation = canvasDocumentSchema.parse(
-    await json(path.join(run, 'sessions/01/continuations/02/canvas.json')),
+  const creation = canvasDocumentSchema.parse(results[0]!.canvas);
+  const refinement = canvasDocumentSchema.parse(results[1]!.canvas);
+  const [creationChat, refinementChat, branchChat] = await Promise.all(
+    ['01', '02', '03'].map(async (stage) => {
+      const folder = path.join(run, 'sessions', stage);
+      const continuations = await readdir(path.join(folder, 'continuations')).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+          return [] as string[];
+        },
+      );
+      const latest = continuations.sort().at(-1);
+      return chatDocumentSchema.parse(
+        await json(
+          path.join(folder, ...(latest ? ['continuations', latest] : []), 'conversation.json'),
+        ),
+      );
+    }),
   );
-  const refinement = canvasDocumentSchema.parse(
-    await json(path.join(run, 'sessions/02/continuations/01/canvas.json')),
-  );
-  const creationChat = chatDocumentSchema.parse(
-    await json(path.join(run, 'sessions/01/continuations/02/conversation.json')),
-  );
-  const refinementChat = chatDocumentSchema.parse(
-    await json(path.join(run, 'sessions/02/continuations/01/conversation.json')),
-  );
-  const branchChat = chatDocumentSchema.parse(
-    await json(path.join(run, 'sessions/03/continuations/02/conversation.json')),
-  );
+  assert.ok(creationChat && refinementChat && branchChat);
   const html = {
-    create: presentInitialStationHTML(creation.html, refinement.html),
-    refine: presentStationHTML(refinement.html),
+    create: creation.html,
+    refine: refinement.html,
   };
   for (const stage of ['create', 'refine'] as const) {
     await writeFile(
@@ -67,9 +82,10 @@ export async function stationFilmSession(runPath: string) {
       stage === 'create' ? creation.html : refinement.html,
       { flag: 'wx' },
     );
-    await writeFile(path.join(root, stage + '.presentation.html'), html[stage], { flag: 'wx' });
   }
-  const before = canvasDocumentSchema.parse(await json(path.join(run, 'sessions/01/before.json')));
+  const before = canvasDocumentSchema.parse(
+    await json(path.join(run, 'reused-plugin/starter.json')),
+  );
   const initial = {
     ...before,
     path: project,
@@ -77,7 +93,25 @@ export async function stationFilmSession(runPath: string) {
       ...s,
       path: s.path?.replace(path.join(run, 'Six-slot station'), project),
     })),
+    state: {
+      reserved: false,
+      targetOffsetX: 0,
+      ui: { targetIndex: 0 },
+      camera: creation.state.camera,
+    },
   };
+  await saveEvidence(path.join(root, 'provenance.json'), {
+    stages,
+    reusedPlugin: await json(path.join(run, 'reused-plugin/provenance.json')),
+    starterHTMLHash: digest(before.html),
+    filmSetup: 'Clear prior study inputs; retain the qualified camera. No changes to plugin code.',
+    creationEnding:
+      'No final reply was recorded. Stop the local replay after its last saved action.',
+    condensedRequests: [
+      '01/05 repeats the same HTML as 01/06',
+      '03/02 reply before verification continuation',
+    ],
+  });
   await saveEvidence(path.join(profile, 'canvas-documents', initial.id + '.json'), initial);
 
   let queue: { file: string; stage: 'create' | 'refine' | 'branch' }[] = [];
@@ -85,6 +119,8 @@ export async function stationFilmSession(runPath: string) {
   let pending = false;
   let completed = 0;
   let localRequests = 0;
+  let exhausted = false;
+  let endReplay: (() => void) | undefined;
   const events: Record<string, unknown>[] = [];
   const server = createServer(async (req, res) => {
     if (req.method === 'GET') {
@@ -98,7 +134,22 @@ export async function stationFilmSession(runPath: string) {
       assert.equal(req.method, 'POST');
       assert.equal(req.url, '/v1/chat/completions');
       const item = queue.shift();
-      assert.ok(item && !pending, 'No unrecorded steps or concurrent calls in film replay.');
+      assert.ok(!pending, 'No concurrent calls in film replay.');
+      if (!item) {
+        exhausted = true;
+        events.push({ kind: 'end-of-saved-turn', noFinalReply: true });
+        req.resume();
+        await new Promise<void>((resolve) => {
+          res.once('close', resolve);
+          endReplay = () => {
+            res.destroy();
+            resolve();
+          };
+        });
+        exhausted = false;
+        endReplay = undefined;
+        return;
+      }
       const parts: Buffer[] = [];
       let length = 0;
       for await (const data of req) {
@@ -120,12 +171,9 @@ export async function stationFilmSession(runPath: string) {
       const adaptations: string[] = [];
       if (step.kind === 'canvas_write') {
         assert.ok(item.stage !== 'branch');
-        step.text = html[item.stage];
+        assert.equal(step.text, html[item.stage], 'Replay the exact qualified provider code.');
         step.commandID = String(context.canvas.revision);
-        adaptations.push(
-          'Qualified final revision with separately retained local presentation edits',
-          'Current content revision',
-        );
+        adaptations.push('Current content revision; unchanged qualified plugin code');
       } else if (step.kind === 'canvas_invoke') {
         const arguments_ = JSON.parse(step.text);
         arguments_.revision = context.canvas.revision;
@@ -222,9 +270,9 @@ export async function stationFilmSession(runPath: string) {
   });
   await saveEvidence(path.join(profile, 'chat-documents', conversation.id + '.json'), conversation);
   const sequences = {
-    create: ['01/06', '01/04', '01/07', '01/08'],
-    refine: ['02/07', '02/02', '02/03', '02/04', '02/05', '02/08'],
-    branch: ['03/02', '03/03', '03/04'],
+    create: ['01/06', '01/07', '01/08'],
+    refine: ['02/01', '02/02', '02/03', '02/04'],
+    branch: ['03/01', '03/03', '03/04', '03/05'],
   };
   return {
     root,
@@ -240,6 +288,15 @@ export async function stationFilmSession(runPath: string) {
     branchChat,
     html,
     events,
+    get exhausted() {
+      return exhausted;
+    },
+    finishStoppedTurn() {
+      if (endReplay) {
+        events.push({ kind: 'close-local-replay', reason: 'Native conversation is stopped' });
+        endReplay();
+      }
+    },
     get pending() {
       return pending;
     },
@@ -251,7 +308,7 @@ export async function stationFilmSession(runPath: string) {
     },
     arm(stage: keyof typeof sequences) {
       assert.equal(queue.length, 0);
-      assert.ok(!pending);
+      assert.ok(!pending && !exhausted);
       queue = sequences[stage].map((value) => {
         const [session, index] = value.split('/');
         return {
@@ -265,6 +322,7 @@ export async function stationFilmSession(runPath: string) {
       release();
     },
     async close() {
+      endReplay?.();
       release?.();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

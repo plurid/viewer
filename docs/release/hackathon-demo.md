@@ -1,13 +1,13 @@
 # There Is No Interface
 
-**Exact script of the station review cut.** The spoken words and times below are generated from the
-same cues as its audio, `Narration.txt` and `Captions.srt`. The opening and system voice are
-temporary. This script replaces the previous reading draft; it does not describe older cuts.
+**Exact script of the plugin review cut.** The spoken words and times below come from the same cues
+as its audio, `Narration.txt` and `Captions.srt`. The opening and system voice are temporary. This
+script describes the current cut, not the earlier host-owned robotics experiments.
 
-The task is to choose a mounting point for an SO-101 arm serving six slots in two trays. Meta builds
-the tool, invokes its actions, reads Viewer's independent checks and adapts it to a reserved area.
-The operator selects Central after Meta recommends it. Meta selects Front and the Rear alternative.
-Plurid connects the sources, conversation, alternatives and saved result.
+Viewer and Plurid are existing projects. The hackathon adds a host for tools that an agent can
+build, revise and operate. This example starts with the existing robotics code packaged as a plugin.
+Meta adds controls, uses its calculations and investigates an alternative. The task is to choose a
+mounting point that gives an SO-101 arm a passing pose at each of six tray slots.
 
 ## Script
 
@@ -35,108 +35,104 @@ Picture: Opening title study.
 
 Picture: Opening title study.
 
-### 00:00:09.405 to 00:00:18.763
+### 00:00:09.361 to 00:00:18.799
 
 > Until twenty twenty-five, I had written about a million lines of code. Since then, I have modified
 > ten thousand at most, mostly configuration.
 
 Picture: Open the robot definition in a linked plane, then return to the project.
 
-### 00:00:20.636 to 00:00:28.612
+### 00:00:20.652 to 00:00:28.616
 
 > I still build projects. But my attention has moved: how the pieces connect, what changes what, and
 > whether the result works.
 
 Picture: Expand the mesh folder and open the linked arm geometry.
 
-### 00:00:33.670 to 00:00:34.424
+### 00:00:33.639 to 00:00:34.394
 
 > A browser.
 
 Picture: Pull back through the workspace, focus the project brief and let the browser plane settle.
 
-### 00:00:39.003 to 00:00:39.630
+### 00:00:38.818 to 00:00:39.445
 
 > An editor.
 
 Picture: Move through the workspace to the source definition, then use Command+E to edit it.
 
-### 00:00:44.696 to 00:00:45.427
+### 00:00:44.413 to 00:00:45.145
 
 > A terminal.
 
 Picture: Move through the workspace to the terminal and run ls after arriving.
 
-### 00:00:47.528 to 00:00:52.392
+### 00:00:47.236 to 00:00:52.101
 
 > A browser. An editor. A terminal. Are you getting it? One workspace.
 
 Picture: Frame all planes to reveal the shared spatial workspace.
 
-### 00:00:54.282 to 00:00:58.229
+### 00:00:53.926 to 00:00:58.013
 
 > This is Viewer, built on Plurid. Both existed before the hackathon.
 
 Picture: Move from the workspace into the actual Viewer conversation.
 
-### 00:01:02.029 to 00:01:09.158
+### 00:00:59.366 to 00:01:05.774
 
-> For the hackathon, I gave Meta tools of its own. Here, it must place a robot that can reach six
-> tray slots.
+> The new agent tools start from working code. Here, Meta must place a robot to reach six tray
+> slots.
 
-Picture: Type the retained request, send it and open the generated canvas.
+Picture: Open the existing robotics plugin and orbit its model before requesting an edit.
 
-Typed request:
+### 00:01:07.565 to 00:01:14.194
 
-> Build a placement tool from this robot and station brief. Test the mounting points and tell me
-> which one needs the smallest move.
+> I need to see which targets pass, and click a result to inspect the robot pose. I ask Meta to add
+> that.
 
-### 00:01:12.908 to 00:01:16.995
-
-> It turns the robot files and station brief into this working interface.
-
-Picture: Reveal the actual station view and working controls.
-
-### 00:01:18.996 to 00:01:26.926
-
-> Meta runs the tool. Four mounting points. Six targets each. Viewer checks the computed poses
-> against the source robot.
-
-Picture: The activity row names Meta. Show the independently recomputed report.
-
-### 00:01:29.171 to 00:01:32.875
-
-> Central reaches all six with the shortest move. I select it.
-
-Picture: The operator selects Central, inspects a target and checks the saved selection.
-
-### 00:01:35.870 to 00:01:40.548
-
-> Now the central area is needed for something else. I ask Meta to reserve it.
-
-Picture: Return to the same conversation and type the reserved-area request.
+Picture: Type an exact retained request excerpt and open the revised plugin.
 
 Typed request:
 
-> Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm. Add a control and bench
-> overlay for this mounting-point restriction.
+> Add a compact per-target results table for the selected mounting point, showing target name,
+> measured residual in mm and whether it meets the tolerance.
 
-### 00:01:43.725 to 00:01:48.694
+### 00:01:15.941 to 00:01:23.603
 
-> It adds the restriction to the interface, evaluates again, and selects Front.
+> Meta adds the controls and runs the plugin. Four mounting points. Six targets. The calculations
+> live in this plugin.
 
-Picture: The revised tool adds the restriction. Meta evaluates and selects Front.
+Picture: Meta invokes the plugin evaluation and selects Central. The activity row names its actor.
 
-### 00:01:50.942 to 00:01:58.117
+### 00:01:24.770 to 00:01:29.890
 
-> The choice changes for a reason: six targets reached, within a millimetre, with the central
-> mounting point excluded.
+> Central reaches all six with the smallest move. Each row takes me to its measured pose.
 
-Picture: Read the checked candidate values and the Front recommendation.
+Picture: Click the new target table and inspect the measured pose in the viewport.
 
-### 00:02:00.710 to 00:02:06.213
+### 00:01:31.993 to 00:01:37.461
 
-> What about the rear mounting point? I branch from that recommendation and ask Meta to test it.
+> Now this central area is needed for something else. Same project, new constraint.
+
+Picture: Finish the first saved turn, then type the retained reserved-area request.
+
+Typed request:
+
+> Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm, including its boundary. Use
+> the existing control and bench overlay, and add an explanation of which candidates this
+> restriction excludes.
+
+### 00:01:39.108 to 00:01:46.469
+
+> Meta explains the restriction, runs the calculation again, and selects Front. The tool changes
+> with the question.
+
+Picture: The plugin shows the restriction explanation. Meta evaluates and selects Front.
+
+### 00:01:48.854 to 00:01:54.021
+
+> What about the rear? I quote the recommendation and open a second conversation beside it.
 
 Picture: Select the actual recommendation and open its quote branch in a new plane.
 
@@ -144,100 +140,115 @@ Typed request:
 
 > Compare the rear mounting point with the front mounting point.
 
-### 00:02:09.169 to 00:02:15.368
+### 00:01:56.399 to 00:02:03.609
 
-> Rear passes too. But it needs a sixty-seven millimetre longer move. Front wins this comparison.
+> Meta checks Rear using the plugin. It passes, but needs sixty-seven millimetres more movement. I
+> keep Front.
 
-Picture: Meta selects Rear. Show the independent comparison and movement distances.
+Picture: Meta invokes the plugin checks and selects Rear in the quoted alternative.
 
-### 00:02:22.460 to 00:02:25.270
+### 00:02:08.844 to 00:02:11.514
 
-> I keep the checked result and the working tool together.
+> I save the decision and export the working tool.
 
-Picture: Save the check through Viewer's file picker, then export the tool.
+Picture: Save the plugin result through the Viewer file picker.
 
-### 00:02:34.415 to 00:02:38.688
+### 00:02:18.416 to 00:02:23.455
 
-> Reopen it, and the inputs, controls and checked decision come with it.
+> Reopen it. The code, files, controls and saved inputs travel together.
 
-Picture: Reopen the exported tool and inspect another target using its controls.
+Picture: Reopen the unchanged exported plugin and use its target table.
 
-### 00:02:41.411 to 00:02:51.175
+### 00:02:24.748 to 00:02:30.936
 
-> Meta wrote the tool, used it, and revised it when the job changed. I didn't open a robotics
-> application. I opened my project and asked for what I needed.
+> These are project tools. I can reopen them, duplicate them, or ask Meta to change them again.
 
-Picture: Hold the reopened Front tool, then pull back into the project before the title.
+Picture: Open the Tool library and show the saved tool controls.
+
+### 00:02:32.692 to 00:02:37.592
+
+> I open the project. I ask for what I need. The interface follows the work.
+
+Picture: Pull back to the shared project space at the recorded camera speed.
 
 ### Credits
 
 - Viewer + Plurid: existing projects
-- Hackathon: generated tools, agent actions, quoted branches and independent checks
-- Meta muse-spark-1.3 · Robot: TheRobotStudio / SO-ARM100
-- Saved Meta responses · Condensed repairs · Local presentation edits and staged reveals
-- Fictional station · Endpoint checks · Temporary opening and voice
+- Hackathon: agent canvases, actions, quoted branches and tool management
+- Meta muse-spark-1.3: interface edits and decisions · Reused robotics plugin
+- Saved Meta responses · Repairs condensed · First turn has no closing reply
+- SO-ARM100 / TheRobotStudio · Fictional station · Temporary opening and voice
 
 ## What each part contributes
 
-| Part             | Observable responsibility                                                                                                                 |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Meta             | Generates and revises the interface; invokes its registered actions; uses actual results to choose its next step and explain the decision |
-| Generated canvas | Renders the robot and task; provides the same working handlers to the person and agent                                                    |
-| Viewer           | Owns source access, action execution, cancellation, independent checks, saved state and reviewed output                                   |
-| Plurid           | Connects source, conversation and alternatives spatially; keeps both investigations accessible during comparison                          |
+| Part            | Observable responsibility                                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Meta            | Adds the target-results table and restriction explanation; invokes plugin actions; selects Central, Front and the quoted Rear alternative from their results |
+| Robotics plugin | Interprets the robot, renders its meshes, solves candidate poses and checks endpoints using its attached calculation module                                  |
+| Viewer          | Supplies context, isolated execution, action contracts, revisions, saved inputs, result review, portable export and the Tool library                         |
+| Plurid          | Connects project files, conversations, tools and alternatives through navigable planes                                                                       |
 
-An invocation marked **Completed** only means the handler ran. The endpoint claim belongs to the
-separate Viewer report. The station study checks endpoint positions, hard joint limits and mounting
-points. Orientation, swept motion, collisions, physical clamp fit and hardware are outside this
-fictional example.
+The parser, solver and checker are reused code. The film does not attribute them to these Meta
+requests or to the Viewer host. A handler marked **Completed** means that action finished; the
+plugin owns its domain result. External qualification checked selected outputs independently and is
+test equipment, not a Viewer robotics feature.
+
+The station is fictional. Its assigned targets and dimensions support endpoint and hard joint-limit
+checks. It does not establish continuous motion, collision avoidance, grasping or hardware
+operation.
 
 ## Capture and narrative requirements
 
-- Record native 2880 × 1800 PNG frames with a 1440 × 900 logical viewport and double pixel density.
-  Verify the source pixels. Encode once; do not enlarge an older low-resolution film.
-- Use the real Viewer chat. Keep the actor, action, result and next decision readable. Do not add a
-  second fake chat or typography that competes with the app.
-- Preserve input cues for shortcuts and movements. Every camera move follows a visible action.
-- Reveal capabilities as the question requires them. The first interface must not already contain
-  the reserved-area controls that the second request supposedly adds.
-- Retain exact requests, responses, usage, failures, repair history and generated revisions. Typed
-  excerpts need their source-message offsets. Condensed waits and staged reveals belong in credits
-  and edit evidence; do not describe replay timing as live model latency.
-- Credit Viewer and Plurid as prior projects. Attribute the model name recorded by the qualified
-  run, TheRobotStudio / SO-ARM100, bundled calculation/rendering libraries and local presentation
-  edits. The station presentation copy adds scene labels, the fictional-station designation,
-  saved-state wording and accessible control labels locally. Keep its edit manifest with the
-  capture. The contribution inventory owns implementation attribution.
+- Preserve the personal million-lines versus ten-thousand account, the browser/editor/terminal
+  repetition and the introduction of Viewer and Plurid as prior projects.
+- Start with the working plugin. Show the request, the actual interface edit and a working control
+  together so the viewer can follow what Meta changed.
+- Use native Viewer chat and exact excerpts of the retained requests. Keep saved-session labels out
+  of the chat controls and identify replay in the credits and evidence.
+- Keep the qualified HTML and attached calculation module unchanged. The recorded actions run that
+  code locally; they are not animations of invented results.
+- Show both movement values during the alternative comparison. Save and reopen the working plugin,
+  then show its Tool library controls before the final spatial view.
+- Preserve visible inputs, shortcuts and plane-to-plane navigation at the recorded speed. Capture
+  native 2880 × 1800 pixels and encode once. Do not enlarge an older low-resolution movie.
+- Keep narrated words, typed prompts and scene directions separate. Generate the transcript and
+  captions from the delivered audio cues, then update this page with that exact script.
 
 ## Implementation and evidence
 
-The generic action API and mounting-study contract are documented in the
-[canvas reference](../reference/canvases.md). The
-[Workshop audit](../research/workshop.md#implementation-audit) separates previous live-model
-evidence from the new local station qualification. The
-[station native test](../../packages/viewer-electron/app/tests/native/station-actions.ts) exercises
-real handlers, constraint changes, takeover, exact quote branching, comparison and portable reopen.
-Its supplied HTML is explicitly a fixture. It is not evidence that Meta generated or operated it.
+The [canvas reference](../reference/canvases.md) defines the generic host contracts. The
+[generated-tool decision](../adr/0015-generated-tool-host.md) assigns domain behavior to plugins.
+The [Workshop audit](../research/workshop.md#implementation-audit) separates current qualification
+from the earlier experiments. The [contribution inventory](hackathon-contributions.md) distinguishes
+prior work, event changes and third-party components.
 
-The separate six-slot run starts from public source snapshots and meshes with a blank canvas. Meta
-generated and repaired the HTML, invoked evaluation, selected Front after the constraint change and
-selected Rear in the exact quoted branch. Native checks confirmed the original stayed unchanged.
-Both actual tools were exported, reopened and restarted without a configured provider; their saved
-inputs and independently recomputed checks survived. The retained evidence includes failed calls,
-host fixes and the operator's initial Central selection. The
-[frozen prompts and acceptance](../research/workshop.md#station-generation-and-acceptance) define
-the scope. The review film replays those retained responses through the ordinary chat service and
-native action handlers, with independently recomputed results. Its capture evidence records local
-envelope conversion, revision bindings and presentation edits separately from provider output.
+The recorded workflow starts from the retained reusable plugin. Meta writes the interface changes
+and invokes evaluation and selection. A native quote branch preserves the original inputs and checks
+Rear through the plugin's registered actions. The film saves the result, exports the tool, reopens
+it and uses its target table. An external review then checks the reopened plugin against held-out
+poses, altered targets and joint limits.
+
+The separate qualification also reopened both alternatives after restarting Viewer without a
+configured provider. That restart is supporting evidence, not a shot in this film. Keep its report
+with the exported packages.
+
+The first live turn reached its cap after producing the edit and selecting Central; it has no final
+assistant reply. Its saved artifact passed review. The film stops that local turn after the last
+saved action without inventing a reply. Duplicate writes and the branch verification continuation
+are condensed. The loopback adapter retains source response hashes and exact typed excerpts while
+binding actions to the current replay revision. It makes no new cloud requests.
+
+The image, video and CAD closing montage remains proposed. Each example needs working generated code
+and a visible edit before inclusion. This cut qualifies the reusable-plugin workflow; it does not
+demonstrate those additional applications.
 
 ## Final production handoff
 
-Deliver `Script.md`, `Narration.txt` and `Captions.srt` from the exact audio cues beside the MP4.
-Keep this canonical script synchronized when the cut changes. Check that a first-time viewer can
-identify the task, what Meta did and why the decision changed. The
-[station recording instructions](../media/README.md#record-the-station-decisions) reproduce the
-native sequence and timed edit.
+Deliver `Script.md`, `Narration.txt` and `Captions.srt` beside the MP4. The
+[plugin recording instructions](../media/README.md#record-the-plugin-workflow) reproduce the native
+sequence and timed edit. Keep the source frames, input logs, replay adaptations and qualification
+reports with the capture.
 
-Replace the temporary voice and opening study after reviewing that edit. Preserve native source
-frames, input logs, attribution and measured outputs. Prepare the contribution receipt from the
-actual demonstrated behavior and attach the final uncommitted patch when no Git commit is requested.
+Replace the temporary opening and voice for final submission. Prepare the contribution receipt from
+the demonstrated behavior and the final source revision or uncommitted patch. Creating commits and
+publishing the entry remain separate actions.

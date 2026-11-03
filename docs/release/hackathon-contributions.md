@@ -10,7 +10,7 @@ Keep run-specific test counts, model usage and artifact paths in the retained ev
 
 | Repository | Last revision before the start date        | Reviewed revision |
 | ---------- | ------------------------------------------ | ----------------- |
-| Viewer     | `c8c973f82f9473a3b8819f61e2b5edfb9466e6cf` | `7c972f5b`        |
+| Viewer     | `c8c973f82f9473a3b8819f61e2b5edfb9466e6cf` | `fb8b8b39eabb`    |
 | Plurid     | `9929887f90e6635552097f8a0466261ce92fc5c1` | `a27510396`       |
 
 The Viewer baseline was committed on 26 October; the Plurid baseline on 23 October. Reproduce each
@@ -38,23 +38,23 @@ the implementation; the film and retained verification establish which behaviors
 Existing provider adapters, conversation storage and file services are supporting foundations, even
 where a row extends them.
 
-| Area                           | Concrete behavior                                                                                                                             | Primary source boundary                                                                                            |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Conversation canvases          | Generated selectable HTML in an isolated plane; content revisions separate from saved input state                                             | `src/domain/canvases`, `src/desktop/canvases`, `src/renderer/canvases`                                             |
-| Quote branches                 | Exact quoted range and frozen conversation context; independent canvas; conflict-aware application to the original                            | `src/domain/models/chat.ts`, `src/desktop/chat`, `src/renderer/chat`                                               |
-| File-backed tools              | Bound inspection snapshots with hashes and coverage; explicit refresh; portable data without source-file authority                            | `src/desktop/canvases/sources.ts`, `src/domain/canvases/sources.ts`, `CanvasSources.tsx`                           |
-| Reviewed results               | CSV, JSON, Markdown, text and cutting DXF review; content/state revision checks; exclusive new-file save; open the saved result               | `src/domain/canvases/results.ts`, `src/desktop/canvases/service.ts`, `ResultReview.tsx`                            |
-| Runtime feedback               | Revision-bound loading/error observations and one bounded repair attempt                                                                      | `src/desktop/canvases/observations.ts`, `src/desktop/chat/service.ts`                                              |
-| Shared canvas actions          | Registered handlers used by both controls and model tools; actual results, atomic state patches, frame/revision guards and takeover           | `src/domain/canvases/actions.ts`, `src/desktop/canvases/actions.ts`, `CanvasPlane.tsx`                             |
-| Station placement study        | Fixed brief targets and candidate mounts; reserved mounting-point regions; independent endpoint checks, comparison and durable report binding | `src/domain/robotics/placement.ts`, `src/desktop/robotics/placement.ts`, `src/desktop/canvases/placement-check.ts` |
-| Meta tool protocol             | Paired assistant calls and actual tool results; validated single-step arguments and final replies                                             | `src/desktop/models/providers.ts`, `src/desktop/chat/service.ts`                                                   |
-| Canvas model context           | Identical historical snapshots reference current data; different values remain; saved transcripts and exact quotes stay unchanged             | `src/desktop/chat/model-context.ts`, `tests/chat.test.ts`                                                          |
-| Entry point                    | **Build tool from selection** opens a contextual draft without sending it automatically                                                       | `src/renderer/commands/window-commands/comparison.ts`                                                              |
-| Supplier regression            | Fictional request/quotes with known arithmetic; retained live responses; native replay and result/restart checks                              | `tools/canvases`, `tests/native/canvas-live.ts`, `tests/native/canvas-productivity.ts`                             |
-| Robot sources and motion       | Bounded URDF joint tree, scoped STL meshes, exact source definitions, articulated motion and bounded target solving                           | `src/domain/robotics`, `src/desktop/canvases/robot.ts`, `src/desktop/canvases/sources.ts`                          |
-| Independent robot checks       | Endpoint positions and hard joint limits checked outside generated HTML; version-bound results and fixed-target base comparison               | `src/desktop/robotics/check.ts`, `src/desktop/canvases/robot-check.ts`                                             |
-| Robot replay and handoff       | Visual pose interpolation; reviewed comparison JSON; portable canvas export/reopen with saved state and recomputed check                      | `src/domain/robotics/replay.ts`, `src/desktop/canvases/service.ts`, `tests/native/robot-comparison.ts`             |
-| Robot generation qualification | Budgeted Meta creation, refinement and exact quoted alternative; retained failures, saved-response recovery and native output review          | `tools/robotics`, `tests/robot-rehearsal.test.ts`                                                                  |
+| Area                           | Concrete behavior                                                                                                                    | Primary source boundary                                                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Conversation canvases          | Generated selectable HTML in an isolated plane; content revisions separate from saved input state                                    | `src/domain/canvases`, `src/desktop/canvases`, `src/renderer/canvases`                                       |
+| Quote branches                 | Exact quoted range and frozen conversation context; independent canvas; conflict-aware application to the original                   | `src/domain/models/chat.ts`, `src/desktop/chat`, `src/renderer/chat`                                         |
+| File-backed tools              | Bound inspection snapshots with hashes and coverage; explicit refresh; portable data without source-file authority                   | `src/desktop/canvases/sources.ts`, `src/domain/canvases/sources.ts`, `CanvasSources.tsx`                     |
+| Reviewed results               | CSV, JSON, Markdown, text and cutting DXF review; content/state revision checks; exclusive new-file save; open the saved result      | `src/domain/canvases/results.ts`, `src/desktop/canvases/service.ts`, `ResultReview.tsx`                      |
+| Runtime feedback               | Revision-bound loading/error observations and one bounded repair attempt                                                             | `src/desktop/canvases/observations.ts`, `src/desktop/chat/service.ts`                                        |
+| Shared canvas actions          | Registered handlers used by both controls and model tools; actual results, atomic state patches, frame/revision guards and takeover  | `src/domain/canvases/actions.ts`, `src/desktop/canvases/actions.ts`, `CanvasPlane.tsx`                       |
+| Tool library                   | Open, rename, enable, disable and duplicate reusable tools with separate conversations and saved inputs                              | `src/domain/canvases/library.ts`, `src/desktop/canvases/service.ts`, `src/renderer/canvases/ToolLibrary.tsx` |
+| Meta tool protocol             | Paired assistant calls and actual tool results; validated single-step arguments and final replies                                    | `src/desktop/models/providers.ts`, `src/desktop/chat/service.ts`                                             |
+| Canvas model context           | Identical historical snapshots reference current data; different values remain; saved transcripts and exact quotes stay unchanged    | `src/desktop/chat/model-context.ts`, `tests/chat.test.ts`                                                    |
+| Entry point                    | **Build tool from selection** opens a contextual draft without sending it automatically                                              | `src/renderer/commands/window-commands/comparison.ts`                                                        |
+| Supplier regression            | Fictional request/quotes with known arithmetic; retained live responses; native replay and result/restart checks                     | `tools/canvases`, `tests/native/canvas-live.ts`, `tests/native/canvas-productivity.ts`                       |
+| Optional robotics plugin       | Reused URDF parser, transforms, solver, endpoint checker and working interface, packaged as explicit canvas code and assets          | `tools/plugins/robotics`                                                                                     |
+| External plugin qualification  | Held-out poses, altered targets and joint limits checked by test tooling outside the shipped host                                    | `tools/robotics/station-review.ts`, `tools/robotics/station-handoff.ts`                                      |
+| Portable plugin handoff        | Export and reopen code, graphics runtime, source snapshots, meshes and saved inputs without a configured model                       | `src/desktop/canvases/service.ts`, `tools/robotics/station-handoff.ts`                                       |
+| Robot generation qualification | Budgeted Meta creation, refinement and exact quoted alternative; retained failures, saved-response recovery and native output review | `tools/robotics`, `tests/robot-rehearsal.test.ts`                                                            |
 
 Paths in this table are relative to `packages/viewer-electron/app`. The
 [canvas reference](../reference/canvases.md) defines the contracts and limits. The
@@ -84,31 +84,36 @@ The supplier case remains
 are not evidence for the robot endpoint study or the separate mounting and cutting-service example.
 
 The [implementation audit](../research/workshop.md#implementation-audit) owns the qualification
-boundary and remaining presentation work. The generated SO-101 workflow has native evidence for
-creation, refinement, an unchanged original with a quoted alternative, checked endpoints, comparison
-save, replay, export/reopen and restart. This does not establish collision checking, continuous
-trajectory validation, dynamics, device calibration or physical operation. Keep these absent
-capabilities out of the completed contribution list.
+boundary and remaining presentation work. The earlier two-target SO-101 exercise has native evidence
+for creation, refinement, an unchanged original with a quoted alternative, checked endpoints,
+comparison save, replay, export/reopen and restart. This does not establish collision checking,
+continuous trajectory validation, dynamics, device calibration or physical operation. Keep these
+absent capabilities out of the completed contribution list.
 
-The selected [screenplay](hackathon-demo.md) follows a separate six-slot station. Meta generated the
-placement interface, invoked its evaluation, added a reserved-area constraint and selected Front. An
-exact quote branch selected and checked Rear. The operator completed the initial Central selection
-after Meta recommended it; do not attribute that selection to Meta. The actual exported tools passed
-native reopening and cold restart with no provider configured. Saved inputs and independently
-recomputed checks agreed.
+The current six-slot qualification starts with the existing robotics implementation packaged as an
+optional plugin. Meta adds a selectable per-target results table and a restriction explanation. It
+invokes the reused calculations and selects Central, then Front after the constraint changes. An
+exact quote branch selects Rear, invokes the plugin self-tests and checks its saved poses. Do not
+attribute the reused parser, solver or checker to these Meta requests. The shipped Viewer host has
+no robotics solver, checker or dedicated robot-check operation. See the
+[generated-tool ownership decision](../adr/0015-generated-tool-host.md).
 
-The local station presentation copy improves scene annotations, identifies the fictional station,
-describes restored state and labels controls. Its manifest retains the provider and edited HTML
-hashes. Evaluation and action code, saved inputs and measured results remain unchanged. Attribute
-these visual and accessibility edits to local presentation work, not Meta.
+Both exported alternatives passed native reopening and cold restart with no provider configured.
+Their code, inputs, attached library and assets survived. An external qualification harness checked
+all returned candidate poses, altered targets and joint limits. That harness is test equipment, not
+a product capability.
 
-The earlier two-target film retains its own presentation manifest and replay-clock repair. The
-station review cut uses its own source messages and actual native handlers. A local replay adapter
+The plugin recording uses the exact qualified HTML and attached code. A loopback replay adapter
 converts retained responses to JSON and binds actions to current revisions; it makes no cloud
-request. The capture records those adaptations and the original response hashes. Attribute
-saved-response replay, condensed repair rounds, staged reveals and local presentation changes
-separately from model generation. The original provider output remains retained. The delivered
-script and captions are generated from the same cues as the review audio.
+request. The capture records those adaptations, exact request excerpts and original response hashes.
+It condenses duplicate writes and a verification continuation. The first live turn reached its cap
+without a closing reply; its saved artifact passed review. The film stops that local turn after its
+last action and does not invent a reply. The delivered script and captions come from the same cues
+as the review audio.
+
+Earlier station and two-target films used the superseded host-owned robotics checks and retain their
+own evidence. Their local layout edits, scene labels and replay repairs belong to those recordings.
+They do not establish the current plugin ownership boundary.
 
 The separate mounting example's Meta-generated controls have native evidence for width editing,
 measured DXF export, source-bound quote selection, save/reopen and restart. The supplier remains a

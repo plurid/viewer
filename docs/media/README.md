@@ -153,7 +153,7 @@ the exact narration, transcript and captions. The output includes an opening stu
 sample frames and technical decode checks. Review the complete story and its input-to-result
 transitions before replacing the temporary voice and opening.
 
-## Record the station decisions
+## Record the plugin workflow
 
 Use the qualified three-stage station run and a tested package. From `packages/viewer-electron/app`:
 
@@ -169,24 +169,29 @@ no cloud transport or credentials. The cloud endpoint rules remain unchanged. Th
 original response hashes, request excerpts, local envelope conversion and current revision bindings.
 Its local replay request count is separate from paid provider requests.
 
-The real canvas handlers evaluate the four mounting points. The native checker recomputes their
-results. Meta's retained recommendation precedes the operator's Central selection. The next stage
-adds the reserved area, evaluates again and selects Front. A native quote branch selects Rear and
-checks the comparison. The film finishes by saving the check, exporting the tool and reopening it.
-Assertions verify those outcomes before the capture is marked complete.
+Start with the qualified run's `reused-plugin/starter.json`. The recorder requires a passing report
+for each saved stage and keeps the reused code's provenance. It clears the old study for the opening
+and retains the qualified camera. The robot parser, solver and checker are attached plugin code.
+Viewer supplies the generic runtime, context, actions, revisions and tool management.
 
-Keep provider HTML beside each presentation copy. Presentation changes adjust labels, layout and
-disclosure of detailed output; they must preserve evaluation and action code. Source bindings,
-computed poses and selected mounts belong to the recorded workflow. The generation reveal and
-condensed repair rounds are editorial timing, not measured provider latency. Credit saved Meta
-responses and the local presentation edits in the film.
+Meta's retained edit adds a target-results table to the existing interface. The local replay invokes
+the same plugin handlers to evaluate the four mounting points and select Central. The next stage
+explains the reserved area, evaluates again and selects Front. A native quote branch selects Rear
+and runs the plugin checks. Save the result, export and reopen the tool, then show the Tool library.
+Assertions verify those outcomes before the capture is marked complete. External qualification
+checks the results after recording; it is not presented as a Viewer robotics feature.
 
-Review the comparison conclusion inside the native report's scroll area. Hold the reopened winning
-tool before the final spatial pullback. Record every plane-to-plane move, including the browser,
-editor and terminal sequence and the return from the alternative. Keep visible actions inside takes,
-preserve their playback speed and hold each destination after the camera settles. Do not cut away
-navigation between takes or omit the reopening route. The capture records navigation intervals, and
-the assembler checks that their arrival pauses survive the edit.
+Keep the exact provider HTML and attached library. This workflow makes no local edits to either.
+Typed requests are exact excerpts from the retained conversations. The first saved turn ended after
+selection without a closing reply, so finish its local replay with **Stop** before continuing. Do
+not invent an assistant reply. The replay condenses duplicate writes and the verification
+continuation; keep those omissions in its evidence and credit saved-response playback in the film.
+
+Hold the reopened working tool before the final spatial pullback. Record every plane-to-plane move,
+including the browser, editor and terminal sequence and the return from the alternative. Keep
+visible actions inside takes, preserve their playback speed and hold each destination after the
+camera settles. Do not cut away navigation between takes or omit the reopening route. The capture
+records navigation intervals, and the assembler checks that their arrival pauses survive the edit.
 
 The assembler produces `Narration.txt`, `Captions.srt` and `script.json` from the audio cues of that
 exact cut. Use those files when reviewing or replacing the temporary voice.

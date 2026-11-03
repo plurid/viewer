@@ -9,8 +9,9 @@ robotics solver and checker design.
 The existing robotics implementation is packaged as an optional plugin. Meta extends its interface
 with a target-results table and a mounting restriction explanation, then uses the plugin's actions
 to evaluate, select and check placements. The parser, solver and checker remain reused code. Keep
-the starting package and provider revisions separate when presenting the contribution. The earlier
-recordings show the former ownership boundary and need a new capture for this workflow.
+the starting package and provider revisions separate when presenting the contribution. The current
+recording uses those exact edits and the reused plugin. Earlier recordings retain the former
+ownership boundary as experiment evidence.
 
 The [screenplay](../release/hackathon-demo.md) is the exact script for the current review cut. It
 must change together with the next recording. The

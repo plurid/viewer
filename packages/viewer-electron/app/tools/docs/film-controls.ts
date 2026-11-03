@@ -9,14 +9,14 @@ import { inputOverlay } from './input-overlay';
 import { presentationControls } from '../robotics/presentation-controls';
 
 /** One native capture owns its pointer cues, timing marks and unscaled source frames. */
-export async function filmControls(raw: Connection, root: string) {
+export async function filmControls(
+  raw: Connection,
+  root: string,
+  layout = { ready: '#view canvas', readyText: '', scroll: '#panel' },
+) {
   const overlay = await inputOverlay(raw);
   const main = overlay.connection;
-  const ui = presentationControls(main, overlay.mapPointer, {
-    ready: '#view canvas',
-    readyText: '',
-    scroll: '#panel',
-  });
+  const ui = presentationControls(main, overlay.mapPointer, layout);
   const clips: Record<string, unknown>[] = [];
   let marks: { seconds: number; action: string; narration: string }[] = [];
   let navigation: { destination: string; start: number; settled: number; end: number }[] = [];
