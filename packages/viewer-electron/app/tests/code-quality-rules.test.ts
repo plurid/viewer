@@ -1,12 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { ESLint } from 'eslint';
+import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 
-// Lint as `pnpm lint` and editors do. Under CI=true typescript-eslint infers a single run, and in a
-// Vitest worker that program made TypeScript 6 crash writing a module path for a type
-// (getLocalModuleSpecifier); the rules under test do not depend on it.
-process.env.TSESTREE_SINGLE_RUN = 'false';
-const eslint = new ESLint();
+// These rules inspect syntax. Load the repository rules without building the app's TypeScript
+// projects in this worker; pnpm lint still checks the source with type information.
+const eslint = new ESLint({ overrideConfig: tseslint.configs.disableTypeChecked });
 
 describe('type import policy', () => {
   it.each([
