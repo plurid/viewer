@@ -167,6 +167,34 @@ const titles = () =>
     .map((card) => card.querySelector('strong')!.textContent);
 const selection = (paneID: string) => browseSession(paneID, downloads).selection;
 
+it('enters a double-clicked folder without forwarding its activation to the space', async () => {
+  const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+  const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(900);
+  const space = vi.fn();
+  document.addEventListener('dblclick', space);
+  try {
+    const { view, paneID } = mount();
+    const row = await waitFor(() => {
+      const row = view.container.querySelector(
+        '[data-file-path="' + downloads + '/Photos"] .filename',
+      );
+      expect(row).not.toBeNull();
+      return row!;
+    });
+    const event = new MouseEvent('dblclick', { bubbles: true, cancelable: true });
+    fireEvent(row, event);
+    expect(activeWorkspace().panes.find((pane) => pane.id === paneID)?.path).toBe(
+      downloads + '/Photos',
+    );
+    expect(space).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  } finally {
+    document.removeEventListener('dblclick', space);
+    height.mockRestore();
+    width.mockRestore();
+  }
+});
+
 describe('the insight strip', () => {
   it('shows three cards from the listing, strongest first, above the files', async () => {
     const { view } = mount();

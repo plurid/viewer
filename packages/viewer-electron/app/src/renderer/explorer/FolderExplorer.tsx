@@ -553,6 +553,9 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       aria-label={`Folder ${path}`}
       onFocus={() => setActivePane(id)}
       onPointerDown={() => setActivePane(id)}
+      // Opening a folder can detach the clicked row before the space handles the event.
+      // Keep content activation here so that detached row is not treated as the backdrop.
+      onDoubleClick={(event) => event.stopPropagation()}
       // The mouse's side buttons go back and forward, as in Finder.
       onMouseDown={(event) => {
         if (mouseHistoryDirection(event.button)) event.preventDefault();

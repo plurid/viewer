@@ -73,6 +73,11 @@ app.
 
 ## Focused native scenarios
 
+`tests/native/folder-double-click.ts` checks folder activation in a workspace with multiple planes.
+It verifies that entering a folder keeps the camera fixed, Option-double-click opens a linked
+folder, and double-clicking the backdrop still frames all planes. Set `VIEWER_TEST_BINARY` and both
+preservation variables above, then run it with `node --import tsx` from the app directory.
+
 `tests/native/mounting-flow.ts` checks canvas DXF review and save, reopening in the drawing preview,
 the local supplier page in a real browser plane, a reply-backed deadline comparison, selected-quote
 Markdown saving and cold restart. Set `VIEWER_TEST_BINARY` and both preservation variables above. It
