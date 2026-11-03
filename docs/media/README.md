@@ -171,6 +171,34 @@ opening titles remain visible. The plugin film also keeps the closing request, *
 adjust them to the final voice recording. The clean cut is encoded directly from the original
 frames.
 
+## Pace a cut to recorded narration
+
+Record again with `record-station.ts` when command selections were too brief to read. The shared
+film controls wait until the requested command is selected, hold it for 1.5 seconds, then execute.
+The capture retains `commandReads` and each action's `workEnd` so the edit can keep those reading
+intervals and trim only unused time after an action finishes.
+
+To use supplied narration, give the assembler a folder containing `Narration.wav` and
+`Captions.srt`, plus the `script.json` from the cut that voice was recorded against:
+
+```sh
+python3 -B tools/robotics/assemble-story.py <fresh-plugin-capture> \
+  --narration <recorded-voice-folder> --timing-from <original-cut>/script.json
+```
+
+This mode uses NumPy and requires mono, 16-bit PCM narration with matching caption text. It finds
+near-silent passage boundaries and preserves every nonzero source sample. It stops if a passage
+cannot be separated safely, captions do not match the script, or the edit would cut a captured
+input, camera move or command reading interval. Voice speed and the capture's camera retiming stay
+unchanged.
+
+The picture is assembled from native frames. Idle tails after completed actions are shortened, and
+speech follows the corresponding action. In the station film, “I'll use the front” follows the
+return from the alternative; the save line continues into tool export. The output includes the
+narrated MP4, separate SRT, edited WAV and matching script. The video has no embedded subtitles,
+burned captions or production notes. Keep the source recording and its original timing evidence; the
+generated verification records source hashes, passage edits and command holds.
+
 The capture can identify a navigation passage to omit. Assembly retains the original timestamps,
 input log and selected source ranges, cuts only that passage, and keeps the included actions at
 their original speed. It generates the closing artwork with the delivered script. The plugin close

@@ -1,12 +1,12 @@
 """Encode a native story capture with separate captions and optional temporary narration."""
 
+import argparse
 import hashlib
 import json
 import math
 import pathlib
 import struct
 import subprocess
-import sys
 import tempfile
 import textwrap
 import wave
@@ -58,9 +58,21 @@ def verify_png(file):
     assert struct.unpack('>II', header[16:24]) == SIZE, ('Never upscale source frames', file)
 
 
-source = pathlib.Path(sys.argv[1]).resolve()
-assert sys.argv[2:] in ([], ['--clean']), 'Usage: assemble-story.py <capture> [--clean]'
-clean = '--clean' in sys.argv[2:]
+arguments = argparse.ArgumentParser()
+arguments.add_argument('capture', type=pathlib.Path)
+arguments.add_argument('--clean', action='store_true')
+arguments.add_argument('--narration', type=pathlib.Path)
+arguments.add_argument('--timing-from', type=pathlib.Path)
+options = arguments.parse_args()
+source = options.capture.resolve()
+clean = options.clean
+recorded = None
+if options.narration:
+    assert options.timing_from and not clean
+    from narration_timing import RecordedNarration
+    recorded = RecordedNarration(options.narration, options.timing_from)
+else:
+    assert not options.timing_from, '--timing-from requires --narration'
 assert json.loads((source / 'story-completed.json').read_text())['status'] == 'passed'
 capture = json.loads((source / 'story-capture.json').read_text())
 plugin = capture.get('film') == 'plugin'
@@ -98,6 +110,7 @@ if continuous_navigation:
 assert capture['providerRequests'] == 0 and len(capture['clips']) in ((11,) if station else (8, 9))
 closing_callback = capture['clips'][-1]['name'] == '08-closing'
 closing_prompt = plugin and not closing_callback
+assert not recorded or closing_prompt, 'Recorded narration currently targets the qualified plugin film.'
 assert (capture['width'], capture['height']) == SIZE
 root = pathlib.Path(tempfile.mkdtemp(prefix='viewer-interface-review-', dir='/private/tmp'))
 for name in ['Voice', 'Captions', 'Review', 'Closing']:
@@ -119,11 +132,17 @@ for index, (start, end, text) in enumerate(opening):
     file = root / f'opening-{index}.png'
     image.save(file)
     picture.extend(concat_entry(file, end - start))
-    slots.append({'start': start, 'end': end, 'text': text, 'opening': True})
+    if recorded:
+        group = recorded.groups[index]
+        assert group['text'] == text
+        slots.append(recorded.place(group, group['sourceStart']))
+    else:
+        slots.append({'start': start, 'end': end, 'text': text, 'opening': True})
 
 cursor = opening[-1][1]
 samples = []
 source_frames = 0
+command_reads = []
 for clip in capture['clips']:
     directory = pathlib.Path(clip['directory'])
     frames = json.loads((directory / 'timestamps.json').read_text())
@@ -148,13 +167,17 @@ for clip in capture['clips']:
         keep_from = clip['marks'][index + 1]['seconds'] if index + 1 < len(clip['marks']) else clip['seconds']
     if keep_from < clip['seconds']:
         ranges.append((keep_from, clip['seconds']))
+    segments = (recorded.ranges(clip, edit_time) if recorded else
+                [{'start': start, 'end': end, 'padding': 0} for start, end in ranges])
     clip['editStart'] = cursor
     clip['selectedRanges'] = []
     included = set()
-    for start, end in ranges:
+    for segment in segments:
+        start, end, padding = segment['start'], segment['end'], segment['padding']
         assert 0 <= start < end <= clip['seconds']
         clip['selectedRanges'].append({'sourceStart': start, 'sourceEnd': end, 'editStart': cursor,
-                                      'editEnd': cursor + edit_time(clip, end) - edit_time(clip, start)})
+                                      'editEnd': cursor + edit_time(clip, end) - edit_time(clip, start) + padding,
+                                      'tailHold': padding})
         selected_seconds = 0
         for index, frame in enumerate(frames):
             frame_start = frames[index]['milliseconds'] / 1000 if index else 0
@@ -163,22 +186,38 @@ for clip in capture['clips']:
             if kept_end <= kept_start:
                 continue
             length = edit_time(clip, kept_end) - edit_time(clip, kept_start)
-            picture.extend(concat_entry(directory / frame['file'], length))
+            last_file = directory / frame['file']
+            picture.extend(concat_entry(last_file, length))
             included.add(index)
             selected_seconds += length
         assert abs(selected_seconds - (edit_time(clip, end) - edit_time(clip, start))) < .000001
+        if padding:
+            picture.extend(concat_entry(last_file, padding))
+        if recorded:
+            if clip['name'] == '10-handoff' and start == 0:
+                at = clip['commandReads'][0]['end']
+                slots.append(recorded.place(recorded.actions['choose-front'], cursor + edit_time(clip, at)))
+            if segment.get('group'):
+                slots.append(recorded.place(segment['group'], cursor + segment['lead']))
+        for read in clip.get('commandReads', []):
+            if start <= read['start'] and read['end'] <= end:
+                first = cursor + edit_time(clip, read['start']) - edit_time(clip, start)
+                last = cursor + edit_time(clip, read['end']) - edit_time(clip, start)
+                assert 1.5 <= last - first < 2
+                command_reads.append({'command': read['command'], 'start': first, 'end': last})
+                samples.append({'time': (first + last) / 2, 'action': 'read-command'})
         for index, mark in enumerate(clip['marks']):
             mark_end = clip['marks'][index + 1]['seconds'] if index + 1 < len(clip['marks']) else clip['seconds']
             if not start <= mark['seconds'] < end:
                 continue
             available = edit_time(clip, min(mark_end, end)) - edit_time(clip, mark['seconds'])
             offset = cursor + edit_time(clip, mark['seconds']) - edit_time(clip, start)
-            if mark['narration']:
+            if mark['narration'] and not recorded:
                 assert mark_end <= end, 'Never cut off a spoken cue.'
                 slots.append({'start': offset, 'end': offset + available,
                               'text': mark['narration'], 'action': mark['action']})
             samples.append({'time': offset + min(3, available * .6), 'action': mark['action']})
-        cursor += edit_time(clip, end) - edit_time(clip, start)
+        cursor += edit_time(clip, end) - edit_time(clip, start) + padding
     source_frames += len(included)
     clip['editEnd'] = cursor
 
@@ -215,6 +254,9 @@ if plugin:
         credits[3] = 'Saved Meta responses · Condensed repairs · Staged entrance · Slower camera moves'
 if clean:
     credits = [credit.replace('Temporary opening and voice', 'Temporary opening') for credit in credits]
+if recorded:
+    credits = [credit.replace('Temporary opening and voice', 'Temporary opening') for credit in credits]
+    credits.append('Supplied recorded narration · Idle tails trimmed · Command selections held for 1.5 seconds')
 on_screen_credits = [] if clean or closing_prompt else credits
 closing_prompt_evidence = None
 if closing_prompt:
@@ -267,42 +309,48 @@ else:
 picture.extend(concat_entry(file, .001)[:2])
 (root / 'picture.concat').write_text('\n'.join(picture) + '\n')
 
-cues = []
-for index, slot in enumerate(slots):
-    prefix = root / 'Voice' / f'{index:02}'
-    prefix.with_suffix('.txt').write_text(slot['text'] + '\n')
-    run(['/usr/bin/say', '-v', 'Daniel', '-r', '172', '-f', str(prefix.with_suffix('.txt')),
-         '-o', str(prefix.with_suffix('.aiff'))])
-    wav = prefix.with_suffix('.wav')
-    run([FFMPEG, '-n', '-v', 'error', '-threads', '2', '-i', str(prefix.with_suffix('.aiff')),
-         '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s16le', str(wav)])
-    length = float(probe(wav)['format']['duration'])
-    room = slot['end'] - slot['start']
-    assert length + .06 <= room, ('Narration does not fit its recorded action', slot, length, str(root))
-    start = slot['start'] + (room - length) / 2
-    cues.append({**slot, 'start': start, 'end': start + length, 'audio': str(wav)})
-    print(json.dumps({'cue': index, 'spoken': round(length, 2), 'slot': round(room, 2)}), flush=True)
+if recorded:
+    cues = slots
+    subtitle_cues = recorded.write(root, duration)
+else:
+    cues = []
+    for index, slot in enumerate(slots):
+        prefix = root / 'Voice' / f'{index:02}'
+        prefix.with_suffix('.txt').write_text(slot['text'] + '\n')
+        run(['/usr/bin/say', '-v', 'Daniel', '-r', '172', '-f', str(prefix.with_suffix('.txt')),
+             '-o', str(prefix.with_suffix('.aiff'))])
+        wav = prefix.with_suffix('.wav')
+        run([FFMPEG, '-n', '-v', 'error', '-threads', '2', '-i', str(prefix.with_suffix('.aiff')),
+             '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s16le', str(wav)])
+        length = float(probe(wav)['format']['duration'])
+        room = slot['end'] - slot['start']
+        assert length + .06 <= room, ('Narration does not fit its recorded action', slot, length, str(root))
+        start = slot['start'] + (room - length) / 2
+        cues.append({**slot, 'start': start, 'end': start + length, 'audio': str(wav)})
+        print(json.dumps({'cue': index, 'spoken': round(length, 2), 'slot': round(room, 2)}), flush=True)
 
-pcm = bytearray(math.ceil(duration * 48000) * 2)
-for cue in cues:
-    with wave.open(cue['audio'], 'rb') as audio:
-        assert (audio.getnchannels(), audio.getsampwidth(), audio.getframerate()) == (1, 2, 48000)
-        data = audio.readframes(audio.getnframes())
-    offset = round(cue['start'] * 48000) * 2
-    pcm[offset:offset + len(data)] = data
-with wave.open(str(root / 'narration.wav'), 'wb') as audio:
-    audio.setnchannels(1)
-    audio.setsampwidth(2)
-    audio.setframerate(48000)
-    audio.writeframes(pcm)
+    pcm = bytearray(math.ceil(duration * 48000) * 2)
+    for cue in cues:
+        with wave.open(cue['audio'], 'rb') as audio:
+            assert (audio.getnchannels(), audio.getsampwidth(), audio.getframerate()) == (1, 2, 48000)
+            data = audio.readframes(audio.getnframes())
+        offset = round(cue['start'] * 48000) * 2
+        pcm[offset:offset + len(data)] = data
+    with wave.open(str(root / 'narration.wav'), 'wb') as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(48000)
+        audio.writeframes(pcm)
+    subtitle_cues = cues
 with (root / 'Narration.txt').open('x') as text:
     text.write('THERE IS NO INTERFACE / NARRATION SCRIPT\n\n' +
                ('Silent video. Timings are a recording guide based on temporary narration.\n\n' if clean else
-                'Exact narration of this review cut. Temporary system voice: Daniel.\n\n'))
+                ('Exact supplied narration, edited to the native actions without changing voice speed.\n\n' if recorded else
+                 'Exact narration of this review cut. Temporary system voice: Daniel.\n\n')))
     for cue in cues:
         text.write(f"{stamp(cue['start'])} - {stamp(cue['end'])}\n{cue['text']}\n\n")
 with (root / 'Captions.srt').open('x') as text:
-    for index, cue in enumerate(cues):
+    for index, cue in enumerate(subtitle_cues):
         text.write(f"{index + 1}\n{stamp(cue['start'], True)} --> {stamp(cue['end'], True)}\n{cue['text']}\n\n")
 
 if station:
@@ -338,7 +386,8 @@ if station:
             'changed-constraint': 'Finish the first saved turn, then type the retained reserved-area request.',
             'meta-revises': 'The plugin shows the restriction explanation. Meta evaluates and selects Front.',
             'comparison': 'Meta invokes the plugin checks and selects Rear in the quoted alternative.',
-            'save-check': 'Save the plugin result through the Viewer file picker.',
+            'choose-front': 'Return from the alternative to the Front tool through the workspace.',
+            'save-check': 'Save the plugin result through the Viewer file picker, then export the tool.',
             'reopen': 'Reopen the unchanged exported plugin and use its target table.',
             'ending-origin': 'Use the new target controls in the reopened tool and watch the arm adopt that pose.',
             'manage-tools': 'Open the Tool library and show the saved tool controls.',
@@ -349,7 +398,8 @@ if station:
         text.write('# There Is No Interface\n\n' +
                    ('Narration and shot script for the silent cut. The video has no audio or burned-in subtitles. '
                     'SRT timings use temporary narration as a recording guide. ' if clean else
-                    'Exact script of this review cut. Temporary opening and system voice. ') +
+                    ('Exact script of the supplied narration, paced to native actions. Temporary opening. ' if recorded else
+                     'Exact script of this review cut. Temporary opening and system voice. ')) +
                    'The product footage replays retained Meta responses through working Viewer actions; '
                    + (f'repair rounds are condensed and camera moves take {camera_time_scale:g} times their recorded duration. '
                       'Tool interactions play at their recorded speed.\n\n' if camera_time_scale != 1 else
@@ -357,6 +407,10 @@ if station:
                        if continuous_navigation else 'repairs and navigation are condensed.\n\n')))
         if staged_canvas_arrival:
             text.write('The revised interface has one staged spatial entrance; its code and controls are unchanged.\n\n')
+        if recorded:
+            text.write('The supplied voice keeps its recorded speed. Idle tails after completed actions are trimmed; '
+                       'every input and camera move remains. Command selections hold for 1.5 seconds before execution. '
+                       'Captions are supplied as a separate SRT. The video has no embedded or burned-in subtitles.\n\n')
         for cue in cues:
             text.write(f"## {stamp(cue['start'])} to {stamp(cue['end'])}\n\n> {cue['text']}\n\n")
             action = cue.get('action')
@@ -400,9 +454,11 @@ store(root / 'script.json', {'source': str(source), 'duration': duration, 'pictu
                             'cues': cues, 'clips': capture['clips'], 'providerRequests': 0,
                             'cameraTimeScale': camera_time_scale, 'stagedCanvasArrival': staged_canvas_arrival,
                             'closingPrompt': closing_prompt_evidence, 'cleanExport': clean,
-                            'creditsInVideo': bool(on_screen_credits)})
+                            'creditsInVideo': bool(on_screen_credits), 'commandReads': command_reads,
+                            'recordedNarration': recorded.evidence() if recorded else None})
 
-output = root / ('Viewer - Clean footage.mp4' if clean else 'Viewer - There Is No Interface - review.mp4')
+output = root / ('Viewer - Narration paced.mp4' if recorded else
+                 'Viewer - Clean footage.mp4' if clean else 'Viewer - There Is No Interface - review.mp4')
 print(json.dumps({'encoding': str(output), 'seconds': duration, 'nativeFrames': source_frames}), flush=True)
 composition = ['-vf', 'fps=30', '-map', '0:v', '-an'] if clean else [
     '-f', 'concat', '-safe', '0', '-i', str(root / 'captions.concat'),
@@ -410,6 +466,12 @@ composition = ['-vf', 'fps=30', '-map', '0:v', '-an'] if clean else [
     '-filter_complex', '[0:v]fps=30[base];[base][1:v]overlay=0:0:format=auto[v]',
     '-map', '[v]', '-map', '2:a:0', '-c:a', 'aac', '-b:a', '160k',
 ]
+if recorded:
+    composition = [
+        '-i', str(root / 'narration.wav'),
+        '-vf', 'fps=30', '-map', '0:v', '-map', '1:a',
+        '-c:a', 'aac', '-b:a', '192k',
+    ]
 run([FFMPEG, '-n', '-v', 'warning', '-threads', '2', '-filter_complex_threads', '2',
      '-f', 'concat', '-safe', '0', '-i', str(root / 'picture.concat'),
      *composition, '-c:v', 'libx264', '-preset', 'fast', '-crf', '16',
@@ -421,6 +483,7 @@ info = probe(output)
 stream = next(s for s in info['streams'] if s['codec_type'] == 'video')
 assert not clean or len(info['streams']) == 1, 'The clean export must contain only video.'
 assert clean or any(s['codec_type'] == 'audio' for s in info['streams'])
+assert not recorded or not any(s['codec_type'] == 'subtitle' for s in info['streams'])
 assert (stream['width'], stream['height']) == SIZE
 assert stream['avg_frame_rate'] == '30/1'
 assert abs(float(info['format']['duration']) - duration) < .1
@@ -444,8 +507,9 @@ with output.open('rb') as stream:
 store(root / 'verification.json', {'status': 'technical-checks-passed', 'duration': duration,
       'sourceCapture': str(source), 'video': str(output), 'sha256': digest, 'resolution': SIZE,
       'sourceFrames': source_frames, 'sourceEncoding': 'PNG', 'videoEncodes': 1,
-      'providerRequests': 0, 'voice': 'None' if clean else 'Temporary system voice',
-      'audioIncluded': not clean, 'burnedInSubtitles': not clean,
+      'providerRequests': 0, 'voice': 'Supplied recorded narration' if recorded else 'None' if clean else 'Temporary system voice',
+      'audioIncluded': not clean, 'burnedInSubtitles': not clean and not bool(recorded),
+      'recordedNarration': recorded.evidence() if recorded else None, 'commandReads': command_reads,
       'creditsInVideo': bool(on_screen_credits), 'interactionPlaybackSpeed': 1,
       'cameraTimeScale': camera_time_scale,
       'stagedCanvasArrival': staged_canvas_arrival,

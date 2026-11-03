@@ -18,7 +18,8 @@ export async function filmControls(
   const main = overlay.connection;
   const ui = presentationControls(main, overlay.mapPointer, layout);
   const clips: Record<string, unknown>[] = [];
-  let marks: { seconds: number; action: string; narration: string }[] = [];
+  let marks: { seconds: number; action: string; narration: string; workEnd?: number }[] = [];
+  let commandReads: { command: string; start: number; end: number }[] = [];
   let navigation: { destination: string; start: number; settled: number; end: number }[] = [];
   let cameraMotion: { start: number; end: number }[] = [];
   let motionStarted: number | undefined;
@@ -148,12 +149,32 @@ export async function filmControls(
     await delay(650);
     overlay.cue('');
   }
+  async function command(name: string, cue: string) {
+    await click('[aria-label="Commands (⌘K)"]');
+    await main.command('Input.insertText', { text: name });
+    await until(
+      () =>
+        main.evaluate(
+          pageCall((name) => {
+            const palette = document.querySelector('.command-palette');
+            const input = palette?.querySelector<HTMLInputElement>('[role="combobox"]');
+            const selected = palette?.querySelector('[role="option"][aria-selected="true"]');
+            return input?.value === name && !!selected?.textContent?.includes(name);
+          }, name),
+        ),
+      Boolean,
+      'readable command ' + name,
+    );
+    const start = (performance.now() - started) / 1000;
+    await delay(1500);
+    if (recording)
+      commandReads.push({ command: name, start, end: (performance.now() - started) / 1000 });
+    await key(cue, 'Enter', 'Enter', 13);
+  }
   async function all() {
     requireTake();
     const start = (performance.now() - started) / 1000;
-    await click('[aria-label="Commands (⌘K)"]');
-    await main.command('Input.insertText', { text: 'Frame all planes' });
-    await key('Frame all planes', 'Enter', 'Enter', 13);
+    await command('Frame all planes', 'Frame all planes');
     await arrive('workspace', start);
   }
   async function frame(id: string) {
@@ -183,9 +204,7 @@ export async function filmControls(
           }, overviewID),
         );
         if (!visible) {
-          await click('[aria-label="Commands (⌘K)"]');
-          await main.command('Input.insertText', { text: 'Overview' });
-          await key('Open workspace overview', 'Enter', 'Enter', 13);
+          await command('Overview', 'Open workspace overview');
         }
       }
       await click(
@@ -205,6 +224,7 @@ export async function filmControls(
   }
   async function take(name: string, work: () => Promise<void>) {
     marks = [];
+    commandReads = [];
     navigation = [];
     cameraMotion = [];
     motionStarted = undefined;
@@ -234,6 +254,7 @@ export async function filmControls(
         marks,
         navigation,
         cameraMotion,
+        commandReads,
         inputs: overlay.events.slice(),
       });
       console.log(JSON.stringify({ name, seconds: result.seconds, frames: result.frames }));
@@ -242,9 +263,11 @@ export async function filmControls(
     }
   }
   async function beat(action: string, narration: string, seconds: number, work = async () => {}) {
-    marks.push({ seconds: (performance.now() - started) / 1000, action, narration });
+    const mark = { seconds: (performance.now() - started) / 1000, action, narration, workEnd: 0 };
+    marks.push(mark);
     const time = performance.now();
     await work();
+    mark.workEnd = (performance.now() - started) / 1000;
     await delay(Math.max(0, seconds * 1000 - (performance.now() - time)));
   }
   async function type(text: string, milliseconds: number) {
