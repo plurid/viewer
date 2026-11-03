@@ -9,9 +9,8 @@ export interface UpdateFeedConfiguration {
   publicKey: string;
 }
 
-/** Empty until the release owner sets both (docs/development/releases.md). With either empty,
- * Check for Updates says this build has no update feed and the launch check does nothing. */
+/** GitHub hosts release assets; the signature authenticates the feed across download redirects. */
 export const updateFeedConfiguration: UpdateFeedConfiguration = {
-  url: '',
-  publicKey: '',
+  url: 'https://github.com/plurid/viewer/releases/latest/download/viewer-update.json',
+  publicKey: 'MCowBQYDK2VwAyEAjeigzYqlIoiO1/CtSbz36yMylQVVvh5aisaQBCmH7EU=',
 };

@@ -10,7 +10,7 @@ Keep run-specific test counts, model usage and artifact paths in the retained ev
 
 | Repository | Last revision before the start date        | Reviewed revision |
 | ---------- | ------------------------------------------ | ----------------- |
-| Viewer     | `c8c973f82f9473a3b8819f61e2b5edfb9466e6cf` | `fb8b8b39eabb`    |
+| Viewer     | `c8c973f82f9473a3b8819f61e2b5edfb9466e6cf` | `3fbddad4`        |
 | Plurid     | `9929887f90e6635552097f8a0466261ce92fc5c1` | `a27510396`       |
 
 The Viewer baseline was committed on 26 October; the Plurid baseline on 23 October. Reproduce each

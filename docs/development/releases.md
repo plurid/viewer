@@ -31,6 +31,16 @@ stops if Electron needs more.
 Check for Updates reads a JSON feed signed with Ed25519. The app embeds the feed address and the
 public key; only the release owner holds the private key.
 
+The configured feed is
+`https://github.com/plurid/viewer/releases/latest/download/viewer-update.json`. GitHub Releases
+hosts the installer, checksums, feed and signature. The product presentation belongs at
+`https://plurid.com/viewer`, in the Plurid applications repository's existing WWW app. Keep download
+links on that page pointed at the qualified GitHub release.
+
+The public key is already configured. Use its matching private key for subsequent releases; do not
+generate a replacement for each build. The following steps describe initial setup for a new
+distribution, before any copies have shipped.
+
 1. Make a key pair, giving a new absolute path outside the repository:
 
    ```sh
@@ -111,6 +121,13 @@ cannot change which app the receipt identifies.
 Installed copies find the release at their next launch check, at most a day later, or at once with
 **Viewer → Check for Updates…**. Download opens the disk image's https address in the browser;
 nothing is installed automatically.
+
+For GitHub Releases, create and push the version tag for the qualified source commit, then prepare a
+draft release with the disk image, checksums, feed and signature. Set `VIEWER_RELEASE_DOWNLOAD_URL`
+during the build to the disk image's version-specific URL under
+`https://github.com/plurid/viewer/releases/download/v<version>/`. Publish the draft as the latest
+release only after its assets have uploaded. This makes the installer and feed available together.
+Run `pnpm updates:verify` against the published assets, then check the website's download link.
 
 ### Qualify the installer
 

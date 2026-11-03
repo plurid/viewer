@@ -8,8 +8,10 @@ Viewer 1.0, the first release.
 - Previews for more than 300 formats: documents, Office files, camera RAW, 3D models, CAD drawings, email, certificates, archives and more. Any file can be shown as hex.
 - Lay out photos and PDFs as collages, contact sheets, N-up sheets, booklets, cards, labels or posters, saved as PDF, PNG or JPEG.
 - Nest DXF parts for laser and plasma cutting, with the sheets, cut length, time and cost it takes.
-- Copies on the same disk are instant. Viewer never deletes your files permanently: removals go to the Trash.
-- Local agents and models can help explore a folder, always with your approval.
+- File copies use filesystem cloning where supported. Removals go to the Trash.
+- Ask a configured model to create or adapt a tool beside your files, browser and terminal. Choose which project data it may receive.
+- Keep tool inputs through revisions, branch a conversation from a quote and manage reusable tools in the Tool library.
+- Export a tool with its code, assets and saved inputs, then reopen it without a model connection.
 - Check for Updates is in the Viewer menu.
 
 Requires macOS 14 or later on a Mac with Apple silicon.
