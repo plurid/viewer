@@ -83,12 +83,14 @@ canvas. Applying content back checks the original revision and preserves its lat
 GLB validation. The sandbox runtime uses the existing private web-preview capability service. See
 [conversation canvases](docs/adr/0011-conversation-canvases.md).
 
-Generated plugins own their application logic, including parsers, calculations and tests. Viewer
-owns context capture, sandbox execution, shared actions, input persistence and revision management.
+Plugins own their application logic, including reused parsers, calculations and tests. Viewer owns
+context capture, sandbox execution, shared actions, input persistence and revision management.
 `domain/canvases/library.ts` defines management requests; `desktop/canvases/service.ts` lists and
 configures the same documents. `renderer/canvases/ToolLibrary.tsx` presents them in a Plurid plane.
-The runtime bundles generic Three.js modules, with no robotics solver or checker. Robotics
-experiment utilities remain offline evaluation material, outside the app's runtime dependency graph.
+The runtime bundles generic Three.js modules, with no robotics solver or checker. The existing
+robotics implementation is packaged by `tools/plugins/robotics` into an explicitly imported canvas
+and code asset. Its source and retained experiment adapters stay outside the app's runtime
+dependency graph. The agent can extend that working plugin without starting from an empty canvas.
 See [generated tool ownership](docs/adr/0015-generated-tool-host.md).
 
 Different worktrees have different working files and indices. Two views of one checkout share those

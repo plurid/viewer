@@ -1,16 +1,13 @@
-import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
 /** Explicit live qualification in the real desktop renderer. All evidence is retained. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { createInterface } from 'node:readline';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parse } from 'jsonc-parser';
 import { Canvases } from '../../src/desktop/canvases/service';
-import { attachRobotMeshes } from '../../src/desktop/canvases/robot';
 import { ChatDocumentStore } from '../../src/desktop/chat/documents';
 import { inspectFile } from '../../src/desktop/files/inspection';
 import { CURRENT_STATE_VERSION } from '../../src/domain/contracts';
@@ -25,6 +22,7 @@ import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { ownedApp, until } from '../../tests/owned-app';
 import { pageCall } from '../../tests/native/runtime/page-function';
 import { canvasFrame } from '../../tests/native/runtime/canvas';
+import { buildRoboticsPlugin } from '../plugins/robotics/build';
 import { screenshot } from '../docs/record';
 import { temporaryRoot, adoptRetainedNativeFixture } from '../temporary';
 import { hashFile } from '../qualification/source';
@@ -37,27 +35,25 @@ import {
   readRobotSessionResult,
 } from './rehearsal';
 import type { RobotStage } from './rehearsal';
+import { stationPrompts as prompts, stationStudySchema } from './station-contract';
+import { reviewStationPlugin } from './station-review';
+import type { CanvasActionInput } from '../../src/domain/canvases/actions';
+import { authorizeStationRun, stationAuthorization } from './station-authorization';
+import { readQualifiedStation } from './station-evidence';
 
-const prompts: Record<RobotStage, string> = {
-  create:
-    "Build a placement tool from this robot and station brief. Test the mounting points and tell me which one needs the smallest move. Use the attached snapshots and meshes. Show the bench, two trays, six labeled targets and the articulated robot. Register actions to evaluate all four mounting points and select one; wire the visible buttons to those same handlers. Invoke the evaluation yourself, request Viewer's independent placement check, then select and recheck the least-movement passing candidate. Keep one stable study state key and preserve camera inputs. Do not add reserved-area controls yet. Explain only results you received from the tools.",
-  refine:
-    'Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm. Add a control and bench overlay for this mounting-point restriction. Keep the same robot, tray targets and 1 mm endpoint tolerance. Revise the existing tool, run its evaluation, request the independent check, then select and check the least-movement passing candidate. Preserve the camera and other inputs.',
-  branch:
-    "Compare the rear mounting point with the front mounting point. Use the same robot, targets and reserved area. Select Rear in this alternative through its registered action, check the saved poses in Viewer and explain the measured tradeoff. Do not change the source brief or the original conversation's inputs.",
-};
 const { values } = parseArgs({
   options: {
     prepare: { type: 'boolean' },
     live: { type: 'boolean' },
-    serve: { type: 'boolean' },
+    authorize: { type: 'string' },
+    qualify: { type: 'boolean' },
+    preflight: { type: 'boolean' },
     run: { type: 'string' },
     stage: { type: 'string' },
     binary: { type: 'string' },
     corpus: { type: 'string' },
     profile: { type: 'string' },
     resume: { type: 'string' },
-    'verify-selection': { type: 'boolean' },
     guidance: { type: 'string' },
     'repair-reason': { type: 'string' },
   },
@@ -65,12 +61,17 @@ const { values } = parseArgs({
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
 assert.equal(
-  Number(!!values.prepare) + Number(!!values.live) + Number(!!values.serve),
+  Number(!!values.prepare) +
+    Number(!!values.live) +
+    Number(!!values.authorize) +
+    Number(!!values.qualify) +
+    Number(!!values.preflight),
   1,
-  'Choose prepare, live or serve.',
+  'Choose prepare, preflight, authorize, live or qualify.',
 );
 const fixture = (name: string) => new URL('../../tests/fixtures/robotics/' + name, import.meta.url);
 type Plan = {
+  contract: 'generated-domain-v1';
   provider: ModelProvider;
   conversationID: string;
   canvasID: string;
@@ -80,6 +81,7 @@ type Plan = {
   prompts: typeof prompts;
   protectedProfile: string;
   protectedHashes: Record<string, string>;
+  starter?: { htmlHash: string; libraryHash: string; origin: string };
 };
 
 async function prepare(): Promise<string> {
@@ -87,7 +89,7 @@ async function prepare(): Promise<string> {
   const sourceProfile = await realpath(
     values.profile ?? path.join(os.homedir(), 'Library/Application Support/Viewer'),
   );
-  const root = await realpath(await temporaryRoot('viewer-station-meta-', '/private/tmp'));
+  const root = await realpath(await temporaryRoot('viewer-generated-station-', '/private/tmp'));
   const profile = path.join(root, 'Profile');
   const project = path.join(root, 'Six-slot station');
   await mkdir(profile, { mode: 0o700 });
@@ -154,24 +156,39 @@ async function prepare(): Promise<string> {
       content: true,
     }),
   );
-  const meshes = await attachRobotMeshes(
-    service,
-    1,
-    canvas.id,
-    source.source,
-    async (file) => {
-      assert.ok((await realpath(file)).startsWith(project + path.sep));
-      return file;
-    },
-    new AbortController().signal,
-  );
+  // Attach only the manifest's explicit files. The model interprets mesh dependencies from raw XML.
+  for (const file of manifest.files.filter((item) => item.path.endsWith('.stl'))) {
+    const source = path.join(project, file.path);
+    await service.attach(1, canvas.id, path.basename(source), await readFile(source), source);
+  }
+  const current = await service.read(1, canvas.id);
   const brief = await service.source(
     1,
     canvas.id,
-    meshes.revision,
+    current.revision,
     await inspectFile(briefPath, { content: true }),
   );
-  await service.state(1, canvas.id, 0, brief.revision, { robotResources: meshes.resources });
+  assert.equal(source.source.data.coverage.content, 'complete');
+  assert.equal(brief.source.data.coverage.content, 'complete');
+  const built = await buildRoboticsPlugin();
+  await service.attach(
+    1,
+    canvas.id,
+    'robotics.js',
+    Buffer.from(built.library),
+    undefined,
+    'Existing robotics plugin implementation. Reuse and extend it.',
+  );
+  const attached = await service.read(1, canvas.id);
+  const starter = await service.write(
+    1,
+    canvas.id,
+    attached.revision,
+    'Robotics workbench',
+    built.html,
+    { reserved: false, targetOffsetX: 0, ui: { targetIndex: 0 } },
+  );
+  await saveEvidence(path.join(root, 'starter.json'), starter);
   await service.flush();
   await new ChatDocumentStore(
     path.join(profile, 'chat-documents', canvas.conversationID + '.json'),
@@ -201,6 +218,7 @@ async function prepare(): Promise<string> {
     ui: normalizePreferences(),
   });
   const plan: Plan = {
+    contract: 'generated-domain-v1',
     provider,
     conversationID: canvas.conversationID,
     canvasID: canvas.id,
@@ -210,15 +228,21 @@ async function prepare(): Promise<string> {
     prompts,
     protectedProfile: sourceProfile,
     protectedHashes,
+    starter: {
+      htmlHash: digest(built.html),
+      libraryHash: digest(built.library),
+      origin: 'existing robotics plugin',
+    },
   };
   await saveEvidence(path.join(root, 'plan.json'), plan);
-  await new RobotRehearsalLedger(root).authorize({ sessions: 3, requestsPerSession: 8 });
-  await saveEvidence(path.join(root, 'authorization.json'), {
-    approval: 'Allow three sessions, up to 24 requests',
-    scope:
-      'Creation, changed mounting constraint, quoted alternative; eight requests per session. Failed and canceled requests count.',
-    at: new Date().toISOString(),
-  });
+  await writeFile(
+    path.join(root, 'prompts.txt'),
+    Object.entries(prompts)
+      .map(([stage, prompt]) => stage.toUpperCase() + '\n\n' + prompt)
+      .join('\n\n'),
+    { flag: 'wx', mode: 0o600 },
+  );
+  // Preparation never creates a paid-call allowance. Authorization is a separate explicit command.
   console.log(
     JSON.stringify({ root, status: 'prepared', provider: provider.model, providerRequests: 0 }),
   );
@@ -226,13 +250,17 @@ async function prepare(): Promise<string> {
 }
 
 async function live(): Promise<void> {
+  if (values.preflight) values.stage = 'create';
   assert.ok(values.run && values.binary && values.stage);
   assert.ok(['create', 'refine', 'branch'].includes(values.stage));
   const stage = values.stage as RobotStage;
   const root = await realpath(values.run);
   adoptRetainedNativeFixture(root);
   const plan = JSON.parse(await readFile(path.join(root, 'plan.json'), 'utf8')) as Plan;
-  assert.deepEqual(plan.prompts, prompts, 'The prepared prompts must be unchanged.');
+  assert.equal(plan.contract, 'generated-domain-v1', 'Prepare a fresh generic-host run.');
+  // Authorization binds the actual prepared plan; changing source defaults must not rewrite history.
+  assert.ok(plan.prompts.create && plan.prompts.refine && plan.prompts.branch);
+  if (!values.qualify && !values.preflight) await stationAuthorization(root);
   for (const [name, hash] of Object.entries(plan.protectedHashes))
     assert.equal(
       await hashFile(path.join(plan.protectedProfile, name)),
@@ -243,21 +271,34 @@ async function live(): Promise<void> {
   const previous = await ledger.sessions();
   assert.equal(
     previous.length,
-    ['create', 'refine', 'branch'].indexOf(stage) + (values.resume ? 1 : 0),
+    ['create', 'refine', 'branch'].indexOf(stage) + (values.resume || values.qualify ? 1 : 0),
     'Review each stage before moving on.',
   );
-  if (previous.length && !values.resume) {
-    const lastResult = (await readRobotSessionResult(previous.at(-1)!)) as { status: string };
-    assert.equal(lastResult.status, 'generated', 'The preceding continuation must finish.');
-    const review = JSON.parse(
-      await readFile(path.join(previous.at(-1)!, 'qualification.json'), 'utf8'),
-    );
-    assert.equal(review.status, 'passed', 'The prior live stage has not passed native review.');
+  if (previous.length && !values.resume && !values.qualify) {
+    await readQualifiedStation(previous.at(-1)!);
   }
-  const profile = path.join(root, 'Profile');
-  const resumed = values.resume
-    ? ((await readRobotSessionResult(previous.at(-1)!)) as { conversationID: string })
-    : undefined;
+  let launchRoot = root;
+  let profile = path.join(root, 'Profile');
+  if (values.preflight) {
+    // The no-call preflight needs files and runtime, never a real credential or keychain grant.
+    launchRoot = await realpath(await temporaryRoot('viewer-station-preflight-', '/private/tmp'));
+    profile = path.join(launchRoot, 'Profile');
+    await mkdir(profile, { mode: 0o700 });
+    for (const folder of ['canvas-documents', 'canvas-assets', 'chat-documents'])
+      await cp(path.join(root, 'Profile', folder), path.join(profile, folder), { recursive: true });
+    const settings = defaultSettings(plan.project);
+    settings.providers = [];
+    settings.hotkey.enabled = false;
+    await saveEvidence(path.join(profile, 'config.jsonc'), {
+      version: 1,
+      settings,
+      ui: normalizePreferences(),
+    });
+  }
+  const resumed =
+    values.resume || values.qualify
+      ? ((await readRobotSessionResult(previous.at(-1)!)) as { conversationID: string })
+      : undefined;
   const baseChat = (await new ChatDocumentStore(
     path.join(
       profile,
@@ -265,7 +306,7 @@ async function live(): Promise<void> {
       (resumed?.conversationID ?? plan.conversationID) + '.json',
     ),
   ).load())!;
-  assert.ok(baseChat && (baseChat.status === 'idle' || values.resume));
+  assert.ok(baseChat && (baseChat.status !== 'running' || values.resume || values.qualify));
   const workspace: SavedState = {
     version: CURRENT_STATE_VERSION,
     look: 'dark',
@@ -301,9 +342,10 @@ async function live(): Promise<void> {
     mode: 0o600,
   });
   const app = await ownedApp(values.binary, profile, {
-    mode: 'hidden',
+    mode: 'foreground',
     label: 'station-live',
-    environment: { VIEWER_STATION_RUN: root },
+    mockKeychain: !!values.preflight,
+    environment: { VIEWER_STATION_RUN: launchRoot },
   });
   let main: Awaited<ReturnType<typeof app.connect>> | undefined;
   let session: Awaited<ReturnType<RobotRehearsalLedger['begin']>> | undefined;
@@ -311,6 +353,7 @@ async function live(): Promise<void> {
   let canvas: CanvasDocument | undefined;
   let original: CanvasDocument | undefined;
   let failure: string | undefined;
+  let generated = false;
   try {
     main = await app.connect();
     await main.command('Emulation.setDeviceMetricsOverride', {
@@ -335,13 +378,10 @@ async function live(): Promise<void> {
     if (stage === 'branch') {
       original = (
         await main.evaluate(
-          pageCall(
-            (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
-            plan.canvasID,
-          ),
+          pageCall((id) => window.viewer.canvas({ kind: 'read', id }), plan.canvasID),
         )
       ).document;
-      if (!values.resume) {
+      if (!values.resume && !values.qualify) {
         const reply = [...conversation.messages]
           .reverse()
           .find((m) => m.role === 'assistant' && /front/i.test(m.text));
@@ -408,163 +448,149 @@ async function live(): Promise<void> {
         );
       }
       assert.ok(conversation.canvasID);
-      const frame = await canvasFrame(main, conversation.canvasID);
-      await until(
-        () => frame.evaluate(pageCall(() => !!document.querySelector('#bSelect'))),
-        Boolean,
-        'generated alternative controls',
-      );
     }
     assert.ok(conversation.canvasID);
-    if (stage === 'refine' && !values.resume) {
-      const frame = await canvasFrame(main, conversation.canvasID);
-      const viewport = await frame.evaluate(
-        pageCall(() => {
-          const joint = document.querySelector<HTMLInputElement>('[aria-label="gripper"]');
-          if (!joint) throw new Error('The generated joint control is missing.');
-          joint.value = '0.1';
-          joint.dispatchEvent(new Event('input', { bubbles: true }));
-          const canvas = [...document.querySelectorAll('canvas')].sort(
-            (a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight,
-          )[0];
-          if (!canvas) throw new Error('The generated robot viewport is missing.');
-          const box = canvas.getBoundingClientRect();
-          return {
-            x: box.x + box.width / 2,
-            y: box.y + box.height / 2,
-            gripper: Number(joint.value),
-          };
-        }),
-      );
-      await main.command(
-        'Input.dispatchMouseEvent',
-        {
-          type: 'mousePressed',
-          x: viewport.x,
-          y: viewport.y,
-          button: 'left',
-          clickCount: 1,
-        },
-        frame.sessionId,
-      );
-      for (let step = 1; step <= 12; step++)
-        await main.command(
-          'Input.dispatchMouseEvent',
-          { type: 'mouseMoved', x: viewport.x + step * 4, y: viewport.y + step, buttons: 1 },
-          frame.sessionId,
-        );
-      await main.command(
-        'Input.dispatchMouseEvent',
-        {
-          type: 'mouseReleased',
-          x: viewport.x + 48,
-          y: viewport.y + 12,
-          button: 'left',
-          clickCount: 1,
-        },
-        frame.sessionId,
-      );
-      await until(
-        async () => {
-          const { document } = await main!.evaluate(
-            pageCall(
-              (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
-              conversation.canvasID!,
-            ),
-          );
-          return (
-            !!document.state.camera &&
-            (document.state.ui as { joints?: { gripper?: number } })?.joints?.gripper ===
-              viewport.gripper
-          );
-        },
-        Boolean,
-        'saved camera and joint inputs',
-      );
-    }
     const before = (
       await main.evaluate(
-        pageCall(
-          (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
-          conversation.canvasID,
-        ),
+        pageCall((id) => window.viewer.canvas({ kind: 'read', id }), conversation.canvasID),
       )
     ).document;
-    session = values.resume
-      ? await ledger.resume(
-          stage,
-          values['repair-reason']
-            ? {
-                canvasID: before.id,
-                revision: before.revision,
-                htmlHash: digest(before.html),
-                message: values['repair-reason'],
-              }
-            : undefined,
-        )
-      : await ledger.begin(stage, {
-          execution: 'live-meta-native',
-          model: plan.provider.model,
-          prompt: prompts[stage],
-          conversationID: conversation.id,
-        });
-    const sessionNumber = previous.length + (values.resume ? 0 : 1);
-    const evidence = values.resume
-      ? path.join(
-          session.folder,
-          'continuations',
-          (await readdir(path.join(session.folder, 'continuations'))).sort().at(-1)!,
-        )
-      : session.folder;
-    const prompt = values.resume
-      ? await readFile(values.resume, 'utf8')
-      : prompts[stage] +
-        (values.guidance ? '\n\n' + (await readFile(values.guidance, 'utf8')) : '');
-    await saveEvidence(path.join(evidence, 'prompt.json'), { text: prompt });
-    await writeFile(
-      path.join(root, 'active-session.json'),
-      JSON.stringify({ session: sessionNumber }),
-      { mode: 0o600 },
-    );
-    const response = await main.evaluate(
-      pageCall(
-        (id, providerID, text) => window.viewer.chat({ kind: 'send', id, providerID, text }),
-        conversation.id,
-        plan.provider.id,
-        prompt,
-      ),
-    );
-    assert.ok(!Array.isArray(response));
-    conversation = response;
-    const deadline = Date.now() + 9 * 60_000;
-    let lastCount = 0;
-    while (conversation.status === 'running' && Date.now() < deadline) {
-      await delay(800);
-      const next: ChatReply = await main.evaluate(
-        pageCall((id) => window.viewer.chat({ kind: 'open', id }), conversation.id),
+    const beforeModel = before;
+    if (values.preflight) {
+      assert.ok(plan.starter, 'Prepare a run with the reusable plugin.');
+      assert.equal(digest(before.html), plan.starter.htmlHash);
+      assert.equal(
+        before.assets.find((asset) => asset.name === 'robotics.js')?.hash,
+        plan.starter.libraryHash,
       );
-      assert.ok(!Array.isArray(next));
-      conversation = next;
-      const count = (await readdir(session.folder)).filter((n) =>
-        /^request-\d{2}\.json$/.test(n),
-      ).length;
-      if (count !== lastCount)
-        console.log(JSON.stringify({ stage, requests: count, status: conversation.status }));
-      lastCount = count;
+      assert.equal(before.sources.length, 2);
+      assert.equal(before.assets.length, 14);
+      assert.ok(before.sources.every((source) => source.data.coverage.content === 'complete'));
+      assert.ok(before.sources.every((source) => !('robot' in source.data)));
+      const frame = await canvasFrame(main, before.id);
+      const imports = await frame.evaluate(
+        pageCall(
+          () =>
+            JSON.parse(
+              document.querySelector<HTMLScriptElement>('script[type="importmap"]')!.textContent!,
+            ).imports as Record<string, string>,
+        ),
+      );
+      assert.deepEqual(Object.keys(imports).sort(), ['three', 'three/addons/']);
+      assert.equal((await ledger.sessions()).length, 0);
+      await saveEvidence(path.join(root, 'preflight.json'), {
+        status: 'passed',
+        providerRequests: 0,
+        profile,
+        sourceSnapshots: before.sources.length,
+        assets: before.assets.length,
+        imports,
+        checks: [
+          'Existing robotics plugin opened in the packaged generic host',
+          'Domain library attached as an explicit plugin asset',
+          'Raw sources retained without robotics interpretation',
+          'Only generic graphics imports exposed',
+          'No provider request or session started',
+        ],
+      });
+      console.log(JSON.stringify({ root, status: 'preflight-passed', providerRequests: 0 }));
+      return;
     }
-    if (conversation.status === 'running') {
-      const stopped = await main.evaluate(
-        pageCall((id) => window.viewer.chat({ kind: 'stop', id }), conversation.id),
+    if (values.qualify) {
+      const saved = (await readRobotSessionResult(previous.at(-1)!)) as { canvas: CanvasDocument };
+      assert.equal(
+        before.html,
+        saved.canvas.html,
+        'Offline review cannot substitute local code for Meta output.',
       );
-      assert.ok(!Array.isArray(stopped));
-      conversation = stopped;
+      assert.equal(before.revision, saved.canvas.revision);
+      assert.deepEqual(before.assets, saved.canvas.assets);
+      assert.deepEqual(before.sources, saved.canvas.sources);
+    }
+    let evidence: string;
+    let stageStarted: number;
+    if (!values.qualify) {
+      session = values.resume
+        ? await ledger.resume(
+            stage,
+            values['repair-reason']
+              ? {
+                  canvasID: before.id,
+                  revision: before.revision,
+                  htmlHash: digest(before.html),
+                  message: values['repair-reason'],
+                }
+              : undefined,
+          )
+        : await ledger.begin(stage, {
+            execution: 'live-meta-native',
+            model: plan.provider.model,
+            prompt: plan.prompts[stage],
+            conversationID: conversation.id,
+          });
+      const sessionNumber = previous.length + (values.resume ? 0 : 1);
+      stageStarted = JSON.parse(
+        await readFile(path.join(session.folder, 'started.json'), 'utf8'),
+      ).at;
+      evidence = values.resume
+        ? path.join(
+            session.folder,
+            'continuations',
+            (await readdir(path.join(session.folder, 'continuations'))).sort().at(-1)!,
+          )
+        : session.folder;
+      const prompt = values.resume
+        ? await readFile(values.resume, 'utf8')
+        : plan.prompts[stage] +
+          (values.guidance ? '\n\n' + (await readFile(values.guidance, 'utf8')) : '');
+      await saveEvidence(path.join(evidence, 'prompt.json'), { text: prompt });
+      await writeFile(
+        path.join(root, 'active-session.json'),
+        JSON.stringify({ session: sessionNumber }),
+        { mode: 0o600 },
+      );
+      const response = await main.evaluate(
+        pageCall(
+          (id, providerID, text) => window.viewer.chat({ kind: 'send', id, providerID, text }),
+          conversation.id,
+          plan.provider.id,
+          prompt,
+        ),
+      );
+      assert.ok(!Array.isArray(response));
+      conversation = response;
+      const deadline = Date.now() + 9 * 60_000;
+      let lastCount = 0;
+      while (conversation.status === 'running' && Date.now() < deadline) {
+        await delay(800);
+        const next: ChatReply = await main.evaluate(
+          pageCall((id) => window.viewer.chat({ kind: 'open', id }), conversation.id),
+        );
+        assert.ok(!Array.isArray(next));
+        conversation = next;
+        const count = (await readdir(session.folder)).filter((n) =>
+          /^request-\d{2}\.json$/.test(n),
+        ).length;
+        if (count !== lastCount)
+          console.log(JSON.stringify({ stage, requests: count, status: conversation.status }));
+        lastCount = count;
+      }
+      if (conversation.status === 'running') {
+        const stopped = await main.evaluate(
+          pageCall((id) => window.viewer.chat({ kind: 'stop', id }), conversation.id),
+        );
+        assert.ok(!Array.isArray(stopped));
+        conversation = stopped;
+      }
+    } else {
+      evidence = await temporaryRoot('viewer-review-', previous.at(-1)!);
+      stageStarted = JSON.parse(
+        await readFile(path.join(previous.at(-1)!, 'started.json'), 'utf8'),
+      ).at;
     }
     canvas = (
       await main.evaluate(
-        pageCall(
-          (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
-          conversation.canvasID!,
-        ),
+        pageCall((id) => window.viewer.canvas({ kind: 'read', id }), conversation.canvasID!),
       )
     ).document;
     await saveEvidence(path.join(evidence, 'before.json'), before);
@@ -572,142 +598,144 @@ async function live(): Promise<void> {
     await saveEvidence(path.join(evidence, 'canvas.json'), canvas);
     await delay(1000);
     await screenshot(main, path.join(evidence, 'native.png'));
-    assert.equal(conversation.status, 'idle', conversation.error ?? 'The live turn must finish.');
-    if (values['verify-selection']) {
-      assert.equal(stage, 'create');
-      const frame = await canvasFrame(main, canvas.id);
-      await frame.evaluate(
-        pageCall(() => {
-          const select = document.querySelector<HTMLSelectElement>('#selMount');
-          const button = document.querySelector<HTMLButtonElement>('#bSelect');
-          if (!select || !button) throw new Error('The reviewed selection control changed.');
-          select.value = 'central';
-          select.dispatchEvent(new Event('change', { bubbles: true }));
-          button.click();
-        }),
-      );
-      await delay(500);
-      await frame.evaluate(
-        pageCall(() => document.querySelector<HTMLButtonElement>('#bCheck')!.click()),
-      );
-      await delay(500);
-      canvas = (
-        await main.evaluate(
-          pageCall(
-            (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
-            canvas.id,
-          ),
-        )
-      ).document;
-      await saveEvidence(path.join(evidence, 'operator-selection.json'), {
-        actor: 'native UI acceptance',
-        control: 'select Central, then Check',
-        note: 'This interaction verifies the generated control; it is not attributed to Meta.',
-        canvas,
-      });
-      await screenshot(main, path.join(evidence, 'selected.png'));
-    }
+    if (!values.qualify)
+      assert.equal(conversation.status, 'idle', conversation.error ?? 'The live turn must finish.');
+    else
+      assert.notEqual(conversation.status, 'running', 'Finish or stop the turn before reviewing.');
     assert.ok(canvas.html.trim(), 'Meta must write an actual interface.');
-    const activity = conversation.messages.filter((m) => m.role === 'tool').map((m) => m.text);
+    if (!values.qualify && stage !== 'branch')
+      assert.notEqual(canvas.html, beforeModel.html, 'Meta must produce a new revision.');
+    const activity = conversation.messages
+      .filter((message) => message.role === 'tool' && message.at >= stageStarted)
+      .map((message) => message.text);
     assert.ok(
       activity.some((text) => text.includes('"actorKind":"model"') && text.includes('"completed"')),
       'Meta must successfully invoke a registered action.',
     );
-    const checked = await main.evaluate(
-      pageCall(
-        (id) =>
-          (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'placement-report', id }),
-        canvas.id,
+    assert.doesNotMatch(canvas.html, /viewer\/robotics|requestRobotCheck|requestPlacementCheck/);
+    generated = true;
+    const selected = stage === 'create' ? 'central' : stage === 'refine' ? 'front' : 'rear';
+    const modelActions = activity
+      .map((text) => JSON.parse(text))
+      .filter(
+        (event) =>
+          event.actorKind === 'model' &&
+          event.status === 'completed' &&
+          event.canvasID === canvas!.id &&
+          event.revision === canvas!.revision,
+      );
+    assert.ok(
+      modelActions.some(
+        (event) => event.action === 'select' && event.result?.selected === selected,
       ),
+      'Meta must select this mount through the current revision, not an earlier tool.',
     );
+    if (stage !== 'branch')
+      assert.ok(
+        modelActions.some((event) => event.action === 'evaluate'),
+        'Meta must evaluate the current revision.',
+      );
     assert.equal(
-      checked.placementReport?.status,
-      'checked',
-      'Meta must request an independent check.',
+      canvas.state.selected,
+      selected,
+      'The model must select through its generated handler.',
     );
-    const report = checked.placementReport!;
-    assert.ok(report.status === 'checked');
-    assert.deepEqual(
-      report.candidates.map((c) => c.reached),
-      [3, 6, 6, 6],
-    );
-    assert.equal(report.recommended, stage === 'create' ? 'central' : 'front');
-    assert.equal(
-      report.input.selected,
-      stage === 'create' ? 'central' : stage === 'refine' ? 'front' : 'rear',
-    );
-    assert.equal(report.input.reserved.length, stage === 'create' ? 0 : 1);
-    if (stage !== 'create') {
-      assert.ok(before.state.camera, 'A real camera input must exist before the revision.');
+    const generatedStudy = stationStudySchema.parse(canvas.state.study);
+    assert.equal(generatedStudy.recommended, stage === 'create' ? 'central' : 'front');
+    const invoke = async (action: string, input: CanvasActionInput) => {
+      const current = await main!.evaluate(
+        pageCall((id) => window.viewer.canvas({ kind: 'read', id }), canvas!.id),
+      );
+      const reply = await main!.evaluate(
+        pageCall(
+          (id, revision, stateRevision, action, input) =>
+            window.viewer.canvas({
+              kind: 'invoke-action',
+              id,
+              revision,
+              stateRevision,
+              action,
+              input,
+            }),
+          current.document.id,
+          current.document.revision,
+          current.document.stateRevision,
+          action,
+          input,
+        ),
+      );
       assert.equal(
-        JSON.stringify(canvas.state.camera),
-        JSON.stringify(before.state.camera),
-        'Camera inputs must survive.',
+        reply.actionRun?.status,
+        'completed',
+        reply.actionRun?.error ?? action + ' failed',
+      );
+      return reply.actionRun!.result;
+    };
+    const report = await reviewStationPlugin(
+      invoke,
+      await readFile(path.join(plan.project, 'Simulation/SO101/so101_new_calib.urdf'), 'utf8'),
+      JSON.parse(await readFile(path.join(plan.project, 'station.json'), 'utf8')),
+      stage !== 'create',
+    );
+    const after = (
+      await main.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'read', id }), canvas.id))
+    ).document;
+    assert.equal(after.state.selected, selected, 'External probes must preserve the selection.');
+    if (stage !== 'create' && !values.qualify) {
+      assert.deepEqual(
+        after.state.camera,
+        beforeModel.state.camera,
+        'Camera inputs must survive the revision.',
       );
       assert.deepEqual(
-        (canvas.state.ui as { joints?: unknown })?.joints,
-        (before.state.ui as { joints?: unknown })?.joints,
-        'Joint inputs must survive.',
+        after.state.ui,
+        beforeModel.state.ui,
+        'Joint inputs must survive the revision.',
       );
     }
-    if (stage === 'refine')
-      assert.notEqual(canvas.html, before.html, 'Meta must revise the interface.');
     if (stage === 'branch') {
       const unchanged = (
         await main.evaluate(
-          pageCall(
-            (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
-            plan.canvasID,
-          ),
+          pageCall((id) => window.viewer.canvas({ kind: 'read', id }), plan.canvasID),
         )
       ).document;
       assert.ok(original);
-      assert.equal(unchanged.html, original.html, 'The original tool must remain unchanged.');
-      assert.deepEqual(
-        unchanged.state,
-        original.state,
-        'The original inputs must remain unchanged.',
-      );
-      await saveEvidence(path.join(session.folder, 'original.json'), unchanged);
-      const comparison = await main.evaluate(
-        pageCall(
-          (id) =>
-            (window.viewer as unknown as ExperimentAPI).canvas({
-              kind: 'placement-comparison',
-              id,
-            }),
-          canvas.id,
-        ),
-      );
-      assert.equal(comparison.placementComparison?.status, 'compared');
-      await saveEvidence(
-        path.join(session.folder, 'comparison.json'),
-        comparison.placementComparison,
-      );
+      assert.equal(unchanged.html, original.html);
+      assert.deepEqual(unchanged.state, original.state);
+      await saveEvidence(path.join(evidence, 'original.json'), unchanged);
     }
-    const qualificationFolder = (await readdir(session.folder)).includes('qualification.json')
-      ? evidence
-      : session.folder;
-    await saveEvidence(path.join(qualificationFolder, 'qualification.json'), {
-      status: 'passed',
-      report,
-      checks: [
-        'actual Meta HTML',
-        'registered action invocation',
-        'independent placement check',
-        'selected candidate',
-      ],
-      providerRequests: (await readdir(session.folder)).filter((n) =>
-        /^request-\d{2}\.json$/.test(n),
+    const qualification = {
+      ...report,
+      actor: 'external acceptance harness, not Viewer or Meta',
+      canvasID: canvas.id,
+      revision: canvas.revision,
+      htmlHash: digest(canvas.html),
+      conversationStatus: conversation.status,
+      conversationError: conversation.error,
+      finalReply: conversation.messages.some(
+        (message) => message.role === 'assistant' && message.at >= stageStarted,
+      ),
+      providerRequests: (await readdir(session?.folder ?? previous.at(-1)!)).filter((name) =>
+        /^request-\d{2}\.json$/.test(name),
       ).length,
-    });
+    };
+    await saveEvidence(path.join(evidence, 'qualification.json'), qualification);
+    const stageFolder = session?.folder ?? previous.at(-1)!;
+    if (stageFolder !== evidence && !(await readdir(stageFolder)).includes('qualification.json'))
+      await saveEvidence(path.join(stageFolder, 'qualification.json'), qualification);
+    await screenshot(main, path.join(evidence, 'reviewed.png'));
   } catch (error) {
     failure = String(error);
+    console.error(JSON.stringify({ stage, failure }));
   } finally {
-    await app.close(main);
+    try {
+      await app.close(main);
+    } catch (error) {
+      failure = [failure, String(error)].filter(Boolean).join('\n');
+    }
     if (session)
       await session.finish({
-        status: failure ? 'failed' : 'generated',
+        status: generated ? 'generated' : 'failed',
         stage,
         failure,
         conversationID: conversation.id,
@@ -733,20 +761,11 @@ async function live(): Promise<void> {
   if (failure) process.exitCode = 1;
 }
 
-if (values.serve) {
-  assert.ok(values.binary && values.corpus);
-  values.run = await prepare();
-  console.log(
-    'Ready. Enter create, refine or branch after reviewing the preceding stage; quit exits.',
-  );
-  for await (const line of createInterface({ input: process.stdin })) {
-    const stage = line.trim();
-    if (stage === 'quit') break;
-    if (!['create', 'refine', 'branch'].includes(stage)) {
-      console.log('Expected create, refine, branch or quit.');
-      continue;
-    }
-    values.stage = stage;
-    await live();
-  }
-} else await (values.prepare ? prepare() : live());
+if (values.authorize) {
+  assert.ok(values.run, 'Choose the prepared run.');
+  const root = await realpath(values.run);
+  const grant = JSON.parse(await readFile(values.authorize, 'utf8'));
+  await authorizeStationRun(root, grant);
+  console.log(JSON.stringify({ root, status: 'authorized', providerRequests: 0 }));
+} else if (values.prepare) await prepare();
+else await live();

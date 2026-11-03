@@ -5,9 +5,16 @@ Status: accepted. Supersedes [robot snapshots](0013-robot-model-snapshots.md) an
 
 ## Decision
 
-Viewer hosts tools created for a request. The generated artifact contains its interface and the
-logic that makes it work: parsing, calculations, transformations, validation and tests. A robotics
-request must generate its solver and checker. Viewer must not supply those behind a generated page.
+Viewer hosts plugins assembled or adapted for a request. A plugin contains its interface and the
+logic that makes it work: parsing, calculations, transformations, validation and tests. Start from
+existing working tools and libraries when available. A robotics request can extend the robotics
+plugin; it does not require the model to invent a solver again.
+
+Application logic belongs to the plugin package, including its explicitly attached code assets.
+Viewer must not inject that logic behind the page. The robotics implementation lives under
+`tools/plugins/robotics`, outside the shipped application's runtime dependency graph. Its package
+uses the existing portable canvas format and includes its own `robotics.js` module. It can be
+imported, duplicated and revised without rebuilding Viewer.
 
 The host supplies domain-neutral scaffolding, bounded context snapshots, local assets, an isolated
 browser runtime, shared action invocation, saved inputs, content revisions and reviewed exports.
@@ -30,10 +37,11 @@ The app no longer injects a robotics module or exposes robot-check operations to
 sandbox. Source capture retains bounded text for the generated tool to interpret. Batch asset
 attachment takes an explicit list of authorized paths and knows nothing about robot mesh structure.
 
-The earlier station recording cannot establish that Meta generated its domain algorithms. New
-qualification must retain the model response, exact generated artifact and observed action results.
-The film should show creation and a visible operation in several domains using this same host.
-Image, video and CAD examples require their own working artifacts before they appear as product
-claims.
+Retain the starting plugin, dependencies, model response, resulting revision and observed action
+results. Credit reused implementation as reused code and model changes as model changes. The earlier
+station recording does not establish that Meta wrote the supplied algorithms. That is not a
+requirement for adapting a plugin successfully. The film should show creation and a visible
+operation in several domains using this same host. Image, video and CAD examples require their own
+working artifacts before they appear as product claims.
 
 [Tool guide](../guides/canvases.md) · [Runtime contract](../reference/canvases.md)

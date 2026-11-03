@@ -3,15 +3,22 @@ import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { temporaryRoot } from '../tools/temporary';
 import { stationTransport } from '../tools/robotics/station-transport';
+import { authorizeStationRun } from '../tools/robotics/station-authorization';
 
-async function fixture() {
+async function fixture(requestsPerSession = 8) {
   const root = await realpath(await temporaryRoot('viewer-station-cap-'));
   const folder = path.join(root, 'sessions/01');
-  await mkdir(folder, { recursive: true });
+  await mkdir(path.join(root, 'sessions'));
   await writeFile(
-    path.join(root, 'budget.json'),
-    JSON.stringify({ sessions: 3, requestsPerSession: 8 }),
+    path.join(root, 'plan.json'),
+    JSON.stringify({ contract: 'generated-domain-v1', prompts: { create: 'test fixture' } }),
   );
+  await authorizeStationRun(root, {
+    sessions: 3,
+    requestsPerSession,
+    approval: 'Synthetic test allowance; mock transport only.',
+  });
+  await mkdir(folder);
   await writeFile(path.join(root, 'active-session.json'), JSON.stringify({ session: 1 }));
   await writeFile(path.join(folder, 'started.json'), '{}');
   return { root, folder };
@@ -75,5 +82,47 @@ describe('native station request allowance', () => {
     expect(upstream).toHaveBeenCalledTimes(8);
     await writeFile(path.join(continuation, 'result.json'), '{}');
     await expect(resumed(url, options)).rejects.toThrow('finished');
+  });
+
+  it('honours a smaller allowance and rejects budget or prompt changes before network I/O', async () => {
+    const { root } = await fixture(2);
+    const upstream = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => Response.json({ ok: true }));
+    const request = stationTransport(root, upstream);
+    await request(url, options);
+    await request(url, options);
+    await expect(stationTransport(root, upstream)(url, options)).rejects.toThrow('exhausted');
+    await writeFile(
+      path.join(root, 'budget.json'),
+      JSON.stringify({ sessions: 3, requestsPerSession: 8 }),
+    );
+    await expect(request(url, options)).rejects.toThrow('changed after approval');
+    expect(upstream).toHaveBeenCalledTimes(2);
+    const other = await fixture();
+    await writeFile(
+      path.join(other.root, 'plan.json'),
+      JSON.stringify({ contract: 'generated-domain-v1', prompts: {} }),
+    );
+    await expect(stationTransport(other.root, upstream)(url, options)).rejects.toThrow(
+      'changed after approval',
+    );
+    expect(upstream).toHaveBeenCalledTimes(2);
+  });
+
+  it('cannot send from an unapproved prepared run or replenish a started run', async () => {
+    const root = await realpath(await temporaryRoot('viewer-unapproved-station-'));
+    await writeFile(path.join(root, 'active-session.json'), JSON.stringify({ session: 1 }));
+    const upstream = vi.fn<typeof fetch>();
+    await expect(stationTransport(root, upstream)(url, options)).rejects.toThrow();
+    expect(upstream).not.toHaveBeenCalled();
+    const fixtureRun = await fixture();
+    await expect(
+      authorizeStationRun(fixtureRun.root, {
+        sessions: 3,
+        requestsPerSession: 8,
+        approval: 'repeat',
+      }),
+    ).rejects.toThrow('cannot be reauthorized');
   });
 });

@@ -321,96 +321,136 @@ conflict-aware application, portable content and bundled 3D rendering. Set `VIEW
 the candidate being tested and retain both preservation variables. Neither fixture is
 model-generation evidence.
 
-### Shared canvas actions and station study
+### Generated tool qualification
 
-Run the service, protocol and independent placement checks without a provider:
-
-```sh
-VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm --filter viewer-electron exec vitest run tests/canvas-actions.test.ts tests/robot-placement.test.ts tests/chat.test.ts
-```
-
-From the app directory, point the native test at a current preserved app and the pinned SO-101
-corpus used by the robot rehearsal:
+Viewer supplies the generic canvas runtime. The station tool must generate its own parser,
+transforms, solver and checker. The external evaluator is test equipment outside Viewer and is never
+supplied to the model. Run its tests and the request-budget checks without a provider:
 
 ```sh
-VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
-VIEWER_TEST_BINARY=/path/to/Viewer.app/Contents/MacOS/Viewer \
-VIEWER_ROBOT_CORPUS=/path/to/SO-101 \
-node --import tsx tests/native/station-actions.ts
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm exec vitest run \
+  tests/tool-library.test.ts tests/canvas-actions.test.ts tests/station-review.test.ts \
+  tests/station-transport.test.ts --maxWorkers=2
 ```
 
-The test verifies every corpus file against the pinned manifest, creates an isolated profile and
-retains all outputs. It exercises real registered handlers, a visible control using the same action,
-independent checks, takeover, an exact quote branch, compatible comparison, saved JSON, portable
-reopen and a native cold restart. `summary.json` records outcomes and `providerRequests: 0`.
-Screenshots cover the wide tool, its report, a narrow view, the alternative and the reopened tool.
+[The station contract](../../packages/viewer-electron/app/tools/robotics/station-contract.ts)
+defines the three prompts and observable action inputs and outputs. Preparation supplies the
+existing robotics plugin, with its calculation library as an attached asset. Its reviewer checks
+generated self-tests, three held-out poses, target perturbations, joint-limit changes, all returned
+placement poses and the recommendation. It recomputes positions from the original URDF. A passing
+action status alone cannot pass this review.
 
-The interface in `tests/fixtures/robotics/station.html` is supplied test code. These checks qualify
-the action mechanism and station calculations, not Meta generation. Use the
-[station generation gates](../research/workshop.md#station-generation-and-acceptance) and an
-explicit new allowance before paid creation, revision or branching.
-
-The live station runner starts with attached public source snapshots and meshes, without the
-supplied HTML. Build a separately named qualification app so its main-process transport records and
-caps actual provider requests before calling the unchanged desktop entry:
+Build a separately named qualification app. Its main-process transport records and caps actual
+provider requests before starting the unchanged desktop entry:
 
 ```sh
 VIEWER_QUALIFICATION_BOOTSTRAP=tools/robotics/station-bootstrap.ts \
 node --import tsx tools/build-preserving.ts /path/to/seed/Viewer.app out/station-live/Viewer.app
 
 VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
-node --import tsx tools/robotics/station-live.ts --serve \
-  --corpus /path/to/SO-101 --binary /path/to/station-live/Viewer.app/Contents/MacOS/Viewer
+node --import tsx tools/robotics/station-live.ts --prepare --corpus /path/to/SO-101
 ```
 
-Only use this runner after approval for three sessions of at most eight requests each. It copies the
+Preparation verifies the public fixture manifest, attaches raw source snapshots and explicit mesh
+files, and starts with the existing robotics plugin. Its interface and calculation library are
+recorded in `starter.json` and hashed in the plan; neither is injected by the host. It copies the
 selected Meta provider's encrypted credential, endpoint binding and existing data permission into an
-isolated profile. It does not modify the original profile. In the runner, enter `create`, review the
-retained native result, then enter `refine` and `branch` separately after each preceding gate
-passes. `quit` ends the runner. Its process retains ownership of the generated profile across
-stages. Failed and canceled outgoing requests consume the allowance; restarting the request
-transport cannot reset it. Request headers are omitted and the API key is redacted from retained
-bodies and responses. This instrumented build is for qualification only.
+isolated profile. It leaves the original profile unchanged. Preparation sends no requests and
+creates no paid allowance. Inspect the printed run folder's `prompts.txt` and `plan.json` first.
 
-For separate invocations, use `--prepare --corpus <folder>`, then
-`--live --run <run> --stage create|refine|branch --binary <executable>`. `--guidance <file>` appends
-recorded instructions to the frozen stage prompt. `--resume <prompt-file>` continues the existing
-stage and conversation within its remaining request allowance. A native repair of an already
-generated result additionally needs `--repair-reason <reason>`; its saved canvas ID, revision and
-HTML hash must still match. Neither continuation route starts another session or refunds failed
-calls.
+Run `--preflight --run <run> --binary <executable>` to open the starting plugin in the qualification
+app and check the raw snapshots, attached code and meshes, and generic graphics imports. This starts
+no session and makes no model call.
 
-`--verify-selection` exercises the initial Central selection through the generated user control. Its
-evidence attributes that action to the operator, not the model. Do not use it to claim an autonomous
-model selection.
-
-After all stages pass, run the actual generated artifacts through export and restart using an
-ordinary packaged app:
+Only after explicit user approval, record that approval in a local JSON file with `sessions`,
+`requestsPerSession` and `approval`. Use the exact approved values and wording, with at most three
+sessions and eight requests per session. Then run:
 
 ```sh
 VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
-node --import tsx tools/robotics/station-handoff.ts --run /path/to/live-run \
-  --binary /path/to/Viewer.app/Contents/MacOS/Viewer
+node --import tsx tools/robotics/station-live.ts --authorize /path/to/approved-grant.json \
+  --run /path/to/prepared-run
+
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
+node --import tsx tools/robotics/station-live.ts --live --run /path/to/prepared-run \
+  --stage create --binary /path/to/station-live/Viewer.app/Contents/MacOS/Viewer
 ```
 
-This creates another retained profile with no configured providers. It exports Front and Rear, saves
-and reads back their independently checked JSON, imports the exact generated HTML and assets, and
-checks both tools before and after restarting Viewer. Inputs must match exactly. Recomputed
-floating-point measurements may differ by at most `1e-12` metres between Node and Electron; pass
-counts, selected mounts and constraints must agree. No model requests are made. Native captures wait
-for the framed plane to be inside the viewport and fully opaque.
+The grant is bound to the prepared plan. Failed and canceled requests consume it. Restarting the
+transport, changing the budget file or reauthorizing a started run cannot replenish it. The retained
+request bodies and responses omit headers and redact the API key. This build is for qualification
+only.
 
-Add `--presentation` to prepare a separate copy with the station's local visual corrections. The
-runner first verifies the unchanged imported artifact, then applies `station-presentation.ts` to
-that copy. It adds readable scene annotations, the fictional-station label, saved-state wording and
-accessible control labels. Evaluation and action code must remain byte-for-byte identical; saved
-inputs must match. The resulting copy is independently checked and exercised before and after
-restart.
+Review creation before running `--stage refine`, then review that revision before `--stage branch`.
+The runner retains each conversation, artifact, native screenshot and external review. The native
+quote action selects an actual recommendation in the preceding answer. The starting implementation
+is recorded separately from Meta revisions. Operator changes must retain their own provenance and
+must not be called model output.
 
-Each alternative retains `provider.html`, `presentation.html` and `presentation-edits.json` with
-both hashes, plus an export in its `Presentation` folder. These are local presentation edits, not
-model-authored improvements. This transformation accepts the qualified station HTML; it is not a
-general styling pass for arbitrary canvases.
+`--guidance <file>` records additional instructions with the prompt. `--resume <prompt-file>`
+continues the same conversation within its remaining session allowance. Repair of a completed
+artifact also requires `--repair-reason <reason>` and its saved ID, revision and HTML hash must
+match. A continuation creates no extra allowance.
+
+If the user directs an interrupted creation session to reuse an existing plugin, run
+`station-reuse.ts --run <run> --plugin <export-folder> --instruction <user-instruction>` with the
+preservation variables above. It checks the source and asset hashes, retains the failed canvas, and
+records the supplied plugin separately under `reused-plugin`. It keeps the same conversation, plan,
+grant and request ledger. Continue with `--resume <run>/reused-plugin/resume.txt`; later stages can
+use the recorded `refine-guidance.txt` and `branch-guidance.txt` through `--guidance`. The retained
+starting implementation is operator-supplied code, not a model result.
+
+`--qualify --run <run> --stage <stage> --binary <executable>` reopens the saved tool and reruns
+external acceptance without a model request. This preserves separate evidence for operator checks
+and model invocations. A turn can finish its edits and actions before its closing reply hits the
+request cap. Offline review may accept that exact saved artifact after checking its current-revision
+model actions and calculations. The failed turn stays in the ledger; the report records its status
+and whether it has a final reply. Later stages require a passing report tied to the artifact's ID,
+revision and HTML hash. After all artifacts pass, export both alternatives and test them in a
+provider-free profile:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
+node --import tsx tools/robotics/station-handoff.ts --run /path/to/prepared-run \
+  --binary /path/to/ordinary/Viewer.app/Contents/MacOS/Viewer
+```
+
+This preserves the exact generated code and saved inputs, writes and reads back the placement JSON,
+reopens the portable tools in Viewer, and runs the external evaluator before and after a native cold
+restart. It sends no model requests. The result records plugin output separately from the external
+review. No local presentation code is substituted for Meta's artifact.
+
+### Package and check the reusable robotics plugin
+
+The existing implementation lives in
+[`tools/plugins/robotics`](../../packages/viewer-electron/app/tools/plugins/robotics). `core/`
+contains the parser, solver and checker. `workbench.html` and `workbench.js` retain the existing
+interface. `build.ts` bundles the calculation library as a self-contained module attached to the
+plugin. The app runtime does not import this package.
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
+node --import tsx tools/plugins/robotics/package.ts --corpus /path/to/SO-101
+
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 \
+node --import tsx tools/plugins/robotics/verify.ts --plugin /path/to/exported-plugin \
+  --binary /path/to/ordinary/Viewer.app/Contents/MacOS/Viewer
+```
+
+The packager retains the portable canvas manifest, code asset, pinned meshes and raw source
+snapshots. Open the exported folder with Chat's **Open canvas…** command. The native check uses an
+isolated profile with no provider configured. It exercises both placement constraints, altered
+targets and limits, then tool management, restart and export/import. This qualifies reuse of the
+existing code. It does not claim new Meta generation or renew a paid allowance.
+
+### Retained station experiment
+
+`tests/native/station-actions.ts` and `tests/fixtures/robotics/station.html` record the earlier
+experiment with supplied robotics calculations. They target that experiment's build, not the current
+generic host. Their old passing results and recordings do not establish that Meta generated a
+solver. Retain them as historical evidence; do not run them against the current app or attribute
+their supplied implementation to a model. See the
+[current generation gates](../research/workshop.md#station-generation-and-acceptance).
 
 The chat regression covers a quoted canvas with repeated historical snapshots larger than the
 model-context limit. Identical snapshot data can reference the current canvas; changed values and

@@ -15,11 +15,11 @@ with its native tool call. The existing context and inspection limits still appl
 
 ## Tool ownership and management
 
-A generated tool includes its interface, application logic and tests. Viewer supplies the scaffold,
-context snapshots, local assets, sandbox, action transport, persistence and export review. The agent
-implements domain parsing, calculations and validation. The host does not supply a robotics solver
-or a pose checker. The [ownership decision](../adr/0015-generated-tool-host.md) defines this
-boundary.
+A plugin includes its interface, application logic and tests. The agent can reuse an existing plugin
+or template and extend its code across requests. Viewer supplies the scaffold, context snapshots,
+local assets, sandbox, action transport, persistence and export review. Domain parsing, calculations
+and validation belong to the plugin package. The host does not supply a robotics solver or a pose
+checker. The [ownership decision](../adr/0015-generated-tool-host.md) defines this boundary.
 
 **Tool library** is a persistent Plurid plane, available from commands, Chat and a canvas toolbar.
 It lists saved canvas documents without starting them. Each entry has a name, project, revision,
@@ -54,11 +54,14 @@ Generated HTML receives `window.viewerCanvas`:
 Use stable state keys. A new content revision cannot change the type of an existing saved value.
 HTML, CSS and scripts run in an opaque sandbox through `viewer-html`. The page has no desktop
 bridge, Node, credentials, parent-document access or external network. Asset URLs belong to that
-preview. Workers, nested frames, forms and plugins are disabled.
+preview. Workers, nested frames, forms and browser plugins are disabled.
 
 The import map supplies `three` and bundled `three/addons/` modules for `OrbitControls`,
 `GLTFLoader`, `STLLoader`, `BufferGeometryUtils` and `SkeletonUtils`. Other dependencies must be
-included in the document; remote CDNs are unavailable.
+included in the document or attached as code assets; remote CDNs are unavailable. A plugin can
+import an attached JavaScript module with `await import(asset.url)`, where `asset` is an entry in
+`api.assets`. The asset is stored by hash, travels with the exported canvas and runs under the same
+sandbox restrictions. It is not added to the host's import map or exposed to other tools.
 
 ### Actions shared by the person and agent
 

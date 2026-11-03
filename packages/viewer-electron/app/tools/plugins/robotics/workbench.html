@@ -1,0 +1,265 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Six-slot station</title>
+<style>
+  :root {
+    color-scheme: dark;
+    font: 13px system-ui;
+    color: #f2f4f6;
+    background: #272a30;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+  button,
+  select {
+    background: #31353d;
+    border: 1px solid #454b55;
+    border-radius: 3px;
+    padding: 7px 10px;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:hover {
+    background: #393e47;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  :focus-visible {
+    outline: 2px solid #82b3cf;
+    outline-offset: 3px;
+  }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 328px;
+    height: 100vh;
+    min-height: 440px;
+  }
+  #scene {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #scene header {
+    position: absolute;
+    left: 24px;
+    top: 20px;
+    pointer-events: none;
+  }
+  h1 {
+    font-size: 21px;
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+  p {
+    line-height: 1.5;
+    margin: 8px 0;
+  }
+  header p,
+  .muted,
+  small {
+    color: #b1bac6;
+  }
+  aside {
+    border-left: 1px solid #454b55;
+    background: #31353d;
+    padding: 20px;
+    overflow: auto;
+  }
+  h2 {
+    font-size: 14px;
+    margin: 0 0 12px;
+    font-weight: 600;
+  }
+  section + section {
+    border-top: 1px solid #454b55;
+    margin-top: 20px;
+    padding-top: 20px;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.5;
+  }
+  input[type='checkbox'] {
+    accent-color: #82b3cf;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  th,
+  td {
+    padding: 9px 0;
+    text-align: left;
+    border-bottom: 1px solid #454b55;
+    font-weight: 400;
+  }
+  thead {
+    color: #b1bac6;
+  }
+  td:last-child,
+  th:last-child {
+    text-align: right;
+  }
+  td button {
+    padding: 3px 0;
+    background: none;
+    border: 0;
+    text-align: left;
+  }
+  tr[data-selected='true'] td {
+    color: #82b3cf;
+  }
+  tr[data-reserved='true'] td {
+    color: #b1bac6;
+  }
+  #result {
+    font-size: 16px;
+    line-height: 1.45;
+    margin: 12px 0;
+  }
+  #progress {
+    min-height: 40px;
+    color: #b1bac6;
+  }
+  #scene footer {
+    position: absolute;
+    left: 24px;
+    bottom: 20px;
+    right: 24px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  #scene footer span {
+    margin-left: auto;
+    background: #272a30d9;
+    padding: 5px 8px;
+  }
+  .target-label {
+    position: absolute;
+    padding: 2px 5px;
+    background: #272a30;
+    pointer-events: none;
+    font-size: 12px;
+  }
+  .sources {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+  }
+  .sources button {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: #82b3cf;
+  }
+  select {
+    max-width: 100%;
+  }
+  input[type='number'] {
+    width: 82px;
+    background: #272a30;
+    border: 1px solid #454b55;
+    padding: 5px 8px;
+  }
+  #scene::selection,
+  aside::selection {
+    background: #405466;
+  }
+  .scope {
+    font-size: 12px;
+    color: #b1bac6;
+  }
+  @media (max-width: 760px) {
+    main {
+      grid-template-columns: minmax(0, 1fr);
+      height: auto;
+      grid-template-rows: 440px auto;
+    }
+    aside {
+      border-left: 0;
+      border-top: 1px solid #454b55;
+    }
+  }
+</style>
+<main>
+  <section id="scene" aria-label="Robot, bench and six tray targets">
+    <header>
+      <h1>Reach every tray slot</h1>
+      <p>SO-101 · 600 × 400 mm bench</p>
+    </header>
+    <footer>
+      <button id="fit">Reset view</button><span id="pose-label">Existing mount · A1</span>
+    </footer>
+  </section>
+  <aside>
+    <section>
+      <h2>Mounting study</h2>
+      <p class="muted">Find a position with a passing pose at each of the six targets.</p>
+      <label><input id="reserved" type="checkbox" />Reserve the central mounting area</label>
+      <label>Target X offset (mm)<input id="offset" type="number" value="0" step="1" /></label>
+      <div class="actions">
+        <button id="evaluate">Evaluate placements</button><button id="check">Check poses</button
+        ><button id="export">Export result…</button>
+      </div>
+      <p id="progress" role="status">Ready to calculate 24 candidate poses.</p>
+      <div id="result" role="status">Evaluate the mounting points to compare them.</div>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Mount</th>
+            <th scope="col">Poses found</th>
+            <th scope="col">Move</th>
+          </tr>
+        </thead>
+        <tbody id="mounts"></tbody>
+      </table>
+      <p id="selection" class="muted">Select a mounting point to inspect its poses.</p>
+    </section>
+    <section>
+      <h2>Inspect a target</h2>
+      <label
+        >Tray slot
+        <select id="target" aria-label="Tray slot"></select
+      ></label>
+      <p id="endpoint" class="muted"></p>
+      <p class="scope">
+        Endpoint positions and joint limits. Travel between poses and physical clearances are
+        outside this study.
+      </p>
+    </section>
+    <div class="sources">
+      <button id="robot-source">Robot definition</button
+      ><button id="brief-source">Station brief</button>
+    </div>
+    <p class="scope"></p>
+  </aside>
+</main>

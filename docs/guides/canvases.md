@@ -37,6 +37,21 @@ open section to close it and return focus to its heading.
 Reopening a saved tool runs its saved code. Use **Tools → Source code** to inspect it and **Undo
 revision** to restore the preceding design.
 
+## Start from a working plugin
+
+1. Choose **Open canvas…** in Chat to import an exported plugin folder, or find an existing tool in
+   **Tool library**.
+2. Choose **Duplicate** when you want a separate version for a new task.
+3. Open **Conversation** and describe what to change. Keep the working calculations and controls
+   that already fit the task.
+4. Inspect the new revision, run its checks and use **Export canvas…** to share the resulting tool.
+
+A plugin uses the same saved document as a canvas. Its package carries the interface, code assets,
+captured sources and inputs. Code assets appear under **Assets** and travel with exports. They run
+inside the canvas sandbox. Importing a robotics plugin does not install a solver in Viewer's host.
+The agent can reuse a plugin's implementation, add functions and adapt its interface across several
+requests.
+
 ## Let the agent use its tool
 
 1. Ask the conversation to register actions for the tool's controls and run the needed calculation.
@@ -121,9 +136,9 @@ private.
 ## Ask for a specialist tool
 
 Attach the source files and describe the work: an image adjustment, a drawing editor, or controls
-for a robot definition. Ask the agent to implement the calculations and checks as well as the
-controls. Viewer provides context, saved inputs, the execution sandbox and linked planes. The
-application logic belongs to the generated tool.
+for a robot definition. Start with an existing plugin when one fits. Ask the agent to reuse or
+extend its calculations and checks together with the controls. Viewer provides context, saved
+inputs, the execution sandbox and linked planes. The application logic belongs to the plugin.
 
 Ask the agent to register a test action and run it. Inspect the returned cases and source evidence.
 A successful generated test reports what that plugin tested; Viewer does not independently certify

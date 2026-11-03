@@ -1,14 +1,16 @@
 # Viewer Workshop: interfaces built around a task
 
-The current direction is a generic generated-tool host. The agent writes the interface and its
-application logic. Viewer supplies scaffolding, context, sandbox execution, persistence and tool
-management. [Generated tool ownership](../adr/0015-generated-tool-host.md) replaces the earlier
-built-in robotics solver and checker design.
+The current direction is a generic generated-tool host. The agent assembles and adapts plugins from
+working code, templates and new code where needed. Viewer supplies scaffolding, context, sandbox
+execution, persistence and tool management.
+[Generated tool ownership](../adr/0015-generated-tool-host.md) replaces the earlier built-in
+robotics solver and checker design.
 
-The earlier station qualification demonstrates generated controls and shared actions around supplied
-algorithms. It does not establish that Meta wrote the algorithms. Keep those responses and
-recordings as evidence of that experiment. Qualify fresh generated plugins before claiming the new
-architecture works for the station or the ending montage.
+The existing robotics implementation is packaged as an optional plugin. Meta extends its interface
+with a target-results table and a mounting restriction explanation, then uses the plugin's actions
+to evaluate, select and check placements. The parser, solver and checker remain reused code. Keep
+the starting package and provider revisions separate when presenting the contribution. The earlier
+recordings show the former ownership boundary and need a new capture for this workflow.
 
 The [screenplay](../release/hackathon-demo.md) is the exact script for the current review cut. It
 must change together with the next recording. The
@@ -53,8 +55,9 @@ The retained offline experiment produced passing candidates for 3/6 targets at E
 the other three points. Central requires the least movement. A new reserved mounting-point
 rectangle, X 140–260 mm and Y 120–240 mm, excludes Central. Front becomes the least-movement passing
 choice. Rear remains a valid endpoint alternative for a quote branch. That experiment used a
-supplied solver. These numbers are reference fixtures for qualifying a new plugin, not proof that
-Meta generated a solver. Front moves the base 228.04 mm and Rear 295.30 mm. The canonical input is
+supplied solver. These numbers are reference fixtures for qualifying the reusable plugin. They do
+not claim that Meta wrote its solver. Front moves the base 228.04 mm and Rear 295.30 mm. The
+canonical input is
 [station.json](../../packages/viewer-electron/app/tests/fixtures/robotics/station.json).
 
 The intended output is a selected mounting point, calculated results and a portable working canvas.
@@ -63,6 +66,12 @@ independent reference cases. The study does not model tray or robot footprints, 
 collisions, intervening motion or physical mounting. The fictional dimensions are assigned; no
 physical-fit confirmation blocks the demo. Ambiguous real source dimensions still require review in
 real work.
+
+The results table links each measured endpoint to its pose in the viewport. The reserved-area
+follow-up selects Front, and a quoted conversation investigates Rear. Exported alternatives retain
+the interface, calculation module, meshes, source snapshots and saved controls. Acceptance checks
+the actual actions, table interaction and restart behavior, including reuse without a configured
+model.
 
 The related mounting example prepares an adapter plate and compares fictional cutting quotes. It
 uses an assigned plate specification and a simulated supplier. Its controls, drawing, measurements
@@ -117,7 +126,7 @@ The [canvas reference](../reference/canvases.md) owns the current APIs and limit
 | Execute actions              | The host runs named plugin handlers, validates the input contract, enforces revision checks and commits the returned state.              |
 | Manage tools                 | The Tool library opens, renames, enables, disables and duplicates saved canvases. Each duplicate has a separate conversation and inputs. |
 | Branch and compare           | Exact quoted context creates a separate investigation. Any domain comparison is authored in the plugin.                                  |
-| Solve and check a robot task | Must be generated. The shipped host has no robot solver, checker or robot-check IPC operation.                                           |
+| Solve and check a robot task | Owned by the reusable robotics plugin. The shipped host has no robot solver, checker or robot-check IPC operation.                       |
 | Image, video and CAD montage | Proposed. Each example needs actual generated code and a visible edit before filming.                                                    |
 
 The earlier station and two-target recordings are retained experiment evidence. Their tools used
@@ -134,31 +143,38 @@ where needed; avoid a parallel application or a hardcoded success demonstration.
 
 ### Station generation and acceptance
 
-Prepare an isolated profile with the original source text, explicitly attached meshes and the blank
-scaffold. Do not pass a supplied solver, checker, expected answers or finished tool to the model.
-Retain every response and the exact generated artifact. A fresh qualification requires a separately
-approved session allowance; the earlier station allowance is not a new generation grant. Count
-failed, canceled and repair requests. Review each stage in the native app before continuing.
+Prepare an isolated profile with the existing robotics plugin, original source text and explicitly
+attached meshes. Reuse its working interface, solver and checker. Retain the starting package, every
+response and each resulting revision. Separate reused code from changes made by Meta. A fresh
+qualification requires a separately approved session allowance; the earlier station allowance is not
+a new generation grant. Count failed, canceled and repair requests. Review each stage in the native
+app before continuing.
+
+The [qualification runner](../development/testing.md#generated-tool-qualification) prepares the raw
+inputs without creating an allowance. Its
+[action contract](../../packages/viewer-electron/app/tools/robotics/station-contract.ts) asks for
+callable evaluation, selection, pose inspection and self-tests. The plugin supplies the working
+implementation. The external reviewer checks observed results against source geometry and altered
+inputs. Expected answers are not supplied as computed results.
 
 **Creation request**
 
-> Build a placement tool from this robot and station brief. Test the mounting points and tell me
+> Adapt this robotics plugin to the robot and station brief. Test the mounting points and tell me
 > which one needs the smallest move. Use the attached snapshots and meshes. Show the bench, two
 > trays, six labeled targets and the articulated robot. Register actions to evaluate all four
 > mounting points and select one; wire the visible buttons to those same handlers. Invoke the
-> evaluation yourself, then select and recheck the least-movement passing candidate. Implement the
-> URDF interpretation, transforms, position solver and endpoint checks in the generated code. Viewer
-> supplies no robotics API. Include deterministic self-tests as a registered action. Keep one stable
-> study state key and preserve camera inputs. Do not add reserved-area controls yet. Explain only
-> results you received from the tools.
+> evaluation yourself, then select and recheck the least-movement passing candidate. Reuse the
+> plugin’s parser, transforms, solver and endpoint checks. Add a per-target results summary so I can
+> see which tray slots each mounting point reaches. Preserve its controls, state keys and camera.
+> Explain only results you received from the tools.
 
 **Changed-requirement request**
 
-> Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm. Add a control and bench
-> overlay for this mounting-point restriction. Keep the same robot, tray targets and 1 mm endpoint
-> tolerance. Revise the existing tool, run its evaluation and self-tests, then select and check the
-> least-movement passing candidate using the plugin's own calculations. Preserve the camera and
-> other inputs.
+> Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm. Use the existing control and
+> overlay, and add an explanation of which candidates this restriction excludes. Keep the same
+> robot, tray targets and 1 mm endpoint tolerance. Revise the existing tool, run its evaluation and
+> self-tests, then select and check the least-movement passing candidate using the plugin's own
+> calculations. Preserve the camera and other inputs.
 
 **Quoted-alternative request**
 
@@ -167,22 +183,22 @@ range, then send:
 
 > Compare the rear mounting point with the front mounting point. Use the same robot, targets and
 > reserved area. Select Rear in this alternative through its registered action, check the saved
-> poses with the generated checker and explain the measured tradeoff. Do not change the source brief
-> or the original conversation's inputs.
+> poses with the plugin checker and explain the measured tradeoff. Do not change the source brief or
+> the original conversation's inputs.
 
-| Gate        | Required evidence                                                                                                                                                         |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Creation    | Actual Meta HTML and handlers; a recorded `canvas_invoke`; Generated results for all four mounts; external reference agreement; Central selected; native controls respond |
-| Revision    | Actual Meta revision adds the constraint control; state and camera persist; another invocation; Central excluded; Front selected and checked                              |
-| Branch      | Exact quote range; separate canvas; Rear selected; generated comparison against Front; original inputs unchanged                                                          |
-| Handoff     | Checked JSON saved and read back; portable canvas reopened; native cold restart reruns the plugin check                                                                   |
-| Attribution | Provider envelopes, usage, rejected responses and local edits retained; supplied fixtures never attributed to Meta                                                        |
+| Gate        | Required evidence                                                                                                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Creation    | Starting plugin retained; actual Meta interface revision; recorded `canvas_invoke`; results for all four mounts; external reference agreement; Central selected; native controls respond |
+| Revision    | Actual Meta revision explains the changed constraint; state and camera persist; another invocation; Central excluded; Front selected and checked                                         |
+| Branch      | Exact quote range; separate canvas; Rear selected; generated comparison against Front; original inputs unchanged                                                                         |
+| Handoff     | Checked JSON saved and read back; portable canvas reopened; native cold restart reruns the plugin check                                                                                  |
+| Attribution | Provider envelopes, usage, rejected responses and local edits retained; reused plugin code never attributed to fresh Meta generation                                                     |
 
 Use the same live handlers in the person's controls and the agent calls. A fixture passing these
 mechanics is necessary preparation, but it does not establish that the model uses them successfully.
 Only after all gates pass should the new film present the sequence as Meta behavior.
 
-For each generated artifact, run known pose fixtures and perturb a target and a joint limit to check
+For each plugin revision, run known pose fixtures and perturb a target and a joint limit to check
 that results respond to changed inputs. Run the independent reference outside the app. It is test
 equipment, never an imported dependency of the generated plugin. Preserve the distinction between a
 plugin-reported result and independently established agreement.

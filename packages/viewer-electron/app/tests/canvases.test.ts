@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Canvases } from '../src/desktop/canvases/service';
 import { canvasAssetFile } from '../src/domain/canvases/document';
 import { temporaryRoot } from '../tools/temporary';
+import { loadCanvasLibraries } from '../tools/canvas-libraries';
 
 let root: string;
 let canvases: Canvases;
@@ -67,6 +68,21 @@ describe('durable canvas revisions', () => {
 });
 
 describe('portable canvas assets', () => {
+  it('includes the installed graphics modules in a standalone tool export', async () => {
+    const libraries = await loadCanvasLibraries();
+    const service = new Canvases(root, { changed, libraries: () => libraries });
+    const first = await service.create(1, randomUUID(), root);
+    await service.write(1, first.id, 0, '3D tool', '<canvas></canvas>', {});
+    const exported = await service.export(1, first.id, root);
+    for (const [name, source] of libraries)
+      expect(await readFile(path.join(exported, 'runtime', name), 'utf8')).toBe(source);
+    expect(libraries.has('three.module.js')).toBe(true);
+    expect(libraries.has('three.core.js')).toBe(true);
+    expect(libraries.has('addons/controls/OrbitControls.js')).toBe(true);
+    expect(libraries.has('addons/loaders/STLLoader.js')).toBe(true);
+    await service.flush();
+  });
+
   it('exports and reopens the exact HTML, state, and asset IDs without original paths', async () => {
     const first = await create();
     const source = path.join(root, 'source.txt');

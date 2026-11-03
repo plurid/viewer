@@ -2,6 +2,7 @@ import { readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { RobotRehearsalSession } from './rehearsal';
 import { recordRobotRequests } from './rehearsal-transport';
+import { stationAuthorization } from './station-authorization';
 
 /** A qualification transport cannot replenish its allowance through process restarts. */
 export function stationTransport(
@@ -18,13 +19,11 @@ export function stationTransport(
     const active = JSON.parse(await readFile(path.join(root, 'active-session.json'), 'utf8')) as {
       session: number;
     };
-    if (!Number.isInteger(active.session) || active.session < 1 || active.session > 3)
-      throw new Error('The approved three-session allowance is exhausted.');
+    const grant = await stationAuthorization(root);
+    if (!Number.isInteger(active.session) || active.session < 1 || active.session > grant.sessions)
+      throw new Error('The approved session allowance is exhausted.');
     if ((await realpath(root)) !== root)
       throw new Error('The qualification root changed identity.');
-    const budget = JSON.parse(await readFile(path.join(root, 'budget.json'), 'utf8'));
-    if (budget.sessions !== 3 || budget.requestsPerSession !== 8)
-      throw new Error('The station allowance must remain three sessions of eight requests.');
     const folder = path.join(root, 'sessions', String(active.session).padStart(2, '0'));
     await readFile(path.join(folder, 'started.json'), 'utf8');
     const files = await readdir(folder);
@@ -44,7 +43,7 @@ export function stationTransport(
         folder,
         new RobotRehearsalSession(
           folder,
-          8,
+          grant.requestsPerSession,
           files.filter((name) => /^request-\d{2}\.json$/.test(name)).length,
         ),
       );
