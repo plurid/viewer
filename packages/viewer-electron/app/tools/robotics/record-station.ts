@@ -90,8 +90,10 @@ const save = () =>
         height: 1800,
         sourceFormat: 'png',
         continuousNavigation: true,
+        cameraTimeScale: 1.75,
+        stagedCanvasArrival: true,
         presentationNote:
-          'Retained Meta responses through local JSON replay. Repair rounds condensed. Exact qualified plugin code and attached library. The creation turn has no closing reply. Calculations run in the plugin; external qualification is separate from the product.',
+          'Retained Meta responses through local JSON replay. Repair rounds condensed. One staged entrance of the revised interface. Exact qualified plugin code and attached library. The creation turn has no closing reply. Calculations run in the plugin; external qualification is separate from the product.',
       },
       null,
       2,
@@ -189,7 +191,7 @@ try {
   await take('01-project', async () => {
     await beat(
       'personal',
-      'Until twenty twenty-five, I had written about a million lines of code. Since then, I have modified ten thousand at most, mostly configuration.',
+      "By twenty twenty-five, I'd written about a million lines of code. Since then, I've changed at most ten thousand lines, mostly configuration files.",
       11,
       async () => {
         await delay(1200);
@@ -206,8 +208,8 @@ try {
     );
     await beat(
       'project-thinking',
-      'I still build projects. But my attention has moved: how the pieces connect, what changes what, and whether the result works.',
-      10,
+      "I still have projects to build. I'm spending less time inside individual files, and more time figuring out how everything should work together.",
+      9,
       async () => {
         await click('[data-file-path$="/assets"]');
         await key('Expand folder · →', 'ArrowRight', 'ArrowRight', 39);
@@ -224,7 +226,7 @@ try {
   await take('02-browser', async () => {
     await all();
     await frame('browser');
-    await beat('browser', 'A browser.', 1.6);
+    await beat('browser', 'A browser.', 1.8);
   });
   const sourcePlane = await main.evaluate(
     pageCall(
@@ -238,16 +240,14 @@ try {
   );
   assert.ok(sourcePlane);
   await take('03-editor', async () => {
-    await all();
     await frame(sourcePlane);
-    await beat('editor', 'An editor.', 1.6, async () => {
+    await beat('editor', 'An editor.', 1.8, async () => {
       await key('Edit · ⌘E', 'e', 'KeyE', 69, 4);
     });
   });
   await take('04-terminal', async () => {
-    await all();
     await frame('terminal');
-    await beat('terminal', 'A terminal.', 2.6, async () => {
+    await beat('terminal', 'A terminal.', 2.8, async () => {
       await click('.terminal-plane .xterm-screen');
       await main.command('Input.insertText', { text: 'ls' });
       await key('Run · ↵', 'Enter', 'Enter', 13);
@@ -257,13 +257,13 @@ try {
     await beat(
       'keynote',
       'A browser. An editor. A terminal. Are you getting it? One workspace.',
-      7,
+      6.5,
       all,
     );
     await beat(
       'foundations',
-      'This is Viewer, built on Plurid. Both existed before the hackathon.',
-      5.5,
+      'I built Viewer on Plurid, my spatial framework. I was working on both before the hackathon.',
+      7,
       async () => {
         await frame('conversation');
       },
@@ -272,8 +272,8 @@ try {
   await take('06-create', async () => {
     await beat(
       'existing-plugin',
-      'The new agent tools start from working code. Here, Meta must place a robot to reach six tray slots.',
-      7.5,
+      'For this hackathon, I added a way for Meta to create specialized interfaces right here, alongside my files, browser and terminal.',
+      10,
       async () => {
         await click(
           chat(initial.conversationID) + ' .chat-toolbar button',
@@ -290,7 +290,7 @@ try {
     );
     await beat(
       'ask-meta',
-      'I need to see which targets pass, and click a result to inspect the robot pose. I ask Meta to add that.',
+      "Here, I'm extending a robot tool to find where the arm can reach all six tray slots.",
       9,
       async () => {
         await click(scope(initial.id) + ' button', 'Conversation', 'Ask for a change');
@@ -304,12 +304,14 @@ try {
         );
         await release();
         await pending();
+        await reveal.coverCanvas();
         await click(
           chat(initial.conversationID) + ' .chat-toolbar button',
           'Canvas',
           'Use the revised plugin',
         );
-        await ui.canvas(initial.id);
+        const canvas = await ui.canvas(initial.id);
+        await reveal.arriveCanvas(canvas.frame, { stage: '#scene', panel: 'aside' });
         assert.equal(digest((await readCanvas(initial.id)).html), digest(session.creation.html));
       },
     );
@@ -317,8 +319,8 @@ try {
   await take('07-evaluate', async () => {
     await beat(
       'model-evaluates',
-      'Meta adds the controls and runs the plugin. Four mounting points. Six targets. The calculations live in this plugin.',
-      8.5,
+      "It adds the table, then runs the plugin's calculations for all four places we could mount the arm.",
+      7.5,
       async () => {
         await release();
         await pending();
@@ -341,8 +343,8 @@ try {
     );
     await beat(
       'central-result',
-      'Central reaches all six with the smallest move. Each row takes me to its measured pose.',
-      6.5,
+      'From the centre, it reaches all six slots. I can click a row to look at that position.',
+      7.5,
       async () => {
         const canvas = await ui.canvas(initial.id);
         overlay.cue('Inspect target B3');
@@ -360,7 +362,7 @@ try {
   await take('08-change', async () => {
     await beat(
       'changed-constraint',
-      'Now this central area is needed for something else. Same project, new constraint.',
+      'But now I need to keep the middle of the bench clear. I ask Meta to leave that area out.',
       8,
       async () => {
         await click(scope(initial.id) + ' button', 'Conversation', 'Return to the conversation');
@@ -398,8 +400,8 @@ try {
     );
     await beat(
       'meta-revises',
-      'Meta explains the restriction, runs the calculation again, and selects Front. The tool changes with the question.',
-      8,
+      'It adds an explanation to the tool and runs the calculations again. This time, it recommends the front.',
+      7.5,
       async () => {
         await release();
         await pending();
@@ -430,8 +432,8 @@ try {
   await take('09-alternative', async () => {
     await beat(
       'quote',
-      'What about the rear? I quote the recommendation and open a second conversation beside it.',
-      9,
+      "I'd like to check the rear too, so I select the recommendation and ask about it in a separate conversation.",
+      8.5,
       async () => {
         await click(scope(initial.id) + ' button', 'Conversation', 'Return to the recommendation');
         await reveal.focusQuote(chat(initial.conversationID), answer.id);
@@ -485,7 +487,7 @@ try {
     );
     await beat(
       'comparison',
-      'Meta checks Rear using the plugin. It passes, but needs sixty-seven millimetres more movement. I keep Front.',
+      "The rear works, but I'd have to move the base another sixty-seven millimetres. I'll use the front.",
       8,
       async () => {
         await release();
@@ -522,17 +524,22 @@ try {
   await take('10-handoff', async () => {
     await all();
     await frame(originalPlane);
-    await beat('save-check', 'I save the decision and export the working tool.', 5, async () => {
-      const canvas = await ui.canvas(initial.id);
-      await canvas.press('#export');
-      await click(
-        scope(initial.id) + ' .canvas-result button',
-        'Save result…',
-        'Review and save the result',
-      );
-      await ui.folder(path.join(root, 'Handoff'));
-      await click('.viewer-file-picker footer .primary', undefined, 'Save the result');
-    });
+    await beat(
+      'save-check',
+      'Now I can save the result and the tool I used to get it.',
+      5.5,
+      async () => {
+        const canvas = await ui.canvas(initial.id);
+        await canvas.press('#export');
+        await click(
+          scope(initial.id) + ' .canvas-result button',
+          'Save result…',
+          'Review and save the result',
+        );
+        await ui.folder(path.join(root, 'Handoff'));
+        await click('.viewer-file-picker footer .primary', undefined, 'Save the result');
+      },
+    );
     await beat('export-tool', '', 0, async () => {
       await click(scope(initial.id) + ' button', 'Export canvas…', 'Export the working tool');
       await ui.folder(path.join(root, 'Handoff'));
@@ -556,8 +563,8 @@ try {
     });
     await beat(
       'reopen',
-      'Reopen it. The code, files, controls and saved inputs travel together.',
-      5.5,
+      'When I reopen it, my settings are there and I can carry on using it.',
+      6.5,
       async () => {
         await click('.viewer-file-picker footer .primary', undefined, 'Reopen the saved tool');
         importedID =
@@ -589,7 +596,7 @@ try {
   await take('11-ending', async () => {
     await beat(
       'manage-tools',
-      'These are project tools. I can reopen them, duplicate them, or ask Meta to change them again.',
+      'I can find it again in the tool library, or make a copy when I need to try something different.',
       8,
       async () => {
         await click(scope(importedID) + ' button', 'Tool library', 'Manage project tools');
@@ -599,8 +606,8 @@ try {
     );
     await beat(
       'ending',
-      'I open the project. I ask for what I need. The interface follows the work.',
-      6.5,
+      "I want to be able to open any project and ask for the tools I need, right where I'm working.",
+      8,
       all,
     );
   });

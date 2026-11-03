@@ -82,7 +82,10 @@ streaming feature. Run it in an isolated profile without configured providers.
 4. Call `coverCanvas()` before following the native **Canvas** action. Wait for the real canvas and
    assets to load, then call `revealCanvas()` with its frame connection. Selectors can identify the
    working view and inspector in the qualified generated layout. The temporary mask reveals those
-   actual elements.
+   actual elements. For one spatial entrance, use `arriveCanvas()` instead: the viewport and
+   inspector approach from opposite sides and settle before the next input. It restores their
+   original styles and uses a short fade when reduced motion is requested. Keep this entrance to the
+   first revised tool; subsequent edits use normal navigation.
 5. Exercise the real controls. Call `dismiss()` when returning to the original transcript or closing
    the take. Save `events`, which identifies message hashes and excerpt offsets, with the input and
    frame logs.
@@ -148,10 +151,11 @@ their original speed. It generates the closing title and its narration from the 
 delivered script. Review the final title along with the native shots.
 
 The assembler uses Pillow, macOS's Daniel voice and Homebrew FFmpeg. It encodes once from the PNG
-sources, at the original playback speed, with bounded encoding threads. Timed capture cues produce
-the exact narration, transcript and captions. The output includes an opening study, attribution,
-sample frames and technical decode checks. Review the complete story and its input-to-result
-transitions before replacing the temporary voice and opening.
+sources, with bounded encoding threads. Playback stays at the recorded speed unless the capture
+specifies camera retiming as described below. Timed capture cues produce the exact narration,
+transcript and captions. The output includes an opening study, attribution, sample frames and
+technical decode checks. Review the complete story and its input-to-result transitions before
+replacing the temporary voice and opening.
 
 ## Record the plugin workflow
 
@@ -189,9 +193,16 @@ continuation; keep those omissions in its evidence and credit saved-response pla
 
 Hold the reopened working tool before the final spatial pullback. Record every plane-to-plane move,
 including the browser, editor and terminal sequence and the return from the alternative. Keep
-visible actions inside takes, preserve their playback speed and hold each destination after the
-camera settles. Do not cut away navigation between takes or omit the reopening route. The capture
-records navigation intervals, and the assembler checks that their arrival pauses survive the edit.
+visible actions inside takes and hold each destination after the camera settles. Do not cut away
+navigation between takes or omit the reopening route. Move directly between the browser, editor and
+terminal after the first overview so the sequence does not repeatedly pull out and zoom in.
+
+The capture observes the engine's camera-motion marker and records those intervals separately from
+the action cues. `cameraTimeScale: 1.75` makes each camera move take 75% longer in the edit. All
+other footage keeps its recorded timing. The assembler maps frames, narration and captions through
+the same time conversion and rejects overlapping motion intervals. Retain the original frames and
+timestamps, and credit the slowed camera moves. Check that the destination remains readable before
+the next action begins.
 
 The assembler produces `Narration.txt`, `Captions.srt` and `script.json` from the audio cues of that
 exact cut. Use those files when reviewing or replacing the temporary voice.

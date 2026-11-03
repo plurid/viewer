@@ -315,5 +315,95 @@ export function sessionReplay(main: Connection) {
     mark('canvas-reveal-complete');
   }
 
-  return { events, mount, type, answer, dismiss, focusQuote, coverCanvas, revealCanvas };
+  /** A single editorial entrance, using the revised tool's actual viewport and controls. */
+  async function arriveCanvas(
+    frame: { evaluate<T>(expression: PageExpression<T>): Promise<T> },
+    selectors: { stage: string; panel: string },
+  ) {
+    const original = await frame.evaluate(
+      pageCall((selectors) => {
+        const elements = [selectors.stage, selectors.panel].map((selector) => {
+          const element = document.querySelector<HTMLElement>(selector);
+          if (!element) throw Error('The qualified presentation layout is required.');
+          return { selector, element };
+        });
+        return elements.map(({ selector, element }) => {
+          const saved = {
+            selector,
+            opacity: element.style.opacity,
+            pointerEvents: element.style.pointerEvents,
+          };
+          element.style.opacity = '0';
+          element.style.pointerEvents = 'none';
+          return saved;
+        });
+      }, selectors),
+    );
+    try {
+      await main.evaluate(
+        pageCall(() => document.querySelector('#capture-canvas-cover')?.remove()),
+      );
+      mark('canvas-arrival-start');
+      await frame.evaluate(
+        pageCall(async (original) => {
+          const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+          const transforms = [
+            'perspective(1400px) translate3d(-68px,0,-220px) rotateY(6deg)',
+            'perspective(1400px) translate3d(96px,0,-220px) rotateY(-8deg)',
+          ];
+          const animations: Animation[] = [];
+          try {
+            for (const [index, saved] of original.entries()) {
+              const element = document.querySelector<HTMLElement>(saved.selector)!;
+              element.style.opacity = saved.opacity;
+              animations.push(
+                element.animate(
+                  reduced
+                    ? [{ opacity: 0 }, { opacity: 1 }]
+                    : [
+                        { opacity: 0, transform: transforms[index] },
+                        { opacity: 1, transform: 'none' },
+                      ],
+                  {
+                    duration: reduced ? 150 : index === 0 ? 720 : 640,
+                    delay: reduced || index === 0 ? 0 : 140,
+                    easing: 'cubic-bezier(.16,1,.3,1)',
+                    fill: 'backwards',
+                  },
+                ),
+              );
+            }
+            await Promise.all(animations.map((animation) => animation.finished));
+          } finally {
+            for (const animation of animations) animation.cancel();
+          }
+        }, original),
+      );
+      mark('canvas-arrival-complete');
+    } finally {
+      await frame.evaluate(
+        pageCall((original) => {
+          for (const saved of original) {
+            const element = document.querySelector<HTMLElement>(saved.selector);
+            if (!element) continue;
+            element.style.opacity = saved.opacity;
+            element.style.pointerEvents = saved.pointerEvents;
+          }
+        }, original),
+      );
+    }
+    await delay(550);
+  }
+
+  return {
+    events,
+    mount,
+    type,
+    answer,
+    dismiss,
+    focusQuote,
+    coverCanvas,
+    revealCanvas,
+    arriveCanvas,
+  };
 }

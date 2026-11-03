@@ -4,10 +4,12 @@
 as its audio, `Narration.txt` and `Captions.srt`. The opening and system voice are temporary. This
 script describes the current cut, not the earlier host-owned robotics experiments.
 
-Viewer and Plurid are existing projects. The hackathon adds a host for tools that an agent can
-build, revise and operate. This example starts with the existing robotics code packaged as a plugin.
-Meta adds controls, uses its calculations and investigates an alternative. The task is to choose a
-mounting point that gives an SO-101 arm a passing pose at each of six tray slots.
+Viewer and Plurid are existing projects. Viewer brings files, a browser and a terminal into one
+spatial workspace. The hackathon adds a host where an agent can create, revise and operate
+specialized interfaces alongside those project views. This example starts with the existing robotics
+code packaged as a plugin. Meta adds controls, uses its calculations and investigates an
+alternative. The task is to choose a mounting point that gives an SO-101 arm a passing pose at each
+of six tray slots.
 
 ## Script
 
@@ -35,85 +37,84 @@ Picture: Opening title study.
 
 Picture: Opening title study.
 
-### 00:00:09.361 to 00:00:18.799
+### 00:00:09.481 to 00:00:19.245
 
-> Until twenty twenty-five, I had written about a million lines of code. Since then, I have modified
-> ten thousand at most, mostly configuration.
+> By twenty twenty-five, I'd written about a million lines of code. Since then, I've changed at most
+> ten thousand lines, mostly configuration files.
 
 Picture: Open the robot definition in a linked plane, then return to the project.
 
-### 00:00:20.652 to 00:00:28.616
+### 00:00:20.718 to 00:00:28.985
 
-> I still build projects. But my attention has moved: how the pieces connect, what changes what, and
-> whether the result works.
+> I still have projects to build. I'm spending less time inside individual files, and more time
+> figuring out how everything should work together.
 
 Picture: Expand the mesh folder and open the linked arm geometry.
 
-### 00:00:33.639 to 00:00:34.394
+### 00:00:34.582 to 00:00:35.337
 
 > A browser.
 
 Picture: Pull back through the workspace, focus the project brief and let the browser plane settle.
 
-### 00:00:38.818 to 00:00:39.445
+### 00:00:39.957 to 00:00:40.584
 
 > An editor.
 
 Picture: Move through the workspace to the source definition, then use Command+E to edit it.
 
-### 00:00:44.413 to 00:00:45.145
+### 00:00:45.714 to 00:00:46.445
 
 > A terminal.
 
 Picture: Move through the workspace to the terminal and run ls after arriving.
 
-### 00:00:47.236 to 00:00:52.101
+### 00:00:48.534 to 00:00:53.399
 
 > A browser. An editor. A terminal. Are you getting it? One workspace.
 
 Picture: Frame all planes to reveal the shared spatial workspace.
 
-### 00:00:53.926 to 00:00:58.013
+### 00:00:55.286 to 00:01:00.812
 
-> This is Viewer, built on Plurid. Both existed before the hackathon.
+> I built Viewer on Plurid, my spatial framework. I was working on both before the hackathon.
 
 Picture: Move from the workspace into the actual Viewer conversation.
 
-### 00:00:59.366 to 00:01:05.774
+### 00:01:02.744 to 00:01:11.127
 
-> The new agent tools start from working code. Here, Meta must place a robot to reach six tray
-> slots.
+> For this hackathon, I added a way for Meta to create specialized interfaces right here, alongside
+> my files, browser and terminal.
 
 Picture: Open the existing robotics plugin and orbit its model before requesting an edit.
 
-### 00:01:07.565 to 00:01:14.194
+### 00:01:14.258 to 00:01:19.587
 
-> I need to see which targets pass, and click a result to inspect the robot pose. I ask Meta to add
-> that.
+> Here, I'm extending a robot tool to find where the arm can reach all six tray slots.
 
-Picture: Type an exact retained request excerpt and open the revised plugin.
+Picture: Type an exact retained request excerpt and open the revised plugin. Its real viewport and
+controls arrive from either side, then settle before use.
 
 Typed request:
 
 > Add a compact per-target results table for the selected mounting point, showing target name,
 > measured residual in mm and whether it meets the tolerance.
 
-### 00:01:15.941 to 00:01:23.603
+### 00:01:22.773 to 00:01:28.462
 
-> Meta adds the controls and runs the plugin. Four mounting points. Six targets. The calculations
-> live in this plugin.
+> It adds the table, then runs the plugin's calculations for all four places we could mount the arm.
 
 Picture: Meta invokes the plugin evaluation and selects Central. The activity row names its actor.
 
-### 00:01:24.770 to 00:01:29.890
+### 00:01:30.499 to 00:01:35.852
 
-> Central reaches all six with the smallest move. Each row takes me to its measured pose.
+> From the centre, it reaches all six slots. I can click a row to look at that position.
 
 Picture: Click the new target table and inspect the measured pose in the viewport.
 
-### 00:01:31.993 to 00:01:37.461
+### 00:01:38.895 to 00:01:43.841
 
-> Now this central area is needed for something else. Same project, new constraint.
+> But now I need to keep the middle of the bench clear. I ask Meta to leave that area out.
 
 Picture: Finish the first saved turn, then type the retained reserved-area request.
 
@@ -123,16 +124,17 @@ Typed request:
 > the existing control and bench overlay, and add an explanation of which candidates this
 > restriction excludes.
 
-### 00:01:39.108 to 00:01:46.469
+### 00:01:46.308 to 00:01:52.670
 
-> Meta explains the restriction, runs the calculation again, and selects Front. The tool changes
-> with the question.
+> It adds an explanation to the tool and runs the calculations again. This time, it recommends the
+> front.
 
 Picture: The plugin shows the restriction explanation. Meta evaluates and selects Front.
 
-### 00:01:48.854 to 00:01:54.021
+### 00:01:55.001 to 00:02:01.166
 
-> What about the rear? I quote the recommendation and open a second conversation beside it.
+> I'd like to check the rear too, so I select the recommendation and ask about it in a separate
+> conversation.
 
 Picture: Select the actual recommendation and open its quote branch in a new plane.
 
@@ -140,43 +142,42 @@ Typed request:
 
 > Compare the rear mounting point with the front mounting point.
 
-### 00:01:56.399 to 00:02:03.609
+### 00:02:03.910 to 00:02:09.749
 
-> Meta checks Rear using the plugin. It passes, but needs sixty-seven millimetres more movement. I
-> keep Front.
+> The rear works, but I'd have to move the base another sixty-seven millimetres. I'll use the front.
 
 Picture: Meta invokes the plugin checks and selects Rear in the quoted alternative.
 
-### 00:02:08.844 to 00:02:11.514
+### 00:02:16.871 to 00:02:19.878
 
-> I save the decision and export the working tool.
+> Now I can save the result and the tool I used to get it.
 
 Picture: Save the plugin result through the Viewer file picker.
 
-### 00:02:18.416 to 00:02:23.455
+### 00:02:29.235 to 00:02:33.229
 
-> Reopen it. The code, files, controls and saved inputs travel together.
+> When I reopen it, my settings are there and I can carry on using it.
 
 Picture: Reopen the unchanged exported plugin and use its target table.
 
-### 00:02:24.748 to 00:02:30.936
+### 00:02:36.322 to 00:02:41.791
 
-> These are project tools. I can reopen them, duplicate them, or ask Meta to change them again.
+> I can find it again in the tool library, or make a copy when I need to try something different.
 
 Picture: Open the Tool library and show the saved tool controls.
 
-### 00:02:32.692 to 00:02:37.592
+### 00:02:44.886 to 00:02:50.203
 
-> I open the project. I ask for what I need. The interface follows the work.
+> I want to be able to open any project and ask for the tools I need, right where I'm working.
 
-Picture: Pull back to the shared project space at the recorded camera speed.
+Picture: Hold the final project overview as the narration finishes.
 
 ### Credits
 
 - Viewer + Plurid: existing projects
 - Hackathon: agent canvases, actions, quoted branches and tool management
 - Meta muse-spark-1.3: interface edits and decisions · Reused robotics plugin
-- Saved Meta responses · Repairs condensed · First turn has no closing reply
+- Saved Meta responses · Condensed repairs · Staged entrance · Slower camera moves
 - SO-ARM100 / TheRobotStudio · Fictional station · Temporary opening and voice
 
 ## What each part contributes
@@ -199,18 +200,25 @@ operation.
 
 ## Capture and narrative requirements
 
-- Preserve the personal million-lines versus ten-thousand account, the browser/editor/terminal
-  repetition and the introduction of Viewer and Plurid as prior projects.
+- Preserve the personal million-lines versus ten-thousand-lines account, the browser/editor/terminal
+  repetition and “Are you getting it?” callback, and the introduction of Viewer and Plurid as prior
+  projects.
+- Explain the general purpose before showing robotics: Meta creates specialized interfaces inside
+  the shared workspace. This example extends the existing robotics plugin.
 - Start with the working plugin. Show the request, the actual interface edit and a working control
   together so the viewer can follow what Meta changed.
 - Use native Viewer chat and exact excerpts of the retained requests. Keep saved-session labels out
   of the chat controls and identify replay in the credits and evidence.
 - Keep the qualified HTML and attached calculation module unchanged. The recorded actions run that
   code locally; they are not animations of invented results.
+- Give the first revised interface one restrained spatial entrance. Its real viewport and controls
+  approach from either side, then settle before use. Keep the workspace palette and avoid flashes, a
+  literal Matrix set or repeated entrance effects. Credit this staging as part of the edit.
 - Show both movement values during the alternative comparison. Save and reopen the working plugin,
   then show its Tool library controls before the final spatial view.
-- Preserve visible inputs, shortcuts and plane-to-plane navigation at the recorded speed. Capture
-  native 2880 × 1800 pixels and encode once. Do not enlarge an older low-resolution movie.
+- Keep visible inputs and shortcuts. Camera moves take 75% longer in this edit; all other footage
+  keeps its recorded timing. Preserve every navigation route and hold each destination before the
+  next action. Capture native 2880 × 1800 pixels and encode once.
 - Keep narrated words, typed prompts and scene directions separate. Generate the transcript and
   captions from the delivered audio cues, then update this page with that exact script.
 

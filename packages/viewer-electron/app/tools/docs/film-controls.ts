@@ -20,8 +20,43 @@ export async function filmControls(
   const clips: Record<string, unknown>[] = [];
   let marks: { seconds: number; action: string; narration: string }[] = [];
   let navigation: { destination: string; start: number; settled: number; end: number }[] = [];
+  let cameraMotion: { start: number; end: number }[] = [];
+  let motionStarted: number | undefined;
   let started = 0;
   let recording = false;
+  // Observe actual camera motion so the edit can slow navigation without retiming tool work.
+  await main.command('Runtime.addBinding', { name: 'viewerFilmCameraMotion' });
+  const offMotion = main.onEvent((method, params) => {
+    if (
+      method !== 'Runtime.bindingCalled' ||
+      params.name !== 'viewerFilmCameraMotion' ||
+      !recording
+    )
+      return;
+    const seconds = (performance.now() - started) / 1000;
+    if (params.payload === 'moving') motionStarted ??= seconds;
+    else if (motionStarted !== undefined) {
+      cameraMotion.push({ start: motionStarted, end: seconds });
+      motionStarted = undefined;
+    }
+  });
+  await main.evaluate(
+    pageCall(() => {
+      const report = (window as typeof window & { viewerFilmCameraMotion(payload: string): void })
+        .viewerFilmCameraMotion;
+      let moving = false;
+      new MutationObserver(() => {
+        const current = !!document.querySelector('[data-plurid-motion]');
+        if (current === moving) return;
+        moving = current;
+        report(moving ? 'moving' : 'settled');
+      }).observe(document.body, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['data-plurid-motion'],
+      });
+    }),
+  );
   function requireTake() {
     assert.ok(recording || clips.length === 0, 'Visible actions must stay inside a recorded take.');
   }
@@ -35,7 +70,7 @@ export async function filmControls(
   async function arrive(destination: string, start: number) {
     await atRest();
     const settled = (performance.now() - started) / 1000;
-    await delay(550);
+    await delay(750);
     if (recording)
       navigation.push({ destination, start, settled, end: (performance.now() - started) / 1000 });
   }
@@ -103,6 +138,7 @@ export async function filmControls(
       if (double && n === 1) await delay(70);
     }
     await delay(350);
+    await atRest();
     overlay.cue('');
   }
   async function key(cue: string, key: string, code: string, virtual: number, modifiers = 0) {
@@ -137,6 +173,21 @@ export async function filmControls(
           return plane.dataset.pluridPlane;
         }, selector),
       );
+      if (overviewID) {
+        const visible = await main.evaluate(
+          pageCall((id) => {
+            const button = document.querySelector<HTMLElement>(
+              `[data-plurid-minimap-plane="${id}"]`,
+            );
+            return !!button?.checkVisibility();
+          }, overviewID),
+        );
+        if (!visible) {
+          await click('[aria-label="Commands (⌘K)"]');
+          await main.command('Input.insertText', { text: 'Overview' });
+          await key('Open workspace overview', 'Enter', 'Enter', 13);
+        }
+      }
       await click(
         overviewID ? `[data-plurid-minimap-plane="${overviewID}"]` : selector,
         undefined,
@@ -155,9 +206,8 @@ export async function filmControls(
   async function take(name: string, work: () => Promise<void>) {
     marks = [];
     navigation = [];
-    overlay.reset();
-    started = performance.now();
-    recording = true;
+    cameraMotion = [];
+    motionStarted = undefined;
     console.log('Recording ' + name);
     try {
       const result = await recordFrames(
@@ -167,9 +217,25 @@ export async function filmControls(
           await work();
           await atRest();
         },
-        { width: 2880, height: 1800 },
+        {
+          width: 2880,
+          height: 1800,
+          onStart() {
+            overlay.reset();
+            started = performance.now();
+            recording = true;
+          },
+        },
       );
-      clips.push({ name, ...result, marks, navigation, inputs: overlay.events.slice() });
+      assert.equal(motionStarted, undefined, 'Finish each camera move before ending the take.');
+      clips.push({
+        name,
+        ...result,
+        marks,
+        navigation,
+        cameraMotion,
+        inputs: overlay.events.slice(),
+      });
       console.log(JSON.stringify({ name, seconds: result.seconds, frames: result.frames }));
     } finally {
       recording = false;
@@ -200,6 +266,9 @@ export async function filmControls(
     take,
     beat,
     type,
-    dispose: () => overlay.dispose(),
+    dispose() {
+      offMotion();
+      overlay.dispose();
+    },
   };
 }

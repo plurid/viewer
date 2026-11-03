@@ -37,7 +37,7 @@ export async function recordFrames(
   connection: Connection,
   directory: string,
   actions: () => Promise<void>,
-  options: { width: number; height: number; fps?: number },
+  options: { width: number; height: number; fps?: number; onStart?(): void },
 ) {
   const { width, height, fps = 30 } = options;
   assert.ok([width, height, fps].every((value) => Number.isInteger(value) && value > 0));
@@ -48,6 +48,7 @@ export async function recordFrames(
   let failure: unknown;
   const writes = new Set<Promise<void>>();
   const started = performance.now();
+  options.onStart?.();
   async function accept(encoded: string) {
     assert.ok(
       frames.length < 2400 && bytes < 2_000_000_000,

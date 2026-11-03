@@ -62,6 +62,29 @@ capture = json.loads((source / 'story-capture.json').read_text())
 plugin = capture.get('film') == 'plugin'
 station = capture.get('film') in ('station', 'plugin')
 continuous_navigation = capture.get('continuousNavigation', False)
+camera_time_scale = capture.get('cameraTimeScale', 1)
+staged_canvas_arrival = capture.get('stagedCanvasArrival', False)
+assert 1 <= camera_time_scale <= 2, 'Keep camera retiming bounded.'
+
+
+def edit_time(clip, seconds):
+    """Slow only observed camera intervals; working controls keep their captured timing."""
+    return seconds + sum(max(0, min(seconds, move['end']) - move['start'])
+                         * (camera_time_scale - 1) for move in clip.get('cameraMotion', []))
+
+
+for clip in capture['clips']:
+    previous = 0
+    for move in clip.get('cameraMotion', []):
+        assert previous <= move['start'] < move['end'] <= clip['seconds']
+        previous = move['end']
+if camera_time_scale != 1:
+    assert any(clip.get('cameraMotion') for clip in capture['clips']), 'Camera retiming needs observed motion.'
+if staged_canvas_arrival:
+    arrivals = [event for item in capture['evidence'] for event in item.get('presentation', [])
+                if event['kind'].startswith('canvas-arrival-')]
+    assert [event['kind'] for event in arrivals] == ['canvas-arrival-start', 'canvas-arrival-complete']
+    assert arrivals[0]['milliseconds'] < arrivals[1]['milliseconds']
 if continuous_navigation:
     assert not any(clip.get('omitActions') for clip in capture['clips']), 'Keep every navigation action.'
     for clip in capture['clips']:
@@ -125,30 +148,32 @@ for clip in capture['clips']:
     included = set()
     for start, end in ranges:
         assert 0 <= start < end <= clip['seconds']
-        clip['selectedRanges'].append({'sourceStart': start, 'sourceEnd': end, 'editStart': cursor})
+        clip['selectedRanges'].append({'sourceStart': start, 'sourceEnd': end, 'editStart': cursor,
+                                      'editEnd': cursor + edit_time(clip, end) - edit_time(clip, start)})
         selected_seconds = 0
         for index, frame in enumerate(frames):
             frame_start = frames[index]['milliseconds'] / 1000 if index else 0
             frame_end = frames[index + 1]['milliseconds'] / 1000 if index + 1 < len(frames) else clip['seconds']
-            length = min(end, frame_end) - max(start, frame_start)
-            if length <= 0:
+            kept_start, kept_end = max(start, frame_start), min(end, frame_end)
+            if kept_end <= kept_start:
                 continue
+            length = edit_time(clip, kept_end) - edit_time(clip, kept_start)
             picture.extend(concat_entry(directory / frame['file'], length))
             included.add(index)
             selected_seconds += length
-        assert abs(selected_seconds - (end - start)) < .000001
+        assert abs(selected_seconds - (edit_time(clip, end) - edit_time(clip, start))) < .000001
         for index, mark in enumerate(clip['marks']):
             mark_end = clip['marks'][index + 1]['seconds'] if index + 1 < len(clip['marks']) else clip['seconds']
             if not start <= mark['seconds'] < end:
                 continue
-            available = min(mark_end, end) - mark['seconds']
-            offset = cursor + mark['seconds'] - start
+            available = edit_time(clip, min(mark_end, end)) - edit_time(clip, mark['seconds'])
+            offset = cursor + edit_time(clip, mark['seconds']) - edit_time(clip, start)
             if mark['narration']:
                 assert mark_end <= end, 'Never cut off a spoken cue.'
                 slots.append({'start': offset, 'end': offset + available,
                               'text': mark['narration'], 'action': mark['action']})
             samples.append({'time': offset + min(3, available * .6), 'action': mark['action']})
-        cursor += end - start
+        cursor += edit_time(clip, end) - edit_time(clip, start)
     source_frames += len(included)
     clip['editEnd'] = cursor
 
@@ -179,6 +204,10 @@ if plugin:
         'Saved Meta responses · Repairs condensed · First turn has no closing reply',
         'SO-ARM100 / TheRobotStudio · Fictional station · Temporary opening and voice',
     ]
+    if camera_time_scale != 1:
+        credits[3] = 'Saved Meta responses · Repairs condensed · Camera moves slowed for readability'
+    if staged_canvas_arrival:
+        credits[3] = 'Saved Meta responses · Condensed repairs · Staged entrance · Slower camera moves'
 if closing_callback:
     for index, text in enumerate(['There is no interface.', 'Until you need one.']):
         image = Image.new('RGB', SIZE, '#22262c')
@@ -273,7 +302,9 @@ if station:
     if plugin:
         directions.update({
             'existing-plugin': 'Open the existing robotics plugin and orbit its model before requesting an edit.',
-            'ask-meta': 'Type an exact retained request excerpt and open the revised plugin.',
+            'ask-meta': 'Type an exact retained request excerpt and open the revised plugin.' +
+                        (' Its real viewport and controls arrive from either side, then settle before use.'
+                         if staged_canvas_arrival else ''),
             'model-evaluates': 'Meta invokes the plugin evaluation and selects Central. The activity row names its actor.',
             'central-result': 'Click the new target table and inspect the measured pose in the viewport.',
             'changed-constraint': 'Finish the first saved turn, then type the retained reserved-area request.',
@@ -282,14 +313,18 @@ if station:
             'save-check': 'Save the plugin result through the Viewer file picker.',
             'reopen': 'Reopen the unchanged exported plugin and use its target table.',
             'manage-tools': 'Open the Tool library and show the saved tool controls.',
-            'ending': 'Pull back to the shared project space at the recorded camera speed.',
+            'ending': 'Hold the final project overview as the narration finishes.',
         })
     prompt_by_action = dict(zip(['ask-meta', 'changed-constraint', 'quote'], capture['prompts']))
     with (root / 'Script.md').open('x') as text:
         text.write('# There Is No Interface\n\nExact script of this review cut. Temporary opening and system voice. '
                    'The product footage replays retained Meta responses through working Viewer actions; '
-                   + ('repair rounds are condensed and spatial navigation plays continuously at its recorded speed.\n\n'
-                      if continuous_navigation else 'repairs and navigation are condensed.\n\n'))
+                   + (f'repair rounds are condensed and camera moves take {camera_time_scale:g} times their recorded duration. '
+                      'Tool interactions play at their recorded speed.\n\n' if camera_time_scale != 1 else
+                      ('repair rounds are condensed and spatial navigation plays continuously at its recorded speed.\n\n'
+                       if continuous_navigation else 'repairs and navigation are condensed.\n\n')))
+        if staged_canvas_arrival:
+            text.write('The revised interface has one staged spatial entrance; its code and controls are unchanged.\n\n')
         for cue in cues:
             text.write(f"## {stamp(cue['start'])} to {stamp(cue['end'])}\n\n> {cue['text']}\n\n")
             action = cue.get('action')
@@ -320,7 +355,8 @@ for index, (start, end) in enumerate(zip(boundaries, boundaries[1:])):
 timeline.extend(concat_entry(file, .001)[:2])
 (root / 'captions.concat').write_text('\n'.join(timeline) + '\n')
 store(root / 'script.json', {'source': str(source), 'duration': duration, 'pictureEnd': picture_end,
-                            'cues': cues, 'clips': capture['clips'], 'providerRequests': 0})
+                            'cues': cues, 'clips': capture['clips'], 'providerRequests': 0,
+                            'cameraTimeScale': camera_time_scale, 'stagedCanvasArrival': staged_canvas_arrival})
 
 output = root / 'Viewer - There Is No Interface - review.mp4'
 print(json.dumps({'encoding': str(output), 'seconds': duration, 'nativeFrames': source_frames}), flush=True)
@@ -359,7 +395,10 @@ with output.open('rb') as stream:
 store(root / 'verification.json', {'status': 'technical-checks-passed', 'duration': duration,
       'sourceCapture': str(source), 'video': str(output), 'sha256': digest, 'resolution': SIZE,
       'sourceFrames': source_frames, 'sourceEncoding': 'PNG', 'videoEncodes': 1,
-      'providerRequests': 0, 'voice': 'Temporary system voice', 'playbackSpeed': 1,
+      'providerRequests': 0, 'voice': 'Temporary system voice', 'interactionPlaybackSpeed': 1,
+      'cameraTimeScale': camera_time_scale,
+      'stagedCanvasArrival': staged_canvas_arrival,
+      'observedCameraMoves': sum(len(c.get('cameraMotion', [])) for c in capture['clips']),
       'continuousNavigation': continuous_navigation,
       'recordedNavigation': sum(len(c.get('navigation', [])) for c in capture['clips']),
       'reusedOpening': capture.get('reusedOpening'),
