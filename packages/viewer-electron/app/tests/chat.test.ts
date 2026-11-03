@@ -115,6 +115,36 @@ async function send(id: string): Promise<void> {
 }
 
 describe('quoted conversations and canvases', () => {
+  it('duplicates a tool with its context and inputs without a model request', async () => {
+    const canvases = new Canvases(path.join(root, 'private'), { changed() {} });
+    ports.canvases = canvases;
+    const parent = await create();
+    const attached = document(await chat.request({ kind: 'canvas', id: parent.id }, 1));
+    const source = await canvases.write(1, attached.canvasID!, 0, 'Cost estimate', '<input>', {
+      quantity: 3,
+    });
+    const disabled = await canvases.configure(1, source.id, source.revision, source.title, false);
+    const copy = document(
+      await chat.request({ kind: 'duplicate-canvas', id: source.id }, 1, origin),
+    );
+    expect(generate).not.toHaveBeenCalled();
+    expect(copy.id).not.toBe(parent.id);
+    expect(copy.canvasID).not.toBe(source.id);
+    expect(copy.scopes).toEqual(parent.scopes);
+    expect(copy.messages).toEqual([]);
+    const tool = await canvases.read(1, copy.canvasID!);
+    expect(tool).toMatchObject({
+      title: 'Cost estimate copy',
+      enabled: false,
+      state: { quantity: 3 },
+    });
+    await canvases.state(1, tool.id, tool.stateRevision, tool.revision, { quantity: 5 });
+    expect(await canvases.read(1, source.id)).toEqual(disabled);
+    await expect(
+      chat.request({ kind: 'duplicate-canvas', id: source.id }, 2, origin),
+    ).rejects.toThrow('another window');
+  });
+
   it.each(['meta', 'openai'] as const)(
     'continues a large quoted canvas without duplicating snapshots (%s)',
     async (kind) => {
@@ -353,7 +383,9 @@ describe('quoted conversations and canvases', () => {
     const conversation = await create();
     generate
       .mockResolvedValueOnce(step('canvas_source', { path: file }))
-      .mockResolvedValueOnce(step('canvas_robot_assets', { path: file }))
+      .mockResolvedValueOnce(
+        step('canvas_asset', { files: [path.join(root, 'context', 'part.stl')] }),
+      )
       .mockResolvedValueOnce(
         step('canvas_write', { text: '<main>Robot fixture</main>', commandID: '2' }),
       )
@@ -384,7 +416,9 @@ describe('quoted conversations and canvases', () => {
     const conversation = document(await chat.request({ kind: 'create', paths: [file] }, 1, origin));
     generate
       .mockResolvedValueOnce(step('canvas_source', { path: file }))
-      .mockResolvedValueOnce(step('canvas_robot_assets', { path: file }));
+      .mockResolvedValueOnce(
+        step('canvas_asset', { files: [path.join(root, 'context', 'part.stl')] }),
+      );
     await send(conversation.id);
     const saved = await settled(conversation.id);
     expect(saved.status).toBe('failed');

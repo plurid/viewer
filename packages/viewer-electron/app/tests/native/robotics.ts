@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Canvases } from '../../src/desktop/canvases/service';
+import { ExperimentCanvases as Canvases } from '../../tools/robotics/experiment-canvases';
 import { attachRobotMeshes } from '../../src/desktop/canvases/robot';
 import { inspectFile } from '../../src/desktop/files/inspection';
 import { forwardKinematics } from '../../src/domain/robotics/kinematics';

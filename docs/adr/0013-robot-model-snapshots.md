@@ -1,5 +1,7 @@
 # Robot semantics belong to source snapshots
 
+Superseded by [generated tool ownership](0015-generated-tool-host.md).
+
 ## Decision
 
 The canvas source owner parses a complete URDF into a bounded, validated joint tree before the model

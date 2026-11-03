@@ -7,7 +7,7 @@ import { solvePosition } from '../src/domain/robotics/solver';
 import { createPoseReplay } from '../src/domain/robotics/replay';
 import { checkRobotTask } from '../src/desktop/robotics/check';
 import { canvasRobotReport, compareCanvasRobots } from '../src/desktop/canvases/robot-check';
-import { Canvases } from '../src/desktop/canvases/service';
+import { ExperimentCanvases as Canvases } from '../tools/robotics/experiment-canvases';
 import { robotTaskSchema } from '../src/domain/robotics/task';
 import type { RobotTask } from '../src/domain/robotics/task';
 import type { RobotVector } from '../src/domain/robotics/model';

@@ -103,6 +103,7 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
         >
           Open canvas…
         </button>
+        <button onClick={() => workspace.openToolLibrary(pane.id)}>Tool library</button>
         <button type="button" disabled={busy} onClick={() => void actions.loadRecent()}>
           Conversations
         </button>

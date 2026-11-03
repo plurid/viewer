@@ -19,9 +19,28 @@ export async function filmControls(raw: Connection, root: string) {
   });
   const clips: Record<string, unknown>[] = [];
   let marks: { seconds: number; action: string; narration: string }[] = [];
+  let navigation: { destination: string; start: number; settled: number; end: number }[] = [];
   let started = 0;
   let recording = false;
+  function requireTake() {
+    assert.ok(recording || clips.length === 0, 'Visible actions must stay inside a recorded take.');
+  }
+  async function atRest() {
+    await until(
+      () => main.evaluate(pageCall(() => !document.querySelector('[data-plurid-motion]'))),
+      Boolean,
+      'camera has settled',
+    );
+  }
+  async function arrive(destination: string, start: number) {
+    await atRest();
+    const settled = (performance.now() - started) / 1000;
+    await delay(550);
+    if (recording)
+      navigation.push({ destination, start, settled, end: (performance.now() - started) / 1000 });
+  }
   async function click(selector: string, label?: string, cue = '', double = false, modifiers = 0) {
+    requireTake();
     console.log(JSON.stringify({ click: label ?? selector }));
     const point = await until(
       () =>
@@ -37,15 +56,20 @@ export async function filmControls(raw: Connection, root: string) {
               if (!el) return null;
               el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
               const r = el.getBoundingClientRect();
-              const x = r.x + r.width / 2,
-                y = r.y + r.height / 2;
-              return x > 0 &&
-                y > 0 &&
-                x < innerWidth &&
-                y < innerHeight &&
-                el.contains(document.elementFromPoint(x, y))
-                ? { x, y }
-                : null;
+              for (const vertical of [0.5, 0.25, 0.75, 0.1, 0.9])
+                for (const horizontal of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+                  const x = r.x + r.width * horizontal,
+                    y = r.y + r.height * vertical;
+                  if (
+                    x > 0 &&
+                    y > 0 &&
+                    x < innerWidth &&
+                    y < innerHeight &&
+                    el.contains(document.elementFromPoint(x, y))
+                  )
+                    return { x, y };
+                }
+              return null;
             },
             selector,
             label,
@@ -82,20 +106,43 @@ export async function filmControls(raw: Connection, root: string) {
     overlay.cue('');
   }
   async function key(cue: string, key: string, code: string, virtual: number, modifiers = 0) {
+    requireTake();
     overlay.cue(cue);
     await ui.key(key, code, virtual, modifiers);
     await delay(650);
     overlay.cue('');
   }
   async function all() {
+    requireTake();
+    const start = (performance.now() - started) / 1000;
     await click('[aria-label="Commands (⌘K)"]');
     await main.command('Input.insertText', { text: 'Frame all planes' });
     await key('Frame all planes', 'Enter', 'Enter', 13);
+    await arrive('workspace', start);
   }
   async function frame(id: string) {
+    requireTake();
+    const start = (performance.now() - started) / 1000;
     const selector = `[data-viewer-plane="${id}"] [aria-label="Frame plane"]`;
-    if (recording) await click(selector, undefined, 'Focus this plane');
-    else
+    if (recording) {
+      const overviewID = await main.evaluate(
+        pageCall((selector) => {
+          const button = document.querySelector<HTMLElement>(selector);
+          if (!button) throw Error('Missing framing control');
+          const r = button.getBoundingClientRect();
+          if (button.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)))
+            return null;
+          const plane = button.closest<HTMLElement>('[data-plurid-plane]');
+          if (!plane?.dataset.pluridPlane) throw Error('Missing overview destination');
+          return plane.dataset.pluridPlane;
+        }, selector),
+      );
+      await click(
+        overviewID ? `[data-plurid-minimap-plane="${overviewID}"]` : selector,
+        undefined,
+        overviewID ? 'Follow this plane in the overview' : 'Focus this plane',
+      );
+    } else
       await main.evaluate(
         pageCall((selector) => {
           const button = document.querySelector<HTMLButtonElement>(selector);
@@ -103,20 +150,26 @@ export async function filmControls(raw: Connection, root: string) {
           button.click();
         }, selector),
       );
-    await delay(950);
+    await arrive(id, start);
   }
   async function take(name: string, work: () => Promise<void>) {
     marks = [];
+    navigation = [];
     overlay.reset();
     started = performance.now();
     recording = true;
     console.log('Recording ' + name);
     try {
-      const result = await recordFrames(main, path.join(root, name), work, {
-        width: 2880,
-        height: 1800,
-      });
-      clips.push({ name, ...result, marks, inputs: overlay.events.slice() });
+      const result = await recordFrames(
+        main,
+        path.join(root, name),
+        async () => {
+          await work();
+          await atRest();
+        },
+        { width: 2880, height: 1800 },
+      );
+      clips.push({ name, ...result, marks, navigation, inputs: overlay.events.slice() });
       console.log(JSON.stringify({ name, seconds: result.seconds, frames: result.frames }));
     } finally {
       recording = false;

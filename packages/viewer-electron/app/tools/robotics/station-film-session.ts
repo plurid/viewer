@@ -126,7 +126,7 @@ export async function stationFilmSession(runPath: string) {
           'Qualified final revision with separately retained local presentation edits',
           'Current content revision',
         );
-      } else if (step.kind === 'canvas_invoke' || step.kind === 'canvas_check_placements') {
+      } else if (step.kind === 'canvas_invoke') {
         const arguments_ = JSON.parse(step.text);
         arguments_.revision = context.canvas.revision;
         arguments_.stateRevision = context.canvas.stateRevision;
@@ -150,7 +150,7 @@ export async function stationFilmSession(runPath: string) {
       await new Promise<void>((resolve) => {
         release = resolve;
       });
-      if (step.kind === 'canvas_invoke' || step.kind === 'canvas_check_placements') {
+      if (step.kind === 'canvas_invoke') {
         const latest = canvasDocumentSchema.parse(
           await json(path.join(profile, 'canvas-documents', context.canvas.id + '.json')),
         );

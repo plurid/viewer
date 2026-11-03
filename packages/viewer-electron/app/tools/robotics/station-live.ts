@@ -1,3 +1,4 @@
+import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
 /** Explicit live qualification in the real desktop renderer. All evidence is retained. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -334,7 +335,10 @@ async function live(): Promise<void> {
     if (stage === 'branch') {
       original = (
         await main.evaluate(
-          pageCall((id) => window.viewer.canvas({ kind: 'read', id }), plan.canvasID),
+          pageCall(
+            (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
+            plan.canvasID,
+          ),
         )
       ).document;
       if (!values.resume) {
@@ -463,7 +467,10 @@ async function live(): Promise<void> {
       await until(
         async () => {
           const { document } = await main!.evaluate(
-            pageCall((id) => window.viewer.canvas({ kind: 'read', id }), conversation.canvasID!),
+            pageCall(
+              (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
+              conversation.canvasID!,
+            ),
           );
           return (
             !!document.state.camera &&
@@ -477,7 +484,10 @@ async function live(): Promise<void> {
     }
     const before = (
       await main.evaluate(
-        pageCall((id) => window.viewer.canvas({ kind: 'read', id }), conversation.canvasID),
+        pageCall(
+          (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
+          conversation.canvasID,
+        ),
       )
     ).document;
     session = values.resume
@@ -551,7 +561,10 @@ async function live(): Promise<void> {
     }
     canvas = (
       await main.evaluate(
-        pageCall((id) => window.viewer.canvas({ kind: 'read', id }), conversation.canvasID!),
+        pageCall(
+          (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
+          conversation.canvasID!,
+        ),
       )
     ).document;
     await saveEvidence(path.join(evidence, 'before.json'), before);
@@ -579,7 +592,12 @@ async function live(): Promise<void> {
       );
       await delay(500);
       canvas = (
-        await main.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'read', id }), canvas.id))
+        await main.evaluate(
+          pageCall(
+            (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
+            canvas.id,
+          ),
+        )
       ).document;
       await saveEvidence(path.join(evidence, 'operator-selection.json'), {
         actor: 'native UI acceptance',
@@ -596,7 +614,11 @@ async function live(): Promise<void> {
       'Meta must successfully invoke a registered action.',
     );
     const checked = await main.evaluate(
-      pageCall((id) => window.viewer.canvas({ kind: 'placement-report', id }), canvas.id),
+      pageCall(
+        (id) =>
+          (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'placement-report', id }),
+        canvas.id,
+      ),
     );
     assert.equal(
       checked.placementReport?.status,
@@ -633,7 +655,10 @@ async function live(): Promise<void> {
     if (stage === 'branch') {
       const unchanged = (
         await main.evaluate(
-          pageCall((id) => window.viewer.canvas({ kind: 'read', id }), plan.canvasID),
+          pageCall(
+            (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
+            plan.canvasID,
+          ),
         )
       ).document;
       assert.ok(original);
@@ -645,7 +670,14 @@ async function live(): Promise<void> {
       );
       await saveEvidence(path.join(session.folder, 'original.json'), unchanged);
       const comparison = await main.evaluate(
-        pageCall((id) => window.viewer.canvas({ kind: 'placement-comparison', id }), canvas.id),
+        pageCall(
+          (id) =>
+            (window.viewer as unknown as ExperimentAPI).canvas({
+              kind: 'placement-comparison',
+              id,
+            }),
+          canvas.id,
+        ),
       );
       assert.equal(comparison.placementComparison?.status, 'compared');
       await saveEvidence(

@@ -17,6 +17,7 @@ import type {
   CheckPane,
   ChatPane,
   CanvasPane,
+  ToolLibraryPane,
   ServerPane,
   JournalPane,
   OverviewPane,
@@ -173,6 +174,7 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
       pane.type === 'check' ||
       pane.type === 'chat' ||
       pane.type === 'canvas' ||
+      pane.type === 'tools' ||
       pane.type === 'server' ||
       pane.type === 'browser' ||
       pane.type === 'media' ||
@@ -211,6 +213,7 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
       | CheckPane
       | ChatPane
       | CanvasPane
+      | ToolLibraryPane
       | ServerPane
       | JournalPane
       | BrowserPane
@@ -225,6 +228,7 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
       pane.type !== 'check' &&
       pane.type !== 'chat' &&
       pane.type !== 'canvas' &&
+      pane.type !== 'tools' &&
       pane.type !== 'server' &&
       pane.type !== 'browser' &&
       pane.type !== 'media' &&

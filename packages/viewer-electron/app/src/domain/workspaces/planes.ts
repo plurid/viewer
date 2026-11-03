@@ -14,6 +14,8 @@ export function itemPlaneType(entry: Pick<FileEntry, 'directory' | 'extension'>)
 export function paneTitle(pane: Pane, collectionName?: string): string {
   const name = baseName(pane.path);
   switch (pane.type) {
+    case 'tools':
+      return 'Tool library';
     case 'canvas':
       return pane.title || 'Canvas';
     case 'task':

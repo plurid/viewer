@@ -1,3 +1,4 @@
+import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
 /** Film retained Meta decisions through native Viewer actions, without a cloud request. */
 import assert from 'node:assert/strict';
 import { readdir, writeFile } from 'node:fs/promises';
@@ -86,6 +87,7 @@ const save = () =>
         width: 2880,
         height: 1800,
         sourceFormat: 'png',
+        continuousNavigation: true,
         presentationNote:
           'Retained Meta responses through local JSON replay. Repair rounds condensed. Final generated revisions have separately retained presentation edits. Native controls and independent checks execute during capture.',
       },
@@ -119,12 +121,22 @@ try {
   const { main, ui, overlay, click, key, all, frame, take, beat, type } = film;
   const reveal = sessionReplay(main);
   const readCanvas = async (id: string) =>
-    (await main.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'read', id }), id)))
-      .document;
+    (
+      await main.evaluate(
+        pageCall(
+          (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
+          id,
+        ),
+      )
+    ).document;
   const report = async (id: string) =>
     (
       await main.evaluate(
-        pageCall((id) => window.viewer.canvas({ kind: 'placement-report', id }), id),
+        pageCall(
+          (id) =>
+            (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'placement-report', id }),
+          id,
+        ),
       )
     ).placementReport;
   const readChat = (id: string) =>
@@ -226,7 +238,7 @@ try {
     await beat(
       'personal',
       'Until twenty twenty-five, I had written about a million lines of code. Since then, I have modified ten thousand at most, mostly configuration.',
-      12,
+      11,
       async () => {
         await delay(1200);
         await click(
@@ -243,7 +255,7 @@ try {
     await beat(
       'project-thinking',
       'I still build projects. But my attention has moved: how the pieces connect, what changes what, and whether the result works.',
-      11,
+      10,
       async () => {
         await click('[data-file-path$="/assets"]');
         await key('Expand folder · →', 'ArrowRight', 'ArrowRight', 39);
@@ -257,9 +269,11 @@ try {
       },
     );
   });
-  await all();
-  await frame('browser');
-  await take('02-browser', () => beat('browser', 'A browser.', 2.7));
+  await take('02-browser', async () => {
+    await all();
+    await frame('browser');
+    await beat('browser', 'A browser.', 1.6);
+  });
   const sourcePlane = await main.evaluate(
     pageCall(
       () =>
@@ -271,22 +285,22 @@ try {
     ),
   );
   assert.ok(sourcePlane);
-  await all();
-  await frame(sourcePlane);
-  await take('03-editor', () =>
-    beat('editor', 'An editor.', 3, async () => {
+  await take('03-editor', async () => {
+    await all();
+    await frame(sourcePlane);
+    await beat('editor', 'An editor.', 1.6, async () => {
       await key('Edit · ⌘E', 'e', 'KeyE', 69, 4);
-    }),
-  );
-  await all();
-  await frame('terminal');
-  await take('04-terminal', () =>
-    beat('terminal', 'A terminal.', 3, async () => {
+    });
+  });
+  await take('04-terminal', async () => {
+    await all();
+    await frame('terminal');
+    await beat('terminal', 'A terminal.', 2.6, async () => {
       await click('.terminal-plane .xterm-screen');
       await main.command('Input.insertText', { text: 'ls' });
       await key('Run · ↵', 'Enter', 'Enter', 13);
-    }),
-  );
+    });
+  });
   await take('05-workspace', async () => {
     await beat(
       'keynote',
@@ -385,13 +399,13 @@ try {
       },
     );
   });
-  await click(scope(initial.id) + ' button', 'Conversation');
   await take('08-change', async () => {
     await beat(
       'changed-constraint',
       'Now the central area is needed for something else. I ask Meta to reserve it.',
       8,
       async () => {
+        await click(scope(initial.id) + ' button', 'Conversation', 'Return to the conversation');
         await send(
           initial.conversationID,
           'refine',
@@ -441,14 +455,12 @@ try {
       },
     );
   });
-  await click(scope(initial.id) + ' button', 'Conversation');
   const currentChat = await readChat(initial.conversationID);
   assert.ok(!Array.isArray(currentChat));
   const answer = currentChat.messages.findLast((m) => m.role === 'assistant')!;
   const quote = 'Recommended: front.';
   const offset = answer.text.indexOf(quote);
   assert.ok(offset >= 0);
-  await reveal.focusQuote(chat(initial.conversationID), answer.id);
   let alternativeID = '',
     branchID = '';
   const beforeBranch = (await readCanvas(initial.id)).state;
@@ -458,6 +470,8 @@ try {
       'What about the rear mounting point? I branch from that recommendation and ask Meta to test it.',
       9,
       async () => {
+        await click(scope(initial.id) + ' button', 'Conversation', 'Return to the recommendation');
+        await reveal.focusQuote(chat(initial.conversationID), answer.id);
         await main.evaluate(
           pageCall(
             (id, start, length) => {
@@ -513,7 +527,11 @@ try {
         await idle(branchID);
         const comparison = await main.evaluate(
           pageCall(
-            (id) => window.viewer.canvas({ kind: 'placement-comparison', id }),
+            (id) =>
+              (window.viewer as unknown as ExperimentAPI).canvas({
+                kind: 'placement-comparison',
+                id,
+              }),
             alternativeID,
           ),
         );
@@ -526,14 +544,14 @@ try {
     );
   });
   assert.deepEqual((await readCanvas(initial.id)).state, beforeBranch);
-  await all();
   const originalPlane = await planeFor(scope(initial.id));
   assert.ok(originalPlane);
-  await frame(originalPlane);
-  await inspector(initial.id, true);
   let exported = '',
     importedID = '';
   await take('10-handoff', async () => {
+    await all();
+    await frame(originalPlane);
+    await inspector(initial.id, true);
     await beat(
       'save-check',
       'I keep the checked result and the working tool together.',
@@ -604,8 +622,6 @@ try {
       },
     );
   });
-  // Directory navigation is omitted; measured actions and their visible outcomes retain real timing.
-  film.clips.at(-1)!.omitActions = ['reopen-navigation'];
   await take('11-ending', () =>
     beat(
       'ending',

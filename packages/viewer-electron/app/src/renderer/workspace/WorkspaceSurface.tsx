@@ -121,6 +121,7 @@ const LazyNotePlane = lazy(() => import('../notes/NotePlane'));
 const LazyDiffPlane = lazy(() => import('../diff/DiffPlane'));
 const LazyGitChanges = lazy(() => import('../git/GitChanges'));
 const LazyCanvasPlane = lazy(() => import('../canvases/CanvasPlane'));
+const LazyToolLibrary = lazy(() => import('../canvases/ToolLibrary'));
 const LazyChatPlane = lazy(() => import('../chat/ChatPlane'));
 const LazySessionPlane = lazy(() => import('../chat/SessionPlane'));
 const LazyServerPlane = lazy(() => import('../local-servers/ServerPlane'));
@@ -256,6 +257,21 @@ function ServerContent() {
   );
 }
 
+function ToolLibraryContent() {
+  const plane = usePluridPlane();
+  const pane = useViewer((state) =>
+    activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
+  );
+  if (pane?.type !== 'tools') return <Empty title="Tool library unavailable" />;
+  return (
+    <PreviewFrame activate={() => setActivePane(pane.id)}>
+      <Suspense fallback={<Empty title="Opening tool library…" />}>
+        <LazyToolLibrary pane={pane} />
+      </Suspense>
+    </PreviewFrame>
+  );
+}
+
 function CanvasContent() {
   const plane = usePluridPlane();
   const pane = useViewer((state) =>
@@ -382,6 +398,7 @@ const planes: PluridPlane<React.ComponentType>[] = [
   { route: '/layouts/:id', component: marked(LayoutContent), pinnable: false },
   { route: '/journals/:id', component: marked(JournalContent), pinnable: false },
   { route: '/overviews/:id', component: marked(OverviewContent), pinnable: false },
+  { route: '/tools/:id', component: marked(ToolLibraryContent), pinnable: false },
   { route: '/canvases/:id', component: marked(CanvasContent), pinnable: false },
   { route: '/chats/:id', component: marked(ChatContent), pinnable: false },
   { route: '/diffs/:id', component: marked(ComparisonContent), pinnable: false },

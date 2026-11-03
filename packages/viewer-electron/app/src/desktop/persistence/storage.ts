@@ -145,6 +145,7 @@ const pane = z.discriminatedUnion('type', [
       serverPath: z.string().max(8192).optional(),
     })
     .strict(),
+  z.object({ id, type: z.literal('tools'), path: localPath }).strict(),
   z
     .object({
       id,

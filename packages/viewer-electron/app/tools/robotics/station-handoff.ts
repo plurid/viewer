@@ -1,3 +1,4 @@
+import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
 /** Reopen actual qualified Meta artifacts without a configured provider or another model request. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -5,10 +6,13 @@ import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
-import { Canvases } from '../../src/desktop/canvases/service';
+import { ExperimentCanvases as Canvases } from './experiment-canvases';
 import { CURRENT_STATE_VERSION } from '../../src/domain/contracts';
 import type { SavedState } from '../../src/domain/contracts';
-import type { CanvasDocument, CanvasReply } from '../../src/domain/canvases/document';
+import type {
+  ExperimentDocument as CanvasDocument,
+  ExperimentReply as CanvasReply,
+} from '../../src/domain/robotics/experiment-canvases';
 import { defaultSettings } from '../../src/domain/services';
 import { normalizePreferences } from '../../src/domain/preferences/ui';
 import { ownedApp, until } from '../../tests/owned-app';
@@ -247,7 +251,11 @@ try {
         'framed plane',
       );
       const response: CanvasReply = await main.evaluate(
-        pageCall((id) => window.viewer.canvas({ kind: 'placement-report', id }), id),
+        pageCall(
+          (id) =>
+            (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'placement-report', id }),
+          id,
+        ),
       );
       const report = response.placementReport;
       assert.equal(report?.status, 'checked');

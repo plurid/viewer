@@ -1,10 +1,11 @@
+import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
 /** Real SO-101 meshes in the sandbox, deterministic UI fixture, no provider calls or removals. */
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Canvases } from '../../src/desktop/canvases/service';
+import { ExperimentCanvases as Canvases } from '../../tools/robotics/experiment-canvases';
 import { attachRobotMeshes } from '../../src/desktop/canvases/robot';
 import { inspectFile } from '../../src/desktop/files/inspection';
 import type { RobotTask } from '../../src/domain/robotics/task';
@@ -168,7 +169,9 @@ const checks: string[] = [];
 let app: Awaited<ReturnType<typeof ownedApp>> | undefined;
 let main: CanvasConnection | undefined;
 const read = (id: string) =>
-  main!.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'read', id }), id));
+  main!.evaluate(
+    pageCall((id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }), id),
+  );
 const start = async (id: string) => {
   app = await ownedApp(binary, profile, {
     label: 'robot-comparison',
@@ -197,9 +200,19 @@ const solve = async (frame: Awaited<ReturnType<typeof canvasFrame>>, outcome: st
   );
 };
 const report = (id: string) =>
-  main!.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'robot-report', id }), id));
+  main!.evaluate(
+    pageCall(
+      (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-report', id }),
+      id,
+    ),
+  );
 const comparison = (id: string) =>
-  main!.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'robot-comparison', id }), id));
+  main!.evaluate(
+    pageCall(
+      (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-comparison', id }),
+      id,
+    ),
+  );
 const check = async (
   frame: Awaited<ReturnType<typeof canvasFrame>>,
   id: string,
@@ -492,7 +505,7 @@ try {
   await main!.evaluate(
     pageCall(
       (id, revision, stateRevision, robotTask) =>
-        window.viewer.canvas({
+        (window.viewer as unknown as ExperimentAPI).canvas({
           kind: 'state',
           id,
           contentRevision: revision,
@@ -523,7 +536,7 @@ try {
   await main!.evaluate(
     pageCall(
       (id, revision, stateRevision, robotTask) =>
-        window.viewer.canvas({
+        (window.viewer as unknown as ExperimentAPI).canvas({
           kind: 'state',
           id,
           contentRevision: revision,
@@ -540,7 +553,7 @@ try {
   await main!.evaluate(
     pageCall(
       (doc) =>
-        window.viewer.canvas({
+        (window.viewer as unknown as ExperimentAPI).canvas({
           kind: 'check-robot',
           id: doc.id,
           revision: doc.revision,

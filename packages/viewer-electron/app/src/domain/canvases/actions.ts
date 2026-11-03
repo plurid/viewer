@@ -48,15 +48,6 @@ export const canvasInvocationSchema = z
     stateRevision: z.number().int().nonnegative(),
   })
   .strict();
-export const canvasPlacementRequestSchema = z
-  .object({
-    sourceID: z.uuid(),
-    briefSourceID: z.uuid(),
-    stateKey: z.string().min(1).max(200),
-    revision: z.number().int().nonnegative(),
-    stateRevision: z.number().int().nonnegative(),
-  })
-  .strict();
 export const canvasActionOutputSchema = z
   .object({
     result: z

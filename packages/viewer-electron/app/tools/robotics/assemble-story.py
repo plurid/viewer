@@ -60,6 +60,13 @@ source = pathlib.Path(sys.argv[1]).resolve()
 assert json.loads((source / 'story-completed.json').read_text())['status'] == 'passed'
 capture = json.loads((source / 'story-capture.json').read_text())
 station = capture.get('film') == 'station'
+continuous_navigation = capture.get('continuousNavigation', False)
+if continuous_navigation:
+    assert not any(clip.get('omitActions') for clip in capture['clips']), 'Keep every navigation action.'
+    for clip in capture['clips']:
+        for move in clip.get('navigation', []):
+            assert 0 <= move['start'] <= move['settled'] < move['end'] <= clip['seconds']
+            assert move['end'] - move['settled'] >= .5, 'Hold the view after arriving.'
 assert capture['providerRequests'] == 0 and len(capture['clips']) in ((11,) if station else (8, 9))
 closing_callback = capture['clips'][-1]['name'] == '08-closing'
 assert (capture['width'], capture['height']) == SIZE
@@ -236,9 +243,9 @@ if station:
     directions = {
         'personal': 'Open the robot definition in a linked plane, then return to the project.',
         'project-thinking': 'Expand the mesh folder and open the linked arm geometry.',
-        'browser': 'Focus the project brief in the browser plane.',
-        'editor': 'Use Command+E to edit the source definition.',
-        'terminal': 'Run ls in the project terminal.',
+        'browser': 'Pull back through the workspace, focus the project brief and let the browser plane settle.',
+        'editor': 'Move through the workspace to the source definition, then use Command+E to edit it.',
+        'terminal': 'Move through the workspace to the terminal and run ls after arriving.',
         'keynote': 'Frame all planes to reveal the shared spatial workspace.',
         'foundations': 'Move from the workspace into the actual Viewer conversation.',
         'ask-meta': 'Type the retained request, send it and open the generated canvas.',
@@ -257,7 +264,9 @@ if station:
     prompt_by_action = dict(zip(['ask-meta', 'changed-constraint', 'quote'], capture['prompts']))
     with (root / 'Script.md').open('x') as text:
         text.write('# There Is No Interface\n\nExact script of this review cut. Temporary opening and system voice. '
-                   'The product footage replays retained Meta responses through working Viewer actions; repairs and navigation are condensed.\n\n')
+                   'The product footage replays retained Meta responses through working Viewer actions; '
+                   + ('repair rounds are condensed and spatial navigation plays continuously at its recorded speed.\n\n'
+                      if continuous_navigation else 'repairs and navigation are condensed.\n\n'))
         for cue in cues:
             text.write(f"## {stamp(cue['start'])} to {stamp(cue['end'])}\n\n> {cue['text']}\n\n")
             action = cue.get('action')
@@ -328,6 +337,8 @@ store(root / 'verification.json', {'status': 'technical-checks-passed', 'duratio
       'sourceCapture': str(source), 'video': str(output), 'sha256': digest, 'resolution': SIZE,
       'sourceFrames': source_frames, 'sourceEncoding': 'PNG', 'videoEncodes': 1,
       'providerRequests': 0, 'voice': 'Temporary system voice', 'playbackSpeed': 1,
+      'continuousNavigation': continuous_navigation,
+      'recordedNavigation': sum(len(c.get('navigation', [])) for c in capture['clips']),
       'reusedOpening': capture.get('reusedOpening'),
       'navigationEdits': [{'clip': c['name'], 'ranges': c['selectedRanges']}
                           for c in capture['clips'] if c.get('omitActions')],

@@ -1,6 +1,7 @@
 import { reconstructionRequestSchema } from '../../domain/canvases/reconstruction';
 import { dialogRequestSchema } from '../../domain/dialogs';
 import { canvasRequestSchema } from '../../domain/canvases/document';
+import { canvasLibraryRequestSchema } from '../../domain/canvases/library';
 import { maximumWorkspaces } from '../../domain/workspaces/catalog';
 /** Argument schemas for every IPC method. The bridge validates each call against these
  * before it reaches a handler, and `ApiCall` carries the inferred argument types. */
@@ -251,6 +252,7 @@ export const schemas = {
   ]),
   chat: z.tuple([chatRequestSchema]),
   canvas: z.tuple([canvasRequestSchema]),
+  canvasLibrary: z.tuple([canvasLibraryRequestSchema]),
   reconstruction: z.tuple([reconstructionRequestSchema]),
   reconstructionKey: z.tuple([z.string().max(10000)]),
   shellCommand: z.tuple([z.enum(['status', 'install', 'uninstall'])]),
@@ -876,6 +878,7 @@ export const methodWindows = {
   localServerAction: 'viewer',
   chat: 'viewer',
   canvas: 'viewer',
+  canvasLibrary: 'viewer',
   reconstruction: 'viewer',
   reconstructionKey: 'settings',
   shellCommand: 'both',

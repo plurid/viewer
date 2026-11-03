@@ -144,9 +144,7 @@ export const chatStepSchema = z
       'canvas_write',
       'canvas_asset',
       'canvas_source',
-      'canvas_robot_assets',
       'canvas_invoke',
-      'canvas_check_placements',
     ]),
     text: z.string().max(canvasLimits.html),
     path: z.string().max(32768).nullable(),
@@ -158,10 +156,14 @@ export const chatStepSchema = z
         z.object({ path: z.string().min(1).max(32768), name: z.string().min(1).max(255) }).strict(),
       )
       .max(100),
-    /** With a reply: inspected files worth opening, shown as links under it. */
-    files: z.array(z.string().max(32768)).max(12),
+    /** Reply links or the explicit batch of local canvas assets to attach. */
+    files: z.array(z.string().max(32768)).max(24),
   })
   .strict()
+  .refine((step) => step.kind === 'canvas_asset' || step.files.length <= 12, {
+    path: ['files'],
+    message: 'Reply links are limited to 12 paths.',
+  })
   .refine((step) => step.kind === 'canvas_write' || step.text.length <= 32000, {
     path: ['text'],
     message: 'Non-canvas text must contain at most 32000 characters.',
@@ -199,6 +201,7 @@ export const chatRequestSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   z.object({ kind: z.literal('canvas'), id: z.uuid() }).strict(),
+  z.object({ kind: z.literal('duplicate-canvas'), id: z.uuid() }).strict(),
   z
     .object({
       kind: z.literal('branch'),

@@ -13,24 +13,43 @@ historical values, action results and check failures remain present. This projec
 the saved transcript or frozen quote context. Meta receives each current-turn result once, paired
 with its native tool call. The existing context and inspection limits still apply.
 
+## Tool ownership and management
+
+A generated tool includes its interface, application logic and tests. Viewer supplies the scaffold,
+context snapshots, local assets, sandbox, action transport, persistence and export review. The agent
+implements domain parsing, calculations and validation. The host does not supply a robotics solver
+or a pose checker. The [ownership decision](../adr/0015-generated-tool-host.md) defines this
+boundary.
+
+**Tool library** is a persistent Plurid plane, available from commands, Chat and a canvas toolbar.
+It lists saved canvas documents without starting them. Each entry has a name, project, revision,
+source and asset counts and enabled state. Rename and enable changes require the current revision.
+Disabling invalidates live registrations, cancels pending work and stops the visible frame. A late
+result cannot change saved inputs. Enabling permits a fresh frame; it does not resume a canceled
+model request.
+
+**Duplicate** creates a new conversation and canvas with copied inputs, sources and asset
+references. It makes no model request. **Source code**, **Undo revision**, quoted alternatives and
+portable export operate on the same document; there is no separate plugin registry or executor. The
+library reads at most 1,000 documents from its own private directory. Invalid entries show an error,
+linked files are ignored, and documents open in another window cannot be changed.
+
 ## Runtime API
 
 Generated HTML receives `window.viewerCanvas`:
 
-| Member                                            | Behavior                                                       |
-| ------------------------------------------------- | -------------------------------------------------------------- |
-| `getSources()`                                    | Return copies of bound evidence snapshots                      |
-| `requestRobotCheck(sourceID,stateKey)`            | Ask Viewer to check the task saved under that state key        |
-| `requestExport(result)`                           | Request host review of `{format,name,content}`                 |
-| `getState()`                                      | Return a copy of saved input state                             |
-| `setState({ key: value })`                        | Merge values and request a desktop save                        |
-| `subscribe(listener)`                             | Observe state updates; returns an unsubscribe function         |
-| `assets`                                          | Attached assets as `{ id, name, mime, url }` records           |
-| `openSource(id, joint?)`                          | Request source review, optionally for a named URDF joint       |
-| `propose(text)`                                   | Prepare text for review in the conversation                    |
-| `registerAction(definition, handler)`             | Register a named operation in this live frame                  |
-| `invokeAction(id, input)`                         | Run a registered operation through the host; returns a promise |
-| `requestPlacementCheck(robotID,briefID,stateKey)` | Recompute a saved mounting study in Viewer; returns the report |
+| Member                                | Behavior                                                       |
+| ------------------------------------- | -------------------------------------------------------------- |
+| `getSources()`                        | Return copies of bound evidence snapshots                      |
+| `requestExport(result)`               | Request host review of `{format,name,content}`                 |
+| `getState()`                          | Return a copy of saved input state                             |
+| `setState({ key: value })`            | Merge values and request a desktop save                        |
+| `subscribe(listener)`                 | Observe state updates; returns an unsubscribe function         |
+| `assets`                              | Attached assets as `{ id, name, mime, url }` records           |
+| `openSource(id)`                      | Request review of a captured source                            |
+| `propose(text)`                       | Prepare text for review in the conversation                    |
+| `registerAction(definition, handler)` | Register a named operation in this live frame                  |
+| `invokeAction(id, input)`             | Run a registered operation through the host; returns a promise |
 
 Use stable state keys. A new content revision cannot change the type of an existing saved value.
 HTML, CSS and scripts run in an opaque sandbox through `viewer-html`. The page has no desktop
@@ -90,14 +109,17 @@ completed or failed; late cancellation cannot relabel a saved result as discarde
 Registrations and activity are live-frame state, not portable authority. Reloading or reopening must
 register handlers again. Window, conversation, frame, content revision and input revision are
 checked before invocation; duplicate and late replies are rejected. A completed action means its
-handler ran. Its returned claims are generated content until a separate checker validates them.
-Actions gain no file-write, shell, network or provider capability.
+handler ran. Domain checks and tests run in the generated plugin. The host does not certify their
+conclusions or supply an undisclosed domain implementation. Actions gain no file-write, shell,
+network or provider capability.
 
 Snapshots contain `{id,name,version,hash,data}`. `data` contains bounded `facts`, `evidence`,
 `coverage`, and optionally `table: {rows,malformed}` for CSV/TSV. Rows include the header. Local
-source paths are not exposed to the frame. `openSource(id)` opens the host's source review.
-Refreshing replaces the snapshot under its existing ID in a new content revision and preserves saved
-inputs. Undo restores the previous snapshot as well as HTML.
+source paths are not exposed to the frame. Text snapshots retain up to 48,000 UTF-8 bytes of
+evidence within the source limit. File formats such as URDF are supplied as text for the plugin to
+interpret; they do not trigger a host domain parser. `openSource(id)` opens the host's source
+review. Refreshing replaces the snapshot under its existing ID in a new content revision and
+preserves saved inputs. Undo restores the previous snapshot as well as HTML.
 
 Result formats are `csv`, `json`, `markdown`, `text` and `dxf`. `content` is UTF-8 text, limited to
 1 MB; JSON must parse. `name` is a basename without path separators. The host adds the extension if
@@ -120,48 +142,15 @@ geometry as R12 DXF through its fabrication writer, then reads and measures thos
 The desktop repeats validation before saving. The preview reports geometry dimensions; it does not
 certify attachment requirements, material, tool clearance or manufacturing readiness.
 
-## Mounting studies
-
-A station brief is a complete JSON source snapshot. It supplies `version: 1`, metre/radian `units`,
-`tool: {link,point}`, `tolerance`, `bench: {min:[x,y],max:[x,y]}`, reference position `[x,y,z]`,
-fixed `targets: [{id,position}]` and `mounts: [{id,label,base:{xyz,rpy}}]`. Mount IDs and target IDs
-are unique. There are at most eight mounts and sixteen targets. The
-[station fixture](../../packages/viewer-electron/app/tests/fixtures/robotics/station.json) is a
-complete example with assigned scenario dimensions.
-
-Save a study as `{version:1,reserved:[{min,max}],candidates:[{id,poses}],selected?}` under one
-stable state key. Every brief mount needs a candidate, and every candidate needs one pose per
-target. Poses are `{targetID,positions}`, with every movable joint named. Up to eight reserved
-rectangles restrict mounting points in the bench XY plane; their edges count as reserved. They do
-not describe collision obstacles or the footprint of the robot.
-
-Keep the returned positions for every target, including an `unresolved` solver outcome. The checker
-needs the full candidate to measure each endpoint. Count passing targets from their checked
-residuals and limits, not from the number of stored poses.
-
-The host derives targets, tool, tolerance and mounting transforms from the bound brief, not the
-handler's claimed results. It recomputes endpoint errors and hard joint limits. A candidate passes
-when all supplied poses meet tolerance and its mounting point lies in the bench outside the reserved
-regions. The recommendation minimizes Euclidean distance from the brief's reference among passing
-candidates, with mount ID as the tie breaker. A failed candidate is not proof of unreachability.
-
-The saved `placementCheck` binds robot and brief hashes, the study hash, content revision, checker
-version and time. Reports are recomputed after reopen; changed inputs or snapshots make the binding
-stale. Camera changes alone do not. Quote comparisons require the same robot, brief and reserved
-areas. **Save check JSON…** creates a new file through the host picker. Canvas export includes the
-study and its binding; import strips local source paths and retains enough data to recompute.
-
-This is a mounting-point and endpoint study. It does not check orientation, robot or tray
-footprints, travel between poses, collisions, clamp fit, loads or calibrated hardware.
-
 ## Model tools
 
 `canvas_read` obtains current content, saved state and revision. `canvas_write` supplies complete
 HTML in `text`, a title in `query`, the expected revision in `commandID`, and default state values
 in `patches`. Canvas writes accept up to 512,000 HTML characters, matching the document limit. Other
-structured turns retain a 32,000-character text limit. `canvas_asset` attaches a file the
-conversation is allowed to inspect. Attached files require the provider's images data level before
-being sent as model context.
+structured turns retain a 32,000-character text limit. `canvas_asset` attaches the explicit paths in
+`path` and `files`, up to 24 unique files. Every path must be in the attached conversation context.
+The full list is authorized before the first attachment. It returns `{assets,revision}`. Attached
+files require the provider's images data level before being sent as model context.
 
 Writes use revision checks. A stale response cannot replace a newer revision. The model receives
 current content and state, not the entire revision history. Canvas requests cannot authorize file or
@@ -171,15 +160,11 @@ shell operations.
 returns the saved snapshot unchanged; refresh is a user action. Source context requires the
 provider's document-excerpts permission.
 
-`canvas_read` and the next model round include `actions`, `lastAction`, `stateRevision` and
-`placementReport`. `canvas_invoke` takes JSON in `text`:
+`canvas_read` and the next model round include `actions`, `lastAction`, `stateRevision`, `enabled`
+and the generic `host` contract. `canvas_invoke` takes JSON in `text`:
 `{"action":"calculateTotal","input":{"quantity":20},"revision":1,"stateRevision":0}`. It invokes
 only the current conversation's live canvas and returns its actual status, result and saved state.
 It cannot invoke a handler in another conversation or an unopened frame.
-
-`canvas_check_placements` takes JSON in `text` with `sourceID`, `briefSourceID`, `stateKey`,
-`revision` and `stateRevision`. It recomputes the study outside the generated document and returns
-the current report, plus a comparison for a quoted alternative when both studies are compatible.
 
 Preview observations are tied to a content revision. `ready` means the page loaded, not that its
 calculations were verified. `error` includes a bounded runtime message. `not-observed` means no
@@ -188,119 +173,6 @@ eight-round request budget; remaining errors stop further automatic repairs.
 
 A canvas turn has an eight-minute overall deadline. Each model request retains its own two-minute
 timeout, and **Stop** cancels the turn. Ordinary Chat turns keep their two-minute overall deadline.
-
-## Robot sources and motion
-
-`canvas_source` recognizes `.urdf` files. A complete definition supplies `data.robot`, with
-`format`, `name`, `root`, `units`, `links`, `joints` and scope `notes`. Links contain visual
-geometry, origins and optional RGBA colors. Joints contain parent and child names, type, origin,
-normalized axis, hard position limits and the exact captured definition. URDF units are metres and
-radians. The file's zero convention is preserved; hardware calibration is not inferred.
-
-The reader supports one connected tree with fixed, revolute, continuous and prismatic joints. It
-rejects mimic, floating and planar joints, cycles, unresolved macros, missing hard position limits
-and incomplete source text. Limits are 128 KB of input, 64 links and 256 visual elements, subject to
-the existing snapshot size limit. Supported visuals are meshes, boxes, spheres and cylinders.
-Collision geometry, dynamics, soft safety-controller limits and calibration tags do not participate
-in these calculations. Texture resources are not loaded.
-
-`canvas_robot_assets` takes `path` to an already-bound URDF. It authorizes and attaches the relative
-binary STL visual files, returning `{resources:[{resource,assetID}],revision}`. Each file must
-already belong to the conversation's scope, and provider images permission is required. The
-containing folder can supply that scope; attaching only the URDF does not. Paths must stay within
-its folder, without links, parent traversal, absolute paths or package/network URLs. A mesh is
-limited to 200,000 triangles and the normal canvas asset budgets. Failed or cancelled attachment can
-retain previously attached assets; it does not change the original files.
-
-Use the returned IDs to find asset URLs. Resource names inside URDF are metadata, not fetchable
-URLs. The offline `viewer/robotics` module exports:
-
-- `forwardKinematics(robot, positions, base?)`: `positions` names every movable joint exactly once.
-  `base` is `{xyz:[x,y,z],rpy:[roll,pitch,yaw]}`, defaulting to zero. The result has `links`, a map
-  of column-major 4×4 world transforms, and `violations`, the unclamped hard position-limit
-  violations.
-- `originTransform(origin)`: convert URDF fixed-axis roll/pitch/yaw and translation to a matrix.
-- `multiplyTransforms(a,b)`: compose two column-major matrices. A visual's world transform is its
-  link transform multiplied by its visual origin, followed by its mesh scale.
-
-The page can call `openSource(sourceID,jointName)` to show a captured joint in the host's source
-review. **Open joint definition** navigates through the original version and stored anchor.
-
-`await solvePosition(robot,{link,point,target,positions,base,tolerance},signal?)` searches for a
-candidate tool position. `point` is local to `link`; `target` is in world coordinates. It returns
-`{outcome,positions,residual,iterations}`. `outcome` is `candidate` or `unresolved`. A failed
-numerical search does not establish unreachability. The solver uses a damped Jacobian update with
-hard-limit projection, deterministic restarts and line search. It preserves joints outside the tool
-chain. Its cap is six attempts of 96 iterations, at most 16 moving chain joints. It yields every
-eight iterations and accepts an AbortSignal. Inputs are copied before yielding. Tolerance is
-0.000001 to 0.005 metres. Orientation is not a search objective.
-
-`createPoseReplay(robot,poses)` copies 1 to 16 complete poses, each `{targetID,positions}`. It
-returns `{length,sample(cursor)}`. The cursor is a finite number from zero to `length-1`; integer
-cursors return the supplied endpoints. Fractional cursors linearly interpolate explicit joint values
-and return `{from,to,fraction,positions}`. Continuous joints retain explicit revolutions; values are
-not wrapped or clamped. The function owns no animation clock and changes no saved inputs. It does
-not validate a trajectory. Generated controls must keep sampled poses separate from the task,
-provide pause and scrubbing, stop at the last pose, and pause when hidden or reopened.
-
-### Check target poses in Viewer
-
-Save the task under one stable canvas state key, then call `requestRobotCheck(sourceID,stateKey)`.
-The task shape is:
-
-```json
-{
-  "version": 1,
-  "units": { "length": "m", "angle": "rad" },
-  "tool": { "link": "tool_link", "point": [0, 0, 0] },
-  "base": { "xyz": [0, 0, 0], "rpy": [0, 0, 0] },
-  "tolerance": 0.001,
-  "targets": [{ "id": "A", "position": [0.2, 0.1, 0.3] }],
-  "poses": [{ "targetID": "A", "positions": { "joint_name": 0.5 } }]
-}
-```
-
-The example shows syntax, not a measured robot pose. Supply each actual movable joint exactly once.
-There must be exactly one pose per unique target, with at most 16 targets. The host waits for input
-saves and verifies the persisted values, not an independently supplied frame payload. The desktop
-checker uses a separate point-propagation implementation from the solver's matrix implementation. It
-measures each endpoint's error and all hard joint bounds. The panel displays the tolerance, world
-target coordinates, tool offset, base transform and source-linked limit violations.
-
-The saved binding contains the source ID/hash, canonical task hash, canvas content revision, checker
-version and request time. It contains no pass/fail result. Every report is recomputed in Viewer,
-including after restart and portable import. Changed task inputs, source snapshots or canvas content
-require a new check. Unrelated camera state does not. `canvas_read` and the conversation's canvas
-context include `robotReport`; its status is `checked` or `stale`. A checked report can pass or
-fail. Generated HTML has no API for supplying a check result.
-
-**Save check JSON…** builds its payload in the desktop service and uses the existing exclusive
-new-file save. The saved file includes inputs, source version/hash, checker version, residuals and
-joint violations. Revision and check-binding changes during save review cancel the write. Ordinary
-frame exports remain proposed content; JSON parsing does not certify them as checked.
-
-These checks cover endpoint positions and hard position limits only. Orientation, intervals between
-poses, collision, dynamics and hardware calibration remain unchecked. No physical operation is
-implied.
-
-### Compare base placements
-
-A quoted alternative can request `robot-comparison` through the host. Viewer resolves its saved fork
-reference, enforces window ownership and recomputes both current checks. The model snapshot hash and
-parsed model must match. Units, tool link and local point, tolerance, ordered world targets and pose
-target order must match exactly. Base transforms and candidate joint positions may differ. Missing
-or stale checks and unequal fixed inputs produce `status: 'unavailable'` with a reason.
-
-A `compared` result includes `sourceHash`, `original` and `alternative`. Each side records canvas
-ID, title, content and input revisions, task hash and its independently recomputed endpoint report.
-`canvas_read` and conversation context include `robotComparison` for a fork. The Viewer panel
-refreshes when either canvas changes. A compared result can contain failed endpoints; it is not an
-unreachability proof.
-
-**Save comparison JSON…** exports both measured tasks with checker version `position-v1`. Changes to
-either side during save review cancel the new-file write. Comparison results are recomputed after
-restart. A portable canvas import drops the fork link and retains its own task and check; the
-separately saved comparison JSON retains both measured tasks as a snapshot.
 
 ## Branches
 

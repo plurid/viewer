@@ -16,6 +16,8 @@ These records explain decisions that still shape the application. Feature usage 
 - [Spoken requests](0010-spoken-requests.md)
 - [Conversation canvases and independent input state](0011-conversation-canvases.md)
 - [Window-owned ordinary dialogs](0012-window-owned-dialogs.md)
-- [Robot model snapshots and motion](0013-robot-model-snapshots.md)
+- [Robot model snapshots and motion (superseded)](0013-robot-model-snapshots.md)
 
-- [Robot target checks](0014-robot-target-checks.md)
+- [Robot target checks (superseded)](0014-robot-target-checks.md)
+
+- [Generated tools own application logic](0015-generated-tool-host.md)

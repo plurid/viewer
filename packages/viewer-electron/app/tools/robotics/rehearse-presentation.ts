@@ -1,3 +1,4 @@
+import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
 import assert from 'node:assert/strict';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -58,7 +59,7 @@ async function start(workspace: string, id: string) {
 const read = (id: string) =>
   main.evaluate(
     pageCall(async (id) => {
-      const result = await window.viewer.canvas({ kind: 'read', id });
+      const result = await (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id });
       if (!result.document) throw Error('Missing saved canvas.');
       return result.document;
     }, id),
@@ -193,7 +194,11 @@ try {
       await until(
         () =>
           main.evaluate(
-            pageCall((id) => window.viewer.canvas({ kind: 'robot-report', id }), originalID),
+            pageCall(
+              (id) =>
+                (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-report', id }),
+              originalID,
+            ),
           ),
         (r) => r.robotReport?.status === 'checked',
         'original checked',
@@ -236,7 +241,11 @@ try {
       await until(
         () =>
           main.evaluate(
-            pageCall((id) => window.viewer.canvas({ kind: 'robot-report', id }), branchID),
+            pageCall(
+              (id) =>
+                (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-report', id }),
+              branchID,
+            ),
           ),
         (r) => r.robotReport?.status === 'checked',
         'independent check',
@@ -245,7 +254,14 @@ try {
       await until(
         () =>
           main.evaluate(
-            pageCall((id) => window.viewer.canvas({ kind: 'robot-comparison', id }), branchID),
+            pageCall(
+              (id) =>
+                (window.viewer as unknown as ExperimentAPI).canvas({
+                  kind: 'robot-comparison',
+                  id,
+                }),
+              branchID,
+            ),
           ),
         (r) => r.robotComparison?.status === 'compared',
         'same-target comparison',
@@ -337,7 +353,11 @@ try {
       'Replay restores paused.',
     );
     const result = await main.evaluate(
-      pageCall((id) => window.viewer.canvas({ kind: 'robot-comparison', id }), branchID),
+      pageCall(
+        (id) =>
+          (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-comparison', id }),
+        branchID,
+      ),
     );
     assert.equal(result.robotComparison?.status, 'compared');
     await screenshot(main, path.join(root, 'restarted.png'));
@@ -386,7 +406,11 @@ try {
       await until(
         () =>
           main.evaluate(
-            pageCall((id) => window.viewer.canvas({ kind: 'robot-report', id }), importedID),
+            pageCall(
+              (id) =>
+                (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-report', id }),
+              importedID,
+            ),
           ),
         (r) => r.robotReport?.status === 'checked',
         'imported check recomputes',

@@ -1,10 +1,11 @@
+import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
 /** Real SO-101 meshes in the sandbox, deterministic UI fixture, no provider calls or removals. */
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Canvases } from '../../src/desktop/canvases/service';
+import { ExperimentCanvases as Canvases } from '../../tools/robotics/experiment-canvases';
 import { attachRobotMeshes } from '../../src/desktop/canvases/robot';
 import { inspectFile } from '../../src/desktop/files/inspection';
 import type { RobotTask } from '../../src/domain/robotics/task';
@@ -115,7 +116,12 @@ const checks: string[] = [];
 let app: Awaited<ReturnType<typeof ownedApp>> | undefined;
 let main: CanvasConnection | undefined;
 const read = () =>
-  main!.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'read', id }), canvas.id));
+  main!.evaluate(
+    pageCall(
+      (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
+      canvas.id,
+    ),
+  );
 const start = async (id = canvas.id) => {
   app = await ownedApp(binary, profile, { label: 'robotics', mode: 'hidden', mockKeychain: true });
   main = await app.connect();
@@ -128,7 +134,12 @@ const start = async (id = canvas.id) => {
   return frame;
 };
 const report = () =>
-  main!.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'robot-report', id }), canvas.id));
+  main!.evaluate(
+    pageCall(
+      (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-report', id }),
+      canvas.id,
+    ),
+  );
 const check = async (
   frame: Awaited<ReturnType<typeof canvasFrame>>,
   expected: 'passed' | 'failed',
@@ -363,7 +374,10 @@ try {
   await writeFile(path.join(profile, 'viewer-state-v1.json'), JSON.stringify(state));
   frame = await start(imported.id);
   const importedReport = await main!.evaluate(
-    pageCall((id) => window.viewer.canvas({ kind: 'robot-report', id }), imported.id),
+    pageCall(
+      (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-report', id }),
+      imported.id,
+    ),
   );
   assert.equal(importedReport.robotReport?.status, 'checked');
   if (importedReport.robotReport?.status === 'checked')

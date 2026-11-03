@@ -1,6 +1,7 @@
 import type { ReconstructionRequest, ReconstructionReply } from './canvases/reconstruction';
 import type { DialogPrompt, DialogRequest, DialogReply } from './dialogs';
 import type { CanvasDocument, CanvasRequest, CanvasReply } from './canvases/document';
+import type { CanvasLibraryRequest, CanvasLibraryReply } from './canvases/library';
 import type { CanvasActionEvent } from './canvases/actions';
 import type { PromptAnswer, PromptRequest, PromptHistoryEntry } from './command-line/prompt';
 import type { SpokenAnswer, SpokenRequest } from './command-line/spoken';
@@ -258,6 +259,11 @@ export interface CanvasPane {
   canvasID: string;
   title: string;
 }
+export interface ToolLibraryPane {
+  id: string;
+  type: 'tools';
+  path: string;
+}
 export interface ChatPane {
   id: string;
   type: 'chat';
@@ -343,6 +349,7 @@ export type Pane =
   | GitChangesPane
   | ChatPane
   | CanvasPane
+  | ToolLibraryPane
   | ServerPane
   | BrowserPane
   | MediaPane
@@ -365,6 +372,7 @@ export const paneTypes = {
   'git-changes': 'git-changes',
   chat: 'chat',
   canvas: 'canvas',
+  tools: 'tools',
   server: 'server',
   browser: 'browser',
   media: 'media',
@@ -750,6 +758,7 @@ export interface ViewerAPI {
   localServerAction(id: string, action: LocalServerAction): Promise<void>;
   chat(request: ChatRequest): Promise<ChatReply>;
   canvas(request: CanvasRequest): Promise<CanvasReply>;
+  canvasLibrary(request: CanvasLibraryRequest): Promise<CanvasLibraryReply>;
   reconstruction(request: ReconstructionRequest): Promise<ReconstructionReply>;
   reconstructionKey(key: string): Promise<void>;
   shellCommand(action: 'status' | 'install' | 'uninstall'): Promise<ShellCommandStatus>;

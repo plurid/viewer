@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { CanvasDocument } from '../../domain/canvases/document';
+import type {
+  ExperimentDocument as CanvasDocument,
+  ExperimentAPI,
+} from '../../domain/robotics/experiment-canvases';
 import type { RobotComparisonReport, RobotComparisonSide } from '../../domain/robotics/task';
 import { errorMessage } from '../../domain/errors';
 import { Disclosure } from '../ui/Disclosure';
@@ -11,11 +14,13 @@ function measured(side: RobotComparisonSide, targetID: string) {
 }
 
 export function RobotComparisonPanel({
+  api,
   document,
   busy,
   group,
   onSave,
 }: {
+  api: ExperimentAPI;
   document: CanvasDocument;
   busy: boolean;
   group?: string;
@@ -43,7 +48,7 @@ export function RobotComparisonPanel({
             JSON.stringify([
               event.document.revision,
               event.document.stateRevision,
-              event.document.robotCheck,
+              event.document.stateRevision,
             ]),
           );
       }),
@@ -51,7 +56,7 @@ export function RobotComparisonPanel({
   );
   useEffect(() => {
     let live = true;
-    void window.viewer
+    void api
       .canvas({ kind: 'robot-comparison', id: document.id })
       .then((reply) => {
         if (live) setResult({ key, report: reply.robotComparison });
@@ -62,7 +67,7 @@ export function RobotComparisonPanel({
     return () => {
       live = false;
     };
-  }, [document.id, key]);
+  }, [api, document.id, key]);
   const current = result?.key === key ? result : undefined;
   const report = current?.report;
   return (

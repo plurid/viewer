@@ -1,3 +1,4 @@
+import { parseRobotURDF } from '../../src/domain/robotics/urdf';
 import path from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -266,7 +267,9 @@ export async function runRobotSession(root: string, options: RobotSessionOptions
       throw new Error(conversation.error ?? 'The model session did not complete.');
     if (
       !canvas?.html.trim() ||
-      !canvas.sources.some((source) => source.data.robot) ||
+      !canvas.sources.some((source) =>
+        parseRobotURDF(source.data.evidence.find((item) => item.source === 'text')!.text),
+      ) ||
       !canvas.assets.length
     )
       throw new Error(

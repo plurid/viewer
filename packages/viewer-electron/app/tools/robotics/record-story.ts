@@ -1,3 +1,4 @@
+import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
 /** Record a project acquiring new capabilities from retained agent sessions. No provider calls. */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -371,7 +372,7 @@ async function beat(action: string, narration: string, seconds: number, work = a
 }
 async function readCanvas(id: string) {
   const result = await main.evaluate(
-    pageCall((id) => window.viewer.canvas({ kind: 'read', id }), id),
+    pageCall((id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }), id),
   );
   assert.ok(result.document);
   return result.document;
@@ -658,7 +659,10 @@ try {
       },
     );
     const original = await main.evaluate(
-      pageCall((id) => window.viewer.canvas({ kind: 'robot-report', id }), refinement.id),
+      pageCall(
+        (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-report', id }),
+        refinement.id,
+      ),
     );
     assert.equal(original.robotReport?.status, 'checked');
     assert.equal(original.robotReport?.passed, false);
@@ -724,7 +728,11 @@ try {
       async () =>
         (
           await main.evaluate(
-            pageCall((id) => window.viewer.canvas({ kind: 'robot-report', id }), refinement.id),
+            pageCall(
+              (id) =>
+                (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'robot-report', id }),
+              refinement.id,
+            ),
           )
         ).robotReport,
       (r) => r?.status === 'checked' && r.passed,

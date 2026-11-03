@@ -7,7 +7,7 @@ import { solvePosition } from '../src/domain/robotics/solver';
 import { placementBriefSchema } from '../src/domain/robotics/placement';
 import type { PlacementStudy } from '../src/domain/robotics/placement';
 import { checkPlacements } from '../src/desktop/robotics/placement';
-import { Canvases } from '../src/desktop/canvases/service';
+import { ExperimentCanvases as Canvases } from '../tools/robotics/experiment-canvases';
 import { canvasPlacementReport, comparePlacements } from '../src/desktop/canvases/placement-check';
 import { temporaryRoot } from '../tools/temporary';
 

@@ -14,6 +14,16 @@ export function toolsCommands({
 }: WindowScopes): CommandDefinition[] {
   const commands: CommandDefinition[] = [
     {
+      id: 'tool-library',
+      label: 'Tool library',
+      group: 'Workspace',
+      icon: 'command',
+      aliases: ['plugins', 'generated tools', 'manage tools', 'canvases'],
+      detail: 'Open, duplicate and manage tools built in your conversations.',
+      when: windowScope,
+      run: (context) => actions.workspace.openToolLibrary(context.paneID),
+    },
+    {
       id: 'personal-backup',
       label: 'Backup and restore…',
       group: 'Workspace',

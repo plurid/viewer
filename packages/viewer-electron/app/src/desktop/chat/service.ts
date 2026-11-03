@@ -1,12 +1,7 @@
 import type { Canvases } from '../canvases/service';
 import { canvasInstructions } from '../canvases/runtime';
-import { attachRobotMeshes } from '../canvases/robot';
-import { canvasRobotReport } from '../canvases/robot-check';
-import { canvasPlacementReport } from '../canvases/placement-check';
-import {
-  canvasInvocationSchema,
-  canvasPlacementRequestSchema,
-} from '../../domain/canvases/actions';
+import { canvasInvocationSchema } from '../../domain/canvases/actions';
+import { canvasHostContract } from '../../domain/canvases/scaffold';
 import { portableCanvasSources } from '../../domain/canvases/sources';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
@@ -306,6 +301,39 @@ export class Chats {
           }
           return structuredClone(document);
         }
+        if (request.kind === 'duplicate-canvas') {
+          if (!origin || !this.ports.canvases) throw new Error('The tool context is unavailable.');
+          const source = await this.ports.canvases.read(owner, request.id);
+          const original = await this.load(source.conversationID);
+          const id = randomUUID();
+          const canvas = await this.ports.canvases.fork(owner, source.id, id);
+          const duplicate: ChatDocument = {
+            version: 4,
+            id,
+            title: source.title.slice(0, 195) + ' copy',
+            path: source.path,
+            providerID: original.providerID,
+            scopes: structuredClone(original.scopes),
+            messages: [],
+            draft: '',
+            draftRevision: 0,
+            revision: 0,
+            updated: Date.now(),
+            status: 'idle',
+            level: original.level,
+            canvasID: canvas.id,
+          };
+          this.principals.set(id, { ...structuredClone(origin), owner, document: duplicate });
+          await this.save(duplicate);
+          await this.ports.canvases.configure(
+            owner,
+            canvas.id,
+            canvas.revision,
+            duplicate.title,
+            source.enabled !== false,
+          );
+          return structuredClone(this.documents.get(id)!);
+        }
         const principal = this.principal(request.id, owner);
         const document = await this.load(request.id);
         if (request.kind === 'branch') {
@@ -491,17 +519,14 @@ export class Chats {
                 stateRevision: canvas.stateRevision,
                 actions: this.ports.canvases!.actions.list(canvas.id, canvas.revision),
                 lastAction: this.ports.canvases!.actions.activity(canvas.id),
-                placementReport: canvasPlacementReport(canvas),
+                host: canvasHostContract,
+                enabled: canvas.enabled !== false,
                 title: canvas.title,
                 html: canvas.html,
                 state: canvas.state,
                 defaults: canvas.defaults,
                 assets: canvas.assets,
                 sources: portableCanvasSources(canvas.sources),
-                robotReport: canvasRobotReport(canvas),
-                robotComparison: canvas.fork
-                  ? await this.ports.canvases!.robotComparison(principal.owner, canvas.id)
-                  : undefined,
                 preview: this.ports.canvases!.previewObservation(canvas.id, canvas.revision),
               }
             : null,
@@ -612,16 +637,13 @@ export class Chats {
           stateRevision: canvas.stateRevision,
           actions: canvases.actions.list(canvas.id, canvas.revision),
           lastAction: canvases.actions.activity(canvas.id),
-          placementReport: canvasPlacementReport(canvas),
+          host: canvasHostContract,
+          enabled: canvas.enabled !== false,
           html: canvas.html,
           state: canvas.state,
           defaults: canvas.defaults,
           assets: canvas.assets,
           sources: portableCanvasSources(canvas.sources),
-          robotReport: canvasRobotReport(canvas),
-          robotComparison: canvas.fork
-            ? await canvases.robotComparison(principal.owner, canvas.id)
-            : undefined,
           preview: canvases.previewObservation(canvas.id, canvas.revision),
         };
       if (step.kind === 'canvas_invoke') {
@@ -641,27 +663,6 @@ export class Chats {
           ...reply.actionRun,
           stateRevision: reply.document.stateRevision,
           savedState: reply.document.state,
-          placementReport: canvasPlacementReport(reply.document),
-        };
-      }
-      if (step.kind === 'canvas_check_placements') {
-        const request = canvasPlacementRequestSchema.parse(JSON.parse(step.text));
-        const updated = await canvases.checkPlacements(
-          principal.owner,
-          canvas.id,
-          request.revision,
-          request.stateRevision,
-          request.sourceID,
-          request.briefSourceID,
-          request.stateKey,
-        );
-        return {
-          revision: updated.revision,
-          stateRevision: updated.stateRevision,
-          report: canvasPlacementReport(updated),
-          comparison: updated.fork
-            ? await canvases.placementComparison(principal.owner, updated.id)
-            : undefined,
         };
       }
       if (step.kind === 'canvas_source') {
@@ -687,37 +688,24 @@ export class Chats {
         });
       }
       if (step.kind === 'canvas_asset') {
+        const paths = [...new Set([...(step.path ? [step.path] : []), ...step.files])];
+        if (!paths.length || paths.length > 24)
+          throw new Error('Attach between 1 and 24 asset paths.');
         await this.edit(id, (current) => ({ ...current, level: 'images' }));
         return this.ports.permit(
           provider,
           signal,
-          async () =>
-            canvases.attachFile(
-              principal.owner,
-              canvas.id,
-              await this.authorize(principal, step.path ?? ''),
-            ),
-          'images',
-        );
-      }
-      if (step.kind === 'canvas_robot_assets') {
-        const file = await this.authorize(principal, step.path ?? '');
-        const source = canvas.sources.find((source) => source.path === file && source.data.robot);
-        if (!source)
-          throw new Error('Use canvas_source on the complete URDF before attaching its meshes.');
-        await this.edit(id, (current) => ({ ...current, level: 'images' }));
-        return this.ports.permit(
-          provider,
-          signal,
-          (authorized) =>
-            attachRobotMeshes(
-              canvases,
-              principal.owner,
-              canvas.id,
-              source,
-              (file) => this.authorize(principal, file),
-              authorized,
-            ),
+          async (authorized) => {
+            const files: string[] = [];
+            for (const file of paths) files.push(await this.authorize(principal, file));
+            const assets = [];
+            for (const file of files) {
+              authorized.throwIfAborted();
+              assets.push(await canvases.attachFile(principal.owner, canvas.id, file));
+            }
+            const updated = await canvases.read(principal.owner, canvas.id);
+            return { assets, revision: updated.revision };
+          },
           'images',
         );
       }

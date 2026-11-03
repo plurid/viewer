@@ -35,6 +35,7 @@ const planeNames: Record<Pane['type'], string> = {
   'git-changes': 'Git changes',
   chat: 'Conversation',
   canvas: 'Agent canvas',
+  tools: 'Tool library',
   server: 'Local server',
   browser: 'Browser',
   media: 'Media editor',

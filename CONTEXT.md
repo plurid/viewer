@@ -83,14 +83,13 @@ canvas. Applying content back checks the original revision and preserves its lat
 GLB validation. The sandbox runtime uses the existing private web-preview capability service. See
 [conversation canvases](docs/adr/0011-conversation-canvases.md).
 
-Robot source snapshots use `domain/robotics` for a bounded URDF tree, exact joint definitions and
-forward kinematics and bounded target solving. `desktop/canvases/robot.ts` attaches authorized
-relative STL meshes through the existing asset store. The bundled `viewer/robotics` module gives
-generated pages motion calculations. `desktop/robotics/check.ts` independently propagates tool
-points for endpoint checks; `desktop/canvases/robot-check.ts` binds their inputs to saved sources
-and state. Host controls own results and checked JSON export. See
-[robot model snapshots](docs/adr/0013-robot-model-snapshots.md) and
-[robot target checks](docs/adr/0014-robot-target-checks.md).
+Generated plugins own their application logic, including parsers, calculations and tests. Viewer
+owns context capture, sandbox execution, shared actions, input persistence and revision management.
+`domain/canvases/library.ts` defines management requests; `desktop/canvases/service.ts` lists and
+configures the same documents. `renderer/canvases/ToolLibrary.tsx` presents them in a Plurid plane.
+The runtime bundles generic Three.js modules, with no robotics solver or checker. Robotics
+experiment utilities remain offline evaluation material, outside the app's runtime dependency graph.
+See [generated tool ownership](docs/adr/0015-generated-tool-host.md).
 
 Different worktrees have different working files and indices. Two views of one checkout share those
 files and staging. A view ID is never checkout identity. Cold restoration does not replay terminal

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { mkdir, open, realpath, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { lookup } from 'mime-types';
 import { z } from 'zod';
@@ -21,21 +21,11 @@ import { portableCanvasSources } from '../../domain/canvases/sources';
 import { sourceHash, sourceSnapshot } from './sources';
 import { CanvasObservations } from './observations';
 import type { CanvasObservation } from './observations';
-import { robotTaskSchema } from '../../domain/robotics/task';
-import { canvasRobotReport, compareCanvasRobots, robotInputHash } from './robot-check';
-import type { RobotComparisonReport } from '../../domain/robotics/task';
-import { checkRobotTask } from '../robotics/check';
 import { CanvasActions } from './actions';
 import type { CanvasActionEvent } from '../../domain/canvases/actions';
 import { errorMessage } from '../../domain/errors';
-import { placementStudySchema } from '../../domain/robotics/placement';
-import { checkPlacements } from '../robotics/placement';
-import {
-  placementBrief,
-  placementInputHash,
-  canvasPlacementReport,
-  comparePlacements,
-} from './placement-check';
+import type { CanvasLibraryEntry, CanvasLibraryReply } from '../../domain/canvases/library';
+import { canvasScaffold } from '../../domain/canvases/scaffold';
 
 interface CanvasPorts {
   changed(owner: number, document: CanvasDocument): void;
@@ -70,10 +60,10 @@ async function readBounded(file: string, limit: number): Promise<Buffer> {
   }
 }
 
-export class Canvases {
+export class Canvases<D extends CanvasDocument = CanvasDocument> {
   readonly actions: CanvasActions;
   private observations = new CanvasObservations();
-  private stores = new Map<string, DocumentStore<CanvasDocument>>();
+  private stores = new Map<string, DocumentStore<D>>();
   private owners = new Map<string, number>();
   private queue: Promise<unknown> = Promise.resolve();
   constructor(
@@ -83,23 +73,26 @@ export class Canvases {
     this.actions = new CanvasActions((owner, event) => this.ports.action?.(owner, event));
   }
 
+  protected parseDocument(value: unknown): D {
+    return canvasDocumentSchema.parse(value) as D;
+  }
   private store(id: string) {
     z.uuid().parse(id);
     let store = this.stores.get(id);
     if (!store) {
       store = new DocumentStore(path.join(this.root, 'canvas-documents', id + '.json'), (value) =>
-        canvasDocumentSchema.parse(value),
+        this.parseDocument(value),
       );
       this.stores.set(id, store);
     }
     return store;
   }
-  private serial<T>(work: () => Promise<T>): Promise<T> {
+  protected serial<T>(work: () => Promise<T>): Promise<T> {
     const task = this.queue.catch(() => {}).then(work);
     this.queue = task;
     return task;
   }
-  private async load(owner: number, id: string): Promise<CanvasDocument> {
+  protected async load(owner: number, id: string): Promise<D> {
     if (this.owners.has(id) && this.owners.get(id) !== owner)
       throw new Error('This canvas is open in another window.');
     const document = await this.store(id).load();
@@ -110,22 +103,84 @@ export class Canvases {
     this.owners.set(id, owner);
     return document;
   }
-  read(owner: number, id: string): Promise<CanvasDocument> {
+  read(owner: number, id: string): Promise<D> {
     return this.serial(() => this.load(owner, id));
   }
-  private async save(
+  library(owner: number): Promise<CanvasLibraryReply> {
+    return this.serial(async () => {
+      const names = await readdir(path.join(this.root, 'canvas-documents'), {
+        withFileTypes: true,
+      }).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return [];
+        throw error;
+      });
+      const documents = names.filter(
+        (entry) =>
+          entry.isFile() &&
+          entry.name.endsWith('.json') &&
+          z.uuid().safeParse(entry.name.slice(0, -5)).success,
+      );
+      const entries: CanvasLibraryEntry[] = [];
+      for (const entry of documents.slice(0, 1000)) {
+        const id = entry.name.slice(0, -5);
+        try {
+          const document = await this.store(id).load();
+          if (!document) continue;
+          const available = !this.owners.has(id) || this.owners.get(id) === owner;
+          entries.push({
+            id,
+            title: document.title,
+            path: document.path,
+            revision: document.revision,
+            updated: document.at,
+            enabled: document.enabled !== false,
+            sources: document.sources.length,
+            assets: document.assets.length,
+            available,
+            ...(!available ? { problem: 'Open in another window' } : {}),
+          });
+        } catch (error) {
+          entries.push({
+            id,
+            title: 'Tool unavailable',
+            path: '',
+            revision: 0,
+            updated: 0,
+            enabled: false,
+            sources: 0,
+            assets: 0,
+            available: false,
+            problem: errorMessage(error),
+          });
+        }
+      }
+      return {
+        entries: entries.toSorted((a, b) => b.updated - a.updated),
+        truncated: documents.length > 1000,
+      };
+    });
+  }
+  configure(owner: number, id: string, revision: number, title: string, enabled: boolean) {
+    return this.serial(async () => {
+      const document = await this.load(owner, id);
+      if (document.revision !== revision)
+        throw new Error('This tool changed. Refresh the library.');
+      return this.save(owner, this.revise(document, { title, enabled }));
+    });
+  }
+  protected async save(
     owner: number,
-    value: CanvasDocument,
+    value: CanvasDocument | D,
     invocationID?: string,
-  ): Promise<CanvasDocument> {
-    const document = canvasDocumentSchema.parse(value);
+  ): Promise<D> {
+    const document = this.parseDocument(value);
     await this.store(document.id).save(document);
     this.actions.invalidate(document, invocationID);
     this.owners.set(document.id, owner);
     this.ports.changed(owner, structuredClone(document));
     return document;
   }
-  create(owner: number, conversationID: string, directory: string): Promise<CanvasDocument> {
+  create(owner: number, conversationID: string, directory: string): Promise<D> {
     return this.serial(() =>
       this.save(owner, {
         version: 2,
@@ -133,7 +188,7 @@ export class Canvases {
         conversationID,
         path: directory,
         title: 'Canvas',
-        html: '<main style="font:16px system-ui;padding:24px"><h1>Your canvas</h1><p>Ask the agent to build a tool here.</p></main>',
+        html: canvasScaffold,
         revision: 0,
         state: {},
         defaults: {},
@@ -165,7 +220,7 @@ export class Canvases {
     title: string,
     html: string,
     defaults: CanvasState,
-  ): Promise<CanvasDocument> {
+  ): Promise<D> {
     return this.serial(async () => {
       const current = await this.load(owner, id);
       if (current.revision !== expected)
@@ -189,7 +244,7 @@ export class Canvases {
     expected: number,
     contentRevision: number,
     patch: CanvasState,
-  ): Promise<CanvasDocument> {
+  ): Promise<D> {
     return this.serial(async () => {
       const current = await this.load(owner, id);
       if (this.actions.busy(id))
@@ -203,7 +258,7 @@ export class Canvases {
       });
     });
   }
-  fork(owner: number, id: string, conversationID: string): Promise<CanvasDocument> {
+  fork(owner: number, id: string, conversationID: string): Promise<D> {
     return this.serial(async () => {
       const current = await this.load(owner, id);
       return this.save(owner, {
@@ -218,7 +273,7 @@ export class Canvases {
       });
     });
   }
-  apply(owner: number, id: string, expected: number): Promise<CanvasDocument> {
+  apply(owner: number, id: string, expected: number): Promise<D> {
     return this.serial(async () => {
       const branch = await this.load(owner, id);
       if (!branch.fork || branch.revision !== expected)
@@ -243,7 +298,7 @@ export class Canvases {
       );
     });
   }
-  undo(owner: number, id: string, expected: number): Promise<CanvasDocument> {
+  undo(owner: number, id: string, expected: number): Promise<D> {
     return this.serial(async () => {
       const current = await this.load(owner, id);
       const previous = current.history.at(-1);
@@ -312,6 +367,7 @@ export class Canvases {
       const document = await this.load(owner, id);
       if (document.revision !== revision)
         throw new Error('This canvas revision is no longer current.');
+      if (document.enabled === false) throw new Error('Enable this tool before running it.');
       this.actions.register(owner, document, frameID, actions);
       return document;
     });
@@ -329,6 +385,7 @@ export class Canvases {
   ) {
     const pending = await this.serial(async () => {
       const document = await this.load(owner, id);
+      if (document.enabled === false) throw new Error('Enable this tool before running it.');
       if (conversationID && document.conversationID !== conversationID)
         throw new Error('This action belongs to another conversation.');
       if (document.revision !== revision || document.stateRevision !== stateRevision)
@@ -383,7 +440,7 @@ export class Canvases {
     stateRevision: number,
     input: CanvasResult,
     choose: () => Promise<string | undefined>,
-    validate?: (document: CanvasDocument) => void | Promise<void>,
+    validate?: (document: D) => void | Promise<void>,
   ): Promise<string | undefined> {
     const result = canvasResultSchema.parse(input);
     const check = async () => {
@@ -410,196 +467,6 @@ export class Canvases {
       }
       return destination;
     });
-  }
-  checkRobot(
-    owner: number,
-    id: string,
-    revision: number,
-    stateRevision: number,
-    sourceID: string,
-    stateKey: string,
-  ) {
-    return this.serial(async () => {
-      const document = await this.load(owner, id);
-      if (document.revision !== revision || document.stateRevision !== stateRevision)
-        throw new Error('The canvas or its inputs changed. Check the saved task again.');
-      const source = document.sources.find((source) => source.id === sourceID);
-      if (!source?.data.robot) throw new Error('Choose a bound robot source.');
-      const input = robotTaskSchema.parse(document.state[stateKey]);
-      checkRobotTask(source.data.robot, input);
-      return this.save(owner, {
-        ...document,
-        robotCheck: {
-          sourceID,
-          stateKey,
-          revision,
-          sourceHash: source.hash,
-          inputHash: robotInputHash(input),
-          checker: 'position-v1',
-          at: Date.now(),
-        },
-      });
-    });
-  }
-  checkPlacements(
-    owner: number,
-    id: string,
-    revision: number,
-    stateRevision: number,
-    sourceID: string,
-    briefSourceID: string,
-    stateKey: string,
-  ) {
-    return this.serial(async () => {
-      const document = await this.load(owner, id);
-      if (document.revision !== revision || document.stateRevision !== stateRevision)
-        throw new Error('The study changed. Check its current saved inputs.');
-      const source = document.sources.find((s) => s.id === sourceID);
-      const brief = document.sources.find((s) => s.id === briefSourceID);
-      if (!source?.data.robot || !brief)
-        throw new Error('Bind the robot and placement brief first.');
-      const input = placementStudySchema.parse(document.state[stateKey]);
-      checkPlacements(source.data.robot, placementBrief(brief), input);
-      return this.save(owner, {
-        ...document,
-        placementCheck: {
-          sourceID,
-          briefSourceID,
-          stateKey,
-          revision,
-          sourceHash: source.hash,
-          briefHash: brief.hash,
-          inputHash: placementInputHash(input),
-          checker: 'placement-v1',
-          at: Date.now(),
-        },
-      });
-    });
-  }
-  placementComparison(owner: number, id: string) {
-    return this.serial(async () => {
-      const alternative = await this.load(owner, id);
-      if (!alternative.fork)
-        return { status: 'unavailable' as const, reason: 'This study has no quoted original.' };
-      return comparePlacements(await this.load(owner, alternative.fork.id), alternative);
-    });
-  }
-  async savePlacementCheck(
-    owner: number,
-    id: string,
-    revision: number,
-    stateRevision: number,
-    choose: () => Promise<string | undefined>,
-  ) {
-    const document = await this.read(owner, id);
-    const report = canvasPlacementReport(document);
-    if (report?.status !== 'checked')
-      throw new Error('Check the current placements before saving.');
-    const binding = document.placementCheck!;
-    return this.saveResult(
-      owner,
-      id,
-      revision,
-      stateRevision,
-      {
-        format: 'json',
-        name: 'placement-check.json',
-        content: JSON.stringify(
-          {
-            version: 1,
-            checker: binding.checker,
-            sourceHash: binding.sourceHash,
-            briefHash: binding.briefHash,
-            inputHash: binding.inputHash,
-            ...report,
-          },
-          null,
-          2,
-        ),
-      },
-      choose,
-      (current) => {
-        if (JSON.stringify(current.placementCheck) !== JSON.stringify(binding))
-          throw new Error('The placement check changed during save review.');
-      },
-    );
-  }
-  async saveRobotCheck(
-    owner: number,
-    id: string,
-    revision: number,
-    stateRevision: number,
-    choose: () => Promise<string | undefined>,
-  ) {
-    const document = await this.read(owner, id);
-    const report = canvasRobotReport(document);
-    if (!report || report.status !== 'checked')
-      throw new Error('Check the current task before saving the result.');
-    const source = document.sources.find((source) => source.id === document.robotCheck!.sourceID)!;
-    return this.saveResult(
-      owner,
-      id,
-      revision,
-      stateRevision,
-      {
-        format: 'json',
-        name: 'robot-check.json',
-        content: JSON.stringify(
-          {
-            version: 1,
-            checker: document.robotCheck!.checker,
-            source: { name: source.name, hash: source.hash, version: source.version },
-            inputHash: document.robotCheck!.inputHash,
-            ...report,
-          },
-          null,
-          2,
-        ),
-      },
-      choose,
-      (current) => {
-        if (JSON.stringify(current.robotCheck) !== JSON.stringify(document.robotCheck))
-          throw new Error('The selected robot check changed. Review the current result.');
-      },
-    );
-  }
-  robotComparison(owner: number, id: string): Promise<RobotComparisonReport> {
-    return this.serial(async () => {
-      const alternative = await this.load(owner, id);
-      if (!alternative.fork)
-        return { status: 'unavailable', reason: 'This canvas has no original to compare.' };
-      return compareCanvasRobots(await this.load(owner, alternative.fork.id), alternative);
-    });
-  }
-  async saveRobotComparison(
-    owner: number,
-    id: string,
-    revision: number,
-    stateRevision: number,
-    choose: () => Promise<string | undefined>,
-  ) {
-    const comparison = await this.robotComparison(owner, id);
-    if (comparison.status !== 'compared') throw new Error(comparison.reason);
-    return this.saveResult(
-      owner,
-      id,
-      revision,
-      stateRevision,
-      {
-        format: 'json',
-        name: 'robot-comparison.json',
-        content: JSON.stringify({ version: 1, checker: 'position-v1', ...comparison }, null, 2),
-      },
-      choose,
-      async (current) => {
-        if (
-          !current.fork ||
-          JSON.stringify(compareCanvasRobots(await this.load(owner, current.fork.id), current)) !==
-            JSON.stringify(comparison)
-        )
-          throw new Error('One of the compared tasks changed. Review the comparison again.');
-      },
-    );
   }
   attach(
     owner: number,
@@ -688,8 +555,8 @@ export class Canvases {
     );
     return directory;
   }
-  async import(owner: number, file: string, conversationID: string): Promise<CanvasDocument> {
-    const imported = canvasDocumentSchema.parse(
+  async import(owner: number, file: string, conversationID: string): Promise<D> {
+    const imported = this.parseDocument(
       JSON.parse((await readBounded(file, 16_000_000)).toString('utf8')),
     );
     const directory = await realpath(path.dirname(file));

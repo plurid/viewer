@@ -11,6 +11,7 @@ import type {
   GitChangesPane,
   ChatPane,
   CanvasPane,
+  ToolLibraryPane,
   ServerPane,
   JournalPane,
   OverviewPane,
@@ -242,6 +243,7 @@ export function addContentPane(
     | GitChangesPane
     | ChatPane
     | CanvasPane
+    | ToolLibraryPane
     | JournalPane
     | OverviewPane
     | ServerPane

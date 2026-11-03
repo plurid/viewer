@@ -1,5 +1,7 @@
 # Robot target checks
 
+Superseded by [generated tool ownership](0015-generated-tool-host.md).
+
 Status: accepted.
 
 ## Context
@@ -45,7 +47,7 @@ rotations and out-of-limit values. Playback is visual inspection, not trajectory
 Verification covers the supplied endpoint positions and hard joint limits. It does not cover
 orientation, intervals between poses, collision, dynamics, physical actuation or calibration.
 Exactly one complete candidate pose must accompany every target. An incomplete task is rejected. The
-reference owns [schemas, budgets and APIs](../reference/canvases.md#check-target-poses-in-viewer).
+reference owns [schemas, budgets and APIs](0015-generated-tool-host.md).
 
 ## Consequences
 

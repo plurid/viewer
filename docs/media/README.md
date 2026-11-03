@@ -182,9 +182,14 @@ condensed repair rounds are editorial timing, not measured provider latency. Cre
 responses and the local presentation edits in the film.
 
 Review the comparison conclusion inside the native report's scroll area. Hold the reopened winning
-tool before the final spatial pullback. The assembler produces `Narration.txt`, `Captions.srt` and
-`script.json` from the audio cues of that exact cut. Use those files when reviewing or replacing the
-temporary voice.
+tool before the final spatial pullback. Record every plane-to-plane move, including the browser,
+editor and terminal sequence and the return from the alternative. Keep visible actions inside takes,
+preserve their playback speed and hold each destination after the camera settles. Do not cut away
+navigation between takes or omit the reopening route. The capture records navigation intervals, and
+the assembler checks that their arrival pauses survive the edit.
+
+The assembler produces `Narration.txt`, `Captions.srt` and `script.json` from the audio cues of that
+exact cut. Use those files when reviewing or replacing the temporary voice.
 
 ## Record the mounting job
 

@@ -57,6 +57,7 @@ const api: ViewerAPI = {
   localServerAction: (id, action) => invoke('localServerAction', id, action),
   chat: (request) => invoke('chat', request),
   canvas: (request) => invoke('canvas', request),
+  canvasLibrary: (request) => invoke('canvasLibrary', request),
   reconstruction: (request) => invoke('reconstruction', request),
   reconstructionKey: (key) => invoke('reconstructionKey', key),
   shellCommand: (action) => invoke('shellCommand', action),

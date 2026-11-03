@@ -1,3 +1,4 @@
+import { parseRobotURDF } from '../../src/domain/robotics/urdf';
 import { app, safeStorage } from 'electron';
 import { parseArgs } from 'node:util';
 import { realpath } from 'node:fs/promises';
@@ -74,13 +75,13 @@ async function main() {
   const project = await verifyRobotRehearsal(root);
   if (values.check) {
     const source = sourceSnapshot(await inspectFile(project.urdf, { content: true }));
-    if (!source.data.robot) throw new Error('The desktop reader did not load the robot.');
+    const robot = parseRobotURDF(source.data.evidence.find((item) => item.source === 'text')!.text);
     console.log(
       JSON.stringify({
         root,
         status: 'offline-ready',
-        links: source.data.robot.links.length,
-        joints: source.data.robot.joints.length,
+        links: robot.links.length,
+        joints: robot.joints.length,
         providerRequests: 0,
       }),
     );

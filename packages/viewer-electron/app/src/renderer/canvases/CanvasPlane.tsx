@@ -12,7 +12,6 @@ import { Empty, Loading } from '../ui/primitives';
 import { Disclosure } from '../ui/Disclosure';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { CanvasSources } from './CanvasSources';
-import { RobotCheckPanel } from './RobotCheckPanel';
 import { ResultReview } from './ResultReview';
 import type { PendingCanvasResult } from './ResultReview';
 import { canvasResultSchema } from '../../domain/canvases/results';
@@ -23,7 +22,6 @@ import {
   canvasActionOutputSchema,
 } from '../../domain/canvases/actions';
 import type { CanvasActionRun } from '../../domain/canvases/actions';
-import { PlacementCheckPanel } from './PlacementCheckPanel';
 
 export default function CanvasPlane({ pane }: { pane: Pane }) {
   const workspace = useWorkspace();
@@ -38,7 +36,6 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
-  const [sourceJoint, setSourceJoint] = useState<{ id: string; name: string }>();
   const [result, setResult] = useState<PendingCanvasResult>();
   const [saved, setSaved] = useState('');
   const [actionRun, setActionRun] = useState<CanvasActionRun>();
@@ -81,8 +78,9 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
   }, [title, pane.id, pane.title]);
 
   const revision = document?.revision;
+  const enabled = document?.enabled !== false;
   useEffect(() => {
-    if (revision === undefined || stopped) {
+    if (revision === undefined || stopped || !enabled) {
       setURL('');
       return;
     }
@@ -107,7 +105,6 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
       else port?.postMessage({ kind: 'cancel-action', runID: action.run.id });
     });
     let writes = Promise.resolve();
-    let checkingRobot = false;
     const saveInput = canvasInputWriter(
       async (patch) => {
         const latest = current.current;
@@ -242,35 +239,6 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
                 error: errorMessage(error),
               });
             });
-        } else if (value.kind === 'placement-check' && typeof value.id === 'string') {
-          void writes
-            .then(async () => {
-              const latest = current.current;
-              if (!live || !latest || JSON.stringify(latest.state) !== JSON.stringify(value.state))
-                throw new Error('Save the current study before requesting its check.');
-              const reply = await window.viewer.canvas({
-                kind: 'check-placements',
-                id: pane.canvasID,
-                revision,
-                stateRevision: latest.stateRevision,
-                sourceID: value.sourceID,
-                briefSourceID: value.briefSourceID,
-                stateKey: value.stateKey,
-              });
-              receive(reply.document);
-              port?.postMessage({
-                kind: 'action-response',
-                id: value.id,
-                result: reply.placementReport,
-              });
-            })
-            .catch((error: unknown) => {
-              port?.postMessage({
-                kind: 'action-response',
-                id: value.id,
-                error: errorMessage(error),
-              });
-            });
         } else if (value.kind === 'export') {
           const parsed = canvasResultSchema.safeParse(value.result);
           if (!parsed.success) {
@@ -288,35 +256,6 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
               setResult({ result: parsed.data, revision, stateRevision: latest.stateRevision });
             })
             .catch(fail);
-        } else if (
-          value.kind === 'robot-check' &&
-          typeof value.sourceID === 'string' &&
-          typeof value.stateKey === 'string'
-        ) {
-          if (checkingRobot) return;
-          checkingRobot = true;
-          void writes
-            .then(async () => {
-              const latest = current.current;
-              if (!live || !latest || latest.revision !== revision) return;
-              if (JSON.stringify(latest.state) !== JSON.stringify(value.state))
-                throw new Error(
-                  'The task inputs changed or could not be saved. Request the check again.',
-                );
-              const reply = await window.viewer.canvas({
-                kind: 'check-robot',
-                id: pane.canvasID,
-                revision,
-                stateRevision: latest.stateRevision,
-                sourceID: value.sourceID,
-                stateKey: value.stateKey,
-              });
-              if (live) receive(reply.document);
-            })
-            .catch(fail)
-            .finally(() => {
-              checkingRobot = false;
-            });
         } else if (value.kind === 'state') {
           const patch = canvasStateSchema.safeParse(value.patch);
           if (!patch.success) {
@@ -331,8 +270,6 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
         } else if (value.kind === 'source' && typeof value.assetID === 'string') {
           const snapshot = current.current?.sources.find((item) => item.id === value.assetID);
           if (snapshot) {
-            const joint = snapshot.data.robot?.joints.find((item) => item.name === value.joint);
-            setSourceJoint(joint ? { id: snapshot.id, name: joint.name } : undefined);
             setSourcesOpen(true);
             return;
           }
@@ -376,7 +313,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
       port?.close();
       if (capability) void window.viewer.htmlPreviewClose(capability).catch(report);
     };
-  }, [pane.canvasID, revision, stopped, reload, receive]);
+  }, [pane.canvasID, revision, stopped, enabled, reload, receive]);
 
   const act = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -422,6 +359,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           Conversation
         </button>
         <span className="canvas-revision">Revision {document.revision}</span>
+        <button onClick={() => workspace.openToolLibrary(pane.id)}>Tool library</button>
         <ChoiceButton
           label="Canvas tools"
           value=""
@@ -457,7 +395,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           }}
         />
         <button
-          disabled={stopped}
+          disabled={stopped || !enabled}
           onClick={() => {
             if (actionRun?.status === 'running' && actionRun.actorKind === 'model')
               void window.viewer.chat({ kind: 'stop', id: document.conversationID }).catch(fail);
@@ -535,96 +473,6 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
         </div>
       )}
       <div className="canvas-inspectors" aria-label="Canvas details">
-        {document.placementCheck && (
-          <PlacementCheckPanel
-            document={document}
-            group={inspectorGroup}
-            busy={busy}
-            onCheck={() =>
-              void act(async () => {
-                const latest = current.current!;
-                const binding = latest.placementCheck!;
-                receive(
-                  (
-                    await window.viewer.canvas({
-                      kind: 'check-placements',
-                      id: latest.id,
-                      revision: latest.revision,
-                      stateRevision: latest.stateRevision,
-                      sourceID: binding.sourceID,
-                      briefSourceID: binding.briefSourceID,
-                      stateKey: binding.stateKey,
-                    })
-                  ).document,
-                );
-              })
-            }
-            onSave={() =>
-              void act(async () => {
-                const latest = current.current!;
-                const reply = await window.viewer.canvas({
-                  kind: 'save-placement-check',
-                  id: latest.id,
-                  revision: latest.revision,
-                  stateRevision: latest.stateRevision,
-                });
-                if (reply.saved) setSaved(reply.saved);
-              })
-            }
-          />
-        )}
-        {document.robotCheck && (
-          <RobotCheckPanel
-            document={document}
-            group={inspectorGroup}
-            busy={busy}
-            onDefinition={(id, name) => {
-              setSourceJoint({ id, name });
-              setSourcesOpen(true);
-            }}
-            onCheck={() =>
-              void act(async () => {
-                const latest = current.current!;
-                receive(
-                  (
-                    await window.viewer.canvas({
-                      kind: 'check-robot',
-                      id: latest.id,
-                      revision: latest.revision,
-                      stateRevision: latest.stateRevision,
-                      sourceID: latest.robotCheck!.sourceID,
-                      stateKey: latest.robotCheck!.stateKey,
-                    })
-                  ).document,
-                );
-              })
-            }
-            onSave={() =>
-              void act(async () => {
-                const latest = current.current!;
-                const reply = await window.viewer.canvas({
-                  kind: 'save-robot-check',
-                  id: latest.id,
-                  revision: latest.revision,
-                  stateRevision: latest.stateRevision,
-                });
-                if (reply.saved) setSaved(reply.saved);
-              })
-            }
-            onSaveComparison={() =>
-              void act(async () => {
-                const latest = current.current!;
-                const reply = await window.viewer.canvas({
-                  kind: 'save-robot-comparison',
-                  id: latest.id,
-                  revision: latest.revision,
-                  stateRevision: latest.stateRevision,
-                });
-                if (reply.saved) setSaved(reply.saved);
-              })
-            }
-          />
-        )}
         {!!document.sources.length && (
           <Disclosure
             variant="compact"
@@ -636,7 +484,6 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
             onOpenChange={setSourcesOpen}
           >
             <CanvasSources
-              joint={sourceJoint}
               sources={document.sources}
               paneID={pane.id}
               busy={busy}
@@ -771,7 +618,9 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
             </Disclosure>
           </div>
         )}
-        {stopped ? (
+        {!enabled ? (
+          <Empty title="Tool disabled" detail="Enable it in the tool library to run it." />
+        ) : stopped ? (
           <Empty title="Canvas stopped" detail="Reload to run the saved revision." />
         ) : url ? (
           <iframe

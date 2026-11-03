@@ -22,6 +22,7 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
 const api: ViewerAPI = {
   dialog: async () => ({ prompt: null }),
   canvas: (request) => invoke('canvas', request),
+  canvasLibrary: (request) => invoke('canvasLibrary', request),
   reconstruction: async () => {
     throw new Error('Reconstruction requires the desktop app.');
   },

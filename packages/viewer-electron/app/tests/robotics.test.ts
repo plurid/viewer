@@ -6,7 +6,7 @@ import { parseRobotURDF } from '../src/domain/robotics/urdf';
 import { forwardKinematics, originTransform } from '../src/domain/robotics/kinematics';
 import { robotModelSchema } from '../src/domain/robotics/model';
 import { sourceSnapshot } from '../src/desktop/canvases/sources';
-import { Canvases } from '../src/desktop/canvases/service';
+import { ExperimentCanvases as Canvases } from '../tools/robotics/experiment-canvases';
 import { attachRobotMeshes, robotMeshPaths, validateRobotSTL } from '../src/desktop/canvases/robot';
 import type { InspectionResult } from '../src/domain/files/inspection';
 import { temporaryRoot } from '../tools/temporary';
@@ -153,7 +153,7 @@ describe('robot canvas sources and resources', () => {
     const text = await readFile(new URL('so101_new_calib.urdf', fixture), 'utf8');
     const bound = await canvases.source(1, initial.id, 0, inspection(text));
     expect(bound.source.data.robot?.joints).toHaveLength(7);
-    expect(bound.source.data.coverage.content).toBe('partial');
+    expect(bound.source.data.coverage.content).toBe('complete');
     await canvases.state(1, initial.id, 0, bound.revision, { shoulder_pan: 0.2 });
     const output = await canvases.export(1, initial.id, root);
     const imported = await canvases.import(
@@ -166,7 +166,7 @@ describe('robot canvas sources and resources', () => {
     expect(imported.state.shoulder_pan).toBe(0.2);
     const partial = inspection(text);
     partial.coverage.content = 'partial';
-    expect(() => sourceSnapshot(partial)).toThrow('complete');
+    expect(sourceSnapshot(partial).data.coverage.content).toBe('partial');
   });
   it('does not read companion files until every resource is authorized', async () => {
     const root = await realpath(await temporaryRoot('viewer-robot-mesh-'));

@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
-import type { CanvasDocument } from '../../domain/canvases/document';
+import type {
+  ExperimentDocument as CanvasDocument,
+  ExperimentAPI,
+} from '../../domain/robotics/experiment-canvases';
 import type { PlacementReport, PlacementComparison } from '../../domain/robotics/placement';
 import { errorMessage } from '../../domain/errors';
 import { Disclosure } from '../ui/Disclosure';
 
 export function PlacementCheckPanel({
+  api,
   document,
   group,
   busy,
   onCheck,
   onSave,
 }: {
+  api: ExperimentAPI;
   document: CanvasDocument;
   group?: string;
   busy: boolean;
@@ -33,8 +38,8 @@ export function PlacementCheckPanel({
   useEffect(() => {
     let live = true;
     void Promise.all([
-      window.viewer.canvas({ kind: 'placement-report', id: document.id }),
-      forkID ? window.viewer.canvas({ kind: 'placement-comparison', id: document.id }) : undefined,
+      api.canvas({ kind: 'placement-report', id: document.id }),
+      forkID ? api.canvas({ kind: 'placement-comparison', id: document.id }) : undefined,
     ])
       .then(([report, comparison]) => {
         if (live)
@@ -50,7 +55,7 @@ export function PlacementCheckPanel({
     return () => {
       live = false;
     };
-  }, [document.id, forkID, key]);
+  }, [api, document.id, forkID, key]);
   const current = result?.key === key ? result : undefined;
   const report = current?.report;
   const checked = report?.status === 'checked' ? report : undefined;

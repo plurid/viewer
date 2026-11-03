@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { Canvases } from '../../src/desktop/canvases/service';
+import { ExperimentCanvases as Canvases } from './experiment-canvases';
 import { canvasDocumentSchema } from '../../src/domain/canvases/document';
 import { chatDocumentSchema } from '../../src/domain/models/chat';
 import type { CanvasDocument } from '../../src/domain/canvases/document';

@@ -1,10 +1,11 @@
+import type { ExperimentAPI } from '../../src/domain/robotics/experiment-canvases';
 /** Real action handlers and robot meshes; local fixture, zero provider requests. */
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Canvases } from '../../src/desktop/canvases/service';
+import { ExperimentCanvases as Canvases } from '../../tools/robotics/experiment-canvases';
 import { attachRobotMeshes } from '../../src/desktop/canvases/robot';
 import { ChatDocumentStore } from '../../src/desktop/chat/documents';
 import { inspectFile } from '../../src/desktop/files/inspection';
@@ -146,13 +147,27 @@ let app: Awaited<ReturnType<typeof ownedApp>> | undefined;
 let main: CanvasConnection | undefined;
 const checks: string[] = [];
 const read = async (id = canvas.id) =>
-  (await main!.evaluate(pageCall((id) => window.viewer.canvas({ kind: 'read', id }), id))).document;
+  (
+    await main!.evaluate(
+      pageCall(
+        (id) => (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'read', id }),
+        id,
+      ),
+    )
+  ).document;
 const invoke = async (action: string, input: Record<string, string | boolean>, id = canvas.id) => {
   const document = await read(id);
   return main!.evaluate(
     pageCall(
       (id, revision, stateRevision, action, input) =>
-        window.viewer.canvas({ kind: 'invoke-action', id, revision, stateRevision, action, input }),
+        (window.viewer as unknown as ExperimentAPI).canvas({
+          kind: 'invoke-action',
+          id,
+          revision,
+          stateRevision,
+          action,
+          input,
+        }),
       id,
       document.revision,
       document.stateRevision,
@@ -167,7 +182,7 @@ const check = async (id = canvas.id) => {
     await main!.evaluate(
       pageCall(
         (id, revision, stateRevision, sourceID, briefSourceID) =>
-          window.viewer.canvas({
+          (window.viewer as unknown as ExperimentAPI).canvas({
             kind: 'check-placements',
             id,
             revision,
@@ -323,7 +338,11 @@ try {
   await check(branchCanvas.id);
   const comparison = (
     await main!.evaluate(
-      pageCall((id) => window.viewer.canvas({ kind: 'placement-comparison', id }), branchCanvas.id),
+      pageCall(
+        (id) =>
+          (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'placement-comparison', id }),
+        branchCanvas.id,
+      ),
     )
   ).placementComparison;
   assert.equal(comparison?.status, 'compared');
@@ -353,7 +372,11 @@ try {
   frame = await start(imported.id);
   const reopened = (
     await main!.evaluate(
-      pageCall((id) => window.viewer.canvas({ kind: 'placement-report', id }), imported.id),
+      pageCall(
+        (id) =>
+          (window.viewer as unknown as ExperimentAPI).canvas({ kind: 'placement-report', id }),
+        imported.id,
+      ),
     )
   ).placementReport;
   assert.equal(reopened?.status, 'checked');

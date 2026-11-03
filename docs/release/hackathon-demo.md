@@ -35,51 +35,51 @@ Picture: Opening title study.
 
 Picture: Opening title study.
 
-### 00:00:09.918 to 00:00:19.276
+### 00:00:09.405 to 00:00:18.763
 
 > Until twenty twenty-five, I had written about a million lines of code. Since then, I have modified
 > ten thousand at most, mostly configuration.
 
 Picture: Open the robot definition in a linked plane, then return to the project.
 
-### 00:00:22.158 to 00:00:30.134
+### 00:00:20.636 to 00:00:28.612
 
 > I still build projects. But my attention has moved: how the pieces connect, what changes what, and
 > whether the result works.
 
 Picture: Expand the mesh folder and open the linked arm geometry.
 
-### 00:00:32.841 to 00:00:33.596
+### 00:00:33.670 to 00:00:34.424
 
 > A browser.
 
-Picture: Focus the project brief in the browser plane.
+Picture: Pull back through the workspace, focus the project brief and let the browser plane settle.
 
-### 00:00:36.017 to 00:00:36.644
+### 00:00:39.003 to 00:00:39.630
 
 > An editor.
 
-Picture: Use Command+E to edit the source definition.
+Picture: Move through the workspace to the source definition, then use Command+E to edit it.
 
-### 00:00:39.151 to 00:00:39.882
+### 00:00:44.696 to 00:00:45.427
 
 > A terminal.
 
-Picture: Run ls in the project terminal.
+Picture: Move through the workspace to the terminal and run ls after arriving.
 
-### 00:00:42.199 to 00:00:47.064
+### 00:00:47.528 to 00:00:52.392
 
 > A browser. An editor. A terminal. Are you getting it? One workspace.
 
 Picture: Frame all planes to reveal the shared spatial workspace.
 
-### 00:00:48.955 to 00:00:52.902
+### 00:00:54.282 to 00:00:58.229
 
 > This is Viewer, built on Plurid. Both existed before the hackathon.
 
 Picture: Move from the workspace into the actual Viewer conversation.
 
-### 00:00:56.706 to 00:01:03.834
+### 00:01:02.029 to 00:01:09.158
 
 > For the hackathon, I gave Meta tools of its own. Here, it must place a robot that can reach six
 > tray slots.
@@ -91,26 +91,26 @@ Typed request:
 > Build a placement tool from this robot and station brief. Test the mounting points and tell me
 > which one needs the smallest move.
 
-### 00:01:07.582 to 00:01:11.668
+### 00:01:12.908 to 00:01:16.995
 
 > It turns the robot files and station brief into this working interface.
 
 Picture: Reveal the actual station view and working controls.
 
-### 00:01:13.662 to 00:01:21.591
+### 00:01:18.996 to 00:01:26.926
 
 > Meta runs the tool. Four mounting points. Six targets each. Viewer checks the computed poses
 > against the source robot.
 
 Picture: The activity row names Meta. Show the independently recomputed report.
 
-### 00:01:23.839 to 00:01:27.542
+### 00:01:29.171 to 00:01:32.875
 
 > Central reaches all six with the shortest move. I select it.
 
 Picture: The operator selects Central, inspects a target and checks the saved selection.
 
-### 00:01:30.553 to 00:01:35.232
+### 00:01:35.870 to 00:01:40.548
 
 > Now the central area is needed for something else. I ask Meta to reserve it.
 
@@ -121,20 +121,20 @@ Typed request:
 > Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm. Add a control and bench
 > overlay for this mounting-point restriction.
 
-### 00:01:38.410 to 00:01:43.379
+### 00:01:43.725 to 00:01:48.694
 
 > It adds the restriction to the interface, evaluates again, and selects Front.
 
 Picture: The revised tool adds the restriction. Meta evaluates and selects Front.
 
-### 00:01:45.616 to 00:01:52.791
+### 00:01:50.942 to 00:01:58.117
 
 > The choice changes for a reason: six targets reached, within a millimetre, with the central
 > mounting point excluded.
 
 Picture: Read the checked candidate values and the Front recommendation.
 
-### 00:01:55.395 to 00:02:00.899
+### 00:02:00.710 to 00:02:06.213
 
 > What about the rear mounting point? I branch from that recommendation and ask Meta to test it.
 
@@ -144,25 +144,25 @@ Typed request:
 
 > Compare the rear mounting point with the front mounting point.
 
-### 00:02:03.856 to 00:02:10.056
+### 00:02:09.169 to 00:02:15.368
 
 > Rear passes too. But it needs a sixty-seven millimetre longer move. Front wins this comparison.
 
 Picture: Meta selects Rear. Show the independent comparison and movement distances.
 
-### 00:02:12.726 to 00:02:15.536
+### 00:02:22.460 to 00:02:25.270
 
 > I keep the checked result and the working tool together.
 
 Picture: Save the check through Viewer's file picker, then export the tool.
 
-### 00:02:21.300 to 00:02:25.572
+### 00:02:34.415 to 00:02:38.688
 
 > Reopen it, and the inputs, controls and checked decision come with it.
 
 Picture: Reopen the exported tool and inspect another target using its controls.
 
-### 00:02:28.282 to 00:02:38.046
+### 00:02:41.411 to 00:02:51.175
 
 > Meta wrote the tool, used it, and revised it when the job changed. I didn't open a robotics
 > application. I opened my project and asked for what I needed.

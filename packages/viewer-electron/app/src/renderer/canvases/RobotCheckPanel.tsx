@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
-import type { CanvasDocument } from '../../domain/canvases/document';
+import type {
+  ExperimentDocument as CanvasDocument,
+  ExperimentAPI,
+} from '../../domain/robotics/experiment-canvases';
 import type { RobotCheckReport } from '../../domain/robotics/task';
 import { errorMessage } from '../../domain/errors';
 import { Disclosure } from '../ui/Disclosure';
 import { RobotComparisonPanel } from './RobotComparisonPanel';
 
 export function RobotCheckPanel({
+  api,
   document,
   busy,
   group,
@@ -14,6 +18,7 @@ export function RobotCheckPanel({
   onSaveComparison,
   onDefinition,
 }: {
+  api: ExperimentAPI;
   document: CanvasDocument;
   busy: boolean;
   group?: string;
@@ -31,7 +36,7 @@ export function RobotCheckPanel({
   }>();
   useEffect(() => {
     let live = true;
-    void window.viewer
+    void api
       .canvas({ kind: 'robot-report', id: document.id })
       .then((reply) => {
         if (live) setResult({ key, report: reply.robotReport });
@@ -42,7 +47,7 @@ export function RobotCheckPanel({
     return () => {
       live = false;
     };
-  }, [key, document.id]);
+  }, [api, key, document.id]);
   const current = result?.key === key ? result : undefined;
   const report = current?.report;
   const state = !current
@@ -146,6 +151,7 @@ export function RobotCheckPanel({
       </Disclosure>
       {document.fork && (
         <RobotComparisonPanel
+          api={api}
           document={document}
           busy={busy}
           group={group}

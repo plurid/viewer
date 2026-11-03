@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { CanvasDocument } from '../../domain/canvases/document';
+import type { ExperimentDocument as CanvasDocument } from '../../domain/robotics/experiment-canvases';
 import { robotTaskSchema } from '../../domain/robotics/task';
 import type {
   RobotTask,

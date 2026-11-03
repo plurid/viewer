@@ -7,8 +7,6 @@ import { validateReconstructedGLB } from './canvases/glb';
 import { preparePhoto } from './fabrication/inputs';
 import { canvasLibraries } from 'virtual:viewer-canvas-libraries';
 import { Canvases } from './canvases/service';
-import { canvasPlacementReport } from './canvases/placement-check';
-import { canvasRobotReport } from './canvases/robot-check';
 import { createGitHandlers } from './ipc/git-handlers';
 import { createEditingHandlers } from './ipc/editing-handlers';
 import { createModelHandlers } from './ipc/model-handlers';
@@ -2256,6 +2254,19 @@ export class Desktop {
         this.settings.announce();
       },
       reconstruction: ([request], owner) => this.reconstructions.handle(owner, request),
+      canvasLibrary: async ([request], owner) => {
+        const document =
+          request.kind === 'configure'
+            ? await this.canvases.configure(
+                owner,
+                request.id,
+                request.revision,
+                request.title,
+                request.enabled,
+              )
+            : undefined;
+        return { ...(await this.canvases.library(owner)), document };
+      },
       canvas: async ([request], owner) => {
         let document = await this.canvases.read(owner, request.id);
         if (request.kind === 'register-actions')
@@ -2291,38 +2302,6 @@ export class Desktop {
             'You',
             new AbortController().signal,
           );
-        if (request.kind === 'check-placements')
-          document = await this.canvases.checkPlacements(
-            owner,
-            document.id,
-            request.revision,
-            request.stateRevision,
-            request.sourceID,
-            request.briefSourceID,
-            request.stateKey,
-          );
-        if (request.kind === 'check-placements' || request.kind === 'placement-report')
-          return { document, placementReport: canvasPlacementReport(document) };
-        if (request.kind === 'placement-comparison')
-          return {
-            document,
-            placementComparison: await this.canvases.placementComparison(owner, document.id),
-          };
-        if (request.kind === 'save-placement-check') {
-          const saved = await this.canvases.savePlacementCheck(
-            owner,
-            document.id,
-            request.revision,
-            request.stateRevision,
-            () =>
-              saveOnce(this.fileAccess, this.windows.get(owner)?.window, {
-                title: 'Save placement check as a new file',
-                defaultPath: path.join(document.path, 'placement-check.json'),
-              }),
-          );
-          if (saved) this.emit({ type: 'folder-changed', path: path.dirname(saved) });
-          return { document: await this.canvases.read(owner, document.id), saved };
-        }
         if (request.kind === 'observe')
           return {
             document: await this.canvases.observe(owner, request.id, request.revision, {
@@ -2344,52 +2323,6 @@ export class Desktop {
           const inspection = await this.files.inspect(file, true, false);
           await this.canvases.source(owner, document.id, request.revision, inspection, source.id);
           document = await this.canvases.read(owner, document.id);
-        }
-        if (request.kind === 'check-robot')
-          document = await this.canvases.checkRobot(
-            owner,
-            document.id,
-            request.revision,
-            request.stateRevision,
-            request.sourceID,
-            request.stateKey,
-          );
-        if (request.kind === 'robot-report' || request.kind === 'check-robot')
-          return { document, robotReport: canvasRobotReport(document) };
-        if (request.kind === 'robot-comparison')
-          return {
-            document,
-            robotComparison: await this.canvases.robotComparison(owner, document.id),
-          };
-        if (request.kind === 'save-robot-comparison') {
-          const saved = await this.canvases.saveRobotComparison(
-            owner,
-            document.id,
-            request.revision,
-            request.stateRevision,
-            () =>
-              saveOnce(this.fileAccess, this.windows.get(owner)?.window, {
-                title: 'Save robot comparison as a new file',
-                defaultPath: path.join(document.path, 'robot-comparison.json'),
-              }),
-          );
-          if (saved) this.emit({ type: 'folder-changed', path: path.dirname(saved) });
-          return { document: await this.canvases.read(owner, document.id), saved };
-        }
-        if (request.kind === 'save-robot-check') {
-          const saved = await this.canvases.saveRobotCheck(
-            owner,
-            document.id,
-            request.revision,
-            request.stateRevision,
-            () =>
-              saveOnce(this.fileAccess, this.windows.get(owner)?.window, {
-                title: 'Save robot check as a new file',
-                defaultPath: path.join(document.path, 'robot-check.json'),
-              }),
-          );
-          if (saved) this.emit({ type: 'folder-changed', path: path.dirname(saved) });
-          return { document: await this.canvases.read(owner, document.id), saved };
         }
         if (request.kind === 'save-result') {
           const saved = await this.canvases.saveResult(
@@ -2431,6 +2364,8 @@ export class Desktop {
             { ...document.defaults, modelLight: 1, modelWire: false, modelBackground: '#20242c' },
           );
         }
+        if (request.kind === 'preview' && document.enabled === false)
+          throw new Error('Enable this tool before running it.');
         if (request.kind === 'preview')
           return {
             document,

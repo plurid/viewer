@@ -43,11 +43,7 @@ export function canvasModelMessages(
         Array.isArray(result.sources) &&
         Array.isArray(result.assets);
       const saved = typeof result.canvasID === 'string' && record(result.savedState);
-      const checked =
-        Number.isInteger(result.stateRevision) &&
-        record(result.report) &&
-        ['checked', 'stale'].includes(String(result.report.status));
-      if (!snapshot && !saved && !checked) return message;
+      if (!snapshot && !saved) return message;
       const fields: Record<string, string> = {
         html: 'html',
         state: 'state',
@@ -55,10 +51,6 @@ export function canvasModelMessages(
         defaults: 'defaults',
         sources: 'sources',
         assets: 'assets',
-        placementReport: 'placementReport',
-        robotReport: 'robotReport',
-        robotComparison: 'robotComparison',
-        ...(checked ? { report: 'placementReport' } : {}),
       };
       const projected = Object.fromEntries(
         Object.entries(result).map(([key, value]) => [

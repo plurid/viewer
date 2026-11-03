@@ -366,7 +366,7 @@ describe('staged real Chat ownership with an offline provider fixture', () => {
     const html = '<main>' + '<p>Saved canvas</p>'.repeat(2500) + '</main>';
     const steps = [
       step('canvas_source', { path: urdf }),
-      step('canvas_robot_assets', { path: urdf }),
+      step('canvas_asset', { files: [path.join(path.dirname(urdf), 'part.stl')] }),
       step('canvas_write', { commandID: '2', query: 'Recovered canvas', text: html }),
     ];
     const failed = await runRobotSession(root, {
@@ -443,7 +443,7 @@ describe('staged real Chat ownership with an offline provider fixture', () => {
       stage: 'create',
       generate: scripted([
         step('canvas_source', { path: urdf }),
-        step('canvas_robot_assets', { path: urdf }),
+        step('canvas_asset', { files: [path.join(path.dirname(urdf), 'part.stl')] }),
         step('canvas_write', {
           commandID: '2',
           text: '<script>const broken = )</script>',
@@ -524,7 +524,7 @@ describe('staged real Chat ownership with an offline provider fixture', () => {
       stage: 'create',
       generate: scripted([
         step('canvas_source', { path: urdf }),
-        step('canvas_robot_assets', { path: urdf }),
+        step('canvas_asset', { files: [path.join(path.dirname(urdf), 'part.stl')] }),
         step('canvas_write', {
           commandID: '2',
           text: '<p>Scripted joint tool</p>',
@@ -617,7 +617,7 @@ describe('staged real Chat ownership with an offline provider fixture', () => {
       stage: 'create',
       generate: scripted([
         step('canvas_source', { path: urdf }),
-        step('canvas_robot_assets', { path: urdf }),
+        step('canvas_asset', { files: [path.join(path.dirname(urdf), 'part.stl')] }),
         step('canvas_write', { commandID: '2', text: '<p>Fixture</p>' }),
         step('reply', { text: 'Real fixture reply.' }),
       ]),

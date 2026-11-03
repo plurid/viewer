@@ -1,0 +1,117 @@
+.tool-library {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+.tool-library-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap-inline);
+  padding: var(--gap-content) var(--gap-panel);
+  border-bottom: 1px solid var(--line);
+}
+.tool-library-toolbar input {
+  flex: 1;
+  min-width: 160px;
+}
+.tool-library-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  min-height: 0;
+  overflow: auto;
+}
+.tool-library-list {
+  flex: 2 1 420px;
+  min-width: 0;
+}
+.tool-library table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: start;
+}
+.tool-library th,
+.tool-library td {
+  text-align: start;
+  border-bottom: 1px solid var(--line);
+  padding: var(--gap-content) var(--gap-panel);
+  overflow-wrap: anywhere;
+  font-size: var(--text-compact);
+  font-weight: 400;
+}
+.tool-library thead th {
+  color: var(--muted);
+}
+.tool-library th button {
+  text-align: start;
+  width: 100%;
+  white-space: normal;
+}
+.tool-library tr[data-selected] {
+  background: var(--selection);
+}
+.tool-library small {
+  display: block;
+  margin-top: var(--gap-tight);
+  color: var(--muted);
+}
+.tool-library-details {
+  flex: 1 1 280px;
+  min-width: 0;
+  padding: var(--gap-panel);
+  border-inline-start: 1px solid var(--line);
+}
+.tool-library-details h2 {
+  margin: 0 0 var(--gap-content);
+  font-size: var(--text-section);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.tool-library-details p {
+  margin-block: var(--gap-content);
+  font-size: var(--text-compact);
+}
+.tool-library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-inline);
+  margin-block: var(--gap-panel);
+}
+.tool-library-details form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--gap-inline);
+  margin-block: var(--gap-panel);
+}
+.tool-library-details form label {
+  flex: 1;
+  display: grid;
+  gap: var(--gap-small);
+  min-width: 0;
+}
+.tool-library-details input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+}
+.tool-library-enabled {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline);
+}
+.tool-library-hint {
+  margin: var(--gap-panel);
+  color: var(--muted);
+}
+.tool-library-details .tool-library-hint {
+  margin-inline: 0;
+}
+
+.tool-library-details .path-field > button {
+  order: -1;
+  flex-shrink: 0;
+}

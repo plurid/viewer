@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { realpath } from 'node:fs/promises';
 import type { Canvases } from './service';
-import type { CanvasSource } from '../../domain/canvases/sources';
+import type { ExperimentSource as CanvasSource } from '../../domain/robotics/experiment-canvases';
 import { canvasLimits } from '../../domain/canvases/document';
 
 /** Resolve inert relative names without reading a companion before authorization. */

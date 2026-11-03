@@ -21,6 +21,7 @@ type ContentPlaneActions = Pick<
   | 'openAgentSession'
   | 'openChat'
   | 'openCanvas'
+  | 'openToolLibrary'
   | 'openDiff'
   | 'openGitDiff'
   | 'openGitChanges'
@@ -51,6 +52,19 @@ export function contentPlaneActions({
   registerContent,
 }: ContentPlanePorts): ContentPlaneActions {
   return {
+    openToolLibrary(parentPaneID) {
+      const space = activeWorkspace();
+      const existing = space.panes.find((pane) => pane.type === 'tools');
+      if (existing) {
+        controller().focusPane(existing.id, { activate: true });
+        return;
+      }
+      const id = crypto.randomUUID();
+      const path =
+        space.panes.find((pane) => pane.id === parentPaneID)?.path ?? getState().bootstrap.home;
+      registerContent({ id, type: 'tools', path }, parentPaneID);
+      controller().focusPane(id, { activate: true });
+    },
     async openMedia(paths, parentID, fresh = false, preset) {
       const space = activeWorkspace(),
         existing =

@@ -43,6 +43,7 @@ export interface WorkspaceController {
     focusMessage?: ChatPane['focusMessage'],
   ): Promise<void>;
   openCanvas(id: string, parentPaneID?: string, activate?: boolean): Promise<void>;
+  openToolLibrary(parentPaneID?: string): void;
   openAgentSession(id: string, parentPaneID?: string): Promise<string>;
   openDiff(left: DiffSource, right: DiffSource, parentPaneID?: string): void;
   openGitDiff(file: string, parentPaneID?: string): Promise<void>;

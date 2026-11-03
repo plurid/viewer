@@ -22,6 +22,21 @@ action beside the filename; long lists scroll within the details area. Opening a
 section closes the previous one and leaves the canvas visible. Press **Escape** while working in an
 open section to close it and return focus to its heading.
 
+## Manage your tools
+
+1. Choose **Tool library** from commands, Chat or the canvas toolbar. It opens in its own plane.
+2. Search by tool or project name, then select a row. Choose **Open tool** to run it or
+   **Conversation** to ask for a change.
+3. Change **Name** and choose **Rename**. Turn off **Enable tool** to stop it and prevent actions
+   from running. The setting survives restarting Viewer.
+4. Choose **Duplicate** to start a separate conversation with a copy of the tool and its saved
+   inputs. No model request is sent until you send a message.
+5. Choose **New tool…** to begin another conversation. Attach the files it should use and describe
+   the tool you need.
+
+Reopening a saved tool runs its saved code. Use **Tools → Source code** to inspect it and **Undo
+revision** to restore the preceding design.
+
 ## Let the agent use its tool
 
 1. Ask the conversation to register actions for the tool's controls and run the needed calculation.
@@ -29,8 +44,8 @@ open section to close it and return focus to its heading.
    receives the handler's actual result before continuing its answer.
 3. Choose **Take over** to cancel pending work and stop that model turn. You can then use the
    controls yourself. **Stop** stops the entire page; **Tools → Reload** starts it again.
-4. Inspect the output. **Completed** means the action ran. Use a separate Viewer check when the tool
-   supports one; a generated result is not an independent measurement.
+4. Inspect the output. **Completed** means the action ran. Ask for tests in the generated tool and
+   compare its results with the source data.
 
 Controls and agent calls use the same registered handler. Inputs are held while an action runs and
 its saved changes appear together when it finishes. Closing or revising the canvas cancels pending
@@ -72,8 +87,8 @@ conversation** returns to the selected passage.
 
 ## Reconstruct one object from a photo
 
-For an existing articulated robot definition, use the URDF workflow below. Photo reconstruction
-produces a mesh without the machine's joints or constraints.
+Photo reconstruction produces a mesh. An articulated model needs its own source definition and
+controls.
 
 1. Add a Meta model that supports object selection in **Settings → Models**.
 2. Under **3D reconstruction**, enter your separate fal API key and choose **Save key**.
@@ -103,61 +118,16 @@ Personal backups include canvases and their attached assets within the backup si
 canvases, use their individual export. Keep exports and backups private when their contents are
 private.
 
-## Explore a URDF robot
+## Ask for a specialist tool
 
-1. Attach the folder containing the URDF and its relative STL meshes to a conversation. Approve the
-   model's requested data access.
-2. Ask it to build joint controls from that definition, using the bundled forward-kinematics module
-   and approved meshes. The agent can bind the definition and attach its meshes in separate steps.
-3. Move a joint and inspect the displayed limits. Angles use radians and distances use metres.
-   Values outside the declared range are reported without being silently corrected.
-4. Ask the tool to show the source of a constraint. In **Sources**, choose **Open joint definition**
-   to inspect the captured passage in the original file.
-5. Ask for world-coordinate target controls and a candidate-pose search. A search can find a
-   candidate or remain unresolved. An unresolved search does not prove a target unreachable.
-6. Request a Viewer check from the generated tool. Expand **Robot check** to inspect each target's
-   measured error, tolerance and joint limits. Change a target, tool point, base placement or pose
-   and use **Check poses** again.
-7. Choose **Save check JSON…** to save the checked inputs and measured results as a new file. Export
-   the canvas to retain the model snapshot, meshes, controls, inputs and check binding. Viewer
-   recomputes the check when reopening it.
+Attach the source files and describe the work: an image adjustment, a drawing editor, or controls
+for a robot definition. Ask the agent to implement the calculations and checks as well as the
+controls. Viewer provides context, saved inputs, the execution sandbox and linked planes. The
+application logic belongs to the generated tool.
 
-### Compare another base placement
-
-1. Select the relevant passage in the conversation and choose **Ask about selection**. The branch
-   keeps an independent copy of the canvas and its saved inputs.
-2. Ask for another base placement while keeping the world targets, their order, tool point and
-   tolerance fixed. Find candidate poses and request a Viewer check in each canvas.
-3. Expand **Compare base placements** in the alternative. Viewer measures both saved tasks and shows
-   their position errors beside one another. A changed original updates the comparison too.
-4. Choose **Save comparison JSON…** to retain both checked inputs and results. Use **Compare
-   original** to return to the original canvas.
-5. Ask the generated tool for pose replay with play, pause and a scrub control. Replay interpolates
-   the saved joint values for inspection. It must keep the candidate poses intact and reopen paused.
-
-A standalone exported canvas retains its own task and check. It does not import a link to the
-original canvas. Keep the comparison JSON with the exported work to retain both measured tasks.
-
-### Compare mounting points for a station
-
-1. Attach the robot folder and a JSON station brief with targets, candidate mounting points, tool
-   and tolerance. Ask for a mounting study using those captured sources.
-2. Ask the agent to run its registered evaluation action and request an independent placement check.
-3. Expand **Station study**. Compare passing endpoints, allowed mounting points, maximum error and
-   distance from the reference position. A reserved rectangle restricts mounting points only.
-4. Change the constraint in the tool or ask for a revision, then check again. Choose a quoted
-   alternative to compare a second selection against the same robot, brief and reserved regions.
-5. Choose **Save check JSON…**, then **Export canvas…** to keep the working tool. Reopen it to
-   recompute the saved check and inspect the selected poses.
-
-The [mounting-study reference](../reference/canvases.md#mounting-studies) defines the brief and the
-scope of checking.
-
-The controls are generated for the conversation. A working page does not establish that the arm can
-reach a target or move without collisions. The checker measures the listed endpoint positions and
-hard joint limits. It does not check orientation or movement between those poses. Confirm the file's
-calibration convention before interpreting its values as hardware settings. See the
-[supported subset](../reference/canvases.md#robot-sources-and-motion).
+Ask the agent to register a test action and run it. Inspect the returned cases and source evidence.
+A successful generated test reports what that plugin tested; Viewer does not independently certify
+its domain conclusions.
 
 [Canvas contracts and limits](../reference/canvases.md) ·
 [Models and permissions](../reference/agents.md)
