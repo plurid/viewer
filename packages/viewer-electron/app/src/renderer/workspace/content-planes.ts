@@ -62,7 +62,9 @@ export function contentPlaneActions({
       const id = crypto.randomUUID();
       const path =
         space.panes.find((pane) => pane.id === parentPaneID)?.path ?? getState().bootstrap.home;
-      registerContent({ id, type: 'tools', path }, parentPaneID);
+      // The library belongs to the workspace. Root placement keeps it beside the current plane,
+      // clear of the linked tool chain that could otherwise hide it during framing.
+      registerContent({ id, type: 'tools', path });
       controller().focusPane(id, { activate: true });
     },
     async openMedia(paths, parentID, fresh = false, preset) {

@@ -4,6 +4,8 @@ node_modules/
 out/
 coverage/
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
 .DS_Store
 .impeccable
 SCRATCH.md

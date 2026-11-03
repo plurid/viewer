@@ -595,9 +595,25 @@ try {
   });
   await take('11-ending', async () => {
     await beat(
+      'ending-origin',
+      'We used to build the interface before the work could begin.',
+      4,
+      async () => {
+        const canvas = await ui.canvas(importedID);
+        overlay.cue('Use the new target controls');
+        await canvas.press('#perTarget tr:nth-child(6) button');
+        await until(
+          () => readCanvas(importedID),
+          (d) => (d.state.ui as { targetIndex: number }).targetIndex === 5,
+          'reopened tool selects target B3',
+        );
+        overlay.cue('');
+      },
+    );
+    await beat(
       'manage-tools',
-      'I can find it again in the tool library, or make a copy when I need to try something different.',
-      8,
+      'Now, working on the project tells us what the interface needs to become.',
+      5,
       async () => {
         await click(scope(importedID) + ' button', 'Tool library', 'Manage project tools');
         await click('.tool-library tbody th button', undefined, 'Inspect a saved tool');
@@ -606,8 +622,8 @@ try {
     );
     await beat(
       'ending',
-      "I want to be able to open any project and ask for the tools I need, right where I'm working.",
-      8,
+      'As we understand more, as we change our minds, the tools change with us.',
+      7,
       all,
     );
   });

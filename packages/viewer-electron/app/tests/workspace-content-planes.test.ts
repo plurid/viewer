@@ -29,11 +29,9 @@ function fixture() {
     open: vi.fn<WorkspaceController['open']>(),
     existingPaneID: vi.fn<WorkspaceController['existingPaneID']>(),
   };
-  const registerContent = vi.fn(
-    (pane: Parameters<typeof addContentPane>[0], _parentID?: string) => {
-      addContentPane(pane, false);
-    },
-  );
+  const registerContent = vi.fn((pane: Parameters<typeof addContentPane>[0], parentID?: string) => {
+    addContentPane(pane, !parentID);
+  });
   return {
     controller,
     registerContent,
@@ -106,6 +104,27 @@ describe('Explore', () => {
 });
 
 describe('content-plane opening and reuse', () => {
+  it('opens the workspace tool library independently of the source canvas and reuses it', () => {
+    const view = fixture();
+    addContentPane(
+      {
+        id: 'linked-canvas',
+        type: 'canvas',
+        path: '/fixture/project',
+        canvasID: 'tool',
+        title: 'Project tool',
+      },
+      false,
+    );
+    view.actions.openToolLibrary('linked-canvas');
+    const opened = activeWorkspace().panes.find((pane) => pane.type === 'tools')!;
+    expect(opened.path).toBe('/fixture/project');
+    expect(activeWorkspace().roots).toContain(opened.id);
+    view.actions.openToolLibrary(activeWorkspace().panes[0]!.id);
+    expect(view.registerContent).toHaveBeenCalledOnce();
+    expect(view.controller.focusPane).toHaveBeenLastCalledWith(opened.id, { activate: true });
+  });
+
   it('keeps a server browser attached to its runtime when its address changes', () => {
     const view = fixture();
     const parent = activeWorkspace().panes[0]!;

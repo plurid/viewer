@@ -1,4 +1,4 @@
-"""Encode a native story capture once, with an exact transcript and temporary narration."""
+"""Encode a native story capture with separate captions and optional temporary narration."""
 
 import hashlib
 import json
@@ -12,6 +12,8 @@ import textwrap
 import wave
 
 from PIL import Image, ImageDraw, ImageFont
+
+from closing_screen import ClosingScreen, SECONDS as CLOSING_SECONDS
 
 FFMPEG = '/opt/homebrew/bin/ffmpeg'
 FFPROBE = '/opt/homebrew/bin/ffprobe'
@@ -57,6 +59,8 @@ def verify_png(file):
 
 
 source = pathlib.Path(sys.argv[1]).resolve()
+assert sys.argv[2:] in ([], ['--clean']), 'Usage: assemble-story.py <capture> [--clean]'
+clean = '--clean' in sys.argv[2:]
 assert json.loads((source / 'story-completed.json').read_text())['status'] == 'passed'
 capture = json.loads((source / 'story-capture.json').read_text())
 plugin = capture.get('film') == 'plugin'
@@ -93,9 +97,10 @@ if continuous_navigation:
             assert move['end'] - move['settled'] >= .5, 'Hold the view after arriving.'
 assert capture['providerRequests'] == 0 and len(capture['clips']) in ((11,) if station else (8, 9))
 closing_callback = capture['clips'][-1]['name'] == '08-closing'
+closing_prompt = plugin and not closing_callback
 assert (capture['width'], capture['height']) == SIZE
 root = pathlib.Path(tempfile.mkdtemp(prefix='viewer-interface-review-', dir='/private/tmp'))
-for name in ['Voice', 'Captions', 'Review']:
+for name in ['Voice', 'Captions', 'Review', 'Closing']:
     (root / name).mkdir()
 print(json.dumps({'output': str(root)}), flush=True)
 
@@ -178,7 +183,7 @@ for clip in capture['clips']:
     clip['editEnd'] = cursor
 
 picture_end = cursor
-duration = math.ceil((picture_end + 7) * 30) / 30
+duration = math.ceil((picture_end + (CLOSING_SECONDS if closing_prompt else 7)) * 30) / 30
 assert duration <= 180, ('Keep the full cut under three minutes', duration)
 credits = [
     'Viewer + Plurid: existing projects',
@@ -208,7 +213,28 @@ if plugin:
         credits[3] = 'Saved Meta responses · Repairs condensed · Camera moves slowed for readability'
     if staged_canvas_arrival:
         credits[3] = 'Saved Meta responses · Condensed repairs · Staged entrance · Slower camera moves'
-if closing_callback:
+if clean:
+    credits = [credit.replace('Temporary opening and voice', 'Temporary opening') for credit in credits]
+on_screen_credits = [] if clean or closing_prompt else credits
+closing_prompt_evidence = None
+if closing_prompt:
+    screen = ClosingScreen()
+    outro_seconds = duration - picture_end
+    for index in range(math.ceil(outro_seconds * 30)):
+        seconds = index / 30
+        file = root / 'Closing' / f'{index:03}.png'
+        screen.frame(seconds).save(file)
+        picture.extend(concat_entry(file, min(1 / 30, outro_seconds - seconds)))
+    closing_prompt_evidence = {
+        'start': picture_end, 'end': duration, 'editorial': True, 'submitted': False,
+        'edits': [{'seconds': at, 'text': text, 'caret': caret} for at, text, caret in screen.edits],
+        'presentation': screen.evidence(),
+    }
+    samples.extend([{'time': picture_end + 1.9, 'action': 'closing-image-editor'},
+                    {'time': picture_end + 3.7, 'action': 'closing-video-editor'},
+                    {'time': picture_end + 6.3, 'action': 'closing-file-editor'},
+                    {'time': picture_end + 7.8, 'action': 'closing-features'}])
+elif closing_callback:
     for index, text in enumerate(['There is no interface.', 'Until you need one.']):
         image = Image.new('RGB', SIZE, '#22262c')
         draw = ImageDraw.Draw(image)
@@ -219,7 +245,7 @@ if closing_callback:
                       font=ImageFont.truetype(FONT, 68), fill='#f3f4f6')
         draw.text((1440, 1050), 'Viewer / Plurid', anchor='mm',
                   font=ImageFont.truetype(FONT, 36), fill='#b8c0cc')
-        for row, credit in enumerate(credits):
+        for row, credit in enumerate(on_screen_credits):
             draw.text((1440, 1440 + row * 48), credit, anchor='mm',
                       font=ImageFont.truetype(FONT, 28), fill='#b8c0cc')
         file = root / f'closing-{index}.png'
@@ -233,7 +259,7 @@ else:
     image = Image.new('RGB', SIZE, '#22262c')
     draw = ImageDraw.Draw(image)
     draw.text((160, 380), 'Viewer / There Is No Interface', font=ImageFont.truetype(FONT, 76), fill='#f3f4f6')
-    for index, text in enumerate(credits):
+    for index, text in enumerate(on_screen_credits):
         draw.text((160, 580 + index * 88), text, font=ImageFont.truetype(FONT, 34), fill='#b8c0cc')
     file = root / 'credits.png'
     image.save(file)
@@ -270,7 +296,9 @@ with wave.open(str(root / 'narration.wav'), 'wb') as audio:
     audio.setframerate(48000)
     audio.writeframes(pcm)
 with (root / 'Narration.txt').open('x') as text:
-    text.write('THERE IS NO INTERFACE / EXACT NARRATION OF THIS REVIEW CUT\n\nTemporary system voice: Daniel.\n\n')
+    text.write('THERE IS NO INTERFACE / NARRATION SCRIPT\n\n' +
+               ('Silent video. Timings are a recording guide based on temporary narration.\n\n' if clean else
+                'Exact narration of this review cut. Temporary system voice: Daniel.\n\n'))
     for cue in cues:
         text.write(f"{stamp(cue['start'])} - {stamp(cue['end'])}\n{cue['text']}\n\n")
 with (root / 'Captions.srt').open('x') as text:
@@ -312,12 +340,16 @@ if station:
             'comparison': 'Meta invokes the plugin checks and selects Rear in the quoted alternative.',
             'save-check': 'Save the plugin result through the Viewer file picker.',
             'reopen': 'Reopen the unchanged exported plugin and use its target table.',
+            'ending-origin': 'Use the new target controls in the reopened tool and watch the arm adopt that pose.',
             'manage-tools': 'Open the Tool library and show the saved tool controls.',
-            'ending': 'Hold the final project overview as the narration finishes.',
+            'ending': 'Pull back to the connected project, tools and alternative, then hold as the narration finishes.',
         })
     prompt_by_action = dict(zip(['ask-meta', 'changed-constraint', 'quote'], capture['prompts']))
     with (root / 'Script.md').open('x') as text:
-        text.write('# There Is No Interface\n\nExact script of this review cut. Temporary opening and system voice. '
+        text.write('# There Is No Interface\n\n' +
+                   ('Narration and shot script for the silent cut. The video has no audio or burned-in subtitles. '
+                    'SRT timings use temporary narration as a recording guide. ' if clean else
+                    'Exact script of this review cut. Temporary opening and system voice. ') +
                    'The product footage replays retained Meta responses through working Viewer actions; '
                    + (f'repair rounds are condensed and camera moves take {camera_time_scale:g} times their recorded duration. '
                       'Tool interactions play at their recorded speed.\n\n' if camera_time_scale != 1 else
@@ -331,7 +363,17 @@ if station:
             text.write('Picture: ' + directions.get(action, 'Opening title study.') + '\n\n')
             if action in prompt_by_action:
                 text.write('Typed request:\n\n> ' + prompt_by_action[action]['text'] + '\n\n')
-        text.write('## Credits\n\n' + '\n'.join('- ' + credit for credit in credits) + '\n')
+        if closing_prompt_evidence:
+            text.write(f'## {stamp(picture_end)} to {stamp(duration)}\n\n'
+                       'On screen: a centered request types “I need an image editor”, '
+                       'replaces “image” with “video” and changes “an” to “a”, '
+                       'then replaces “video” with “file”. The final request holds with a blinking caret. '
+                       'A large Viewer title sits above “a plurid technology”. '
+                       'Under “Built during the hackathon”, five rows of feature pills scroll in alternating directions. '
+                       'This is an editorial closing sequence; the request is not submitted. '
+                       'Production notes remain in this script. No additional narration.\n\n')
+        text.write(('## Production notes (not on screen)\n\n' if not on_screen_credits else '## Credits\n\n') +
+                   '\n'.join('- ' + credit for credit in credits) + '\n')
 
 boundaries = sorted({0, duration, *[point for cue in cues for point in [cue['start'], cue['end']]]})
 timeline = []
@@ -356,22 +398,29 @@ timeline.extend(concat_entry(file, .001)[:2])
 (root / 'captions.concat').write_text('\n'.join(timeline) + '\n')
 store(root / 'script.json', {'source': str(source), 'duration': duration, 'pictureEnd': picture_end,
                             'cues': cues, 'clips': capture['clips'], 'providerRequests': 0,
-                            'cameraTimeScale': camera_time_scale, 'stagedCanvasArrival': staged_canvas_arrival})
+                            'cameraTimeScale': camera_time_scale, 'stagedCanvasArrival': staged_canvas_arrival,
+                            'closingPrompt': closing_prompt_evidence, 'cleanExport': clean,
+                            'creditsInVideo': bool(on_screen_credits)})
 
-output = root / 'Viewer - There Is No Interface - review.mp4'
+output = root / ('Viewer - Clean footage.mp4' if clean else 'Viewer - There Is No Interface - review.mp4')
 print(json.dumps({'encoding': str(output), 'seconds': duration, 'nativeFrames': source_frames}), flush=True)
+composition = ['-vf', 'fps=30', '-map', '0:v', '-an'] if clean else [
+    '-f', 'concat', '-safe', '0', '-i', str(root / 'captions.concat'),
+    '-i', str(root / 'narration.wav'),
+    '-filter_complex', '[0:v]fps=30[base];[base][1:v]overlay=0:0:format=auto[v]',
+    '-map', '[v]', '-map', '2:a:0', '-c:a', 'aac', '-b:a', '160k',
+]
 run([FFMPEG, '-n', '-v', 'warning', '-threads', '2', '-filter_complex_threads', '2',
      '-f', 'concat', '-safe', '0', '-i', str(root / 'picture.concat'),
-     '-f', 'concat', '-safe', '0', '-i', str(root / 'captions.concat'),
-     '-i', str(root / 'narration.wav'),
-     '-filter_complex', '[0:v]fps=30[base];[base][1:v]overlay=0:0:format=auto[v]',
-     '-map', '[v]', '-map', '2:a:0', '-c:v', 'libx264', '-preset', 'fast', '-crf', '16',
-     '-threads', '2', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k',
+     *composition, '-c:v', 'libx264', '-preset', 'fast', '-crf', '16',
+     '-threads', '2', '-pix_fmt', 'yuv420p',
      '-t', str(duration), '-movflags', '+faststart', str(output)], timeout=900)
 run([FFMPEG, '-v', 'error', '-threads', '2', '-i', str(output),
-     '-map', '0:v', '-map', '0:a', '-f', 'null', '-'], timeout=240)
+     '-map', '0:v', '-map', '0:a?', '-f', 'null', '-'], timeout=240)
 info = probe(output)
 stream = next(s for s in info['streams'] if s['codec_type'] == 'video')
+assert not clean or len(info['streams']) == 1, 'The clean export must contain only video.'
+assert clean or any(s['codec_type'] == 'audio' for s in info['streams'])
 assert (stream['width'], stream['height']) == SIZE
 assert stream['avg_frame_rate'] == '30/1'
 assert abs(float(info['format']['duration']) - duration) < .1
@@ -395,9 +444,12 @@ with output.open('rb') as stream:
 store(root / 'verification.json', {'status': 'technical-checks-passed', 'duration': duration,
       'sourceCapture': str(source), 'video': str(output), 'sha256': digest, 'resolution': SIZE,
       'sourceFrames': source_frames, 'sourceEncoding': 'PNG', 'videoEncodes': 1,
-      'providerRequests': 0, 'voice': 'Temporary system voice', 'interactionPlaybackSpeed': 1,
+      'providerRequests': 0, 'voice': 'None' if clean else 'Temporary system voice',
+      'audioIncluded': not clean, 'burnedInSubtitles': not clean,
+      'creditsInVideo': bool(on_screen_credits), 'interactionPlaybackSpeed': 1,
       'cameraTimeScale': camera_time_scale,
       'stagedCanvasArrival': staged_canvas_arrival,
+      'closingPrompt': closing_prompt_evidence,
       'observedCameraMoves': sum(len(c.get('cameraMotion', [])) for c in capture['clips']),
       'continuousNavigation': continuous_navigation,
       'recordedNavigation': sum(len(c.get('navigation', [])) for c in capture['clips']),

@@ -93,7 +93,8 @@ streaming feature. Run it in an isolated profile without configured providers.
 The controller changes presentation DOM only. It does not rewrite transcripts, change generated
 scripts or add native APIs. Assembly timing is editorial, not measured model latency. Retain the
 original messages and the qualified revision mapping, including omitted repairs, outside the cut.
-Credit saved-session replay, staged reveals and local layout refinements once in the film credits.
+Credit saved-session replay, staged reveals and local layout refinements in the cut's production
+notes. The plugin film and clean exports keep these notes in the accompanying script, off screen.
 Keep editorial labels out of the chat controls. Inspect prompt legibility, the staged reveal and the
 first working interaction together before assembling the full film.
 
@@ -101,6 +102,17 @@ Generate the delivered narration transcript and captions from the same timed cue
 the audio. Put spoken words, on-screen titles and scene directions in separate fields of the full
 script. Check the delivered audio against those cues; an earlier story outline is not its
 transcript.
+
+The plugin film ends with an eight-second editorial sequence. A centered request types “I need an
+image editor”, replaces “image” with “video” while changing “an” to “a”, then replaces “video” with
+“file”. The final request holds with a blinking caret and stays unsent.
+
+Keep the exact **Viewer** signature with **a plurid technology** below it. Under **Built during the
+hackathon**, five rows of feature pills scroll in alternating directions. Their 32 labels come from
+the [contribution inventory](../release/hackathon-contributions.md). Production credits stay in
+`Script.md`, off screen in both the plugin review cut and clean export. The generated
+`closingPrompt` evidence records edit times, unsubmitted status and each feature's fully visible
+duration. Keep this editorial sequence distinct from footage showing an actual generated tool.
 
 ## Record the evolving interface
 
@@ -145,10 +157,24 @@ After the native sequence passes, assemble the full review cut:
 python3 tools/robotics/assemble-story.py <capture-folder>
 ```
 
+For a silent export to record the final narration against, add `--clean`:
+
+```sh
+python3 tools/robotics/assemble-story.py <capture-folder> --clean
+```
+
+This produces `Viewer - Clean footage.mp4` with no audio stream, burned-in subtitles or production
+credits, plus `Captions.srt`, `Narration.txt` and `Script.md`. Product text, keyboard cues and
+opening titles remain visible. The plugin film also keeps the closing request, **Viewer** signature,
+**a plurid technology** byline and feature roll. Attribution and production notes stay in
+`Script.md`. The separate subtitles use the temporary narration's timing as a recording guide;
+adjust them to the final voice recording. The clean cut is encoded directly from the original
+frames.
+
 The capture can identify a navigation passage to omit. Assembly retains the original timestamps,
 input log and selected source ranges, cuts only that passage, and keeps the included actions at
-their original speed. It generates the closing title and its narration from the same cues as the
-delivered script. Review the final title along with the native shots.
+their original speed. It generates the closing artwork with the delivered script. The plugin close
+adds no narration. Review the complete ending along with the native shots.
 
 The assembler uses Pillow, macOS's Daniel voice and Homebrew FFmpeg. It encodes once from the PNG
 sources, with bounded encoding threads. Playback stays at the recorded speed unless the capture
@@ -204,8 +230,9 @@ the same time conversion and rejects overlapping motion intervals. Retain the or
 timestamps, and credit the slowed camera moves. Check that the destination remains readable before
 the next action begins.
 
-The assembler produces `Narration.txt`, `Captions.srt` and `script.json` from the audio cues of that
-exact cut. Use those files when reviewing or replacing the temporary voice.
+The assembler produces `Narration.txt`, `Captions.srt`, `Script.md` and `script.json` for that exact
+cut. Use the timed cues when reviewing or replacing the temporary voice, and keep production notes
+in `Script.md`.
 
 ## Record the mounting job
 
