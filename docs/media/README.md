@@ -153,6 +153,39 @@ the exact narration, transcript and captions. The output includes an opening stu
 sample frames and technical decode checks. Review the complete story and its input-to-result
 transitions before replacing the temporary voice and opening.
 
+## Record the station decisions
+
+Use the qualified three-stage station run and a tested package. From `packages/viewer-electron/app`:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 node --import tsx tools/robotics/record-station.ts \
+  --run <qualified-station-run> --binary <packaged-Viewer-executable>
+python3 tools/robotics/assemble-story.py <completed-station-capture>
+```
+
+The recorder copies the public station files, source snapshots and mesh assets into an isolated
+profile. A loopback provider supplies retained Meta responses to the ordinary chat service. It has
+no cloud transport or credentials. The cloud endpoint rules remain unchanged. The capture keeps the
+original response hashes, request excerpts, local envelope conversion and current revision bindings.
+Its local replay request count is separate from paid provider requests.
+
+The real canvas handlers evaluate the four mounting points. The native checker recomputes their
+results. Meta's retained recommendation precedes the operator's Central selection. The next stage
+adds the reserved area, evaluates again and selects Front. A native quote branch selects Rear and
+checks the comparison. The film finishes by saving the check, exporting the tool and reopening it.
+Assertions verify those outcomes before the capture is marked complete.
+
+Keep provider HTML beside each presentation copy. Presentation changes adjust labels, layout and
+disclosure of detailed output; they must preserve evaluation and action code. Source bindings,
+computed poses and selected mounts belong to the recorded workflow. The generation reveal and
+condensed repair rounds are editorial timing, not measured provider latency. Credit saved Meta
+responses and the local presentation edits in the film.
+
+Review the comparison conclusion inside the native report's scroll area. Hold the reopened winning
+tool before the final spatial pullback. The assembler produces `Narration.txt`, `Captions.srt` and
+`script.json` from the audio cues of that exact cut. Use those files when reviewing or replacing the
+temporary voice.
+
 ## Record the mounting job
 
 From `packages/viewer-electron/app`, use the qualified review copy and its retained source run:

@@ -1,0 +1,152 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { until } from '../../tests/owned-app';
+import { pageCall } from '../../tests/native/runtime/page-function';
+import { recordFrames } from './record';
+import type { Connection } from './record';
+import { inputOverlay } from './input-overlay';
+import { presentationControls } from '../robotics/presentation-controls';
+
+/** One native capture owns its pointer cues, timing marks and unscaled source frames. */
+export async function filmControls(raw: Connection, root: string) {
+  const overlay = await inputOverlay(raw);
+  const main = overlay.connection;
+  const ui = presentationControls(main, overlay.mapPointer, {
+    ready: '#view canvas',
+    readyText: '',
+    scroll: '#panel',
+  });
+  const clips: Record<string, unknown>[] = [];
+  let marks: { seconds: number; action: string; narration: string }[] = [];
+  let started = 0;
+  let recording = false;
+  async function click(selector: string, label?: string, cue = '', double = false, modifiers = 0) {
+    console.log(JSON.stringify({ click: label ?? selector }));
+    const point = await until(
+      () =>
+        main.evaluate(
+          pageCall(
+            (selector, label) => {
+              const el = [...document.querySelectorAll<HTMLElement>(selector)].find(
+                (el) =>
+                  el.checkVisibility() &&
+                  !el.matches(':disabled') &&
+                  (!label || el.textContent?.trim() === label),
+              );
+              if (!el) return null;
+              el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+              const r = el.getBoundingClientRect();
+              const x = r.x + r.width / 2,
+                y = r.y + r.height / 2;
+              return x > 0 &&
+                y > 0 &&
+                x < innerWidth &&
+                y < innerHeight &&
+                el.contains(document.elementFromPoint(x, y))
+                ? { x, y }
+                : null;
+            },
+            selector,
+            label,
+          ),
+        ),
+      Boolean,
+      'visible ' + (label ?? selector),
+    );
+    assert.ok(point);
+    overlay.cue(cue);
+    const from = overlay.position();
+    for (let i = 1; i <= 10; i++) {
+      const t = i / 10,
+        f = t * t * (3 - 2 * t);
+      await main.command('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: from.x + (point.x - from.x) * f,
+        y: from.y + (point.y - from.y) * f,
+      });
+      await delay(18);
+    }
+    for (let n = 1; n <= (double ? 2 : 1); n++) {
+      for (const type of ['mousePressed', 'mouseReleased'])
+        await main.command('Input.dispatchMouseEvent', {
+          type,
+          ...point,
+          button: 'left',
+          clickCount: n,
+          modifiers,
+        });
+      if (double && n === 1) await delay(70);
+    }
+    await delay(350);
+    overlay.cue('');
+  }
+  async function key(cue: string, key: string, code: string, virtual: number, modifiers = 0) {
+    overlay.cue(cue);
+    await ui.key(key, code, virtual, modifiers);
+    await delay(650);
+    overlay.cue('');
+  }
+  async function all() {
+    await click('[aria-label="Commands (⌘K)"]');
+    await main.command('Input.insertText', { text: 'Frame all planes' });
+    await key('Frame all planes', 'Enter', 'Enter', 13);
+  }
+  async function frame(id: string) {
+    const selector = `[data-viewer-plane="${id}"] [aria-label="Frame plane"]`;
+    if (recording) await click(selector, undefined, 'Focus this plane');
+    else
+      await main.evaluate(
+        pageCall((selector) => {
+          const button = document.querySelector<HTMLButtonElement>(selector);
+          if (!button) throw Error('Missing framing control');
+          button.click();
+        }, selector),
+      );
+    await delay(950);
+  }
+  async function take(name: string, work: () => Promise<void>) {
+    marks = [];
+    overlay.reset();
+    started = performance.now();
+    recording = true;
+    console.log('Recording ' + name);
+    try {
+      const result = await recordFrames(main, path.join(root, name), work, {
+        width: 2880,
+        height: 1800,
+      });
+      clips.push({ name, ...result, marks, inputs: overlay.events.slice() });
+      console.log(JSON.stringify({ name, seconds: result.seconds, frames: result.frames }));
+    } finally {
+      recording = false;
+    }
+  }
+  async function beat(action: string, narration: string, seconds: number, work = async () => {}) {
+    marks.push({ seconds: (performance.now() - started) / 1000, action, narration });
+    const time = performance.now();
+    await work();
+    await delay(Math.max(0, seconds * 1000 - (performance.now() - time)));
+  }
+  async function type(text: string, milliseconds: number) {
+    const chunks = text.match(/.{1,6}/gs) ?? [];
+    for (const chunk of chunks) {
+      await main.command('Input.insertText', { text: chunk });
+      await delay(milliseconds / chunks.length);
+    }
+  }
+  return {
+    main,
+    overlay,
+    ui,
+    clips,
+    click,
+    key,
+    all,
+    frame,
+    take,
+    beat,
+    type,
+    dispose: () => overlay.dispose(),
+  };
+}

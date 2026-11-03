@@ -1,11 +1,12 @@
 # Hackathon submission draft
 
-This is working entry copy for the next [film](hackathon-demo.md): Meta builds a tool for a six-slot
-robot station, runs it, reads measured results and adapts it to a changed constraint. The action
-protocol and actual Meta-generated tools have passed native evaluation, constraint revision, quoted
-branch comparison and portable restart. The operator completed the initial Central selection after
-Meta recommended it; later Front and Rear selections were model invocations. The new film remains
-production work. The owner supplied 27 October 2026 as the development baseline. The
+This is working entry copy for the [review film](hackathon-demo.md): Meta builds a tool for a
+six-slot robot station, runs it, reads measured results and adapts it to a changed constraint. The
+action protocol and actual Meta-generated tools have passed native evaluation, constraint revision,
+quoted branch comparison and portable restart. The operator completed the initial Central selection
+after Meta recommended it; later Front and Rear selections were model invocations. The review cut
+replays retained responses through native actions. Final voice and opening footage remain production
+work. The owner supplied 27 October 2026 as the development baseline. The
 [contribution inventory](hackathon-contributions.md) records the source comparison. Public URLs,
 team credits and organizer eligibility remain to be confirmed.
 
@@ -63,17 +64,17 @@ interfaces pass native width editing, measured DXF export, source-bound quote se
 and restart checks. The service is a local simulation; it sends no external messages and places no
 order. Those examples establish additional operations but do not carry this film's main argument.
 
-The [screenplay](hackathon-demo.md) owns the proposed narration and shots. The
+The [screenplay](hackathon-demo.md) records the review cut's exact narration and shots. The
 [implementation audit](../research/workshop.md#implementation-audit) records current canvas and
 robot capabilities. The [fabrication reference](../reference/fabrication.md) owns that workflow's
 behavior.
 
 ## Meta's role
 
-The proposed new demonstration makes three model responsibilities visible: generate working
-controls, invoke their handlers and use actual measured feedback to revise the next action. The
-model's code, invocation and explanation must come from a retained live run. The operator can use
-the same controls and interrupt the agent through **Take over**.
+The review demonstration makes three model responsibilities visible: generate working controls,
+invoke their handlers and use actual measured feedback to revise the next action. The model's code,
+invocation and explanation must come from a retained live run. The operator can use the same
+controls and interrupt the agent through **Take over**.
 
 Meta's `muse-spark-1.3` generated the station interface, added the reserved-area control, invoked
 evaluation and selected the Front and Rear alternatives. The retained run includes failed calls,

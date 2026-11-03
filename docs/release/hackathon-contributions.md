@@ -102,10 +102,13 @@ describes restored state and labels controls. Its manifest retains the provider 
 hashes. Evaluation and action code, saved inputs and measured results remain unchanged. Attribute
 these visual and accessibility edits to local presentation work, not Meta.
 
-The earlier two-target film retains its own presentation manifest and replay-clock repair. The next
-station film must use its own source messages, actual interactions and edit evidence. Attribute
+The earlier two-target film retains its own presentation manifest and replay-clock repair. The
+station review cut uses its own source messages and actual native handlers. A local replay adapter
+converts retained responses to JSON and binds actions to current revisions; it makes no cloud
+request. The capture records those adaptations and the original response hashes. Attribute
 saved-response replay, condensed repair rounds, staged reveals and local presentation changes
-separately from model generation. The original provider output remains retained.
+separately from model generation. The original provider output remains retained. The delivered
+script and captions are generated from the same cues as the review audio.
 
 The separate mounting example's Meta-generated controls have native evidence for width editing,
 measured DXF export, source-bound quote selection, save/reopen and restart. The supplier remains a

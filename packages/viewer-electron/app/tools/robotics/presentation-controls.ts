@@ -13,6 +13,7 @@ export function presentationControls(
     session: string,
     projection: { x: number; y: number; scaleX: number; scaleY: number },
   ) => void,
+  layout = { ready: '#assetLine', readyText: '17 meshes loaded', scroll: '.panel' },
 ) {
   const events: { milliseconds: number; action: string }[] = [];
   const started = performance.now();
@@ -165,34 +166,44 @@ export function presentationControls(
     const scope = `[data-canvas-id="${id}"]`;
     const frame = await canvasFrame(main, id);
     await until(
-      () => frame.evaluate(pageCall(() => document.querySelector('#assetLine')?.textContent)),
-      (text) => text?.includes('17 meshes loaded'),
-      'all visual meshes',
+      () =>
+        frame.evaluate(
+          pageCall((selector) => {
+            const element = document.querySelector(selector);
+            return element ? (element.textContent ?? '') : null;
+          }, layout.ready),
+        ),
+      (text) => text !== null && text.includes(layout.readyText),
+      'canvas layout ready',
     );
     async function box(selector: string) {
       const local = await frame.evaluate(
-        pageCall(async (selector) => {
-          const el = document.querySelector<HTMLElement>(selector);
-          if (!el) throw Error('Missing canvas control: ' + selector);
-          const panel = el.closest<HTMLElement>('.panel');
-          if (panel) {
-            const control = el.getBoundingClientRect(),
-              bounds = panel.getBoundingClientRect();
-            panel.scrollTop += control.y - bounds.y - bounds.height / 2 + control.height / 2;
-          }
-          await new Promise((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(resolve)),
-          );
-          const r = el.getBoundingClientRect();
-          return {
-            x: r.x,
-            y: r.y,
-            width: r.width,
-            height: r.height,
-            frameWidth: innerWidth,
-            frameHeight: innerHeight,
-          };
-        }, selector),
+        pageCall(
+          async (selector, scroll) => {
+            const el = document.querySelector<HTMLElement>(selector);
+            if (!el) throw Error('Missing canvas control: ' + selector);
+            const panel = el.closest<HTMLElement>(scroll);
+            if (panel) {
+              const control = el.getBoundingClientRect(),
+                bounds = panel.getBoundingClientRect();
+              panel.scrollTop += control.y - bounds.y - bounds.height / 2 + control.height / 2;
+            }
+            await new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve)),
+            );
+            const r = el.getBoundingClientRect();
+            return {
+              x: r.x,
+              y: r.y,
+              width: r.width,
+              height: r.height,
+              frameWidth: innerWidth,
+              frameHeight: innerHeight,
+            };
+          },
+          selector,
+          layout.scroll,
+        ),
       );
       const parent = await main.evaluate(
         pageCall((scope) => {

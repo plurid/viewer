@@ -428,9 +428,10 @@ Cancel and Save drawing… remain reachable.
 copies of actual Meta output and retain the provider HTML unchanged. Preserve flat controls, system
 type, neutral robot and bench, and restrained blue accents. Keep scene labels legible and distinct
 in screen space, Fictional station quiet and Mounting point visibly labeled. Expose status changes
-through polite live regions. Describe the saved evaluation and selection accurately on reopen.
-Preserve evaluation and action code, saved inputs and measured outcomes. The canvas host does not
-apply these edits to other generated canvases.
+through polite live regions. Describe the saved evaluation and selection accurately on reopen. Keep
+human-readable task labels and measurement units visible, with raw evaluation and check output
+available in disclosures that start closed. Preserve evaluation and action code, saved inputs and
+measured outcomes. The canvas host does not apply these edits to other generated canvases.
 
 Show source imagery in creative tools. Tie export, progress, optimization savings and output links
 to real jobs. Label camera previews, RAW renditions and video compatibility copies accurately.

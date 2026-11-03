@@ -59,7 +59,8 @@ def verify_png(file):
 source = pathlib.Path(sys.argv[1]).resolve()
 assert json.loads((source / 'story-completed.json').read_text())['status'] == 'passed'
 capture = json.loads((source / 'story-capture.json').read_text())
-assert capture['providerRequests'] == 0 and len(capture['clips']) in (8, 9)
+station = capture.get('film') == 'station'
+assert capture['providerRequests'] == 0 and len(capture['clips']) in ((11,) if station else (8, 9))
 closing_callback = capture['clips'][-1]['name'] == '08-closing'
 assert (capture['width'], capture['height']) == SIZE
 root = pathlib.Path(tempfile.mkdtemp(prefix='viewer-interface-review-', dir='/private/tmp'))
@@ -154,6 +155,14 @@ credits = [
      if closing_callback else 'Saved responses · Condensed repairs · Staged reveals and local layout refinements'),
     'Temporary opening and voice · Kinematic endpoints, no path or hardware simulation',
 ]
+if station:
+    credits = [
+        'Viewer + Plurid: existing projects',
+        'Hackathon: generated tools, agent actions, quoted branches and independent checks',
+        'Meta muse-spark-1.3 · Robot: TheRobotStudio / SO-ARM100',
+        'Saved Meta responses · Condensed repairs · Local presentation edits and staged reveals',
+        'Fictional station · Endpoint checks · Temporary opening and voice',
+    ]
 if closing_callback:
     for index, text in enumerate(['There is no interface.', 'Until you need one.']):
         image = Image.new('RGB', SIZE, '#22262c')
@@ -222,6 +231,40 @@ with (root / 'Narration.txt').open('x') as text:
 with (root / 'Captions.srt').open('x') as text:
     for index, cue in enumerate(cues):
         text.write(f"{index + 1}\n{stamp(cue['start'], True)} --> {stamp(cue['end'], True)}\n{cue['text']}\n\n")
+
+if station:
+    directions = {
+        'personal': 'Open the robot definition in a linked plane, then return to the project.',
+        'project-thinking': 'Expand the mesh folder and open the linked arm geometry.',
+        'browser': 'Focus the project brief in the browser plane.',
+        'editor': 'Use Command+E to edit the source definition.',
+        'terminal': 'Run ls in the project terminal.',
+        'keynote': 'Frame all planes to reveal the shared spatial workspace.',
+        'foundations': 'Move from the workspace into the actual Viewer conversation.',
+        'ask-meta': 'Type the retained request, send it and open the generated canvas.',
+        'tool-appears': 'Reveal the actual station view and working controls.',
+        'model-evaluates': 'The activity row names Meta. Show the independently recomputed report.',
+        'central-result': 'The operator selects Central, inspects a target and checks the saved selection.',
+        'changed-constraint': 'Return to the same conversation and type the reserved-area request.',
+        'meta-revises': 'The revised tool adds the restriction. Meta evaluates and selects Front.',
+        'front-result': 'Read the checked candidate values and the Front recommendation.',
+        'quote': 'Select the actual recommendation and open its quote branch in a new plane.',
+        'comparison': 'Meta selects Rear. Show the independent comparison and movement distances.',
+        'save-check': 'Save the check through Viewer\'s file picker, then export the tool.',
+        'reopen': 'Reopen the exported tool and inspect another target using its controls.',
+        'ending': 'Hold the reopened Front tool, then pull back into the project before the title.',
+    }
+    prompt_by_action = dict(zip(['ask-meta', 'changed-constraint', 'quote'], capture['prompts']))
+    with (root / 'Script.md').open('x') as text:
+        text.write('# There Is No Interface\n\nExact script of this review cut. Temporary opening and system voice. '
+                   'The product footage replays retained Meta responses through working Viewer actions; repairs and navigation are condensed.\n\n')
+        for cue in cues:
+            text.write(f"## {stamp(cue['start'])} to {stamp(cue['end'])}\n\n> {cue['text']}\n\n")
+            action = cue.get('action')
+            text.write('Picture: ' + directions.get(action, 'Opening title study.') + '\n\n')
+            if action in prompt_by_action:
+                text.write('Typed request:\n\n> ' + prompt_by_action[action]['text'] + '\n\n')
+        text.write('## Credits\n\n' + '\n'.join('- ' + credit for credit in credits) + '\n')
 
 boundaries = sorted({0, duration, *[point for cue in cues for point in [cue['start'], cue['end']]]})
 timeline = []

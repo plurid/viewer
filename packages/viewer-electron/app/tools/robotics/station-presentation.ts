@@ -97,3 +97,93 @@ export function presentStationHTML(original: string): string {
   );
   return html;
 }
+
+/** The creation stage has no restriction control; its presentation must not anticipate one. */
+export function presentInitialStationHTML(original: string, refined: string): string {
+  const styles = refined.match(/<style>([\s\S]*?)<\/style>/)?.[1];
+  assert.ok(styles);
+  const start = original.indexOf('function makeText(');
+  const end = original.indexOf('function drawStation()', start);
+  assert.ok(start >= 0 && end > start);
+  let html =
+    original.slice(0, start) +
+    'function makeText(txt,color){const anchor=new THREE.Object3D();anchor.userData.presentationLabel=txt;return anchor;}\n' +
+    original.slice(end);
+  html = html.replace(
+    /<style>[\s\S]*?<\/style>/,
+    () => `<style>${styles}
+#panel{display:flex;flex-direction:column}
+#panel section{flex-shrink:0}
+#panel section:has(#resTable){order:-1}
+#panel section:has(#srcInfo){display:none}
+#studyInfo,#resTable th:last-child,#resTable td:last-child{display:none}
+#panel details{margin-top:8px}
+#panel summary{cursor:pointer;color:#aeb6bf;font-size:12px}
+#panel summary:focus-visible{outline:2px solid #8fb8cd;outline-offset:3px}
+.log{white-space:pre-wrap;border:1px solid #454a53;padding:6px;max-height:100px;overflow:auto;font:12px system-ui}
+#panel section > .note{display:none}
+button.primary{border-color:#8fb8cd;color:#8fb8cd}
+.fixture-note{margin-left:12px;font-size:12px;font-weight:400;color:#aeb6bf}
+#sceneLabels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+#sceneLabels svg{position:absolute;inset:0}
+.scene-label{position:absolute;white-space:nowrap;font:500 14px/20px system-ui,-apple-system,sans-serif;color:#e6e8eb;background:#141619;padding:0 3px}
+</style>`,
+  );
+  html = html.replace(
+    '<h1>Six-slot station placement</h1>',
+    '<h1>Six-slot station placement <span class="fixture-note">Fictional station</span></h1>',
+  );
+  html = html.replace('<th>Move</th><th>OK</th>', '<th>Move (m)</th><th>Reached</th>');
+  html = html.replace(
+    "document.getElementById('briefLine').textContent='Bench '+JSON.stringify(brief.bench)+' tool '+brief.tool.link+' tol '+brief.tolerance+' ref '+JSON.stringify(brief.reference);",
+    "document.getElementById('briefLine').textContent='Bench '+Math.round((brief.bench.max[0]-brief.bench.min[0])*1000)+' × '+Math.round((brief.bench.max[1]-brief.bench.min[1])*1000)+' mm · Two trays · Six targets · Tolerance '+(brief.tolerance*1000)+' mm';",
+  );
+  for (const [id, label] of [
+    ['evalStatus', 'Evaluation details'],
+    ['checkStatus', 'Check details'],
+  ]) {
+    html = html.replace(
+      new RegExp('<div id="' + id + '" class="log">([^<]*)</div>'),
+      '<details><summary>' +
+        label +
+        '</summary><div id="' +
+        id +
+        '" class="log">$1</div></details>',
+    );
+  }
+  html = html.replace(
+    '<div class="row"><select id="selMount">',
+    '<label for="selMount">Mounting point</label><div class="row"><select id="selMount">',
+  );
+  html = html.replace(
+    'function render(){renderer.render(scene,camera);}',
+    annotations + 'function render(){renderer.render(scene,camera);updateSceneLabels();}',
+  );
+  html = html.replace(
+    'lbl.position.set((x0+x1)/2,(y0+y1)/2,0.03)',
+    'lbl.position.set((x0+x1)/2,y0-0.04,0.015)',
+  );
+  for (const [before, after] of Object.entries({
+    '0x232b33': '0x555a62',
+    '0x2b4a5a': '0x6b7179',
+    '0x4a3a5a': '0x6b7179',
+    '0x3f7a52': '0x777e86',
+    '0xe8b81a': '0x9aa0a8',
+    '0xffc861': '0x8fb8cd',
+    '0x58d0ff': '0xd9dee4',
+  }))
+    html = html.replaceAll(before, after);
+  for (const id of ['evalStatus', 'checkStatus', 'selStatus'])
+    html = html.replace(
+      `id="${id}"`,
+      `id="${id}" role="status" aria-live="polite" aria-atomic="true"`,
+    );
+  const calculations = (text: string) =>
+    text.slice(
+      text.indexOf('async function evalOne('),
+      text.indexOf("document.getElementById('bAll')"),
+    );
+  assert.equal(calculations(html), calculations(original));
+  assert.ok(!html.includes('id="chkReserve"'));
+  return html;
+}

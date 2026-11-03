@@ -1,152 +1,181 @@
 # There Is No Interface
 
-**Reading draft for the next film. This is not the transcript of the previously delivered MP4.**
-Actual Meta-generated station tools now have native evidence for evaluation, a changed constraint,
-an exact quoted alternative and portable restart. The first Central selection was completed through
-the user control after Meta recommended it. The film must preserve that attribution. The local HTML
-fixture remains separate development evidence.
+**Exact script of the station review cut.** The spoken words and times below are generated from the
+same cues as its audio, `Narration.txt` and `Captions.srt`. The opening and system voice are
+temporary. This script replaces the previous reading draft; it does not describe older cuts.
 
-The task is concrete: choose a mounting point for an SO-101 arm serving six slots in two trays. Meta
-builds the tool, invokes its registered actions, reads independent measurements from Viewer and
-adapts it to a new constraint. Plurid keeps the sources, conversation, alternatives and result in
-one navigable project. The drawing and supplier examples remain supporting work.
+The task is to choose a mounting point for an SO-101 arm serving six slots in two trays. Meta builds
+the tool, invokes its actions, reads Viewer's independent checks and adapts it to a reserved area.
+The operator selects Central after Meta recommends it. Meta selects Front and the Rear alternative.
+Plurid connects the sources, conversation, alternatives and saved result.
 
 ## Script
 
-Aim for 180 seconds including credits. Spoken paragraphs below are the proposed narration. Requests
-are on-screen typing, not extra voiceover. Leave calculation, comparison and reopening passages room
-to be understood. If a take runs long, shorten navigation before cutting the causal steps.
-
-### 0:00–0:08 · Opening
+### 00:00:00.467 to 00:00:02.533
 
 > Do not try and use the interface.
->
+
+Picture: Opening title study.
+
+### 00:00:03.328 to 00:00:04.372
+
 > That's impossible.
->
+
+Picture: Opening title study.
+
+### 00:00:04.829 to 00:00:06.071
+
 > Realize the truth.
->
+
+Picture: Opening title study.
+
+### 00:00:06.688 to 00:00:08.012
+
 > There is no interface.
 
-**Picture:** The proposed Matrix-style opening, followed by a clean cut into Viewer. Opening footage
-and the creator's final voice remain production work. A synthetic homage stays distinct from the
-real product recording.
+Picture: Opening title study.
 
-### 0:08–0:28 · The creator's reason
+### 00:00:09.918 to 00:00:19.276
 
-> Until 2025, I'd written about a million lines of code. Since then, I've modified ten thousand at
-> most, mostly configuration files.
->
-> I still have projects to build. More of my work is deciding how the pieces fit together, what
-> should change, and what that change affects.
+> Until twenty twenty-five, I had written about a million lines of code. Since then, I have modified
+> ten thousand at most, mostly configuration.
 
-**Picture:** Begin in a project folder. Open its definition, notes and a related file with visible
-pointer actions. Follow a link between planes. These are the creator's estimates; do not turn them
-into a measured productivity claim or a literal “I am a file manager” slogan.
+Picture: Open the robot definition in a linked plane, then return to the project.
 
-### 0:28–0:48 · The workspace reveal
+### 00:00:22.158 to 00:00:30.134
 
-> A browser. An editor. A terminal.
->
-> A browser. An editor. A terminal.
->
-> Are you getting it?
->
-> One workspace.
->
-> This is Viewer. Plurid is its spatial engine. Both started before this hackathon.
+> I still build projects. But my attention has moved: how the pieces connect, what changes what, and
+> whether the result works.
 
-**Picture:** Focus the three real planes in sequence, then pull back to reveal their shared space.
-Use the keynote cadence and let the spatial reveal carry the joke. Show the navigation keys as they
-are pressed. Keep “Viewer + Plurid · Existing projects” legible during the final sentence.
+Picture: Expand the mesh folder and open the linked arm geometry.
 
-### 0:48–1:08 · Give Meta a job
+### 00:00:32.841 to 00:00:33.596
 
-> For the hackathon, I gave Meta a canvas where it can build a tool and use it.
->
-> This arm needs to reach six tray slots. Where should I put its base?
+> A browser.
 
-**Typed request, from the qualified run:**
+Picture: Focus the project brief in the browser plane.
+
+### 00:00:36.017 to 00:00:36.644
+
+> An editor.
+
+Picture: Use Command+E to edit the source definition.
+
+### 00:00:39.151 to 00:00:39.882
+
+> A terminal.
+
+Picture: Run ls in the project terminal.
+
+### 00:00:42.199 to 00:00:47.064
+
+> A browser. An editor. A terminal. Are you getting it? One workspace.
+
+Picture: Frame all planes to reveal the shared spatial workspace.
+
+### 00:00:48.955 to 00:00:52.902
+
+> This is Viewer, built on Plurid. Both existed before the hackathon.
+
+Picture: Move from the workspace into the actual Viewer conversation.
+
+### 00:00:56.706 to 00:01:03.834
+
+> For the hackathon, I gave Meta tools of its own. Here, it must place a robot that can reach six
+> tray slots.
+
+Picture: Type the retained request, send it and open the generated canvas.
+
+Typed request:
 
 > Build a placement tool from this robot and station brief. Test the mounting points and tell me
 > which one needs the smallest move.
 
-**Picture:** Select the two sources and send in Viewer's actual chat. Open the generated canvas
-beside that conversation. Introduce one thing at a time: bench, robot, two trays, six labeled
-targets. Keep the input and result in the same passage. Do not insert a hand-authored reply or
-fixture as the model's work.
+### 00:01:07.582 to 00:01:11.668
 
-**On-screen attribution:** “Hackathon additions · Generated tools + agent actions + checked results”
+> It turns the robot files and station brief into this working interface.
 
-### 1:08–1:34 · Let the model run its tool
+Picture: Reveal the actual station view and working controls.
 
-> Meta builds the controls, then runs the experiment through them.
->
-> Viewer checks the saved poses against the robot definition. The existing position has three of
-> six. The central position has all six, and needs the smallest move.
+### 00:01:13.662 to 00:01:21.591
 
-**Picture:** The host activity row shows Meta invoking the named action. Candidate rows populate as
-the handler computes poses. The real tool result returns to the conversation; Meta requests the
-independent placement check and recommends Central. Show the host report with 3/6 and 6/6, then
-select Central through the user control and inspect one target. The operator completed this initial
-selection in the qualified run; do not depict it as a model invocation.
+> Meta runs the tool. Four mounting points. Six targets each. Viewer checks the computed poses
+> against the source robot.
 
-Keep the phrase “has three of six” tied to the supplied candidate poses. The calculation does not
-prove the remaining targets unreachable. Do not show a transported object, grasp, motion planner or
-collision-free path. This is the placement decision before those tasks.
+Picture: The activity row names Meta. Show the independently recomputed report.
 
-### 1:34–1:59 · Change the job
+### 00:01:23.839 to 00:01:27.542
 
-> That area is needed for another fixture. Keep it clear.
->
-> Meta adds the constraint to the tool and runs it again. Central is excluded. Front now gives the
-> smallest move with all six targets checked.
+> Central reaches all six with the shortest move. I select it.
 
-**Typed request:**
+Picture: The operator selects Central, inspects a target and checks the saved selection.
+
+### 00:01:30.553 to 00:01:35.232
+
+> Now the central area is needed for something else. I ask Meta to reserve it.
+
+Picture: Return to the same conversation and type the reserved-area request.
+
+Typed request:
 
 > Reserve the central mounting area: X 140 to 260 mm, Y 120 to 240 mm. Add a control and bench
 > overlay for this mounting-point restriction.
 
-**Picture:** Return to the same chat. The next real generated revision adds a reserved-area control
-and outline. Preserve the camera and prior inputs. Show the second invocation, the central row
-becoming ineligible and the host's new recommendation. Let the viewer see why the answer changed.
+### 00:01:38.410 to 00:01:43.379
 
-The fictional constraint is a mounting-point rectangle, not a collision obstacle. Use the actual
-qualified run's input rectangle: X 140–260 mm, Y 120–240 mm. Do not imply a full robot footprint
-check.
+> It adds the restriction to the interface, evaluates again, and selects Front.
 
-### 1:59–2:24 · Explore the other answer
+Picture: The revised tool adds the restriction. Meta evaluates and selects Front.
 
-> What about the rear position?
->
-> I can ask about that exact answer in another plane. Same robot, same targets, same constraint.
-> Both options work for these endpoints. Front moves the base less.
+### 00:01:45.616 to 00:01:52.791
 
-**Picture:** Select the actual sentence recommending Front and use **Ask about this…**. Show the new
-linked chat and canvas. Meta selects Rear and checks it. Frame the two alternatives together. Focus
-one, then the other, with a visible initiating click. Keep the shared source in view and the
-comparison to selected mount, 6/6 and movement distance. No generic second dashboard or unexplained
-camera rotation.
+> The choice changes for a reason: six targets reached, within a millimetre, with the central
+> mounting point excluded.
 
-### 2:24–2:44 · Save the decision
+Picture: Read the checked candidate values and the Front recommendation.
 
-> I'll use Front. Save the placement and the check.
->
-> The working tool comes with the result. I can reopen it and inspect any of the six poses.
+### 00:01:55.395 to 00:02:00.899
 
-**Picture:** Save the independently recomputed JSON, export the actual canvas and reopen it. Inspect
-another target in the reopened tool. Leave time for the controls to respond. The check must still
-recompute from the included sources after restart; show a restart only if this take records one.
+> What about the rear mounting point? I branch from that recommendation and ask Meta to test it.
 
-### 2:44–3:00 · End on the mechanism
+Picture: Select the actual recommendation and open its quote branch in a new plane.
 
-> Meta wrote the tool, used it, and revised it when the job changed.
->
-> I didn't open a robotics application. I opened my project and asked for what I needed.
+Typed request:
 
-**Picture:** Pull back once to the connected project: source, original question, generated tool,
-quoted alternative and saved decision. Hold the relationships long enough to read them. Cut to
-**There Is No Interface · Viewer / Plurid**. End there, with compact credits. No second manifesto,
-quote table, list of imagined replacement applications or extra spoken conclusion.
+> Compare the rear mounting point with the front mounting point.
+
+### 00:02:03.856 to 00:02:10.056
+
+> Rear passes too. But it needs a sixty-seven millimetre longer move. Front wins this comparison.
+
+Picture: Meta selects Rear. Show the independent comparison and movement distances.
+
+### 00:02:12.726 to 00:02:15.536
+
+> I keep the checked result and the working tool together.
+
+Picture: Save the check through Viewer's file picker, then export the tool.
+
+### 00:02:21.300 to 00:02:25.572
+
+> Reopen it, and the inputs, controls and checked decision come with it.
+
+Picture: Reopen the exported tool and inspect another target using its controls.
+
+### 00:02:28.282 to 00:02:38.046
+
+> Meta wrote the tool, used it, and revised it when the job changed. I didn't open a robotics
+> application. I opened my project and asked for what I needed.
+
+Picture: Hold the reopened Front tool, then pull back into the project before the title.
+
+### Credits
+
+- Viewer + Plurid: existing projects
+- Hackathon: generated tools, agent actions, quoted branches and independent checks
+- Meta muse-spark-1.3 · Robot: TheRobotStudio / SO-ARM100
+- Saved Meta responses · Condensed repairs · Local presentation edits and staged reveals
+- Fictional station · Endpoint checks · Temporary opening and voice
 
 ## What each part contributes
 
@@ -197,14 +226,17 @@ Both actual tools were exported, reopened and restarted without a configured pro
 inputs and independently recomputed checks survived. The retained evidence includes failed calls,
 host fixes and the operator's initial Central selection. The
 [frozen prompts and acceptance](../research/workshop.md#station-generation-and-acceptance) define
-the scope. These are qualified artifacts, not a completed new film.
+the scope. The review film replays those retained responses through the ordinary chat service and
+native action handlers, with independently recomputed results. Its capture evidence records local
+envelope conversion, revision bindings and presentation edits separately from provider output.
 
 ## Final production handoff
 
-Produce the next timed edit only from qualified artifacts. Generate `Narration.txt` and
-`Captions.srt` from the same cues that create its audio, and deliver them beside that MP4. This
-reading draft must never be described as the transcript of an older video. Check that a first-time
-viewer can identify the task, what Meta did and what decision changed.
+Deliver `Script.md`, `Narration.txt` and `Captions.srt` from the exact audio cues beside the MP4.
+Keep this canonical script synchronized when the cut changes. Check that a first-time viewer can
+identify the task, what Meta did and why the decision changed. The
+[station recording instructions](../media/README.md#record-the-station-decisions) reproduce the
+native sequence and timed edit.
 
 Replace the temporary voice and opening study after reviewing that edit. Preserve native source
 frames, input logs, attribution and measured outputs. Prepare the contribution receipt from the
