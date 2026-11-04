@@ -16,6 +16,7 @@ and their contents leave your Mac only for a model you add and allow.
 > Spark builds and operates the tool a task needs, and checks laser jobs with SAM 3.1 while Viewer
 > measures every number. [Watch the demonstration](https://plurid.com/viewer/) ·
 > [Try the demo project](docs/guides/demo-project.md) ·
+> [Check the sample laser job](examples/laser-job/README.md) ·
 > [Submission](docs/release/hackathon-submission.md)
 
 ## Look inside anything

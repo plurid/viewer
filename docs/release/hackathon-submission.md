@@ -18,14 +18,14 @@ demo 25%.
 | Team name                         | Plurid, subject to the owner's choice                                      |
 | Team members                      | Jan Cavel is listed in the form; confirm any additional human contributors |
 | Track                             | Indie Developer Track                                                      |
-| Problem statement                 | Push the Frontier, focused on software and manufacturing                   |
+| Problem statement                 | Build for Your World                                                       |
 | Public GitHub repository          | <https://github.com/plurid/viewer>                                         |
 | Website and live product download | <https://plurid.com/viewer/>                                               |
 | Release                           | <https://github.com/plurid/viewer/releases/tag/v1.0.0>                     |
-| Demo video                        | The published film's link, recorded here once uploaded                     |
+| Demo video                        | <https://www.youtube.com/watch?v=eClnvICbzRI>                              |
 | Captions                          | <https://plurid.com/viewer/demo.vtt>                                       |
 | Downloadable project              | **Viewer-1.0.0-Demo.zip** on the 1.0.0 release                             |
-| X post                            | The post's link, recorded here once published                              |
+| X post                            | <https://x.com/plurid_viewer/status/2118034476060103001>                   |
 
 The film is at most three minutes. Its generated-tool scenes replay retained Meta responses; its
 laser-job scene is a live recording of the released app. The opening, the flights between workspaces
