@@ -2,8 +2,7 @@
 
 Choose a mounting point for the fictional six-slot station shown in the
 [Viewer film](https://plurid.com/viewer/). Open the saved tools, inspect their results and change
-the controls. This walkthrough runs locally without a model account or API key. The
-[laser job](#check-the-laser-job) at the end needs a model that takes pictures.
+the controls. This walkthrough runs locally without a model account or API key.
 
 ## Open the Front tool
 
@@ -54,25 +53,6 @@ them opens independent saved tools; the archive does not recreate that conversat
    tool**. Its saved inputs stay with it.
 4. To reopen an exported version, use Chat's **Open canvas…** and select the exported folder.
 
-## Check the laser job
-
-The second download is a fictional laser job whose base plate DXF puts its holes 48 mm apart where
-the drawing gives 50 mm. Checking it sends the job to the model you choose, so it needs a model that
-takes pictures, such as Meta's Muse Spark.
-
-1. Download **Viewer-1.0.0-Laser-Job.zip** from the
-   [1.0.0 release](https://github.com/plurid/viewer/releases/tag/v1.0.0) and extract it.
-2. [Add a model](automate.md#add-a-model). Under its **Data access**, choose **Text and pictures**,
-   then **Allow selected data**.
-3. In Viewer, press **⌘⇧O**, open **Viewer Laser Job**, then open **Job 1042**.
-4. Press **⌘K**, choose **Check laser job…**, then **Check 7 files**. The model reads the request,
-   the drawing and Viewer's measurement of every part; SAM 3.1 outlines each feature it names.
-5. Read the finding: Viewer measures 48 mm in the DXF against 50 mm in the drawing and marks it
-   **Confirmed**. Choose **Play the tour**, save the corrected copy beside the original, then choose
-   **Prepare cut sheets**.
-
-[Check a laser job](layout.md#check-a-laser-job) explains each step and what is sent.
-
 ## What was made by Meta
 
 Meta `muse-spark-1.3` added the per-target results table and the restriction explanation to a
@@ -80,10 +60,6 @@ working robotics plugin. It invoked that plugin's actions, selected Central, cha
 the constraint changed, and selected Rear in a quoted alternative. The parser, solver, endpoint
 checker and starting interface are reused plugin code. Viewer supplies the general host and saved
 state; Plurid supplies the connected spatial workspace.
-
-In the laser-job check, Muse Spark reads the job and SAM 3.1 outlines the features it names. Viewer
-measures every part itself and grades each finding; the archive holds only the job's files, and each
-check is a new model request.
 
 The **Licenses** folder credits SO-ARM100 / TheRobotStudio and the supporting libraries. Opening the
 archive makes no provider request.

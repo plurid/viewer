@@ -13,19 +13,19 @@ demo 25%.
 
 ## Entry fields
 
-| Field                             | Prepared value                                                                    |
-| --------------------------------- | --------------------------------------------------------------------------------- |
-| Team name                         | Plurid, subject to the owner's choice                                             |
-| Team members                      | Jan Cavel is listed in the form; confirm any additional human contributors        |
-| Track                             | Indie Developer Track                                                             |
-| Problem statement                 | Push the Frontier, focused on software and manufacturing                          |
-| Public GitHub repository          | <https://github.com/plurid/viewer>                                                |
-| Website and live product download | <https://plurid.com/viewer/>                                                      |
-| Release                           | <https://github.com/plurid/viewer/releases/tag/v1.0.0>                            |
-| Demo video                        | The published film's link, recorded here once uploaded                            |
-| Captions                          | <https://plurid.com/viewer/demo.vtt>                                              |
-| Downloadable projects             | **Viewer-1.0.0-Demo.zip** and **Viewer-1.0.0-Laser-Job.zip** on the 1.0.0 release |
-| X post                            | The post's link, recorded here once published                                     |
+| Field                             | Prepared value                                                             |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| Team name                         | Plurid, subject to the owner's choice                                      |
+| Team members                      | Jan Cavel is listed in the form; confirm any additional human contributors |
+| Track                             | Indie Developer Track                                                      |
+| Problem statement                 | Push the Frontier, focused on software and manufacturing                   |
+| Public GitHub repository          | <https://github.com/plurid/viewer>                                         |
+| Website and live product download | <https://plurid.com/viewer/>                                               |
+| Release                           | <https://github.com/plurid/viewer/releases/tag/v1.0.0>                     |
+| Demo video                        | The published film's link, recorded here once uploaded                     |
+| Captions                          | <https://plurid.com/viewer/demo.vtt>                                       |
+| Downloadable project              | **Viewer-1.0.0-Demo.zip** on the 1.0.0 release                             |
+| X post                            | The post's link, recorded here once published                              |
 
 The film is at most three minutes. Its generated-tool scenes replay retained Meta responses; its
 laser-job scene is a live recording of the released app. The opening is a rendered title sequence
@@ -164,9 +164,9 @@ the request email, the drawing and Viewer's measurement of every DXF part; SAM 3
 feature on the drawing. Viewer measures the DXF itself: its holes are 48 mm apart where the drawing
 gives 50 mm, and the model quoted the drawing's full requirement, so Viewer grades the finding
 **Confirmed**. The tour walks through the request, the drawing and the part, and a reviewed
-correction is saved beside the original and measured again. Job 1042 is a fictional sample;
-**Viewer-1.0.0-Laser-Job.zip** carries it. Of three live checks recorded for the film, this is the
-one Viewer confirmed; in the other two the model quoted only "50", so Viewer left the finding
+correction is saved beside the original and measured again. Job 1042 is a fictional sample from the
+[sample playground](../development/playground.md). Of three live checks recorded for the film, this
+is the one Viewer confirmed; in the other two the model quoted only "50", so Viewer left the finding
 Unverified and offered no correction. In the recorded take, SAM 3.1 outlined the centre hole rather
 than the pitched holes.
 
