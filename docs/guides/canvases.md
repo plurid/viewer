@@ -39,6 +39,9 @@ revision** to restore the preceding design.
 
 ## Start from a working plugin
 
+To try a complete saved tool without configuring a model, follow
+[Try the demo project](demo-project.md).
+
 1. Choose **Open canvas…** in Chat to import an exported plugin folder, or find an existing tool in
    **Tool library**.
 2. Choose **Duplicate** when you want a separate version for a new task.

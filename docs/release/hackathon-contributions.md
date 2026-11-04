@@ -3,21 +3,25 @@
 Use this inventory to prepare the final contribution receipt. The owner supplied **27 October 2026**
 as the development start date. The comparison below uses the last committed state before midnight at
 the start of that date in Europe/Bucharest (`2026-10-27T00:00:00+02:00`). This is the development
-baseline for attribution; organizer eligibility and contributor credits still need final review.
-Keep run-specific test counts, model usage and artifact paths in the retained evaluation report.
+baseline for attribution. The owner reviews contributor credits and the completed entry before
+submission. The [participant guide](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details)
+requires the demo to identify work built during the event. Keep run-specific test counts, model
+usage and artifact paths in the retained evaluation report.
 
 ## Source baseline
 
-| Repository | Last revision before the start date        | Reviewed revision |
-| ---------- | ------------------------------------------ | ----------------- |
-| Viewer     | `c8c973f82f9473a3b8819f61e2b5edfb9466e6cf` | `3fbddad4`        |
-| Plurid     | `9929887f90e6635552097f8a0466261ce92fc5c1` | `a27510396`       |
+| Repository | Last revision before the start date        | Reviewed revision                          |
+| ---------- | ------------------------------------------ | ------------------------------------------ |
+| Viewer     | `c8c973f82f9473a3b8819f61e2b5edfb9466e6cf` | `1a0dcf04e50fa4c74f506ea07035a52da68d4a04` |
+| Plurid     | `9929887f90e6635552097f8a0466261ce92fc5c1` | `a27510396d4c14f1d24095ccb5fc23b2855fbc79` |
 
 The Viewer baseline was committed on 26 October; the Plurid baseline on 23 October. Reproduce each
 selection in its repository with `git rev-list -1 --before=2026-10-27T00:00:00+02:00 HEAD`, then
-compare that revision with the reviewed source. Refresh the reviewed revision or attach the final
-patch before submission. Commit history establishes what changed between repository states; it does
-not establish the exact time every line was written.
+compare that revision with the reviewed source. Viewer is published as
+[1.0.0](https://github.com/plurid/viewer/releases/tag/v1.0.0); the Plurid packages are published
+from `release/2026-11-03`. Documentation prepared after those releases is a separate submission
+update. Commit history establishes what changed between repository states; it does not establish the
+exact time every line was written.
 
 ## Existing foundation
 
@@ -78,7 +82,8 @@ describes the prepared 30 and 31 October releases and their source contracts.
 
 Credit these as improvements to an existing engine. Do not describe spatial navigation or Plurid
 itself as invented during this hackathon, or imply every new engine feature is demonstrated in the
-robot film. Package publication is a separate status from source implementation.
+robot film. The 3 November package release is published on npm. The source comparison remains the
+basis for attribution; registry publication does not change the contribution window.
 
 ## Qualification boundaries
 

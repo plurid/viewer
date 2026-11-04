@@ -1,13 +1,95 @@
 # Hackathon submission draft
 
-This is working entry copy for the [recorded-voice film](hackathon-demo.md): Meta extends a working
-robotics plugin, invokes its calculations and adapts its interface to a changed constraint. The
-qualified run includes interface edits, Central and Front selections and a quoted alternative that
-selects Rear. Portable reopening and cold restart were checked separately. The film uses retained
-Meta responses, native interactions and the creator's recorded narration. Its opening remains
-temporary. The owner supplied 27 October 2026 as the development baseline. The
-[contribution inventory](hackathon-contributions.md) records the source comparison. Public URLs,
-team credits and organizer eligibility remain to be confirmed.
+These answers are prepared for the
+[submission form](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/hackathon/submit). The
+installer and presentation site are public. The entry has not been submitted. Review the answers,
+contributor list and model-feedback fields before sending it.
+
+The [participant guide](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details), checked on
+3 November 2026, sets the deadline at **4 November, 9 PM EST**, or **5 November, 4 AM in
+Bucharest**. It requires a public repository and a three-minute demo focused on the event's
+contributions. The judging weights are impact 30%, Meta tooling 25%, technical execution 20% and
+demo 25%.
+
+## Entry fields
+
+| Field                             | Prepared value                                                             |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| Team name                         | Plurid, subject to the owner's choice                                      |
+| Team members                      | Jan Cavel is listed in the form; confirm any additional human contributors |
+| Track                             | Indie Developer Track                                                      |
+| Problem statement                 | Push the Frontier, focused on software                                     |
+| Public GitHub repository          | <https://github.com/plurid/viewer>                                         |
+| Website and live product download | <https://plurid.com/viewer/>                                               |
+| Release                           | <https://github.com/plurid/viewer/releases/tag/v1.0.0>                     |
+| Demo video                        | <https://plurid.com/viewer/demo.mp4>                                       |
+| Captions                          | <https://plurid.com/viewer/demo.vtt>                                       |
+| Downloadable project              | **Viewer-1.0.0-Demo.zip** on the 1.0.0 release                             |
+
+The hosted film is 2 minutes 40 seconds. The form labels its video field “3-Minute Demo Video” and
+shows a YouTube URL as an example; it does not state that YouTube is mandatory. The direct MP4 is
+publicly accessible and the website provides playback controls and captions.
+
+### Project Description
+
+Working on a project often means moving between a file manager, browser, editor, terminal and
+specialist applications. The project stays connected; its tools do not always make those connections
+easy to follow.
+
+Viewer brings those views into one spatial workspace. For this hackathon, I built a host where Meta
+can create and adapt working tools beside the project files. An interface can change as the task
+changes, while keeping the person's inputs and access to its sources.
+
+In the demo, Meta extends a robotics plugin to help choose a mounting point for an arm. It adds a
+results table, runs the plugin's calculations and recommends a position that reaches all six tray
+slots. When I reserve the middle of the bench, it updates the tool and changes its recommendation. I
+quote that recommendation to investigate another position in a separate conversation and compare
+both tools in the same space. I then save the result and reopen the working tool.
+
+The new work includes generated canvases, shared actions, quoted alternatives, saved inputs,
+reviewed results and a tool library. Viewer and Plurid are existing projects. The robotics
+calculations belong to a reusable plugin. The released app and downloadable example let visitors
+operate the saved tools locally without a model key.
+
+### Describe your use of Meta products to build the submitted project
+
+The demonstrated workflow uses Meta Model API with `muse-spark-1.3`. Viewer supplies selected
+project snapshots, the current tool and its registered actions. Meta edits the tool's HTML and
+JavaScript, then invokes those same actions to obtain measured results.
+
+Starting with an existing robotics plugin, Meta added a selectable per-target results table and an
+explanation of a reserved area. It evaluated four mounting candidates, selected Central, then
+selected Front after the constraint changed. A conversation branched from the quoted recommendation
+evaluated and selected Rear.
+
+Viewer pairs model tool calls with their actual results and ties writes and actions to the current
+revision. The operator can use the controls directly or take over from the agent. The model edits
+and decisions in the film come from retained live sessions. The recording replays those responses;
+the saved plugin code executes locally. The parser, solver and checker were reused, not generated by
+these requests.
+
+### Why are Meta's models important to your solution?
+
+Meta turns a project-specific request into an interface change, then uses the resulting tool to
+continue the task. The user can ask for a new control, inspect its output and change a requirement
+without leaving the project workspace.
+
+The demonstration connects those responsibilities. Meta adds a table that the person can operate,
+reads the plugin's measurements and revises its recommendation when the bench constraint changes. An
+exact quote provides the context for investigating an alternative. The output includes both the
+decision and a tool the person can keep using after the model session ends.
+
+The host is general: context, actions, revisions, saved state and exports. A plugin carries its own
+domain implementation. This lets the model work with existing code and extend it across requests.
+
+### Fields the owner answers
+
+The form asks for the owner's likelihood of using Meta Model API, overall opinion, optional
+recommendation scores and comparison with other models. It also asks for permission to promote the
+submitted materials. Leave these choices to the owner. Partner feedback and an X post link are
+optional; do not claim use of a partner or publish a post that is not part of this entry.
+
+## Supporting account
 
 ## Project
 
@@ -146,21 +228,22 @@ supporting libraries independently of Viewer's generated interface.
 1. Retain the completed foreground checks and the actual recorded workflow. Keep evidence of
    failures as well as successful runs; obtain a new explicit budget before further paid model
    sessions.
-2. Confirm the current requirements in the
+2. Check the contribution boundary against the
    [official event guide](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details) and
-   [terms](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/waiver), including duration,
-   source availability, asset use, synthetic portrayals and eligibility of prior work.
+   [terms](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/waiver). The guide requires the
+   demo to identify work built during the event. Keep the existing workspace introduction brief and
+   identify the new agent capabilities as soon as they appear.
 3. Review the story cut using the [production handoff](hackathon-demo.md#final-production-handoff).
-   Check whether a first-time viewer can follow the actions with the recorded narration and finish
-   the opening. Identify edited saved-session playback and staged reveals; retain source takes,
-   exact message excerpts and the edit decision list. Attribute local layout refinements separately.
-4. Complete the [contribution inventory](hackathon-contributions.md) from the confirmed development
-   baseline. Fill in authors and final source references, then check the organizer's eligibility
-   rules. Keep the existing Viewer and Plurid foundation distinct from the post-baseline additions.
-5. Package a signed, notarized installer and a portable example that opens without a model key.
-   Check the downloaded installer and example in a fresh profile. State which actions replay saved
-   code and which require the visitor's model configuration. Follow the
-   [release gates](../development/releases.md) before distributing the app.
+   Check whether a first-time viewer can follow the actions with the recorded narration. Decide
+   whether to retain the opening title treatment. Identify edited saved-session playback and staged
+   reveals; retain source takes, exact message excerpts and the edit decision list. Attribute local
+   layout refinements separately.
+4. Review the [contribution inventory](hackathon-contributions.md), now tied to the published Viewer
+   and Plurid revisions. Confirm authors and keep the existing foundation distinct from the
+   post-baseline additions.
+5. Use the published signed, notarized Viewer 1.0.0 installer and the
+   [demo project walkthrough](../guides/demo-project.md). Check the public downloads in a fresh
+   profile. Operating a saved tool requires no model account; asking for another edit does.
 6. Add public source, download, reproduction instructions, video and team details to the organizer's
    form. Inspect public materials for credentials and personal data. Have the owner review the
    complete entry and publish through the chosen submission channel.

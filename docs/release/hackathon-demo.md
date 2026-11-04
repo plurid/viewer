@@ -287,6 +287,7 @@ Deliver `Script.md`, `Narration.txt` and `Captions.srt` beside the MP4. The
 sequence and timed edit. Keep the source frames, input logs, replay adaptations and qualification
 reports with the capture.
 
-Replace the temporary opening and voice for final submission. Prepare the contribution receipt from
-the demonstrated behavior and the final source revision or uncommitted patch. Creating commits and
-publishing the entry remain separate actions.
+The supplied recorded narration is already used in the public film. Decide whether to retain the
+opening title treatment. Review the event's requirement to highlight the hackathon additions, then
+prepare the contribution receipt from the demonstrated behavior and released source revision.
+Creating commits and publishing the entry remain separate actions.
