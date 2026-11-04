@@ -1,7 +1,7 @@
 # There Is No Interface
 
 **Narration and shot script for the submitted cut.** The words and times below match its captions
-(`demo-v3.vtt`) and its narration track. The film is 2 minutes 55.9 seconds at 2880 × 1800.
+(`demo-v3.vtt`) and its narration track. The film is 2 minutes 59.8 seconds at 2880 × 1800.
 
 Viewer and Plurid are existing projects. Viewer brings files, a browser and a terminal into one
 spatial workspace. The film shows two things added during the hackathon. First, Meta reads real
@@ -14,10 +14,10 @@ mounting point for an SO-101 arm at six tray slots.
 | Part                | Time             | Source                                                                                         |
 | ------------------- | ---------------- | ---------------------------------------------------------------------------------------------- |
 | Opening             | 0:00 to 0:09.6   | A rendered title sequence: CSS 3D planes with frames of the film, ending on the real workspace |
-| The workspace       | 0:09.6 to 0:42.6 | Native recording of the released app (the earlier cut's footage, shortened)                    |
-| The laser-job check | 0:42.6 to 1:11.7 | Native recording of a live check in the released app, Viewer 1.0.0 build 553                   |
-| The robotics tool   | 1:11.7 to 2:49.9 | Native recording; Meta's edits and choices replay retained live responses                      |
-| End card            | 2:49.9 to 2:55.9 | What was built during the event and the Meta models used                                       |
+| The workspace       | 0:09.6 to 0:41.1 | Native recording of the released app (the earlier cut's footage, shortened)                    |
+| The laser-job check | 0:41.1 to 1:10.3 | Native recording of a live check in the released app, Viewer 1.0.0 build 553                   |
+| The robotics tool   | 1:10.3 to 2:53.8 | Native recording; Meta's edits and choices replay retained live responses                      |
+| End card            | 2:53.8 to 2:59.8 | What was built during the event and the Meta models used                                       |
 
 The opening's lines are titles: lower case, no full stops, in the picture and the captions. The
 narration is one voice from start to end, generated with ElevenLabs (`eleven_multilingual_v2`) from
@@ -27,7 +27,19 @@ Each passage starts where the picture needs it; none is sped up. Captions write 
 Key moments are zoomed into the native footage (up to 2.5×) and some are held as a still frame so
 they can be read: the laser finding, the drawing, the DXF measurement and the saved correction; each
 request sent to Meta, the table it adds, the target rows, the Front recommendation and the Rear
-comparison. Holds add 10.9 seconds in total; nothing inside a frame is altered.
+comparison. Holds add 10.9 seconds in total; nothing inside a frame is altered. Where a cut jumps
+within one workspace, a 0.3-second dissolve joins the shots.
+
+Four short rendered scenes are cut in. They are drawn like the opening, and each starts and ends on
+the footage's own frame at its cut:
+
+- the flights from the Six-slot station workspace to Laser jobs (0:41.1) and back (1:10.3);
+- the two moments Meta writes the robotics tool (1:28.1 and 1:54.8). Each shows the lines its saved
+  response changed in the canvas HTML (+43, then +12 −8), taken from that response, with the tool's
+  two sources and attached assets linked around it. The code then fades into the revised tool.
+
+These scenes are the film's illustration. Viewer shows a canvas's code through **Tools → Source
+code**, not as this animation.
 
 ## Script
 
@@ -50,7 +62,7 @@ the real workspace.
 Picture: Open the robot definition in a linked plane, then return to the project. Expand the mesh
 folder and open the linked arm geometry.
 
-### 0:23.7 to 0:35.1
+### 0:23.4 to 0:33.9
 
 > A browser. An editor. A terminal. A browser. An editor. A terminal. Are you getting it? One
 > workspace.
@@ -58,45 +70,48 @@ folder and open the linked arm geometry.
 Picture: Short cuts between the project brief in its browser plane, the source definition and the
 terminal running ls. Then frame all planes to reveal the shared workspace.
 
-### 0:36.7 to 0:42.1
+### 0:35.2 to 0:40.6
 
 > I built Viewer on Plurid, my spatial framework. I was working on both before the hackathon.
 
 Picture: Move from the workspace into the Viewer conversation.
 
-### 0:43.0 to 1:09.3: the laser-job check
+### 0:41.5 to 1:08.2: the laser-job check
 
 > For this hackathon, I brought Meta into this space. I prepare laser jobs. Muse Spark reads the
 > email and the drawing. Viewer checks every number. Then it walks me through my own files. SAM 3.1
 > marks the feature. The part says forty-eight millimetres. The drawing says fifty. Caught before a
 > sheet is cut.
 
-Picture: Job 1042's folder. **⌘K**, **Check laser job…**, the check panel listing what is sent to
-Meta; **Check 7 files** and "Muse Spark is reading the request, 1 drawing page and 5 DXF parts". The
-finding, graded **Confirmed**: requirement 50 mm, DXF measured 48 mm, zoomed and held. **Play the
-tour**: the camera flies to the request, to the drawing with SAM 3.1's outline, and to the DXF with
-its 48 mm pitch, each zoomed. "Saved: pitch 48.00 mm → 50.00 mm, measured again."
+Picture: A rendered flight from the Six-slot station workspace to Laser jobs. Job 1042's folder.
+**⌘K**, **Check laser job…**, the check panel listing what is sent to Meta; **Check 7 files** and
+"Muse Spark is reading the request, 1 drawing page and 5 DXF parts". The finding, graded
+**Confirmed**: requirement 50 mm, DXF measured 48 mm, zoomed and held. **Play the tour**: the camera
+flies to the request, to the drawing with SAM 3.1's outline, and to the DXF with its 48 mm pitch,
+each zoomed. "Saved: pitch 48.00 mm → 50.00 mm, measured again."
 
-### 1:11.9 to 1:19.6
+### 1:10.9 to 1:18.7
 
 > That check is built in, and Meta worked through it. When nothing is built in, the interface gets
 > made on the spot, right beside my files.
 
-Picture: Open the existing robotics plugin and orbit its model before requesting an edit.
+Picture: A rendered flight back to the Six-slot station. Open the existing robotics plugin and orbit
+its model before requesting an edit.
 
-### 1:20.7 to 1:26.2
+### 1:20.9 to 1:26.4
 
 > Here, I'm extending a robot tool to find where the arm can reach all six tray slots.
 
-Picture: Type an exact retained request; zoom into it as sent and hold. Open the revised plugin. Its
-real viewport and controls arrive from either side, then settle before use.
+Picture: Type an exact retained request; zoom into it as sent and hold. A rendered scene: the camera
+pulls back from the chat to the canvas, where the 43 lines Muse Spark's saved response added are
+written, then flies into the revised plugin.
 
 Typed request:
 
 > Add a compact per-target results table for the selected mounting point, showing target name,
 > measured residual in mm and whether it meets the tolerance.
 
-### 1:31.0 to 1:43.2
+### 1:29.9 to 1:45.4
 
 > It adds the table, then runs the plugin's calculations for all four places we could mount the arm.
 > From the centre, it reaches all six slots. I can click a row to look at that position.
@@ -104,12 +119,13 @@ Typed request:
 Picture: Meta invokes the plugin evaluation and selects Central; the activity row names its actor.
 Zoomed: the results, then the new target table as a row is clicked to inspect the measured pose.
 
-### 1:44.8 to 1:50.3
+### 1:47.0 to 1:52.5
 
 > But now I need to keep the middle of the bench clear. I ask Meta to leave that area out.
 
 Picture: Finish the first saved turn, then type the retained reserved-area request; zoom into it as
-sent and hold.
+sent and hold. A rendered scene shows the response's change to the canvas HTML (+12 −8), then flies
+into the changed tool.
 
 Typed request:
 
@@ -117,7 +133,7 @@ Typed request:
 > the existing control and bench overlay, and add an explanation of which candidates this
 > restriction excludes.
 
-### 1:54.3 to 2:00.7
+### 1:56.3 to 2:02.7
 
 > It adds an explanation to the tool and runs the calculations again. This time, it recommends the
 > front.
@@ -125,7 +141,7 @@ Typed request:
 Picture: The plugin shows the restriction explanation. Meta evaluates and selects Front, zoomed and
 held.
 
-### 2:03.3 to 2:16.4
+### 2:07.2 to 2:20.3
 
 > I'd like to check the rear too, so I select the recommendation and ask about it in a separate
 > conversation. The rear works, but I'd have to move the base another sixty-seven millimetres.
@@ -137,20 +153,20 @@ Typed request:
 
 > Compare the rear mounting point with the front mounting point.
 
-### 2:20.4 to 2:27.6
+### 2:24.3 to 2:31.5
 
 > I'll use the front. Now I can save the result and the tool I used to get it.
 
 Picture: Return from the alternative to the Front tool through the workspace. Save the plugin result
 through the Viewer file picker, then export the tool.
 
-### 2:32.2 to 2:36.4
+### 2:36.1 to 2:40.3
 
 > When I reopen it, my settings are there and I can carry on using it.
 
 Picture: Reopen the unchanged exported plugin and use its target table.
 
-### 2:37.4 to 2:49.2
+### 2:41.3 to 2:53.1
 
 > We used to build the interface before the work could begin. Now, working on the project tells us
 > what the interface needs to become. As we understand more, as we change our minds, the tools
@@ -159,7 +175,7 @@ Picture: Reopen the unchanged exported plugin and use its target table.
 Picture: Use the new target controls and watch the arm adopt that pose. Open the Tool library. Pull
 back to the connected project, tools and alternative.
 
-### 2:49.9 to 2:55.9: end card
+### 2:53.8 to 2:59.8: end card
 
 On screen: **Viewer**, _a plurid technology_; "Built during the hackathon, Oct 27 to Nov 4" with
 rows of what was built; "Meta models: Muse Spark · SAM 3.1"; `plurid.com/viewer`. No narration.
@@ -192,7 +208,8 @@ hard joint limits, not continuous motion, collisions, grasping or hardware.
 - The robotics scenes replay retained Meta responses, with duplicate writes and a repair condensed,
   a staged entrance for the first revised tool and camera moves slowed by 75%.
 - The narration voice is generated with ElevenLabs from a clone of the author's voice.
-- The opening is a rendered title sequence, not app footage, ending on the app's first frame.
+- The opening is a rendered title sequence, not app footage, ending on the app's first frame. The
+  workspace flights and the two code scenes are rendered the same way.
 - SO-ARM100 robot model: TheRobotStudio. The station is fictional.
 
 ## Reproduce

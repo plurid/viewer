@@ -28,8 +28,10 @@ demo 25%.
 | X post                            | The post's link, recorded here once published                              |
 
 The film is at most three minutes. Its generated-tool scenes replay retained Meta responses; its
-laser-job scene is a live recording of the released app. The opening is a rendered title sequence
-and the narration is generated with ElevenLabs from a clone of the author's voice.
+laser-job scene is a live recording of the released app. The opening, the flights between workspaces
+and the two scenes of Meta writing the tool are rendered; the code in those scenes is the change
+Meta's saved responses made. The narration is generated with ElevenLabs from a clone of the author's
+voice. The [screenplay](hackathon-demo.md) lists every edit.
 
 ### Project Description
 
@@ -55,8 +57,8 @@ was not there. A reviewed correction is written beside the original and nested f
 requests use Muse Voice Transcribe.
 
 The model proposes; Viewer verifies, keeps the originals and asks before anything changes. Viewer
-1.0.0 is a signed, notarized Mac app with a public repository and demo projects that open without a
-key.
+1.0.0 is a signed, notarized Mac app with a public repository. Its robotics demo opens and runs
+without a key; asking Meta and the laser check need a Meta Model API key.
 
 ### Describe your use of Meta products to build the submitted project
 

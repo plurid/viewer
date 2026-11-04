@@ -12,6 +12,12 @@ side as planes in one 3D workspace.
 For Macs with Apple silicon and macOS 14 or later. No account. Your files stay in their own folders,
 and their contents leave your Mac only for a model you add and allow.
 
+> **Meta AI Developer Hackathon.** During the event Meta's models came into the workspace: Muse
+> Spark builds and operates the tool a task needs, and checks laser jobs with SAM 3.1 while Viewer
+> measures every number. [Watch the demonstration](https://plurid.com/viewer/) ·
+> [Try the demo project](docs/guides/demo-project.md) ·
+> [Submission](docs/release/hackathon-submission.md)
+
 ## Look inside anything
 
 Select a file and press **Space**, or select it in Columns view. Each kind of file gets the controls
