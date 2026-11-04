@@ -294,6 +294,27 @@ capture's playback speed, places narration between recorded actions and writes a
 sample frames and decode verification. Review the video and transcript together before replacing the
 temporary voice or incorporating this scene into the full film.
 
+## Record the laser-job check
+
+The film's laser-job scene is a live check. From `packages/viewer-electron/app`, with a packaged app
+and a Meta Model API key:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 META_API_KEY=<key> \
+  node --import tsx tools/fabrication/record.ts --binary <packaged-Viewer-executable>
+```
+
+The recorder writes Job 1042 from the playground recipe into a new folder and creates an isolated
+profile with one Meta provider, already allowed pictures. It enters the key in the owned app's
+Settings window, as a person does; the key is never written to a file or the log. Each run makes one
+paid check. `--effort minimal` asks for a faster answer.
+
+It records three takes in native 2880 × 1800 frames: **Check laser job…** from **⌘K** and **Check 7
+files**; the findings and the tour; the corrected copy and **Prepare cut sheets**. The model's wait
+falls between the first and second takes and is not recorded. `capture.json` keeps the panel's
+findings and reader line, the progress lines it showed, the tour's stops, the correction and the
+nesting. Each take is also written as an MP4 at its recorded timing for the edit.
+
 ## Attribution
 
 `source.jpg`, the sample PDF image, the image-conversion demonstration and the three collage

@@ -35,6 +35,11 @@ first committed implementation is `4cee7ad0`, on 1 November. Ordinary chat preda
 the ability to generate a tool and branch it from a selected passage belongs in the post-baseline
 changes.
 
+The laser-job check, speech, spoken requests, layout and nesting, tours, the signed update feed and
+14 of the current preview modules were also absent from the baseline. The baseline had 12 preview
+modules; the reviewed revision has 26. Viewer's Meta Model API provider first appears in `992b7eed`
+(28 October). Claim the new modules, not the whole format count: many formats predate the event.
+
 ## Implemented candidate contributions
 
 These are additions or extensions relative to the Viewer baseline. The source boundaries identify
@@ -63,9 +68,26 @@ where a row extends them.
 | Portable plugin handoff        | Export and reopen code, graphics runtime, source snapshots, meshes and saved inputs without a configured model                       | `src/desktop/canvases/service.ts`, `tools/robotics/station-handoff.ts`                                       |
 | Robot generation qualification | Budgeted Meta creation, refinement and exact quoted alternative; retained failures, saved-response recovery and native output review | `tools/robotics`, `tests/robot-rehearsal.test.ts`                                                            |
 
-Paths in this table are relative to `packages/viewer-electron/app`. The
+| Area                    | Concrete behavior                                                                                                                                         | First commit           | Primary source boundary                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------ |
+| Laser-job check         | Inventory and data permission, Muse Spark reading the request, drawing pages and photos in a strict schema, grading against Viewer's own DXF measurements | `14d6c6be`, 30 October | `src/domain/fabrication`, `src/desktop/fabrication`, `src/renderer/fabrication`      |
+| SAM 3.1 outlines        | The feature a finding names, outlined on the drawing or photo through the reading provider's `/responses` route                                           | `14d6c6be`, 30 October | `src/desktop/models/segmentation.ts`                                                 |
+| Corrections and handoff | Reviewed corrected DXF beside its original, measured again; handoff folder with nested cut sheets and the check record                                    | `14d6c6be`, 30 October | `src/domain/fabrication`, `src/desktop/fabrication/service.ts`                       |
+| Live evaluation         | The app's own check service run against the Meta Model API on eight generated jobs, scored against their planted problems                                 | `14d6c6be`, 30 October | `tools/fabrication/evaluate-live.ts`, `tools/playground/samples/fabrication-jobs.ts` |
+| Speech                  | Local Whisper dictation and hosted transcription, including Meta `muse-voice-transcribe-1.0`, with window-owned consent                                   | `87b241e2`, 28 October | `src/domain/speech`, `src/desktop/speech`, `src/renderer/speech`                     |
+| Spoken requests         | A transcript becomes a plan of registry commands, checked against the captured folder and selection                                                       | `c5ff07b5`, 31 October | `src/domain/command-line/spoken.ts`, `src/renderer/command-line/spoken.ts`           |
+| Tours                   | Captioned stops over the files a check read, recorded and replayed through Plurid anchors                                                                 | `14d6c6be`, 30 October | `src/domain/tours`, `src/renderer/workspace/tours`                                   |
+| Layout and nesting      | Collages, contact sheets, N-up, booklets and posters; DXF nesting by thickness with cut length, time and cost                                             | `10b23004`, 30 October | `src/domain/layout`, `src/renderer/layout`, `src/desktop/transforms`                 |
+| Preview modules         | Mail and mailboxes, saved web pages, notebooks, SQLite, fonts, certificates and keys, torrents, profiles, shortcuts, subtitles, cards, compressed files   | `0c33d758`, 27 October | `src/renderer/previews/modules`, `src/domain/previews`                               |
+| Terminal CLI            | `viewer` commands over the scoped agent connection                                                                                                        | `87b241e2`, 28 October | `src/domain/cli`, `src/desktop/cli`                                                  |
+| Update checks           | Signed feed and **Check for Updates…**                                                                                                                    | `b8e60c28`, 30 October | `src/desktop/updates`, `src/domain/updates`                                          |
+
+Paths in these tables are relative to `packages/viewer-electron/app`. The
 [canvas reference](../reference/canvases.md) defines the contracts and limits. The
-[ownership decision](../adr/0011-conversation-canvases.md) explains persistence and isolation.
+[ownership decision](../adr/0011-conversation-canvases.md) explains persistence and isolation. The
+[fabrication reference](../reference/fabrication.md) owns the laser-job check's behavior and its
+[live evaluation](../reference/fabrication.md#live-evaluation); run results stay in the retained
+evaluation report.
 
 The source-snapshot, reviewed-result and runtime-observation files first appear in `e8953828`. The
 robot reader appears in `ced1b0c5`, the independent checker and comparison owner in `d734681b`, and
