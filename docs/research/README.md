@@ -10,9 +10,10 @@ instructions or a list of shipped features. Current behavior is in the [guides](
 - [File services and format coverage: previews, conversions, optimization, transcripts and scan-to-CAD](formats.md)
 - [Spatial development and review](spatial-development.md)
 - [File workflows: interfaces, batch work, delivery profiles and reusable tools](actions.md)
+- [File-manager gaps: everyday features to add](file-manager-gaps.md)
 - [Sharing and plurid.link](sharing.md)
 - [Task-built interfaces, robot showcase and implementation audit](workshop.md)
-- [Job 1042 fabrication audit and implementation plan](audit-and-hackathon-plan.md)
+- [Job 1042 fabrication audit and implementation plan](fabrication-workflow.md)
 - [Earlier Viewer app](history.md)
 
 Promote an idea into the guides only after its implementation and limits are clear. Keep useful

@@ -4,13 +4,12 @@ Viewer Workshop connects a fabrication request, drawing and CAD parts to a revie
 an exported handoff. This page records the design decisions from the ecosystem audit. Current
 behavior belongs in the [fabrication reference](../reference/fabrication.md); run evidence belongs
 with the retained test and evaluation artifacts. Implementation does not establish live-model
-accuracy, registry publication or submission readiness.
+accuracy or registry publication.
 
-This is the fabrication implementation plan from the earlier ecosystem review. The selected film
-follows a robot mounting plate and a simulated cutting quote. Job 1042 remains a separate fixture;
-its 48/50 mm discrepancy does not describe the robot's mounting dimensions. The
-[Workshop strategy](workshop.md) owns the connected workflow's integration and qualification gaps;
-the [screenplay](../release/hackathon-demo.md) owns its narration and shots.
+This is the fabrication implementation plan from the earlier ecosystem review. Job 1042 is a
+separate fixture from the robot mounting example; its 48/50 mm discrepancy does not describe the
+robot's mounting dimensions. The [Workshop strategy](workshop.md) owns the generated-tool workflow's
+integration and qualification gaps.
 
 ## Product direction
 
@@ -145,8 +144,5 @@ human confirmation, the result must say so. Compare recorded fixtures and live r
 evidence.
 
 Retain the real request, readable evidence and completed handoff. A fabrication recording must label
-fixture responses and elapsed waits. It does not qualify the generated interface proposed in the
-[current screenplay](../release/hackathon-demo.md). Final public source, registry versions, live
-evaluation and event contribution boundaries are separate gates; none is implied by a passing local
-test. Current submission requirements belong to the
-[Workshop strategy](workshop.md#submission-gates).
+fixture responses and elapsed waits. It does not qualify a generated interface. Final public source,
+registry versions and live evaluation are separate gates; none is implied by a passing local test.

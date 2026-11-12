@@ -42,7 +42,7 @@ configured in **Settings → Models**.
 
 The two tools were exported from the original conversation and its quoted alternative. Importing
 them opens independent saved tools; the archive does not recreate that conversation history. The
-[film and script](../release/hackathon-demo.md) show the quote-branch interaction.
+[film](https://plurid.com/viewer/) shows the quote-branch interaction.
 
 ## Save and return
 
@@ -64,5 +64,4 @@ state; Plurid supplies the connected spatial workspace.
 The **Licenses** folder credits SO-ARM100 / TheRobotStudio and the supporting libraries. Opening the
 archive makes no provider request.
 
-[Build a canvas with a conversation](canvases.md) ·
-[Contribution inventory](../release/hackathon-contributions.md)
+[Build a canvas with a conversation](canvases.md)

@@ -302,10 +302,9 @@ unchanged.
 
 ## Canvas evaluation and replay
 
-The **Workshop kits** supplier case is a regression and evaluation sample, not the current
-[hackathon screenplay](../release/hackathon-demo.md). It keeps independently calculable results for
-the generic canvas foundation. Paths in this section are relative to `packages/viewer-electron/app`;
-run its commands from that package.
+The **Workshop kits** supplier case is a regression and evaluation sample, not the film's scenario.
+It keeps independently calculable results for the generic canvas foundation. Paths in this section
+are relative to `packages/viewer-electron/app`; run its commands from that package.
 
 ### Source and service checks
 

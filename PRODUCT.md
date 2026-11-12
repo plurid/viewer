@@ -44,8 +44,8 @@ PDF/image/media transforms; notes and checklists; browser and terminal planes; G
 custom commands; reviewed workflows; optional model recipes and scoped agent integration.
 
 The [capability reference](docs/reference/capabilities.md) describes current behavior.
-[Research](docs/research/README.md) holds proposed capabilities and the hackathon direction. A
-proposal is not an implemented feature.
+[Research](docs/research/README.md) holds proposed capabilities. A proposal is not an implemented
+feature.
 
 ## Writing about Viewer
 

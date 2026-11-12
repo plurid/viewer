@@ -283,6 +283,41 @@ variable frame rate, nonzero start times and interrupted processing. Measure wor
 timing error, diarization error, latency, peak memory and cost separately. Record the reference
 transcripts and acceptable thresholds before comparing engines.
 
+### Stereoscopic and immersive video
+
+A 3D video plays today as its raw frame. A side-by-side film shows two squeezed pictures, and a
+spatial video shows one eye with no sign that a second exists. The preview should say what the file
+is and show it at the right shape.
+
+| Kind                | Examples                                                                 | First preview                                                                        | Later                                       |
+| ------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------- |
+| Frame-packed stereo | Side-by-side and over-under films in MP4, MKV or WebM, full or half size | One eye at its true shape, with **Left**, **Right**, **Both** and **Anaglyph** views | Depth on a stereo display or headset        |
+| Multiview stereo    | Apple spatial video: MV-HEVC in MOV, from iPhone and Vision Pro          | The same views, from a prepared copy holding both eyes                               | Export a side-by-side MP4                   |
+| 180° and 360° video | Equirectangular VR180 and 360 clips, one eye or two                      | A look-around view: drag to turn, scroll to zoom                                     | Stereo look-around on a headset             |
+| Blu-ray 3D          | H.264 MVC in `.m2ts`, `.ssif` or MKV                                     | The base view, labelled as one eye of a 3D film                                      | The second eye needs a decoder FFmpeg lacks |
+
+Read the layout from the file first: the stereo and projection side data FFprobe reports, and the
+view layers of MV-HEVC. A name such as `SBS`, `LR`, `OU`, `TAB`, `180` or `360` only suggests a
+layout, and the person can change it in the player. An ordinary video whose name contains `3D` must
+play untouched.
+
+What the current build already allows, checked against the bundled FFmpeg 9.0.2:
+
+- Its HEVC decoder returns both MV-HEVC views (`view_ids`), and it has the `framepack` and `v360`
+  filters. The LGPL build leaves out the GPL `stereo3d` filter, so layout changes and anaglyph
+  belong in the renderer.
+- Showing one eye of a frame-packed file is a crop of the playing video. It needs no converted copy.
+  Anaglyph needs a shader over the same video.
+- Chromium plays only the base view of MV-HEVC. A second eye needs a side-by-side copy through the
+  existing compatible-copy route.
+- FFprobe already runs for each video to read its rotation; the same call can return the stereo and
+  projection data. A look-around view can use the Three.js that model previews bundle.
+
+Accept a kind only with labelled real samples: each opens in the right view without a manual choice,
+seeking and sound stay in step, a half-size file keeps its true shape, and a spatial video either
+shows both eyes or says which one it shows. Spatial photos (HEIC pairs and MPO) can reuse the same
+views afterwards.
+
 ## Priority: scans to CAD and dimensional inspection
 
 This deserves its own workflow, not another input/output pair. Separate three tasks:
@@ -694,6 +729,8 @@ Diarization evaluation and a Viewer-owned scan-calibration prototype can start e
 should block the first reliable audio-extraction and timed-transcript release. ScanRuler integration
 is optional. DWG feasibility should also start early because of engineering demand, while
 implementation depends on a qualified decoder decision.
+[Stereoscopic video preview](#stereoscopic-and-immersive-video) can start early too: its first slice
+changes how a playing video is shown and adds no decoder.
 
 For every promoted capability:
 

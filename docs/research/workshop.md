@@ -9,14 +9,9 @@ robotics solver and checker design.
 The existing robotics implementation is packaged as an optional plugin. Meta extends its interface
 with a target-results table and a mounting restriction explanation, then uses the plugin's actions
 to evaluate, select and check placements. The parser, solver and checker remain reused code. Keep
-the starting package and provider revisions separate when presenting the contribution. The current
+the starting package and provider revisions separate when presenting what Meta changed. The current
 recording uses those exact edits and the reused plugin. Earlier recordings retain the former
 ownership boundary as experiment evidence.
-
-The [screenplay](../release/hackathon-demo.md) is the exact script for the current review cut. It
-must change together with the next recording. The
-[contribution inventory](../release/hackathon-contributions.md) uses the owner's 27 October 2026
-baseline to distinguish prior work.
 
 ## Product thesis
 
@@ -79,8 +74,9 @@ uses an assigned plate specification and a simulated supplier. Its controls, dra
 and quote must agree with those scenario inputs. It is supporting evidence, not the film's payoff.
 
 The supplier mock presents two delivery options for the same part. The generated comparison reads
-that reply and lets the person change the deadline. The screenplay owns the exact sample values and
-dialogue. Real service messaging, browser session access and order submission are outside this local
+that reply and lets the person change the deadline. The
+[mock](../../packages/viewer-electron/app/tools/mounting/supplier.ts) owns the exact sample values.
+Real service messaging, browser session access and order submission are outside this local
 simulation.
 
 The accepted attachment approach uses the existing two table clamps with an adapter plate. The
@@ -266,12 +262,11 @@ control's quality.
 4. Film the qualified deadline transition and saved quote together with the cutting file. Keep mock
    service behavior distinct from actual model output.
 
-The [screenplay readiness table](../release/hackathon-demo.md#implementation-and-evidence) separates
-the implemented workflow from the remaining presentation and recording work. The
-[mounting runner](../development/testing.md#mounting-and-quote-generation) retains request counts,
-failed responses, native repair evidence and the original model output. Only the demonstrated
-controls and file operations are qualified; camera persistence, arbitrary inputs and physical fit
-are not established by those checks. Further paid generation must fit an explicit allowance.
+The [mounting runner](../development/testing.md#mounting-and-quote-generation) retains request
+counts, failed responses, native repair evidence and the original model output. Only the
+demonstrated controls and file operations are qualified; camera persistence, arbitrary inputs and
+physical fit are not established by those checks. Further paid generation must fit an explicit
+allowance.
 
 ## Model and human responsibilities
 
@@ -308,7 +303,7 @@ workflow.
 
 The [supplier regression](../development/testing.md#canvas-evaluation-and-replay) remains a small
 case with known arithmetic, retained model responses and native export/restart checks. The
-[Job 1042 plan](audit-and-hackathon-plan.md) describes a separate fabrication workflow. Its
+[Job 1042 plan](fabrication-workflow.md) describes a separate fabrication workflow. Its
 requirement-verification and durable-check decisions still apply. Its 48/50 mm mismatch and the
 supplier regression's quotes do not establish the mounting job or new service conversation.
 
@@ -316,20 +311,3 @@ supplier regression's quotes do not establish the mounting job or new service co
 projects and connected artifacts. RP1 is not the selected demonstration asset. The RP Hand
 [license inventory](https://github.com/Roboparty/rp_dexhand/blob/main/LICENSES.md) leaves several
 resource permissions unresolved; verify exact asset terms before any later use.
-
-## Submission gates
-
-The target is a competitive Indie entry. The
-[official event overview](https://events.cerebralvalley.ai/e/meta-ai-developer-hackathon) describes
-that track in terms of creativity, technical ambition and whether the project works. Confirm the
-current [event details](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details) and
-[terms](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/waiver) before publication,
-including video duration, eligibility, prize conditions, source availability, asset use and
-contribution window.
-
-Retain real requests, failed attempts and measured outcomes. Model budgets require explicit
-approval; a new case does not renew an exhausted allowance. Use the
-[contribution inventory](../release/hackathon-contributions.md) to separate prior work, new code and
-third-party assets. Public source, package release, live-model qualification and final recording are
-separate gates. Follow the [screenplay](../release/hackathon-demo.md) only after its readiness
-checks pass.

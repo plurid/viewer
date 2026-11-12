@@ -1,7 +1,29 @@
 # Product priorities
 
 Viewer should remain easy for everyday work while gaining depth in the tools people already use.
-This is a set of directions, not a release schedule.
+**Next** is the working order. The sections after it are directions, not a release schedule.
+
+## Next
+
+Fixes come before features, because a new person meets them first.
+
+1. **Make the laser-job check confirm what it finds.** In the last live evaluation the check found
+   every planted problem, yet Viewer confirmed fewer than a third of them, and no hole pitch or
+   thickness at all. It also asked for a review of about one requirement per run that was not a
+   problem. Read the retained answers first. Then verify each requirement from the drawing's own
+   text at the place the model points to, so a grade stops depending on how the model words its
+   quote. [Answer and grading](../reference/fabrication.md#answer-and-grading) owns the rules.
+2. **Run the checks only a person can run.** VoiceOver and keyboard-only passes through the main
+   flows, dictation with a real microphone, one request to each hosted provider, and native
+   acceptance on an Intel Mac, which [platform status](../reference/platforms.md) lists as open.
+3. **Close the first-hour gaps.** Paste a picture as a file, go to a folder by habit and a report
+   that is safe to share. Then more archive formats, visible tags and Help that opens without a
+   network. [File-manager gaps](file-manager-gaps.md) gives each one's current state.
+4. **Finish the everyday media tasks.** Audio extraction as a direct action, file transcription with
+   reviewed subtitles, and a first [3D video preview](formats.md#stereoscopic-and-immersive-video).
+5. **Earn trust before asking for attention.** Publish how Viewer is built and tested, with measured
+   startup time, memory and idle energy for the release build, and offer a Homebrew cask beside the
+   disk image.
 
 ## Make the existing experience dependable
 
@@ -19,6 +41,8 @@ Complete the common file-processing tasks: direct video-to-audio extraction, bro
 long-file transcription, reviewed subtitles, optional speaker labeling, consistent image conversion,
 searchable-document export and broader archives. Existing Office-to-PDF, media editing, PDF tools
 and optimization are foundations to deepen, not features to rebuild from zero.
+[File-manager gaps](file-manager-gaps.md) lists the smaller features people expect from any file
+manager.
 
 Improve search discovery, large-folder handling, metadata and preview fidelity alongside those
 tasks. Treat fonts/layout, codecs, animated/multipage images and domain-specific data loss as
@@ -44,6 +68,12 @@ The [format roadmap](formats.md) owns the audited baseline, projected scale, per
 directional conversion backlog and optimization contracts. Its proposed sequence covers everyday
 gaps, then CAD/BIM, point clouds, GIS, columnar/scientific data, robotics, PCB/toolpaths and deeper
 creative formats. Proprietary versions and licensed readers remain explicit investigations.
+
+Preview 3D video properly. Side-by-side and over-under films, Apple spatial video and 180° or 360°
+clips should open at their true shape, with a choice of one eye, both or anaglyph, and a look-around
+view for the wide formats. The format roadmap's
+[stereoscopic and immersive video](formats.md#stereoscopic-and-immersive-video) section gives the
+first slice and what the bundled FFmpeg already allows.
 
 The 90% everyday preview and 80% common conversion/optimization goals require a representative task
 corpus with fixed denominators. Neither a decoder's presence nor a thumbnail proves semantic
@@ -72,9 +102,7 @@ is a reference and an optional interoperability candidate, not a required depend
 measured geometry, inferred reconstruction and generated visual assets.
 
 Viewer Workshop connects source documents, models, generated tools and verification around a task.
-The selected film follows a robot mounting plate through inspection, a cutting drawing and a
-simulated supplier quote. Bounded robot controls, target checks and comparison are implemented; the
-mounting-specific geometry, generated fabrication controls and mock service handoff need integration
-or qualification. The [strategy and implementation audit](workshop.md) records those boundaries.
-[Job 1042](audit-and-hackathon-plan.md) remains a separate fabrication workflow. The broader format
-and conversion suite is future product work, outside the current film.
+Bounded robot controls, target checks and comparison are implemented; the mounting-specific
+geometry, generated fabrication controls and mock service handoff need integration or qualification.
+The [strategy and implementation audit](workshop.md) records those boundaries.
+[Job 1042](fabrication-workflow.md) remains a separate fabrication workflow.

@@ -107,12 +107,12 @@ The plugin film ends with an eight-second editorial sequence. A centered request
 image editor”, replaces “image” with “video” while changing “an” to “a”, then replaces “video” with
 “file”. The final request holds with a blinking caret and stays unsent.
 
-Keep the exact **Viewer** signature with **a plurid technology** below it. Under **Built during the
-hackathon**, five rows of feature pills scroll in alternating directions. Their 32 labels come from
-the [contribution inventory](../release/hackathon-contributions.md). Production credits stay in
-`Script.md`, off screen in both the plugin review cut and clean export. The generated
-`closingPrompt` evidence records edit times, unsubmitted status and each feature's fully visible
-duration. Keep this editorial sequence distinct from footage showing an actual generated tool.
+Keep the exact **Viewer** signature with **a plurid technology** below it. Below the signature, five
+rows of feature pills scroll in alternating directions. Their 32 labels are `FEATURE_ROWS` in
+`tools/robotics/closing_screen.py`. Production credits stay in `Script.md`, off screen in both the
+plugin review cut and clean export. The generated `closingPrompt` evidence records edit times,
+unsubmitted status and each feature's fully visible duration. Keep this editorial sequence distinct
+from footage showing an actual generated tool.
 
 ## Record the evolving interface
 

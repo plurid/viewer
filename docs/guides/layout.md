@@ -140,7 +140,8 @@ their sources, the estimate formulas and the saved files exactly.
 
 Before a job is cut, Viewer can read the customer's request, the drawings and photos with a model,
 then measure every DXF part itself and say where the job disagrees with itself: a hole pitch drawn
-48 mm where the drawing gives 50 mm, a quantity the request and a file name give differently.
+48 mm where the drawing gives 50 mm, a quantity the request and a file name give differently. To try
+it, use the [sample job](../../examples/laser-job/README.md).
 
 1. Select the job's folder, or its files with at least one DXF part, press **⌘K** and choose **Check
    laser job…**. The command appears only where there are parts to cut, and says what the check
