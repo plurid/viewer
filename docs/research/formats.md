@@ -301,15 +301,16 @@ view layers of MV-HEVC. A name such as `SBS`, `LR`, `OU`, `TAB`, `180` or `360` 
 layout, and the person can change it in the player. An ordinary video whose name contains `3D` must
 play untouched.
 
-What the current build already allows, checked against the bundled FFmpeg 9.0.2:
+What the current build already allows, read from the bundled FFmpeg 9.0.2's own option and filter
+lists. No sample file has been decoded yet:
 
-- Its HEVC decoder returns both MV-HEVC views (`view_ids`), and it has the `framepack` and `v360`
+- Its HEVC decoder can return both MV-HEVC views (`view_ids`), and it has the `framepack` and `v360`
   filters. The LGPL build leaves out the GPL `stereo3d` filter, so layout changes and anaglyph
   belong in the renderer.
 - Showing one eye of a frame-packed file is a crop of the playing video. It needs no converted copy.
   Anaglyph needs a shader over the same video.
-- Chromium plays only the base view of MV-HEVC. A second eye needs a side-by-side copy through the
-  existing compatible-copy route.
+- Chromium is expected to play only the base view of MV-HEVC; confirm that with a real spatial
+  video. A second eye then needs a side-by-side copy through the existing compatible-copy route.
 - FFprobe already runs for each video to read its rotation; the same call can return the stereo and
   projection data. A look-around view can use the Three.js that model previews bundle.
 
