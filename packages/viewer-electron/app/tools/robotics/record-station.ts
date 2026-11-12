@@ -260,19 +260,14 @@ try {
       6.5,
       all,
     );
-    await beat(
-      'foundations',
-      'I built Viewer on Plurid, my spatial framework. I was working on both before the hackathon.',
-      7,
-      async () => {
-        await frame('conversation');
-      },
-    );
+    await beat('foundations', 'I built Viewer on Plurid, my spatial framework.', 7, async () => {
+      await frame('conversation');
+    });
   });
   await take('06-create', async () => {
     await beat(
       'existing-plugin',
-      'For this hackathon, I added a way for Meta to create specialized interfaces right here, alongside my files, browser and terminal.',
+      'I added a way for Meta to create specialized interfaces right here, alongside my files, browser and terminal.',
       10,
       async () => {
         await click(

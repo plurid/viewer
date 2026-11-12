@@ -1,4 +1,4 @@
-"""The film's editorial request, product signature and hackathon feature roll."""
+"""The film's editorial request, product signature and feature roll."""
 
 import math
 
@@ -10,7 +10,7 @@ SIZE = (2880, 1800)
 BACKGROUND = '#20242b'
 FONT = '/System/Library/Fonts/SFNS.ttf'
 
-# Product additions and extensions recorded in docs/release/hackathon-contributions.md.
+# Canvas, tool and engine features the film presents.
 # Requested editors are the closing draft, not claims that those editors have been generated.
 FEATURE_ROWS = (
     ('Agent canvases', 'Meta tool calls', 'Shared tool actions', 'Human takeover',
@@ -73,8 +73,6 @@ class ClosingScreen:
         draw.text((1440, 650), 'Viewer', anchor='mm', font=font(236, 650), fill='#f6f8fa')
         draw.text((1440, 835), 'a plurid technology', anchor='mm',
                   font=font(54, 400), fill='#bdcbd7')
-        draw.text((1440, 1035), 'Built during the hackathon', anchor='mm',
-                  font=font(36, 500), fill='#bdcbd7')
         self.rows = []
         pill_font = font(43, 500)
         for row, labels in enumerate(FEATURE_ROWS):

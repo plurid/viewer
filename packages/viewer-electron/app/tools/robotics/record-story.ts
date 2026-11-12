@@ -552,14 +552,10 @@ try {
         await all();
       },
     );
+    await beat('foundations', 'This is Viewer. Plurid is its spatial engine.', 7);
     await beat(
-      'foundations',
-      'This is Viewer. Plurid is its spatial engine. I was building both before this hackathon.',
-      7,
-    );
-    await beat(
-      'hackathon',
-      "For the hackathon, I gave Meta a canvas. It builds working interfaces from the project's files.",
+      'canvas',
+      "I gave Meta a canvas. It builds working interfaces from the project's files.",
       8,
       async () => {
         await frame('conversation');

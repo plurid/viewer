@@ -226,7 +226,7 @@ duration = math.ceil((picture_end + (CLOSING_SECONDS if closing_prompt else 7)) 
 assert duration <= 180, ('Keep the full cut under three minutes', duration)
 credits = [
     'Viewer + Plurid: existing projects',
-    'Hackathon: generated canvases, revisions, saved inputs and source-based checks',
+    'New: generated canvases, revisions, saved inputs and source-based checks',
     'Meta muse-spark-1.3 · Robot: TheRobotStudio / SO-ARM100',
     ('Saved responses · Condensed repairs · Local layout, replay repair and measurement labels · Edited navigation and reveals'
      if closing_callback else 'Saved responses · Condensed repairs · Staged reveals and local layout refinements'),
@@ -235,7 +235,7 @@ credits = [
 if station:
     credits = [
         'Viewer + Plurid: existing projects',
-        'Hackathon: generated tools, agent actions, quoted branches and independent checks',
+        'New: generated tools, agent actions, quoted branches and independent checks',
         'Meta muse-spark-1.3 · Robot: TheRobotStudio / SO-ARM100',
         'Saved Meta responses · Condensed repairs · Local presentation edits and staged reveals',
         'Fictional station · Endpoint checks · Temporary opening and voice',
@@ -243,7 +243,7 @@ if station:
 if plugin:
     credits = [
         'Viewer + Plurid: existing projects',
-        'Hackathon: agent canvases, actions, quoted branches and tool management',
+        'New: agent canvases, actions, quoted branches and tool management',
         'Meta muse-spark-1.3: interface edits and decisions · Reused robotics plugin',
         'Saved Meta responses · Repairs condensed · First turn has no closing reply',
         'SO-ARM100 / TheRobotStudio · Fictional station · Temporary opening and voice',
@@ -423,7 +423,7 @@ if station:
                        'replaces “image” with “video” and changes “an” to “a”, '
                        'then replaces “video” with “file”. The final request holds with a blinking caret. '
                        'A large Viewer title sits above “a plurid technology”. '
-                       'Under “Built during the hackathon”, five rows of feature pills scroll in alternating directions. '
+                       'Below it, five rows of feature pills scroll in alternating directions. '
                        'This is an editorial closing sequence; the request is not submitted. '
                        'Production notes remain in this script. No additional narration.\n\n')
         text.write(('## Production notes (not on screen)\n\n' if not on_screen_credits else '## Credits\n\n') +
