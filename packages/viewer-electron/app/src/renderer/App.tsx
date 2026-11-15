@@ -56,6 +56,7 @@ import { WorkspaceSurface } from './workspace/WorkspaceSurface';
 import { Icon } from './ui/Icon';
 import { ErrorBoundary, IconButton } from './ui/primitives';
 import { ProjectControls, ProjectFileNotice } from './workspace/projects';
+import { LicenseReminder } from './app/LicenseReminder';
 import { InspectionControls } from './ui/inspection/Inspection';
 import { CheckpointControls } from './ui/operations/Checkpoints';
 import { OperationReviewControls } from './ui/operations/OperationReview';
@@ -880,6 +881,7 @@ function AppWindow() {
           )}
         </header>
         <ProjectFileNotice />
+        <LicenseReminder />
         <div className="app-main">
           <Sidebar />
           <main className="workspace-main">

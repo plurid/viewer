@@ -30,6 +30,7 @@ On another platform these report the message shown and the rest of Viewer stays 
 | **Open With** application choice                                                          | "Application selection is not available on this platform yet."                                               |
 | Printing PDFs                                                                             | "Printing PDFs requires macOS."                                                                              |
 | Finder aliases                                                                            | "Finder aliases require macOS."                                                                              |
+| Pasting a picture as a PNG                                                                | Not offered until clipboard files can take priority over picture renditions                                  |
 | Instant copies (APFS clones)                                                              | Files are copied byte by byte                                                                                |
 | Spotlight name search                                                                     | Not offered                                                                                                  |
 | HEIC, HEIF and BMP decoding, RAW rendering, OCR, file tags and the `viewer` shell command | Bundled as macOS helpers only                                                                                |
@@ -42,18 +43,23 @@ platform; its real-engine macOS smoke passes, and Windows and Linux runs are pen
 
 ## Direct and App Store builds
 
-| Feature                                                    | Direct build                            | App Store build                                    |
-| ---------------------------------------------------------- | --------------------------------------- | -------------------------------------------------- |
-| Folder access                                              | Folder grants and macOS privacy prompts | Security-scoped bookmarks                          |
-| Git review, worktrees, Git actions and branch tasks        | Yes                                     | No                                                 |
-| Spotlight name search                                      | Yes                                     | No: the sandbox has no `mdfind`                    |
-| The `viewer` shell command                                 | Yes                                     | No                                                 |
-| **Open With** from Finder (document types)                 | Yes                                     | No: the sandbox would receive only the opened file |
-| **Viewer → Check for Updates…** and the signed update feed | Yes                                     | No: the App Store updates it                       |
-| File and terminal workers                                  | Processes                               | Threads                                            |
+| Feature                                                    | Direct build                                     | App Store build                                    |
+| ---------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
+| Folder access                                              | Folder grants and macOS privacy prompts          | Security-scoped bookmarks                          |
+| Git review, worktrees, Git actions and branch tasks        | Yes                                              | No                                                 |
+| Spotlight name search                                      | Yes                                              | No: the sandbox has no `mdfind`                    |
+| The `viewer` shell command                                 | Yes                                              | No                                                 |
+| **Open With** from Finder (document types)                 | Yes                                              | No: the sandbox would receive only the opened file |
+| **Viewer → Check for Updates…** and the signed update feed | Yes                                              | No: the App Store updates it                       |
+| 30-day trial and pay-once offline key                      | When both publisher configuration fields are set | No UI or license record                            |
+| File and terminal workers                                  | Processes                                        | Threads                                            |
 
 Store folder bookmarks do not grant Full Disk Access, and direct-build access does not establish
 sandbox acceptance.
+
+The shipped source leaves license configuration empty. Such a direct build has no trial, license
+menu, Settings page or reminder, and writes no license record. Configured direct builds keep all
+features available after the trial. See [license keys and trial state](license.md).
 
 ## Distribution
 

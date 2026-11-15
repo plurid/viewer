@@ -117,7 +117,7 @@ function installTrashFixture(noteOriginal: string, longOriginal: string, preview
   fixture.__trashFixtureItems = [
     folder,
     make('2', 'Build notes.txt', false, noteOriginal),
-    make('3', 'Unsorted notes — original location unavailable.txt', false),
+    make('3', 'Unsorted notes (original location unavailable).txt', false),
     make('4', '00026295_T02.200.008_00A_Assembly-review-notes.txt', false, longOriginal),
   ];
   api.trashList = async (folderID) => ({

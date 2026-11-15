@@ -1,4 +1,4 @@
-export function PrivacyInformation() {
+export function PrivacyInformation({ showLicense = false }: { showLicense?: boolean }) {
   return (
     <div className="privacy-information">
       <p className="settings-note">
@@ -45,6 +45,17 @@ export function PrivacyInformation() {
         ordinary connection information, such as your IP address, and nothing about your files. Turn
         the daily check off below. The App Store edition is updated by the App Store.
       </p>
+      {showLicense && (
+        <>
+          <h3>Trial and license key</h3>
+          <p>
+            Viewer keeps trial dates and your optional license key on this Mac. The key contains
+            your purchase email and order reference. Viewer checks it offline and sends nothing to
+            its developer for licensing. Buy Viewer opens the purchase page in your browser, under
+            that site's own terms.
+          </p>
+        </>
+      )}
       <h3>Support</h3>
       <p>
         Contact source@plurid.com. If you send a report, share only the details you want support to

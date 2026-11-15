@@ -682,7 +682,7 @@ async function commitDialog(main: Connection, app: Application) {
     Boolean,
     'actual commit message dialog',
   );
-  const message = 'Generated message — never submitted\n\nNo mutation approval is requested.';
+  const message = 'Generated message, never submitted\n\nNo mutation approval is requested.';
   await main.evaluate(focus('.git-commit-dialog textarea'));
   await main.command('Input.insertText', { text: message });
   const form = await until(

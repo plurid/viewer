@@ -180,6 +180,19 @@ export function navigationCommands({
       when: windowScope,
       run: actions.settings,
     },
+    ...(state.bootstrap.license
+      ? [
+          {
+            id: 'license-key',
+            label: 'License Key…',
+            group: 'App',
+            icon: 'settings' as const,
+            aliases: ['buy viewer', 'trial', 'enter license'],
+            when: windowScope,
+            run: () => window.viewer.openSettings('license'),
+          },
+        ]
+      : []),
     {
       id: 'install-viewer-cli',
       label: 'Install Viewer CLI',

@@ -12,7 +12,9 @@ import type { AgentClientRequest } from '../src/domain/agents/clients';
 import type { ReadableStream } from 'node:stream/web';
 import { createServer } from 'vite';
 import { rename, mkdir, realpath, writeFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
+import { License } from '../src/desktop/license/license';
+import { issueLicenseKey } from '../tools/license-key';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import type { ServerResponse } from 'node:http';
@@ -99,6 +101,42 @@ const journal = new JournalStore(path.join(fixture.root, 'journal'), () =>
   emit({ type: 'journal-changed' }),
 );
 const activity = new JournalActivity(journal);
+const licenseScenario = process.env.VIEWER_TEST_SCENARIO?.startsWith('license-');
+let license: License | undefined;
+if (licenseScenario) {
+  const pair = generateKeyPairSync('ed25519');
+  const configuration = {
+    publicKey: pair.publicKey.export({ format: 'der', type: 'spki' }).toString('base64'),
+    purchaseURL: 'https://purchase.example.invalid/viewer',
+  };
+  const file = path.join(fixture.root, 'license-v1.json');
+  const now = Date.now();
+  const elapsed = process.env.VIEWER_TEST_SCENARIO === 'license-ended' ? 31 : 12;
+  await writeFile(
+    file,
+    JSON.stringify({ version: 1, trial: { started: now - elapsed * 86400000, seen: now } }),
+  );
+  await writeFile(
+    path.join(fixture.root, 'generated-license-key.txt'),
+    issueLicenseKey(
+      {
+        product: 'viewer',
+        email: `${crypto.randomUUID()}@buyer.example.invalid`,
+        order: crypto.randomUUID(),
+        issued: new Date(now).toISOString().slice(0, 10),
+      },
+      pair.privateKey,
+      configuration,
+    ),
+    { mode: 0o600 },
+  );
+  license = new License(file, {
+    configuration,
+    store: false,
+    open: async () => {},
+    changed: (status) => emit({ type: 'license', status }),
+  });
+}
 const journalHandlers = createJournalHandlers({
   store: journal,
   allowHuman: () => {},
@@ -430,6 +468,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     }
     case 'bootstrap':
       return {
+        license: await license?.status(),
         home: fixture.files,
         platform: 'darwin',
         locations: [
@@ -445,6 +484,20 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
         settings: settingsSnapshot(settings.snapshot()),
         openPaths: [],
       };
+    case 'license': {
+      const [request] = schemas.license.parse(args);
+      switch (request.kind) {
+        case 'status':
+          return license?.status(request.hideReminder);
+        case 'enter':
+          return license?.enter(request.key);
+        case 'remove':
+          return license?.remove();
+        case 'buy':
+          await license?.buy();
+          return license?.status();
+      }
+    }
     case 'fileInformation':
       return information.get(scoped(args[0] as string));
     case 'fileInformationUpdate':
@@ -744,6 +797,17 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return;
     case 'clipboardRead':
       return clipboard;
+    case 'clipboardPaste':
+      return clipboard
+        ? {
+            id: operations.start({
+              kind: clipboard.cut ? 'move' : 'copy',
+              sources: clipboard.paths.map(scoped),
+              destination: scoped(args[0] as string),
+            }),
+            image: false,
+          }
+        : null;
     case 'copyPaths':
       (args[0] as string[]).forEach(scoped);
       clipboard = null;

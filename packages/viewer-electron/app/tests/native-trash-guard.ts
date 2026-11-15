@@ -19,7 +19,7 @@ await writeFile(path.join(trash, 'Nested', 'Unicode-ș.txt'), 'Generated nested 
 await writeFile(path.join(trash, 'Notes.txt'), 'Generated note');
 await mkdir(path.join(root, 'Documents'), { mode: 0o700 });
 const outside = path.join(root, 'Documents', 'Precious.txt');
-await writeFile(outside, 'Generated external sentinel — must remain unchanged');
+await writeFile(outside, 'Generated external sentinel: must remain unchanged');
 await symlink(path.join(root, 'Documents'), path.join(trash, 'Documents link'));
 const before = await readFile(outside);
 const binary = path.join(root, 'guard-test');

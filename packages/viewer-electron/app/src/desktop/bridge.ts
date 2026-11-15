@@ -29,6 +29,8 @@ import { createSearchHandlers } from './ipc/search-handlers';
 import { createSettingHandlers } from './ipc/setting-handlers';
 import { createTerminalHandlers } from './ipc/terminal-handlers';
 import { createWindowHandlers } from './ipc/window-handlers';
+import { createLicenseHandlers } from './ipc/license-handlers';
+import type { License } from './license/license';
 import { PersonalBackups } from './persistence/backup';
 import { sendEvent } from './ipc/events';
 import { assetPath, processorFolder } from './native/assets';
@@ -352,6 +354,7 @@ export class Desktop {
     private allowedURL: (url: string) => boolean,
     private options: {
       openSettings(focus?: string): Promise<void>;
+      license?: License;
       newWindow?(workspaceID?: string): Promise<void>;
       workspaceChanged?(window: BrowserWindow, workspaceID: string): void;
       quitting?(): boolean;
@@ -1991,6 +1994,7 @@ export class Desktop {
       home,
       freshSession,
       gitActionsAvailable: !process.mas,
+      license: await this.options.license?.status(),
       settings: this.settings.snapshot(this.credentials.ids()),
       platform: process.platform as DesktopPlatform,
       locations: defaultSidebarLocations(
@@ -2039,6 +2043,7 @@ export class Desktop {
         if (!dialogs) throw new Error('The dialog window is unavailable.');
         return dialogs.request(request);
       },
+      ...createLicenseHandlers({ license: this.options?.license, isSettings }),
       ...createWindowHandlers({
         host: this.options,
         shellCommand: this.shellCommand,
@@ -2090,6 +2095,9 @@ export class Desktop {
       }),
       ...createPasteboardHandlers({
         pasteboard: this.pasteboard,
+        operations: this.operations,
+        isAgent,
+        recorded: (request, id) => this.fabrication.rememberOperation(request, id),
         fileAccess: this.fileAccess,
         window: windowOf,
       }),

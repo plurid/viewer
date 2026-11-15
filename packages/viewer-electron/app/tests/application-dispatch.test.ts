@@ -29,7 +29,7 @@ function menuWindow() {
 
 function menuHost() {
   return {
-    openSettings: vi.fn(async () => {}),
+    openSettings: vi.fn(async (_focus?: string) => {}),
     newWindow: vi.fn(async () => {}),
     checkForUpdates: vi.fn(async () => {}),
     acknowledgements: vi.fn(async () => {}),
@@ -40,6 +40,56 @@ function menuHost() {
 }
 
 describe('native application menu dispatch', () => {
+  it('opens the license page independently of Settings focus', async () => {
+    const host = menuHost();
+    await dispatchApplicationCommand('license-key', host);
+    expect(host.openSettings).toHaveBeenCalledExactlyOnceWith('license');
+    expect(host.workspaceCommand).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('shows the License Key item only when enabled (%s)', (visible) => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { ...platform, value: 'darwin' });
+    try {
+      installApplicationMenu(
+        undefined,
+        () => () => {},
+        '/generated/diagnostics.log',
+        vi.fn(),
+        visible,
+      );
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+    }
+    const template = nativeMenu.buildFromTemplate.mock.calls.at(-1)![0];
+    const items = template[0]!.submenu as MenuItemConstructorOptions[];
+    expect(items.some((item) => item.label === 'License Key…')).toBe(visible);
+    expect(items.some((item) => item.label === 'Acknowledgements')).toBe(true);
+  });
+
+  it('keeps the Store menu free of license and update actions', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    const store = Object.getOwnPropertyDescriptor(process, 'mas');
+    Object.defineProperty(process, 'platform', { ...platform, value: 'darwin' });
+    Object.defineProperty(process, 'mas', { configurable: true, value: true });
+    try {
+      installApplicationMenu(
+        undefined,
+        () => () => {},
+        '/generated/diagnostics.log',
+        vi.fn(),
+        true,
+      );
+      const template = nativeMenu.buildFromTemplate.mock.calls.at(-1)![0];
+      const items = template[0]!.submenu as MenuItemConstructorOptions[];
+      expect(items.some((item) => item.label === 'License Key…')).toBe(false);
+      expect(items.some((item) => item.label === 'Check for Updates…')).toBe(false);
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+      if (store) Object.defineProperty(process, 'mas', store);
+      else Reflect.deleteProperty(process, 'mas');
+    }
+  });
   it('uses Command N for a folder and Shift Command N for a new plane', () => {
     installApplicationMenu(undefined, () => () => {}, '/generated/diagnostics.log', vi.fn());
     const template = nativeMenu.buildFromTemplate.mock.calls.at(-1)![0];

@@ -244,6 +244,6 @@ describe('a macro’s command name', () => {
     expect(commandName('open docs')).toBe('OpenDocs');
     expect(commandName('Macro')).toBe('Macro');
     expect(commandName('3 views')).toBeUndefined();
-    expect(commandName('—')).toBeUndefined();
+    expect(commandName('\u2014')).toBeUndefined();
   });
 });

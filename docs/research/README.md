@@ -5,6 +5,7 @@ instructions or a list of shipped features. Current behavior is in the [guides](
 [capability reference](../reference/capabilities.md).
 
 - [Product priorities](roadmap.md)
+- [The paid build: trial, license key and what stays out](paid-build.md)
 - [Desktop quality and durable workspaces](desktop-quality.md)
 - [Speech input and local or hosted model setup](speech.md)
 - [File services and format coverage: previews, conversions, optimization, transcripts and scan-to-CAD](formats.md)

@@ -20,6 +20,7 @@ export function installApplicationMenu(
   command: (id: string) => () => void,
   diagnosticFile: string,
   quit: (byShortcut: boolean) => void,
+  licenseVisible = false,
 ): void {
   const quitItem: MenuItemConstructorOptions = {
     label: 'Quit Viewer',
@@ -39,6 +40,9 @@ export function installApplicationMenu(
                 ...(process.mas
                   ? []
                   : [{ label: 'Check for Updates…', click: command('check-for-updates') }]),
+                ...(licenseVisible && !process.mas
+                  ? [{ label: 'License Key…', click: command('license-key') }]
+                  : []),
                 { type: 'separator' as const },
                 {
                   label: 'Settings…',

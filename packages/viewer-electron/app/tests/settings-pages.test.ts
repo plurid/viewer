@@ -6,16 +6,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
+import { randomUUID } from 'node:crypto';
 import type { DesktopEvent } from '../src/domain/contracts';
 import type { SettingsSnapshot } from '../src/domain/services';
 import { SettingsWindow } from '../src/renderer/ui/settings/Settings';
 import { categories, settingCatalog, settingValue } from '../src/domain/preferences/catalog';
 import { getState, initialize } from '../src/renderer/state/store';
+import type { LicenseRequest, LicenseStatus } from '../src/domain/license/license';
+import { restoreApiErrors } from '../src/renderer/api-boundary';
 
 type Listener = (event: DesktopEvent) => void;
 const listeners = new Set<Listener>();
 let snapshot: SettingsSnapshot;
 beforeEach(() => {
+  listeners.clear();
+  history.replaceState(null, '', '/');
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
   snapshot = structuredClone(getState().settings);
   const stubs: Record<string, unknown> = {
@@ -45,6 +50,90 @@ function toggled(path: string): SettingsSnapshot {
 }
 
 describe('Settings pages', () => {
+  it('omits the License page when the desktop returns no license status', async () => {
+    history.replaceState(null, '', '/?window=settings&category=License&focus=license');
+    const view = render(createElement(SettingsWindow));
+    await view.findByRole('heading', { level: 1 });
+    expect(view.queryByRole('button', { name: 'License' })).toBeNull();
+    expect(view.getByRole('heading', { level: 1 }).textContent).toBe('Browsing');
+    fireEvent.click(view.getByRole('button', { name: 'Privacy' }));
+    expect(view.queryByRole('heading', { name: 'Trial and license key' })).toBeNull();
+  });
+
+  it('keeps an event newer than the initial license status request', async () => {
+    let complete: ((status: LicenseStatus) => void) | undefined;
+    window.viewer.license = vi.fn(
+      () =>
+        new Promise<LicenseStatus>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const view = render(createElement(SettingsWindow));
+    await view.findByRole('heading', { level: 1 });
+    const email = `${randomUUID()}@buyer.example.invalid`;
+    act(() =>
+      listeners.forEach((listener) =>
+        listener({ type: 'license', status: { kind: 'licensed', email } }),
+      ),
+    );
+    await act(async () => complete!({ kind: 'trial-ended' }));
+    fireEvent.click(view.getByRole('button', { name: 'License' }));
+    expect(view.getByRole('status').textContent).toBe(`Licensed to ${email}`);
+  });
+
+  it('opens License from its command, reports a bad key inline, and saves or removes a valid key', async () => {
+    const email = `${randomUUID()}@buyer.example.invalid`;
+    let status: LicenseStatus = { kind: 'trial', daysLeft: 12 };
+    let complete: ((value: LicenseStatus) => void) | undefined;
+    const license = vi.fn(async (request: LicenseRequest) => {
+      if (request.kind === 'enter') {
+        if (request.key === 'wrong')
+          throw { message: 'This is not a valid license key for Viewer.', code: 'invalid' };
+        status = await new Promise<LicenseStatus>((resolve) => {
+          complete = resolve;
+        });
+      }
+      if (request.kind === 'remove') status = { kind: 'trial', daysLeft: 12 };
+      return status;
+    });
+    window.viewer.license = restoreApiErrors({ license }).license;
+    history.replaceState(null, '', '/?window=settings&focus=license');
+    const view = render(createElement(SettingsWindow));
+    await view.findByRole('button', { name: 'License' });
+    await waitFor(() =>
+      expect(view.getByRole('heading', { level: 1 }).textContent).toBe('License'),
+    );
+    expect(view.getByRole('status').textContent).toBe('Trial: 12 days left');
+    fireEvent.click(view.getByRole('button', { name: 'Buy Viewer' }));
+    await waitFor(() => expect(license).toHaveBeenCalledWith({ kind: 'buy' }));
+    const field = view.getByRole('textbox', { name: 'License key' });
+    fireEvent.change(field, { target: { value: 'wrong' } });
+    fireEvent.click(view.getByRole('button', { name: 'Save license key' }));
+    await waitFor(() =>
+      expect(view.getByRole('alert').textContent).toBe(
+        'This is not a valid license key for Viewer.',
+      ),
+    );
+    expect(view.getByRole('alert').textContent).not.toContain('code');
+    fireEvent.change(field, { target: { value: 'generated valid key' } });
+    fireEvent.click(view.getByRole('button', { name: 'Save license key' }));
+    await waitFor(() => expect(complete).toBeTypeOf('function'));
+    expect(view.getByRole('button', { name: 'Working…' }).hasAttribute('disabled')).toBe(true);
+    expect(field.hasAttribute('disabled')).toBe(true);
+    await act(async () => complete!({ kind: 'licensed', email }));
+    await waitFor(() => expect(view.getByRole('status').textContent).toBe(`Licensed to ${email}`));
+    expect((field as HTMLTextAreaElement).value).toBe('');
+    expect(view.queryByRole('button', { name: 'Buy Viewer' })).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'Remove license key' }));
+    await waitFor(() => expect(view.getByRole('status').textContent).toBe('Trial: 12 days left'));
+    expect(license).toHaveBeenCalledWith({ kind: 'remove' });
+    act(() =>
+      listeners.forEach((listener) =>
+        listener({ type: 'license', status: { kind: 'trial-ended' } }),
+      ),
+    );
+    expect(view.getByRole('status').textContent).toBe('Trial ended');
+  });
   it('focuses search on open and selects the previous query on explicit reopen', async () => {
     const view = render(createElement(SettingsWindow));
     const search = (await view.findByRole('textbox', {

@@ -44,6 +44,17 @@ contents or settings are sent. Turn the daily check off in Settings → Privacy.
 opens the installer address in your browser. The Mac App Store edition makes no update checks of its
 own.
 
+## Trial and license key
+
+A configured direct-download edition keeps trial dates and an optional signed license key in
+`license-v1.json` in its local application data folder. The key contains the buyer's email and order
+reference. These details stay on this Mac. Viewer verifies the key offline at every launch and sends
+nothing to its developer for licensing. There is no activation server or online license check.
+
+Choosing **Buy Viewer** opens the fixed purchase page in your browser. That website receives
+ordinary browser connection information and the purchase details you enter under its own terms. The
+App Store edition and a build without license configuration keep no license record.
+
 ## Optional model providers
 
 Model actions are optional. They run only when you invoke an action and explicitly authorize the

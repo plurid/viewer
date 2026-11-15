@@ -14,3 +14,14 @@ export const updateFeedConfiguration: UpdateFeedConfiguration = {
   url: 'https://github.com/plurid/viewer/releases/latest/download/viewer-update.json',
   publicKey: 'MCowBQYDK2VwAyEAjeigzYqlIoiO1/CtSbz36yMylQVVvh5aisaQBCmH7EU=',
 };
+
+export interface LicenseConfiguration {
+  publicKey: string;
+  purchaseURL: string;
+}
+
+/** Empty until the publisher configures offline keys and the purchase page for the direct build. */
+export const licenseConfiguration: LicenseConfiguration = {
+  publicKey: '',
+  purchaseURL: '',
+};

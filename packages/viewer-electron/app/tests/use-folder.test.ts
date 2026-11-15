@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { FileEntry } from '../src/domain/contracts';
-import { refreshFolder, useFolder } from '../src/renderer/explorer/useFolder';
+import { refreshFolder, reloadFolder, useFolder } from '../src/renderer/explorer/useFolder';
 
 const entry = (name: string): FileEntry => ({
   path: `/fixtures/folder/${name}`,
@@ -44,6 +44,28 @@ const settle = async () => {
 };
 
 describe('a folder listing', () => {
+  it('waits for an older listing and reloads before selecting a newly pasted picture', async () => {
+    const path = `/fixtures/folder-${++folder}`;
+    const picture = entry('Pasted image.png');
+    let finishOldListing: () => void = () => {};
+    viewer.list
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOldListing = () => resolve({ entries: [] });
+          }),
+      )
+      .mockResolvedValueOnce({ entries: [picture] });
+    const view = renderHook(() => useFolder(path));
+    await act(async () => {
+      const current = reloadFolder(path);
+      finishOldListing();
+      expect(await current).toEqual([picture]);
+    });
+    expect(view.result.current.entries).toEqual([picture]);
+    expect(viewer.list).toHaveBeenCalledTimes(2);
+    view.unmount();
+  });
   it('refreshes the requested child listing without refreshing its mounted ancestor', async () => {
     const parent = `/fixtures/folder-${++folder}`,
       child = parent + '/child';

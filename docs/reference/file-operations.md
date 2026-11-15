@@ -15,26 +15,34 @@ available when the button is hidden.
 
 ## Commands
 
-| Command                                          | Key      | What it does                                                              |
-| ------------------------------------------------ | -------- | ------------------------------------------------------------------------- |
-| **Copy**, **Cut**                                | ⌘C, ⌘X   | Puts the selection on the clipboard                                       |
-| **Paste here**                                   | ⌘V       | Copies the clipboard's items here; after **Cut**, moves them              |
-| **Move copied items here**                       | ⌥⌘V      | Moves the clipboard's items here                                          |
-| **Copy to…**, **Move to…**                       |          | Asks for a folder, then copies or moves                                   |
-| **Copy to** _folder_, **Move to** _folder_       | ⌃⌘C, ⌃⌘X | Copies or moves to the other folder of a pair                             |
-| **Duplicate**                                    | ⌘D       | Makes `Name copy.ext` beside each item                                    |
-| **Make alias**                                   |          | Makes a Finder alias, such as `Report.pdf alias`, beside each item        |
-| **New folder…**                                  | ⌘N       | Creates an empty folder; it never replaces an existing item               |
-| **New file…**                                    |          | Creates an empty file; it never replaces an existing item                 |
-| **New folder with selection…**                   | ⌃⌘N      | Asks for a name, then moves the selection into a new folder               |
-| **Rename…**                                      | Return   | Renames one item; a case-only rename works on a case-blind volume         |
-| **Compress to ZIP**                              |          | Makes `Photos.zip` for one item named `Photos`; `Archive.zip` for several |
-| **Extract here**                                 |          | Extracts a ZIP or TAR archive into a new folder beside it                 |
-| **Move to Trash** (**Move to Trash…**)           | ⌘⌫       | Moves the selection to the system Trash                                   |
-| **Undo file operation**, **Redo file operation** | ⌘Z, ⇧⌘Z  | Reverses the latest job, or starts it again                               |
+| Command                                          | Key      | What it does                                                                |
+| ------------------------------------------------ | -------- | --------------------------------------------------------------------------- |
+| **Copy**, **Cut**                                | ⌘C, ⌘X   | Puts the selection on the clipboard                                         |
+| **Paste here**                                   | ⌘V       | Copies or moves clipboard files; with a picture and no files, creates a PNG |
+| **Move copied items here**                       | ⌥⌘V      | Moves the clipboard's items here                                            |
+| **Copy to…**, **Move to…**                       |          | Asks for a folder, then copies or moves                                     |
+| **Copy to** _folder_, **Move to** _folder_       | ⌃⌘C, ⌃⌘X | Copies or moves to the other folder of a pair                               |
+| **Duplicate**                                    | ⌘D       | Makes `Name copy.ext` beside each item                                      |
+| **Make alias**                                   |          | Makes a Finder alias, such as `Report.pdf alias`, beside each item          |
+| **New folder…**                                  | ⌘N       | Creates an empty folder; it never replaces an existing item                 |
+| **New file…**                                    |          | Creates an empty file; it never replaces an existing item                   |
+| **New folder with selection…**                   | ⌃⌘N      | Asks for a name, then moves the selection into a new folder                 |
+| **Rename…**                                      | Return   | Renames one item; a case-only rename works on a case-blind volume           |
+| **Compress to ZIP**                              |          | Makes `Photos.zip` for one item named `Photos`; `Archive.zip` for several   |
+| **Extract here**                                 |          | Extracts a ZIP or TAR archive into a new folder beside it                   |
+| **Move to Trash** (**Move to Trash…**)           | ⌘⌫       | Moves the selection to the system Trash                                     |
+| **Undo file operation**, **Redo file operation** | ⌘Z, ⇧⌘Z  | Reverses the latest job, or starts it again                                 |
 
 **Move to Trash…** asks first while **Confirm before moving to Trash** is on
 (`settings.browsing.confirmTrash`, on by default).
+
+Clipboard files take priority over pictures, including file icons and previews. With a picture and
+no files, **Paste here** creates `Pasted image.png`, then `Pasted image 2.png`, `Pasted image 3.png`
+as needed. Its encoded PNG must be at most 64 MiB. Text-only and empty clipboards create nothing.
+Text alongside a picture does not prevent the PNG creation. Pictures waiting to be written share a
+128 MiB memory budget; wait for a paste to finish or cancel one when it is full. Picture pastes are
+ordinary creation jobs with Undo; their image bytes are not kept in the journal, so they have no
+Redo. Agents cannot paste from the clipboard.
 
 ## Drag and drop
 
@@ -77,6 +85,9 @@ exists." and these choices:
 | Move on one volume             | One rename                                                           | Atomic                                                                       |
 | Move to another volume         | A copy, then removal of each verified original                       | Each file synced (`F_FULLFSYNC`), then its folders, before any original goes |
 | Text save, extraction, new ZIP | New file, synced                                                     | Written to permanent storage                                                 |
+
+A pasted picture is written and synced in a private stage, then published exclusively under its
+final name, so a failed or cancelled write leaves no partial picture there.
 
 - A folder is cloned or copied file by file. A copy keeps the original's dates, permissions, ACLs
   and extended attributes.
@@ -145,7 +156,7 @@ Viewer never deletes an item in place of moving it to the Trash.
 - Undo refuses when the original location is taken, so a known conflict never produces a partial
   Undo.
 - **Redo** starts the job again as a new job with every usual check, only in the session that undid
-  it. A text save has no Redo.
+  it. A text save or pasted picture has no Redo.
 - **Undo file operation** also undoes a lens edit when that was the latest change. Arrangement Undo
   is separate, and so are Git actions and changes made by other apps.
 

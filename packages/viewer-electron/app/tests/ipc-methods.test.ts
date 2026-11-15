@@ -8,13 +8,65 @@ import {
 import { Desktop } from '../src/desktop/bridge';
 import { paneTypes } from '../src/domain/contracts';
 import { createPasteboardHandlers } from '../src/desktop/ipc/pasteboard-handlers';
+import { createLicenseHandlers } from '../src/desktop/ipc/license-handlers';
 
 describe('IPC method table', () => {
+  it('bounds license requests and permits key changes only from Settings', async () => {
+    const service = {
+      status: vi.fn(async (_hide?: boolean) => ({ kind: 'trial', daysLeft: 30 }) as const),
+      enter: vi.fn(
+        async (_key: string) =>
+          ({ kind: 'licensed', email: 'generated@buyer.example.invalid' }) as const,
+      ),
+      remove: vi.fn(async () => ({ kind: 'trial-ended' }) as const),
+      buy: vi.fn(async () => {}),
+    };
+    const handler = createLicenseHandlers({
+      license: service,
+      isSettings: (owner) => owner === 2,
+    }).license;
+    expect(methodWindows.license).toBe('both');
+    expect(settingsEvents).toContain('license');
+    expect(schemas.license.safeParse([{ kind: 'enter', key: 'x'.repeat(4096) }]).success).toBe(
+      true,
+    );
+    for (const request of [
+      { kind: 'enter', key: 'x'.repeat(4097) },
+      { kind: 'enter' },
+      { kind: 'buy', url: 'https://other.example.invalid' },
+      { kind: 'status', key: 'unexpected' },
+      { kind: 'paid' },
+    ])
+      expect(schemas.license.safeParse([request]).success).toBe(false);
+    for (const request of [{ kind: 'enter', key: 'generated' }, { kind: 'remove' }] as const)
+      await expect(handler([request], 1)).rejects.toThrow('Settings');
+    expect(service.enter).not.toHaveBeenCalled();
+    expect(service.remove).not.toHaveBeenCalled();
+    await handler([{ kind: 'enter', key: 'generated' }], 2);
+    await handler([{ kind: 'remove' }], 2);
+    await handler([{ kind: 'status', hideReminder: true }], 1);
+    await handler([{ kind: 'buy' }], 1);
+    expect(service.enter).toHaveBeenCalledExactlyOnceWith('generated');
+    expect(service.remove).toHaveBeenCalledOnce();
+    expect(service.status).toHaveBeenCalledWith(true);
+    expect(service.buy).toHaveBeenCalledOnce();
+    const off = createLicenseHandlers({ isSettings: () => true }).license;
+    expect(await off([{ kind: 'status' }], 1)).toBeUndefined();
+  });
   it('copies plain text through the desktop without treating output as file paths', async () => {
     const writeText = vi.fn(async () => {});
     const requireAccess = vi.fn();
     const handlers = createPasteboardHandlers({
-      pasteboard: { writeText, write: vi.fn(), read: vi.fn(), dropped: vi.fn(), copyText: vi.fn() },
+      pasteboard: {
+        writeText,
+        write: vi.fn(),
+        read: vi.fn(),
+        readForPaste: vi.fn(),
+        dropped: vi.fn(),
+        copyText: vi.fn(),
+      },
+      operations: { start: vi.fn(), createImage: vi.fn() },
+      isAgent: () => false,
       fileAccess: { require: requireAccess },
       window: () => undefined,
     });
@@ -28,6 +80,17 @@ describe('IPC method table', () => {
     expect(schemas.clipboardWriteText.safeParse(['x'.repeat(16 * 1024 * 1024 + 1)]).success).toBe(
       false,
     );
+  });
+  it('accepts only a destination for clipboard paste in a workspace window', () => {
+    expect(methodWindows.clipboardPaste).toBe('viewer');
+    expect(schemas.clipboardPaste.safeParse(['/fixtures/destination']).success).toBe(true);
+    for (const args of [[], ['relative'], ['/fixtures', { png: 'unexpected' }], [{ image: true }]])
+      expect(schemas.clipboardPaste.safeParse(args).success).toBe(false);
+    expect(
+      schemas.operate.parse([
+        { kind: 'mkfile', sources: [], destination: '/fixtures', name: 'image.png', imageBytes: 1 },
+      ]),
+    ).toEqual([{ kind: 'mkfile', sources: [], destination: '/fixtures', name: 'image.png' }]);
   });
   it('bounds worksheet pages and cancellation to existing viewer resources', () => {
     expect(schemas.document.safeParse(['resource']).success).toBe(true);

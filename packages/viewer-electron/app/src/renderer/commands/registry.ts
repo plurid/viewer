@@ -1,4 +1,5 @@
 import type { FileEntry, FolderPane, OperationJob, SidebarSection } from '../../domain/contracts';
+import type { ClipboardContent } from '../../domain/files/clipboard';
 import type { IconName } from '../ui/Icon';
 import { typoScore } from '../../domain/search/approximate';
 
@@ -17,7 +18,7 @@ export interface CommandContext {
   directory?: string;
   resourceID?: string;
   path?: string;
-  clipboard: { paths: string[]; cut: boolean } | null;
+  clipboard: ClipboardContent | null;
   jobs: readonly OperationJob[];
   sidebar?: { section: SidebarSection; path?: string; name?: string };
   /** A lens group heading's menu: the group, or null for Unsorted. */

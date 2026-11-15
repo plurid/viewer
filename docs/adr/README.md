@@ -21,3 +21,4 @@ These records explain decisions that still shape the application. Feature usage 
 - [Robot target checks (superseded)](0014-robot-target-checks.md)
 
 - [Generated tools own application logic](0015-generated-tool-host.md)
+- [Offline license keys for direct builds](0016-offline-license-keys.md)

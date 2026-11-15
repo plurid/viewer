@@ -19,6 +19,7 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  license: (request) => invoke('license', request),
   dialog: (request) => invoke('dialog', request),
   speech: (request) => invoke('speech', request),
   createTask: (input) => invoke('createTask', input),
@@ -204,6 +205,7 @@ const api: ViewerAPI = {
   clipboardWriteText: (text) => invoke('clipboardWriteText', text),
   copyPaths: (files) => invoke('copyPaths', files),
   clipboardRead: () => invoke('clipboardRead'),
+  clipboardPaste: (destination) => invoke('clipboardPaste', destination),
   fileDropPaths: (files) =>
     invoke('fileDropPaths', files.map((file) => webUtils.getPathForFile(file)).filter(Boolean)),
   fileDragStart: (paths) => invoke('fileDragStart', paths),

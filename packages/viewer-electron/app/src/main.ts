@@ -72,6 +72,9 @@ import { answerStoppedWindows, rendererWatches } from './desktop/windows/window-
 import { assetPath, setAssetRoot } from './desktop/native/assets';
 import { installAboutPanel, installedRelease, openAcknowledgements } from './desktop/windows/about';
 import { applicationUpdates } from './desktop/updates/native';
+import { applicationLicense } from './desktop/license/native';
+import { licenseLine } from './domain/license/license';
+import type { LicenseStatus } from './domain/license/license';
 import type { Updates } from './desktop/updates/updates';
 const terminalArguments = process.argv.slice(app.isPackaged ? 1 : 2);
 const mcpMode = terminalArguments[0] === '--mcp';
@@ -301,6 +304,7 @@ const quitShortcut = new QuitShortcut({
 });
 const pendingPaths: string[] = [];
 let updates: Updates | undefined;
+let licenseStatus: LicenseStatus | undefined;
 
 async function saveFailure(
   error: unknown,
@@ -419,8 +423,12 @@ function menu(): void {
       workspaceCommand: (id) => desktop?.emit({ type: 'command', command: id }),
     }).catch(reportApplicationCommandFailure);
   };
-  installApplicationMenu(settings, command, diagnostics.file, (byShortcut) =>
-    quitShortcut.request(byShortcut),
+  installApplicationMenu(
+    settings,
+    command,
+    diagnostics.file,
+    (byShortcut) => quitShortcut.request(byShortcut),
+    !!licenseStatus,
   );
 }
 
@@ -795,6 +803,14 @@ app
       app.getPath('userData'),
       () => !!desktop?.settings.snapshot().settings.updates.checkAtLaunch,
     );
+    const license = applicationLicense(app.getPath('userData'), (status) => {
+      licenseStatus = status;
+      desktop?.emit({ type: 'license', status });
+      installAboutPanel(installedRelease(), licenseLine(status));
+    });
+    await license.status();
+    if (licenseStatus)
+      setInterval(() => void license.status().catch(() => {}), 60 * 60 * 1000).unref();
     windowState = new WindowState(path.join(app.getPath('userData'), 'window-state-v1.json'));
     await windowState.load();
     settingsWindowState = new WindowState(
@@ -803,6 +819,7 @@ app
     await settingsWindowState.load();
     if (!quit.accepting()) return;
     desktop = new Desktop(app.getPath('userData'), trusted, {
+      license,
       shellCommandHome,
       openSettings: openSettingsWindow,
       newWindow: async (workspaceID) => {

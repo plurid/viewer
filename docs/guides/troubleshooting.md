@@ -107,6 +107,24 @@ and closes its browser planes.
 - If it says updates are not configured for this build, this copy was built without an update feed.
   Check the Viewer website for new versions.
 
+## A license key is not accepted
+
+- Copy the complete key from your purchase into **Settings → License → License key**, then choose
+  **Save license key**. Line breaks are accepted; missing characters are not.
+- A key for another product is not a Viewer key. A changed or foreign signature is refused. Copy the
+  original again and check that it is the key for this build's publisher.
+- No connection is needed to enter or check a key. If the error remains, contact support with the
+  order reference and the error sentence. Keep the complete key out of public reports.
+
+A key this build cannot verify stays saved. Unreadable records are kept under a recovery name before
+a fresh trial starts. If Viewer says the record could not be preserved, keep the original, restore
+access to the data folder and relaunch. This session will not save over it. See
+[record recovery](../reference/license.md#stored-record).
+
+An ended trial never blocks work. **Hide** dismisses its bar until the next launch. If **License**
+is absent, this is the Store edition or a build without license configuration. See the
+[license guide](license.md).
+
 ## Settings stopped changing
 
 Open **Settings → Configuration** to see which line of the settings file is invalid; **Validate**

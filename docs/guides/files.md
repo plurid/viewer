@@ -83,6 +83,9 @@ stays at the end.
 | Copy a path in a dialog  | Click the path to select all of it, or click the copy button beside it    |
 | See size, dates and tags | **⌘I** (**Get info…**)                                                    |
 
+With a picture and no copied files on the clipboard, **Paste here** (**⌘V**) saves and selects
+`Pasted image.png`, using a unique name when needed. **Undo file operation** moves it to the Trash.
+
 A copy on the same disk is instant: on APFS, Viewer clones the file, so the copy shares the
 original's storage until either one changes. Copies to another disk read and write every byte.
 

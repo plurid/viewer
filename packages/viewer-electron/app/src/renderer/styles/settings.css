@@ -29,6 +29,13 @@
   color: var(--muted);
   margin: 14px 0 0;
 }
+.license-key-field {
+  display: grid;
+  gap: var(--gap-inline);
+}
+.license-status {
+  overflow-wrap: anywhere;
+}
 .settings-reset {
   margin: 16px 0 0;
 }

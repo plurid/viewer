@@ -6,7 +6,7 @@ import { SpeechModels } from '../src/desktop/speech/models';
 import type { SpeechModel } from '../src/domain/speech/models';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
-const bytes = Buffer.from('Generated model weights — not a recognition engine.');
+const bytes = Buffer.from('Generated model weights, not a recognition engine.');
 const model: SpeechModel = {
   id: 'fixture-model',
   name: 'Generated model',

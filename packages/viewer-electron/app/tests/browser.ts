@@ -20,6 +20,7 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  license: (request) => invoke('license', request),
   dialog: async () => ({ prompt: null }),
   canvas: (request) => invoke('canvas', request),
   canvasLibrary: (request) => invoke('canvasLibrary', request),
@@ -232,6 +233,7 @@ const api: ViewerAPI = {
   copyPaths: (paths) =>
     copyBrowserPaths(paths, () => invoke('copyPaths', paths), navigator.clipboard),
   clipboardRead: () => invoke('clipboardRead'),
+  clipboardPaste: (destination) => invoke('clipboardPaste', destination),
   fileDropPaths: async () => [],
   volumesList: () => invoke('volumesList'),
   trashList: (folderID) => invoke('trashList', folderID),

@@ -16,7 +16,7 @@ const settingsEdits: Readonly<Record<string, EditingAction | undefined>> = {
 export async function dispatchApplicationCommand<Window extends MenuWindow>(
   command: string,
   host: {
-    openSettings(): Promise<void>;
+    openSettings(focus?: string): Promise<void>;
     newWindow(): Promise<void>;
     checkForUpdates(): Promise<void>;
     acknowledgements(): Promise<void>;
@@ -27,6 +27,7 @@ export async function dispatchApplicationCommand<Window extends MenuWindow>(
 ): Promise<void> {
   // Application actions cannot depend on a renderer or a focused native window.
   if (command === 'settings') return host.openSettings();
+  if (command === 'license-key') return host.openSettings('license');
   if (command === 'new-native-window') return host.newWindow();
   if (command === 'check-for-updates') return host.checkForUpdates();
   if (command === 'acknowledgements') return host.acknowledgements();

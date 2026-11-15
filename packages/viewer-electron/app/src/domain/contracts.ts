@@ -1,4 +1,5 @@
 import type { ReconstructionRequest, ReconstructionReply } from './canvases/reconstruction';
+import type { LicenseRequest, LicenseStatus } from './license/license';
 import type { DialogPrompt, DialogRequest, DialogReply } from './dialogs';
 import type { CanvasDocument, CanvasRequest, CanvasReply } from './canvases/document';
 import type { CanvasLibraryRequest, CanvasLibraryReply } from './canvases/library';
@@ -8,6 +9,7 @@ import type { SpokenAnswer, SpokenRequest } from './command-line/spoken';
 import type { ModelSuggestionRequest, ModelSuggestions } from './suggestions/model';
 import type { FileGuess } from './files/file-guess';
 import type { FileIdentity } from './files/signatures';
+import type { ClipboardContent, ClipboardPaste } from './files/clipboard';
 import type { ReviewState, GitReviewRequest, GitReviewReply } from './comparison/review';
 import type { SessionRequest, SessionReply } from './agents/sessions';
 import type { FlushResult } from './persistence/flush';
@@ -502,6 +504,7 @@ export interface UIPreferences {
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
+  license?: LicenseStatus;
   gitActionsAvailable?: boolean;
   launches?: LaunchRequest[];
   freshSession?: boolean;
@@ -560,6 +563,8 @@ export interface OperationRequest {
    * so a save is not offered for Redo. */
   textSHA256?: string;
   textBytes?: number;
+  /** A clipboard picture's encoded length; its bytes stay in memory and cannot be redone. */
+  imageBytes?: number;
 }
 /** The operations a renderer may start; a text save (`rewrite`) belongs to the editing service. */
 export const rendererOperationKinds = [
@@ -673,6 +678,7 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'license'; status: LicenseStatus }
   | { type: 'dialog'; prompt: DialogPrompt | null }
   | { type: 'speech-changed' }
   | { type: 'speech'; event: SpeechSessionEvent }
@@ -731,6 +737,7 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  license(request: LicenseRequest): Promise<LicenseStatus | undefined>;
   dialog(request: DialogRequest): Promise<DialogReply>;
   speech(request: SpeechRequest): Promise<SpeechReply>;
   createTask(input: TaskWorkflowInput): Promise<TaskWorkflowReply>;
@@ -949,7 +956,8 @@ export interface ViewerAPI {
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;
   clipboardWriteText(text: string): Promise<void>;
   copyPaths(paths: string[]): Promise<void>;
-  clipboardRead(): Promise<{ paths: string[]; cut: boolean } | null>;
+  clipboardRead(): Promise<ClipboardContent | null>;
+  clipboardPaste(destination: string): Promise<ClipboardPaste | null>;
   fileDropPaths(files: File[]): Promise<string[]>;
   fileDragStart(paths: string[]): Promise<void>;
   volumesList(): Promise<Volume[]>;

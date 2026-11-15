@@ -90,7 +90,7 @@ await writeFile(
 );
 const original = path.resolve(suppliedHTML ?? path.join(files, 'index.html'));
 const chairSample = (await readFile(original, 'utf8')).includes(
-  '<title>FORME — Chairs, considered.</title>',
+  '<title>FORME: Chairs, considered.</title>',
 );
 const hash = async (file: string) =>
   createHash('sha256')

@@ -13,8 +13,32 @@ import { macOSMinimum } from './native-build/macos-target';
 import { sourceHash } from './qualification/source';
 import { releaseFeedEndpoint, releaseNotes, signingKey, writeSignedFeed } from './update-feed';
 import { httpsAddress } from '../src/desktop/updates/signature';
+import { licenseEndpoint } from '../src/desktop/license/signature';
+import { licenseConfiguration } from '../src/desktop/release';
+import type { LicenseConfiguration } from '../src/desktop/release';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
   exec = promisify(execFile);
+
+export function releaseLicenseConfiguration(
+  configuration: LicenseConfiguration = licenseConfiguration,
+): void {
+  licenseEndpoint(configuration);
+}
+
+/** Child gates and packagers have no reason to receive either publisher's signing material. */
+export function releaseEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      ([name]) =>
+        ![
+          'VIEWER_UPDATE_SIGNING_KEY',
+          'VIEWER_UPDATE_SIGNING_KEY_FILE',
+          'VIEWER_LICENSE_SIGNING_KEY',
+          'VIEWER_LICENSE_SIGNING_KEY_FILE',
+        ].includes(name),
+    ),
+  );
+}
 
 interface Notarization {
   status: string;
@@ -157,6 +181,7 @@ async function bundleValue(app: string, key: string): Promise<string> {
 async function main() {
   if (process.platform !== 'darwin' || process.arch !== 'arm64')
     throw new Error('The initial direct release targets Apple Silicon macOS.');
+  releaseLicenseConfiguration();
   const identity = process.env.VIEWER_DIRECT_IDENTITY?.trim(),
     profile = process.env.VIEWER_NOTARY_PROFILE?.trim();
   if (!identity || !profile)
@@ -189,7 +214,7 @@ async function main() {
     );
   const signedIdentity = row.trim().split(/\s+/)[1];
   // The signing key stays in this process; the gates and the packager never see it.
-  const { VIEWER_UPDATE_SIGNING_KEY: _key, ...environment } = process.env;
+  const environment = releaseEnvironment(process.env);
   for (const gate of releaseGates)
     await pnpm(gate, { ...environment, VIEWER_TEST_PRESERVE: '1', VIEWER_TEST_NO_REMOVAL: '1' });
   // The gates must leave the committed source as it was.

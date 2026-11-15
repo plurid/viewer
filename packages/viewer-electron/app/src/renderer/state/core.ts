@@ -1,5 +1,6 @@
 // The renderer state container: one immutable snapshot, change notification and saved-state patches.
 import { useSyncExternalStore } from 'react';
+import type { ClipboardContent } from '../../domain/files/clipboard';
 import {
   CURRENT_STATE_VERSION,
   type Bootstrap,
@@ -25,7 +26,7 @@ export interface ViewerState {
   operationsOpen: boolean;
   operationsHistory: boolean;
   acknowledgedJobs: string[];
-  clipboard: { paths: string[]; cut: boolean } | null;
+  clipboard: ClipboardContent | null;
   deletedWorkspace: { workspace: Workspace; index: number; replacement?: string } | null;
 }
 let current: ViewerState;

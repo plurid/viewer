@@ -140,6 +140,7 @@ const record = z
           .regex(/^[0-9a-f]{64}$/)
           .optional(),
         textBytes: count.optional(),
+        imageBytes: count.optional(),
       })
       .strict(),
     // Replace adds a Trash step beside each item's own step.

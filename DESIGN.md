@@ -593,6 +593,13 @@ explicit unpinning without substituting another action.
 A first run is quiet: the space toolbar and viewcube start off, the grid on, and the minimap appears
 once the space holds three planes.
 
+**The License Reminder Rule.** A configured direct build's 30-day trial is silent in the workspace;
+only About and Settings show days left. After it ends, keep every feature working and show a calm
+bar in normal flow with Buy Viewer, Enter license… and Hide. Hide lasts until the next launch,
+across windows and reloads. Never use a modal or delay. Store, unconfigured, headless, terminal CLI
+and MCP runs show none of this. License Key… names the menu and palette action; License names the
+Settings page, distinct from third-party notices.
+
 **The First-Run Tips Rule.** A new profile shows one card above its first folder, in the folder's
 own flow before any insight cards: Space previews the selected file, the palette's keys find any
 action, and a plane's title drags it. The card names the keys the person has, leaves out dragging

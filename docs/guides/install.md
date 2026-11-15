@@ -51,6 +51,21 @@ one back.
 Viewer asks for the microphone only when you start dictation, and for your local network only when a
 model endpoint you added is on it.
 
+### Trial and license key
+
+A configured direct build starts a quiet 30-day trial on first launch. **Viewer → About Viewer** and
+**Settings → License** show days left. After the trial all features keep working; a bar offers **Buy
+Viewer**, **Enter license…** and **Hide** until the next launch. A pay-once license key works
+offline. See [Try Viewer and enter a license key](license.md).
+
+The App Store edition and a direct build without license configuration have no trial or key UI.
+Updating or reinstalling with the same data folder keeps the trial dates and saved key.
+
+If a license record cannot be read, Viewer keeps it beside the new record under an
+`.unreadable-<time>-<id>` name before starting a fresh trial. If it cannot preserve the original, it
+keeps the existing copy and saves nothing over it. A key this build cannot verify also stays saved;
+enter a valid replacement in **Settings → License** or choose **Remove license key** to clear it.
+
 ## Update Viewer
 
 Viewer looks for a newer version once a day when it opens. When there is one, it says which version
@@ -73,13 +88,14 @@ The Mac App Store edition has no **Check for Updates…** item: the App Store up
 
 ## Where Viewer keeps its data
 
-| What                                            | Where                                       |
-| ----------------------------------------------- | ------------------------------------------- |
-| Settings, workspaces, notes, indexes, receipts  | `~/Library/Application Support/Viewer`      |
-| The editable configuration                      | `config.jsonc` in that folder               |
-| The diagnostic log                              | `Logs/diagnostics.log` in that folder       |
-| The `viewer` shell command, if you installed it | `~/.local/bin/viewer`                       |
-| App Store edition data                          | `~/Library/Containers/com.pluridviewer.app` |
+| What                                              | Where                                       |
+| ------------------------------------------------- | ------------------------------------------- |
+| Settings, workspaces, notes, indexes, receipts    | `~/Library/Application Support/Viewer`      |
+| The editable configuration                        | `config.jsonc` in that folder               |
+| Direct-build trial and saved key, when configured | `license-v1.json` in that folder            |
+| The diagnostic log                                | `Logs/diagnostics.log` in that folder       |
+| The `viewer` shell command, if you installed it   | `~/.local/bin/viewer`                       |
+| App Store edition data                            | `~/Library/Containers/com.pluridviewer.app` |
 
 Your own files stay where they are. The data folder holds Viewer's own records: indexes, preview
 caches and, when you choose them, recovery copies of reviewed changes.

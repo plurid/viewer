@@ -81,7 +81,7 @@ export async function licenseInventory() {
         if (license === 'Unknown' && content.startsWith('delicense\n')) license = 'delicense';
         notices.push({ file, sha256 });
         text.push(
-          `\n${'='.repeat(72)}\n${item.name} ${item.versions.join(', ')} — ${file}\n\n${content}\n`,
+          `\n${'='.repeat(72)}\n${item.name} ${item.versions.join(', ')}: ${file}\n\n${content}\n`,
         );
       }
     }

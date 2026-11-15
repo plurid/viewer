@@ -6,6 +6,7 @@ five minutes.
 | Guide                                             | You will                                                            |
 | ------------------------------------------------- | ------------------------------------------------------------------- |
 | [Install and update Viewer](install.md)           | Install the app, allow folder access, update or remove it           |
+| [Try Viewer and enter a license key](license.md)  | Use the trial, buy Viewer and save an offline license key           |
 | [Your first five minutes](getting-started.md)     | Open a folder, look inside a file, find things and actions          |
 | [Try the demo project](demo-project.md)           | Open the film's saved tools and compare results without a model key |
 | [Browse and organize](files.md)                   | Select, copy, rename, find, measure and restore files               |

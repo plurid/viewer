@@ -5,24 +5,28 @@ Viewer should remain easy for everyday work while gaining depth in the tools peo
 
 ## Next
 
-Fixes come before features, because a new person meets them first.
+A person has to be able to try Viewer, like its first hour and pay for it. The order follows that.
 
-1. **Make the laser-job check confirm what it finds.** In the last live evaluation the check found
+1. **Sell Viewer.** A free trial, then a license key bought once and checked on the Mac, with
+   nothing sent anywhere. After the trial Viewer keeps working and shows a reminder.
+   [The paid build](paid-build.md) has the rules and what stays out.
+2. **Close the first-hour gaps.** Paste a picture as a file, go to a folder by habit and a report
+   that is safe to share. Then Help that opens without a network, more archive formats and visible
+   tags. [File-manager gaps](file-manager-gaps.md) gives each one's current state.
+3. **Run the checks only a person can run.** Use Viewer as the only file manager for two days.
+   VoiceOver and keyboard-only passes through the main flows, dictation with a real microphone, one
+   request to each hosted provider, and native acceptance on an Intel Mac, which
+   [platform status](../reference/platforms.md) lists as open.
+4. **Make the laser-job check confirm what it finds.** In the last live evaluation the check found
    every planted problem, yet Viewer confirmed fewer than a third of them, and no hole pitch or
    thickness at all. It also asked for a review of about one requirement per run that was not a
    problem. Read the retained answers first. Then verify each requirement from the drawing's own
    text at the place the model points to, so a grade stops depending on how the model words its
    quote. [Answer and grading](../reference/fabrication.md#answer-and-grading) owns the rules.
-2. **Run the checks only a person can run.** VoiceOver and keyboard-only passes through the main
-   flows, dictation with a real microphone, one request to each hosted provider, and native
-   acceptance on an Intel Mac, which [platform status](../reference/platforms.md) lists as open.
-3. **Close the first-hour gaps.** Paste a picture as a file, go to a folder by habit and a report
-   that is safe to share. Then more archive formats, visible tags and Help that opens without a
-   network. [File-manager gaps](file-manager-gaps.md) gives each one's current state.
-4. **Finish the everyday media tasks.** Audio extraction as a direct action, file transcription with
+5. **Finish the everyday media tasks.** Audio extraction as a direct action, file transcription with
    reviewed subtitles, and a first [3D video preview](formats.md#stereoscopic-and-immersive-video).
-5. **Earn trust before asking for attention.** Publish how Viewer is built and tested, with measured
-   startup time, memory and idle energy for the release build, and offer a Homebrew cask beside the
+6. **Earn trust before asking for attention.** Publish how Viewer is built and tested, with measured
+   startup time, memory and idle energy for the release build, and offer a Homebrew tap beside the
    disk image.
 
 ## Make the existing experience dependable

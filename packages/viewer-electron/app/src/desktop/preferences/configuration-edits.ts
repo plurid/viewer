@@ -13,8 +13,8 @@ import {
  * Text edits element by element. A changed list was one edit, the whole value written
  * again, so every comment inside it went, those of unchanged items too; jsonc-parser's own removal
  * took the comments above the next item and broke a list written on one line. A list's items are
- * matched — by `id` when every item has a unique one, by value when all are plain values — and only
- * the ones that differ are removed, inserted or edited in place. An item owns the comment lines
+ * matched, by `id` when every item has a unique one and by value when all are plain values, and
+ * only the ones that differ are removed, inserted or edited in place. An item owns the comment lines
  * directly above it and the comment on its own line, and goes with them.
  */
 export type ConfigEdit =

@@ -60,6 +60,22 @@ const label = (id: string) => {
 };
 
 describe('a command for every setting', () => {
+  it('offers License Key only for a configured interactive build', async () => {
+    expect(windowCommands(actions).some((command) => command.id === 'license-key')).toBe(false);
+    initialize({
+      home: '/fixtures',
+      platform: 'darwin',
+      state: null,
+      locations: [],
+      openPaths: [],
+      license: { kind: 'trial', daysLeft: 30 },
+    });
+    const command = windowCommands(actions).find((item) => item.id === 'license-key')!;
+    expect(command.label).toBe('License Key…');
+    expect(command.when?.(context)).toBe(true);
+    await command.run(context);
+    expect(openSettings).toHaveBeenCalledWith('license');
+  });
   it('covers each catalogued setting, but those with commands of their own', () => {
     const ids = new Set(commands().map((command) => command.id.split('=')[0]));
     const own = ['ui.sidebar.visible', 'ui.titlebar.visible'];

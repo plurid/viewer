@@ -47,6 +47,7 @@ import {
   aliasName,
   copyTree,
   keepBothName,
+  numberedName,
   previousName,
   publish,
   syncDirectories,
@@ -56,6 +57,7 @@ import {
 import { guardDestination, outputName, sameItemAt, singleOutput } from './destinations';
 import { isActiveJob } from '../../domain/operations/jobs';
 import { errorMessage } from '../../domain/errors';
+import { MAX_CLIPBOARD_IMAGE_BYTES, checkClipboardImageSize } from '../../domain/files/clipboard';
 
 interface UndoStep {
   from: string;
@@ -85,6 +87,10 @@ interface Target {
   replaces?: Replaced;
 }
 interface Task {
+  /** Encoded clipboard content stays out of operation receipts. */
+  image?: Buffer;
+  /** Publication commits a picture even if cancellation races the native rename's reply. */
+  imagePublished?: boolean;
   reviewedFile?: ReviewedFile;
   /** Absent for the person's own. */
   actor?: OperationActor;
@@ -397,13 +403,34 @@ export class Operations {
       throw new Error(task.job.errors[0]?.message || 'The shell command was preserved.');
   }
 
+  createImage(destination: string, png: Buffer, actor: OperationActor = 'person'): string {
+    checkClipboardImageSize(png.length);
+    // Two maximum-size pictures bound queued memory while allowing a second paste behind work.
+    const retained = [...this.tasks.values()].reduce(
+      (bytes, task) => bytes + (task.image?.length ?? 0),
+      0,
+    );
+    if (retained + png.length > 2 * MAX_CLIPBOARD_IMAGE_BYTES)
+      throw new Error('Wait for a picture paste to finish or cancel one before pasting another.');
+    return this.startOperation(
+      { kind: 'mkfile', sources: [], destination, name: 'Pasted image.png' },
+      false,
+      undefined,
+      actor,
+      png,
+    );
+  }
+
   private startOperation(
     request: OperationRequest,
     redo = false,
     reviewedFile?: ReviewedFile,
     actor: OperationActor = 'person',
+    image?: Buffer,
   ): string {
     if (this.stopped) throw new Error('The file operation queue has closed.');
+    if (request.imageBytes !== undefined)
+      throw new Error('Paste a picture from the clipboard to create an image file.');
     if (
       request.kind === 'rewrite' ||
       request.textSHA256 !== undefined ||
@@ -499,7 +526,11 @@ export class Operations {
       }
     }
     // A PDF is one output from every source; other conversions create one file per image.
-    const task = this.add({ ...request, sources: roots }, singleOutput(request) ? 1 : roots.length);
+    const task = this.add(
+      { ...request, sources: roots, ...(image ? { imageBytes: image.length } : {}) },
+      singleOutput(request) ? 1 : roots.length,
+    );
+    task.image = image;
     task.reviewedFile = reviewedFile;
     if (actor === 'agent') task.actor = actor;
     this.queue.push(task);
@@ -697,7 +728,16 @@ export class Operations {
   cancel(id: string): void {
     const task = this.tasks.get(id);
     if (!task || ['completed', 'failed', 'cancelled'].includes(task.job.status)) return;
+    if (task.imagePublished) return;
     task.abort.abort();
+    task.image = undefined;
+    if (task.request.imageBytes !== undefined && task.job.status === 'queued') {
+      const index = this.queue.indexOf(task);
+      if (index >= 0) this.queue.splice(index, 1);
+      task.job.status = 'cancelled';
+      this.emit(task);
+      void this.checkpoint(task).catch((error) => this.stopAfterReceiptFailure(error));
+    }
     task.decision?.('cancel');
   }
   async quiesce(root: string): Promise<void> {
@@ -901,7 +941,7 @@ export class Operations {
       }
     // An agent approval's contents pins are not carried over: Redo is the person's own, pinned to
     // what Undo put back. A save kept no text to write again.
-    if (task.request.textSHA256 === undefined) {
+    if (task.request.textSHA256 === undefined && task.request.imageBytes === undefined) {
       task.redo = {
         ...task.request,
         expectedSources,
@@ -1235,6 +1275,7 @@ export class Operations {
       throw error;
     });
     if (!existing) return { path: destination };
+    if (task.request.imageBytes !== undefined) return { path: await numberedName(destination) };
     if (task.request.transform) return { path: await keepBothName(destination) };
     // Creating something new never replaces what is already there.
     let replaceable = !['mkdir', 'mkfile'].includes(task.request.kind);
@@ -1418,7 +1459,11 @@ export class Operations {
         current = task;
         this.active = task;
         this.settle();
-        await this.runTask(task);
+        try {
+          await this.runTask(task);
+        } finally {
+          task.image = undefined;
+        }
         current = undefined;
         this.active = undefined;
         this.settle();
@@ -1579,6 +1624,7 @@ export class Operations {
         await this.createNew(task, destination, (folder) => mkdir(folder));
         return {};
       case 'mkfile':
+        if (task.request.imageBytes !== undefined) return this.writeImage(task, destination);
         await this.createNew(task, destination, async (file) =>
           (await open(file, 'wx', 0o644)).close(),
         );
@@ -1593,6 +1639,28 @@ export class Operations {
       default:
         return { movedInPlace: await this.transfer(task, source, destination, move, replaced) };
     }
+  }
+  /** A picture's final name is published only after its complete staged contents are synced. */
+  private writeImage(task: Task, destination: string): Promise<Produced> {
+    return this.withStage(task, '', destination, { prefix: '.viewer-image-' }, async (staging) => {
+      await this.createNew(task, staging, async (file) => {
+        this.check(task);
+        const image = task.image!;
+        const output = await open(file, 'wx', 0o644);
+        try {
+          await output.writeFile(image, { signal: task.abort.signal });
+          this.check(task);
+          await output.sync();
+          this.check(task);
+          task.job.bytesDone = image.length;
+          task.job.bytesTotal = image.length;
+        } finally {
+          task.image = undefined;
+          await output.close();
+        }
+      });
+      return {};
+    });
   }
   /** A new folder or file, created inside its claim. Exclusive creation: an item that appeared
    * meanwhile is never touched. */
@@ -1749,6 +1817,7 @@ export class Operations {
       if (made === 'kept') return made;
       this.check(task);
       await this.publishReplacing(task, staging, destination, staged.replaced, staged.guard);
+      if (task.request.imageBytes !== undefined) task.imagePublished = true;
       return made;
     } finally {
       await this.disposeStage(task, stage, made === 'kept' ? staging : undefined);
@@ -1799,7 +1868,12 @@ export class Operations {
    */
   private async settleJob(task: Task, failure?: Failure): Promise<void> {
     const { job } = task;
-    job.status = task.abort.signal.aborted ? 'cancelled' : failure ? 'failed' : 'completed';
+    job.status =
+      task.abort.signal.aborted && !task.imagePublished
+        ? 'cancelled'
+        : failure
+          ? 'failed'
+          : 'completed';
     job.undoable = !!task.undo.length;
     if (task.unproven) job.detail = unprovenNote(task.unproven, job.undoable);
     job.current = undefined;
@@ -1816,6 +1890,7 @@ export class Operations {
   private stopAfterReceiptFailure(error: unknown, current?: Task): void {
     for (const task of this.tasks.values())
       if (task === current || isActiveJob(task.job)) {
+        task.image = undefined;
         task.job.status = 'failed';
         task.job.errors.push({
           path: task.job.current || task.job.destination || task.job.sources[0] || '',

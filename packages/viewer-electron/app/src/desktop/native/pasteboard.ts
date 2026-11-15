@@ -1,7 +1,13 @@
 import { clipboard } from 'electron';
 import { macFiles } from './macos-files';
+import type { MacFiles } from './macos-files';
+import type { ClipboardContent, ClipboardFiles } from '../../domain/files/clipboard';
+import { checkClipboardImageSize } from '../../domain/files/clipboard';
 import type { FileAccess } from '../files/file-access';
 import type { NativeSelections } from './native-selections';
+
+export type PasteboardContent = ClipboardFiles | { png: Buffer };
+type NativeClipboard = ReturnType<MacFiles['clipboardRead']>;
 
 /** Files on the system pasteboard and in drags. On macOS, only bookmarks the native
  * pasteboard itself provides can extend Viewer's folder access. */
@@ -29,10 +35,35 @@ export class Pasteboard {
     }
     return;
   }
-  async read(): Promise<{ paths: string[]; cut: boolean } | null> {
+  async read(): Promise<ClipboardContent | null> {
+    const files = await this.readFiles();
+    if (files) return files;
+    if (process.platform !== 'darwin') return null;
+    return (await clipboard.has('image/png')) ? { paths: [], cut: false, image: true } : null;
+  }
+  /** File previews on the pasteboard must never become separate image creations. */
+  async readForPaste(): Promise<PasteboardContent | null> {
+    const native = process.platform === 'darwin' ? macFiles().clipboardRead() : undefined;
+    const files = await this.readFiles(native);
+    if (files) return files;
+    if (process.platform !== 'darwin') return null;
+    const items = await clipboard.read();
+    const image = items.find((item) => item.types.includes('image/png'));
+    if (!image) return null;
+    // Electron exposes MIME types but no encoded size until getType has built the PNG Blob.
+    const png = await image.getType('image/png');
+    if (!png.size) return null;
+    checkClipboardImageSize(png.size);
+    const bytes = Buffer.from(await png.arrayBuffer());
+    // Electron's async read must still belong to the file-free native selection we checked.
+    if (native && macFiles().clipboardVersion() !== native.changeCount)
+      throw new Error('The clipboard changed; paste again.');
+    return { png: bytes };
+  }
+  private async readFiles(snapshot?: NativeClipboard): Promise<ClipboardFiles | null> {
     const value = this.clipboard;
     if (process.platform === 'darwin') {
-      const native = macFiles().clipboardRead();
+      const native = snapshot ?? macFiles().clipboardRead();
       const selection = this.selections.capture('clipboard', native.changeCount);
       if (!native.files.length) return null;
       // Only bookmarks obtained from the native pasteboard can confer access.

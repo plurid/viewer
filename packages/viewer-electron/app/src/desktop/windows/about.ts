@@ -23,14 +23,18 @@ export function installedRelease(): InstalledRelease {
   }
 }
 
-export function installAboutPanel(release: InstalledRelease): void {
+export function installAboutPanel(release: InstalledRelease, line?: string): void {
   app.setAboutPanelOptions({
     applicationName: 'Viewer',
     applicationVersion: release.version,
     version: release.build === undefined ? 'development' : String(release.build),
     copyright: applicationCopyright,
-    credits:
+    credits: [
+      line,
       'Viewer is built with Electron, React and other open-source software. Choose Viewer > Acknowledgements for their licenses.',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
   });
 }
 

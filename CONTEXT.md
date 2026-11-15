@@ -197,6 +197,19 @@ presentation have separate precedence.
 its Ed25519 signature matches the key in `desktop/release.ts`. A check never downloads or installs;
 Download opens the https disk image in the browser. The Store edition never checks.
 
+**License keys and trials** belong to `domain/license` and `desktop/license`. The domain owns the
+payload, status and 30-day clock arithmetic; the desktop verifies exact-byte Ed25519 signatures and
+stores `license-v1.json` in `userData`. The record retains the earliest start, latest observed time
+and key, never a paid flag. Unreadable files are preserved for recovery, and a key this build cannot
+verify stays saved. Status reads checkpoint only key or visible status changes or an hour of clock
+advance. Both fields of `licenseConfiguration` in `desktop/release.ts` ship empty; incomplete
+configuration, the Store edition and headless CLI/MCP runs have no license UI or record. Settings
+alone may enter or remove a key. `renderer/app/LicenseReminder.tsx` shows the ended-trial bar; its
+per-launch hidden state belongs to the desktop process. `tools/license-key.ts` issues keys without a
+server and keeps the private key outside the repository. Release and issuance checks reject partial
+or invalid license configuration. See the
+[offline license decision](docs/adr/0016-offline-license-keys.md).
+
 `CURRENT_STATE_VERSION` and migration functions in domain/persistence code are authoritative for
 saved-state versions. Durable save barriers coordinate document and window shutdown; invalid files
 and migration inputs are preserved for recovery.

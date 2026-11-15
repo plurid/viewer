@@ -3,6 +3,8 @@ import { columnCommands } from './columns';
 import { folderCommandPath } from './folder-target';
 import { copyPathCommand } from './copy-path';
 import { calculateSize } from '../explorer/sizes';
+import { reloadFolder } from '../explorer/useFolder';
+import { browseSession, updateBrowseSession } from '../workspace/sessions';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath, baseName } from '../../domain/workspaces/planes';
 import { convertibleImage, inConversionFormat } from '../../domain/operations/image-conversions';
@@ -13,6 +15,9 @@ import {
   navigate,
   quickPreview,
   refreshClipboard,
+  pasteClipboard,
+  report,
+  settledJob,
   folderPresentation,
   updateFolderPresentation,
   updatePane,
@@ -365,16 +370,48 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       icon: 'copy',
       aliases: ['ps'],
       shortcut: '⌘V',
-      when: (context) => folder(context) && !!context.clipboard?.paths.length,
+      when: (context) =>
+        folder(context) && !!(context.clipboard?.paths.length || context.clipboard?.image),
       run: async (context) => {
-        await refreshClipboard();
-        const clipboard = getState().clipboard;
-        if (clipboard)
-          await window.viewer.operate({
-            kind: clipboard.cut ? 'move' : 'copy',
-            sources: clipboard.paths,
-            destination: context.directory,
-          });
+        const origin =
+          context.paneID && context.folder
+            ? browseSession(context.paneID, context.folder.path)
+            : undefined;
+        const selection = origin?.selection;
+        const cursor = origin?.cursor;
+        const unchanged = () => {
+          const space = getState().saved.workspaces.find(
+            (space) => space.id === context.workspaceID,
+          );
+          const pane = space?.panes.find((pane) => pane.id === context.paneID);
+          if (!origin || pane?.type !== 'folder' || pane.path !== context.folder?.path)
+            return false;
+          return (
+            browseSession(pane.id, pane.path) === origin &&
+            origin.selection === selection &&
+            origin.cursor === cursor &&
+            (pane.mode !== 'columns' || origin.columnDirectory === context.directory)
+          );
+        };
+        const pasted = await pasteClipboard(context.directory!);
+        if (!pasted?.image || !origin) return;
+        // A queued job must not hold the command open or replace a later selection.
+        void settledJob(pasted.id)
+          .then(async (job) => {
+            const output = job.status === 'completed' ? job.completed[0]?.destination : undefined;
+            if (!output || !unchanged()) return;
+            const entries = await reloadFolder(context.directory!);
+            const created = entries.find((entry) => entry.path === output);
+            if (!created || !unchanged()) return;
+            origin.cache.set(created.path, created);
+            updateBrowseSession(context.paneID!, origin.path, {
+              selection: [created.path],
+              anchor: created.path,
+              cursor: created.path,
+              ...(context.folder?.mode === 'columns' ? { columnScope: context.directory } : {}),
+            });
+          })
+          .catch(report);
       },
     },
     {
@@ -387,7 +424,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       run: async (context) => {
         await refreshClipboard();
         const clipboard = getState().clipboard;
-        if (clipboard)
+        if (clipboard?.paths.length)
           await window.viewer.operate({
             kind: 'move',
             sources: clipboard.paths,

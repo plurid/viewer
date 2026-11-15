@@ -8,11 +8,10 @@ behavior is in the [capability reference](../reference/capabilities.md).
 ## Small additions
 
 Each is about a day of work, and each is something a person meets in the first hour. Start with the
-first three.
+first two.
 
 | Feature                        | Viewer today                                                                                                                              | Proposal                                                                                                                                                          |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Paste a picture as a file      | **Paste here** takes copied files. A copied screenshot or picture pastes nothing.                                                         | When the clipboard holds a picture and no files, write `Pasted image.png` into the folder as an ordinary job with Undo.                                           |
 | Go to a folder by habit        | Viewer keeps the last 50 folders, newest first, and the sidebar shows 8. Nothing counts how often a folder is used.                       | Rank visited folders by how often and how recently they were opened, and match part of a name in **Go to folder…** and ⌘K.                                        |
 | A report that is safe to share | **Help → Show Diagnostic Log** reveals a local log, and **Report an Issue…** opens GitHub. Names and paths have to be edited out by hand. | **Copy report**: Markdown with the Viewer version, macOS, hardware and recent failures, with the user name, home folder, computer name and network names removed. |
 | Recent files                   | Only folders are remembered.                                                                                                              | A **Recent files** list of what was opened or saved in Viewer, kept on this Mac.                                                                                  |

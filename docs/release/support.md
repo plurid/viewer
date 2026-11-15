@@ -15,6 +15,18 @@ later planes. Settings → Configuration opens the commented JSONC configuration
 validation or edit conflicts. Settings → Space controls plane toolbar buttons. List column headers
 and the View menu control visible fields and widths.
 
+## Trial and license key
+
+Configured direct builds offer a quiet 30-day trial and a pay-once key. Open **Viewer → License
+Key…** or **Settings → License** to buy or enter the key. The purchase page states the price. Viewer
+checks keys offline. All features keep working after the trial; **Hide** dismisses the reminder
+until the next launch.
+
+For a key error, copy the complete original from the purchase and try again. Contact support with
+the order reference and the error sentence if it is still refused. Do not post the key publicly. The
+Store edition and an unconfigured build have no License page. See the
+[license guide](../guides/license.md).
+
 ## Folder access
 
 In the App Store edition, use **Allow folder access…** or Settings → Permissions when macOS

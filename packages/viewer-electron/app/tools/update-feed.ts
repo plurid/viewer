@@ -2,7 +2,7 @@
  * one. The private key never enters the repository; release tooling reads it from the environment. */
 import { createPrivateKey, generateKeyPairSync, sign } from 'node:crypto';
 import type { KeyObject } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { feedLimits, updateFeedSchema } from '../src/domain/updates/feed';
@@ -16,34 +16,61 @@ import { macOSMinimum } from './native-build/macos-target';
 
 export const feedFile = 'viewer-update.json';
 
-/** `VIEWER_UPDATE_SIGNING_KEY` holds the PEM text, or `VIEWER_UPDATE_SIGNING_KEY_FILE` its path. */
-export async function signingKey(env: NodeJS.ProcessEnv): Promise<KeyObject> {
-  const text = env.VIEWER_UPDATE_SIGNING_KEY?.trim();
-  const file = env.VIEWER_UPDATE_SIGNING_KEY_FILE?.trim();
-  if (text && file)
-    throw new Error('Set VIEWER_UPDATE_SIGNING_KEY or VIEWER_UPDATE_SIGNING_KEY_FILE, not both.');
-  if (!text && !file)
+export type SigningKeyVariable = 'VIEWER_UPDATE_SIGNING_KEY' | 'VIEWER_LICENSE_SIGNING_KEY';
+
+async function signingKeyPath(
+  file: string,
+  variable: SigningKeyVariable,
+  creating = false,
+): Promise<void> {
+  if (!path.isAbsolute(file))
     throw new Error(
-      'Set VIEWER_UPDATE_SIGNING_KEY_FILE to the absolute path of the update signing key (pnpm updates:keys makes one).',
+      creating
+        ? 'The private key path argument must be absolute.'
+        : `${variable}_FILE must be an absolute path.`,
     );
-  if (file && !path.isAbsolute(file))
-    throw new Error('VIEWER_UPDATE_SIGNING_KEY_FILE must be an absolute path.');
+  if (variable !== 'VIEWER_LICENSE_SIGNING_KEY') return;
+  const repository = await realpath(fileURLToPath(new URL('../../../../', import.meta.url)));
+  const resolved = creating
+    ? path.join(await realpath(path.dirname(file)), path.basename(file))
+    : await realpath(file);
+  const relative = path.relative(repository, resolved);
+  if (!relative || (!relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)))
+    throw new Error('Keep the license signing key outside the repository.');
+}
+
+/** The named environment variable holds PEM text; its `_FILE` counterpart holds an absolute path. */
+export async function signingKey(
+  env: NodeJS.ProcessEnv,
+  variable: SigningKeyVariable = 'VIEWER_UPDATE_SIGNING_KEY',
+): Promise<KeyObject> {
+  const text = env[variable]?.trim();
+  const file = env[variable + '_FILE']?.trim();
+  const name = variable === 'VIEWER_LICENSE_SIGNING_KEY' ? 'license' : 'update';
+  if (text && file) throw new Error(`Set ${variable} or ${variable}_FILE, not both.`);
+  if (!text && !file)
+    throw new Error(`Set ${variable}_FILE to the absolute path of the ${name} signing key.`);
+  if (file) await signingKeyPath(file, variable);
   let key: KeyObject;
   try {
     key = createPrivateKey(text ?? (await readFile(file!, 'utf8')));
   } catch {
-    throw new Error('The update signing key could not be read as a PEM private key.');
+    throw new Error(`The ${name} signing key could not be read as a PEM private key.`);
   }
   if (key.asymmetricKeyType !== 'ed25519')
-    throw new Error('The update signing key must be an Ed25519 key.');
+    throw new Error(`The ${name} signing key must be an Ed25519 key.`);
   return key;
+}
+
+export function signBytes(bytes: Uint8Array, key: KeyObject): Buffer {
+  return sign(null, bytes, key);
 }
 
 /** The feed bytes and their base64 signature, as the app reads them. */
 export function signFeed(feed: UpdateFeed, key: KeyObject): { bytes: Buffer; signature: string } {
   const bytes = Buffer.from(JSON.stringify(updateFeedSchema.parse(feed), null, 2) + '\n');
   if (bytes.byteLength > feedLimits.feed) throw new Error('The update feed is too large.');
-  return { bytes, signature: sign(null, bytes, key).toString('base64') + '\n' };
+  return { bytes, signature: signBytes(bytes, key).toString('base64') + '\n' };
 }
 
 /** Refuses a release whose feed this build could not read: no feed, or a key that does not
@@ -102,8 +129,11 @@ export async function writeSignedFeed(
 }
 
 /** A new key pair. The private key file is new, readable by its owner only. */
-export async function createSigningKeys(file: string): Promise<string> {
-  if (!path.isAbsolute(file)) throw new Error('Give an absolute path for the private key.');
+export async function createSigningKeys(
+  file: string,
+  variable: SigningKeyVariable = 'VIEWER_UPDATE_SIGNING_KEY',
+): Promise<string> {
+  await signingKeyPath(file, variable, true);
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   await writeFile(file, privateKey.export({ format: 'pem', type: 'pkcs8' }), {
     flag: 'wx',

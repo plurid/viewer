@@ -21,6 +21,8 @@ import { Loading } from '../primitives';
 import type { SettingsEditor } from './editor';
 import { CatalogSettings } from './CatalogSettings';
 import { NavigationSettings } from './NavigationSettings';
+import { LicenseSettings } from './LicenseSettings';
+import type { LicenseStatus } from '../../../domain/license/license';
 import { SearchSettings } from './SearchSettings';
 import { RecipeSettings } from './RecipeSettings';
 import { AgentSettings } from './AgentSettings';
@@ -36,6 +38,7 @@ const noThemes = { themes: [], theme: { dark: '', light: '' } };
 export function SettingsWindow() {
   const [commandDraft, setCommandDraft] = useState<CustomAction>();
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
+  const [license, setLicense] = useState<LicenseStatus>();
   const [category, setCategory] = useState('Browsing');
   const [query, setQuery] = useState('');
   const search = useRef<HTMLInputElement>(null);
@@ -44,13 +47,15 @@ export function SettingsWindow() {
   const [focused, setFocused] = useState<{ path: string; at: number } | null>(null);
   const show = (path: string) => {
     const section =
-      path === 'settings.providers'
-        ? 'Models'
-        : path === 'settings.speech'
-          ? 'Speech'
-          : path === 'settings.customActions'
-            ? 'Actions'
-            : undefined;
+      path === 'license'
+        ? 'License'
+        : path === 'settings.providers'
+          ? 'Models'
+          : path === 'settings.speech'
+            ? 'Speech'
+            : path === 'settings.customActions'
+              ? 'Actions'
+              : undefined;
     if (section) {
       setQuery('');
       setCategory(section);
@@ -80,6 +85,8 @@ export function SettingsWindow() {
       error: setError,
     });
   useEffect(() => {
+    let live = true;
+    let licenseReceived = false;
     const readDraft = () => {
       void window.viewer
         .commandDraft?.()
@@ -96,8 +103,9 @@ export function SettingsWindow() {
         // the desktop passes the last category in, kept with the window's frame
         const saved = new URLSearchParams(window.location.search).get('category') ?? '';
         setCategory(
-          categories.find((category) => category.toLowerCase() === saved.toLowerCase()) ||
-            'Browsing',
+          [...categories, 'License'].find(
+            (category) => category.toLowerCase() === saved.toLowerCase(),
+          ) || 'Browsing',
         );
         const focus = new URLSearchParams(window.location.search).get('focus');
         if (focus) show(focus);
@@ -105,13 +113,24 @@ export function SettingsWindow() {
       })
       .catch((error) => setError(error.message));
     void window.viewer
+      .license({ kind: 'status' })
+      .then((value) => {
+        if (live && !licenseReceived) setLicense(value);
+      })
+      .catch((failure) => {
+        if (live) setError(errorMessage(failure));
+      });
+    void window.viewer
       .sessionKeys?.()
       .then(receiveSessionKeys)
       .catch(() => {});
-    return window.viewer.onEvent((event) => {
+    const stop = window.viewer.onEvent((event) => {
       if (event.type === 'service-error') setError(event.message);
       if (event.type === 'settings') accept(event.snapshot);
-      else if (event.type === 'session-keys') receiveSessionKeys(event.session);
+      else if (event.type === 'license') {
+        licenseReceived = true;
+        setLicense(event.status);
+      } else if (event.type === 'session-keys') receiveSessionKeys(event.session);
       if (event.type === 'settings-focus') {
         if (event.path) show(event.path);
         else {
@@ -131,6 +150,10 @@ export function SettingsWindow() {
           .catch((error) => setError(errorMessage(error)));
       }
     });
+    return () => {
+      live = false;
+      stop();
+    };
   }, []);
   const ready = !!snapshot;
   useEffect(() => {
@@ -185,15 +208,16 @@ export function SettingsWindow() {
     );
   const settings = snapshot.settings;
   const editor: SettingsEditor = { snapshot, patch, patches, save: enqueue, error: setError };
+  const shownCategory = category === 'License' && !license ? 'Browsing' : category;
   const definitions = settingCatalog.filter((item) =>
     query
       ? (item.label + ' ' + item.category + ' ' + item.detail + ' ' + item.section)
           .toLowerCase()
           .includes(query.toLowerCase())
-      : item.category === category,
+      : item.category === shownCategory,
   );
   const discover = settingsDiscovery(settings, query);
-  const page = !query && category;
+  const page = !query && shownCategory;
   return (
     <div className="settings-window">
       <aside className="settings-navigation">
@@ -208,10 +232,10 @@ export function SettingsWindow() {
           />
         </div>
         <nav aria-label="Settings categories">
-          {categories.map((item) => (
+          {(license ? [...categories, 'License'] : categories).map((item) => (
             <button
               key={item}
-              className={!query && category === item ? 'selected' : ''}
+              className={!query && shownCategory === item ? 'selected' : ''}
               onClick={() => selected(item)}
             >
               {item}
@@ -221,7 +245,7 @@ export function SettingsWindow() {
       </aside>
       <main className="settings-page" key={query ? 'search' : category}>
         <header>
-          <h1>{query ? 'Search results' : category}</h1>
+          <h1>{query ? 'Search results' : shownCategory}</h1>
         </header>
         {error && (
           <p className="settings-error" role="alert">
@@ -244,17 +268,18 @@ export function SettingsWindow() {
             </button>
           ))}
         {!query && category === 'Permissions' && <FilePermissions error={setError} />}
-        {!query && category === 'Privacy' && <PrivacyInformation />}
+        {!query && category === 'Privacy' && <PrivacyInformation showLicense={!!license} />}
         <CatalogSettings editor={editor} definitions={definitions} query={query} />
         {page === 'Navigation' && <NavigationSettings editor={editor} />}
+        {page === 'License' && license && (
+          <LicenseSettings status={license} onChange={setLicense} />
+        )}
         {page === 'Search' && <SearchSettings editor={editor} />}
         {!query && category === 'Models' && (
           <ModelSettings snapshot={snapshot} save={enqueue} error={setError} />
         )}
         {page === 'Speech' && <SpeechSettings shortcut={settings.shortcuts.dictate} />}
-        {!query && category === 'Browsing' && (
-          <FolderOverrideSettings snapshot={snapshot} save={patches} />
-        )}
+        {page === 'Browsing' && <FolderOverrideSettings snapshot={snapshot} save={patches} />}
         {!query && category === 'Terminals' && (
           <TerminalSettings snapshot={snapshot} save={enqueue} />
         )}

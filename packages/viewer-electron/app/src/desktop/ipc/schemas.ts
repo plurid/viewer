@@ -1,4 +1,5 @@
 import { reconstructionRequestSchema } from '../../domain/canvases/reconstruction';
+import { licenseLimits } from '../../domain/license/license';
 import { dialogRequestSchema } from '../../domain/dialogs';
 import { canvasRequestSchema } from '../../domain/canvases/document';
 import { canvasLibraryRequestSchema } from '../../domain/canvases/library';
@@ -218,6 +219,14 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export const schemas = {
+  license: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('status'), hideReminder: z.boolean().optional() }).strict(),
+      z.object({ kind: z.literal('enter'), key: z.string().max(licenseLimits.key) }).strict(),
+      z.object({ kind: z.literal('remove') }).strict(),
+      z.object({ kind: z.literal('buy') }).strict(),
+    ]),
+  ]),
   dialog: z.tuple([dialogRequestSchema]),
   speech: z.tuple([speechRequestSchema]),
   createTask: z.tuple([taskWorkflowInputSchema]),
@@ -794,6 +803,7 @@ export const schemas = {
   clipboardWriteText: z.tuple([z.string().max(16 * 1024 * 1024)]),
   copyPaths: z.tuple([z.array(localPath).min(1).max(10000)]),
   clipboardRead: z.tuple([]),
+  clipboardPaste: z.tuple([localPath]),
   fileDropPaths: z.tuple([z.array(localPath).max(10000)]),
   fileDragStart: z.tuple([z.array(localPath).min(1).max(10000)]),
   volumesList: z.tuple([]),
@@ -839,6 +849,7 @@ export const schemas = {
  * provider's model data permission and the ⌘Q hint. The workspace window receives every event.
  */
 export const settingsEvents: readonly DesktopEvent['type'][] = [
+  'license',
   'dialog',
   'speech-changed',
   'settings',
@@ -853,6 +864,7 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  license: 'both',
   dialog: 'both',
   speech: 'both',
   createTask: 'viewer',
@@ -1019,6 +1031,7 @@ export const methodWindows = {
   clipboardWriteText: 'both',
   copyPaths: 'viewer',
   clipboardRead: 'viewer',
+  clipboardPaste: 'viewer',
   fileDropPaths: 'viewer',
   fileDragStart: 'viewer',
   volumesList: 'viewer',

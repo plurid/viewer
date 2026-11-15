@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FileEntry } from '../src/domain/contracts';
+import type { FileEntry, OperationJob } from '../src/domain/contracts';
+import { browseSession, clearSessions } from '../src/renderer/workspace/sessions';
 import {
   CommandRegistry,
   rankCommands,
@@ -21,6 +22,7 @@ import {
   initialize,
   refreshClipboard,
   receiveSettings,
+  receiveJob,
   rememberCommand,
 } from '../src/renderer/state/store';
 
@@ -53,11 +55,29 @@ const actions: FolderActions = {
 };
 const operate = vi.fn();
 const save = vi.fn();
+const pictureJob = (status: OperationJob['status']): OperationJob => ({
+  id: 'pending-picture',
+  revision: status === 'queued' ? 1 : 2,
+  kind: 'mkfile',
+  status,
+  sources: [],
+  destination: '/fixtures',
+  bytesDone: 0,
+  bytesTotal: 0,
+  itemsDone: status === 'completed' ? 1 : 0,
+  itemsTotal: 1,
+  completed:
+    status === 'completed' ? [{ source: '', destination: '/fixtures/Pasted image.png' }] : [],
+  errors: [],
+  errorCount: 0,
+  undoable: status === 'completed',
+});
 let context: CommandContext;
 let registry: CommandRegistry;
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  clearSessions();
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
     viewer: {
@@ -65,6 +85,8 @@ beforeEach(() => {
       operate,
       copyPaths: vi.fn(async () => {}),
       clipboardRead: vi.fn(async () => null),
+      clipboardPaste: vi.fn(async () => null),
+      list: vi.fn(async () => ({ entries: [] })),
     },
   });
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
@@ -362,6 +384,147 @@ describe('contextual commands', () => {
     await refreshClipboard();
     expect(getState().clipboard).toBeNull();
   });
+  it('offers Paste here for a picture and keeps Move copied items here for files', async () => {
+    context = { ...context, clipboard: { paths: [], cut: false, image: true } };
+    const paste = folderCommands(actions).find((command) => command.id === 'paste')!;
+    const move = folderCommands(actions).find((command) => command.id === 'paste-move')!;
+    expect(paste.when(context)).toBe(true);
+    expect(move.when(context)).toBe(false);
+    for (const directory of ['/Volumes/External', '/fixtures/granted'])
+      expect(paste.when({ ...context, directory })).toBe(true);
+    expect(paste.when({ ...context, clipboard: null })).toBe(false);
+    await registry.invoke('paste', { paneID: context.paneID });
+    expect(window.viewer.clipboardPaste).toHaveBeenCalledExactlyOnceWith(context.directory);
+    expect(window.viewer.clipboardRead).not.toHaveBeenCalled();
+  });
+  it('does not offer folder Paste in a preview context without a folder', () => {
+    const paste = folderCommands(actions).find((command) => command.id === 'paste')!;
+    expect(
+      paste.when({
+        ...context,
+        scope: 'preview',
+        folder: undefined,
+        clipboard: { paths: [], cut: false, image: true },
+      }),
+    ).toBe(false);
+  });
+  it('does not move a picture when a previously copied file leaves the clipboard', async () => {
+    context = { ...context, clipboard: { paths: ['/fixtures/source'], cut: false } };
+    vi.mocked(window.viewer.clipboardRead).mockResolvedValueOnce({
+      paths: [],
+      cut: false,
+      image: true,
+    });
+    await registry.invoke('paste-move', { paneID: context.paneID });
+    expect(operate).not.toHaveBeenCalled();
+    expect(window.viewer.clipboardPaste).not.toHaveBeenCalled();
+  });
+  it('finishes the paste command while its picture is still queued', async () => {
+    context = { ...context, clipboard: { paths: [], cut: false, image: true } };
+    receiveJob(pictureJob('queued'));
+    vi.mocked(window.viewer.clipboardPaste).mockResolvedValueOnce({
+      id: 'pending-picture',
+      image: true,
+    });
+    let finished = false;
+    const command = registry.invoke('paste', { paneID: context.paneID }).then(() => {
+      finished = true;
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(finished).toBe(true);
+      expect(getState().jobs[0]?.status).toBe('queued');
+    } finally {
+      receiveJob(pictureJob('cancelled'));
+      await command;
+    }
+  });
+  it.each(['queued', 'listing'] as const)(
+    'keeps a selection changed while the picture was %s',
+    async (phase) => {
+      const pane = context.folder!;
+      const session = browseSession(pane.id, pane.path);
+      session.selection = ['/fixtures/one.txt'];
+      session.cursor = '/fixtures/one.txt';
+      context = { ...context, clipboard: { paths: [], cut: false, image: true } };
+      receiveJob(pictureJob('queued'));
+      vi.mocked(window.viewer.clipboardPaste).mockResolvedValueOnce({
+        id: 'pending-picture',
+        image: true,
+      });
+      let listed: (listing: Awaited<ReturnType<typeof window.viewer.list>>) => void = () => {};
+      vi.mocked(window.viewer.list).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            listed = resolve;
+          }),
+      );
+      const command = registry.invoke('paste', { paneID: pane.id });
+      await vi.advanceTimersByTimeAsync(0);
+      if (phase === 'listing') {
+        receiveJob(pictureJob('completed'));
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      session.selection = ['/fixtures/other.txt'];
+      session.cursor = '/fixtures/other.txt';
+      session.anchor = '/fixtures/other.txt';
+      if (phase === 'queued') receiveJob(pictureJob('completed'));
+      await vi.advanceTimersByTimeAsync(0);
+      listed({ path: '/fixtures', parent: '/', entries: [file('Pasted image.png')] });
+      await command;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(session.selection).toEqual(['/fixtures/other.txt']);
+      expect(session.cursor).toBe('/fixtures/other.txt');
+      expect(session.anchor).toBe('/fixtures/other.txt');
+    },
+  );
+  it.each([false, true])(
+    'selects the completed picture in its captured folder, columns=%s',
+    async (columns) => {
+      const pane = context.folder!;
+      if (columns) pane.mode = 'columns';
+      const session = browseSession(pane.id, pane.path);
+      const directory = columns ? '/fixtures/child' : pane.path;
+      session.columnDirectory = directory;
+      const created = {
+        ...file('Pasted image 2.png'),
+        path: directory + '/Pasted image 2.png',
+        parent: directory,
+      };
+      context = { ...context, directory, clipboard: { paths: [], cut: false, image: true } };
+      receiveJob({
+        id: 'picture-job',
+        revision: 1,
+        kind: 'mkfile',
+        status: 'completed',
+        sources: [],
+        destination: directory,
+        bytesDone: 10,
+        bytesTotal: 10,
+        itemsDone: 1,
+        itemsTotal: 1,
+        completed: [{ source: '', destination: created.path }],
+        errors: [],
+        errorCount: 0,
+        undoable: true,
+      });
+      vi.mocked(window.viewer.clipboardPaste).mockResolvedValueOnce({
+        id: 'picture-job',
+        image: true,
+      });
+      vi.mocked(window.viewer.list).mockResolvedValueOnce({
+        path: directory,
+        parent: '/fixtures',
+        entries: [created],
+      });
+      await registry.invoke('paste', { paneID: pane.id });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(session.selection).toEqual([created.path]);
+      expect(session.cursor).toBe(created.path);
+      expect(session.cache.get(created.path)).toEqual(created);
+      if (columns) expect(session.columnScope).toBe(directory);
+    },
+  );
   it('delegates native edit actions to text only while editing', () => {
     expect(textEditFor('copy', true)).toBe('copy');
     expect(textEditFor('undo-file', true)).toBe('undo');
@@ -392,7 +555,9 @@ describe('contextual commands', () => {
     });
     await refreshClipboard();
     context = { ...context, clipboard: getState().clipboard };
-    vi.mocked(window.viewer.clipboardRead).mockRejectedValueOnce(new Error('Allow folder access.'));
+    vi.mocked(window.viewer.clipboardPaste).mockRejectedValueOnce(
+      new Error('Allow folder access.'),
+    );
     await expect(registry.invoke('paste', { paneID: context.paneID })).rejects.toThrow(
       'Allow folder access.',
     );

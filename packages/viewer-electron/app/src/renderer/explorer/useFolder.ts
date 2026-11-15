@@ -97,6 +97,13 @@ export function refreshFolder(path: string): void {
   if (value.refresh) value.refresh();
   else load(path);
 }
+/** A newly created item's selection waits for every older in-flight listing to finish. */
+export async function reloadFolder(path: string): Promise<readonly FileEntry[]> {
+  const value = dataset(path);
+  load(path);
+  while (value.request) await value.request;
+  return listedEntries(path) ?? [];
+}
 export function useFolder(path: string) {
   const subscribe = useCallback(
     (listener: () => void) => {

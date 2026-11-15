@@ -35,15 +35,14 @@ export function httpsAddress(value: string, name: string): URL {
 }
 
 /** The embedded key: base64 of an Ed25519 SubjectPublicKeyInfo. */
-export function feedPublicKey(value: string): KeyObject {
+export function feedPublicKey(value: string, name = 'update public key'): KeyObject {
   let key: KeyObject;
   try {
     key = createPublicKey({ key: Buffer.from(value, 'base64'), format: 'der', type: 'spki' });
   } catch {
-    throw new Error('The update public key is not a valid key.');
+    throw new Error(`The ${name} is not a valid key.`);
   }
-  if (key.asymmetricKeyType !== 'ed25519')
-    throw new Error('The update public key must be an Ed25519 key.');
+  if (key.asymmetricKeyType !== 'ed25519') throw new Error(`The ${name} must be an Ed25519 key.`);
   return key;
 }
 

@@ -61,6 +61,7 @@ export {
   copyText,
   quickPreview,
   refreshClipboard,
+  pasteClipboard,
   stepQuickPreview,
   writeFileClipboard,
 } from './ui';

@@ -150,6 +150,18 @@ export async function keepBothName(destination: string): Promise<string> {
   while (await exists(candidate)) candidate = `${stem} copy ${++suffix}${ext}`;
   return candidate;
 }
+/**
+ * The free name for something newly created beside an existing one: "Pasted image 2.png", then
+ * "Pasted image 3.png". A copy keeps "copy" in its name; a new item only counts.
+ */
+export async function numberedName(destination: string): Promise<string> {
+  const ext = path.extname(destination);
+  const stem = destination.slice(0, destination.length - ext.length);
+  let suffix = 2;
+  let candidate = `${stem} ${suffix}${ext}`;
+  while (await exists(candidate)) candidate = `${stem} ${++suffix}${ext}`;
+  return candidate;
+}
 /** Where a replaced item is kept on a volume without a Trash: "Notes (previous).md", then
  * "Notes (previous 2).md". */
 export async function previousName(destination: string): Promise<string> {

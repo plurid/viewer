@@ -2,6 +2,7 @@
 import { focusFiles } from '../workspace/sessions';
 import { getState, update } from './core';
 import { noteFirstRunStep } from './preferences';
+import type { ClipboardPaste } from '../../domain/files/clipboard';
 
 export function quickPreview(
   paths: string | string[] | null,
@@ -47,6 +48,17 @@ export async function refreshClipboard(quiet = false): Promise<void> {
 export async function writeFileClipboard(paths: string[], cut: boolean): Promise<void> {
   await window.viewer.clipboardWrite(paths, cut);
   update({ ...getState(), clipboard: { paths, cut } });
+}
+/** Paste rereads in the desktop so its files-first decision and image bytes stay together. */
+export async function pasteClipboard(destination: string): Promise<ClipboardPaste | null> {
+  try {
+    const result = await window.viewer.clipboardPaste(destination);
+    if (!result) update({ ...getState(), clipboard: null });
+    return result;
+  } catch (error) {
+    update({ ...getState(), clipboard: null });
+    throw error;
+  }
 }
 /**
  * Copied text replaces a copied or cut file on the pasteboard, so Paste is read again. Settings

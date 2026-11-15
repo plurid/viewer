@@ -57,6 +57,55 @@ distribution, before any copies have shipped.
 With either value empty, Check for Updates says the build has no update feed and the launch check
 does nothing. A release refuses to start.
 
+### Set up offline license keys
+
+The direct build's trial and pay-once key use a separate Ed25519 key pair from the update feed.
+`licenseConfiguration` ships with both fields empty, disabling the feature. Configure both before
+selling a direct build. The Store edition ignores them and writes no license record.
+
+Before the release gates or packaging run, `pnpm direct:release` checks that the configuration is
+fully empty or contains a valid Ed25519 public key and an https purchase address without
+credentials. A partial or mistyped configuration stops the release with the field's name.
+`pnpm license:issue` applies the same check and requires both fields to be configured.
+
+1. Generate the license key pair at a new absolute path outside this repository:
+
+   ```sh
+   pnpm license:keys /absolute/path/viewer-license-key.pem
+   ```
+
+   The private file is readable by its owner only. The command prints only the public key. Back up
+   the private file privately; never put it in source control or a release artifact.
+
+2. Set `licenseConfiguration.publicKey` in `packages/viewer-electron/app/src/desktop/release.ts` to
+   the printed public key and `licenseConfiguration.purchaseURL` to the fixed https purchase page
+   without credentials. The purchase page owns the price and payment instructions.
+3. After a purchase, issue a key with its email and order reference:
+
+   ```sh
+   VIEWER_LICENSE_SIGNING_KEY_FILE=/absolute/path/viewer-license-key.pem \
+   pnpm license:issue buyer@example.invalid generated-order-reference
+   ```
+
+   `VIEWER_LICENSE_SIGNING_KEY` can hold PEM text instead. Set exactly one of the two variables.
+   File paths must be absolute and outside the repository, including resolved symbolic links. The
+   issuer refuses a private key that does not match the embedded public key. It prints the resulting
+   key to stdout and never prints the private key. Deliver the key privately to its buyer; payment
+   fulfillment is outside this tool.
+
+   Purchase emails may contain international characters. They must have exactly one `@`, text on
+   both sides, no whitespace or control characters, and at most 320 characters. The app verifies the
+   signed text without applying an email address pattern.
+
+4. Check a copied key offline with `pnpm license:verify '<key>'`. It uses the embedded public key
+   and prints the email, order and issue date. Commands report errors on stdout and exit with a
+   failure code.
+
+Release gates and packagers receive neither signing variable nor its file reference, for updates or
+license keys. No license check contacts a server. The only license-related navigation is **Buy
+Viewer**, which opens the configured page in the person's browser. See the
+[format and trial reference](../reference/license.md).
+
 ### Make a release
 
 1. Set `version` in `packages/viewer-electron/app/package.json`.
