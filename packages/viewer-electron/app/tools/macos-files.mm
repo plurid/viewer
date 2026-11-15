@@ -72,6 +72,7 @@ static bool sandboxedProcess() {
 #include "trash-ui.h"
 #include "file-coordination.h"
 #include "file-review.h"
+#include "exclusive-rename.h"
 
 static napi_value clipboardVersion(napi_env env, napi_callback_info info) {
   @autoreleasepool {
@@ -144,6 +145,7 @@ struct Work {
   NSString *result = nil;
   NSString *bookmark = nil;
   bool directory = false;
+  bool allowReservation = false;
   NSArray<NSDictionary *> *volumes = nil;
   NSArray<NSString *> *files = nil;
   NSArray<NSDictionary *> *dates = nil;
@@ -217,9 +219,12 @@ static void execute(napi_env, void *data) {
           return;
         }
         if (sandboxedProcess()) [coordinator itemAtURL:from willMoveToURL:to];
-        if (renameatx_np(AT_FDCWD, from.fileSystemRepresentation, AT_FDCWD, to.fileSystemRepresentation, RENAME_EXCL) != 0) {
-          task->errorNumber = errno;
-          task->error = [NSString stringWithFormat:@"Could not move the item: %s", std::strerror(errno)];
+        const auto moved = viewer_rename::move(from.fileSystemRepresentation, to.fileSystemRepresentation, task->allowReservation);
+        if (moved.error) {
+          task->errorNumber = moved.error;
+          task->error = [NSString stringWithFormat:@"Could not move the item: %s", std::strerror(moved.error)];
+          if (moved.cleanupError)
+            task->error = [task->error stringByAppendingFormat:@". The Viewer reservation could not be cleared at %@; the item was kept: %s", to.path, std::strerror(moved.cleanupError)];
         } else [coordinator itemAtURL:from didMoveToURL:to];
       }];
       if (!entered) task->error = error.localizedDescription ?: @"The file provider could not prepare this move.";
@@ -375,11 +380,13 @@ static napi_value fileWork(napi_env env, napi_callback_info info, Kind kind) {
 }
 static napi_value trash(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::Trash); }
 static napi_value pairWork(napi_env env, napi_callback_info info, Kind kind) {
-  size_t count = 3; napi_value args[3]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
+  size_t count = 4; napi_value args[4]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
   NSString *source = count >= 2 ? stringArg(env, args[0]) : nil;
   NSString *target = count >= 2 ? stringArg(env, args[1]) : nil;
   if (!source.isAbsolutePath || !target.isAbsolutePath) return invalid(env);
-  Work *task = new Work{}; task->kind = kind; task->file = source; task->targetFile = target; task->purpose = count > 2 ? stringArg(env, args[2]) : nil; return queue(env, task);
+  bool allowReservation = false;
+  if (kind == Kind::Rename && count > 3 && napi_get_value_bool(env, args[3], &allowReservation) != napi_ok) return invalid(env);
+  Work *task = new Work{}; task->kind = kind; task->file = source; task->targetFile = target; task->purpose = count > 2 ? stringArg(env, args[2]) : nil; task->allowReservation = allowReservation; return queue(env, task);
 }
 static napi_value linkMetadata(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::LinkMetadata); }
 static napi_value renameExclusive(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::Rename); }

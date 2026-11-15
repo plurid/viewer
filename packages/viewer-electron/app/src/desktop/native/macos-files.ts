@@ -59,7 +59,12 @@ export interface MacFiles {
    * source's attributes. Rejects with ENOTSUP or EXDEV where the volume cannot clone it. */
   clone(sourceFD: number, target: string): Promise<void>;
   copyLinkMetadata(source: string, target: string): Promise<void>;
-  renameExclusive(source: string, target: string, purpose?: string): Promise<void>;
+  renameExclusive(
+    source: string,
+    target: string,
+    purpose?: string,
+    allowReservation?: boolean,
+  ): Promise<void>;
   /** Rejects with ENOTSUP only for a volume without a Trash. */
   trash(file: string, purpose?: string, expected?: ReviewedFileExpectation): Promise<TrashReceipt>;
   volumes(): Promise<NativeVolume[]>;

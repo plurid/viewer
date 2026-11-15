@@ -15,6 +15,7 @@ import {
 import path from 'node:path';
 import { exists } from '../files/filesystem';
 import { macFiles } from '../native/macos-files';
+import { renameExclusive } from './rename-exclusive';
 import { fileCoordination } from '../files/file-coordination';
 import { removeEmptyDirectory, unlinkVerified } from './removal';
 import { errorMessage } from '../../domain/errors';
@@ -63,8 +64,8 @@ export async function syncDirectories(root: string): Promise<void> {
     }
   }
 }
-/** macOS uses a coordinated exclusive rename; other platforms use exclusive publication.
- * A concurrent writer can make publication fail, but its file is never overwritten. */
+/** macOS coordinates publication, with a verified reservation only where exclusive rename is
+ * unsupported. Other platforms use exclusive publication. */
 export async function publish(
   source: string,
   destination: string,
@@ -90,7 +91,7 @@ export async function publish(
         const info = await lstat(from);
         if (!info.isDirectory() && !info.isFile() && !info.isSymbolicLink())
           throw new Error('Special devices and sockets cannot be transferred.');
-        await macFiles().renameExclusive(from, to, fileCoordination.purpose());
+        await renameExclusive(from, to, fileCoordination.purpose(), signal);
       },
       job?.signal ?? signal,
     );

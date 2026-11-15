@@ -341,6 +341,61 @@ describe('pasting clipboard pictures', () => {
     expect(operations.all().find((job) => job.id === id)?.status).toBe('failed');
     expect(retainedImage(id) === undefined).toBe(true);
   });
+  it('keeps a queued picture cancellation receipt failure on that picture only', async () => {
+    const running = await holdQueue();
+    const cancelled = operations.createImage(destination, png);
+    const record = OperationLog.prototype.record;
+    const records = vi.spyOn(OperationLog.prototype, 'record').mockImplementation(function (
+      this: OperationLog,
+      receipt,
+      durable,
+    ) {
+      if (receipt.job.id === cancelled)
+        return Promise.reject(new Error('Cancellation receipt unavailable.'));
+      return record.call(this, receipt, durable);
+    });
+
+    operations.cancel(cancelled);
+
+    try {
+      await vi.waitFor(() =>
+        expect(operations.all().find((job) => job.id === cancelled)?.errors).toEqual([
+          expect.objectContaining({
+            message: expect.stringContaining('Cancellation receipt unavailable.'),
+          }),
+        ]),
+      );
+      expect(operations.all().find((job) => job.id === running)).toMatchObject({
+        status: 'collision',
+        errors: [],
+      });
+      expect(operations.all().find((job) => job.id === cancelled)?.status).toBe('cancelled');
+      expect(records.mock.calls.map(([receipt]) => receipt.job.id)).toEqual([cancelled]);
+    } finally {
+      operations.resolve(running, 'skip', false);
+    }
+    await operations.drained();
+    expect(operations.all().find((job) => job.id === running)?.status).toBe('completed');
+  });
+  it('releases picture bytes before announcing a failure that happened before writing', async () => {
+    await operations.close();
+    let heldAtFailure = false;
+    operations = new Operations(
+      trash,
+      (job) => {
+        if (job.status === 'failed') heldAtFailure = retainedImage(job.id) !== undefined;
+      },
+      undefined,
+      undefined,
+      async () => {
+        throw new Error('Destination unavailable.');
+      },
+    );
+    const id = operations.createImage(destination, png);
+    await operations.drained();
+    expect(operations.all().find((job) => job.id === id)?.status).toBe('failed');
+    expect(heldAtFailure).toBe(false);
+  });
   it('honours cancellation during a picture write and never publishes the staged bytes', async () => {
     let writing: () => void = () => {};
     const started = new Promise<void>((resolve) => {

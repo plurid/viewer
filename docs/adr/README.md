@@ -22,3 +22,4 @@ These records explain decisions that still shape the application. Feature usage 
 
 - [Generated tools own application logic](0015-generated-tool-host.md)
 - [Offline license keys for direct builds](0016-offline-license-keys.md)
+- [Publication without exclusive rename](0017-publication-without-exclusive-rename.md)

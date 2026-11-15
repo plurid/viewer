@@ -100,6 +100,24 @@ final name, so a failed or cancelled write leaves no partial picture there.
 - After a power failure, a copy made in the seconds before it can be incomplete even when it shows
   as finished; copy it again.
 
+### Volumes without exclusive rename
+
+On macOS, Viewer first attempts an exclusive rename. When the volume reports `ENOTSUP` or
+`EOPNOTSUPP`, as exFAT does, Viewer reserves the final name exclusively, verifies that its own
+reservation is still empty, then renames the complete item over it. The final name briefly holds an
+empty reservation. Existing files, folders and links are refused; a final link is never followed.
+Any other native rename error is reported without this fallback.
+
+A failed rename clears only Viewer's same, still-empty reservation. A changed entry is kept. If the
+volume refuses cleanup, the error names the remaining reservation. A competing process can replace
+the reservation between its final check and rename; this short race is accepted on these volumes.
+Volumes that support exclusive rename keep their atomic no-replacement behavior.
+
+This applies to copies, pastes, moves, renames, Undo from Trash, replacement recovery, stage cleanup
+and Trash Restore. Direct and Store builds retain native file coordination and move notifications.
+Trash availability is separate: the rules below still apply when a volume has no Trash. See the
+[publication decision](../adr/0017-publication-without-exclusive-rename.md).
+
 ## Protected folders
 
 These cannot be moved, renamed, replaced or moved to the Trash by anyone, including agents and watch

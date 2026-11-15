@@ -73,6 +73,23 @@ app.
 
 ## Focused native scenarios
 
+`tests/native/exfat-file-operations.ts` creates a retained 64 MiB exFAT image and mounts it in its
+own temporary folder. It checks the real helper's unsupported exclusive-rename error, file and
+folder copies, picture-paste publication, a same-volume move and a rename. It uses the production
+operation engine; picture bytes enter through its desktop paste entry point, without changing the OS
+clipboard. Cross-volume source removal stays disabled. Cleanup only unmounts the generated image and
+keeps every artifact. Supply a rebuilt helper outside the repository, or omit
+`VIEWER_TEST_MAC_BINDING` after the owner has rebuilt the bundled helper:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 VIEWER_TEST_MAC_BINDING=/tmp/viewer-native-build/assets/viewer-macos-files.node pnpm --filter viewer-electron exec node --import tsx tests/native/exfat-file-operations.ts
+```
+
+`tests/exfat-rename.test.ts` compiles a small native reservation runner into a retained temporary
+folder. It forces unsupported rename at all five call sites and injects collisions, changed
+reservations and commit failures against real folders. Its discard adapter moves verified empty
+reservations into retained evidence; it never deletes them.
+
 `tests/native/folder-double-click.ts` checks folder activation in a workspace with multiple planes.
 It verifies that entering a folder keeps the camera fixed, Option-double-click opens a linked
 folder, and double-clicking the backdrop still frames all planes. Set `VIEWER_TEST_BINARY` and both

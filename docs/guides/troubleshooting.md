@@ -39,6 +39,11 @@ operation on its own when it restarts.
 
 **Undo** can be unavailable when a file it would restore has changed since.
 
+If a copy or paste to an exFAT disk fails with "Could not move the item: Operation not supported",
+use a build with the updated native file helper. It can publish complete files on volumes without
+exclusive rename. Keep any incomplete stage the failed job names until you have inspected it. See
+[volume publication](../reference/file-operations.md#volumes-without-exclusive-rename).
+
 ## A window stopped working
 
 If a window freezes or goes blank, Viewer asks **This window stopped working.**

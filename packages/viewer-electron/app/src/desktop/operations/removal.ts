@@ -5,7 +5,8 @@
  * Trash instead (AGENTS.md). One exception runs outside Viewer: a terminal
  * launcher script removes its own file with `/bin/rm`, guarded, as the terminal
  * app runs it (`launcherScript`); those never run go at startup through
- * `removePrivateFile`.
+ * `removePrivateFile`. The native publication fallback also discards only its
+ * own verified empty reservations (`tools/exclusive-rename.h`).
  */
 import { rm, rmdir, unlink } from 'node:fs/promises';
 import path from 'node:path';

@@ -61,6 +61,20 @@ The shipped source leaves license configuration empty. Such a direct build has n
 menu, Settings page or reminder, and writes no license record. Configured direct builds keep all
 features available after the trial. See [license keys and trial state](license.md).
 
+## Volumes without exclusive rename
+
+Both macOS editions use exclusive rename where supported. Only `ENOTSUP` or `EOPNOTSUPP` enables
+reservation publication, including on exFAT: Viewer creates an empty reservation exclusively,
+verifies its identity and emptiness, then renames the complete item over it. Existing names and
+final links are refused. Native coordination and the Store move notifications remain in place.
+
+The reservation check and rename leave a short race with an outside process replacing that
+reservation. Supporting volumes retain their atomic guarantee. A matching rebuilt native helper is
+required; older helpers continue to fail without replacing anything. Signed Store and physical
+volume acceptance remain separate from source tests and the generated-image native scenario. See
+[file operations](file-operations.md#volumes-without-exclusive-rename) and the
+[decision](../adr/0017-publication-without-exclusive-rename.md).
+
 ## Distribution
 
 A local package is signed ad hoc. A direct release is signed with a Developer ID Application

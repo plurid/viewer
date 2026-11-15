@@ -16,6 +16,7 @@ import type { Resource } from '../../domain/contracts';
 import { trashName } from '../../domain/files/trash';
 import { linuxMounts, trashRoots, type TrashRoot } from './trash-locations';
 import { macFiles } from '../native/macos-files';
+import { renameExclusive } from './rename-exclusive';
 import type { FileAccess } from '../files/file-access';
 import { errorMessage } from '../../domain/errors';
 import { openDialog } from '../native/dialogs';
@@ -303,7 +304,7 @@ export class Trash {
         if ((await realpath(parent)) !== parent || identity(await lstat(parent)) !== parentIdentity)
           throw new Error('The destination changed. Remaining items were kept in Trash.');
         if (process.platform === 'darwin') {
-          await macFiles().renameExclusive(item.file, target);
+          await renameExclusive(item.file, target);
         } else if (process.platform === 'linux') {
           // Never replace an existing destination or copy-and-delete. Keep
           // .trashinfo metadata rather than permanently deleting it ourselves.

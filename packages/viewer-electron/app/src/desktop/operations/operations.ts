@@ -32,6 +32,7 @@ import {
   type ReviewedFileExpectation,
 } from '../native/reviewed-file';
 import { privateStage } from './staging';
+import { renameExclusive } from './rename-exclusive';
 import { keepMetadata } from '../files/file-metadata';
 import { MAX_TEXT_BYTES, textChangedCode } from '../../domain/editing/documents';
 import { fileCoordination } from '../files/file-coordination';
@@ -736,7 +737,25 @@ export class Operations {
       if (index >= 0) this.queue.splice(index, 1);
       task.job.status = 'cancelled';
       this.emit(task);
-      void this.checkpoint(task).catch((error) => this.stopAfterReceiptFailure(error));
+      // The running job must keep ownership of its pending receipt and any failure saving it.
+      this.dirty.delete(task);
+      void this.journal
+        ?.record({
+          job: task.job,
+          request: task.request,
+          undo: task.undo,
+          intent: task.intent,
+        })
+        .catch((error: unknown) => {
+          // This job touched no files; its failed cancellation record cannot fail unrelated work.
+          task.job.errors.push({
+            path: task.job.destination || '',
+            message: 'The cancelled picture receipt could not be saved. ' + errorMessage(error),
+          });
+          this.emit(task);
+          // Retrying this failed record from another job's checkpoint would fail that job too.
+          this.dirty.delete(task);
+        });
     }
     task.decision?.('cancel');
   }
@@ -911,15 +930,14 @@ export class Operations {
             if (step.remove) await this.trash(step.from);
             else if (step.caseOnly && (await exists(step.to)))
               await this.changeCase(step.from, step.to);
-            // A Trash bookmark authorizes its item, rather than browsing the Trash
-            // directory. Restore it with one exclusive native rename; hard-link
-            // publication requires different sandbox rights and can fall back to
-            // streaming a resource fork unnecessarily.
+            // A Trash bookmark authorizes its item without access to browse its parent.
+            // Native restoration preserves that boundary and the source's metadata.
             else if (step.trash && process.platform === 'darwin')
-              await macFiles().renameExclusive(
+              await renameExclusive(
                 fileCoordination.path(step.from),
                 fileCoordination.path(step.to),
                 fileCoordination.purpose(),
+                signal,
               );
             else await publish(step.from, step.to, this.access);
           },
@@ -1092,7 +1110,7 @@ export class Operations {
       if (await exists(destination)) return false;
       await this.withStep(step, () =>
         process.platform === 'darwin'
-          ? macFiles().renameExclusive(
+          ? renameExclusive(
               fileCoordination.path(step.from),
               fileCoordination.path(step.to),
               fileCoordination.purpose(),
@@ -1868,6 +1886,7 @@ export class Operations {
    */
   private async settleJob(task: Task, failure?: Failure): Promise<void> {
     const { job } = task;
+    task.image = undefined;
     job.status =
       task.abort.signal.aborted && !task.imagePublished
         ? 'cancelled'

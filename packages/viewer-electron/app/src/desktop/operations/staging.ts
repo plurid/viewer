@@ -1,7 +1,7 @@
 import { mkdtemp, lstat, readdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { macFiles } from '../native/macos-files';
+import { renameExclusive } from './rename-exclusive';
 import { removeEmptyDirectory } from './removal';
 
 /** Keep partial transfers in a private directory. Cleanup removes it only while
@@ -21,7 +21,7 @@ export async function privateStage(
   };
   const move = (source: string, destination: string) =>
     process.platform === 'darwin'
-      ? macFiles().renameExclusive(source, destination)
+      ? renameExclusive(source, destination)
       : rename(source, destination);
   return {
     file: path.join(root, 'item'),
