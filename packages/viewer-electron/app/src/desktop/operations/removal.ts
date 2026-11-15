@@ -5,11 +5,100 @@
  * Trash instead (AGENTS.md). One exception runs outside Viewer: a terminal
  * launcher script removes its own file with `/bin/rm`, guarded, as the terminal
  * app runs it (`launcherScript`); those never run go at startup through
- * `removePrivateFile`. The native publication fallback also discards only its
- * own verified empty reservations (`tools/exclusive-rename.h`).
+ * `removePrivateFile`. Failed native publication uses the Trash or keeps its
+ * recovered reservations; that path never permanently deletes an entry.
  */
-import { rm, rmdir, unlink } from 'node:fs/promises';
+import { lstat, readdir, rm, rmdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
+import type {
+  NativeRenameContainer,
+  NativeRenameRecovery,
+  NativeRenameReservation,
+  TrashReceipt,
+} from '../native/macos-files';
+import { errorMessage } from '../../domain/errors';
+
+type ReservationTrash = (file: string) => Promise<TrashReceipt>;
+
+const identity = (info: { dev: number; ino: number }) => `${info.dev}:${info.ino}`;
+
+async function ownedContainer(container: NativeRenameContainer): Promise<boolean> {
+  if (!/^\.viewer-rename-[a-f0-9]{32}$/.test(path.basename(container.path))) return false;
+  const info = await lstat(container.path);
+  return info.isDirectory() && !info.isSymbolicLink() && identity(info) === container.identity;
+}
+
+async function ownedReservation(
+  entry: NativeRenameReservation,
+  containers: readonly NativeRenameContainer[],
+): Promise<boolean> {
+  const container = containers.find((item) => item.path === path.dirname(entry.path));
+  if (!container || !(await ownedContainer(container))) return false;
+  const info = await lstat(entry.path);
+  if (identity(info) !== entry.identity || info.isSymbolicLink()) return false;
+  return entry.directory
+    ? info.isDirectory() && (await readdir(entry.path)).length === 0
+    : info.isFile() && info.size === 0 && info.nlink === 1;
+}
+
+/** Recovery paths are private claims, never final names. Foreign or changed entries stay out of
+ * the Trash; permanent-removal helpers below are deliberately unavailable to this path. */
+export async function disposeRenameRecovery(
+  recovery: NativeRenameRecovery,
+  trash: ReservationTrash,
+): Promise<string[]> {
+  const notes: string[] = [];
+  const dispose = async (file: string): Promise<void> => {
+    if (process.env.VIEWER_TEST_NO_REMOVAL === '1' || process.env.VIEWER_TEST_PRESERVE === '1') {
+      notes.push(`An empty Viewer reservation was kept at ${file}.`);
+      return;
+    }
+    try {
+      const receipt = await trash(file);
+      const remaining = await lstat(file).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error;
+        return undefined;
+      });
+      notes.push(
+        remaining
+          ? `An empty Viewer reservation was kept at ${file}.`
+          : `An empty Viewer reservation was moved to the Trash at ${receipt.path}.`,
+      );
+    } catch (error) {
+      notes.push(`An empty Viewer reservation was kept at ${file}: ${errorMessage(error)}`);
+    }
+  };
+  for (const entry of recovery.entries) {
+    if (entry.kind === 'restored') {
+      notes.push(`The other item was restored at ${entry.path}.`);
+      continue;
+    }
+    if (entry.kind === 'kept') {
+      notes.push(`An item was kept at ${entry.path}.`);
+      continue;
+    }
+    try {
+      if (await ownedReservation(entry, recovery.containers)) await dispose(entry.path);
+      else notes.push(`The recovery item changed and was kept at ${entry.path}.`);
+    } catch (error) {
+      notes.push(`The recovery item was kept at ${entry.path}: ${errorMessage(error)}`);
+    }
+  }
+  for (const container of recovery.containers) {
+    try {
+      if (!(await ownedContainer(container))) {
+        notes.push(`The recovery folder changed and was kept at ${container.path}.`);
+      } else if ((await readdir(container.path)).length === 0) {
+        await dispose(container.path);
+      } else if (!recovery.entries.some((entry) => path.dirname(entry.path) === container.path)) {
+        notes.push(`Recovery content was kept at ${container.path}.`);
+      }
+    } catch (error) {
+      notes.push(`The recovery folder was kept at ${container.path}: ${errorMessage(error)}`);
+    }
+  }
+  return notes;
+}
 
 function ignoreMissing(error: NodeJS.ErrnoException): void {
   if (error.code !== 'ENOENT') throw error;

@@ -146,6 +146,7 @@ struct Work {
   NSString *bookmark = nil;
   bool directory = false;
   bool allowReservation = false;
+  viewer_rename::Result renameResult;
   NSArray<NSDictionary *> *volumes = nil;
   NSArray<NSString *> *files = nil;
   NSArray<NSDictionary *> *dates = nil;
@@ -220,11 +221,12 @@ static void execute(napi_env, void *data) {
         }
         if (sandboxedProcess()) [coordinator itemAtURL:from willMoveToURL:to];
         const auto moved = viewer_rename::move(from.fileSystemRepresentation, to.fileSystemRepresentation, task->allowReservation);
+        task->renameResult = moved;
         if (moved.error) {
           task->errorNumber = moved.error;
           task->error = [NSString stringWithFormat:@"Could not move the item: %s", std::strerror(moved.error)];
           if (moved.cleanupError)
-            task->error = [task->error stringByAppendingFormat:@". The Viewer reservation could not be cleared at %@; the item was kept: %s", to.path, std::strerror(moved.cleanupError)];
+            task->error = [task->error stringByAppendingFormat:@". Recovery could not finish: %s", std::strerror(moved.cleanupError)];
         } else [coordinator itemAtURL:from didMoveToURL:to];
       }];
       if (!entered) task->error = error.localizedDescription ?: @"The file provider could not prepare this move.";
@@ -287,10 +289,51 @@ static void execute(napi_env, void *data) {
     }
   } @catch (NSException *error) { task->error = error.reason ?: @"macOS file service failed."; } }
 }
+static napi_value renameRecovery(napi_env env, const viewer_rename::Result& recovery) {
+  napi_value result, entries, containers;
+  napi_create_object(env, &result);
+  napi_create_array(env, &entries);
+  napi_create_array(env, &containers);
+  uint32_t index = 0;
+  for (const auto& entry : recovery.entries) {
+    napi_value item; napi_create_object(env, &item);
+    const char* kind = entry.kind == viewer_rename::RecoveryKind::Reservation ? "reservation"
+      : entry.kind == viewer_rename::RecoveryKind::Restored ? "restored" : "kept";
+    property(env, item, "kind", text(env, [NSString stringWithUTF8String:kind]));
+    property(env, item, "path", text(env, [NSString stringWithUTF8String:entry.path.c_str()]));
+    if (entry.kind == viewer_rename::RecoveryKind::Reservation) {
+      property(env, item, "identity", text(env, [NSString stringWithUTF8String:viewer_rename::identity(entry.info).c_str()]));
+      property(env, item, "directory", boolean(env, S_ISDIR(entry.info.st_mode)));
+    }
+    napi_set_element(env, entries, index++, item);
+  }
+  index = 0;
+  for (const auto& container : recovery.containers) {
+    napi_value item; napi_create_object(env, &item);
+    property(env, item, "path", text(env, [NSString stringWithUTF8String:container.path.c_str()]));
+    property(env, item, "identity", text(env, [NSString stringWithUTF8String:viewer_rename::identity(container.info).c_str()]));
+    napi_set_element(env, containers, index++, item);
+  }
+  property(env, result, "entries", entries);
+  property(env, result, "containers", containers);
+  return result;
+}
 static void complete(napi_env env, napi_status status, void *data) {
   Work *task = static_cast<Work *>(data);
   if (status != napi_ok || task->error) {
-    napi_value error; napi_create_error(env, nullptr, text(env, task->error ?: @"macOS file work was cancelled."), &error);
+    NSString* message = task->error ?: @"macOS file work was cancelled.";
+    const bool recovery = !task->renameResult.entries.empty() || !task->renameResult.containers.empty();
+    if (recovery) {
+      for (const auto& entry : task->renameResult.entries)
+        message = [message stringByAppendingFormat:@". Recovery path: %@", [NSString stringWithUTF8String:entry.path.c_str()]];
+      for (const auto& container : task->renameResult.containers)
+        message = [message stringByAppendingFormat:@". Recovery folder: %@", [NSString stringWithUTF8String:container.path.c_str()]];
+    }
+    napi_value error; napi_create_error(env, nullptr, text(env, message), &error);
+    if (recovery) {
+      property(env, error, "renameMessage", text(env, task->error));
+      property(env, error, "renameRecovery", renameRecovery(env, task->renameResult));
+    }
     if (task->errorNumber) {
       const char *code = task->errorNumber == EXDEV ? "EXDEV" : task->errorNumber == EEXIST ? "EEXIST" : task->errorNumber == ENOENT ? "ENOENT" : task->errorNumber == EBUSY ? "EBUSY" : task->errorNumber == ENOTSUP ? "ENOTSUP" : task->errorNumber == EOPNOTSUPP ? "EOPNOTSUPP" : task->errorNumber == EINVAL ? "EINVAL" : task->errorNumber == ENOSYS ? "ENOSYS" : "EIO";
       property(env, error, "code", text(env, [NSString stringWithUTF8String:code]));
@@ -422,6 +465,7 @@ static napi_value init(napi_env env, napi_value exports) {
   registerWindowFullscreen(env, exports);
   registerQuarantine(env, exports);
   napi_property_descriptor methods[] = {
+    {"renameRecoveryVersion", nullptr, nullptr, nullptr, nullptr, number(env, 1), napi_default, nullptr},
     {"trashConfirmation", nullptr, trashConfirmation, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardVersion", nullptr, clipboardVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardRead", nullptr, clipboardRead, nullptr, nullptr, nullptr, napi_default, nullptr},

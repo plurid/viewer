@@ -69,11 +69,19 @@ verifies its identity and emptiness, then renames the complete item over it. Exi
 final links are refused. Native coordination and the Store move notifications remain in place.
 
 The reservation check and rename leave a short race with an outside process replacing that
-reservation. Supporting volumes retain their atomic guarantee. A matching rebuilt native helper is
-required; older helpers continue to fail without replacing anything. Signed Store and physical
+reservation and losing that entry's content. Supporting volumes retain their atomic guarantee. A
+helper built from this source is required. An older helper lacks the recovery capability, so Viewer
+keeps the original "Could not move the item: Operation not supported" failure and never enters that
+helper's reservation fallback. It replaces nothing through that fallback. Signed Store and physical
 volume acceptance remain separate from source tests and the generated-image native scenario. See
 [file operations](file-operations.md#volumes-without-exclusive-rename) and the
 [decision](../adr/0017-publication-without-exclusive-rename.md).
+
+In the Store edition, permission for one file does not grant permission to its parent folder. The
+fallback must open that folder and fails if that access is missing. **File operations** shows "Could
+not move the item: Permission denied" or "Operation not permitted". The source or complete stage
+stays available at the job's recovery path. Choose **Allow folder access…**, grant the parent
+folder, then retry. Viewer never broadens a single-file grant itself.
 
 ## Distribution
 

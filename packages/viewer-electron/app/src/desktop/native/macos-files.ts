@@ -28,7 +28,37 @@ export interface NativeAddedDate {
   modified: number;
   added?: number;
 }
+export interface NativeRenameReservation {
+  kind: 'reservation';
+  path: string;
+  identity: string;
+  directory: boolean;
+}
+export interface NativeRenameKept {
+  kind: 'kept';
+  path: string;
+}
+export interface NativeRenameRestored {
+  kind: 'restored';
+  path: string;
+}
+export type NativeRenameRecoveryEntry =
+  NativeRenameReservation | NativeRenameKept | NativeRenameRestored;
+export interface NativeRenameContainer {
+  path: string;
+  identity: string;
+}
+export interface NativeRenameRecovery {
+  entries: NativeRenameRecoveryEntry[];
+  containers: NativeRenameContainer[];
+}
+export interface NativeRenameFailure extends NodeJS.ErrnoException {
+  renameMessage?: string;
+  renameRecovery?: NativeRenameRecovery;
+}
 export interface MacFiles {
+  /** Older helpers must never enter reservation publication with path-based cleanup. */
+  readonly renameRecoveryVersion?: number;
   /** Public AppKit transition notifications, read only for a live owned NSView handle. */
   windowFullscreenPhase(handle: Buffer): FullscreenPhase;
   /** Displays native confirmation only. No callable erasure/approval endpoint. */

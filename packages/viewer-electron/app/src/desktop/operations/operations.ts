@@ -1,4 +1,5 @@
 import type { FileChange } from '../../domain/files/changes';
+import type { NativeRenameFailure } from '../native/macos-files';
 import { isOfficeFormat } from '../../domain/previews/documents/layout';
 import type { TrashOrigin } from '../../domain/files/trash';
 import type { ObservedOperationLink } from '../../domain/files/relationships';
@@ -1117,7 +1118,9 @@ export class Operations {
             )
           : publish(step.from, step.to, this.access),
       );
-    } catch {
+    } catch (error) {
+      if ((error as NativeRenameFailure | undefined)?.renameRecovery)
+        task.job.errors.push({ path: destination, message: errorMessage(error) });
       return false;
     }
     task.undo.splice(task.undo.indexOf(step), 1);

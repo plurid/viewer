@@ -1,6 +1,8 @@
 import { mkdtemp, lstat, readdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import type { NativeRenameFailure } from '../native/macos-files';
+import { errorMessage } from '../../domain/errors';
 import { renameExclusive } from './rename-exclusive';
 import { removeEmptyDirectory } from './removal';
 
@@ -48,9 +50,14 @@ export async function privateStage(
       );
       await move(root, cleanup);
       if (!(await owned(cleanup))) {
-        await move(cleanup, root).catch(() => {});
+        let recovery = '';
+        await move(cleanup, root).catch((error: unknown) => {
+          if ((error as NativeRenameFailure | undefined)?.renameRecovery)
+            recovery = ' ' + errorMessage(error);
+        });
         throw new Error(
-          'The temporary transfer location changed during cleanup. Its contents were kept.',
+          'The temporary transfer location changed during cleanup. Its contents were kept.' +
+            recovery,
         );
       }
       if (!trash) return cleanup;

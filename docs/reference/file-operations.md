@@ -105,13 +105,25 @@ final name, so a failed or cancelled write leaves no partial picture there.
 On macOS, Viewer first attempts an exclusive rename. When the volume reports `ENOTSUP` or
 `EOPNOTSUPP`, as exFAT does, Viewer reserves the final name exclusively, verifies that its own
 reservation is still empty, then renames the complete item over it. The final name briefly holds an
-empty reservation. Existing files, folders and links are refused; a final link is never followed.
-Any other native rename error is reported without this fallback.
+empty reservation. Names occupied when the reservation is created are refused; a final link is never
+followed. Any other native rename error is reported without this fallback.
 
-A failed rename clears only Viewer's same, still-empty reservation. A changed entry is kept. If the
-volume refuses cleanup, the error names the remaining reservation. A competing process can replace
-the reservation between its final check and rename; this short race is accepted on these volumes.
-Volumes that support exclusive rename keep their atomic no-replacement behavior.
+After a failed rename, Viewer first moves whatever is at the final name into a random hidden
+`.viewer-rename-` holding folder beside it. It then checks what was moved. Its own unchanged empty
+reservation, and any empty owned holding folder, go through the removal module to the system Trash.
+With no Trash or with preservation enabled, they stay and the error names their paths. Viewer
+deletes nothing permanently in this recovery path.
+
+Someone else's item, including content added to the reservation, is never sent to the Trash. Viewer
+puts it back when its original name is free, using the same guarded rename steps. If the name is
+occupied or restoration cannot finish, it keeps the item at its private path and reports that path.
+If recovery itself cannot proceed, the error reports the final name or holding folder that remains.
+
+An item appearing after the last check can still be overwritten by rename and lose its content: a
+file, empty file, link, empty folder for a folder source, or bytes added to a file reservation. A
+link's target is not followed. Non-empty folders and file/folder type mismatches are preserved when
+rename fails. This short race also applies to restoration and is accepted on these volumes. Volumes
+that support exclusive rename keep their atomic no-replacement behavior.
 
 This applies to copies, pastes, moves, renames, Undo from Trash, replacement recovery, stage cleanup
 and Trash Restore. Direct and Store builds retain native file coordination and move notifications.

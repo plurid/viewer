@@ -85,10 +85,19 @@ keeps every artifact. Supply a rebuilt helper outside the repository, or omit
 VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 VIEWER_TEST_MAC_BINDING=/tmp/viewer-native-build/assets/viewer-macos-files.node pnpm --filter viewer-electron exec node --import tsx tests/native/exfat-file-operations.ts
 ```
 
+The original agent attempt reached no operations: the old 12-character label caused image creation
+to fail with "Operation not permitted". The reviewer identified the label defect and reported all
+four steps and unmount passing after shortening it. The agent has since run the corrected `ViewerQA`
+scenario against a real exFAT image with the rebuilt recovery helper; copy, picture paste,
+same-volume move, rename and unmount passed. This is engine/helper evidence, not OS clipboard UI or
+signed Store evidence. The retained `result.json` records the helper hash and each job.
+
 `tests/exfat-rename.test.ts` compiles a small native reservation runner into a retained temporary
 folder. It forces unsupported rename at all five call sites and injects collisions, changed
-reservations and commit failures against real folders. Its discard adapter moves verified empty
-reservations into retained evidence; it never deletes them.
+reservations and commit failures against real folders. Its cleanup seam substitutes files, empty
+files, links, written reservations and folders just before recovery claims the name. It checks
+restoration, collisions and reported paths without permanent deletion. The TypeScript disposal tests
+use a retained Trash adapter or preservation; no fixture is deleted.
 
 `tests/native/folder-double-click.ts` checks folder activation in a workspace with multiple planes.
 It verifies that entering a folder keeps the camera fixed, Option-double-click opens a linked

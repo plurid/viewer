@@ -100,7 +100,7 @@ try {
     'UDIF',
     '-nospotlight',
     '-volname',
-    'Viewer exFAT',
+    'ViewerQA',
     image,
   ]);
   attachAttempted = true;

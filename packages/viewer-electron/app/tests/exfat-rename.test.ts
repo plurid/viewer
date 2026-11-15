@@ -14,7 +14,11 @@ import path from 'node:path';
 import { getSystemErrorName, promisify } from 'node:util';
 import type { BrowserWindow } from 'electron';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FileAccessIntent } from '../src/desktop/native/macos-files';
+import type {
+  FileAccessIntent,
+  NativeRenameRecovery,
+  TrashReceipt,
+} from '../src/desktop/native/macos-files';
 import type { FileAccess } from '../src/desktop/files/file-access';
 import { publish } from '../src/desktop/operations/file-transfer';
 import { renameExclusive } from '../src/desktop/operations/rename-exclusive';
@@ -25,6 +29,8 @@ import * as removal from '../src/desktop/operations/removal';
 import { temporaryRoot } from '../tools/temporary';
 
 const native = vi.hoisted(() => ({
+  renameRecoveryVersion: 1 as number | undefined,
+  trash: vi.fn<(file: string, purpose?: string) => Promise<TrashReceipt>>(),
   renameExclusive:
     vi.fn<
       (
@@ -62,12 +68,18 @@ let beforeRetry: ((source: string, target: string) => Promise<void>) | undefined
 let destination: string;
 let results: NativeResult[];
 let nativeRuns: number;
+let afterNative: ((result: NativeResult) => Promise<void>) | undefined;
 const operations: Operations[] = [];
 const execute = promisify(execFile);
 type ItemKind = 'file' | 'folder';
 type Caller = 'publish' | 'undo-trash' | 'restore-replaced' | 'stage-cleanup' | 'trash-restore';
 type Collision = 'file' | 'folder' | 'link' | 'dangling-link' | 'outside-link';
+type CleanupKind = 'file' | 'empty' | 'link' | 'fill' | 'folder' | 'folder-fill';
+type CleanupAvailability = '' | '-occupied' | '-restore-fail' | '-restore-late';
+type CleanupScenario = `cleanup-${CleanupKind}${CleanupAvailability}`;
 type Scenario =
+  | CleanupScenario
+  | 'opened-folder-swap'
   | 'native'
   | 'open-fail-4'
   | 'open-fail-5'
@@ -82,13 +94,19 @@ type Scenario =
   | 'pause'
   | 'exclusive-io'
   | 'cleanup-fail';
-interface NativeResult {
+interface NativeResult extends NativeRenameRecovery {
   error: number;
   cleanupError: number;
   reservations: number;
   commits: number;
   discards: number;
   retained: string;
+  unsafeDiscards: number;
+  claims: number;
+  restores: number;
+  closeOnExec: boolean;
+  directoryReads: number;
+  otherIdentity: string;
 }
 interface Fixture {
   source: string;
@@ -116,10 +134,13 @@ beforeEach(async () => {
   root = await realpath(await temporaryRoot('viewer-exfat-rename-'));
   vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
   scenario = 'normal';
+  native.renameRecoveryVersion = 1;
   beforeRetry = undefined;
+  afterNative = undefined;
   destination = '';
   results = [];
   nativeRuns = 0;
+  native.trash.mockRejectedValue(Object.assign(new Error('No test Trash'), { code: 'ENOTSUP' }));
   native.renameExclusive.mockImplementation(async (source, target, _purpose, allowReservation) => {
     destination = target;
     if (!allowReservation) {
@@ -132,11 +153,17 @@ beforeEach(async () => {
     const { stdout } = await execute(runner, [source, target, retained, scenario, 'reserve']);
     const result = { ...JSON.parse(stdout), retained } as NativeResult;
     results.push(result);
+    await afterNative?.(result);
     if (result.error)
       throw Object.assign(
         new Error(result.cleanupError ? 'Reservation cleanup failed' : 'Rename refused'),
         {
           code: getSystemErrorName(-result.error),
+          renameMessage: 'Rename refused',
+          renameRecovery:
+            result.entries.length || result.containers.length
+              ? { entries: result.entries, containers: result.containers }
+              : undefined,
         },
       );
   });
@@ -225,7 +252,15 @@ async function fixture(caller: Caller, kind: ItemKind): Promise<Fixture> {
     source,
     relative,
     run: async () => {
-      if (!(await restore.call(service, task, target))) throw new Error('Restoration refused');
+      if (!(await restore.call(service, task, target)))
+        throw new Error(
+          'Restoration refused. ' +
+            service
+              .all()
+              .find((job) => job.id === id)!
+              .errors.map((error) => error.message)
+              .join(' '),
+        );
     },
   };
 }
@@ -241,7 +276,301 @@ async function collision(target: string, kind: Collision): Promise<void> {
   await symlink(kind === 'dangling-link' ? path.join(root, 'Missing') : sentinel, target);
 }
 
+async function expectOtherItem(file: string, kind: CleanupKind, directory: boolean): Promise<void> {
+  const info = await lstat(file);
+  if (kind === 'link') {
+    expect(info.isSymbolicLink()).toBe(true);
+    expect(await readFile(await readlink(file), 'utf8')).toBe('sentinel');
+  } else if (kind === 'folder') {
+    expect(info.isDirectory()).toBe(true);
+    expect(await readdir(file)).toEqual([]);
+  } else if (kind === 'folder-fill' || (kind === 'fill' && directory)) {
+    expect(await readFile(path.join(file, 'Other.txt'), 'utf8')).toBe('other');
+  } else {
+    expect(info.isFile()).toBe(true);
+    expect(await readFile(file, 'utf8')).toBe(
+      kind === 'empty' ? '' : kind === 'fill' ? 'other' : 'other process content',
+    );
+  }
+}
+
 describe.skipIf(process.platform !== 'darwin')('publication without exclusive rename', () => {
+  const cleanupKinds: CleanupKind[] = ['file', 'empty', 'link', 'fill', 'folder', 'folder-fill'];
+  const recoveryCases = (['file', 'folder'] as const).flatMap((kind) =>
+    cleanupKinds.flatMap((interleaving) =>
+      ([false, true] as const).map((occupied) => ({
+        kind,
+        interleaving,
+        occupied,
+      })),
+    ),
+  );
+  it.each(recoveryCases)(
+    'preserves and reports cleanup $interleaving for a $kind with occupied destination: $occupied',
+    async ({ kind, interleaving, occupied }) => {
+      const source = path.join(root, 'Source.txt');
+      const target = path.join(root, 'Published.txt');
+      const evidence = path.join(root, 'Evidence');
+      const relative = await makeItem(source, kind);
+      await mkdir(evidence);
+      await writeFile(path.join(evidence, 'Sentinel.txt'), 'sentinel', { flag: 'wx' });
+      const testCase = `cleanup-${interleaving}${occupied ? '-occupied' : ''}`;
+      const { stdout } = await execute(runner, [source, target, evidence, testCase, 'reserve']);
+      const result = JSON.parse(stdout) as NativeResult;
+      expect(result.unsafeDiscards).toBe(0);
+      expect(result.error).not.toBe(0);
+      const entry = result.entries.find(
+        (entry) => entry.kind === (occupied ? 'kept' : 'restored'),
+      )!;
+      expect(entry).toBeDefined();
+      expect(entry.path).toBe(occupied ? path.join(result.containers[0]!.path, 'item') : target);
+      expect(`${(await lstat(entry.path)).dev}:${(await lstat(entry.path)).ino}`).toBe(
+        result.otherIdentity,
+      );
+      expect(
+        result.entries.some(
+          (candidate) => candidate.kind === 'reservation' && candidate.path === entry.path,
+        ),
+      ).toBe(false);
+      await expectOtherItem(entry.path, interleaving, kind === 'folder');
+      if (occupied) expect(await readFile(target, 'utf8')).toBe('new occupant');
+      expect(await readFile(path.join(source, relative), 'utf8')).toBe('complete');
+    },
+  );
+
+  it('keeps native recovery free of permanent-removal calls', async () => {
+    const header = await readFile('tools/exclusive-rename.h', 'utf8');
+    expect(header).not.toMatch(/\b(?:unlink|unlinkat|rmdir|remove)\b/);
+  });
+
+  it('binds folder identity to the descriptor before a path replacement', async () => {
+    const item = await fixture('publish', 'folder');
+    scenario = 'opened-folder-swap';
+    await expect(item.run()).rejects.toThrow(destination);
+    const result = results[0]!;
+    expect(result).toMatchObject({ commits: 0, restores: 1, discards: 0 });
+    expect(`${(await lstat(destination)).dev}:${(await lstat(destination)).ino}`).toBe(
+      result.otherIdentity,
+    );
+    expect(await readdir(destination)).toEqual([]);
+    expect(result.entries).toEqual([
+      expect.objectContaining({ kind: 'restored', path: destination }),
+    ]);
+    expect(await readFile(path.join(item.source, item.relative), 'utf8')).toBe('complete');
+  });
+
+  it('keeps directory-reader descriptors closed on exec', async () => {
+    const item = await fixture('publish', 'folder');
+    await item.run();
+    expect(results[0]!.directoryReads).toBeGreaterThan(0);
+    expect(results[0]!.closeOnExec).toBe(true);
+  });
+
+  it.each(['file', 'folder'] as const)(
+    'retains every item when restoring a captured %s fails',
+    async (kind) => {
+      const item = await fixture('publish', kind);
+      scenario = `cleanup-${kind}-restore-fail`;
+      let failure: unknown;
+      try {
+        await item.run();
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeDefined();
+      const recovery = results[0]!;
+      const foreign = recovery.entries.find((entry) => entry.kind === 'kept')!;
+      const empty = recovery.entries.find((entry) => entry.kind === 'reservation')!;
+      expect(String(failure)).toContain(foreign.path);
+      expect(String(failure)).toContain(empty.path);
+      await expectOtherItem(foreign.path, kind, kind === 'folder');
+      await expect(lstat(destination)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await readFile(path.join(item.source, item.relative), 'utf8')).toBe('complete');
+      expect(native.trash).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps both foreign items when a second writer wins during restoration', async () => {
+    const item = await fixture('publish', 'file');
+    scenario = 'cleanup-file-restore-late';
+    let failure: unknown;
+    try {
+      await item.run();
+    } catch (error) {
+      failure = error;
+    }
+    const kept = results[0]!.entries.filter((entry) => entry.kind === 'kept');
+    expect(kept).toHaveLength(2);
+    for (const entry of kept) {
+      expect(String(failure)).toContain(entry.path);
+      expect(await readFile(entry.path, 'utf8')).toBe('other process content');
+    }
+    expect(native.trash).not.toHaveBeenCalled();
+    expect(await readFile(item.source, 'utf8')).toBe('complete');
+  });
+
+  it('trashes only the empty restoration slot while keeping a foreign sibling', async () => {
+    const item = await fixture('publish', 'file');
+    scenario = 'cleanup-file-restore-fail';
+    vi.stubEnv('VIEWER_TEST_PRESERVE', '0');
+    vi.stubEnv('VIEWER_TEST_NO_REMOVAL', '0');
+    const bin = path.join(root, 'Retained empty slot');
+    native.trash.mockImplementation(async (file) => {
+      const empty = results[0]!.entries.find((entry) => entry.kind === 'reservation')!;
+      expect(file).toBe(empty.path);
+      expect((await lstat(file)).size).toBe(0);
+      await rename(file, bin);
+      return { path: bin, directory: false };
+    });
+    let failure: unknown;
+    try {
+      await item.run();
+    } catch (error) {
+      failure = error;
+    }
+    const kept = results[0]!.entries.find((entry) => entry.kind === 'kept')!;
+    expect(await readFile(kept.path, 'utf8')).toBe('other process content');
+    expect(String(failure)).toContain(kept.path);
+    expect(native.trash).toHaveBeenCalledTimes(1);
+    expect((await lstat(bin)).size).toBe(0);
+    expect((await lstat(results[0]!.containers[0]!.path)).isDirectory()).toBe(true);
+  });
+
+  it('keeps a substituted private holding folder out of the Trash', async () => {
+    const item = await fixture('publish', 'file');
+    scenario = 'fail';
+    vi.stubEnv('VIEWER_TEST_PRESERVE', '0');
+    vi.stubEnv('VIEWER_TEST_NO_REMOVAL', '0');
+    let folder = '';
+    afterNative = async (result) => {
+      folder = result.containers[0]!.path;
+      await rename(folder, folder + '-original');
+      await mkdir(folder);
+      await writeFile(path.join(folder, 'Other.txt'), 'other process content', { flag: 'wx' });
+    };
+    await expect(item.run()).rejects.toThrow('recovery folder changed');
+    expect(await readFile(path.join(folder, 'Other.txt'), 'utf8')).toBe('other process content');
+    expect(native.trash).not.toHaveBeenCalled();
+  });
+
+  it('reports a protected path when the stage move back also fails', async () => {
+    const item = await fixture('stage-cleanup', 'file');
+    let changed = false;
+    afterNative = async (result) => {
+      if (changed || result.error) return;
+      changed = true;
+      const published = destination;
+      await rename(published, published + '-original');
+      await mkdir(published);
+      await writeFile(path.join(published, 'Other.txt'), 'stage replacement', { flag: 'wx' });
+      scenario = 'cleanup-file-occupied';
+    };
+    let failure: unknown;
+    try {
+      await item.run();
+    } catch (error) {
+      failure = error;
+    }
+    const kept = results[1]!.entries.find((entry) => entry.kind === 'kept')!;
+    expect(String(failure)).toContain(kept.path);
+    expect(await readFile(kept.path, 'utf8')).toBe('other process content');
+  });
+
+  it('reports final and private paths when claiming a failed reservation is refused', async () => {
+    const item = await fixture('publish', 'file');
+    scenario = 'cleanup-fail';
+    let failure: unknown;
+    try {
+      await item.run();
+    } catch (error) {
+      failure = error;
+    }
+    expect(String(failure)).toContain(destination);
+    expect(String(failure)).toContain(results[0]!.containers[0]!.path);
+    expect((await lstat(destination)).size).toBe(0);
+    expect(await readFile(item.source, 'utf8')).toBe('complete');
+  });
+
+  const disposals = (['file', 'folder'] as const).flatMap((kind) =>
+    (['trash', 'no-trash', 'preserved'] as const).map((policy) => ({ kind, policy })),
+  );
+  it.each(disposals)(
+    'handles an owned empty $kind through the removal module: $policy',
+    async ({ kind, policy }) => {
+      const item = await fixture('publish', kind);
+      scenario = 'fail';
+      const bin = path.join(root, 'Retained Trash adapter');
+      await mkdir(bin);
+      let trashed = 0;
+      if (policy !== 'preserved') {
+        vi.stubEnv('VIEWER_TEST_PRESERVE', '0');
+        vi.stubEnv('VIEWER_TEST_NO_REMOVAL', '0');
+      }
+      if (policy === 'trash')
+        native.trash.mockImplementation(async (file) => {
+          const info = await lstat(file);
+          if (info.isDirectory()) expect(await readdir(file)).toEqual([]);
+          else expect(info.size).toBe(0);
+          const target = path.join(bin, String(++trashed));
+          await rename(file, target);
+          return { path: target, directory: info.isDirectory() };
+        });
+      let failure: unknown;
+      try {
+        await item.run();
+      } catch (error) {
+        failure = error;
+      }
+      const recovery = results[0]!;
+      const reservation = recovery.entries.find((entry) => entry.kind === 'reservation')!;
+      await expect(lstat(destination)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await readFile(path.join(item.source, item.relative), 'utf8')).toBe('complete');
+      if (policy === 'trash') {
+        expect(trashed).toBe(2);
+        expect(String(failure)).toContain('moved to the Trash');
+        await expect(lstat(reservation.path)).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(lstat(recovery.containers[0]!.path)).rejects.toMatchObject({ code: 'ENOENT' });
+        expect(await readdir(bin)).toHaveLength(2);
+      } else {
+        expect(String(failure)).toContain(reservation.path);
+        expect((await lstat(reservation.path)).isDirectory()).toBe(kind === 'folder');
+        if (policy === 'preserved') expect(native.trash).not.toHaveBeenCalled();
+        else expect(native.trash).toHaveBeenCalledTimes(1);
+      }
+    },
+  );
+
+  it.each(['file', 'empty', 'link', 'fill', 'folder-fill'] as const)(
+    'never trashes a %s substituted at a private recovery path',
+    async (kind) => {
+      const item = await fixture('publish', kind === 'folder-fill' ? 'folder' : 'file');
+      scenario = 'fail';
+      vi.stubEnv('VIEWER_TEST_PRESERVE', '0');
+      vi.stubEnv('VIEWER_TEST_NO_REMOVAL', '0');
+      let changed = '';
+      afterNative = async (result) => {
+        const entry = result.entries.find((entry) => entry.kind === 'reservation')!;
+        changed = entry.path;
+        if (kind !== 'fill' && kind !== 'folder-fill') await rename(changed, changed + '-original');
+        if (kind === 'link') {
+          const sentinel = path.join(root, 'Private sentinel');
+          await writeFile(sentinel, 'sentinel', { flag: 'wx' });
+          await symlink(sentinel, changed);
+        } else if (kind === 'folder-fill') {
+          await writeFile(path.join(changed, 'Other.txt'), 'other', { flag: 'wx' });
+        } else {
+          await writeFile(
+            changed,
+            kind === 'empty' ? '' : kind === 'fill' ? 'other' : 'other process content',
+            { flag: kind === 'fill' ? 'w' : 'wx' },
+          );
+        }
+      };
+      await expect(item.run()).rejects.toThrow('kept at');
+      await expectOtherItem(changed, kind, kind === 'folder-fill');
+      expect(native.trash).not.toHaveBeenCalled();
+    },
+  );
   const callers: Caller[] = [
     'publish',
     'undo-trash',
@@ -252,6 +581,24 @@ describe.skipIf(process.platform !== 'darwin')('publication without exclusive re
   const kinds: ItemKind[] = ['file', 'folder'];
 
   describe.each(callers)('%s', (caller) => {
+    it.each(cleanupKinds)('reports a protected %s held aside during cleanup', async (kind) => {
+      const item = await fixture(caller, 'file');
+      scenario = `cleanup-${kind}-occupied`;
+      let failure: unknown;
+      try {
+        await item.run();
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeDefined();
+      const held = results[0]!.entries.find((entry) => entry.kind === 'kept')!;
+      expect(held).toBeDefined();
+      expect(String(failure)).toContain(held.path);
+      await expectOtherItem(held.path, kind, caller === 'stage-cleanup');
+      expect(await readFile(destination, 'utf8')).toBe('new occupant');
+      expect(await readFile(path.join(item.source, item.relative), 'utf8')).toBe('complete');
+      expect(native.trash).not.toHaveBeenCalled();
+    });
     it.each(kinds)('publishes a complete %s', async (kind) => {
       const item = await fixture(caller, kind);
       await item.run();
@@ -295,10 +642,11 @@ describe.skipIf(process.platform !== 'darwin')('publication without exclusive re
       expect(results[0]).toMatchObject({
         reservations: 1,
         commits: 1,
-        discards: 1,
+        claims: 1,
+        discards: 0,
         cleanupError: 0,
       });
-      const discarded = path.join(results[0]!.retained, 'Discarded reservation');
+      const discarded = results[0]!.entries.find((entry) => entry.kind === 'reservation')!.path;
       if ((await lstat(discarded)).isDirectory()) expect(await readdir(discarded)).toEqual([]);
       else expect((await lstat(discarded)).size).toBe(0);
     });
@@ -339,7 +687,10 @@ describe.skipIf(process.platform !== 'darwin')('publication without exclusive re
           );
         } else if (info.isDirectory())
           expect(await readFile(path.join(destination, 'Other.txt'), 'utf8')).toBe('other');
-        else expect(await readFile(destination, 'utf8')).toBe('other');
+        else
+          expect(await readFile(destination, 'utf8')).toBe(
+            interleaving === 'fill' ? 'other' : 'other process content',
+          );
       },
     );
   });
@@ -354,6 +705,16 @@ describe.skipIf(process.platform !== 'darwin')('publication without exclusive re
       expect(results).toEqual([]);
     },
   );
+
+  it.each([undefined, 0])('fails safely with an older helper capability %s', async (version) => {
+    const item = await fixture('publish', 'file');
+    native.renameRecoveryVersion = version;
+    await expect(item.run()).rejects.toMatchObject({ code: 'ENOTSUP' });
+    expect(native.renameExclusive).toHaveBeenCalledTimes(1);
+    expect(results).toEqual([]);
+    expect(await readFile(item.source, 'utf8')).toBe('complete');
+    await expect(lstat(destination)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 
   it('leaves a supported native exclusive rename unchanged', async () => {
     native.renameExclusive.mockImplementation(async (source, target) => {
@@ -381,8 +742,11 @@ describe.skipIf(process.platform !== 'darwin')('publication without exclusive re
       const item = await fixture('publish', 'folder');
       scenario = limit;
       await expect(item.run()).rejects.toMatchObject({ code: 'EMFILE' });
-      await expect(lstat(destination)).rejects.toMatchObject({ code: 'ENOENT' });
-      expect(results[0]).toMatchObject({ commits: 0, discards: 1, cleanupError: 0 });
+      expect(results[0]).toMatchObject({ commits: 0, discards: 0 });
+      if (results[0]!.containers.length)
+        await expect(lstat(destination)).rejects.toMatchObject({ code: 'ENOENT' });
+      else expect((await lstat(destination)).isDirectory()).toBe(true);
+      expect(results[0]!.entries.length).toBeGreaterThan(0);
       expect(await readFile(path.join(item.source, item.relative), 'utf8')).toBe('complete');
     },
   );
