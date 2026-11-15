@@ -1101,6 +1101,15 @@ export class Operations {
     await this.checkpoint(task);
     return kept;
   }
+  /** Cancellation and compensation can absorb a failure; its kept paths must still be findable. */
+  private reportRenameRecovery(task: Task, error: unknown, file: string): void {
+    const recovery = (error as NativeRenameFailure | undefined)?.renameRecovery;
+    if (!recovery) return;
+    const kept = recovery.entries.filter((entry) => entry.kind === 'kept');
+    for (const recoveryPath of kept.length ? kept.map((entry) => entry.path) : [file])
+      task.job.errors.push({ path: recoveryPath, message: errorMessage(error).slice(0, 4000) });
+  }
+
   /** Put a replaced item back when its replacement could not be published. */
   private async restoreReplaced(task: Task, destination: string, kept?: string): Promise<boolean> {
     const step = task.undo.findLast(
@@ -1119,8 +1128,7 @@ export class Operations {
           : publish(step.from, step.to, this.access),
       );
     } catch (error) {
-      if ((error as NativeRenameFailure | undefined)?.renameRecovery)
-        task.job.errors.push({ path: destination, message: errorMessage(error) });
+      this.reportRenameRecovery(task, error, destination);
       return false;
     }
     task.undo.splice(task.undo.indexOf(step), 1);
@@ -1260,7 +1268,11 @@ export class Operations {
       await publish(temporary, destination, this.access, task && this.transferJob(task));
     } catch (error) {
       // Restore only when the old name is still available; preserve the intermediate otherwise.
-      await publish(temporary, source, this.access).catch(() => undefined);
+      await publish(temporary, source, this.access).catch((rollback: unknown) => {
+        if (!(rollback as NativeRenameFailure | undefined)?.renameRecovery) return;
+        if (error instanceof Error) error.message += ' ' + errorMessage(rollback);
+        else throw new Error(errorMessage(error) + ' ' + errorMessage(rollback));
+      });
       throw error;
     }
   }
@@ -1357,6 +1369,7 @@ export class Operations {
         return true;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+        this.reportRenameRecovery(task, error, destination);
       }
     }
     const stage = await privateStage(path.dirname(destination), '.viewer-transfer-', this.trash);
@@ -1512,7 +1525,10 @@ export class Operations {
         if ((await this.runItem(task, source)) !== 'done') continue;
       } catch (error) {
         if (error instanceof ReceiptFailure) throw error;
-        if (task.abort.signal.aborted) break;
+        if (task.abort.signal.aborted) {
+          this.reportRenameRecovery(task, error, source || request.destination!);
+          break;
+        }
         // Cleanup may already have reported retained partial content. Keep this item's
         // original failure before those details, without reordering earlier items.
         job.errors.splice(priorErrors, 0, {

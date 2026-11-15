@@ -76,6 +76,7 @@ static void reserved(int parent, const char* name, bool directory) {
 
 static int commit(int from, const char* source, int to, const char* target) {
   ++commits;
+  if (scenario == "commit-exdev") { errno = EXDEV; return -1; }
   if (scenario == "fail" || scenario == "cleanup-fail" || scenario.rfind("cleanup-", 0) == 0) { errno = EIO; return -1; }
   return renameat(from, source, to, target);
 }

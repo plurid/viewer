@@ -78,6 +78,7 @@ type CleanupKind = 'file' | 'empty' | 'link' | 'fill' | 'folder' | 'folder-fill'
 type CleanupAvailability = '' | '-occupied' | '-restore-fail' | '-restore-late';
 type CleanupScenario = `cleanup-${CleanupKind}${CleanupAvailability}`;
 type Scenario =
+  | 'commit-exdev'
   | CleanupScenario
   | 'opened-folder-swap'
   | 'native'
@@ -474,6 +475,92 @@ describe.skipIf(process.platform !== 'darwin')('publication without exclusive re
     const kept = results[1]!.entries.find((entry) => entry.kind === 'kept')!;
     expect(String(failure)).toContain(kept.path);
     expect(await readFile(kept.path, 'utf8')).toBe('other process content');
+  });
+
+  it('reports a private recovery path even when the job was cancelled during the native reply', async () => {
+    const source = path.join(root, 'Copy.txt');
+    const folder = path.join(root, 'Destination');
+    await writeFile(source, 'complete', { flag: 'wx' });
+    await mkdir(folder);
+    const service = new Operations(
+      async () => {
+        throw new Error('No test removal');
+      },
+      () => {},
+    );
+    operations.push(service);
+    scenario = 'cleanup-file-occupied';
+    afterNative = async () => service.cancel(id);
+    const id = service.start({ kind: 'copy', sources: [source], destination: folder });
+    await service.drained();
+    const job = service.all().find((job) => job.id === id)!;
+    const held = results[0]!.entries.find((entry) => entry.kind === 'kept')!;
+    expect(job.status).toBe('cancelled');
+    expect(
+      job.errors.some((error) => error.path === held.path && error.message.includes(held.path)),
+    ).toBe(true);
+    expect(await readFile(held.path, 'utf8')).toBe('other process content');
+    expect(await readFile(source, 'utf8')).toBe('complete');
+  });
+
+  it('keeps case-rename rollback recovery in the original error', async () => {
+    const source = path.join(root, 'Case.txt');
+    const target = path.join(root, 'CASE.txt');
+    await writeFile(source, 'complete', { flag: 'wx' });
+    const service = new Operations(
+      async () => {
+        throw new Error('No test removal');
+      },
+      () => {},
+    );
+    operations.push(service);
+    beforeRetry = async (_source, destination) => {
+      if (destination !== target) return;
+      beforeRetry = async () => {
+        beforeRetry = undefined;
+        scenario = 'cleanup-file-occupied';
+      };
+      throw Object.assign(new Error('Case rename failed'), { code: 'EIO' });
+    };
+    const changeCase = Reflect.get(service, 'changeCase') as (
+      source: string,
+      target: string,
+    ) => Promise<void>;
+    let failure: unknown;
+    try {
+      await changeCase.call(service, source, target);
+    } catch (error) {
+      failure = error;
+    }
+    const held = results[1]!.entries.find((entry) => entry.kind === 'kept')!;
+    expect(String(failure)).toContain('Case rename failed');
+    expect(String(failure)).toContain(held.path);
+    expect(await readFile(held.path, 'utf8')).toBe('other process content');
+  });
+
+  it('reports kept reservations when EXDEV starts a streamed move', async () => {
+    const source = path.join(root, 'Move.txt');
+    const folder = path.join(root, 'Destination');
+    await writeFile(source, 'complete', { flag: 'wx' });
+    await mkdir(folder);
+    const service = new Operations(
+      async () => {
+        throw new Error('No test removal');
+      },
+      () => {},
+    );
+    operations.push(service);
+    scenario = 'commit-exdev';
+    afterNative = async () => {
+      scenario = 'normal';
+    };
+    const id = service.start({ kind: 'move', sources: [source], destination: folder });
+    await service.drained();
+    const kept = results[0]!.entries.find((entry) => entry.kind === 'reservation')!;
+    const job = service.all().find((job) => job.id === id)!;
+    expect(job.errors.some((error) => error.message.includes(kept.path))).toBe(true);
+    expect(await readFile(source, 'utf8')).toBe('complete');
+    expect(await readFile(path.join(folder, 'Move.txt'), 'utf8')).toBe('complete');
   });
 
   it('reports final and private paths when claiming a failed reservation is refused', async () => {
