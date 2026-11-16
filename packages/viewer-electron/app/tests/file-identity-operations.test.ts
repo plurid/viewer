@@ -145,7 +145,7 @@ describe('exact identity at operation boundaries', () => {
     const service = operations();
     const job = await service.writeText(file, '');
     expect(job.status).toBe('completed');
-    await highInode(file, -20n);
+    await highInode(file, 42n);
     await service.undo(job.id);
     await expect(lstat(file)).rejects.toMatchObject({ code: 'ENOENT' });
     const retained = (await readdir(root)).find((name) => name.startsWith('Retained '));
@@ -164,7 +164,7 @@ describe('exact identity at operation boundaries', () => {
     const id = service.start({ kind: 'copy', sources: [source], destination });
     await service.drained();
     expect(service.all().find((job) => job.id === id)?.status).toBe('completed');
-    await highInode(path.join(destination, 'Folder/Empty.txt'), -20n);
+    await highInode(path.join(destination, 'Folder/Empty.txt'), 42n);
     await service.undo(id);
     const retained = (await readdir(root)).find((name) => name.startsWith('Retained '));
     expect((await lstat(path.join(root, retained!, 'Empty.txt'))).size).toBe(0);
@@ -284,7 +284,7 @@ describe('exact identity at operation boundaries', () => {
       (item) => item.job.id === id,
     )!;
     expect(receipt.undo[0]?.identity).toMatch(/:synthetic:file$/);
-    await highInode(path.join(destination, 'report.txt'), -2n);
+    await highInode(path.join(destination, 'report.txt'), 42n);
     const restored = operations(data);
     await restored.undo(id);
     expect(await readFile(source, 'utf8')).toBe('complete');
@@ -476,7 +476,7 @@ describe('exact identity at operation boundaries', () => {
     >;
     expect(first.identity).toMatch(/:18446744073709551615:u64$/);
     const cache = new Map([[file, first]]);
-    await highInode(file, -2n);
+    await highInode(file, 42n);
     const second = await entry(file);
     expect(reconcileSelection([file], cache, root, indexEntries([second]))).toEqual([file]);
     const old = { identity: '12:18446744073709552000', modified: 1, size: 0 };

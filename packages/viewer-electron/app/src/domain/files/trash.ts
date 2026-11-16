@@ -42,6 +42,8 @@ export interface TrashOrigin {
   file: string;
   originalPath: string;
   identity: string;
+  modified?: number;
+  size?: number;
 }
 export type TrashSortKey = 'name' | 'originalPath' | 'date' | 'size';
 export function trashDateColumn(items: readonly TrashItem[]): 'deleted' | 'added' | undefined {

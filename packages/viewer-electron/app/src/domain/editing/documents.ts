@@ -17,7 +17,7 @@ export const textVersionSchema = z
 export type TextVersion = z.infer<typeof textVersionSchema>;
 
 export const sameTextVersion = (a: TextVersion, b: TextVersion) =>
-  sameTemporalIdentity(a.identity, b.identity) &&
+  sameTemporalIdentity(a.identity, b.identity, 'file', 'file') &&
   a.modified === b.modified &&
   a.size === b.size &&
   a.sha256 === b.sha256;

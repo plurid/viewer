@@ -56,6 +56,7 @@ import type { PostScriptInspection } from '../../domain/previews/documents/posts
 import { postscriptFormats } from '../../domain/previews/documents/postscript';
 import { previewTextLimit } from '../../domain/files/read-limits';
 import { readPostScript } from './postscript';
+import { needsFolderAccess } from '../../domain/files/access';
 import { hasFilePreview } from '../../domain/previews/formats';
 
 interface Grant {
@@ -754,6 +755,9 @@ export class Resources {
       }),
     ).catch((error: unknown) => {
       if (child) this.release(child.id);
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (needsFolderAccess(code))
+        throw Object.assign(new Error('The file could not be read.'), { code });
       throw error;
     });
   }

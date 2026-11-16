@@ -28,7 +28,9 @@ stdout and scratch limits, priority reduction and process-group cancellation. It
 owned process's exit with a bounded final stdout drain, so descendants cannot hold the cache slot
 through an inherited pipe. The PostScript section is streamed through stdin with backpressure. TIFF
 sections are bounded byte inputs to the existing image pipeline. Neither path makes a document copy
-on disk. An EPS uses `-dEPSCrop`.
+on disk. An EPS uses `-dEPSCrop` only for a stated, non-deferred box within the
+[format limits](../reference/formats.md). A full-page fallback avoids failed or zero-sized pages
+when comments cannot supply a usable box, and the preview explains that choice.
 
 Ghostscript receives a private `TMPDIR`, a monitored 64 MiB scratch budget and `-K131072` for a 128
 MiB allocation budget. The [format reference](../reference/formats.md) states sampling, traversal,

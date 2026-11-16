@@ -99,7 +99,7 @@ const pane = z.discriminatedUnion('type', [
       sourceIdentity: z
         .string()
         .max(100)
-        .regex(/^\d+:\d+$/)
+        .refine((value) => readItemIdentity(value) !== undefined)
         .optional(),
     })
     .strict(),
@@ -534,3 +534,4 @@ export class Storage {
     return this.writes;
   }
 }
+import { readItemIdentity } from '../../domain/files/item-identity';

@@ -8,7 +8,7 @@ import type {
   GhostscriptStatus,
 } from '../src/domain/previews/documents/postscript';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
-import { inspectPostScript } from '../src/domain/previews/documents/postscript';
+import { inspectPostScript, epsCropMessage } from '../src/domain/previews/documents/postscript';
 import { postscriptSample } from './support/postscript';
 import PostScriptPreview from '../src/renderer/previews/modules/PostScriptPreview';
 
@@ -69,6 +69,15 @@ function fixture(
 }
 
 describe('PostScript preview composition and explicit rendering', () => {
+  it('explains the full-page fallback before and after rendering an EPS with an unusable box', async () => {
+    const f = fixture({ kind: 'found' }, { kind: 'Encapsulated PostScript', epsCrop: 'page' });
+    render(<PostScriptPreview {...f.context} />);
+    expect(await screen.findByText(epsCropMessage)).toBeTruthy();
+    expect(f.services.renderPostscript).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Render pages with Ghostscript' }));
+    expect(await screen.findByText('Pages rendered with Ghostscript 10.99.1.')).toBeTruthy();
+    expect(screen.getByText(epsCropMessage)).toBeTruthy();
+  });
   it('describes and shows source through the text viewer, with no automatic execution in Quick Preview', async () => {
     const f = fixture();
     render(<PostScriptPreview {...f.context} />);
@@ -131,6 +140,7 @@ describe('PostScript preview composition and explicit rendering', () => {
   it.each([
     [{ kind: 'missing' }, 'Pages can be rendered if Ghostscript is installed.'],
     [{ kind: 'store' }, 'Page rendering is unavailable in the Store edition.'],
+    [{ kind: 'failed' }, 'Ghostscript could not be checked.'],
   ] as const)('shows the quiet %s state with no rendering button', async (status, text) => {
     const f = fixture(status);
     render(<PostScriptPreview {...f.context} />);

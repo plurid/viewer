@@ -34,7 +34,7 @@ export async function readPostScript(
     read += bytesRead;
   }
   const truncated = section.length > length;
-  const content = postscriptContent(bytes, extension, truncated);
+  const content = postscriptContent(bytes, extension, truncated, !!header);
   const document = { ...content.document, wmf: !!header?.wmf };
   if (header && document.pdf)
     throw new Error('This EPS PostScript section is malformed; its bytes are shown below.');

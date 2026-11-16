@@ -8,7 +8,7 @@ import * as pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 import { describe, expect, it } from 'vitest';
 import { Ghostscript } from '../src/desktop/previews/postscript-renderer';
 import { temporaryRoot } from '../tools/temporary';
-import { postscriptSample } from './support/postscript';
+import { postscriptSample, unusableEPSBoxes, epsCropSample } from './support/postscript';
 import { recordingPostScriptStage } from './support/postscript-runtime';
 
 const ready = ['/opt/homebrew/bin/gs', '/usr/local/bin/gs', '/opt/local/bin/gs'].some(existsSync);
@@ -21,6 +21,42 @@ const systemScratch = () =>
 (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = pdfWorker;
 
 describe.skipIf(!ready)('installed Ghostscript against generated programs', () => {
+  it.each(unusableEPSBoxes)(
+    'renders a full EPS page when its box is %s',
+    async (_name, comments) => {
+      const root = await temporaryRoot('viewer-postscript-full-page-');
+      const file = path.join(root, 'drawing.eps');
+      await writeFile(file, epsCropSample(comments), { flag: 'wx' });
+      const renderer = new Ghostscript({
+        ...recordingPostScriptStage(root).options,
+        store: () => false,
+      });
+      const handle = await open(file, 'r');
+      try {
+        const output = await renderer.decode(
+          { file, handle, info: await fileStat(handle) },
+          'postscript',
+          new AbortController().signal,
+          4096,
+          await renderer.variant(),
+        );
+        const task = getDocument({ data: new Uint8Array(output.data) });
+        try {
+          const pdf = await task.promise;
+          expect(pdf.numPages).toBe(1);
+          const page = await pdf.getPage(1);
+          const box = page.getViewport({ scale: 1 });
+          expect(box.width).toBeGreaterThan(144);
+          expect(box.height).toBeGreaterThan(72);
+          expect((await page.getOperatorList()).fnArray.length).toBeGreaterThan(0);
+        } finally {
+          await task.destroy();
+        }
+      } finally {
+        await handle.close();
+      }
+    },
+  );
   it.each([2, 3])('renders a Level %s two-page document into a readable PDF', async (level) => {
     const root = await temporaryRoot('viewer-postscript-real-');
     const file = path.join(root, 'source.ps');

@@ -2,7 +2,7 @@ import { realpath } from 'node:fs/promises';
 import { lstat } from './stats';
 import type { FileStats as Stats } from './stats';
 import type { StatIdentity, TemporalIdentity } from '../../domain/files/item-identity';
-import { itemIdentity, versionIdentity } from '../../domain/files/item-identity';
+import { itemIdentity, versionIdentity, matchesVersionIdentity } from '../../domain/files/item-identity';
 import type { VersionStat } from '../../domain/files/item-identity';
 import path from 'node:path';
 
@@ -16,7 +16,7 @@ export const pinReplacement = (info: Stats): Replaced => ({ identity: versionIde
  * symbolic-link ancestors and firmlinks all share its device and inode. */
 export const sameItem = (a: StatIdentity, b: StatIdentity) => itemIdentity(a) === itemIdentity(b);
 export const sameVersionItem = (a: VersionStat, b: VersionStat) =>
-  versionIdentity(a) === versionIdentity(b);
+  matchesVersionIdentity(b, versionIdentity(a));
 /** Whether the folder `ancestor` holds `file` at any depth, compared by identity. */
 export async function holds(ancestor: Stats, file: string): Promise<boolean> {
   if (!ancestor.isDirectory()) return false;
@@ -32,7 +32,7 @@ export async function holds(ancestor: Stats, file: string): Promise<boolean> {
  * modification times change when entries are added or removed. */
 export function unchanged(current: Stats, expected: Replaced): boolean {
   return (
-    versionIdentity(current) === expected.identity &&
+    matchesVersionIdentity(current, expected.identity) &&
     current.mtimeMs === expected.info.mtimeMs &&
     (current.isDirectory() ||
       (current.size === expected.info.size && current.ctimeMs === expected.info.ctimeMs))

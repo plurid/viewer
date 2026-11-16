@@ -7,16 +7,12 @@ import path from 'node:path';
 import type { Decoder } from './derived';
 import type { PostScriptStageOptions } from './postscript-stage';
 import type { GhostscriptStatus } from '../../domain/previews/documents/postscript';
-import {
-  binaryEPS,
-  epsHeader,
-  inspectPostScript,
-  postscriptOffset,
-} from '../../domain/previews/documents/postscript';
+import { binaryEPS, epsHeader, postscriptOffset } from '../../domain/previews/documents/postscript';
 import { errorMessage } from '../../domain/errors';
 import { previewInput } from './input-copy';
 import { withPostScriptStage } from './postscript-stage';
 import { runProcessor } from '../transforms/process';
+import { readPostScript } from './postscript';
 
 export const ghostscriptLocations = [
   '/opt/homebrew/bin/gs',
@@ -33,6 +29,7 @@ interface GhostscriptOptions extends PostScriptStageOptions {
   outputLimit?: number;
   scratchLimit?: number;
   resolveExecutable?(file: string): Promise<string>;
+  diagnose?(detail: string): void;
 }
 interface Executable {
   file: string;
@@ -47,7 +44,12 @@ export class Ghostscript {
   private async find(): Promise<Executable | undefined> {
     if (this.options.store()) return undefined;
     for (const candidate of ghostscriptLocations) {
-      const found = await this.executable(candidate).catch(() => undefined);
+      const found = await this.executable(candidate).catch((error: unknown) => {
+        if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException)?.code ?? ''))
+          return undefined;
+        this.options.diagnose?.(`Ghostscript discovery failed: ${errorMessage(error)}`);
+        throw new Error('Ghostscript could not be checked.');
+      });
       if (found) return found;
     }
     return undefined;
@@ -70,7 +72,11 @@ export class Ghostscript {
 
   async status(): Promise<GhostscriptStatus> {
     if (this.options.store()) return { kind: 'store' };
-    return { kind: (await this.find()) ? 'found' : 'missing' };
+    try {
+      return { kind: (await this.find()) ? 'found' : 'missing' };
+    } catch {
+      return { kind: 'failed' };
+    }
   }
 
   async variant(): Promise<string> {
@@ -93,12 +99,13 @@ export class Ghostscript {
     if (binaryEPS(header)) section = epsHeader(header, source.info.size)!.postscript;
     const first = Buffer.alloc(Math.min(256, section.length));
     await source.handle.read(first, 0, first.length, section.offset);
-    if (inspectPostScript(first, source.format ?? path.extname(source.file).slice(1)).pdf)
-      throw new Error('This Illustrator file already contains a PDF.');
-    const crop =
-      binaryEPS(header) ||
-      /EPSF-/.test(first.toString()) ||
-      /^eps[fi]?$/.test(source.format ?? path.extname(source.file).slice(1));
+    const { document } = await readPostScript(
+      source,
+      source.format ?? path.extname(source.file).slice(1),
+      signal,
+    );
+    if (document.pdf) throw new Error('This Illustrator file already contains a PDF.');
+    const crop = document.epsCrop === 'drawing';
     const prelude = postscriptOffset(first);
     section = { offset: section.offset + prelude, length: section.length - prelude };
     let version: string | undefined;

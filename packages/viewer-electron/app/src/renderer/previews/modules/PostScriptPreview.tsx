@@ -7,6 +7,7 @@ import type {
 } from '../../../domain/previews/documents/postscript';
 import type { PreviewContext } from '../contracts';
 import { errorMessage } from '../../../domain/errors';
+import { epsCropMessage } from '../../../domain/previews/documents/postscript';
 import { HexView } from '../HexView';
 import { Loading } from '../../ui/primitives';
 import TextPreview from './TextPreview';
@@ -212,12 +213,14 @@ export default function PostScriptPreview(context: PreviewContext) {
           )}
         </div>
         {document.previewMessage && <p className="muted">{document.previewMessage}</p>}
+        {document.epsCrop === 'page' && <p className="muted">{epsCropMessage}</p>}
         {document.wmf && (
           <p className="muted">Embedded WMF preview; this picture is not displayed.</p>
         )}
         {status.kind === 'missing' && (
           <p className="muted">Pages can be rendered if Ghostscript is installed.</p>
         )}
+        {status.kind === 'failed' && <p className="muted">Ghostscript could not be checked.</p>}
         {status.kind === 'store' && (
           <p className="muted">Page rendering is unavailable in the Store edition.</p>
         )}

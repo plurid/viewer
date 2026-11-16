@@ -489,7 +489,8 @@ export class Desktop {
     const office = new DerivedPreviews(access, officeDecoder(assetPath(officeRuntimeName)));
     const ghostscript = new Ghostscript({
       store: () => !!process.mas,
-      trash: (file) => shell.trashItem(file),
+      trash: guardTestTrash((file: string) => shell.trashItem(file)),
+      diagnose: (detail) => this.options.diagnose?.(detail),
     });
     const postscript = new DerivedPreviews(access, ghostscript.decode);
     this.resources = new Resources(

@@ -1,4 +1,4 @@
-import { itemIdentity, versionIdentity, temporalIdentity, legacyIdentityParts } from '../../domain/files/item-identity';
+import { itemIdentity, versionIdentity, syntheticInode, syntheticVersionIdentity, temporalIdentity, legacyIdentityParts } from '../../domain/files/item-identity';
 import { lstat } from '../files/stats';
 import path from 'node:path';
 import { imageConversions } from '../../domain/contracts';
@@ -47,6 +47,7 @@ export const undoStepSchema = z
     remove: z.boolean().optional(),
     proof: z.string().length(64).optional(),
     proofVersion: z.literal(2).optional(),
+    proofSynthetic: z.array(z.string().max(32768)).max(10000).optional(),
     trash: z.boolean().optional(),
     bookmark: z.string().min(1).max(65536).optional(),
     directory: z.boolean().optional(),
@@ -167,6 +168,7 @@ export interface OutputEvidence {
   proofVersion?: 2;
   failure?: ProofFailure;
   exactProof?: string;
+  proofSynthetic?: string[];
 }
 
 /** Safe trees retain the earlier byte layout. Large identities need a versioned proof; synthetic
@@ -174,10 +176,13 @@ export interface OutputEvidence {
 export async function outputEvidence(
   root: string,
   version?: OutputProofVersion,
+  proofSynthetic?: readonly string[],
 ): Promise<OutputEvidence> {
   const temporal = createHash('sha256');
   const exact = version === 2 ? createHash('sha256') : undefined;
   let large = false;
+  const synthetic = new Set(proofSynthetic);
+  const recordedSynthetic: string[] = [];
   const queue = [''];
   let count = 0;
   while (queue.length) {
@@ -187,18 +192,25 @@ export async function outputEvidence(
     const info = await lstat(file);
     const previous = legacyIdentityParts(info);
     if (!previous) large = true;
+    const unstable = proofSynthetic === undefined
+      ? info.isFile() && syntheticInode(info)
+      : synthetic.has(relative);
+    if (unstable) {
+      recordedSynthetic.push(relative);
+      large = true;
+    }
     const metadata = [
       info.size, info.mtimeMs, info.ctimeMs, info.mode,
       info.isSymbolicLink() ? await readlink(file) : '',
     ];
-    temporal.update(JSON.stringify([relative, ...(previous ?? [versionIdentity(info)]), ...metadata]));
+    temporal.update(JSON.stringify([relative, ...(unstable ? [syntheticVersionIdentity(info)] : previous ?? [versionIdentity(info)]), ...metadata]));
     exact?.update(JSON.stringify([relative, itemIdentity(info), ...metadata]));
     if (info.isDirectory())
       for (const name of (await readdir(file)).sort().reverse()) queue.push(path.join(relative, name));
   }
   if (version === 1 && large) return { failure: 'legacy-identity' };
   if (version === 2 || large)
-    return { proof: temporal.digest('hex'), proofVersion: 2, exactProof: exact?.digest('hex') };
+    return { proof: temporal.digest('hex'), proofVersion: 2, exactProof: exact?.digest('hex'), ...(recordedSynthetic.length ? { proofSynthetic: recordedSynthetic } : {}) };
   return { proof: temporal.digest('hex') };
 }
 
@@ -210,8 +222,9 @@ export async function matchesOutputProof(
   root: string,
   proof: string,
   version?: OutputProofVersion,
+  proofSynthetic?: readonly string[],
 ): Promise<{ matches: boolean; failure?: ProofFailure }> {
-  const current = await outputEvidence(root, version ?? 1);
+  const current = await outputEvidence(root, version ?? 1, proofSynthetic);
   return {
     matches: current.proof === proof || (version === 2 && current.exactProof === proof),
     failure: current.failure,

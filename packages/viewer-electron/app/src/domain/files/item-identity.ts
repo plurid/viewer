@@ -67,6 +67,17 @@ export function versionIdentity(info: VersionStat): TemporalIdentity {
   return temporalIdentity(itemIdentity(info), identityKind(info.mode));
 }
 
+export function syntheticVersionIdentity(info: VersionStat): TemporalIdentity {
+  return `${unsigned(info.dev)}:synthetic:${identityKind(info.mode)}` as TemporalIdentity;
+}
+
+export function matchesVersionIdentity(current: VersionStat, expected: TemporalIdentity): boolean {
+  const previous = readTemporalIdentity(expected);
+  if (previous?.endsWith(':synthetic:file'))
+    return syntheticVersionIdentity(current) === previous;
+  return previous !== undefined && versionIdentity(current) === previous;
+}
+
 export function readTemporalIdentity(value: string): TemporalIdentity | undefined {
   const synthetic = /^(0|[1-9]\d*):synthetic:file$/.exec(value);
   if (synthetic) {
@@ -77,10 +88,22 @@ export function readTemporalIdentity(value: string): TemporalIdentity | undefine
   return exact ? temporalIdentity(exact) : undefined;
 }
 
-export function sameTemporalIdentity(a: TemporalIdentity, b: TemporalIdentity): boolean {
+export function sameTemporalIdentity(
+  a: TemporalIdentity,
+  b: TemporalIdentity,
+  kindA?: IdentityKind,
+  kindB?: IdentityKind,
+): boolean {
   if (!/^-?\d+:/.test(a) && !/^-?\d+:/.test(b)) return a !== '' && a === b;
-  const identity = readTemporalIdentity(a);
-  return identity !== undefined && identity === readTemporalIdentity(b);
+  const left = readTemporalIdentity(a);
+  const right = readTemporalIdentity(b);
+  if (left === undefined || right === undefined) return false;
+  if (left === right) return true;
+  if (left.endsWith(':synthetic:file') && kindB === 'file')
+    return left.slice(0, left.indexOf(':')) === right.slice(0, right.indexOf(':'));
+  if (right.endsWith(':synthetic:file') && kindA === 'file')
+    return left.slice(0, left.indexOf(':')) === right.slice(0, right.indexOf(':'));
+  return false;
 }
 
 export function exactIdentityParts(info: StatIdentity): { dev: bigint; ino: bigint } {

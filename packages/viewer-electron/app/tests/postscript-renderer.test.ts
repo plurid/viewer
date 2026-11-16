@@ -16,7 +16,14 @@ import { agentConfigurationPath } from '../src/domain/agents/safety';
 import { settingsSchema } from '../src/desktop/preferences/settings-schema';
 import { defaultSettings } from '../src/domain/services';
 import { temporaryRoot } from '../tools/temporary';
-import { binaryEPSSample, pdfSample, postscriptSample } from './support/postscript';
+import {
+  binaryEPSSample,
+  pdfSample,
+  postscriptSample,
+  unusableEPSBoxes,
+  epsCropSample,
+} from './support/postscript';
+import { guardTestTrash } from '../src/desktop/native/test-removal-policy';
 import { recordingPostScriptStage } from './support/postscript-runtime';
 import { withPostScriptStage } from '../src/desktop/previews/postscript-stage';
 
@@ -58,14 +65,18 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function fixture(mode: FakeMode = 'success', store = false) {
+interface FixtureOptions {
+  timeout?: number;
+  source?: string;
+}
+async function fixture(mode: FakeMode = 'success', store = false, options: FixtureOptions = {}) {
   const executable = path.join(root, 'fake-gs');
   const log = path.join(root, 'calls.jsonl');
   const signals = path.join(root, 'signals.jsonl');
   const input = path.join(root, 'stdin.bin');
   const descendant = path.join(root, 'descendant.json');
   const source = path.join(root, 'drawing.eps');
-  const sourceBytes = binaryEPSSample(postscriptSample);
+  const sourceBytes = binaryEPSSample(options.source ?? postscriptSample);
   await writeFile(source, sourceBytes, { flag: 'wx' });
   const script = `#!${process.execPath}
 const fs = require('node:fs');
@@ -97,14 +108,16 @@ if (args.includes('-h')) {
 `;
   await writeFile(executable, script, { flag: 'wx', mode: 0o700 });
   const recording = recordingPostScriptStage(root);
+  const diagnose = vi.fn();
   const resolveExecutable = vi.fn(async (file: string) =>
     realpath(ghostscriptLocations.includes(file) ? executable : file),
   );
   const renderer = new Ghostscript({
     ...recording.options,
     resolveExecutable,
+    diagnose,
     store: () => store,
-    timeout: mode === 'timeout' ? 400 : 5000,
+    timeout: options.timeout ?? (mode === 'timeout' ? 400 : 5000),
     outputLimit: mode === 'oversized' ? 1024 : 1_000_000,
     scratchLimit: mode === 'scratch' ? 8192 : undefined,
   });
@@ -152,6 +165,7 @@ if (args.includes('-h')) {
     signalRecords,
     recording,
     resolveExecutable,
+    diagnose,
     input,
     descendant,
   };
@@ -172,6 +186,38 @@ const expectedArgs = [
 ];
 
 describe('explicit, bounded Ghostscript rendering', () => {
+  it.each(unusableEPSBoxes)('omits cropping for a %s EPS box', async (_name, comments) => {
+    const f = await fixture('success', false, { source: epsCropSample(comments) });
+    expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).epsCrop).toBe('page');
+    await f.service.renderPostscript(f.granted.id, 'render');
+    expect((await f.calls())[1]!.args).toEqual(
+      expectedArgs.filter((argument) => argument !== '-dEPSCrop'),
+    );
+  });
+  it.each(['ENOENT', 'ENOTDIR'])('keeps discovery quiet for %s', async (code) => {
+    const f = await fixture();
+    f.resolveExecutable.mockRejectedValue(
+      Object.assign(new Error('Absent test executable.'), { code }),
+    );
+    expect(await f.service.postscriptStatus()).toEqual({ kind: 'missing' });
+    expect(f.diagnose).not.toHaveBeenCalled();
+    expect(await f.calls()).toEqual([]);
+  });
+  it.each(['EACCES', 'EMFILE', undefined])(
+    'diagnoses unexpected discovery failures with code %s',
+    async (code) => {
+      const f = await fixture();
+      f.resolveExecutable.mockRejectedValue(
+        Object.assign(new Error('Generated discovery failure.'), { code }),
+      );
+      expect(await f.service.postscriptStatus()).toEqual({ kind: 'failed' });
+      expect(f.diagnose).toHaveBeenCalledWith(
+        'Ghostscript discovery failed: Generated discovery failure.',
+      );
+      await expect(f.renderer.variant()).rejects.toThrow('Ghostscript could not be checked.');
+      expect(await f.calls()).toEqual([]);
+    },
+  );
   it('uses exact safe arguments, a non-inherited environment and only stdin after the action', async () => {
     vi.stubEnv('GS_OPTIONS', '-dNOSAFER');
     const f = await fixture();
@@ -233,7 +279,7 @@ describe('explicit, bounded Ghostscript rendering', () => {
     }
   });
   it('signals cancellation and waits for the owned process to exit', async () => {
-    const f = await fixture('timeout');
+    const f = await fixture('timeout', false, { timeout: 60_000 });
     const outcome = f.service
       .renderPostscript(f.granted.id, 'render')
       .catch((error: Error) => error);
@@ -257,7 +303,7 @@ describe('explicit, bounded Ghostscript rendering', () => {
     await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 3000 });
   });
   it('cancels the entire process group including a descendant that ignores SIGTERM', async () => {
-    const f = await fixture('tree');
+    const f = await fixture('tree', false, { timeout: 60_000 });
     const outcome = f.service
       .renderPostscript(f.granted.id, 'render')
       .catch((error: Error) => error);
@@ -268,11 +314,13 @@ describe('explicit, bounded Ghostscript rendering', () => {
     });
     f.service.cancelDocument(f.granted.id, 'render');
     expect(await outcome).toBeInstanceOf(Error);
-    await f.service.close();
-    expect(await f.signalRecords()).toEqual([
-      { pid: (await f.calls())[1]!.pid, signal: 'SIGTERM' },
-    ]);
+    await vi.waitFor(async () =>
+      expect(await f.signalRecords()).toEqual([
+        { pid: (await f.calls())[1]!.pid, signal: 'SIGTERM' },
+      ]),
+    );
     await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 3000 });
+    await f.service.close();
   });
   it('cancels during discovery before queuing a process', async () => {
     const f = await fixture();
@@ -312,6 +360,24 @@ describe('explicit, bounded Ghostscript rendering', () => {
     ).rejects.toThrow('could not be safely checked and was kept');
     expect(recording.trash).not.toHaveBeenCalled();
     expect(await readdir(recording.stages[0]!)).toEqual(['unexpected-link']);
+  });
+  it('keeps native automated scratch out of the operating-system Trash', async () => {
+    const recording = recordingPostScriptStage(root);
+    const trash = guardTestTrash(recording.trash, {
+      VIEWER_RENDER_TEST: '1',
+      VIEWER_DATA_DIRECTORY: root,
+      VIEWER_TEST_NO_REMOVAL: '1',
+    });
+    await expect(
+      withPostScriptStage({ ...recording.options, trash }, async (directory) => {
+        await writeFile(path.join(directory, 'gs_scratch'), 'Generated scratch.');
+        throw new Error('Stopped test render.');
+      }),
+    ).rejects.toThrow('could not be moved to Trash and was kept');
+    expect(recording.trash).not.toHaveBeenCalled();
+    expect(
+      (await readdir(root)).some((name) => name.startsWith('Viewer Ghostscript scratch ')),
+    ).toBe(true);
   });
   it('has no discovery or render path in the Store edition', async () => {
     const f = await fixture('success', true);

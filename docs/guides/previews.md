@@ -85,7 +85,8 @@ import, follow or download it.
 3. To render pages, choose **Render pages with Ghostscript**. The button appears when Viewer finds
    an executable in one of its three fixed installation locations. Viewer checks its identity and
    version after the click, then reads the program through standard input and shows the resulting
-   PDF with its version label. An EPS page is cropped to its drawing.
+   PDF with its version label. An EPS page is cropped to its drawing when its stated box can be
+   used. Otherwise Viewer explains that rendering uses the full page.
 4. Choose **Cancel rendering** to stop. A failure leaves the document details, source and embedded
    picture available. **Source**, **Embedded preview** and **Rendered pages** switch between the
    available views.

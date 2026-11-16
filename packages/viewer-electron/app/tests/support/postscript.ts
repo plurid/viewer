@@ -94,3 +94,15 @@ export function pdfSample(): Buffer {
   body += `trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(body);
 }
+export const unusableEPSBoxes = [
+  ['missing', ''],
+  ['deferred', '%%BoundingBox: (atend)'],
+  ['empty', '%%BoundingBox: 0 0 0 0'],
+  ['inverted', '%%BoundingBox: 144 72 0 0'],
+  ['huge', '%%BoundingBox: 0 0 1000000 1000000'],
+  ['tiny HiRes', '%%BoundingBox: 0 0 144 72\n%%HiResBoundingBox: 0 0 0.01 0.01'],
+] as const;
+
+export function epsCropSample(comments: string): string {
+  return `%!PS-Adobe-3.0 EPSF-3.0\n${comments}\n%%EndComments\n10 20 144 72 rectfill\nshowpage\n%%Trailer\n%%BoundingBox: 10 20 154 92\n%%EOF\n`;
+}

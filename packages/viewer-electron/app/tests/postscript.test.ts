@@ -17,9 +17,34 @@ import {
   pdfSample,
   postscriptSample,
   tiffSample,
+  unusableEPSBoxes,
+  epsCropSample,
 } from './support/postscript';
 
 describe('PostScript identities and registry', () => {
+  it.each(['%!PS', '%!\n', '%!\r', '%!\t', '%! showpage'])(
+    'recognizes the bounded PostScript signature %j for unknown files',
+    (header) => {
+      expect(identifyBytes(Buffer.from(header), 'unknown.data')?.extension).toBe('ps');
+    },
+  );
+  it.each(['%!', '%!TEX root = main.tex', '%!other', '%!P', '%!\u0000'])(
+    'does not claim the unknown signature %j',
+    (header) => {
+      expect(identifyBytes(Buffer.from(header), 'unknown.data')).toBeUndefined();
+      expect(inspectPostScript(Buffer.from(header), 'ps').kind).toBe('PostScript document');
+    },
+  );
+  it.each(unusableEPSBoxes)('uses full pages for an EPS box that is %s', (_name, comments) => {
+    expect(inspectPostScript(Buffer.from(epsCropSample(comments)), 'eps').epsCrop).toBe('page');
+  });
+  it.each([
+    '%%BoundingBox: 10 20 154 92',
+    '%%BoundingBox: 0 0 14400 14400',
+    '%%BoundingBox: 0 0 144 72\n%%HiResBoundingBox: 0 0 143.5 71.5',
+  ])('uses a stated, usable EPS box %j', (comments) => {
+    expect(inspectPostScript(Buffer.from(epsCropSample(comments)), 'eps').epsCrop).toBe('drawing');
+  });
   it.each(['ps', 'eps', 'epsf', 'epsi', 'ai'])(
     'preserves automatic double-click opening for .%s',
     (extension) => {

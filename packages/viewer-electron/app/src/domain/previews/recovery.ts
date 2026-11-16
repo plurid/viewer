@@ -1,5 +1,5 @@
 import type { FileEntry } from '../contracts';
-import { sameIdentity } from '../files/item-identity';
+import { sameSelection } from '../files/entries';
 
 /** Identity, not a similar name, is evidence of a rename. Hard links with more
  * than one possible destination require an explicit file choice. */
@@ -13,7 +13,7 @@ export function renamedSibling(
       entry.kind === 'file' &&
       !entry.directory &&
       entry.path !== source.path &&
-      sameIdentity(entry.identity, source.identity),
+      sameSelection(entry, source),
   );
   return matches.length === 1 ? matches[0] : undefined;
 }

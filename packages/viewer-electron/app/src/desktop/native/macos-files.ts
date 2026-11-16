@@ -4,8 +4,8 @@ import type { ReviewedFileExpectation } from './reviewed-file';
 import { guardNativeTestRemovals } from './test-removal-policy';
 import type { FullscreenPhase } from '../windows/fullscreen-transition';
 import { assetPath } from './assets';
-import { nativeIdentityArgument, itemIdentity, versionIdentity } from '../../domain/files/item-identity';
-import { sameSourceVersion } from '../../domain/files/inspection';
+import { nativeIdentityArgument, itemIdentity, identityKind } from '../../domain/files/item-identity';
+import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
 import { lstat } from '../files/stats';
 export interface NativeVolume {
   path: string;
@@ -130,7 +130,7 @@ export function adaptMacFiles(native: NativeFileBindings): MacFiles {
       // A retained review uses temporal evidence. The native accessor must receive a fresh
       // exact identity from the same syscall as its metadata, then verify that plus the hash.
       const info = await lstat(item);
-      const current = { identity: versionIdentity(info), modified: info.mtimeMs, size: info.size };
+      const current = sourceVersion({ identity: itemIdentity(info), kind: identityKind(info.mode), modified: info.mtimeMs, size: info.size });
       if (!sameSourceVersion(current, expected.version))
         throw new Error('The file changed after confirmation. It was preserved.');
       return native.trash(item, purpose, {

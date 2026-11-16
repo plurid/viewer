@@ -1,5 +1,6 @@
 import { itemIdentity } from '../../domain/files/item-identity';
 import { sameItem } from '../files/item-identity';
+import { stat } from '../files/stats';
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -167,7 +168,7 @@ export class Executions {
     if (executor.kind !== 'executable' && executor.kind !== 'shell')
       throw new Error('This action must run through the command registry.');
     const cwd = await fs.realpath(absolute(target.directory));
-    const original = await fs.stat(cwd);
+    const original = await stat(cwd);
     if (!original.isDirectory()) throw new Error('Action folder is unavailable.');
     for (const file of target.selection)
       if ((await entry(file.path)).identity !== file.identity)
@@ -178,7 +179,7 @@ export class Executions {
     const executable = await executablePath(executor.executable);
     await this.access([target.directory, cwd, ...target.selection.map((file) => file.path)]);
     if (manual) await this.validateManual(manual.owner, target);
-    const current = await fs.stat(cwd);
+    const current = await stat(cwd);
     if ((await fs.realpath(absolute(target.directory))) !== cwd || !sameItem(current, original))
       throw new Error('The command folder changed before launch. Choose the command again.');
     if (this.closed || cancelled())

@@ -250,7 +250,7 @@ export const schemas = {
     z
       .string()
       .max(100)
-      .regex(/^\d+:\d+$/)
+      .refine((value) => readItemIdentity(value) !== undefined)
       .optional(),
   ]),
   localServers: z.tuple([]),
@@ -1079,3 +1079,4 @@ type Accepts<K extends ApiMethod> =
 type Disagreeing = Exclude<ApiMethod, PreloadAdapted | { [K in ApiMethod]: Accepts<K> }[ApiMethod]>;
 export const schemasAgreeWithAPI: [Disagreeing] extends [never] ? true : { [K in Disagreeing]: K } =
   true;
+import { readItemIdentity } from '../../domain/files/item-identity';

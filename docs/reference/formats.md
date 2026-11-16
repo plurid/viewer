@@ -128,8 +128,9 @@ A `.mbox` folder, as Mail exports one, opens as a folder.
 
 **PostScript, EPS and Illustrator.** These extensions show document comments and readable source. A
 `%!` header, an initial comment, a leading Ctrl-D or UTF-8 byte order mark is accepted. `%PDF`
-identifies the PDF inside an `.ai`. First-byte detection also identifies otherwise unrecognized
-files; it never replaces another known file kind. The comments supply title, creator, creation date,
+identifies the PDF inside an `.ai`. For otherwise unrecognized files, the text signature must be
+`%!PS` or `%!` followed by whitespace or a line ending. A `%!TEX` comment is not PostScript.
+Detection never replaces another known file kind. The comments supply title, creator, creation date,
 page count, page or bounding-box dimensions in points and millimetres, and language level. Missing
 or invalid comments stay **Unknown**. Source is capped at 4,000,000 bytes. One comment scan inspects
 at most 65,536 lines, with a 4096-byte line limit and 1024-character values; comments in nested
@@ -150,9 +151,14 @@ drawn. Selecting a binary EPS creates no preview files or Trash items.
 setting or `PATH` search. The click first checks Ghostscript's identity and version. Rendering uses
 the shared versioned preview cache, resource authority and cancellation. The PostScript section goes
 to standard input; the original is only read and no document copy is written. EPS pages are cropped
-to the drawing with `-dEPSCrop`. Safe mode, batch/no-prompt flags and a minimal environment are
-fixed. The process group runs at background priority and is stopped together on cancellation or a
-limit. An exited wrapper or a descendant holding a pipe cannot retain the render slot.
+to the drawing with `-dEPSCrop` only when their non-deferred bounding-box comments state dimensions
+from 1 to 14,400 points on both axes. Missing, deferred, empty, inverted, oversized or sub-point
+boxes render a full page instead, with an explanation in the preview. HiRes boxes obey the same
+limits. An unexpected discovery failure is recorded in diagnostics and shown as **Ghostscript could
+not be checked**; only an absent program gets the installation message. Safe mode, batch/no-prompt
+flags and a minimal environment are fixed. The process group runs at background priority and is
+stopped together on cancellation or a limit. An exited wrapper or a descendant holding a pipe cannot
+retain the render slot.
 
 Input is capped at 256 MiB. **32 MiB bounds the PDF result on standard output**, not scratch space.
 The private scratch stage is monitored every 50 ms with a 64 MiB total-size limit; a burst can

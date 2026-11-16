@@ -3,7 +3,12 @@ import {
   nativeItemIdentity,
   nativeIdentityArgument,
   itemIdentity,
+  versionIdentity,
+  matchesVersionIdentity,
+  sameTemporalIdentity,
+  temporalIdentity,
 } from '../../domain/files/item-identity';
+import type { TemporalIdentity } from '../../domain/files/item-identity';
 
 import { lstat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
@@ -67,6 +72,7 @@ const listRecycleBin = [
   'ConvertTo-Json -InputObject $output -Depth 3 -Compress',
 ].join('; ');
 type ReviewedItem = { name: string; identity: string; size: number; modified: number };
+type RetainedItem = Omit<ReviewedItem, 'identity'> & { identity: TemporalIdentity };
 type ReviewedRoot = { path: string; identity: string; items: ReviewedItem[] };
 type ReadResult = {
   snapshot: TrashSnapshot;
@@ -77,7 +83,7 @@ type BackingItem = {
   file: string;
   root: TrashRoot;
   rootIdentity: string;
-  version: ReviewedItem;
+  version: RetainedItem;
   item: TrashItem;
   parents: BackingItem[];
 };
@@ -380,7 +386,7 @@ export class Trash {
     for (const current of [...item.parents, item]) {
       const info = await lstat(current.file);
       if (
-        identity(info) !== current.version.identity ||
+        !matchesVersionIdentity(info, current.version.identity) ||
         (current !== item && (!info.isDirectory() || info.isSymbolicLink())) ||
         (current === item &&
           strict &&
@@ -401,7 +407,7 @@ export class Trash {
     metadata: Pick<TrashItem, 'name' | 'originalPath' | 'deleted'>,
     parents: BackingItem[] = [],
   ): TrashItem {
-    const itemID = id(JSON.stringify([file, identity(info), info.size, info.mtimeMs]));
+    const itemID = id(JSON.stringify([file, versionIdentity(info), info.size, info.mtimeMs]));
     if (parents.length > 64) throw new Error('This folder is too deep to browse in Viewer.');
     if (this.#known.size >= 16000 && !this.#known.has(itemID))
       this.#known.delete(this.#known.keys().next().value!);
@@ -423,7 +429,7 @@ export class Trash {
       parents,
       version: {
         name: path.basename(file),
-        identity: identity(info),
+        identity: versionIdentity(info),
         size: info.size,
         modified: info.mtimeMs,
       },
@@ -616,7 +622,10 @@ export class Trash {
           const receipt = origins.get(file);
           let metadata: Pick<TrashItem, 'name' | 'originalPath' | 'deleted'> = {
             name,
-            ...(receipt?.identity === identity(info) ? { originalPath: receipt.originalPath } : {}),
+            ...(receipt && (
+              receipt.identity === identity(info) ||
+              (matchesVersionIdentity(info, receipt.identity) && receipt.size === info.size && receipt.modified === info.mtimeMs)
+            ) ? { originalPath: receipt.originalPath } : {}),
           };
           if (metadata.originalPath) metadata.name = path.basename(metadata.originalPath);
           if (candidate.info) {
@@ -684,7 +693,7 @@ export class Trash {
         const date = byPath.get(backing.file);
         const added =
           date &&
-          nativeItemIdentity(date.identity) === backing.version.identity &&
+          sameTemporalIdentity(temporalIdentity(nativeItemIdentity(date.identity) ?? ''), backing.version.identity, 'file', 'file') &&
           date.size === backing.version.size &&
           Math.abs(date.modified - backing.version.modified) < 0.01 &&
           typeof date.added === 'number' &&

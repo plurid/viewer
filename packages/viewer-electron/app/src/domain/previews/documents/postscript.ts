@@ -3,7 +3,12 @@ import { previewTextLimit } from '../../files/read-limits';
 
 export const postscriptFormats = ['ps', 'eps', 'epsf', 'epsi', 'ai'] as const;
 export type PostScriptKind = 'PostScript document' | 'Encapsulated PostScript' | 'Illustrator';
-export type GhostscriptStatus = { kind: 'found' } | { kind: 'missing' } | { kind: 'store' };
+export type GhostscriptStatus =
+  { kind: 'found' } | { kind: 'missing' } | { kind: 'store' } | { kind: 'failed' };
+export type EPSCrop = 'drawing' | 'page';
+export const epsCropMaximumPoints = 14_400;
+export const epsCropMessage =
+  "The drawing's bounding box could not be used; rendering uses the full page.";
 export interface ByteSection {
   offset: number;
   length: number;
@@ -30,6 +35,7 @@ export interface PostScriptInspection {
   wmf: boolean;
   limited: boolean;
   previewMessage?: string;
+  epsCrop?: EPSCrop;
 }
 export interface EPSIBitmap {
   width: number;
@@ -199,6 +205,9 @@ function scanComments(bytes: Uint8Array, truncated = false) {
   const metadata: PostScriptMetadata = {};
   let nested = 0;
   let picture: BitmapScan | undefined;
+  let boxSeen = false;
+  let boxUsable = true;
+  let trailer = false;
   for (const line of commentLines(bytes, state)) {
     if (/^%%Begin(?:Document|Resource|File)(?::|\s|$)/.test(line)) {
       nested++;
@@ -210,6 +219,18 @@ function scanComments(bytes: Uint8Array, truncated = false) {
     }
     if (/^%%Begin(?:Binary|Data):/.test(line)) break;
     if (nested) continue;
+    if (line === '%%Trailer') trailer = true;
+    const boxComment = !trailer && /^%%(?:HiRes)?BoundingBox:\s*(.*)$/.exec(line);
+    if (boxComment) {
+      boxSeen = true;
+      const box = numbers(boxComment[1]!, 4);
+      // A sub-point box can round to a zero-sized pdfwrite page; excessive dimensions stay uncropped.
+      boxUsable &&=
+        !!box &&
+        [box[2]! - box[0]!, box[3]! - box[1]!].every(
+          (dimension) => dimension >= 1 && dimension <= epsCropMaximumPoints,
+        );
+    }
     if (!picture && line.startsWith('%%BeginPreview:')) picture = beginBitmap(line);
     else if (picture && !picture.ended) bitmapLine(picture, line);
     metadataComment(metadata, line);
@@ -226,6 +247,7 @@ function scanComments(bytes: Uint8Array, truncated = false) {
     limited: state.limited,
     bitmap: picture?.error ? undefined : picture?.bitmap,
     error: picture?.error,
+    epsCrop: (boxSeen && boxUsable ? 'drawing' : 'page') as EPSCrop,
   };
 }
 export function postscriptMetadata(bytes: Uint8Array): PostScriptMetadata {
@@ -247,7 +269,12 @@ export function postscriptOffset(bytes: Uint8Array): number {
 }
 export function postscriptSignature(bytes: Uint8Array): boolean {
   const offset = postscriptOffset(bytes);
-  return bytes[offset] === 37 && bytes[offset + 1] === 33;
+  return (
+    bytes[offset] === 37 &&
+    bytes[offset + 1] === 33 &&
+    ((bytes[offset + 2] === 80 && bytes[offset + 3] === 83) ||
+      [9, 10, 11, 12, 13, 32].includes(bytes[offset + 2]!))
+  );
 }
 
 /** The existing browser image viewer reads this grayscale BMP without running PostScript. */
@@ -279,7 +306,12 @@ export function epsiBMP(bitmap: EPSIBitmap): Uint8Array {
   return output;
 }
 
-export function postscriptContent(bytes: Uint8Array, extension: string, truncated = false) {
+export function postscriptContent(
+  bytes: Uint8Array,
+  extension: string,
+  truncated = false,
+  binary = false,
+) {
   const illustrator = extension.toLowerCase() === 'ai';
   const pdf = illustrator && starts(bytes, '%PDF');
   const offset = postscriptOffset(bytes);
@@ -305,18 +337,20 @@ export function postscriptContent(bytes: Uint8Array, extension: string, truncate
   const first =
     new TextDecoder().decode(bytes.subarray(offset, offset + 256)).split(/[\r\n]/)[0] ?? '';
   const comments = pdf
-    ? { metadata: {}, limited: false, bitmap: undefined, error: undefined }
+    ? { metadata: {}, limited: false, bitmap: undefined, error: undefined, epsCrop: undefined }
     : scanComments(bytes, truncated);
+  const encapsulated = binary || /EPSF-/.test(first) || /^eps[fi]?$/.test(extension.toLowerCase());
   const document: Omit<PostScriptInspection, 'preview' | 'wmf'> = {
     kind: illustrator
       ? 'Illustrator'
-      : /EPSF-/.test(first) || /^eps[fi]?$/.test(extension)
+      : encapsulated
         ? 'Encapsulated PostScript'
         : 'PostScript document',
     pdf,
     metadata: comments.metadata,
     source: { text: pdf ? '' : new TextDecoder().decode(bytes), binary: false, truncated },
     limited: truncated || comments.limited,
+    epsCrop: encapsulated && !pdf ? comments.epsCrop : undefined,
     previewMessage: comments.error
       ? comments.error instanceof EPSIPreviewLimitError
         ? comments.error.message

@@ -50,6 +50,24 @@ const create = (images?: DerivedPreviews) => {
 };
 
 describe('authorized PostScript inspection', () => {
+  it('keeps a LaTeX magic comment in an unknown file out of the PostScript preview', async () => {
+    const file = path.join(root, 'latex.unknown');
+    await writeFile(file, '%!TEX root = main.tex\n');
+    const resource = await create().grant(file);
+    expect(resource.entry.extension).toBe('unknown');
+    expect(choosePreview(resource.entry).id).toBe('fallback');
+  });
+  it('uses a plain sentence without the path when a PostScript file is unreadable', async () => {
+    const file = path.join(root, 'unreadable.ps');
+    await writeFile(file, postscriptSample);
+    await chmod(file, 0);
+    const service = create();
+    const resource = await service.grant(file);
+    await expect(service.inspectPostscript(resource.id, 'read')).rejects.toMatchObject({
+      message: 'The file could not be read.',
+      code: 'EACCES',
+    });
+  });
   it.each(['data', 'unknown'])(
     'routes a .%s file by its PostScript header without running it',
     async (extension) => {

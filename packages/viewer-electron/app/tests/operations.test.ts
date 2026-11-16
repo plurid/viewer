@@ -100,6 +100,8 @@ vi.mock('../src/desktop/operations/operation-journal', async (original) => {
     ...actual,
     outputProof: async (file: string) =>
       paths.basename(file) === 'many items' ? undefined : actual.outputProof(file),
+    outputEvidence: async (file: string) =>
+      paths.basename(file) === 'many items' ? { failure: 'limit' as const } : actual.outputEvidence(file),
   };
 });
 import { Operations } from '../src/desktop/operations/operations';
@@ -1548,7 +1550,6 @@ describe('an item from start to finish', () => {
     to: '',
     remove: true,
     proof: await outputProof(file),
-    proofVersion: 2 as const,
     ...(await version(file)),
   });
   const stepBack = async (from: string, to: string, caseOnly = false) => ({
@@ -2119,8 +2120,7 @@ describe('an item from start to finish', () => {
           trash: true,
           directory: false,
           proof: await outputProof(file),
-          proofVersion: 2 as const,
-          ...(await version(file)),
+                ...(await version(file)),
         };
       };
       const expected = new Map([
