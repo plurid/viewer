@@ -132,9 +132,7 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
             ) : (
               <p>This folder is not shared.</p>
             )
-          ) : (
-            <p className="muted">Sharing status is unknown.</p>
-          )}
+          ) : null}
         </div>
         <ol>
           <li>

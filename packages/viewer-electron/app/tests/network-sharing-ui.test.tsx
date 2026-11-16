@@ -250,6 +250,10 @@ it('has no sharing UI or command in the Store edition or for unknown share point
   expect(screen.queryByRole('img', { name: 'Shared' })).toBeNull();
   expect(screen.queryByRole('region', { name: 'Network sharing' })).toBeNull();
   unmount();
+  const guidance = render(<NetworkSharingDialog path={file.path} onClose={() => {}} />);
+  expect(screen.queryByText(/Sharing status is unknown/)).toBeNull();
+  expect(screen.queryByText('This folder is not shared.')).toBeNull();
+  guidance.unmount();
   initialize({
     networkSharingAvailable: false,
     home: '/fixtures',
