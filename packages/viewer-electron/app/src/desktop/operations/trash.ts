@@ -622,10 +622,13 @@ export class Trash {
           const receipt = origins.get(file);
           let metadata: Pick<TrashItem, 'name' | 'originalPath' | 'deleted'> = {
             name,
-            ...(receipt && (
-              receipt.identity === identity(info) ||
-              (matchesVersionIdentity(info, receipt.identity) && receipt.size === info.size && receipt.modified === info.mtimeMs)
-            ) ? { originalPath: receipt.originalPath } : {}),
+            ...(receipt &&
+            (receipt.identity === identity(info) ||
+              (matchesVersionIdentity(info, receipt.identity) &&
+                receipt.size === info.size &&
+                receipt.modified === info.mtimeMs))
+              ? { originalPath: receipt.originalPath }
+              : {}),
           };
           if (metadata.originalPath) metadata.name = path.basename(metadata.originalPath);
           if (candidate.info) {
@@ -693,7 +696,12 @@ export class Trash {
         const date = byPath.get(backing.file);
         const added =
           date &&
-          sameTemporalIdentity(temporalIdentity(nativeItemIdentity(date.identity) ?? ''), backing.version.identity, 'file', 'file') &&
+          sameTemporalIdentity(
+            temporalIdentity(nativeItemIdentity(date.identity) ?? ''),
+            backing.version.identity,
+            'file',
+            'file',
+          ) &&
           date.size === backing.version.size &&
           Math.abs(date.modified - backing.version.modified) < 0.01 &&
           typeof date.added === 'number' &&

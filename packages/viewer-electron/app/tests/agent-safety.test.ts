@@ -23,6 +23,7 @@ import type * as FileSystem from '../src/desktop/files/filesystem';
 import { Operations } from '../src/desktop/operations/operations';
 import { Resources } from '../src/desktop/previews/resources';
 import { createResourceHandlers } from '../src/desktop/ipc/resource-handlers';
+import { sourceVersion } from '../src/domain/files/inspection';
 
 const memory = vi.hoisted(() => ({
   stores: new Map<string, unknown>(),
@@ -498,7 +499,7 @@ describe('agent removal safety', () => {
       expectedSources: [
         {
           path: file.path,
-          version: { identity: file.identity, modified: file.modified, size: file.size },
+          version: sourceVersion(file),
         },
       ],
     });

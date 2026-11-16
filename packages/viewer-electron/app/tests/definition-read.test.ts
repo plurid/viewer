@@ -17,6 +17,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
     return {
       dev: 1,
       ino: 2,
+      mode: 0o100600,
       size: 0,
       mtimeMs: 0,
       ctimeMs: 0,
@@ -25,7 +26,15 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
     };
   },
   open: async () => ({
-    stat: async () => ({ dev: 1, ino: 2, size: 0, mtimeMs: 0, ctimeMs: 0, isFile: () => true }),
+    stat: async () => ({
+      dev: 1,
+      ino: 2,
+      mode: 0o100600,
+      size: 0,
+      mtimeMs: 0,
+      ctimeMs: 0,
+      isFile: () => true,
+    }),
     close: fixture.close,
   }),
 }));

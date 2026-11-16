@@ -1,3 +1,4 @@
+import { readItemIdentity } from '../../domain/files/item-identity';
 import { maximumWorkspaces } from '../../domain/workspaces/catalog';
 import { syncParentDirectory } from './directory-sync';
 import {
@@ -534,4 +535,3 @@ export class Storage {
     return this.writes;
   }
 }
-import { readItemIdentity } from '../../domain/files/item-identity';

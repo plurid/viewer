@@ -24,6 +24,7 @@ import {
   updateStop,
 } from '../src/renderer/workspace/tours/recorder';
 import { openedTour } from '../src/renderer/workspace/tour';
+import { sourceVersion } from '../src/domain/files/inspection';
 
 const entry = (path: string): FileEntry => ({
   path,
@@ -150,11 +151,7 @@ it('needs a file plane, and never saves over a tour already there', async () => 
 
 it('records from a preview’s state alone, and keeps opened evidence only where there is none', async () => {
   editTour();
-  const version = {
-    identity: entry('/Jobs/Recca/photo.jpg').identity,
-    modified: 1_761_800_000_000,
-    size: 2048,
-  };
+  const version = sourceVersion(entry('/Jobs/Recca/photo.jpg'));
   // a picture opened at a region, then shown whole again
   const photo = addPane('/Jobs/Recca/photo.jpg', 'preview', true);
   updatePane(photo.id, {
@@ -176,7 +173,7 @@ it('records from a preview’s state alone, and keeps opened evidence only where
   updatePane(notes.id, {
     evidence: {
       path: '/Jobs/Recca/notes.txt',
-      version: { ...version, identity: entry('/Jobs/Recca/notes.txt').identity },
+      version: sourceVersion(entry('/Jobs/Recca/notes.txt')),
       anchor: { kind: 'text', line: 4, start: 30, end: 36 },
       quote: 'pitch',
     },

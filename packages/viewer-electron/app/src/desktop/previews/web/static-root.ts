@@ -1,3 +1,4 @@
+import { sameVersionItem } from '../../files/item-identity';
 import { lstat, fileStat } from '../../files/stats';
 import type { FileStats as Stats } from '../../files/stats';
 
@@ -32,7 +33,7 @@ export interface StaticRootIdentity {
 
 const identity = versionIdentity;
 const stable = (before: Stats, after: Stats) =>
-  identity(before) === identity(after) &&
+  sameVersionItem(before, after) &&
   before.size === after.size &&
   before.mode === after.mode &&
   before.mtimeMs === after.mtimeMs &&

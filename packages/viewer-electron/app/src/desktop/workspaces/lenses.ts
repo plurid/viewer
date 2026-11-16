@@ -1,5 +1,5 @@
 import { lstat } from '../files/stats';
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { packageExtensions } from '../../domain/files/entries';
 import { constants } from 'node:fs';
 import { access as fileAccess, mkdir, open, readFile, readdir, rename } from 'node:fs/promises';
@@ -58,7 +58,7 @@ const stateSchema = z
           .object({
             path: localPath,
             used: z.number(),
-            /** Item name and `dev:ino`, so renames made outside Viewer can be recognized. */
+            /** Item name and retained identity, so outside renames can be recognized. */
             hints: z.array(z.tuple([z.string().max(255), z.string().max(64)])).max(50000),
             /** Lens ID, item name and when it was first found missing. */
             missing: z.array(z.tuple([z.uuid(), z.string().max(255), z.number()])).max(50000),
@@ -73,7 +73,7 @@ type LensState = z.infer<typeof stateSchema>;
 type FolderRecord = LensState['folders'][number];
 const emptyState = (): LensState => ({ version: 1, folders: [], collapsed: [] });
 const errorCode = (error: unknown) => (error as NodeJS.ErrnoException | undefined)?.code;
-const identityOf = itemIdentity;
+const identityOf = versionIdentity;
 
 /**
  * Lenses live in `<folder>/.viewer/lenses/`, created only when a person makes one. Folders

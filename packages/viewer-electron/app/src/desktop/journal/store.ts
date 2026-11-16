@@ -1,6 +1,6 @@
 import { lstat, fileStat } from '../files/stats';
 
-import { versionIdentity } from '../../domain/files/item-identity';
+import { versionIdentity, matchesVersionIdentity } from '../../domain/files/item-identity';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { mkdir, open, realpath, type FileHandle } from 'node:fs/promises';
@@ -117,7 +117,8 @@ export class JournalStore {
       !file.isFile() ||
       file.isSymbolicLink() ||
       file.nlink !== 1 ||
-      versionIdentity(file) !== this.identity ||
+      !this.identity ||
+      !matchesVersionIdentity(file, this.identity) ||
       file.size !== this.bytes ||
       file.mode & 0o077
     )

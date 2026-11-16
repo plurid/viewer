@@ -62,7 +62,8 @@ vi.mock('node:fs/promises', () => ({
       dev: 1,
       ino: value.ino,
       uid: value.uid,
-      mode: value.mode,
+      mode:
+        (value.mode & ~0o170000) | (value.link ? 0o120000 : value.directory ? 0o040000 : 0o100000),
       size: value.size,
       mtimeMs: value.modified,
       isDirectory: () => value.directory,

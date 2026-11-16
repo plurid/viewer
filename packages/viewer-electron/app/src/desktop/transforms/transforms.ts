@@ -1,6 +1,7 @@
+import type { TemporalIdentity } from '../../domain/files/item-identity';
 import { lstat, fileStat } from '../files/stats';
 
-import { versionIdentity } from '../../domain/files/item-identity';
+import { versionIdentity, matchesVersionIdentity } from '../../domain/files/item-identity';
 import { constants } from 'node:fs';
 import { open, realpath, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
@@ -32,7 +33,7 @@ import type { HandoffChecks } from '../fabrication/handoff';
 interface Source {
   file: string;
   handle: FileHandle;
-  identity: string;
+  identity: TemporalIdentity;
   modified: number;
   size: number;
 }
@@ -165,7 +166,7 @@ export class Transforms implements TransformExecutor {
       for (const source of sources)
         for (const info of [await fileStat(source.handle), await lstat(source.file)]) {
           if (
-            versionIdentity(info) !== source.identity ||
+            !matchesVersionIdentity(info, source.identity) ||
             info.mtimeMs !== source.modified ||
             info.size !== source.size
           )
@@ -398,7 +399,7 @@ export class Transforms implements TransformExecutor {
                 const info = await fileStat(input),
                   expected = sources[index]!;
                 if (
-                  versionIdentity(info) !== expected.identity ||
+                  !matchesVersionIdentity(info, expected.identity) ||
                   info.mtimeMs !== expected.modified ||
                   info.size !== expected.size
                 )

@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import { watchFile, unwatchFile } from 'node:fs';
 import type { BigIntStats } from 'node:fs';
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
+import { fileStats } from '../files/stats';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
@@ -238,7 +239,7 @@ export class JsoncConfiguration<T> {
     this.listener = (current, previous) => {
       if (
         current.mtimeMs !== previous.mtimeMs ||
-        !sameItem(current, previous) ||
+        !sameVersionItem(fileStats(previous), fileStats(current)) ||
         current.size !== previous.size
       )
         reload();

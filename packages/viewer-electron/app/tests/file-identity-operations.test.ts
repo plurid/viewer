@@ -3,6 +3,9 @@ import { lstat, mkdir, readFile, readdir, rename, writeFile } from 'node:fs/prom
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as FileSystemModule from 'node:fs/promises';
+import type * as MacFilesModule from '../src/desktop/native/macos-files';
+import type { NativeFileBindings } from '../src/desktop/native/macos-files';
+import type { FileAccess } from '../src/desktop/files/file-access';
 import type { BigIntStats, PathLike, Stats } from 'node:fs';
 import type { OperationReceipt } from '../src/desktop/operations/operation-journal';
 import { Operations } from '../src/desktop/operations/operations';
@@ -11,7 +14,12 @@ import {
   operationJournal,
   outputProof,
   outputEvidence,
+  undoStepSchema,
 } from '../src/desktop/operations/operation-journal';
+import { Resources } from '../src/desktop/previews/resources';
+import { Trash } from '../src/desktop/operations/trash';
+import { adaptMacFiles } from '../src/desktop/native/macos-files';
+import { inspectReviewedFile } from '../src/desktop/native/reviewed-file';
 import { readText } from '../src/desktop/editing/text-files';
 import * as removal from '../src/desktop/operations/removal';
 import { disposeRenameRecovery } from '../src/desktop/operations/removal';
@@ -32,6 +40,8 @@ const interleaving = vi.hoisted(() => ({
   afterPublish: undefined as (() => Promise<void>) | undefined,
   foreign: '',
   createdSynthetic: false,
+  device: undefined as bigint | undefined,
+  many: '',
 }));
 const native = vi.hoisted(() => ({
   coordinateStart: vi.fn(async (_id: string, intents: { path: string }[]) =>
@@ -41,11 +51,29 @@ const native = vi.hoisted(() => ({
   coordinateCancel: vi.fn(),
   coordinateSameItem: vi.fn(() => false),
   renameExclusive: vi.fn<(source: string, target: string) => Promise<void>>(),
-  clone: vi.fn(async () => { throw Object.assign(new Error('No clone'), { code: 'ENOTSUP' }); }),
-  copyMetadata: vi.fn(async () => { await interleaving.afterRead?.(); }),
+  clone: vi.fn(async () => {
+    throw Object.assign(new Error('No clone'), { code: 'ENOTSUP' });
+  }),
+  copyMetadata: vi.fn(async () => {
+    await interleaving.afterRead?.();
+  }),
   copyLinkMetadata: vi.fn(async () => {}),
+  volumes: vi.fn(async () => []),
+  datesAdded: vi.fn(
+    async (_files: string[]) =>
+      [] as { path: string; identity: string; size: number; modified: number; added: number }[],
+  ),
+  trashConfirmation: vi.fn(),
 }));
-vi.mock('../src/desktop/native/macos-files', () => ({ macFiles: () => native }));
+vi.mock('../src/desktop/native/macos-files', async (original) => ({
+  ...(await original<typeof MacFilesModule>()),
+  macFiles: () => native,
+}));
+vi.mock('electron', () => ({
+  clipboard: { writeText: vi.fn(async () => {}) },
+  dialog: { showOpenDialog: vi.fn(), showMessageBox: vi.fn() },
+  shell: { openExternal: vi.fn() },
+}));
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof FileSystemModule>();
   const projected = (info: Stats | BigIntStats, file: PathLike) => {
@@ -54,12 +82,21 @@ vi.mock('node:fs/promises', async (original) => {
       if (typeof info.ino === 'bigint') info.ino = inode;
       else info.ino = Number(BigInt.asUintN(64, inode));
     }
-    if (interleaving.foreign && String(file).startsWith(interleaving.foreign))
+    if (interleaving.device !== undefined) {
+      const device =
+        interleaving.device -
+        (interleaving.foreign && String(file).startsWith(interleaving.foreign) ? 1n : 0n);
+      info.dev = typeof info.dev === 'bigint' ? device : Number(BigInt.asUintN(64, device));
+    } else if (interleaving.foreign && String(file).startsWith(interleaving.foreign))
       info.dev = typeof info.dev === 'bigint' ? info.dev + 1n : info.dev + 1;
     return info;
   };
   return {
     ...actual,
+    readdir: async (...args: Parameters<typeof actual.readdir>) =>
+      String(args[0]) === interleaving.many
+        ? Array.from({ length: 10001 }, () => 'Child.txt')
+        : actual.readdir(...args),
     lstat: async (file: PathLike, options?: { bigint?: boolean }) =>
       projected(
         options?.bigint ? await actual.lstat(file, { bigint: true }) : await actual.lstat(file),
@@ -76,9 +113,8 @@ vi.mock('node:fs/promises', async (original) => {
       if (interleaving.createdSynthetic && typeof args[1] === 'string' && args[1].includes('w'))
         inodes.set(BigInt.asUintN(64, (await stat({ bigint: true })).ino), -1n);
       Object.defineProperty(handle, 'stat', {
-        value: async (options?: { bigint?: boolean }) => projected(
-          options?.bigint ? await stat({ bigint: true }) : await stat(), args[0],
-        ),
+        value: async (options?: { bigint?: boolean }) =>
+          projected(options?.bigint ? await stat({ bigint: true }) : await stat(), args[0]),
       });
       return handle;
     },
@@ -94,6 +130,9 @@ beforeEach(async () => {
   interleaving.afterPublish = undefined;
   interleaving.foreign = '';
   interleaving.createdSynthetic = false;
+  interleaving.device = undefined;
+  interleaving.many = '';
+  native.copyMetadata.mockClear();
   native.renameExclusive.mockImplementation(async (source, target) => {
     const existing = await lstat(target).catch(() => undefined);
     if (existing) throw Object.assign(new Error('File exists'), { code: 'EEXIST' });
@@ -114,7 +153,10 @@ async function highInode(file: string, inode: bigint): Promise<void> {
 function operations(data?: string): Operations {
   const result = new Operations(
     async (file) => {
-      await rename(file, path.join(root, 'Retained ' + randomUUID()));
+      const directory = (await lstat(file)).isDirectory();
+      const target = path.join(root, 'Retained ' + randomUUID());
+      await rename(file, target);
+      return { path: target, directory };
     },
     () => {},
     undefined,
@@ -127,6 +169,206 @@ function operations(data?: string): Operations {
 }
 
 describe('exact identity at operation boundaries', () => {
+  it('writes safe copy and Trash proofs in the exact layout accepted by the earlier reader', async () => {
+    const file = path.join(root, 'Source.txt');
+    const destination = path.join(root, 'Destination');
+    const data = path.join(root, 'Profile');
+    await mkdir(destination);
+    await writeFile(file, 'stable bytes', { flag: 'wx' });
+    const service = operations(data);
+    const id = service.start({ kind: 'copy', sources: [file], destination });
+    await service.drained();
+    const trashSource = path.join(root, 'Trashed.txt');
+    await writeFile(trashSource, 'retained Trash bytes', { flag: 'wx' });
+    const trashID = service.start({ kind: 'trash', sources: [trashSource] });
+    await service.drained();
+    await service.close();
+    const receipt = (await new OperationLog(data).load()).receipts.find(
+      (item) => item.job.id === id,
+    )!;
+    const trashReceipt = (await new OperationLog(data).load()).receipts.find(
+      (item) => item.job.id === trashID,
+    )!;
+    expect(trashReceipt.undo[0]?.trash).toBe(true);
+    const oldReader = undoStepSchema.omit({ proofVersion: true, proofSynthetic: true });
+    for (const step of [...receipt.undo, ...trashReceipt.undo]) {
+      expect(step.proofVersion).toBeUndefined();
+      expect(step.proofSynthetic).toBeUndefined();
+      expect(JSON.stringify(oldReader.parse(step))).toBe(JSON.stringify(step));
+      expect(step.proof).toBe(await outputProof(step.from, 1));
+      const output = await outputEvidence(step.from);
+      expect(Object.hasOwn(output, 'proofVersion')).toBe(false);
+    }
+  });
+
+  it('reports contents changed when an older proof exceeds the item limit', async () => {
+    const folder = path.join(root, 'Output');
+    const data = path.join(root, 'Profile');
+    await mkdir(folder);
+    await writeFile(path.join(folder, 'Child.txt'), 'retained', { flag: 'wx' });
+    const proof = (await outputProof(folder, 1))!;
+    const info = await lstat(folder);
+    const id = randomUUID();
+    await new OperationLog(data).record({
+      job: {
+        id,
+        revision: 1,
+        kind: 'copy',
+        status: 'completed',
+        sources: [],
+        bytesDone: 0,
+        bytesTotal: 0,
+        itemsDone: 1,
+        itemsTotal: 1,
+        completed: [],
+        errors: [],
+        errorCount: 0,
+        undoable: true,
+      },
+      request: { kind: 'copy', sources: [], destination: root },
+      undo: [
+        {
+          from: folder,
+          to: '',
+          remove: true,
+          proof,
+          identity: `${info.dev}:${info.ino}`,
+          modified: info.mtimeMs,
+          size: info.size,
+        },
+      ],
+    });
+    interleaving.many = folder;
+    await expect(operations(data).undo(id)).rejects.toThrow('contents changed');
+  });
+
+  it('keeps unreadable entries selected at the same path', async () => {
+    const file = path.join(root, 'Unreadable.txt');
+    await writeFile(file, 'retained', { flag: 'wx' });
+    const unreadable = { ...(await entry(file)), identity: '', error: 'Unreadable fixture' };
+    expect(
+      reconcileSelection([file], new Map([[file, unreadable]]), root, indexEntries([unreadable])),
+    ).toEqual([file]);
+  });
+
+  it('uses exact devices to choose copy for a drop between rounded-looking different volumes', async () => {
+    const source = path.join(root, 'Drop.txt');
+    const destination = path.join(root, 'Destination');
+    await mkdir(destination);
+    await writeFile(source, 'drop bytes', { flag: 'wx' });
+    interleaving.device = -1n;
+    interleaving.foreign = destination;
+    expect((await lstat(source)).dev).toBe((await lstat(destination)).dev);
+    const service = operations();
+    const id = service.start({ kind: 'transfer', sources: [source], destination });
+    await service.drained();
+    const job = service.all().find((job) => job.id === id)!;
+    expect(job.status, JSON.stringify(job.errors)).toBe('completed');
+    expect(native.copyMetadata).toHaveBeenCalled();
+    expect(await readFile(source, 'utf8')).toBe('drop bytes');
+    expect(await readFile(path.join(destination, 'Drop.txt'), 'utf8')).toBe('drop bytes');
+  });
+
+  it('verifies a high-inode preview grant against its open descriptor', async () => {
+    const file = path.join(root, 'Preview.txt');
+    await writeFile(file, 'preview bytes', { flag: 'wx' });
+    await highInode(file, -1n);
+    const resources = new Resources();
+    try {
+      const grant = await resources.grant(file);
+      const response = await resources.response(new Request(grant.url!));
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('preview bytes');
+    } finally {
+      await resources.close();
+    }
+  });
+
+  it('normalizes native Trash metadata while retaining temporal item verification', async () => {
+    const home = path.join(root, 'Home');
+    const folder = path.join(home, '.Trash');
+    await mkdir(home);
+    await mkdir(folder, { mode: 0o700 });
+    const file = path.join(folder, 'Retained.txt');
+    await writeFile(file, 'trash bytes', { flag: 'wx' });
+    await highInode(file, -1n);
+    native.datesAdded.mockImplementation(async (files) =>
+      Promise.all(
+        files.map(async (file) => {
+          const info = fileStats(await lstat(file, { bigint: true }));
+          return {
+            path: file,
+            identity: nativeIdentityArgument(itemIdentity(info)),
+            size: info.size,
+            modified: info.mtimeMs,
+            added: 1700000000000,
+          };
+        }),
+      ),
+    );
+    const trash = new Trash(home, { require: async () => {} } as unknown as FileAccess);
+    try {
+      const snapshot = await trash.list();
+      const item = snapshot.items.find((item) => item.name === 'Retained.txt')!;
+      expect(item.addedToTrash).toBe(new Date(1700000000000).toISOString());
+      await highInode(file, 42n);
+      await trash.copyPaths([item.id]);
+    } finally {
+      trash.close();
+    }
+  });
+
+  it('hands a fresh exact native identity to the Trash adapter after a temporal review', async () => {
+    const file = path.join(root, 'Reviewed.txt');
+    await writeFile(file, 'reviewed bytes', { flag: 'wx' });
+    await highInode(file, -1n);
+    const reviewed = (await inspectReviewedFile(file, 32768)).reviewed;
+    const recorded = vi.fn(async (file: string) => ({ path: file, directory: false }));
+    const adapter = adaptMacFiles({ trash: recorded } as unknown as NativeFileBindings);
+    await adapter.trash(file, 'purpose', reviewed);
+    const raw = nativeIdentityArgument(itemIdentity(await lstat(file, { bigint: true })));
+    expect(recorded).toHaveBeenLastCalledWith(
+      file,
+      'purpose',
+      expect.objectContaining({ version: expect.objectContaining({ identity: raw }) }),
+    );
+    expect(raw).toMatch(/:18446744073709551615$/);
+    await highInode(file, 42n);
+    await adapter.trash(file, 'purpose', reviewed);
+    expect(recorded).toHaveBeenLastCalledWith(
+      file,
+      'purpose',
+      expect.objectContaining({
+        version: expect.objectContaining({ identity: raw.slice(0, raw.indexOf(':')) + ':42' }),
+      }),
+    );
+  });
+
+  it('hashes a versioned proof from exact device and temporal file evidence', async () => {
+    const file = path.join(root, 'Proof.txt');
+    await writeFile(file, 'proof bytes', { flag: 'wx' });
+    await highInode(file, -1n);
+    interleaving.device = -1n;
+    const info = fileStats(await lstat(file, { bigint: true }));
+    const expected = createHash('sha256')
+      .update(
+        JSON.stringify([
+          '',
+          '18446744073709551615:synthetic:file',
+          info.size,
+          info.mtimeMs,
+          info.ctimeMs,
+          info.mode,
+          '',
+        ]),
+      )
+      .digest('hex');
+    const evidence = await outputEvidence(file);
+    expect(evidence.proof).toBe(expected);
+    expect(evidence.proofVersion).toBe(2);
+    expect(evidence.proofSynthetic).toEqual(['']);
+  });
+
   it('saves text read from an empty file after its synthetic inode changes', async () => {
     const file = path.join(root, 'Empty.txt');
     await writeFile(file, '', { flag: 'wx' });
@@ -181,7 +423,9 @@ describe('exact identity at operation boundaries', () => {
     await highInode(target, -2n);
     const service = operations();
     const id = service.start({ kind: 'copy', sources: [source], destination });
-    await vi.waitFor(() => expect(service.all().find((job) => job.id === id)?.status).toBe('collision'));
+    await vi.waitFor(() =>
+      expect(service.all().find((job) => job.id === id)?.status).toBe('collision'),
+    );
     await highInode(target, -30n);
     service.resolve(id, 'replace', false);
     await service.drained();
@@ -198,7 +442,9 @@ describe('exact identity at operation boundaries', () => {
     await writeFile(child, '', { flag: 'wx' });
     await highInode(child, -1n);
     interleaving.foreign = destination;
-    interleaving.afterPublish = async () => { await highInode(child, -2n); };
+    interleaving.afterPublish = async () => {
+      await highInode(child, -2n);
+    };
     vi.spyOn(removal, 'unlinkVerified').mockImplementation(async (file) => {
       await rename(file, path.join(root, 'Preserved source ' + randomUUID()));
     });
@@ -222,13 +468,17 @@ describe('exact identity at operation boundaries', () => {
     await mkdir(destination);
     await writeFile(source, 'complete high-inode bytes', { flag: 'wx' });
     await highInode(source, -1n);
-    interleaving.afterRead = async () => { await highInode(source, -2n); };
+    interleaving.afterRead = async () => {
+      await highInode(source, -2n);
+    };
     const service = operations();
     const id = service.start({ kind: 'copy', sources: [source], destination });
     await service.drained();
     const job = service.all().find((job) => job.id === id)!;
     expect(job.status, JSON.stringify(job.errors)).toBe('completed');
-    expect(await readFile(path.join(destination, 'report.txt'), 'utf8')).toBe('complete high-inode bytes');
+    expect(await readFile(path.join(destination, 'report.txt'), 'utf8')).toBe(
+      'complete high-inode bytes',
+    );
   });
 
   it.each(['copy', 'move', 'rename'] as const)(

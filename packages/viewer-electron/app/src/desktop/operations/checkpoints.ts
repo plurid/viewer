@@ -1,6 +1,11 @@
+import type { TemporalIdentity } from '../../domain/files/item-identity';
 import { lstat, fileStat } from '../files/stats';
 
-import { versionIdentity } from '../../domain/files/item-identity';
+import {
+  versionIdentity,
+  matchesVersionIdentity,
+  temporalIdentity,
+} from '../../domain/files/item-identity';
 import type { OperationJob } from '../../domain/contracts';
 import { randomUUID, createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -34,7 +39,7 @@ interface Item {
   directory: boolean;
   mode: number;
   bytes: number;
-  identity: string;
+  identity: TemporalIdentity;
   modified: number;
   changed: number;
 }
@@ -53,7 +58,10 @@ const treeItemSchema = z
     directory: z.boolean(),
     mode: z.number().int().min(0).max(0o777),
     bytes: z.number().finite().nonnegative(),
-    identity: z.string().max(300),
+    identity: z
+      .string()
+      .max(300)
+      .transform((value) => temporalIdentity(value)),
     modified: z.number().finite(),
     changed: z.number().finite(),
   })
@@ -257,7 +265,7 @@ export class Checkpoints {
                     const before = await fileStat(input);
                     if (
                       !before.isFile() ||
-                      versionIdentity(before) !== item.identity ||
+                      !matchesVersionIdentity(before, item.identity) ||
                       before.mtimeMs !== item.modified ||
                       before.ctimeMs !== item.changed ||
                       before.size !== item.bytes

@@ -1,4 +1,5 @@
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity, matchesVersionIdentity } from '../../domain/files/item-identity';
+import type { TemporalIdentity } from '../../domain/files/item-identity';
 import { lstat, stat } from '../files/stats';
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
@@ -24,11 +25,16 @@ import { absolute, list, validName } from '../files/filesystem';
 import { packageExtensions } from '../../domain/files/entries';
 
 type Answer = { paths: string[]; button: number; system?: boolean };
+interface FileStamp {
+  identity: TemporalIdentity;
+  modified: number;
+  size: number;
+}
 interface Pending {
   prompt: DialogPrompt;
   resolve(answer: Answer): void;
   overwrite: boolean;
-  conflict?: { path: string; stamp: string };
+  conflict?: { path: string; stamp: FileStamp };
   removeAbort?(): void;
 }
 interface Ports {
@@ -54,8 +60,15 @@ export function attachWindowDialogs(window: BrowserWindow, dialogs: WindowDialog
     if (mainFrame && !inPlace) stop();
   });
 }
-const stamp = (info: Awaited<ReturnType<typeof lstat>>) =>
-  `${itemIdentity(info)}:${info.mtimeMs}:${info.size}`;
+const stamp = (info: Awaited<ReturnType<typeof lstat>>): FileStamp => ({
+  identity: versionIdentity(info),
+  modified: info.mtimeMs,
+  size: info.size,
+});
+const unchangedStamp = (info: Awaited<ReturnType<typeof lstat>>, before: FileStamp) =>
+  matchesVersionIdentity(info, before.identity) &&
+  info.mtimeMs === before.modified &&
+  info.size === before.size;
 
 /** A window may answer only its own outstanding desktop question. Filesystem checks stay here. */
 export class WindowDialogs {
@@ -246,7 +259,7 @@ export class WindowDialogs {
           if (
             !request.replace ||
             item.conflict?.path !== file ||
-            item.conflict.stamp !== stamp(info)
+            !unchangedStamp(info, item.conflict.stamp)
           ) {
             item.conflict = { path: file, stamp: stamp(info) };
             return { conflict: file };

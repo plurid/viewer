@@ -1,3 +1,4 @@
+import { sameVersionItem } from '../files/item-identity';
 import { versionIdentity } from '../../domain/files/item-identity';
 import { lstat, fileStat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
@@ -52,7 +53,8 @@ interface Pending {
   users: number;
 }
 const version = (info: Stats) => [versionIdentity(info), info.size, info.mtimeMs, info.ctimeMs];
-const same = (a: Stats, b: Stats) => JSON.stringify(version(a)) === JSON.stringify(version(b));
+const same = (a: Stats, b: Stats) =>
+  sameVersionItem(a, b) && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs;
 
 /** Shared bounded bytes, never filesystem authority. Views pin entries until their
  * derived resource is released. Cancellation detaches one consumer independently. */

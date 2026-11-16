@@ -36,6 +36,16 @@ const state = (version: number, panes: unknown[]) => ({
 it('uses the current plane format', () => {
   expect(CURRENT_STATE_VERSION).toBe(12);
 });
+it('saves a server pane with an exact large folder identity', async () => {
+  const value = stateSchema.parse(
+    state(CURRENT_STATE_VERSION, [
+      { id: 'server', type: 'server', path: root, sourceIdentity: '12:9007199254740993:u64' },
+    ]),
+  );
+  const storage = new Storage(path.join(root, 'Exact server state.json'));
+  await storage.save(value);
+  expect(JSON.stringify(await storage.load())).toContain('12:9007199254740993:u64');
+});
 it('preserves version 11 before adding check views, pins and stacks', async () => {
   const storage = new Storage(path.join(root, 'state.json'));
   const previous = stateSchema.parse(

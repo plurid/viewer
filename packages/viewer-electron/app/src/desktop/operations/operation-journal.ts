@@ -1,4 +1,11 @@
-import { itemIdentity, versionIdentity, syntheticInode, syntheticVersionIdentity, temporalIdentity, legacyIdentityParts } from '../../domain/files/item-identity';
+import {
+  itemIdentity,
+  versionIdentity,
+  syntheticInode,
+  syntheticVersionIdentity,
+  temporalIdentity,
+  legacyIdentityParts,
+} from '../../domain/files/item-identity';
 import { lstat } from '../files/stats';
 import path from 'node:path';
 import { imageConversions } from '../../domain/contracts';
@@ -40,7 +47,10 @@ export const undoStepSchema = z
   .object({
     from: file,
     to: z.string().max(32768),
-    identity: z.string().max(200).transform((value) => temporalIdentity(value)),
+    identity: z
+      .string()
+      .max(200)
+      .transform((value) => temporalIdentity(value)),
     modified: count,
     size: count,
     caseOnly: z.boolean().optional(),
@@ -192,29 +202,48 @@ export async function outputEvidence(
     const info = await lstat(file);
     const previous = legacyIdentityParts(info);
     if (!previous) large = true;
-    const unstable = proofSynthetic === undefined
-      ? info.isFile() && syntheticInode(info)
-      : synthetic.has(relative);
+    const unstable =
+      proofSynthetic === undefined
+        ? info.isFile() && syntheticInode(info)
+        : synthetic.has(relative);
     if (unstable) {
       recordedSynthetic.push(relative);
       large = true;
     }
     const metadata = [
-      info.size, info.mtimeMs, info.ctimeMs, info.mode,
+      info.size,
+      info.mtimeMs,
+      info.ctimeMs,
+      info.mode,
       info.isSymbolicLink() ? await readlink(file) : '',
     ];
-    temporal.update(JSON.stringify([relative, ...(unstable ? [syntheticVersionIdentity(info)] : previous ?? [versionIdentity(info)]), ...metadata]));
+    temporal.update(
+      JSON.stringify([
+        relative,
+        ...(unstable ? [syntheticVersionIdentity(info)] : (previous ?? [versionIdentity(info)])),
+        ...metadata,
+      ]),
+    );
     exact?.update(JSON.stringify([relative, itemIdentity(info), ...metadata]));
     if (info.isDirectory())
-      for (const name of (await readdir(file)).sort().reverse()) queue.push(path.join(relative, name));
+      for (const name of (await readdir(file)).sort().reverse())
+        queue.push(path.join(relative, name));
   }
   if (version === 1 && large) return { failure: 'legacy-identity' };
   if (version === 2 || large)
-    return { proof: temporal.digest('hex'), proofVersion: 2, exactProof: exact?.digest('hex'), ...(recordedSynthetic.length ? { proofSynthetic: recordedSynthetic } : {}) };
+    return {
+      proof: temporal.digest('hex'),
+      proofVersion: 2,
+      exactProof: exact?.digest('hex'),
+      ...(recordedSynthetic.length ? { proofSynthetic: recordedSynthetic } : {}),
+    };
   return { proof: temporal.digest('hex') };
 }
 
-export async function outputProof(root: string, version?: OutputProofVersion): Promise<string | undefined> {
+export async function outputProof(
+  root: string,
+  version?: OutputProofVersion,
+): Promise<string | undefined> {
   return (await outputEvidence(root, version)).proof;
 }
 

@@ -20,7 +20,8 @@ export function inspectStatIdentity(
   overrides: ReadonlyMap<string, string> = new Map(),
 ): IdentityViolation[] {
   const config = ts.readConfigFile(path.join(app, 'tsconfig.main.json'), ts.sys.readFile);
-  if (config.error) throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'));
+  if (config.error)
+    throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'));
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, app);
   const host = ts.createCompilerHost(parsed.options);
   const read = host.readFile;
@@ -33,21 +34,29 @@ export function inspectStatIdentity(
   for (const source of program.getSourceFiles()) {
     const file = path.relative(app, source.fileName).split(path.sep).join('/');
     if (!file.startsWith('src/') || implementations.has(file)) continue;
-    const report = (node: ts.Node, reason: string) => violations.push({
-      file, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1, reason,
-    });
+    const report = (node: ts.Node, reason: string) =>
+      violations.push({
+        file,
+        line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+        reason,
+      });
     const visit = (node: ts.Node): void => {
       if (ts.isPropertyAccessExpression(node) && ['dev', 'ino'].includes(node.name.text))
         report(node, 'Device/inode reads belong to the shared exact-identity implementation.');
       if (ts.isCallExpression(node)) {
         const declaration = checker.getResolvedSignature(node)?.declaration;
-        const owner = declaration && path.relative(app, declaration.getSourceFile().fileName).split(path.sep).join('/');
+        const owner =
+          declaration &&
+          path.relative(app, declaration.getSourceFile().fileName).split(path.sep).join('/');
         if (owner && implementations.has(owner)) {
           for (const argument of node.arguments) {
             const type = checker.getTypeAtLocation(argument);
             const inode = type.getProperty('ino');
             if (inode && isNumber(checker.getTypeOfSymbolAtLocation(inode, argument)))
-              report(argument, 'Identity requires a BigInt stat from files/stats, including descriptor reads.');
+              report(
+                argument,
+                'Identity requires a BigInt stat from files/stats, including descriptor reads.',
+              );
           }
         }
       }

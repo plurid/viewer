@@ -4,7 +4,10 @@ import type { BigIntStats, PathLike } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 import { exactIdentityParts } from '../../domain/files/item-identity';
 
-export type FileStats = Omit<Stats, 'dev' | 'ino' | 'rdev' | 'blksize'> & { dev: bigint; ino: bigint };
+export type FileStats = Omit<Stats, 'dev' | 'ino' | 'rdev' | 'blksize' | 'gid'> & {
+  dev: bigint;
+  ino: bigint;
+};
 type NodeStats = Stats | BigIntStats;
 
 /** Kernel timespec nanoseconds are nonnegative even before the epoch. Reconstruct that pair
@@ -21,23 +24,40 @@ function milliseconds(ns: bigint): number {
 
 /** Identity must come from the same syscall as metadata. Keep sizes and timestamps in the
  * existing numeric API, but never pass device or inode through a JavaScript number. */
+class StatSnapshot {
+  declare dev: bigint;
+  declare ino: bigint;
+  declare mode: number;
+  declare nlink: number;
+  declare uid: number;
+  declare size: number;
+  declare blocks: number;
+  declare atimeMs: number;
+  declare mtimeMs: number;
+  declare ctimeMs: number;
+  declare birthtimeMs: number;
+
+  constructor(info: NodeStats) {
+    const identity = exactIdentityParts(info);
+    this.dev = identity.dev;
+    this.ino = identity.ino;
+    this.mode = Number(info.mode);
+    this.nlink = Number(info.nlink);
+    this.uid = Number(info.uid);
+    this.size = Number(info.size);
+    this.blocks = Number(info.blocks);
+    this.atimeMs = 'atimeNs' in info ? milliseconds(info.atimeNs) : info.atimeMs;
+    this.mtimeMs = 'mtimeNs' in info ? milliseconds(info.mtimeNs) : info.mtimeMs;
+    this.ctimeMs = 'ctimeNs' in info ? milliseconds(info.ctimeNs) : info.ctimeMs;
+    this.birthtimeMs = 'birthtimeNs' in info ? milliseconds(info.birthtimeNs) : info.birthtimeMs;
+  }
+}
+// A fixed constructor avoids dictionary storage and eager Dates. Node supplies its type checks
+// and lazy Date getters, including the same Math.round behavior as ordinary stats.
+Object.setPrototypeOf(StatSnapshot.prototype, Stats.prototype);
+
 export function fileStats(info: NodeStats): FileStats {
-  const identity = exactIdentityParts(info);
-  const result = Object.create(Stats.prototype) as FileStats;
-  result.dev = identity.dev;
-  result.ino = identity.ino;
-  result.mode = Number(info.mode);
-  result.nlink = Number(info.nlink);
-  result.uid = Number(info.uid);
-  result.gid = Number(info.gid);
-  result.size = Number(info.size);
-  result.blocks = Number(info.blocks);
-  result.atimeMs = 'atimeNs' in info ? milliseconds(info.atimeNs) : info.atimeMs;
-  result.mtimeMs = 'mtimeNs' in info ? milliseconds(info.mtimeNs) : info.mtimeMs;
-  result.ctimeMs = 'ctimeNs' in info ? milliseconds(info.ctimeNs) : info.ctimeMs;
-  result.birthtimeMs = 'birthtimeNs' in info ? milliseconds(info.birthtimeNs) : info.birthtimeMs;
-  // Stats.prototype owns Node's lazy Date getters, including its Math.round behavior.
-  return result;
+  return new StatSnapshot(info) as FileStats;
 }
 
 export async function lstat(file: PathLike): Promise<FileStats> {

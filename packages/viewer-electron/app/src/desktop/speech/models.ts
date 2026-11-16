@@ -1,6 +1,10 @@
 import { lstat, fileStat } from '../files/stats';
 
-import { versionIdentity } from '../../domain/files/item-identity';
+import {
+  versionIdentity,
+  matchesVersionIdentity,
+  temporalIdentity,
+} from '../../domain/files/item-identity';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { mkdir, open, realpath, statfs } from 'node:fs/promises';
@@ -24,7 +28,10 @@ const recordSchema = z
     file: z.string().regex(/^[a-z0-9-]+\.bin$/),
     status: z.enum(['downloading', 'ready', 'failed', 'cancelled']),
     received: z.number().int().min(0),
-    identity: z.string().optional(),
+    identity: z
+      .string()
+      .transform((value) => temporalIdentity(value))
+      .optional(),
     modified: z.number().optional(),
     error: z.string().max(1000).optional(),
   })
@@ -151,7 +158,8 @@ export class SpeechModels {
         info.isFile() &&
         !info.isSymbolicLink() &&
         info.size === model.bytes &&
-        versionIdentity(info) === record.identity &&
+        record.identity !== undefined &&
+        matchesVersionIdentity(info, record.identity) &&
         info.mtimeMs === record.modified
       );
     } catch {

@@ -270,7 +270,8 @@ export async function copyTree(
           let output: Awaited<ReturnType<typeof open>> | undefined;
           try {
             const opened = await fileStat(input);
-            if (!sameVersionItem(opened, info)) throw new Error('Source folder changed during the copy.');
+            if (!sameVersionItem(opened, info))
+              throw new Error('Source folder changed during the copy.');
             output = await open(
               fileCoordination.path(target),
               constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,

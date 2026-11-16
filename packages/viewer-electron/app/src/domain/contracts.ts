@@ -1,3 +1,4 @@
+import type { ObservedIdentity } from './files/item-identity';
 import type { ReconstructionRequest, ReconstructionReply } from './canvases/reconstruction';
 import type { LicenseRequest, LicenseStatus } from './license/license';
 import type { DialogPrompt, DialogRequest, DialogReply } from './dialogs';
@@ -132,7 +133,7 @@ export interface FileEntry {
   created: number;
   hidden: boolean;
   mime: string;
-  identity: string;
+  identity: ObservedIdentity;
   linkTarget?: string;
   error?: string;
 }

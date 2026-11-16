@@ -5,7 +5,10 @@ import type { FileEntry } from '../contracts';
 import type { DocumentData, DocumentEvidence } from '../services';
 export const sourceVersionSchema = z
   .object({
-    identity: z.string().max(300).transform((value): TemporalIdentity => temporalIdentity(value)),
+    identity: z
+      .string()
+      .max(300)
+      .transform((value): TemporalIdentity => temporalIdentity(value)),
     modified: z.number().finite(),
     size: z.number().finite().min(0),
   })
@@ -160,7 +163,9 @@ export const inspectionResultSchema = z
 export interface SearchEvidence extends EvidenceNavigation {
   coverage: 'complete' | 'partial';
 }
-export function sourceVersion(entry: Pick<FileEntry, 'identity' | 'kind' | 'modified' | 'size'>): SourceVersion {
+export function sourceVersion(
+  entry: Pick<FileEntry, 'identity' | 'kind' | 'modified' | 'size'>,
+): SourceVersion {
   const version = {
     identity: temporalIdentity(entry.identity, entry.kind),
     modified: entry.modified,
@@ -171,7 +176,9 @@ export function sourceVersion(entry: Pick<FileEntry, 'identity' | 'kind' | 'modi
   return Object.defineProperty(version, 'kind', { value: entry.kind });
 }
 export const sameSourceVersion = (a: SourceVersion, b: SourceVersion) =>
-  sameTemporalIdentity(a.identity, b.identity, a.kind, b.kind) && a.modified === b.modified && a.size === b.size;
+  sameTemporalIdentity(a.identity, b.identity, a.kind, b.kind) &&
+  a.modified === b.modified &&
+  a.size === b.size;
 
 /** Case/diacritic matching keeps a map back to the original passage and offsets. */
 export function originalMatch(

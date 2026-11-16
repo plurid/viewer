@@ -49,12 +49,6 @@ TypeScript disposal path calls a permanent-removal helper. Viewer deletes nothin
 recovery. Native identities arrive as exact decimal strings; TypeScript normalizes them before
 comparison, so an unchanged empty file reservation on exFAT follows the same Trash path as on APFS.
 
-Safe integer identities from older journals remain readable. New large identities carry an
-exact-value marker, so an older rounded number cannot authorize Undo. New output proofs are
-versioned; an older proof is checked only when every recorded identity component can still be
-represented exactly. An untrustworthy older record refuses Undo with: "Cannot undo because this
-older record does not have an exact file identity."
-
 A claimed foreign item, including bytes written into the reservation, is never sent to the Trash.
 Recovery restores it when the original name is free, using exclusive rename or the same
 reserve-then-rename steps. When that name is occupied or restoration fails, the item stays under its
@@ -62,6 +56,56 @@ private name and the error reports that path. Recovery is bounded: another race 
 keeps and reports additional captured entries instead of repeatedly chasing writers. If recovery
 cannot create or access its holding folder, it keeps and reports the final name and any holding
 folder already created. Failure to prove ownership never authorizes disposal.
+
+## Identity across time
+
+Same-moment comparisons keep the exact unsigned device and inode from one stat call. Collision
+checks, reservation ownership and the publication check use this form. The action folder check uses
+the same adapter; the architecture test follows aliases and descriptor reads to reject plain numeric
+stats at identity consumers.
+
+macOS FSKit can assign descending synthetic inodes to empty FAT32 files and to empty or newly
+created exFAT files. These identities last one mount or less and can change while untouched. The
+shared rule recognizes a regular-file inode with bit 63 set. HFS+ file IDs are 32-bit and APFS inode
+object IDs are 60-bit, so their real inode IDs cannot enter this range. A distinct temporal identity
+records the unsigned device and regular-file type, without retaining that inode as evidence.
+
+A retained synthetic identity also matches a later stable inode on the same device, once the type
+and the caller's other evidence agree. This permits Undo after remount. It does not make same-name
+items equal during a collision. Same-moment and temporal identities have separate TypeScript types.
+
+| Check                             | Evidence retained for a synthetic regular file                                                                                                 |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Save text read earlier            | Device, file type, size, modification time and the text hash                                                                                   |
+| Undo a new file                   | Path, device, type, size, dates, mode and the output proof                                                                                     |
+| Undo a move                       | Recorded paths, device, file type, size and modification time                                                                                  |
+| Undo a folder copy                | Relative paths and types, devices, sizes, modification and change times, modes and link targets; non-synthetic descendants retain inode checks |
+| Delayed Replace                   | Device, file type, size, modification and change times                                                                                         |
+| Remove a fully copied move source | Each fingerprint's device, type, size, dates and directory children; the existing final change-time and size check runs before removal         |
+| Keep a saved selection            | Path or one unambiguous candidate, device, type, size, modification and creation times                                                         |
+
+Metadata cannot distinguish a substituted item with exactly the same fallback evidence. This is
+accepted for synthetic inodes, whose previous rounded representation already provided no useful
+inode evidence across time. An exact immediate check remains mandatory wherever ownership, rather
+than a retained version, is required. Native reviewed Trash materializes a fresh exact identity,
+then the helper verifies it and the reviewed content hash inside its coordinated accessor.
+
+## Journal compatibility
+
+Safe integer identities retain the earlier representation. A proof containing only safe identities
+uses the earlier numeric hash layout and omits `proofVersion`, so an older strict reader accepts
+APFS records in that range. A large identity requires a versioned proof. A synthetic descendant's
+relative path is recorded separately, so its inode stays excluded even when remount assigns a stable
+inode. Other descendants keep their own identity checks.
+
+Older safe proofs remain readable. Earlier exact version 2 proofs can still validate while their
+recorded inode evidence remains reproducible; they cannot be reconstructed after a synthetic inode
+has changed, because their descendant identities were only hashed. Undo refuses that case. An
+unmarked rounded identity never authorizes Undo: "Cannot undo because this older record does not
+have an exact file identity." Exceeding the proof item limit is reported as changed contents.
+
+Large or synthetic proof records require this format. An older strict reader can set those records
+aside as unreadable on downgrade; safe records keep the earlier layout and their Undo history.
 
 ## Accepted race and invariant
 

@@ -1,5 +1,5 @@
 import { lstat } from '../files/stats';
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { randomUUID, createHash } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
@@ -20,7 +20,7 @@ import { inspectReviewedFile } from '../native/reviewed-file';
 import { GitReader, runGit, gitEnvironment, gitSafeOptions } from './git';
 
 const digest = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
-const identity = itemIdentity;
+const identity = versionIdentity;
 const diffOptions = [
   '--no-ext-diff',
   '--no-textconv',

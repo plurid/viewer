@@ -1,4 +1,4 @@
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { stat, lstat, fileStat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
 
@@ -83,7 +83,7 @@ const documentPackage = (file: string, info: Stats) =>
 /** The extension a granted file is read as: the format its bytes confirmed, or its own. */
 const grantExtension = (grant: Grant) => grant.format?.extension ?? grant.resource.entry.extension;
 const fileVersion = (info: Stats) =>
-  JSON.stringify([itemIdentity(info), info.size, info.mtimeMs, info.ctimeMs]);
+  JSON.stringify([versionIdentity(info), info.size, info.mtimeMs, info.ctimeMs]);
 /** At most `length` bytes of an open file, from `at`. */
 const readAt = async (file: FileHandle, at: number, length: number) => {
   const bytes = Buffer.alloc(length);

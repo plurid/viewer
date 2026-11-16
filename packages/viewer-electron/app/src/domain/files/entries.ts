@@ -13,18 +13,30 @@ export function sameSelection(a: FileEntry, b: FileEntry): boolean {
   if (a.identity === '' && b.identity === '') return true;
   const previous = temporalIdentity(b.identity, b.kind);
   if (previous.endsWith(':synthetic:file'))
-    return a.kind === 'file' &&
+    return (
+      a.kind === 'file' &&
       sameTemporalIdentity(temporalIdentity(a.identity, a.kind), previous, a.kind, b.kind) &&
-      a.size === b.size && a.modified === b.modified && a.created === b.created;
+      a.size === b.size &&
+      a.modified === b.modified &&
+      a.created === b.created
+    );
   return sameIdentity(a.identity, b.identity);
 }
-function renamedSelection(cached: FileEntry, index: ReturnType<typeof indexEntries>): FileEntry | undefined {
+function renamedSelection(
+  cached: FileEntry,
+  index: ReturnType<typeof indexEntries>,
+): FileEntry | undefined {
   if (!temporalIdentity(cached.identity, cached.kind).endsWith(':synthetic:file'))
     return index.identities.get(cached.identity) ?? undefined;
   let found: FileEntry | undefined;
   for (const entry of index.paths.values()) {
-    if (entry.kind !== cached.kind || entry.size !== cached.size ||
-      entry.modified !== cached.modified || entry.created !== cached.created) continue;
+    if (
+      entry.kind !== cached.kind ||
+      entry.size !== cached.size ||
+      entry.modified !== cached.modified ||
+      entry.created !== cached.created
+    )
+      continue;
     if (!sameSelection(entry, cached)) continue;
     if (found) return;
     found = entry;

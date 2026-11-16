@@ -8,7 +8,10 @@ import type { TemporalIdentity } from '../files/item-identity';
  */
 export const textVersionSchema = z
   .object({
-    identity: z.string().max(300).transform((value): TemporalIdentity => temporalIdentity(value)),
+    identity: z
+      .string()
+      .max(300)
+      .transform((value): TemporalIdentity => temporalIdentity(value)),
     modified: z.number().finite(),
     size: z.number().finite().min(0),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),

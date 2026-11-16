@@ -19,6 +19,7 @@ import { extractDocument } from '../src/desktop/previews/formats';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 import type * as Coordination from '../src/desktop/files/file-coordination';
 import { entry } from '../src/desktop/files/filesystem';
+import { sourceVersion } from '../src/domain/files/inspection';
 
 // These service regressions exercise authorization, real readers and parsers. Native provider
 // coordination has its own acceptance; an OS prompt must not decide the broker's unit results.
@@ -248,7 +249,7 @@ it('returns content search evidence only for granted paths and rechecks a change
   token = reader.token;
   const evidence = (file: typeof allowedFile) => ({
     path: file.path,
-    version: { identity: file.identity, modified: file.modified, size: file.size },
+    version: sourceVersion(file),
     anchor: { kind: 'text' as const, line: 1, start: 0, end: 4 },
     quote: 'Generated content match.',
     coverage: 'complete' as const,

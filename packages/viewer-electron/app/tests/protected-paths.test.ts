@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 const folder = (dev: number, ino: number) => ({
   dev,
   ino,
+  mode: 0o40700,
   isDirectory: () => true,
   isSymbolicLink: () => false,
 });

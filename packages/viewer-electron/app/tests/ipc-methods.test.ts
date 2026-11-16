@@ -11,6 +11,15 @@ import { createPasteboardHandlers } from '../src/desktop/ipc/pasteboard-handlers
 import { createLicenseHandlers } from '../src/desktop/ipc/license-handlers';
 
 describe('IPC method table', () => {
+  it('accepts exact large server identities and rejects malformed or unmarked rounded values', () => {
+    expect(
+      schemas.localServerStart.safeParse(['/Folder', 'server', '12:9007199254740993:u64']).success,
+    ).toBe(true);
+    for (const identity of ['12:9007199254740993', '12:18446744073709551616:u64', '12:2:forged'])
+      expect(schemas.localServerStart.safeParse(['/Folder', 'server', identity]).success).toBe(
+        false,
+      );
+  });
   it('bounds license requests and permits key changes only from Settings', async () => {
     const service = {
       status: vi.fn(async (_hide?: boolean) => ({ kind: 'trial', daysLeft: 30 }) as const),

@@ -111,6 +111,27 @@ followed. Any other native rename error is reported without this fallback.
 Viewer compares device and inode as exact unsigned 64-bit values from a single stat call, including
 when Node reports an inode as a negative BigInt.
 
+On macOS FSKit, empty files on FAT32 and empty or newly created files on exFAT can receive synthetic
+inode numbers that last one mount or less. For checks across time, Viewer uses their device and
+regular-file type plus the evidence already checked by the operation: size and dates, text hashes,
+output proofs and folder contents. A proof records which descendants had synthetic identities, so
+Undo still verifies them after remount. Immediate collision and reservation checks retain exact
+inodes. The shared rule is the unsigned upper half of regular-file inode numbers; real APFS and HFS+
+inode IDs cannot enter that range.
+
+For a text save, the text hash also binds the bytes read earlier. Replace keeps its size,
+modification-time and change-time checks. A cross-volume move verifies every copied source and its
+folder children before the existing source-removal checks. Saved selections keep only the same path
+or one unambiguous match with the same type, size, modification and creation times. Metadata can
+still match a different item with identical values when a synthetic inode supplies no durable
+identity evidence.
+
+Safe proofs retain the earlier numeric layout with no version field, so an older build accepts those
+records on downgrade. Proofs needing large identities use the newer layout; an older strict reader
+can set those records aside. Old exact proofs that already hashed a synthetic inode cannot be
+reconstructed after it changes, so Undo refuses them. The
+[decision](../adr/0017-publication-without-exclusive-rename.md) records these compatibility limits.
+
 After a failed rename, Viewer first moves whatever is at the final name into a random hidden
 `.viewer-rename-` holding folder beside it. It then checks what was moved. Its own unchanged empty
 reservation, and any empty owned holding folder, go through the removal module to the system Trash.

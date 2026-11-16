@@ -1,6 +1,8 @@
 export type IdentityComponent = number | bigint;
 declare const identityLifetime: unique symbol;
 export type MomentIdentity = string & { readonly [identityLifetime]: 'moment' };
+export type SerializedIdentity = string & { readonly [identityLifetime]?: 'serialized' };
+export type ObservedIdentity = MomentIdentity | SerializedIdentity;
 /** Unbranded serialized input remains readable, but a moment identity is not assignable here. */
 export type TemporalIdentity = string & { readonly [identityLifetime]?: 'temporal' };
 export type IdentityKind = 'file' | 'directory' | 'symlink' | 'other';
@@ -44,10 +46,14 @@ export function syntheticInode(info: StatIdentity): boolean {
 
 export function identityKind(mode: number): IdentityKind {
   switch (mode & 0o170000) {
-    case 0o100000: return 'file';
-    case 0o040000: return 'directory';
-    case 0o120000: return 'symlink';
-    default: return 'other';
+    case 0o100000:
+      return 'file';
+    case 0o040000:
+      return 'directory';
+    case 0o120000:
+      return 'symlink';
+    default:
+      return 'other';
   }
 }
 
@@ -73,8 +79,7 @@ export function syntheticVersionIdentity(info: VersionStat): TemporalIdentity {
 
 export function matchesVersionIdentity(current: VersionStat, expected: TemporalIdentity): boolean {
   const previous = readTemporalIdentity(expected);
-  if (previous?.endsWith(':synthetic:file'))
-    return syntheticVersionIdentity(current) === previous;
+  if (previous?.endsWith(':synthetic:file')) return syntheticVersionIdentity(current) === previous;
   return previous !== undefined && versionIdentity(current) === previous;
 }
 

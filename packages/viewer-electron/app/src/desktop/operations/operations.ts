@@ -342,7 +342,8 @@ export class Operations {
       current.size !== step.size
     )
       return false;
-    return (await matchesOutputProof(file, step.proof!, step.proofVersion, step.proofSynthetic)).matches;
+    return (await matchesOutputProof(file, step.proof!, step.proofVersion, step.proofSynthetic))
+      .matches;
   }
   /** Clearing finished notifications preserves receipts, recovery paths and Undo. */
   async dismiss(ids: readonly string[]): Promise<void> {
@@ -361,7 +362,13 @@ export class Operations {
     return [...this.tasks.values()].flatMap((task) =>
       task.undo
         .filter((step) => step.trash && path.isAbsolute(step.to))
-        .map((step) => ({ file: step.from, originalPath: step.to, identity: step.identity, modified: step.modified, size: step.size })),
+        .map((step) => ({
+          file: step.from,
+          originalPath: step.to,
+          identity: step.identity,
+          modified: step.modified,
+          size: step.size,
+        })),
     );
   }
   /** Minimal durable provenance; bookmarks, staging paths and Undo internals stay private. */
@@ -910,7 +917,12 @@ export class Operations {
         )
           throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
         if (step.proof) {
-          const proof = await matchesOutputProof(step.from, step.proof, step.proofVersion, step.proofSynthetic);
+          const proof = await matchesOutputProof(
+            step.from,
+            step.proof,
+            step.proofVersion,
+            step.proofSynthetic,
+          );
           if (proof.failure === 'legacy-identity') throw new Error(olderIdentityMessage);
           if (!proof.matches)
             throw new Error(
@@ -922,7 +934,10 @@ export class Operations {
           const willVacate = task.undo
             .slice(task.undo.indexOf(step) + 1)
             .some((other) => other.from === step.to);
-          if (!willVacate && (!step.caseOnly || !matchesVersionIdentity(destination, step.identity)))
+          if (
+            !willVacate &&
+            (!step.caseOnly || !matchesVersionIdentity(destination, step.identity))
+          )
             throw new Error(`Cannot undo: ${step.to} already exists.`);
         }
       });
@@ -948,7 +963,17 @@ export class Operations {
                 (current.size !== step.size || current.mtimeMs !== step.modified))
             )
               throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
-            if (step.proof && !(await matchesOutputProof(step.from, step.proof, step.proofVersion, step.proofSynthetic)).matches)
+            if (
+              step.proof &&
+              !(
+                await matchesOutputProof(
+                  step.from,
+                  step.proof,
+                  step.proofVersion,
+                  step.proofSynthetic,
+                )
+              ).matches
+            )
               throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
             if (step.remove) await this.trash(step.from);
             else if (step.caseOnly && (await exists(step.to)))
@@ -1074,7 +1099,7 @@ export class Operations {
           directory: receipt.directory,
           proof,
           ...(proofVersion === 2 ? { proofVersion } : {}),
-              ...(proofSynthetic ? { proofSynthetic } : {}),
+          ...(proofSynthetic ? { proofSynthetic } : {}),
           identity: versionIdentity(info),
           modified: info.mtimeMs,
           size: info.size,
@@ -1913,7 +1938,7 @@ export class Operations {
           remove: true,
           proof,
           ...(proofVersion === 2 ? { proofVersion } : {}),
-              ...(proofSynthetic ? { proofSynthetic } : {}),
+          ...(proofSynthetic ? { proofSynthetic } : {}),
           identity: versionIdentity(info),
           modified: info.mtimeMs,
           size: info.size,

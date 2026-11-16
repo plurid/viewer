@@ -15,12 +15,12 @@ describe('application module seams', () => {
     const source = [
       "import fs, { lstat, open } from 'node:fs/promises';",
       "import { itemIdentity, sameDevice } from '../../domain/files/item-identity';",
-      "export async function probe(file: string) {",
-      "  const first = await fs.stat(file);",
-      "  itemIdentity(first);",
-      "  itemIdentity(await lstat(file));",
-      "  sameDevice(first, await (await open(file)).stat());",
-      "}",
+      'export async function probe(file: string) {',
+      '  const first = await fs.stat(file);',
+      '  itemIdentity(first);',
+      '  itemIdentity(await lstat(file));',
+      '  sameDevice(first, await (await open(file)).stat());',
+      '}',
     ].join('\n');
     const violations = inspectStatIdentity(app, new Map([[file, source]]));
     expect(violations).toHaveLength(4);

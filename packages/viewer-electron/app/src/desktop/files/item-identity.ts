@@ -2,7 +2,11 @@ import { realpath } from 'node:fs/promises';
 import { lstat } from './stats';
 import type { FileStats as Stats } from './stats';
 import type { StatIdentity, TemporalIdentity } from '../../domain/files/item-identity';
-import { itemIdentity, versionIdentity, matchesVersionIdentity } from '../../domain/files/item-identity';
+import {
+  itemIdentity,
+  versionIdentity,
+  matchesVersionIdentity,
+} from '../../domain/files/item-identity';
 import type { VersionStat } from '../../domain/files/item-identity';
 import path from 'node:path';
 
@@ -11,7 +15,10 @@ export interface Replaced {
   identity: TemporalIdentity;
   info: Stats;
 }
-export const pinReplacement = (info: Stats): Replaced => ({ identity: versionIdentity(info), info });
+export const pinReplacement = (info: Stats): Replaced => ({
+  identity: versionIdentity(info),
+  info,
+});
 /** Identity of an item reached under any spelling: case or Unicode variants,
  * symbolic-link ancestors and firmlinks all share its device and inode. */
 export const sameItem = (a: StatIdentity, b: StatIdentity) => itemIdentity(a) === itemIdentity(b);
