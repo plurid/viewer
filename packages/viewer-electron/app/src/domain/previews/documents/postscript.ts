@@ -29,6 +29,7 @@ export interface PostScriptInspection {
   preview?: Resource;
   wmf: boolean;
   limited: boolean;
+  previewMessage?: string;
 }
 export interface EPSIBitmap {
   width: number;
@@ -36,6 +37,7 @@ export interface EPSIBitmap {
   depth: number;
   bytes: Uint8Array;
 }
+export class EPSIPreviewLimitError extends Error {}
 const invalid = () => new Error('This PostScript file is malformed; its bytes are shown below.');
 const starts = (bytes: Uint8Array, text: string) =>
   bytes.length >= text.length &&
@@ -143,7 +145,7 @@ export function postscriptMetadata(bytes: Uint8Array): PostScriptMetadata {
   return result;
 }
 
-export function decodeEPSI(bytes: Uint8Array): EPSIBitmap | undefined {
+export function decodeEPSI(bytes: Uint8Array, truncated = false): EPSIBitmap | undefined {
   const lines = commentLines(bytes);
   let nested = 0;
   for (const line of lines) {
@@ -155,20 +157,17 @@ export function decodeEPSI(bytes: Uint8Array): EPSIBitmap | undefined {
     if (!fields || fields.some((field) => !Number.isInteger(field))) throw invalid();
     const [width = 0, height = 0, depth = 0, count = 0] = fields;
     const stride = Math.ceil((width * depth) / 8);
-    if (
-      width < 1 ||
-      height < 1 ||
-      width * height > 16_000_000 ||
-      ![1, 2, 4, 8].includes(depth) ||
-      count < 1 ||
-      count > 100_000 ||
-      stride * height > previewTextLimit
-    )
-      throw invalid();
+    if (width < 1 || height < 1 || ![1, 2, 4, 8].includes(depth) || count < 1) throw invalid();
+    if (width * height > 16_000_000 || count > 100_000 || stride * height > previewTextLimit)
+      throw new EPSIPreviewLimitError('The embedded EPSI picture exceeds the preview limits.');
     const data = new Uint8Array(stride * height);
     let digits = 0;
     for (let index = 0; index < count; index++) {
       const row = lines.next();
+      if (row.done && truncated)
+        throw new EPSIPreviewLimitError(
+          'The embedded EPSI picture extends beyond the text preview limit.',
+        );
       if (row.done || !/^%[\s0-9a-fA-F]*$/.test(row.value)) throw invalid();
       for (const character of row.value.slice(1)) {
         if (/\s/.test(character)) continue;
@@ -178,7 +177,12 @@ export function decodeEPSI(bytes: Uint8Array): EPSIBitmap | undefined {
         digits++;
       }
     }
-    if (digits !== data.length * 2 || lines.next().value !== '%%EndPreview') throw invalid();
+    const end = lines.next();
+    if (end.done && truncated)
+      throw new EPSIPreviewLimitError(
+        'The embedded EPSI picture extends beyond the text preview limit.',
+      );
+    if (digits !== data.length * 2 || end.value !== '%%EndPreview') throw invalid();
     return { width, height, depth, bytes: data };
   }
   return undefined;

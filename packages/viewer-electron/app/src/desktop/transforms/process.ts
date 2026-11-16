@@ -1,8 +1,7 @@
 import { spawn } from 'node:child_process';
 import { constants, setPriority } from 'node:os';
 
-/** Process ports accept argument vectors built by typed executors only. This is
- * deliberately not exposed as an IPC method or a configurable executable. */
+/** Keep flags inside typed executors so IPC cannot supply arbitrary argument vectors. */
 export function runProcessor(
   executable: string,
   args: string[],
@@ -25,11 +24,13 @@ export function runProcessor(
       cwd: options.cwd,
       env: { PATH: '/usr/bin:/bin', LC_ALL: 'C', LANG: 'C' },
     });
+    let priorityFailed = false;
     if (options.lowPriority && child.pid) {
       try {
         setPriority(child.pid, constants.priority.PRIORITY_LOW);
-      } catch {
-        // A short-lived child may have exited before the scheduler could lower it.
+      } catch (error) {
+        // An already-exited child needs no scheduling change; a live converter must stay bounded.
+        priorityFailed = (error as NodeJS.ErrnoException).code !== 'ESRCH';
       }
     }
     if (options.input) {
@@ -48,6 +49,7 @@ export function runProcessor(
       force ??= setTimeout(() => child.kill('SIGKILL'), 2000);
     };
     const cancel = () => stop(new Error('Media task cancelled.'));
+    if (priorityFailed) stop(new Error('The converter could not start at background priority.'));
     const timer = setTimeout(
       () =>
         stop(new Error('Media processing timed out. Its sources and partial output were kept.')),

@@ -149,7 +149,13 @@ export default function PostScriptPreview(context: PreviewContext) {
     return (
       <div className="postscript-viewer">
         <p className="postscript-caption">Illustrator file with a PDF inside.</p>
-        <PDFPreview {...context} editing={undefined} editPDF={undefined} optimize={undefined} />
+        <PDFPreview
+          {...context}
+          editing={undefined}
+          editPDF={undefined}
+          optimize={undefined}
+          printable={false}
+        />
       </div>
     );
   const metadata = document.metadata;
@@ -188,16 +194,24 @@ export default function PostScriptPreview(context: PreviewContext) {
               Embedded preview
             </button>
           )}
-          {rendered && (
-            <button aria-pressed={view === 'pages'} onClick={() => setView('pages')}>
-              Rendered pages
+          {status.kind === 'found' && services.renderPostscript && (
+            <button
+              aria-pressed={renderState === 'finished' ? view === 'pages' : undefined}
+              onClick={() => {
+                if (renderState === 'running') cancel();
+                else if (renderState === 'finished') setView('pages');
+                else void render();
+              }}
+            >
+              {renderState === 'running'
+                ? 'Cancel rendering'
+                : renderState === 'finished'
+                  ? 'Rendered pages'
+                  : 'Render pages with Ghostscript'}
             </button>
           )}
-          {status.kind === 'found' && services.renderPostscript && renderState === 'idle' && (
-            <button onClick={() => void render()}>Render pages with Ghostscript</button>
-          )}
-          {renderState === 'running' && <button onClick={cancel}>Cancel rendering</button>}
         </div>
+        {document.previewMessage && <p className="muted">{document.previewMessage}</p>}
         {document.wmf && (
           <p className="muted">Embedded WMF preview; this picture is not displayed.</p>
         )}
@@ -226,6 +240,7 @@ export default function PostScriptPreview(context: PreviewContext) {
         <PDFPreview
           {...context}
           resource={rendered}
+          printable={false}
           editing={undefined}
           editPDF={undefined}
           optimize={undefined}

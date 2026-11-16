@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
+import { Readable, Writable } from 'node:stream';
+import { runCLI } from '../src/desktop/cli/run';
 import type { FileEntry, OperationJob } from '../src/domain/contracts';
 import type { CapturedTarget, CustomAction } from '../src/domain/automation/actions';
 import type { AgentProposal, CommandDescriptor } from '../src/domain/agents/requests';
@@ -229,6 +231,51 @@ beforeEach(() => {
 });
 
 describe('agent removal safety', () => {
+  it('refuses Ghostscript through MCP, CLI and custom actions even with a saved execution grant', async () => {
+    const f = await fixture(['/Granted'], true);
+    f.config.customActions = [action({ kind: 'builtin', command: 'postscript-render' })];
+    memory.stores.set('/Memory/Viewer/execution-approvals-v1.json', [
+      {
+        id: 'old-render-grant',
+        clientID: f.created.client.id,
+        actionID: 'custom.cleanup',
+        root: '/Granted',
+        capability: 'execute',
+        fingerprint: createHash('sha256')
+          .update(JSON.stringify(f.config.customActions[0]))
+          .digest('hex'),
+      },
+    ]);
+    expect(await f.requests.listGrants()).toHaveLength(1);
+    await expect(f.call('renderPostscript', { id: 'source', requestID: 'render' })).rejects.toThrow(
+      'Unknown agent tool',
+    );
+    for (const commandID of ['postscript-render', 'preview.postscript-render', 'custom.cleanup'])
+      await expect(f.call('propose_command', { commandID })).rejects.toThrow();
+    let output = '';
+    const sink = new Writable({
+      write(chunk, _encoding, done) {
+        output += String(chunk);
+        done();
+      },
+    });
+    const code = await runCLI(['tools', 'call', 'renderPostscript', '--args', '{}'], {
+      dataPath: '/Memory/Viewer',
+      version: 'test',
+      cwd: '/Granted',
+      home: '/Home',
+      input: Readable.from([]),
+      output: sink,
+      error: sink,
+      call: (method, params, signal) =>
+        f.broker.handle(f.created.token, { method, params }, signal),
+    });
+    expect(code).not.toBe(0);
+    expect(output).toContain('Unknown agent tool');
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.requests.list()).toEqual([]);
+    await f.broker.close();
+  });
   it.each(['disable', 'remove-folder', 'capabilities'] as const)(
     'retires proposals when shared authority narrows: %s',
     async (kind) => {

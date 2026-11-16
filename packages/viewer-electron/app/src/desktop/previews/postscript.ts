@@ -5,6 +5,7 @@ import {
   epsHeader,
   epsiBMP,
   inspectPostScript,
+  EPSIPreviewLimitError,
 } from '../../domain/previews/documents/postscript';
 import { previewTextLimit } from '../../domain/files/read-limits';
 
@@ -39,10 +40,20 @@ export async function readPostScript(
     read += bytesRead;
   }
   const document = { ...inspectPostScript(bytes, extension), wmf: !!header?.wmf };
+  if (header && document.pdf)
+    throw new Error('This EPS PostScript section is malformed; its bytes are shown below.');
+  if (header && document.kind !== 'Illustrator') document.kind = 'Encapsulated PostScript';
   const truncated = section.length > length;
   document.source.truncated = truncated;
   document.limited = truncated;
-  const epsi = document.pdf ? undefined : decodeEPSI(bytes);
+  let bitmap: Buffer | undefined;
+  try {
+    const epsi = document.pdf ? undefined : decodeEPSI(bytes, truncated);
+    if (epsi) bitmap = Buffer.from(epsiBMP(epsi));
+  } catch (error) {
+    if (!(error instanceof EPSIPreviewLimitError)) throw error;
+    document.previewMessage = error.message;
+  }
   signal.throwIfAborted();
-  return { document, header, bitmap: epsi ? Buffer.from(epsiBMP(epsi)) : undefined };
+  return { document, header, bitmap };
 }

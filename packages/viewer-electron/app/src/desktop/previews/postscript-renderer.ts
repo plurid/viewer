@@ -88,20 +88,22 @@ export class Ghostscript {
     await source.handle.read(first, 0, first.length, section.offset);
     if (inspectPostScript(first, source.format ?? path.extname(source.file).slice(1)).pdf)
       throw new Error('This Illustrator file already contains a PDF.');
+    let version: string | undefined;
     try {
       const help = await runProcessor(executable.file, ['-h'], [], signal, {
         timeout: 3000,
         outputLimit: 64 * 1024,
         lowPriority: true,
       });
-      const version =
-        /\b(?:GPL |AFPL |Artifex )?Ghostscript (\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)\b/.exec(
-          help.toString(),
-        )?.[1];
+      version = /\b(?:GPL |AFPL |Artifex )?Ghostscript (\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)\b/.exec(
+        help.toString(),
+      )?.[1];
       if (!version) throw new Error('The selected program did not identify itself as Ghostscript.');
       if ((await this.executable(executable.file))?.identity !== executable.identity)
         throw new Error('Ghostscript changed; choose Render pages again.');
       const data = await withPreviewCopy(source, section, signal, this.options, async (file) => {
+        if ((await this.executable(executable.file))?.identity !== executable.identity)
+          throw new Error('Ghostscript changed; choose Render pages again.');
         return runProcessor(
           executable.file,
           [
@@ -127,6 +129,8 @@ export class Ghostscript {
           },
         );
       });
+      if ((await this.executable(executable.file))?.identity !== executable.identity)
+        throw new Error('Ghostscript changed; choose Render pages again.');
       if (
         data.length < 16 ||
         data.subarray(0, 5).toString() !== '%PDF-' ||
@@ -137,12 +141,13 @@ export class Ghostscript {
     } catch (error) {
       if (signal.aborted) throw new Error('PostScript rendering was cancelled.');
       const message = errorMessage(error);
+      const engine = version ? `Ghostscript ${version}` : 'Ghostscript';
       if (message.includes('timed out'))
-        throw new Error('Ghostscript exceeded the rendering time limit.');
+        throw new Error(`${engine} exceeded the rendering time limit.`);
       if (message.includes('output exceeded'))
-        throw new Error('Ghostscript exceeded the PDF output size limit.');
+        throw new Error(`${engine} exceeded the PDF output size limit.`);
       if (message.includes('Media processor failed'))
-        throw new Error('Ghostscript could not render this document.');
+        throw new Error(`${engine} could not render this document.`);
       throw error;
     }
   };

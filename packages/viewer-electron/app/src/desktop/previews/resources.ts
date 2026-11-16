@@ -25,7 +25,7 @@ import {
   cameraRawFormats,
   type ImageRenditionRequest,
 } from '../../domain/previews/images/rendered';
-import type { DerivedPreviews, DerivedMode } from './derived';
+import type { DerivedPreviews, DerivedMode, DerivedLease } from './derived';
 import {
   carriesThumbnail,
   isOfficeFormat,
@@ -680,12 +680,17 @@ export class Resources {
   postscriptStatus() {
     return this.postscript?.renderer.status() ?? Promise.resolve({ kind: 'missing' } as const);
   }
-  async renderPostscript(id: string, requestID: string): Promise<Resource> {
+  renderPostscript(id: string, requestID: string): Promise<Resource> {
     if (!postscriptFormats.some((extension) => extension === grantExtension(this.get(id))))
-      throw new Error('Choose a PostScript, EPS or Illustrator file.');
-    if (!this.postscript) throw new Error('PostScript rendering is unavailable here.');
-    const variant = await this.postscript.renderer.variant();
-    return this.derivedRendition(id, 'postscript', requestID, variant);
+      return Promise.reject(new Error('Choose a PostScript, EPS or Illustrator file.'));
+    const postscript = this.postscript;
+    if (!postscript) return Promise.reject(new Error('PostScript rendering is unavailable here.'));
+    return this.documentRead(id, requestID, async (file, signal, format) => {
+      const variant = await postscript.renderer.variant();
+      signal.throwIfAborted();
+      const lease = await postscript.cache.read(file, 'postscript', signal, 4096, variant, format);
+      return this.derivedChild(id, lease, signal);
+    });
   }
   inspectPostscript(id: string, requestID: string): Promise<PostScriptInspection> {
     let child: Resource | undefined;
@@ -710,16 +715,27 @@ export class Resources {
           if (inspected.bitmap) {
             child = this.dataChild(id, 'embedded-preview.bmp', file, inspected.bitmap);
           } else if (inspected.header?.tiff && this.images) {
-            const lease = await this.images.read(file, 'image', signal, 4096, 'eps-tiff', format);
             try {
+              const lease = await this.images.read(file, 'image', signal, 4096, 'eps-tiff', format);
+              try {
+                signal.throwIfAborted();
+                child = this.dataChild(id, 'embedded-preview.png', file, lease.value.data);
+                this.get(child.id).dispose = lease.release;
+              } catch (error) {
+                lease.release();
+                throw error;
+              }
+            } catch {
               signal.throwIfAborted();
-              child = this.dataChild(id, 'embedded-preview.png', file, lease.value.data);
-              this.get(child.id).dispose = lease.release;
-            } catch (error) {
-              lease.release();
-              throw error;
+              inspected.document.previewMessage =
+                'The embedded TIFF picture could not be decoded within the preview limits.';
             }
           }
+          await this.access([file]);
+          signal.throwIfAborted();
+          this.get(id);
+          if (fileVersion(info) !== fileVersion(await lstat(file)))
+            throw new Error('This PostScript file changed while opening.');
           return { ...inspected.document, preview: child };
         } finally {
           await input.close();
@@ -736,7 +752,6 @@ export class Resources {
     requestID: string,
     variant?: string,
   ): Promise<Resource> {
-    const grant = this.get(id);
     const decoder =
       mode === 'office'
         ? this.office
@@ -748,24 +763,27 @@ export class Resources {
     if (!decoder) return Promise.reject(new Error('The local preview decoder is unavailable.'));
     return this.documentRead(id, requestID, async (file, signal, format) => {
       const lease = await decoder.read(file, mode, signal, 4096, variant, format);
-      try {
-        signal.throwIfAborted();
-        this.get(id);
-        const child = this.dataChild(
-          id,
-          grant.resource.entry.name + '.' + lease.value.extension,
-          grant.resource.entry.path,
-          lease.value.data,
-        );
-        child.derivation = { kind: lease.value.kind, decoder: lease.value.decoder };
-        child.office = lease.value.office;
-        this.get(child.id).dispose = lease.release;
-        return child;
-      } catch (error) {
-        lease.release();
-        throw error;
-      }
+      return this.derivedChild(id, lease, signal);
     });
+  }
+  private derivedChild(id: string, lease: DerivedLease, signal: AbortSignal): Resource {
+    try {
+      signal.throwIfAborted();
+      const grant = this.get(id);
+      const child = this.dataChild(
+        id,
+        grant.resource.entry.name + '.' + lease.value.extension,
+        grant.resource.entry.path,
+        lease.value.data,
+      );
+      child.derivation = { kind: lease.value.kind, decoder: lease.value.decoder };
+      child.office = lease.value.office;
+      this.get(child.id).dispose = lease.release;
+      return child;
+    } catch (error) {
+      lease.release();
+      throw error;
+    }
   }
   private async renderFile(id: string, scope: AbortSignal): Promise<Resource> {
     const grant = this.get(id);

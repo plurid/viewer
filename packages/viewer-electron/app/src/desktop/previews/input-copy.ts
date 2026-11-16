@@ -61,6 +61,16 @@ export async function withPreviewCopy<T>(
     signal.throwIfAborted();
     return await read(stage.file);
   } finally {
-    await stage.dispose();
+    try {
+      const kept = await stage.dispose();
+      if (
+        kept &&
+        process.env.VIEWER_TEST_PRESERVE !== '1' &&
+        process.env.VIEWER_TEST_NO_REMOVAL !== '1'
+      )
+        throw new Error('Temporary preview copy retained.');
+    } catch {
+      throw new Error('The temporary preview copy could not be moved to Trash and was kept.');
+    }
   }
 }

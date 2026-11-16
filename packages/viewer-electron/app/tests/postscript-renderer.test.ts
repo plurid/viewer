@@ -49,7 +49,7 @@ async function fixture(mode: FakeMode = 'success', store = false) {
   const script = `#!${process.execPath}
 const fs = require('node:fs');
 const args = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args, environment: Object.keys(process.env), cwd: process.cwd() }) + '\\n');
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args, environment: Object.keys(process.env), cwd: process.cwd(), priority: require('node:os').getPriority(0) }) + '\\n');
 if (args.includes('-h')) {
   process.stdout.write(${JSON.stringify(mode === 'impostor' ? 'Another program 1.0' : 'GPL Ghostscript 10.99.1 (generated test program)\n')});
 } else if (${JSON.stringify(mode)} === 'timeout') {
@@ -94,6 +94,7 @@ if (args.includes('-h')) {
         (line) =>
           JSON.parse(line) as {
             args: string[];
+            priority: number;
             environment: string[];
             cwd: string;
           },
@@ -131,6 +132,7 @@ describe('explicit, bounded Ghostscript rendering', () => {
     expect(path.dirname(calls[1]!.args.at(-1)!)).toBe(calls[1]!.cwd);
     expect(calls[1]!.environment).toEqual(expect.arrayContaining(['PATH', 'LC_ALL', 'LANG']));
     expect(calls[1]!.environment).not.toContain('GS_OPTIONS');
+    expect(calls[1]!.priority).toBe(19);
     expect(await readFile(f.source)).toEqual(f.sourceBytes);
     const cached = await f.service.renderPostscript(f.granted.id, 'again');
     expect(await f.calls()).toHaveLength(2);
@@ -164,6 +166,22 @@ describe('explicit, bounded Ghostscript rendering', () => {
     expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).kind).toBe(
       'Encapsulated PostScript',
     );
+  });
+  it('cancels during executable discovery before a process can be queued', async () => {
+    const f = await fixture();
+    let finish!: (value: string) => void;
+    vi.spyOn(f.renderer, 'variant').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const work = f.service.renderPostscript(f.granted.id, 'render').catch((error: Error) => error);
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    f.service.cancelDocument(f.granted.id, 'render');
+    finish('not-used');
+    expect(await work).toBeInstanceOf(Error);
+    expect(await f.calls()).toEqual([]);
   });
   it('cancels when the preview closes and refuses late derived resources', async () => {
     const f = await fixture('timeout');

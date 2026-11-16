@@ -126,8 +126,9 @@ describe('preview extension contract', () => {
       expect(choosePreview(file(`model.${extension}`)).id).toBe('model');
   });
   it('does not claim unsupported creative formats are raster images', () => {
-    for (const extension of ['ai', 'usd'])
+    for (const extension of ['usd'])
       expect(choosePreview(file(`file.${extension}`)).id).toBe('fallback');
+    expect(choosePreview(file('drawing.ai')).id).toBe('postscript');
     // Chromium cannot decode these; Quick Look renders them out of process instead.
     for (const extension of ['psd', 'heic', 'tiff', 'dng'])
       expect(choosePreview(file(`file.${extension}`)).id).toBe('rendered-image');

@@ -29,7 +29,9 @@ type PDFSidebar = 'none' | 'pages' | 'outline';
 GlobalWorkerOptions.workerSrc = workerURL;
 /** `onPaint` follows each painted page: the Office layout holds a picture of its first page until
  * then, so nothing blank shows between them. */
-export default function PDFPreview(context: PreviewContext & { onPaint?(): void }) {
+export default function PDFPreview(
+  context: PreviewContext & { onPaint?(): void; printable?: boolean },
+) {
   const { resource, signal, active, pages } = context;
   const dark = pages?.dark;
   const painted = useEffectEvent(() => context.onPaint?.());
@@ -306,7 +308,9 @@ export default function PDFPreview(context: PreviewContext & { onPaint?(): void 
     };
   }, [pdf, query, signal, setPage]);
   const printable =
-    getState().bootstrap.platform === 'darwin' && resource.derivation?.kind !== 'office';
+    context.printable !== false &&
+    getState().bootstrap.platform === 'darwin' &&
+    resource.derivation?.kind !== 'office';
   const print = useMemo(
     () => () => {
       void window.viewer.printPDF(resource.id, password.current || undefined).catch(report);

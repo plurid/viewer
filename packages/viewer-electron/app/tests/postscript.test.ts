@@ -152,11 +152,18 @@ describe('EPSI bitmap decoding', () => {
     epsiSample.replace('% 55\n', ''),
     epsiSample.replace('%%EndPreview', ''),
     epsiSample.replace('% aa', '% gg'),
-    epsiSample.replace('8 2 1 2', '100000 100000 1 2'),
     epsiSample.replace('% 55', '% 5'),
     epsiSample.replace('8 2 1 2', '8 2 3 2'),
   ])('refuses truncated or malformed bitmaps', (source) => {
     expect(() => decodeEPSI(Buffer.from(source))).toThrow('malformed');
+  });
+  it('distinguishes a preview limit from a malformed bitmap', () => {
+    expect(() =>
+      decodeEPSI(Buffer.from(epsiSample.replace('8 2 1 2', '100000 100000 1 2'))),
+    ).toThrow('preview limits');
+    expect(() =>
+      decodeEPSI(Buffer.from(epsiSample.slice(0, epsiSample.indexOf('% 55'))), true),
+    ).toThrow('text preview limit');
   });
   it('leaves files without a preview and embedded child previews alone', () => {
     expect(decodeEPSI(Buffer.from(postscriptSample))).toBeUndefined();

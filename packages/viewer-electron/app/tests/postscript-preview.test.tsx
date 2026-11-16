@@ -101,6 +101,7 @@ describe('PostScript preview composition and explicit rendering', () => {
     render(<PostScriptPreview {...f.context} />);
     expect(await screen.findByText('Illustrator file with a PDF inside.')).toBeTruthy();
     expect(screen.getByText('Existing PDF viewer')).toBeTruthy();
+    expect(children.pdf.mock.lastCall![0].printable).toBe(false);
     expect(screen.queryByRole('button', { name: 'Render pages with Ghostscript' })).toBeNull();
     expect(f.services.renderPostscript).not.toHaveBeenCalled();
   });
@@ -111,6 +112,7 @@ describe('PostScript preview composition and explicit rendering', () => {
     expect(await screen.findByText('Pages rendered with Ghostscript 10.99.1.')).toBeTruthy();
     expect(f.services.renderPostscript).toHaveBeenCalledOnce();
     expect(children.pdf.mock.lastCall![0].resource.id).toBe('child-pdf');
+    expect(children.pdf.mock.lastCall![0].printable).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Source' }));
     expect(screen.getByText('Two squares')).toBeTruthy();
     expect(screen.getByText('Existing text viewer')).toBeTruthy();
@@ -153,6 +155,30 @@ describe('PostScript preview composition and explicit rendering', () => {
     expect(f.services.release).toHaveBeenCalledWith('child-pdf');
     expect(screen.getByText('Two squares')).toBeTruthy();
     expect(screen.queryByText('Existing PDF viewer')).toBeNull();
+  });
+  it('retains keyboard focus through rendering, cancellation and completion', async () => {
+    const f = fixture();
+    let finish!: (value: Resource) => void;
+    f.services.renderPostscript.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<PostScriptPreview {...f.context} />);
+    const button = await screen.findByRole('button', { name: 'Render pages with Ghostscript' });
+    button.focus();
+    fireEvent.click(button);
+    expect(globalThis.document.activeElement).toBe(button);
+    expect(button.textContent).toBe('Cancel rendering');
+    fireEvent.click(button);
+    expect(globalThis.document.activeElement).toBe(button);
+    expect(button.textContent).toBe('Render pages with Ghostscript');
+    await act(async () => finish(child('pdf')));
+    fireEvent.click(button);
+    await act(async () => finish(child('pdf')));
+    expect(globalThis.document.activeElement).toBe(button);
+    expect(button.textContent).toBe('Rendered pages');
   });
   it('cancels on close and releases a late embedded preview', async () => {
     const f = fixture();

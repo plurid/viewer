@@ -123,6 +123,43 @@ describe('authorized PostScript inspection', () => {
     await expect(service.inspectPostscript(resource.id, 'read')).rejects.toThrow('malformed');
     expect(decode).not.toHaveBeenCalled();
   });
+  it('keeps comments and source when a valid TIFF section cannot be decoded', async () => {
+    const file = path.join(root, 'unsupported-tiff.eps');
+    await writeFile(file, binaryEPSSample(postscriptSample, tiffSample()));
+    const service = create(
+      new DerivedPreviews(
+        async () => {},
+        async () => {
+          throw new Error('Unsupported TIFF encoding.');
+        },
+      ),
+    );
+    const resource = await service.grant(file);
+    const result = await service.inspectPostscript(resource.id, 'read');
+    expect(result.source.text).toBe(postscriptSample);
+    expect(result.metadata.title).toBe('Two squares');
+    expect(result.previewMessage).toBe(
+      'The embedded TIFF picture could not be decoded within the preview limits.',
+    );
+  });
+  it('keeps inspection when an EPSI picture extends past the bounded source read', async () => {
+    const file = path.join(root, 'bounded.epsi');
+    const prefix = '%!PS\n%%Title: Bounded source\n';
+    const preview = '%%BeginPreview: 8 2 1 2\n% aa\n';
+    const source =
+      prefix +
+      'x'.repeat(previewTextLimit - prefix.length - preview.length - 1) +
+      '\n' +
+      preview +
+      '% 55\n%%EndPreview\n';
+    await writeFile(file, source);
+    const service = create();
+    const resource = await service.grant(file);
+    const result = await service.inspectPostscript(resource.id, 'read');
+    expect(result.metadata.title).toBe('Bounded source');
+    expect(result.previewMessage).toContain('text preview limit');
+    expect(result.source.truncated).toBe(true);
+  });
   it('obeys cancellation before reading any PostScript content', async () => {
     const file = path.join(root, 'cancelled.ps');
     await writeFile(file, postscriptSample);
