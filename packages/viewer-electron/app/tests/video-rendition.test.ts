@@ -1,3 +1,4 @@
+import { fileStat } from '../src/desktop/files/stats';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { writeFile, open, type FileHandle, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -48,7 +49,7 @@ it('uses closed vectors, verifies through EOF, and bounds a complete encoded cop
     ),
   );
   const result = await videoDecoder('/bundled', execute)(
-    { file, handle, info: await handle.stat() },
+    { file, handle, info: await fileStat(handle) },
     'video',
     new AbortController().signal,
   );
@@ -73,7 +74,7 @@ it('refuses a partial output even when it contains valid codecs and an initial M
   );
   await expect(
     videoDecoder('/bundled', execute)(
-      { file, handle, info: await handle.stat() },
+      { file, handle, info: await fileStat(handle) },
       'video',
       new AbortController().signal,
     ),
@@ -85,7 +86,7 @@ it('refuses a source too long for the complete-copy budget before encoding', asy
   );
   await expect(
     videoDecoder('/bundled', execute)(
-      { file, handle, info: await handle.stat() },
+      { file, handle, info: await fileStat(handle) },
       'video',
       new AbortController().signal,
     ),
@@ -120,7 +121,7 @@ it('copies sound without a picture to AAC and checks it through its last frame',
     };
     const execute = run(141);
     const result = await videoDecoder('/bundled', execute)(
-      { file: sound, handle: source, info: await source.stat() },
+      { file: sound, handle: source, info: await fileStat(source) },
       'video',
       new AbortController().signal,
     );
@@ -130,7 +131,7 @@ it('copies sound without a picture to AAC and checks it through its last frame',
     expect(command).toContain('fd,pipe');
     await expect(
       videoDecoder('/bundled', run(40))(
-        { file: sound, handle: source, info: await source.stat() },
+        { file: sound, handle: source, info: await fileStat(source) },
         'video',
         new AbortController().signal,
       ),
@@ -161,7 +162,7 @@ it('counts the frames of a raw elementary stream, which states no duration', asy
   // 24 frames at 12 a second: two seconds, as the copy's 60 frames at 30 are
   const execute = run({ streams: [{ nb_read_packets: '24', r_frame_rate: '12/1' }] });
   const result = await videoDecoder('/bundled', execute)(
-    { file, handle, info: await handle.stat() },
+    { file, handle, info: await fileStat(handle) },
     'video',
     new AbortController().signal,
   );
@@ -172,7 +173,7 @@ it('counts the frames of a raw elementary stream, which states no duration', asy
   expect(descriptors).not.toEqual([handle.fd]);
   await expect(
     videoDecoder('/bundled', run({ streams: [] }))(
-      { file, handle, info: await handle.stat() },
+      { file, handle, info: await fileStat(handle) },
       'video',
       new AbortController().signal,
     ),

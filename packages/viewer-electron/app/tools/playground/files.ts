@@ -1,5 +1,7 @@
+import { lstat } from '../../src/desktop/files/stats';
+import { itemIdentity } from '../../src/domain/files/item-identity';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readFile, realpath } from 'node:fs/promises';
+import { mkdir, open, readFile, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { FileResult } from './types';
@@ -56,7 +58,7 @@ export async function openPlayground(directory: string): Promise<PlaygroundFiles
   const info = await lstat(root);
   if (!info.isDirectory() || info.isSymbolicLink())
     throw new Error(`The playground destination is not an ordinary directory: ${root}`);
-  const files = new PlaygroundFiles(root, `${info.dev}:${info.ino}`);
+  const files = new PlaygroundFiles(root, itemIdentity(info));
   if (created) await files.put(markerName, marker);
   const existing = await files.read(markerName);
   if (existing?.toString() !== marker)
@@ -85,7 +87,7 @@ export class PlaygroundFiles {
 
   private async checkRoot(): Promise<void> {
     const info = await lstat(this.root);
-    if (!info.isDirectory() || info.isSymbolicLink() || `${info.dev}:${info.ino}` !== this.identity)
+    if (!info.isDirectory() || info.isSymbolicLink() || itemIdentity(info) !== this.identity)
       throw new Error('The playground directory changed; preserved the replacement.');
   }
 

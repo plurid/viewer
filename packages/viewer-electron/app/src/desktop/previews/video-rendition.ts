@@ -1,3 +1,5 @@
+import { fileStat } from '../files/stats';
+import { sameItem } from '../files/item-identity';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import path from 'node:path';
@@ -26,10 +28,9 @@ async function countedDuration(
     constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
   );
   try {
-    const current = await input.stat();
+    const current = await fileStat(input);
     if (
-      current.dev !== source.info.dev ||
-      current.ino !== source.info.ino ||
+      !sameItem(current, source.info) ||
       current.mtimeMs !== source.info.mtimeMs ||
       current.size !== source.info.size
     )
@@ -140,10 +141,9 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
       );
       let data: Buffer;
       try {
-        const current = await input.stat();
+        const current = await fileStat(input);
         if (
-          current.dev !== source.info.dev ||
-          current.ino !== source.info.ino ||
+          !sameItem(current, source.info) ||
           current.mtimeMs !== source.info.mtimeMs ||
           current.ctimeMs !== source.info.ctimeMs ||
           current.size !== source.info.size
@@ -313,10 +313,9 @@ async function audioCopy(
   );
   let data: Buffer;
   try {
-    const current = await input.stat();
+    const current = await fileStat(input);
     if (
-      current.dev !== source.info.dev ||
-      current.ino !== source.info.ino ||
+      !sameItem(current, source.info) ||
       current.mtimeMs !== source.info.mtimeMs ||
       current.size !== source.info.size
     )

@@ -4,11 +4,24 @@ import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { copyFile, lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  writeFile,
+} from 'node:fs/promises';
+import { setTimeout } from 'node:timers/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type { OperationJob, OperationRequest } from '../../src/domain/contracts';
+import type { NativeRenameRecovery } from '../../src/desktop/native/macos-files';
+import { disposeRenameRecovery } from '../../src/desktop/operations/removal';
+import { itemIdentity, nativeItemIdentity } from '../../src/domain/files/item-identity';
 import { setAssetRoot } from '../../src/desktop/native/assets';
 import { macFiles } from '../../src/desktop/native/macos-files';
 import { fileCoordination } from '../../src/desktop/files/file-coordination';
@@ -64,6 +77,8 @@ let attachAttempted = false;
 let unmounted = false;
 let failure: unknown;
 const results: Result[] = [];
+const collisions: OperationJob[] = [];
+let recovery: { native: NativeRenameRecovery; notes: string[]; adapterPaths: string[] } | undefined;
 const operations = new Operations(
   async () => {
     throw new Error('This preserved scenario must never invoke the Trash.');
@@ -84,6 +99,20 @@ async function completed(action: string, id: string): Promise<void> {
 }
 async function operate(action: string, request: OperationRequest): Promise<void> {
   await completed(action, operations.start(request));
+}
+
+async function collision(action: string, request: OperationRequest): Promise<void> {
+  const id = operations.start(request);
+  let job: OperationJob | undefined;
+  for (let attempt = 0; attempt < 200; attempt++) {
+    job = operations.all().find((item) => item.id === id);
+    if (job && !['queued', 'running'].includes(job.status)) break;
+    await setTimeout(25);
+  }
+  assert.equal(job?.status, 'collision', JSON.stringify(job));
+  collisions.push(job!);
+  operations.resolve(id, 'skip', false);
+  await completed(action, id);
 }
 
 try {
@@ -164,6 +193,94 @@ try {
   assert.equal(await readFile(path.join(moved, 'Renamed.txt'), 'utf8'), 'Complete exFAT move.');
   await assert.rejects(lstat(movedFile), { code: 'ENOENT' });
   assert.equal(await readFile(note, 'utf8'), 'Complete exFAT copy.');
+
+  const report = path.join(incoming, 'report.txt');
+  const taken = path.join(copied, 'report.txt');
+  const renameSource = path.join(incoming, 'Rename source.txt');
+  await writeFile(report, 'Incoming report.', { flag: 'wx' });
+  await writeFile(taken, 'Existing report.', { flag: 'wx' });
+  await writeFile(renameSource, 'Rename source.', { flag: 'wx' });
+  assert.notEqual(
+    itemIdentity(await lstat(report, { bigint: true })),
+    itemIdentity(await lstat(taken, { bigint: true })),
+  );
+  await collision('copy collision on exFAT', {
+    kind: 'copy',
+    sources: [report],
+    destination: copied,
+  });
+  await collision('move collision on exFAT', {
+    kind: 'move',
+    sources: [report],
+    destination: copied,
+  });
+  await collision('rename collision on exFAT', {
+    kind: 'rename',
+    sources: [renameSource],
+    name: 'report.txt',
+  });
+  assert.equal(await readFile(report, 'utf8'), 'Incoming report.');
+  assert.equal(await readFile(taken, 'utf8'), 'Existing report.');
+  assert.equal(await readFile(renameSource, 'utf8'), 'Rename source.');
+
+  // Only the standalone test algorithm fails commit. Its exclusive syscall and recovery use
+  // the real exFAT image; production N-API has no failure-injection endpoint.
+  const runner = path.join(root, 'exclusive-rename-test');
+  await run('/usr/bin/xcrun', [
+    'clang++',
+    '-std=c++17',
+    '-Wall',
+    '-Wextra',
+    '-Werror',
+    path.join(appRoot, 'tools/exclusive-rename-test.cc'),
+    '-o',
+    runner,
+  ]);
+  const failedSource = path.join(incoming, 'Failed publication.txt');
+  const failedTarget = path.join(copied, 'Failed publication.txt');
+  const retained = path.join(root, 'Failure evidence');
+  const adapterFolder = path.join(mount, 'Trash adapter');
+  await mkdir(retained);
+  await mkdir(adapterFolder);
+  await writeFile(failedSource, 'Complete failed-publication source.', { flag: 'wx' });
+  const failed = JSON.parse(
+    (await run(runner, [failedSource, failedTarget, retained, 'native-fail', 'reserve'])).stdout,
+  ) as NativeRenameRecovery & { error: number; reservations: number; commits: number };
+  assert.notEqual(failed.error, 0);
+  assert.equal(failed.reservations, 1);
+  assert.equal(failed.commits, 1);
+  const reservation = failed.entries.find((entry) => entry.kind === 'reservation');
+  assert.ok(reservation && reservation.kind === 'reservation');
+  assert.equal(
+    itemIdentity(await lstat(reservation.path, { bigint: true })),
+    nativeItemIdentity(reservation.identity),
+  );
+  const adapterPaths: string[] = [];
+  const flags = [process.env.VIEWER_TEST_PRESERVE, process.env.VIEWER_TEST_NO_REMOVAL];
+  let notes: string[];
+  try {
+    // Enable only this injected retained adapter. It moves entries within the generated image,
+    // never calls the operating-system Trash and never deletes fixtures.
+    process.env.VIEWER_TEST_PRESERVE = '0';
+    process.env.VIEWER_TEST_NO_REMOVAL = '0';
+    notes = await disposeRenameRecovery(failed, async (file) => {
+      adapterPaths.push(file);
+      const target = path.join(adapterFolder, 'Retained ' + adapterPaths.length);
+      await rename(file, target);
+      return { path: target, directory: (await lstat(target)).isDirectory() };
+    });
+  } finally {
+    process.env.VIEWER_TEST_PRESERVE = flags[0];
+    process.env.VIEWER_TEST_NO_REMOVAL = flags[1];
+  }
+  recovery = { native: failed, notes, adapterPaths };
+  assert.ok(adapterPaths.includes(reservation.path));
+  assert.ok(notes.join(' ').includes('moved to the Trash'));
+  assert.ok(!notes.join(' ').includes('changed and was kept'));
+  assert.equal((await lstat(path.join(adapterFolder, 'Retained 1'))).size, 0);
+  assert.equal(await readFile(failedSource, 'utf8'), 'Complete failed-publication source.');
+  await assert.rejects(lstat(failedTarget), { code: 'ENOENT' });
+  console.log('failed publication reservation reached the retained Trash adapter: passed');
   for (const name of (await readdir(copied)).filter((name) => name.startsWith('.viewer-')))
     assert.deepEqual(await readdir(path.join(copied, name)), []);
 } catch (error) {
@@ -204,6 +321,8 @@ await writeFile(
       passed: !failure,
       bindingSHA256,
       results,
+      collisions,
+      recovery,
       unmounted,
       error: failure ? String(failure) : undefined,
       limitations: [

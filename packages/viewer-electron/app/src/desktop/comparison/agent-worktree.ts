@@ -1,6 +1,8 @@
+import { lstat } from '../files/stats';
+import { sameItem } from '../files/item-identity';
 import path from 'node:path';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, realpath, symlink } from 'node:fs/promises';
+import { mkdir, open, realpath, symlink } from 'node:fs/promises';
 import { runGit } from './git';
 import { gitBlobs } from './git-blobs';
 import { assertNoGitFilters } from './git-filters';
@@ -88,11 +90,7 @@ export async function addAgentWorktree(
     throw new Error('The new worktree folder changed.');
   const check = async (folder: string) => {
     const info = await lstat(root);
-    if (
-      info.dev !== identity.dev ||
-      info.ino !== identity.ino ||
-      (await realpath(destination)) !== root
-    )
+    if (!sameItem(info, identity) || (await realpath(destination)) !== root)
       throw new Error('The new worktree folder was replaced.');
     let directory = root;
     for (const part of path.relative(root, folder).split(path.sep).filter(Boolean)) {

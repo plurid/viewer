@@ -1,27 +1,38 @@
+import { itemIdentity } from '../../domain/files/item-identity';
+import { stat } from '../files/stats';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { access, realpath, stat } from 'node:fs/promises';
+import { access, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import type { Decoder } from './derived';
-import type { PreviewCopyOptions } from './input-copy';
+import type { PostScriptStageOptions } from './postscript-stage';
 import type { GhostscriptStatus } from '../../domain/previews/documents/postscript';
 import {
   binaryEPS,
   epsHeader,
   inspectPostScript,
+  postscriptOffset,
 } from '../../domain/previews/documents/postscript';
 import { errorMessage } from '../../domain/errors';
-import { withPreviewCopy } from './input-copy';
+import { previewInput } from './input-copy';
+import { withPostScriptStage } from './postscript-stage';
 import { runProcessor } from '../transforms/process';
 
-const locations = ['/opt/homebrew/bin/gs', '/usr/local/bin/gs', '/opt/local/bin/gs'];
+export const ghostscriptLocations = [
+  '/opt/homebrew/bin/gs',
+  '/usr/local/bin/gs',
+  '/opt/local/bin/gs',
+];
 export const postscriptOutputLimit = 32 * 1024 * 1024;
 export const postscriptTimeout = 60_000;
-interface GhostscriptOptions extends PreviewCopyOptions {
-  customPath(): string;
+export const postscriptScratchLimit = 64 * 1024 * 1024;
+export const postscriptMemoryKiB = 131072;
+interface GhostscriptOptions extends PostScriptStageOptions {
   store(): boolean;
   timeout?: number;
   outputLimit?: number;
+  scratchLimit?: number;
+  resolveExecutable?(file: string): Promise<string>;
 }
 interface Executable {
   file: string;
@@ -35,10 +46,7 @@ export class Ghostscript {
 
   private async find(): Promise<Executable | undefined> {
     if (this.options.store()) return undefined;
-    const custom = this.options.customPath();
-    if (custom && (!path.isAbsolute(custom) || custom.includes('\0') || custom.length > 32768))
-      return undefined;
-    for (const candidate of custom ? [custom, ...locations] : locations) {
+    for (const candidate of ghostscriptLocations) {
       const found = await this.executable(candidate).catch(() => undefined);
       if (found) return found;
     }
@@ -46,14 +54,13 @@ export class Ghostscript {
   }
 
   private async executable(candidate: string): Promise<Executable | undefined> {
-    const file = await realpath(candidate);
+    const file = await (this.options.resolveExecutable ?? realpath)(candidate);
     const info = await stat(file);
     if (!info.isFile()) return undefined;
     await access(file, constants.X_OK);
     const identity = JSON.stringify([
       file,
-      info.dev,
-      info.ino,
+      itemIdentity(info),
       info.size,
       info.mtimeMs,
       info.ctimeMs,
@@ -88,23 +95,32 @@ export class Ghostscript {
     await source.handle.read(first, 0, first.length, section.offset);
     if (inspectPostScript(first, source.format ?? path.extname(source.file).slice(1)).pdf)
       throw new Error('This Illustrator file already contains a PDF.');
+    const crop =
+      binaryEPS(header) ||
+      /EPSF-/.test(first.toString()) ||
+      /^eps[fi]?$/.test(source.format ?? path.extname(source.file).slice(1));
+    const prelude = postscriptOffset(first);
+    section = { offset: section.offset + prelude, length: section.length - prelude };
     let version: string | undefined;
     try {
-      const help = await runProcessor(executable.file, ['-h'], [], signal, {
-        timeout: 3000,
-        outputLimit: 64 * 1024,
-        lowPriority: true,
-      });
-      version = /\b(?:GPL |AFPL |Artifex )?Ghostscript (\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)\b/.exec(
-        help.toString(),
-      )?.[1];
-      if (!version) throw new Error('The selected program did not identify itself as Ghostscript.');
-      if ((await this.executable(executable.file))?.identity !== executable.identity)
-        throw new Error('Ghostscript changed; choose Render pages again.');
-      const data = await withPreviewCopy(source, section, signal, this.options, async (file) => {
+      return await withPostScriptStage(this.options, async (directory) => {
+        const help = await runProcessor(executable.file, ['-h'], [], signal, {
+          timeout: 3000,
+          outputLimit: 64 * 1024,
+          lowPriority: true,
+          processGroup: true,
+          cwd: directory,
+          tempDirectory: directory,
+          scratchLimit: this.options.scratchLimit ?? postscriptScratchLimit,
+        });
+        version = /\b(?:GPL |AFPL |Artifex )?Ghostscript (\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)\b/.exec(
+          help.toString(),
+        )?.[1];
+        if (!version)
+          throw new Error('The selected program did not identify itself as Ghostscript.');
         if ((await this.executable(executable.file))?.identity !== executable.identity)
           throw new Error('Ghostscript changed; choose Render pages again.');
-        return runProcessor(
+        const data = await runProcessor(
           executable.file,
           [
             '-dSAFER',
@@ -113,11 +129,12 @@ export class Ghostscript {
             '-dNOPROMPT',
             '-dQUIET',
             '-dNumRenderingThreads=1',
+            `-K${postscriptMemoryKiB}`,
+            ...(crop ? ['-dEPSCrop'] : []),
             '-sDEVICE=pdfwrite',
             '-sOutputFile=%stdout',
             '-sstdout=%stderr',
-            '--',
-            file,
+            '-',
           ],
           [],
           signal,
@@ -125,19 +142,23 @@ export class Ghostscript {
             timeout: this.options.timeout ?? postscriptTimeout,
             outputLimit: this.options.outputLimit ?? postscriptOutputLimit,
             lowPriority: true,
-            cwd: path.dirname(file),
+            processGroup: true,
+            cwd: directory,
+            tempDirectory: directory,
+            scratchLimit: this.options.scratchLimit ?? postscriptScratchLimit,
+            input: previewInput(source, section, signal),
           },
         );
+        if ((await this.executable(executable.file))?.identity !== executable.identity)
+          throw new Error('Ghostscript changed; choose Render pages again.');
+        if (
+          data.length < 16 ||
+          data.subarray(0, 5).toString() !== '%PDF-' ||
+          !data.subarray(-1024).includes(Buffer.from('%%EOF'))
+        )
+          throw new Error('Ghostscript did not produce a complete PDF.');
+        return { data, extension: 'pdf', kind: 'postscript', decoder: `Ghostscript ${version}` };
       });
-      if ((await this.executable(executable.file))?.identity !== executable.identity)
-        throw new Error('Ghostscript changed; choose Render pages again.');
-      if (
-        data.length < 16 ||
-        data.subarray(0, 5).toString() !== '%PDF-' ||
-        !data.subarray(-1024).includes(Buffer.from('%%EOF'))
-      )
-        throw new Error('Ghostscript did not produce a complete PDF.');
-      return { data, extension: 'pdf', kind: 'postscript', decoder: `Ghostscript ${version}` };
     } catch (error) {
       if (signal.aborted) throw new Error('PostScript rendering was cancelled.');
       const message = errorMessage(error);
@@ -146,6 +167,8 @@ export class Ghostscript {
         throw new Error(`${engine} exceeded the rendering time limit.`);
       if (message.includes('output exceeded'))
         throw new Error(`${engine} exceeded the PDF output size limit.`);
+      if (message.includes('scratch space'))
+        throw new Error(`${engine} exceeded the scratch-space limit.`);
       if (message.includes('Media processor failed'))
         throw new Error(`${engine} could not render this document.`);
       throw error;

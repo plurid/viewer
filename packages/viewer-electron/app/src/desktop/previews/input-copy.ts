@@ -1,22 +1,9 @@
-import { open } from 'node:fs/promises';
-import os from 'node:os';
-import { privateStage } from '../operations/staging';
+import { Readable } from 'node:stream';
 import type { Source } from './derived';
 import type { ByteSection } from '../../domain/previews/documents/postscript';
 
-export interface PreviewCopyOptions {
-  directory?: string;
-  trash?(file: string): Promise<unknown>;
-}
-
-/** Private copies reuse the transfer owner's identity checks and Trash recovery. */
-export async function withPreviewCopy<T>(
-  source: Source,
-  section: ByteSection,
-  signal: AbortSignal,
-  options: PreviewCopyOptions,
-  read: (file: string) => Promise<T>,
-): Promise<T> {
+/** A held descriptor supplies only its validated section, with backpressure and no disk copy. */
+export function previewInput(source: Source, section: ByteSection, signal: AbortSignal): Readable {
   const { offset, length } = section;
   if (
     !Number.isSafeInteger(offset) ||
@@ -28,49 +15,27 @@ export async function withPreviewCopy<T>(
   )
     throw new Error('This preview section lies outside its source.');
   signal.throwIfAborted();
-  const stage = await privateStage(
-    options.directory ?? os.tmpdir(),
-    'viewer-preview-',
-    options.trash,
-    true,
-  );
-  try {
-    const output = await open(stage.file, 'wx', 0o600);
-    try {
-      const chunk = Buffer.alloc(Math.min(length, 1024 * 1024));
-      for (let copied = 0; copied < length;) {
+  return Readable.from(
+    (async function* () {
+      for (let read = 0; read < length;) {
         signal.throwIfAborted();
-        const { bytesRead } = await source.handle.read(
-          chunk,
-          0,
-          Math.min(chunk.length, length - copied),
-          offset + copied,
-        );
-        if (!bytesRead) throw new Error('The preview source changed while copying.');
-        let written = 0;
-        while (written < bytesRead) {
-          const result = await output.write(chunk, written, bytesRead - written, copied + written);
-          if (!result.bytesWritten) throw new Error('The preview copy could not be written.');
-          written += result.bytesWritten;
-        }
-        copied += bytesRead;
+        const chunk = Buffer.alloc(Math.min(1024 * 1024, length - read));
+        const { bytesRead } = await source.handle.read(chunk, 0, chunk.length, offset + read);
+        if (!bytesRead) throw new Error('The preview source changed while reading.');
+        read += bytesRead;
+        yield chunk.subarray(0, bytesRead);
       }
-    } finally {
-      await output.close();
-    }
-    signal.throwIfAborted();
-    return await read(stage.file);
-  } finally {
-    try {
-      const kept = await stage.dispose();
-      if (
-        kept &&
-        process.env.VIEWER_TEST_PRESERVE !== '1' &&
-        process.env.VIEWER_TEST_NO_REMOVAL !== '1'
-      )
-        throw new Error('Temporary preview copy retained.');
-    } catch {
-      throw new Error('The temporary preview copy could not be moved to Trash and was kept.');
-    }
-  }
+    })(),
+  );
+}
+
+export async function previewBytes(
+  source: Source,
+  section: ByteSection,
+  signal: AbortSignal,
+): Promise<Buffer> {
+  if (section.length > 32 * 1024 * 1024) throw new Error('The embedded picture exceeds 32 MiB.');
+  const chunks: Buffer[] = [];
+  for await (const chunk of previewInput(source, section, signal)) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks, section.length);
 }

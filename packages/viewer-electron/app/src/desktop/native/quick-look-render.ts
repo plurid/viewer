@@ -2,10 +2,8 @@ import { gunzipSync } from 'node:zlib';
 import { runProcessor } from '../transforms/process';
 import { imageDimensions } from '../previews/image-dimensions';
 import type { Decoder } from '../previews/derived';
-import type { PreviewCopyOptions } from '../previews/input-copy';
-import { open } from 'node:fs/promises';
 import { binaryEPS, epsHeader } from '../../domain/previews/documents/postscript';
-import { withPreviewCopy } from '../previews/input-copy';
+import { previewBytes } from '../previews/input-copy';
 
 /** The longest edge of a rendered preview. */
 const renditionSize = 4096;
@@ -15,13 +13,12 @@ export function imageDecoder(
   helper: string,
   ffmpeg?: string,
   svg?: (bytes: Buffer, size: number, signal: AbortSignal) => Promise<Buffer>,
-  copies: PreviewCopyOptions = {},
 ): Decoder {
   return async (source, mode, signal, size = renditionSize, variant) => {
     if (mode !== 'image') throw new Error('Use the camera or video decoder for this preview.');
     if (!Number.isInteger(size) || size < 1 || size > renditionSize)
       throw new Error('Choose an image preview size between 1 and 4096 pixels.');
-    const signature = Buffer.alloc(Math.min(30, source.info.size));
+    const signature = Buffer.alloc(30);
     await source.handle.read(signature, 0, signature.length, 0);
     const eps = binaryEPS(signature);
     const embedded =
@@ -71,21 +68,56 @@ export function imageDecoder(
       : ['image', String(size)];
     const render = async () => {
       if (embedded) {
-        const magic = Buffer.alloc(4);
-        await source.handle.read(magic, 0, 4, embedded.offset);
-        if (!['49492a00', '4d4d002a'].includes(magic.toString('hex')))
+        if (!ffmpeg) throw new Error('The private TIFF decoder is unavailable.');
+        const bytes = await previewBytes(source, embedded, signal);
+        if (!['49492a00', '4d4d002a'].includes(bytes.subarray(0, 4).toString('hex')))
           throw new Error('The embedded TIFF header is malformed.');
-        return withPreviewCopy(source, embedded, signal, copies, async (file) => {
-          const input = await open(file, 'r');
-          try {
-            return await runProcessor(helper, ['image', String(size)], [input.fd], signal, {
-              timeout: 10000,
-              outputLimit: 32 * 1024 * 1024,
-            });
-          } finally {
-            await input.close();
-          }
-        });
+        return runProcessor(
+          ffmpeg,
+          [
+            '-nostdin',
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-xerror',
+            '-max_alloc',
+            '268435456',
+            '-threads',
+            '1',
+            '-filter_threads',
+            '1',
+            '-protocol_whitelist',
+            'pipe',
+            '-max_pixels',
+            '100000000',
+            '-f',
+            'image2pipe',
+            '-frame_size',
+            String(bytes.length),
+            '-c:v',
+            'tiff',
+            '-i',
+            'pipe:0',
+            '-map',
+            '0:v:0',
+            '-frames:v',
+            '1',
+            '-vf',
+            `scale=w='min(iw,${size})':h='min(ih,${size})':force_original_aspect_ratio=decrease`,
+            '-c:v',
+            'png',
+            '-f',
+            'image2pipe',
+            'pipe:1',
+          ],
+          [],
+          signal,
+          {
+            input: bytes,
+            timeout: 10000,
+            outputLimit: 32 * 1024 * 1024,
+          },
+        );
       }
       if (!vector)
         return runProcessor(exr ? ffmpeg! : helper, args, [source.handle.fd], signal, {
@@ -142,7 +174,9 @@ export function imageDecoder(
         ? 'librsvg isolated v1'
         : exr
           ? 'FFmpeg OpenEXR isolated v1'
-          : 'ImageIO isolated v1',
+          : embedded
+            ? 'FFmpeg TIFF isolated v1'
+            : 'ImageIO isolated v1',
     };
   };
 }

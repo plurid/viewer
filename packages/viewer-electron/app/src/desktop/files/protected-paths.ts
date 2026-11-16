@@ -1,4 +1,6 @@
-import { lstat, stat } from 'node:fs/promises';
+import { sameDevice, itemIdentity } from '../../domain/files/item-identity';
+import { lstat, stat } from './stats';
+
 import os from 'node:os';
 import path from 'node:path';
 
@@ -55,8 +57,7 @@ export class ProtectedPaths {
           lstat(file).catch(() => null),
           stat(file).catch(() => null),
         ]))
-          if (info && !identities.has(`${info.dev}:${info.ino}`))
-            identities.set(`${info.dev}:${info.ino}`, file);
+          if (info && !identities.has(itemIdentity(info))) identities.set(itemIdentity(info), file);
       return identities;
     })());
   }
@@ -64,7 +65,7 @@ export class ProtectedPaths {
   async check(file: string, action: string): Promise<void> {
     const info = await lstat(file).catch(() => null);
     if (!info?.isDirectory() && !info?.isSymbolicLink()) return;
-    const protectedPath = (await this.load()).get(`${info.dev}:${info.ino}`);
+    const protectedPath = (await this.load()).get(itemIdentity(info));
     if (protectedPath)
       throw new Error(`${protectedPath} is a protected folder, so it cannot be ${action}.`);
     // A mounted volume's root: its device is not its parent's. Only /Volumes itself was protected,
@@ -72,7 +73,7 @@ export class ProtectedPaths {
     const parent = path.dirname(file);
     if (info.isDirectory() && parent !== file) {
       const outer = await lstat(parent).catch(() => null);
-      if (outer && outer.dev !== info.dev)
+      if (outer && !sameDevice(outer, info))
         throw new Error(`${file} is the root of a mounted volume, so it cannot be ${action}.`);
     }
   }

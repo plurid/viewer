@@ -1,8 +1,10 @@
+import { itemIdentity, legacyIdentityParts } from '../../domain/files/item-identity';
+import { lstat } from '../files/stats';
 import path from 'node:path';
 import { imageConversions } from '../../domain/contracts';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readdir, readlink, rename } from 'node:fs/promises';
+import { mkdir, open, readdir, readlink, rename } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { optimizationOutcomeSchema } from '../../domain/operations/optimization-target';
@@ -44,6 +46,7 @@ export const undoStepSchema = z
     caseOnly: z.boolean().optional(),
     remove: z.boolean().optional(),
     proof: z.string().length(64).optional(),
+    proofVersion: z.literal(2).optional(),
     trash: z.boolean().optional(),
     bookmark: z.string().min(1).max(65536).optional(),
     directory: z.boolean().optional(),
@@ -157,9 +160,13 @@ export const operationJournal = (dataPath: string) =>
 
 /** The most items an output may hold for Undo to remove it. */
 export const outputProofLimit = 10000;
+export type OutputProofVersion = 1 | 2;
 /** Compare the entire owned output before an Undo that removes it. Large trees
  * remain valid outputs but are ineligible for automatic removal by Undo. */
-export async function outputProof(root: string): Promise<string | undefined> {
+export async function outputProof(
+  root: string,
+  version: OutputProofVersion = 2,
+): Promise<string | undefined> {
   const hash = createHash('sha256');
   const queue = [''];
   let count = 0;
@@ -168,11 +175,12 @@ export async function outputProof(root: string): Promise<string | undefined> {
     const relative = queue.pop()!;
     const file = path.join(root, relative);
     const info = await lstat(file);
+    const identity = version === 1 ? legacyIdentityParts(info) : [itemIdentity(info)];
+    if (!identity) return undefined;
     hash.update(
       JSON.stringify([
         relative,
-        info.dev,
-        info.ino,
+        ...identity,
         info.size,
         info.mtimeMs,
         info.ctimeMs,

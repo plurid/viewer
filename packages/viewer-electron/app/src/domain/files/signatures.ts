@@ -6,6 +6,8 @@
  */
 
 /** The bytes read from the start of a file to identify it. */
+import { postscriptSignature } from '../previews/documents/postscript';
+
 export const identifyProbe = 4096;
 
 export interface FileIdentity {
@@ -514,7 +516,8 @@ export function identifyBytes(
   name = '',
   directory?: Uint8Array,
 ): FileIdentity | undefined {
-  if (readsAsText(head) && !has(head, '%!PS') && !has(head, '%PDF')) return undefined;
+  if (postscriptSignature(head)) return postscript(head, name);
+  if (readsAsText(head) && !has(head, '%PDF')) return undefined;
   for (const signature of signatures) {
     if (!has(head, signature.magic, signature.at)) continue;
     const identity =

@@ -1,5 +1,8 @@
-import { constants, type Stats } from 'node:fs';
-import { lstat, open, realpath, stat } from 'node:fs/promises';
+import { lstat, stat, fileStat } from '../files/stats';
+
+import { itemIdentity } from '../../domain/files/item-identity';
+import { constants } from 'node:fs';
+import { open, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
@@ -130,18 +133,16 @@ function boundedArgument(value: unknown, label: string, maximum = 32768): assert
     throw new Error(`${label} is empty, contains a null character or exceeds its size limit.`);
 }
 
-const identity = (value: Stats) => `${value.dev}:${value.ino}`;
+const identity = itemIdentity;
 
 async function metadataStamp(file: string): Promise<unknown> {
   try {
     const [link, target, canonical] = await Promise.all([lstat(file), stat(file), realpath(file)]);
     return [
       canonical,
-      link.dev,
-      link.ino,
+      itemIdentity(link),
       link.ctimeMs,
-      target.dev,
-      target.ino,
+      itemIdentity(target),
       target.size,
       target.mtimeMs,
       target.ctimeMs,
@@ -159,7 +160,7 @@ async function headText(gitDirectory: string): Promise<string> {
     constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
   );
   try {
-    const info = await handle.stat();
+    const info = await fileStat(handle);
     if (!info.isFile() || info.size > 4096)
       throw new Error('Git HEAD is not a bounded regular file.');
     const bytes = Buffer.alloc(4097);

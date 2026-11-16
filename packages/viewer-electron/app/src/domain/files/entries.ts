@@ -1,4 +1,5 @@
 import { zipContainers } from './containers';
+import { sameIdentity } from './item-identity';
 import type { FileEntry, SortKey } from '../contracts';
 import { modelFormats } from '../previews/models/formats';
 import { cameraRawFormats } from '../previews/images/rendered';
@@ -13,7 +14,8 @@ export function indexEntries(entries: readonly FileEntry[]) {
   const identities = new Map<string, FileEntry | null>();
   for (const entry of entries) {
     paths.set(entry.path, entry);
-    identities.set(entry.identity, identities.has(entry.identity) ? null : entry);
+    if (sameIdentity(entry.identity, entry.identity))
+      identities.set(entry.identity, identities.has(entry.identity) ? null : entry);
   }
   return { paths, identities };
 }
@@ -34,7 +36,7 @@ export function reconcileSelection(
     }
     const exact = index.paths.get(path);
     const entry =
-      exact && (!cached || exact.identity === cached.identity)
+      exact && (!cached || sameIdentity(exact.identity, cached.identity))
         ? exact
         : cached?.identity
           ? index.identities.get(cached.identity)

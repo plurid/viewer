@@ -1,5 +1,7 @@
+import { itemIdentity } from '../../domain/files/item-identity';
+import { lstat, stat } from '../files/stats';
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, stat } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   BrowserWindow,
@@ -53,7 +55,7 @@ export function attachWindowDialogs(window: BrowserWindow, dialogs: WindowDialog
   });
 }
 const stamp = (info: Awaited<ReturnType<typeof lstat>>) =>
-  `${info.dev}:${info.ino}:${info.mtimeMs}:${info.size}`;
+  `${itemIdentity(info)}:${info.mtimeMs}:${info.size}`;
 
 /** A window may answer only its own outstanding desktop question. Filesystem checks stay here. */
 export class WindowDialogs {

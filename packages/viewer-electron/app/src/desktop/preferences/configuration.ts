@@ -1,5 +1,7 @@
 import fs from 'node:fs/promises';
-import { watchFile, unwatchFile, type Stats } from 'node:fs';
+import { watchFile, unwatchFile } from 'node:fs';
+import type { BigIntStats } from 'node:fs';
+import { sameItem } from '../files/item-identity';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
@@ -42,7 +44,7 @@ export function overlaps(a: string[], b: string[]): boolean {
 export class JsoncConfiguration<T> {
   readonly file: string;
   private text = '';
-  private listener?: (current: Stats, previous: Stats) => void;
+  private listener?: (current: BigIntStats, previous: BigIntStats) => void;
   diagnostics: string[] = [];
   changes: string[] = [];
   /** Read, then removed: the settings in effect stay, and the next write puts the file back. */
@@ -236,12 +238,12 @@ export class JsoncConfiguration<T> {
     this.listener = (current, previous) => {
       if (
         current.mtimeMs !== previous.mtimeMs ||
-        current.ino !== previous.ino ||
+        !sameItem(current, previous) ||
         current.size !== previous.size
       )
         reload();
     };
-    watchFile(this.file, { persistent: false, interval: 500 }, this.listener);
+    watchFile(this.file, { bigint: true, persistent: false, interval: 500 }, this.listener);
   }
   close(): void {
     if (this.listener) unwatchFile(this.file, this.listener);

@@ -1,5 +1,7 @@
+import { lstat } from '../files/stats';
+import { itemIdentity } from '../../domain/files/item-identity';
 import { randomUUID, createHash } from 'node:crypto';
-import { lstat, realpath } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import type { CapturedTarget } from '../../domain/automation/actions';
@@ -18,7 +20,7 @@ import { inspectReviewedFile } from '../native/reviewed-file';
 import { GitReader, runGit, gitEnvironment, gitSafeOptions } from './git';
 
 const digest = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
-const identity = (info: { dev: number; ino: number }) => `${info.dev}:${info.ino}`;
+const identity = itemIdentity;
 const diffOptions = [
   '--no-ext-diff',
   '--no-textconv',

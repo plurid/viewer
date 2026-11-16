@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sameIdentity } from './item-identity';
 import type { FileEntry } from '../contracts';
 import type { DocumentData, DocumentEvidence } from '../services';
 export const sourceVersionSchema = z
@@ -164,7 +165,7 @@ export const sourceVersion = (entry: FileEntry): SourceVersion => ({
   size: entry.size,
 });
 export const sameSourceVersion = (a: SourceVersion, b: SourceVersion) =>
-  a.identity === b.identity && a.modified === b.modified && a.size === b.size;
+  sameIdentity(a.identity, b.identity) && a.modified === b.modified && a.size === b.size;
 
 /** Case/diacritic matching keeps a map back to the original passage and offsets. */
 export function originalMatch(

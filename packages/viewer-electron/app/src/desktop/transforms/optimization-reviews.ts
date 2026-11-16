@@ -1,6 +1,9 @@
+import { lstat, fileStat } from '../files/stats';
+
+import { sameItem } from '../files/item-identity';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, realpath, type FileHandle } from 'node:fs/promises';
+import { mkdir, open, realpath, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import type { FileEntry, OperationJob, OperationRequest } from '../../domain/contracts';
 import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
@@ -388,7 +391,7 @@ export class OptimizationReviews implements TransformExecutor {
     );
     let target: FileHandle | undefined;
     try {
-      const before = await input.stat();
+      const before = await fileStat(input);
       if (!before.isFile() || before.size > 256_000_000)
         throw new Error('The candidate is invalid or exceeds 256 MB.');
       if (output) target = await open(output, 'wx', 0o600);
@@ -420,10 +423,9 @@ export class OptimizationReviews implements TransformExecutor {
         }
         position += bytesRead;
       }
-      for (const after of [await input.stat(), await lstat(file)])
+      for (const after of [await fileStat(input), await lstat(file)])
         if (
-          after.dev !== before.dev ||
-          after.ino !== before.ino ||
+          !sameItem(after, before) ||
           after.size !== before.size ||
           after.mtimeMs !== before.mtimeMs
         )

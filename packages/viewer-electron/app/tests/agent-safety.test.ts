@@ -21,6 +21,8 @@ import type { FileServices } from '../src/desktop/files/file-services';
 import type { ActionPlanner } from '../src/desktop/actions/planner';
 import type * as FileSystem from '../src/desktop/files/filesystem';
 import { Operations } from '../src/desktop/operations/operations';
+import { Resources } from '../src/desktop/previews/resources';
+import { createResourceHandlers } from '../src/desktop/ipc/resource-handlers';
 
 const memory = vi.hoisted(() => ({
   stores: new Map<string, unknown>(),
@@ -36,7 +38,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<typeof fs>();
   const safe = {
     realpath: async (file: string) => memory.aliases.get(String(file)) ?? String(file),
-    stat: async () => ({ isDirectory: () => true }),
+    stat: async () => ({ dev: 1n, ino: 1n, mode: 0o40700n, isDirectory: () => true }),
     rm: memory.remove,
     unlink: memory.remove,
     rmdir: memory.remove,
@@ -233,7 +235,28 @@ beforeEach(() => {
 describe('agent removal safety', () => {
   it('refuses Ghostscript through MCP, CLI and custom actions even with a saved execution grant', async () => {
     const f = await fixture(['/Granted'], true);
-    f.config.customActions = [action({ kind: 'builtin', command: 'postscript-render' })];
+    f.config.customActions = [action({ kind: 'builtin', command: 'copy-path' })];
+    const resources = new Resources();
+    const render = vi.spyOn(resources, 'renderPostscript').mockImplementation(async () => {
+      throw new Error('The render delegate was reached.');
+    });
+    const handler = createResourceHandlers({
+      resources,
+      thumbnails: { get: vi.fn() },
+      webPreviews: { releaseResource: vi.fn() },
+      files: { extract: vi.fn() },
+      fileAccess: { require: vi.fn() },
+      forgetGitResource: vi.fn(),
+      warmOffice: vi.fn(),
+      isAgent: (owner) => owner === 1,
+    }).renderPostscript;
+    expect(() => handler(['source', 'agent-render'], 1)).toThrow('never to agents');
+    expect(render).not.toHaveBeenCalled();
+    await expect(handler(['source', 'human-render'], 2)).rejects.toThrow('render delegate');
+    render.mockClear();
+    f.execute.mockImplementation(async () => {
+      await handler(['source', 'dispatch-render'], 1);
+    });
     memory.stores.set('/Memory/Viewer/execution-approvals-v1.json', [
       {
         id: 'old-render-grant',
@@ -250,8 +273,13 @@ describe('agent removal safety', () => {
     await expect(f.call('renderPostscript', { id: 'source', requestID: 'render' })).rejects.toThrow(
       'Unknown agent tool',
     );
-    for (const commandID of ['postscript-render', 'preview.postscript-render', 'custom.cleanup'])
-      await expect(f.call('propose_command', { commandID })).rejects.toThrow();
+    const proposal = await f.call<{ id: string }>('propose_command', {
+      commandID: 'custom.cleanup',
+    });
+    await expect(f.requests.review(proposal.id, true)).rejects.toThrow('never to agents');
+    expect(f.execute).toHaveBeenCalledOnce();
+    expect(f.requests.get(proposal.id).status).toBe('failed');
+    expect(render).not.toHaveBeenCalled();
     let output = '';
     const sink = new Writable({
       write(chunk, _encoding, done) {
@@ -272,8 +300,7 @@ describe('agent removal safety', () => {
     });
     expect(code).not.toBe(0);
     expect(output).toContain('Unknown agent tool');
-    expect(f.execute).not.toHaveBeenCalled();
-    expect(f.requests.list()).toEqual([]);
+    expect(render).not.toHaveBeenCalled();
     await f.broker.close();
   });
   it.each(['disable', 'remove-folder', 'capabilities'] as const)(

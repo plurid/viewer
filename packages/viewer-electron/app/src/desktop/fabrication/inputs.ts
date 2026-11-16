@@ -1,3 +1,6 @@
+import type { FileStats as Stats } from '../files/stats';
+import { fileStat } from '../files/stats';
+import { itemIdentity } from '../../domain/files/item-identity';
 /**
  * WHAT A CHECK READS: each job file only while it is the version the check listed, hashed for the
  * check record. A request is read through the mail parser, a photo re-encoded without its metadata,
@@ -8,7 +11,7 @@ import { constants } from 'node:fs';
 import { open, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { Stats } from 'node:fs';
+
 import type { SourceVersion } from '../../domain/files/inspection';
 import type { ModelImage } from '../../domain/models/images';
 import type { RenderedPage } from '../../domain/fabrication/check';
@@ -25,7 +28,7 @@ export const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).
 const sizeText = (bytes: number) =>
   bytes >= 1_000_000 ? `${Math.round(bytes / 1_000_000)} MB` : `${Math.ceil(bytes / 1000)} kB`;
 const listed = (info: Stats, version: SourceVersion) =>
-  `${info.dev}:${info.ino}` === version.identity &&
+  itemIdentity(info) === version.identity &&
   info.mtimeMs === version.modified &&
   info.size === version.size;
 const changed = (file: string) =>
@@ -41,7 +44,7 @@ async function openListed(file: string, version: SourceVersion, access: Access) 
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
   );
   try {
-    const info = await handle.stat();
+    const info = await fileStat(handle);
     if (!info.isFile() || !listed(info, version)) throw changed(file);
     return { handle, info };
   } catch (error) {
@@ -67,7 +70,7 @@ export async function readListed(
       if (!bytesRead) throw changed(file);
       offset += bytesRead;
     }
-    if (!listed(await handle.stat(), version)) throw changed(file);
+    if (!listed(await fileStat(handle), version)) throw changed(file);
     return bytes;
   } finally {
     await handle.close();
@@ -92,7 +95,7 @@ export async function hashListed(
       hash.update(buffer.subarray(0, bytesRead));
       offset += bytesRead;
     }
-    if (!listed(await handle.stat(), version)) throw changed(file);
+    if (!listed(await fileStat(handle), version)) throw changed(file);
     return hash.digest('hex');
   } finally {
     await handle.close();

@@ -4,6 +4,7 @@ import type { ReviewedFileExpectation } from './reviewed-file';
 import { guardNativeTestRemovals } from './test-removal-policy';
 import type { FullscreenPhase } from '../windows/fullscreen-transition';
 import { assetPath } from './assets';
+import { nativeIdentityArgument } from '../../domain/files/item-identity';
 export interface NativeVolume {
   path: string;
   name: string;
@@ -119,5 +120,27 @@ export function macFiles(): MacFiles {
   // The addon path is absolute; resolution needs only a stable absolute base.
   const require = createRequire(path.join(assets, 'viewer-native.cjs'));
   const file = path.join(assets, 'viewer-macos-files.node');
-  return (binding ??= guardNativeTestRemovals(require(file) as MacFiles));
+  if (!binding) {
+    const native = guardNativeTestRemovals(require(file) as MacFiles);
+    const adapter = Object.create(native) as MacFiles;
+    // The helper's reviewed-file protocol has always used exact unsigned decimal strings.
+    Object.defineProperty(adapter, 'trash', {
+      value: (item: string, purpose?: string, expected?: ReviewedFileExpectation) =>
+        native.trash(
+          item,
+          purpose,
+          expected
+            ? {
+                ...expected,
+                version: {
+                  ...expected.version,
+                  identity: nativeIdentityArgument(expected.version.identity),
+                },
+              }
+            : undefined,
+        ),
+    });
+    binding = adapter;
+  }
+  return binding;
 }

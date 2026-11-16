@@ -1,5 +1,7 @@
+import { lstat } from '../files/stats';
+import { sameItem } from '../files/item-identity';
 import path from 'node:path';
-import { lstat } from 'node:fs/promises';
+
 import { Archives } from './archives';
 import { fileCoordination } from '../files/file-coordination';
 import { attribute, child, children, localName, officeXML, xmlText } from './office-xml';
@@ -290,8 +292,7 @@ export async function extractOffice(
     }
     const after = await lstat(fileCoordination.path(file));
     if (
-      before.dev !== after.dev ||
-      before.ino !== after.ino ||
+      !sameItem(before, after) ||
       before.size !== after.size ||
       before.mtimeMs !== after.mtimeMs ||
       before.ctimeMs !== after.ctimeMs

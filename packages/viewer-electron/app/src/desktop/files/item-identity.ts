@@ -1,12 +1,15 @@
-import { lstat, realpath } from 'node:fs/promises';
-import type { Stats } from 'node:fs';
+import { realpath } from 'node:fs/promises';
+import { lstat } from './stats';
+import type { FileStats as Stats } from './stats';
+import type { StatIdentity } from '../../domain/files/item-identity';
+import { itemIdentity } from '../../domain/files/item-identity';
 import path from 'node:path';
 
 /** The existing item a person chose to replace, captured when the collision was shown. */
 export type Replaced = Stats;
 /** Identity of an item reached under any spelling: case or Unicode variants,
  * symbolic-link ancestors and firmlinks all share its device and inode. */
-export const sameItem = (a: Stats, b: Stats) => a.dev === b.dev && a.ino === b.ino;
+export const sameItem = (a: StatIdentity, b: StatIdentity) => itemIdentity(a) === itemIdentity(b);
 /** Whether the folder `ancestor` holds `file` at any depth, compared by identity. */
 export async function holds(ancestor: Stats, file: string): Promise<boolean> {
   if (!ancestor.isDirectory()) return false;

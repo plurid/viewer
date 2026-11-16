@@ -1,6 +1,7 @@
 import type { OperationRequest } from '../../domain/contracts';
 import type { TransformPlan } from '../../domain/operations/transforms';
-import { lstat, realpath } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
+import { lstat } from '../files/stats';
 import path from 'node:path';
 import { extractedFolderName } from '../../domain/operations/extract';
 import { savedAttachmentName } from '../../domain/previews/mail/attachments';

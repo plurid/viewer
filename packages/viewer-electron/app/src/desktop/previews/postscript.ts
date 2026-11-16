@@ -1,12 +1,6 @@
 import type { Source } from './derived';
 import type { EPSHeader, PostScriptInspection } from '../../domain/previews/documents/postscript';
-import {
-  decodeEPSI,
-  epsHeader,
-  epsiBMP,
-  inspectPostScript,
-  EPSIPreviewLimitError,
-} from '../../domain/previews/documents/postscript';
+import { epsHeader, epsiBMP, postscriptContent } from '../../domain/previews/documents/postscript';
 import { previewTextLimit } from '../../domain/files/read-limits';
 
 export interface InspectedPostScript {
@@ -39,21 +33,13 @@ export async function readPostScript(
     if (!bytesRead) throw new Error('This PostScript file changed while opening.');
     read += bytesRead;
   }
-  const document = { ...inspectPostScript(bytes, extension), wmf: !!header?.wmf };
+  const truncated = section.length > length;
+  const content = postscriptContent(bytes, extension, truncated);
+  const document = { ...content.document, wmf: !!header?.wmf };
   if (header && document.pdf)
     throw new Error('This EPS PostScript section is malformed; its bytes are shown below.');
   if (header && document.kind !== 'Illustrator') document.kind = 'Encapsulated PostScript';
-  const truncated = section.length > length;
-  document.source.truncated = truncated;
-  document.limited = truncated;
-  let bitmap: Buffer | undefined;
-  try {
-    const epsi = document.pdf ? undefined : decodeEPSI(bytes, truncated);
-    if (epsi) bitmap = Buffer.from(epsiBMP(epsi));
-  } catch (error) {
-    if (!(error instanceof EPSIPreviewLimitError)) throw error;
-    document.previewMessage = error.message;
-  }
+  const bitmap = content.bitmap ? Buffer.from(epsiBMP(content.bitmap)) : undefined;
   signal.throwIfAborted();
   return { document, header, bitmap };
 }

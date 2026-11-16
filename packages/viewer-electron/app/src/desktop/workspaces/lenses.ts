@@ -1,14 +1,8 @@
+import { lstat } from '../files/stats';
+import { itemIdentity } from '../../domain/files/item-identity';
 import { packageExtensions } from '../../domain/files/entries';
 import { constants } from 'node:fs';
-import {
-  access as fileAccess,
-  lstat,
-  mkdir,
-  open,
-  readFile,
-  readdir,
-  rename,
-} from 'node:fs/promises';
+import { access as fileAccess, mkdir, open, readFile, readdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -79,7 +73,7 @@ type LensState = z.infer<typeof stateSchema>;
 type FolderRecord = LensState['folders'][number];
 const emptyState = (): LensState => ({ version: 1, folders: [], collapsed: [] });
 const errorCode = (error: unknown) => (error as NodeJS.ErrnoException | undefined)?.code;
-const identityOf = (info: { dev: number; ino: number }) => `${info.dev}:${info.ino}`;
+const identityOf = itemIdentity;
 
 /**
  * Lenses live in `<folder>/.viewer/lenses/`, created only when a person makes one. Folders

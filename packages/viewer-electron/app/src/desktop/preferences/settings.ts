@@ -18,9 +18,8 @@ import { modelDataLevels } from '../../domain/models/permissions';
 import { profileSchema, validateCustomProfiles, settingsSchema } from './settings-schema';
 import { importChanges } from './import-changes';
 /**
- * What the workspace window changes: its own preferences and views. It could patch any setting, so a
- * compromised workspace renderer could widen agent folders, add a provider or an action;
- * the rest is changed in Settings.
+ * Restrict a workspace renderer to presentation so it cannot add programs, providers or agent
+ * authority. Settings owns those changes and their review.
  */
 // the workspace window's own view and presentation: domain/preferences/catalog.ts
 const workspaceMayPatch = workspaceMayChange;

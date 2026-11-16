@@ -4,6 +4,7 @@ import type { ApplicationSettings } from '../../domain/services';
 import { isPackage } from '../../domain/files/entries';
 import { embeddedFormat } from '../../domain/previews/documents/embedded';
 import { choosePreview } from '../previews/registry';
+import { postscriptFormats } from '../../domain/previews/documents/postscript';
 /** Opening policy is shared by folder and search explorers; explicit linked-open always wins. */
 export function nativeOpening(
   entry: FileEntry,
@@ -17,6 +18,11 @@ export function nativeOpening(
   if (isPackage(entry)) return true;
   // Viewer shows only the picture such a document saved: its app opens it, Space previews it
   if (embeddedFormat(entry.extension)) return true;
+  if (
+    policy.default === 'automatic' &&
+    postscriptFormats.some((format) => format === entry.extension.toLowerCase())
+  )
+    return true;
   return (
     policy.default === 'native' ||
     (policy.default === 'automatic' && choosePreview(entry).id === 'fallback')

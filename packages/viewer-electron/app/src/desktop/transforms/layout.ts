@@ -1,3 +1,4 @@
+import { fileStat } from '../files/stats';
 /**
  * LAYOUT WRITER: draws a resolved layout plan (src/domain/layout/plan.ts) as one PDF that keeps
  * source PDF pages as vectors, or as one PNG or JPEG image. docs/reference/layout.md describes
@@ -163,7 +164,7 @@ async function decoded(
   side: number,
   signal: AbortSignal,
 ): Promise<Buffer> {
-  const held = { file: source.file, handle: source.handle, info: await source.handle.stat() };
+  const held = { file: source.file, handle: source.handle, info: await fileStat(source.handle) };
   try {
     if (reading === 'raw') return (await rawDecoder(decoders.raw)(held, 'raw', signal)).data;
     const render = imageDecoder(decoders.image);

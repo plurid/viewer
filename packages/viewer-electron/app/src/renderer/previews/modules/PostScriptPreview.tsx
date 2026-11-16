@@ -182,7 +182,7 @@ export default function PostScriptPreview(context: PreviewContext) {
             ))}
           </dl>
           {document.limited && (
-            <p className="muted">Comments beyond the text preview limit were not inspected.</p>
+            <p className="muted">Some comments were outside the inspection limits.</p>
           )}
         </details>
         <div className="empty-actions">

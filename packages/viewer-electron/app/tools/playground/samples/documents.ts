@@ -32,7 +32,7 @@ export function sample(
   };
 }
 
-function pdf(): Uint8Array {
+export function pdf(): Uint8Array {
   const bodies = [
     '<< /Type /Catalog /Pages 2 0 R /Outlines 10 0 R >>',
     '<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>',

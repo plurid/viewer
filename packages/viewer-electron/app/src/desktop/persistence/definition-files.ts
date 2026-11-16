@@ -1,5 +1,8 @@
+import { lstat, fileStat } from '../files/stats';
+
+import { sameItem } from '../files/item-identity';
 import { constants } from 'node:fs';
-import { open, lstat, rename } from 'node:fs/promises';
+import { open, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
@@ -43,13 +46,8 @@ async function source(file: string, title: string, limit: number): Promise<strin
   if (info.size > limit) throw new Error(title + ' exceeds ' + limit / 1048576 + ' MiB.');
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    const before = await handle.stat();
-    if (
-      before.ino !== info.ino ||
-      before.dev !== info.dev ||
-      !before.isFile() ||
-      before.size > limit
-    )
+    const before = await fileStat(handle);
+    if (!sameItem(before, info) || !before.isFile() || before.size > limit)
       throw new Error(title + ' changed while opening. Try again.');
     const data = Buffer.alloc(before.size);
     let offset = 0;
@@ -58,7 +56,7 @@ async function source(file: string, title: string, limit: number): Promise<strin
       if (!bytesRead) throw new Error(title + ' changed while reading.');
       offset += bytesRead;
     }
-    const after = await handle.stat();
+    const after = await fileStat(handle);
     if (
       before.size !== after.size ||
       before.mtimeMs !== after.mtimeMs ||

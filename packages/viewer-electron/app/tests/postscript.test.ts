@@ -3,6 +3,7 @@ import type { FileEntry } from '../src/domain/contracts';
 import { identifyBytes } from '../src/domain/files/signatures';
 import { previewTextLimit } from '../src/domain/files/read-limits';
 import { choosePreview } from '../src/renderer/previews/registry';
+import { nativeOpening } from '../src/renderer/explorer/opening';
 import {
   decodeEPSI,
   epsHeader,
@@ -19,6 +20,31 @@ import {
 } from './support/postscript';
 
 describe('PostScript identities and registry', () => {
+  it.each(['ps', 'eps', 'epsf', 'epsi', 'ai'])(
+    'preserves automatic double-click opening for .%s',
+    (extension) => {
+      const file = {
+        extension,
+        name: `Drawing.${extension}`,
+        directory: false,
+        mime: 'application/postscript',
+      } as FileEntry;
+      expect(nativeOpening(file, { default: 'automatic', types: {} })).toBe(true);
+      expect(nativeOpening(file, { default: 'automatic', types: {} }, true)).toBe(false);
+      expect(nativeOpening(file, { default: 'automatic', types: { [extension]: 'plane' } })).toBe(
+        false,
+      );
+    },
+  );
+  it.each([
+    '%!\nshowpage\n',
+    '\u0004%!PS\nshowpage\n',
+    '\ufeff%!PS\nshowpage\n',
+    '% A PostScript comment\nshowpage\n',
+    '1 2 add pop showpage\n',
+  ])('describes valid PostScript preambles without interpreting them', (source) => {
+    expect(inspectPostScript(Buffer.from(source), 'ps').kind).toBe('PostScript document');
+  });
   it.each(['ps', 'eps', 'epsf', 'epsi', 'ai', 'PS', 'EPS', 'AI'])(
     'recognizes .%s before text and image MIME hints',
     (extension) => {
@@ -57,7 +83,7 @@ describe('PostScript identities and registry', () => {
       kind: 'Illustrator',
       pdf: false,
     });
-    expect(() => inspectPostScript(Buffer.from('not PostScript'), 'eps')).toThrow('malformed');
+    expect(() => inspectPostScript(Buffer.from([0, 1, 2, 3]), 'eps')).toThrow('malformed');
   });
 });
 
@@ -163,7 +189,7 @@ describe('EPSI bitmap decoding', () => {
     ).toThrow('preview limits');
     expect(() =>
       decodeEPSI(Buffer.from(epsiSample.slice(0, epsiSample.indexOf('% 55'))), true),
-    ).toThrow('text preview limit');
+    ).toThrow('inspection limits');
   });
   it('leaves files without a preview and embedded child previews alone', () => {
     expect(decodeEPSI(Buffer.from(postscriptSample))).toBeUndefined();

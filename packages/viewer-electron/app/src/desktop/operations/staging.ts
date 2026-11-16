@@ -1,4 +1,6 @@
-import { mkdtemp, lstat, readdir, rename } from 'node:fs/promises';
+import { lstat } from '../files/stats';
+import { sameItem } from '../files/item-identity';
+import { mkdtemp, readdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { NativeRenameFailure } from '../native/macos-files';
@@ -14,13 +16,12 @@ export async function privateStage(
   directory: string,
   prefix: string,
   trash?: (file: string) => Promise<unknown>,
-  trashOnly = false,
 ) {
   const root = await mkdtemp(path.join(directory, prefix)),
     info = await lstat(root);
   const owned = async (file: string) => {
     const current = await lstat(file);
-    return current.dev === info.dev && current.ino === info.ino && current.isDirectory();
+    return sameItem(current, info) && current.isDirectory();
   };
   const move = (source: string, destination: string) =>
     process.platform === 'darwin'
@@ -37,14 +38,12 @@ export async function privateStage(
         // its original generated path and is reported without invoking a removal adapter.
         return (await readdir(root)).length ? root : undefined;
       }
-      if (!trashOnly) {
-        try {
-          await removeEmptyDirectory(root);
-          return;
-        } catch (error) {
-          if (!['ENOTEMPTY', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? ''))
-            throw error;
-        }
+      try {
+        await removeEmptyDirectory(root);
+        return;
+      } catch (error) {
+        if (!['ENOTEMPTY', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? ''))
+          throw error;
       }
       // A visible name: hidden folders in the Trash would use space unnoticed.
       const cleanup = path.join(

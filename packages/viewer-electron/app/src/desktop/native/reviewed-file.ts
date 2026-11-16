@@ -1,5 +1,10 @@
-import { constants, type Stats } from 'node:fs';
-import { lstat, open } from 'node:fs/promises';
+import { lstat, fileStat } from '../files/stats';
+import type { FileStats as Stats } from '../files/stats';
+
+import { itemIdentity } from '../../domain/files/item-identity';
+import { sameItem } from '../files/item-identity';
+import { constants } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { sameSourceVersion, type SourceVersion } from '../../domain/files/inspection';
 
@@ -19,8 +24,7 @@ export interface InspectedFile {
 }
 
 const stable = (before: Stats, after: Stats) =>
-  before.dev === after.dev &&
-  before.ino === after.ino &&
+  sameItem(before, after) &&
   before.size === after.size &&
   before.mode === after.mode &&
   before.mtimeMs === after.mtimeMs &&
@@ -30,7 +34,7 @@ const stable = (before: Stats, after: Stats) =>
 export async function inspectReviewedFile(file: string, limit: number): Promise<InspectedFile> {
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    const before = await handle.stat();
+    const before = await fileStat(handle);
     if (!before.isFile() || before.size > limit)
       throw new Error('The reviewed path is not a bounded regular file. It was preserved.');
     const bytes = Buffer.alloc(before.size);
@@ -40,7 +44,7 @@ export async function inspectReviewedFile(file: string, limit: number): Promise<
       if (!bytesRead) throw new Error('The reviewed file changed while it was inspected.');
       offset += bytesRead;
     }
-    const after = await handle.stat();
+    const after = await fileStat(handle);
     const current = await lstat(file);
     if (!stable(before, after) || !stable(before, current))
       throw new Error('The reviewed file changed while it was inspected.');
@@ -50,7 +54,7 @@ export async function inspectReviewedFile(file: string, limit: number): Promise<
       reviewed: {
         path: file,
         version: {
-          identity: `${before.dev}:${before.ino}`,
+          identity: itemIdentity(before),
           modified: before.mtimeMs,
           size: before.size,
         },

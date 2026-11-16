@@ -1,3 +1,5 @@
+import { fileStat } from '../files/stats';
+import { sameItem } from '../files/item-identity';
 /**
  * A layout as a PDF. Each source page becomes a Form XObject that keeps its vectors and text;
  * pictures, shapes and lines of text are drawn with PDF operators. The objects are written as
@@ -941,8 +943,8 @@ export async function writeLayoutPDF(
   );
   let bytes: Buffer;
   try {
-    const [written, read] = await Promise.all([target.stat(), reader.stat()]);
-    if (!read.isFile() || written.dev !== read.dev || written.ino !== read.ino)
+    const [written, read] = await Promise.all([fileStat(target), fileStat(reader)]);
+    if (!read.isFile() || !sameItem(written, read))
       throw new Error('The private PDF staging file changed. Export again.');
     bytes = await runProcessor(
       layout.qpdf,

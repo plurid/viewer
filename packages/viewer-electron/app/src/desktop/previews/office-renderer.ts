@@ -1,3 +1,4 @@
+import { fileStat } from '../files/stats';
 import { BrowserWindow, session, type Session } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
@@ -363,7 +364,7 @@ export function officePDFCopy(directory: string) {
     const handle = await open(source, constants.O_RDONLY | constants.O_NOFOLLOW);
     let input: Buffer;
     try {
-      input = await officeInput({ file: source, handle, info: await handle.stat() }, signal);
+      input = await officeInput({ file: source, handle, info: await fileStat(handle) }, signal);
     } finally {
       await handle.close();
     }

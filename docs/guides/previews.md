@@ -82,18 +82,23 @@ import, follow or download it.
    level. A missing comment reads **Unknown**.
 2. Choose **Source** to read the program as text. For a binary EPS, this is only its PostScript
    part. An **Embedded preview** is the picture saved in the EPS, not a rendering of its pages.
-3. To render pages, choose **Render pages with Ghostscript**. This button appears when Viewer finds
-   an executable in a known installation location or at **Settings → Previews → Ghostscript path**.
-   That setting takes an absolute path. Viewer checks the program's identity and version after the
-   click, then renders a copy and shows the resulting PDF with its version label.
+3. To render pages, choose **Render pages with Ghostscript**. The button appears when Viewer finds
+   an executable in one of its three fixed installation locations. Viewer checks its identity and
+   version after the click, then reads the program through standard input and shows the resulting
+   PDF with its version label. An EPS page is cropped to its drawing.
 4. Choose **Cancel rendering** to stop. A failure leaves the document details, source and embedded
    picture available. **Source**, **Embedded preview** and **Rendered pages** switch between the
    available views.
 
-Opening or selecting a file never runs Ghostscript. Without it, you can still read the comments,
-source and embedded picture. An Illustrator file with a PDF inside opens directly in the PDF
-preview. In the Store edition you get the described preview and embedded pictures, or the PDF inside
-an Illustrator file; the render button is absent.
+With the default **Automatic** opening policy, double-click opens these files in their own app, such
+as Illustrator. **Space** and **Open linked plane** look inside them in Viewer. A `.ps` file
+beginning with `%!`, a comment, Ctrl-D or a UTF-8 byte order mark is described as PostScript.
+Opening its preview never runs Ghostscript. Without it, you can still read the comments, source and
+embedded picture. An Illustrator file with a PDF inside opens directly in the PDF preview. In the
+Store edition the render button is absent.
+
+Normal rendering writes no document copy and leaves no scratch. An interrupted render can leave
+Ghostscript scratch, which Viewer moves to Trash under that name. The original stays in place.
 
 [Supported formats](../reference/formats.md) gives inspection and rendering limits.
 

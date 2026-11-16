@@ -1,3 +1,7 @@
+import { lstat, fileStat } from '../files/stats';
+import type { FileStats as Stats } from '../files/stats';
+
+import { sameItem } from '../files/item-identity';
 /**
  * Reads SQLite databases for previews without changing them. A database opens read-only and
  * immutable, so SQLite takes no locks and neither creates nor reads its -wal, -shm or journal
@@ -7,9 +11,9 @@
  * node:sqlite cannot interrupt a running statement, so each statement is bounded by rows
  * instead, and a listing stops counting at a deadline.
  */
-import type { Stats } from 'node:fs';
+
 import { constants as fileFlags } from 'node:fs';
-import { lstat, open } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import type { SQLOutputValue } from 'node:sqlite';
 import { DatabaseSync, constants } from 'node:sqlite';
@@ -97,7 +101,7 @@ async function readHeader(file: string, expected: Stats): Promise<Uint8Array> {
     fileFlags.O_RDONLY | (fileFlags.O_NOFOLLOW || 0) | (fileFlags.O_NONBLOCK || 0),
   );
   try {
-    const info = await handle.stat();
+    const info = await fileStat(handle);
     if (!info.isFile() || !sameFile(expected, info)) throw new Error(changed);
     const header = Buffer.alloc(100);
     const { bytesRead } = await handle.read(header, 0, header.length, 0);
@@ -110,8 +114,7 @@ async function readHeader(file: string, expected: Stats): Promise<Uint8Array> {
 function sameFile(before: Stats, after: Stats): boolean {
   return (
     after.isFile() &&
-    before.dev === after.dev &&
-    before.ino === after.ino &&
+    sameItem(before, after) &&
     before.size === after.size &&
     before.mtimeMs === after.mtimeMs
   );

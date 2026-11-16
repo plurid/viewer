@@ -1,5 +1,8 @@
+import { lstat, fileStat } from '../files/stats';
+
+import { sameItem } from '../files/item-identity';
 import { constants } from 'node:fs';
-import { lstat, open, realpath } from 'node:fs/promises';
+import { open, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import type { ArchiveEntry, ArchiveListing } from '../../domain/contracts';
 import {
@@ -56,8 +59,8 @@ async function readPackaged(bundle: string, name: string, bytes: number): Promis
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
   );
   try {
-    const info = await handle.stat();
-    if (!info.isFile() || info.dev !== checked.dev || info.ino !== checked.ino)
+    const info = await fileStat(handle);
+    if (!info.isFile() || !sameItem(info, checked))
       throw new Error('This package member changed while it was read.');
     if (info.size > bytes) throw new Error('This picture is missing or exceeds its preview limit.');
     if ((await realpath(file)) !== path.join(await realpath(root), ...name.split('/')))

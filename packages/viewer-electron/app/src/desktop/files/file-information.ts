@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { nativeItemIdentity } from '../../domain/files/item-identity';
 import { lstat } from 'node:fs/promises';
 import { absolute } from './filesystem';
 import { macFiles } from '../native/macos-files';
@@ -80,7 +81,7 @@ export class FileInformationService {
         await this.check(actual);
         const value = JSON.parse(await this.native().information(actual)) as FileInformation;
         await this.access([actual]);
-        return value;
+        return { ...value, identity: nativeItemIdentity(value.identity) ?? '' };
       });
     });
   }
@@ -108,7 +109,7 @@ export class FileInformationService {
           await this.native().updateInformation(actual, revision, JSON.stringify(patch)),
         ) as FileInformation;
         this.changed(actual);
-        return value;
+        return { ...value, identity: nativeItemIdentity(value.identity) ?? '' };
       });
     });
   }

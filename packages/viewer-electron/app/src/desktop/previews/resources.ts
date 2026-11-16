@@ -1,7 +1,12 @@
+import { itemIdentity } from '../../domain/files/item-identity';
+import { stat, lstat, fileStat } from '../files/stats';
+import type { FileStats as Stats } from '../files/stats';
+
+import { sameItem } from '../files/item-identity';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import type { Stats } from 'node:fs';
-import { open, realpath, stat, lstat } from 'node:fs/promises';
+
+import { open, realpath } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -51,6 +56,7 @@ import type { PostScriptInspection } from '../../domain/previews/documents/posts
 import { postscriptFormats } from '../../domain/previews/documents/postscript';
 import { previewTextLimit } from '../../domain/files/read-limits';
 import { readPostScript } from './postscript';
+import { hasFilePreview } from '../../domain/previews/formats';
 
 interface Grant {
   dispose?(): void;
@@ -76,7 +82,7 @@ const documentPackage = (file: string, info: Stats) =>
 /** The extension a granted file is read as: the format its bytes confirmed, or its own. */
 const grantExtension = (grant: Grant) => grant.format?.extension ?? grant.resource.entry.extension;
 const fileVersion = (info: Stats) =>
-  JSON.stringify([info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs]);
+  JSON.stringify([itemIdentity(info), info.size, info.mtimeMs, info.ctimeMs]);
 /** At most `length` bytes of an open file, from `at`. */
 const readAt = async (file: FileHandle, at: number, length: number) => {
   const bytes = Buffer.alloc(length);
@@ -222,12 +228,17 @@ export class Resources {
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
     const extension = item.extension || path.extname(actual).slice(1).toLowerCase();
     // a recording with a TypeScript name is read as the stream it is, while it stays that version
-    const format =
+    const recording =
       target.isFile() && transportStreamExtensions.includes(extension)
         ? await this.recording(actual).catch(() => undefined)
-        : target.isFile()
-          ? await this.postscriptFormat(actual, extension)
-          : undefined;
+        : undefined;
+    const format =
+      recording ??
+      (target.isFile() &&
+      (postscriptFormats.some((format) => format === extension) ||
+        (item.mime === 'application/octet-stream' && !hasFilePreview(item)))
+        ? await this.postscriptFormat(actual, extension).catch(() => undefined)
+        : undefined);
     const id = randomUUID();
     const resource = {
       dimensions: item.mime.startsWith('image/')
@@ -270,7 +281,7 @@ export class Resources {
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
     try {
-      const info = await handle.stat();
+      const info = await fileStat(handle);
       const head = await readAt(handle, 0, Math.min(info.size, 256));
       const identity = identifyBytes(head, path.basename(file));
       if (!identity?.extension || !['ps', 'eps', 'ai'].includes(identity.extension))
@@ -292,7 +303,7 @@ export class Resources {
       constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
     );
     try {
-      const info = await handle.stat();
+      const info = await fileStat(handle);
       const head = await readAt(handle, 0, Math.min(info.size, transportStreamProbe));
       return info.isFile() && transportStreamContent(head) === 'video'
         ? { extension: recordingFormat, version: fileVersion(info) }
@@ -484,7 +495,7 @@ export class Resources {
     );
     let head: Buffer, directory: Buffer | undefined, info: Stats;
     try {
-      info = await file.stat();
+      info = await fileStat(file);
       if (!info.isFile()) throw new Error('This preview file is no longer a regular file.');
       head = await readAt(file, 0, Math.min(info.size, identifyProbe));
       const probe = directoryProbe(head, info.size);
@@ -539,7 +550,7 @@ export class Resources {
         constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
       );
       try {
-        const info = await file.stat();
+        const info = await fileStat(file);
         if (!info.isFile()) throw new Error('This preview file is no longer a regular file.');
         size = info.size;
         buffer = Buffer.alloc(Math.min(size, limit));
@@ -701,11 +712,11 @@ export class Resources {
           constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
         );
         try {
-          const info = await input.stat();
+          const info = await fileStat(input);
           if (!info.isFile()) throw new Error('Choose a regular PostScript file.');
           const inspected = await readPostScript({ file, handle: input, info }, format, signal);
           if (
-            fileVersion(info) !== fileVersion(await input.stat()) ||
+            fileVersion(info) !== fileVersion(await fileStat(input)) ||
             fileVersion(info) !== fileVersion(await lstat(file))
           )
             throw new Error('This PostScript file changed while opening.');
@@ -924,9 +935,8 @@ export class Resources {
           file!,
           constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
         );
-        const actual = await opened.stat();
-        if (!actual.isFile() || actual.dev !== info.dev || actual.ino !== info.ino)
-          return new Response(null, { status: 403 });
+        const actual = await fileStat(opened);
+        if (!actual.isFile() || !sameItem(actual, info)) return new Response(null, { status: 403 });
         if (grant.root && file !== grant.file && (lookup(file!) || '').startsWith('image/')) {
           // Reject oversized companion bitmaps before Chromium decodes them.
           // A later renderer budget also accounts for combined texture storage.

@@ -40,7 +40,7 @@ export interface SettingDefinition {
   detail?: string;
   section?: string;
   /** `color`: a `#rrggbb` colour, or empty for the automatic one. */
-  kind: 'boolean' | 'choice' | 'number' | 'color' | 'text';
+  kind: 'boolean' | 'choice' | 'number' | 'color';
   choices?: [string, string][];
   min?: number;
   max?: number;
@@ -395,14 +395,6 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Previews',
     label: 'Wrap preview text',
     kind: 'boolean',
-  },
-  {
-    path: 'settings.previews.ghostscriptPath',
-    category: 'Previews',
-    label: 'Ghostscript path',
-    detail:
-      'Optional absolute path. Pages render only when you choose Render pages with Ghostscript; unavailable in the Store edition.',
-    kind: 'text',
   },
   {
     path: 'settings.previews.darkPages',

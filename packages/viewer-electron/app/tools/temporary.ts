@@ -1,3 +1,5 @@
+import { fileStats } from '../src/desktop/files/stats';
+import { itemIdentity } from '../src/domain/files/item-identity';
 /**
  * Temporary test and tool folders follow AGENTS.md: they are never permanently
  * deleted. Cleanup moves a folder this process created to the user Trash after
@@ -12,7 +14,7 @@ import { execFile } from 'node:child_process';
 import {
   appendFileSync,
   existsSync,
-  lstatSync,
+  lstatSync as nodeLstatSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -23,8 +25,9 @@ import path from 'node:path';
 
 // Synchronous node:fs keeps these checks independent of tests that mock node:fs/promises.
 export const keptManifest = path.join(os.tmpdir(), 'viewer-kept-test-folders.log');
-const owned = new Map<string, { dev: number; ino: number }>();
-const retainedNative = new Map<string, { dev: number; ino: number }>();
+const lstatSync = (file: string) => fileStats(nodeLstatSync(file, { bigint: true }));
+const owned = new Map<string, string>();
+const retainedNative = new Map<string, string>();
 const preserve = () =>
   process.env.VIEWER_TEST_PRESERVE === '1' || process.env.VIEWER_TEST_NO_REMOVAL === '1';
 /** This run's folder: one directly inside a system temporary folder, named as a run. */
@@ -106,7 +109,7 @@ export async function temporaryRoot(
     throw new Error('Temporary folders use a "viewer-<name>-" prefix.');
   const root = mkdtempSync(path.join(parent, prefix));
   const info = lstatSync(root);
-  owned.set(canonical(root), { dev: info.dev, ino: info.ino });
+  owned.set(canonical(root), itemIdentity(info));
   // Register retained roots immediately so early failures remain discoverable.
 
   if (preserve()) keep(root, 'VIEWER_TEST_PRESERVE=1');
@@ -120,7 +123,7 @@ export async function ownedDirectory(directory: string): Promise<string> {
   mkdirSync(path.dirname(directory), { recursive: true });
   mkdirSync(directory);
   const info = lstatSync(directory);
-  owned.set(canonical(directory), { dev: info.dev, ino: info.ino });
+  owned.set(canonical(directory), itemIdentity(info));
   if (preserve()) keep(directory, 'VIEWER_TEST_PRESERVE=1');
   return directory;
 }
@@ -140,7 +143,7 @@ export function adoptRetainedNativeFixture(root: string): void {
     (info.mode & 0o077) !== 0
   )
     throw new Error('Reopen only a private retained fixture directly in a temporary folder.');
-  retainedNative.set(actual, { dev: info.dev, ino: info.ino });
+  retainedNative.set(actual, itemIdentity(info));
 }
 
 /** Read-only proof that this directory belongs to a generated or explicitly retained fixture. */
@@ -153,12 +156,7 @@ export function assertOwnedFixtureDirectory(directory: string): string {
   if (!owner) throw new Error(`The native profile is not inside a generated fixture: ${directory}`);
   const [root, identity] = owner;
   const current = lstatSync(root);
-  if (
-    current.isSymbolicLink() ||
-    !current.isDirectory() ||
-    current.dev !== identity.dev ||
-    current.ino !== identity.ino
-  )
+  if (current.isSymbolicLink() || !current.isDirectory() || itemIdentity(current) !== identity)
     throw new Error(`The generated fixture changed identity: ${root}`);
   let cursor = requested;
   while (true) {
@@ -194,8 +192,7 @@ export async function trashTemporary(root: string | undefined): Promise<void> {
     return;
   }
   if (!info.isDirectory()) return keep(root, 'no longer a directory');
-  if (info.dev !== identity.dev || info.ino !== identity.ino)
-    return keep(root, 'replaced after creation');
+  if (itemIdentity(info) !== identity) return keep(root, 'replaced after creation');
   if (
     !temporaryParents().includes(path.dirname(actual)) ||
     !path.basename(actual).startsWith('viewer-')

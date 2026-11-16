@@ -193,13 +193,6 @@ export function CatalogSettings({
                     automaticColor={looks[snapshot.look].space}
                     onChange={(value) => patchColor(definition.path, value)}
                   />
-                ) : definition.kind === 'text' ? (
-                  <input
-                    aria-label={definition.label}
-                    type="text"
-                    defaultValue={String(settingValue(snapshot, definition.path) ?? '')}
-                    onBlur={(event) => patch(definition.path, event.target.value.trim())}
-                  />
                 ) : (
                   <input
                     aria-label={definition.label}

@@ -1,6 +1,16 @@
+import {
+  sameDevice,
+  nativeItemIdentity,
+  nativeIdentityArgument,
+  itemIdentity,
+} from '../../domain/files/item-identity';
+
+import { lstat } from '../files/stats';
+import type { FileStats as Stats } from '../files/stats';
+
 import { createHash } from 'node:crypto';
-import type { Stats } from 'node:fs';
-import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
+
+import { readdir, readFile, realpath } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -78,7 +88,7 @@ interface TrashServices {
   changed?(source: string, destination: string): void;
 }
 const id = (text: string) => createHash('sha256').update(text).digest('hex');
-const identity = (value: { dev: number; ino: number }) => `${value.dev}:${value.ino}`;
+const identity = itemIdentity;
 function moveLinux(source: string, destination: string): Promise<void> {
   return new Promise((resolve, reject) => {
     // Interactive mode disables GIO's default overwrite flag. EOF on stdin
@@ -277,7 +287,7 @@ export class Trash {
         const parentInfo = await lstat(parent);
         if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink())
           throw new Error('The destination is no longer a folder.');
-        if ((await lstat(item.file)).dev !== parentInfo.dev)
+        if (!sameDevice(await lstat(item.file), parentInfo))
           throw new Error(
             'Restore needs a destination on the same disk. The item remains in Trash.',
           );
@@ -460,7 +470,17 @@ export class Trash {
       // This call can ONLY display a native confirmation. It accepts no
       // erase/approve flag; only NSAlert's affirmative human choice can erase.
       macFiles().trashConfirmation(
-        JSON.stringify({ roots: current.roots, count: current.snapshot.items.length }),
+        JSON.stringify({
+          roots: current.roots.map((root) => ({
+            ...root,
+            identity: nativeIdentityArgument(root.identity),
+            items: root.items.map((item) => ({
+              ...item,
+              identity: nativeIdentityArgument(item.identity),
+            })),
+          })),
+          count: current.snapshot.items.length,
+        }),
       );
       return;
     }
@@ -664,7 +684,7 @@ export class Trash {
         const date = byPath.get(backing.file);
         const added =
           date &&
-          date.identity === backing.version.identity &&
+          nativeItemIdentity(date.identity) === backing.version.identity &&
           date.size === backing.version.size &&
           Math.abs(date.modified - backing.version.modified) < 0.01 &&
           typeof date.added === 'number' &&

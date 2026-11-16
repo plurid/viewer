@@ -1,3 +1,5 @@
+import { fileStat } from '../files/stats';
+import { sameItem } from '../files/item-identity';
 import { open, type FileHandle } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
@@ -313,13 +315,8 @@ export async function transformPDF(
             constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
           );
           try {
-            const [written, read] = await Promise.all([target.stat(), reader.stat()]);
-            if (
-              !read.isFile() ||
-              written.dev !== read.dev ||
-              written.ino !== read.ino ||
-              written.size !== read.size
-            )
+            const [written, read] = await Promise.all([fileStat(target), fileStat(reader)]);
+            if (!read.isFile() || !sameItem(written, read) || written.size !== read.size)
               throw new Error('The private PDF staging file changed. Export again.');
             return await runProcessor(
               executable,
@@ -364,7 +361,7 @@ export async function transformPDF(
     if (plan.kind === 'pdf')
       return {
         inputBytes: sources[0]!.size,
-        outputBytes: (await target.stat()).size,
+        outputBytes: (await fileStat(target)).size,
         ...(targetSize ? { targetSize } : {}),
       };
   } finally {

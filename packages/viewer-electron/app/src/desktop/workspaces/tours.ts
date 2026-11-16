@@ -1,5 +1,10 @@
-import { constants, type Stats } from 'node:fs';
-import { lstat, open, realpath } from 'node:fs/promises';
+import { lstat, fileStat } from '../files/stats';
+import type { FileStats as Stats } from '../files/stats';
+
+import { itemIdentity } from '../../domain/files/item-identity';
+import { sameItem } from '../files/item-identity';
+import { constants } from 'node:fs';
+import { open, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import {
@@ -52,8 +57,8 @@ async function sha256(file: string, info: Stats): Promise<string | undefined> {
   if (!info.isFile() || info.size > tourHashLimit) return;
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    const before = await handle.stat();
-    if (before.ino !== info.ino || before.dev !== info.dev || before.size > tourHashLimit) return;
+    const before = await fileStat(handle);
+    if (!sameItem(before, info) || before.size > tourHashLimit) return;
     const hash = createHash('sha256');
     if (before.size)
       for await (const chunk of handle.createReadStream({
@@ -62,7 +67,7 @@ async function sha256(file: string, info: Stats): Promise<string | undefined> {
         autoClose: false,
       }))
         hash.update(chunk as Buffer);
-    const after = await handle.stat();
+    const after = await fileStat(handle);
     if (after.size !== before.size || after.mtimeMs !== before.mtimeMs) return;
     return hash.digest('hex');
   } finally {
@@ -121,7 +126,7 @@ export class Tours extends DefinitionFiles<TourDefinition> {
     const [inside, actual] = await Promise.all([realpath(folder), realpath(file)]);
     if (!containsPath(inside, actual)) return { state: 'link' };
     const found = await entry(file);
-    if (found.identity !== `${info.dev}:${info.ino}`) return { state: 'missing' };
+    if (found.identity !== itemIdentity(info)) return { state: 'missing' };
     const digest = hash ? await sha256(file, info) : undefined;
     return { state: 'found', entry: found, ...(digest ? { sha256: digest } : {}) };
   }

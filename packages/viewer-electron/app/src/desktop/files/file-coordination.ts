@@ -1,7 +1,9 @@
+import { lstat, stat } from './stats';
+import { sameItem } from './item-identity';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { lstat, stat, realpath } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import { macFiles, type FileAccessIntent, type MacFiles } from '../native/macos-files';
 import { containsPath } from './containment';
 
@@ -29,7 +31,11 @@ async function canonical(file: string): Promise<string> {
 }
 const canonicalItem = async (file: string) =>
   path.join(await canonical(path.dirname(file)), path.basename(file));
-async function sameItem(original: string, returned: string, native: Binding): Promise<boolean> {
+async function sameCoordinatedItem(
+  original: string,
+  returned: string,
+  native: Binding,
+): Promise<boolean> {
   const actual = await canonicalItem(returned);
   if (actual === original) return true;
   if (actual.normalize('NFC') !== original.normalize('NFC')) return false;
@@ -39,7 +45,7 @@ async function sameItem(original: string, returned: string, native: Binding): Pr
     lstat(original).catch(() => null),
     lstat(returned).catch(() => null),
   ]);
-  if (before && after) return before.dev === after.dev && before.ino === after.ino;
+  if (before && after) return sameItem(before, after);
   return native.coordinateSameItem(original, returned);
 }
 
@@ -193,7 +199,8 @@ export class FileCoordination {
         // Anything that cannot be matched to its request counts as moved.
         if (
           !requested ||
-          (file !== requested.path && !(original && (await sameItem(original, file, native))))
+          (file !== requested.path &&
+            !(original && (await sameCoordinatedItem(original, file, native))))
         )
           throw new Error(
             'The item moved while waiting for its file provider. Refresh the folder and retry.',

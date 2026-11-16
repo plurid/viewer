@@ -1,5 +1,9 @@
-import { constants, type Stats } from 'node:fs';
-import { lstat, open, opendir, realpath, type FileHandle } from 'node:fs/promises';
+import { lstat, fileStat } from '../../files/stats';
+import type { FileStats as Stats } from '../../files/stats';
+
+import { itemIdentity } from '../../../domain/files/item-identity';
+import { constants } from 'node:fs';
+import { open, opendir, realpath, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import {
@@ -26,7 +30,7 @@ export interface StaticRootIdentity {
   identity: string;
 }
 
-const identity = (info: Stats) => `${info.dev}:${info.ino}`;
+const identity = itemIdentity;
 const stable = (before: Stats, after: Stats) =>
   identity(before) === identity(after) &&
   before.size === after.size &&
@@ -232,7 +236,7 @@ export class StaticRoot {
         target.actual,
         constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
       );
-      const before = await lease.file.stat();
+      const before = await fileStat(lease.file);
       if (!before.isFile() || !stable(target.info, before))
         throw new WebPreviewError(403, 'The asset changed while opening.');
       await this.verify(lease.signal);
@@ -302,7 +306,7 @@ export class StaticRoot {
       const buffer = Buffer.alloc(Math.min(64 * 1024, selected.end - offset + 1));
       const { bytesRead } = await lease.file!.read(buffer, 0, buffer.length, offset);
       lease.signal.throwIfAborted();
-      if (!bytesRead || !stable(before, await lease.file!.stat()))
+      if (!bytesRead || !stable(before, await fileStat(lease.file!)))
         throw new WebPreviewError(403, 'The asset changed while reading.');
       offset += bytesRead;
       yield buffer.subarray(0, bytesRead);

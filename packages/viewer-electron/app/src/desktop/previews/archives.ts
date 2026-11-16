@@ -1,4 +1,7 @@
-import { open, stat } from 'node:fs/promises';
+import { itemIdentity } from '../../domain/files/item-identity';
+import { stat, fileStat } from '../files/stats';
+
+import { open } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { crc32, createInflateRaw, gunzip, inflateRaw } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
@@ -33,7 +36,8 @@ async function openArchive(file: string) {
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
   );
   try {
-    if (!(await handle.stat()).isFile()) throw new Error('Archive source must be a regular file.');
+    if (!(await fileStat(handle)).isFile())
+      throw new Error('Archive source must be a regular file.');
     return handle;
   } catch (error) {
     await handle.close();
@@ -219,7 +223,7 @@ export class Archives {
     return this.coordinated(file, async () => {
       const handle = await openArchive(file);
       try {
-        const { size } = await handle.stat();
+        const { size } = await fileStat(handle);
         const header = Buffer.alloc(3);
         const trailer = Buffer.alloc(4);
         await handle.read(header, 0, header.length, 0);
@@ -248,7 +252,7 @@ export class Archives {
       const handle = await openArchive(file);
       let compressed: Buffer;
       try {
-        const { size } = await handle.stat();
+        const { size } = await fileStat(handle);
         if (size > limits.compressed)
           throw new Error(`This file expands beyond the ${limit} preview limit.`);
         compressed = await readWhole(handle, size);
@@ -304,7 +308,7 @@ export class Archives {
             )
               throw new Error('Malformed or encrypted ZIP local header.');
             const offset = entry.offset + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
-            if (offset + entry.compressed > (await handle.stat()).size)
+            if (offset + entry.compressed > (await fileStat(handle)).size)
               throw new Error('Truncated ZIP entry.');
             let length = 0,
               checksum = 0;
@@ -382,7 +386,7 @@ export class Archives {
       await handle.read(header, 0, 30, entry.offset);
       if (header.readUInt32LE(0) !== 0x04034b50) throw new Error('Malformed ZIP local header.');
       const offset = entry.offset + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
-      if (offset + entry.compressed > (await handle.stat()).size)
+      if (offset + entry.compressed > (await fileStat(handle)).size)
         throw new Error('Truncated ZIP entry.');
       return await this.background(async () => {
         const compressed = Buffer.alloc(entry.compressed);
@@ -403,7 +407,7 @@ export class Archives {
   private async load(file: string): Promise<Index> {
     const handle = await openArchive(file);
     try {
-      const info = await handle.stat();
+      const info = await fileStat(handle);
       const signature = Buffer.alloc(4);
       await handle.read(signature, 0, 4, 0);
       if (signature.readUInt32LE(0) === 0x04034b50 || signature.readUInt32LE(0) === 0x06054b50) {
@@ -573,5 +577,5 @@ export class Archives {
 
 export async function archiveFingerprint(file: string): Promise<string> {
   const info = await stat(file);
-  return `${file}:${info.dev}:${info.ino}:${info.ctimeMs}:${info.mtimeMs}:${info.size}`;
+  return `${file}:${itemIdentity(info)}:${info.ctimeMs}:${info.mtimeMs}:${info.size}`;
 }

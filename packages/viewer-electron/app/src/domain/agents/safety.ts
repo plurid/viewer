@@ -338,14 +338,6 @@ function agentSettingCommand(command: string): void {
 }
 export function agentConfigurationPath(keys: readonly string[]): void {
   if (
-    keys[0] === 'settings' &&
-    keys[1] === 'previews' &&
-    (keys.length === 2 || keys[2] === 'ghostscriptPath')
-  )
-    throw new Error(
-      'Ghostscript executable settings change only in Settings, never through agents.',
-    );
-  if (
     !agentConfigurable.some(
       (allowed) =>
         keys.length >= allowed.length && allowed.every((key, index) => keys[index] === key),

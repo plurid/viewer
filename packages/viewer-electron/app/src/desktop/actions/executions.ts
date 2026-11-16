@@ -1,3 +1,5 @@
+import { itemIdentity } from '../../domain/files/item-identity';
+import { sameItem } from '../files/item-identity';
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -177,11 +179,7 @@ export class Executions {
     await this.access([target.directory, cwd, ...target.selection.map((file) => file.path)]);
     if (manual) await this.validateManual(manual.owner, target);
     const current = await fs.stat(cwd);
-    if (
-      (await fs.realpath(absolute(target.directory))) !== cwd ||
-      current.dev !== original.dev ||
-      current.ino !== original.ino
-    )
+    if ((await fs.realpath(absolute(target.directory))) !== cwd || !sameItem(current, original))
       throw new Error('The command folder changed before launch. Choose the command again.');
     if (this.closed || cancelled())
       throw new Error('Command cancelled before launch because folder access changed.');
@@ -196,9 +194,7 @@ export class Executions {
       started: Date.now(),
       workspaceID: target.workspaceID,
       paneID: target.paneID,
-      ...(manual
-        ? { command: manual.script, folderIdentity: `${original.dev}:${original.ino}` }
-        : {}),
+      ...(manual ? { command: manual.script, folderIdentity: itemIdentity(original) } : {}),
     };
     this.tasks.set(task.id, task);
     if (owner !== undefined) this.owners.set(task.id, owner);

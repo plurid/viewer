@@ -1,7 +1,10 @@
+import { lstat, fileStat } from '../files/stats';
+
+import { itemIdentity } from '../../domain/files/item-identity';
 import type { OperationJob } from '../../domain/contracts';
 import { randomUUID, createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { chmod, lstat, mkdir, open, opendir } from 'node:fs/promises';
+import { chmod, mkdir, open, opendir } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { DocumentStore } from '../persistence/document-store';
@@ -141,7 +144,7 @@ export class Checkpoints {
         directory: info.isDirectory(),
         mode: info.mode & 0o777,
         bytes: info.isFile() ? info.size : 0,
-        identity: info.dev + ':' + info.ino,
+        identity: itemIdentity(info),
         modified: info.mtimeMs,
         changed: info.ctimeMs,
       });
@@ -251,10 +254,10 @@ export class Checkpoints {
                   );
                   let output: Awaited<ReturnType<typeof open>> | undefined;
                   try {
-                    const before = await input.stat();
+                    const before = await fileStat(input);
                     if (
                       !before.isFile() ||
-                      before.dev + ':' + before.ino !== item.identity ||
+                      itemIdentity(before) !== item.identity ||
                       before.mtimeMs !== item.modified ||
                       before.ctimeMs !== item.changed ||
                       before.size !== item.bytes
@@ -279,7 +282,7 @@ export class Checkpoints {
                       while (written < bytes.length)
                         written += (await output.write(bytes.subarray(written))).bytesWritten;
                     }
-                    const after = await input.stat();
+                    const after = await fileStat(input);
                     if (
                       after.size !== before.size ||
                       after.mtimeMs !== before.mtimeMs ||
@@ -448,7 +451,7 @@ export class Checkpoints {
         constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
       );
       try {
-        const info = await input.stat();
+        const info = await fileStat(input);
         if (!info.isFile() || info.size > record.bytes)
           throw new Error('A checkpoint file exceeds its recorded bounds.');
         const hash = createHash('sha256'),
@@ -462,7 +465,7 @@ export class Checkpoints {
             throw new Error('Checkpoint contents changed during verification.');
           hash.update(buffer.subarray(0, bytesRead));
         }
-        const after = await input.stat();
+        const after = await fileStat(input);
         if (
           hash.digest('hex') !== proof.hash ||
           after.size !== info.size ||

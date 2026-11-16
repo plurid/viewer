@@ -1,5 +1,9 @@
-import { constants, type Stats } from 'node:fs';
-import { open, realpath, lstat, type FileHandle } from 'node:fs/promises';
+import { itemIdentity } from '../../domain/files/item-identity';
+import { lstat, fileStat } from '../files/stats';
+import type { FileStats as Stats } from '../files/stats';
+
+import { constants } from 'node:fs';
+import { open, realpath, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { fileCoordination } from '../files/file-coordination';
 import { previewContains } from './preview-work';
@@ -47,7 +51,7 @@ interface Pending {
   work: Promise<Cached>;
   users: number;
 }
-const version = (info: Stats) => [info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs];
+const version = (info: Stats) => [itemIdentity(info), info.size, info.mtimeMs, info.ctimeMs];
 const same = (a: Stats, b: Stats) => JSON.stringify(version(a)) === JSON.stringify(version(b));
 
 /** Shared bounded bytes, never filesystem authority. Views pin entries until their
@@ -158,7 +162,7 @@ export class DerivedPreviews {
                   constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
                 );
                 try {
-                  if (!same(before, await handle.stat()))
+                  if (!same(before, await fileStat(handle)))
                     throw new Error('The source changed before decoding. Reopen its preview.');
                   const result = await this.decode(
                     { file: actual, handle, info: before, format },
@@ -169,7 +173,7 @@ export class DerivedPreviews {
                   );
                   abort.signal.throwIfAborted();
                   if (
-                    !same(before, await handle.stat()) ||
+                    !same(before, await fileStat(handle)) ||
                     !same(before, await lstat(actual)) ||
                     actual !== (await realpath(file))
                   )

@@ -1,5 +1,8 @@
+import { lstat, fileStat } from '../files/stats';
+
+import { itemIdentity } from '../../domain/files/item-identity';
 import { constants } from 'node:fs';
-import { lstat, open, realpath, type FileHandle } from 'node:fs/promises';
+import { open, realpath, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { validateTransform, type TransformPlan } from '../../domain/operations/transforms';
 import type { MediaInfo } from '../../domain/media/documents';
@@ -146,11 +149,11 @@ export class Transforms implements TransformExecutor {
           claim.path(actual),
           constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
         );
-        const info = await handle.stat();
+        const info = await fileStat(handle);
         sources.push({
           file: actual,
           handle,
-          identity: `${info.dev}:${info.ino}`,
+          identity: itemIdentity(info),
           modified: info.mtimeMs,
           size: info.size,
         });
@@ -160,9 +163,9 @@ export class Transforms implements TransformExecutor {
       scope.check();
       await this.access(files);
       for (const source of sources)
-        for (const info of [await source.handle.stat(), await lstat(source.file)]) {
+        for (const info of [await fileStat(source.handle), await lstat(source.file)]) {
           if (
-            `${info.dev}:${info.ino}` !== source.identity ||
+            itemIdentity(info) !== source.identity ||
             info.mtimeMs !== source.modified ||
             info.size !== source.size
           )
@@ -392,10 +395,10 @@ export class Transforms implements TransformExecutor {
                   constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
                 );
                 inputs.push(input);
-                const info = await input.stat(),
+                const info = await fileStat(input),
                   expected = sources[index]!;
                 if (
-                  `${info.dev}:${info.ino}` !== expected.identity ||
+                  itemIdentity(info) !== expected.identity ||
                   info.mtimeMs !== expected.modified ||
                   info.size !== expected.size
                 )

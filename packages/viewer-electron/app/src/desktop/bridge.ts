@@ -480,7 +480,6 @@ export class Desktop {
             signal,
             options.fileBackend,
           ),
-        { trash: (file) => shell.trashItem(file) },
       ),
       64 * 1024 * 1024,
       // thumbnails and small renditions: a few helper processes at once
@@ -489,7 +488,6 @@ export class Desktop {
     this.thumbnails = new Thumbnails(derived, images);
     const office = new DerivedPreviews(access, officeDecoder(assetPath(officeRuntimeName)));
     const ghostscript = new Ghostscript({
-      customPath: () => this.settings.snapshot().settings.previews.ghostscriptPath,
       store: () => !!process.mas,
       trash: (file) => shell.trashItem(file),
     });

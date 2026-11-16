@@ -401,12 +401,6 @@ Trash, **Move to Trash** fails and the item stays where it is.
 
 ## Settings and updates
 
-**Settings → Previews → Ghostscript path** (`settings.previews.ghostscriptPath`, default empty)
-accepts one custom absolute executable path. Empty uses the fixed installation locations listed in
-[formats](formats.md). Discovery never executes it; version verification waits for **Render pages
-with Ghostscript**. Agents cannot change this executable setting, including by replacing the whole
-Previews section. No setting enables automatic rendering.
-
 | Feature                                       | Key    | ⌘K command                                                                                                | Menu                                                                                                                                          | Learn                                                           |
 | --------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | Open Settings                                 | **⌘,** | **Settings…** `settings`                                                                                  | **Viewer → Settings…**                                                                                                                        | [Configuration](configuration.md)                               |

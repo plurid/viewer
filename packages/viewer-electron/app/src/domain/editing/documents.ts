@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sameIdentity } from '../files/item-identity';
 
 /**
  * A text file's version as it was read: its item, date and size, and the hash of its bytes, all
@@ -15,7 +16,7 @@ export const textVersionSchema = z
 export type TextVersion = z.infer<typeof textVersionSchema>;
 
 export const sameTextVersion = (a: TextVersion, b: TextVersion) =>
-  a.identity === b.identity &&
+  sameIdentity(a.identity, b.identity) &&
   a.modified === b.modified &&
   a.size === b.size &&
   a.sha256 === b.sha256;

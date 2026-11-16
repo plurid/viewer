@@ -1,5 +1,8 @@
+import { lstat, fileStat } from '../files/stats';
+
+import { itemIdentity } from '../../domain/files/item-identity';
 import { constants } from 'node:fs';
-import { access as permitted, lstat, open, rename } from 'node:fs/promises';
+import { access as permitted, open, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
@@ -40,7 +43,7 @@ export async function readText(file: string): Promise<{ text: string; version: T
     throw error;
   });
   try {
-    const before = await handle.stat();
+    const before = await fileStat(handle);
     if (!before.isFile()) throw new NotEditable('Only regular files can be edited.');
     if (before.size > MAX_TEXT_BYTES)
       throw new NotEditable(
@@ -58,7 +61,7 @@ export async function readText(file: string): Promise<{ text: string; version: T
       if (!bytesRead) throw changed();
       offset += bytesRead;
     }
-    const after = await handle.stat();
+    const after = await fileStat(handle);
     if (
       before.size !== after.size ||
       before.mtimeMs !== after.mtimeMs ||
@@ -76,7 +79,7 @@ export async function readText(file: string): Promise<{ text: string; version: T
     return {
       text,
       version: {
-        identity: `${after.dev}:${after.ino}`,
+        identity: itemIdentity(after),
         modified: after.mtimeMs,
         size: after.size,
         sha256: sha256(data),
@@ -177,7 +180,7 @@ export class TextFiles {
     const data = Buffer.from(text, 'utf8');
     await this.operations.writeText(file, text, {
       version: {
-        identity: `${existing.dev}:${existing.ino}`,
+        identity: itemIdentity(existing),
         modified: existing.mtimeMs,
         size: existing.size,
       },
@@ -242,7 +245,7 @@ export class TextFiles {
   private async written(file: string, data: Buffer): Promise<TextVersion> {
     const info = await lstat(file);
     return {
-      identity: `${info.dev}:${info.ino}`,
+      identity: itemIdentity(info),
       modified: info.mtimeMs,
       size: info.size,
       sha256: sha256(data),

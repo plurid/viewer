@@ -1,5 +1,7 @@
+import { lstat } from '../files/stats';
+import { itemIdentity } from '../../domain/files/item-identity';
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, realpath } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import {
@@ -46,7 +48,7 @@ export class AgentSessions {
         const info = await lstat(directory);
         if (!info.isDirectory() || info.isSymbolicLink())
           throw new Error('Choose an ordinary session folder.');
-        const identity = `${info.dev}:${info.ino}`;
+        const identity = itemIdentity(info);
         const entries = await Promise.all(
           report.entries.map(async (entry) => ({
             ...entry,
@@ -64,10 +66,7 @@ export class AgentSessions {
         );
         // Repeat checks after asynchronous authorization; a grant can be revoked while a report waits.
         const current = await lstat(directory);
-        if (
-          (await authorize(directory)) !== directory ||
-          `${current.dev}:${current.ino}` !== identity
-        )
+        if ((await authorize(directory)) !== directory || itemIdentity(current) !== identity)
           throw new Error('The session folder changed. Report again.');
         const values = (await this.store.load()) ?? [];
         const existing = values.find(

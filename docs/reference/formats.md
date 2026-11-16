@@ -126,32 +126,48 @@ its own when you choose it, up to 64 MB. A message starts at a `From ` line at t
 file, after a blank line, or with an envelope date. A body line quoted as `>From ` reads as `From `.
 A `.mbox` folder, as Mail exports one, opens as a folder.
 
-**PostScript, EPS and Illustrator.** First bytes `%!PS` and the binary EPS magic identify these
-files even under another extension. `%PDF` identifies the PDF inside an `.ai`. The comments supply
-title, creator, creation date, page count, page or bounding-box dimensions in points and
-millimetres, and language level. Missing or invalid comments stay **Unknown**. Inspection and source
-use the existing 4,000,000-byte text limit, with a 4096-byte line limit and 1024-character comment
-values; comments in nested documents or after binary/data blocks are excluded. Comments beyond the
-bounded inspection stay unknown. A binary EPS shows only its PostScript section as source. Every
-section must fit inside the file and be disjoint; absent optional pictures have zero offset and
-length. Malformed files show their bytes and a plain explanation.
+**PostScript, EPS and Illustrator.** These extensions show document comments and readable source. A
+`%!` header, an initial comment, a leading Ctrl-D or UTF-8 byte order mark is accepted. `%PDF`
+identifies the PDF inside an `.ai`. First-byte detection also identifies otherwise unrecognized
+files; it never replaces another known file kind. The comments supply title, creator, creation date,
+page count, page or bounding-box dimensions in points and millimetres, and language level. Missing
+or invalid comments stay **Unknown**. Source is capped at 4,000,000 bytes. One comment scan inspects
+at most 65,536 lines, with a 4096-byte line limit and 1024-character values; comments in nested
+documents or after binary/data blocks are excluded. Comments beyond the limits stay unknown. A
+binary EPS shows only its checked PostScript section as source. Sections must fit inside the file
+and be disjoint; absent optional pictures have zero offset and length. Invalid source or binary
+header ranges show bytes and a plain explanation.
 
-TIFF embedded pictures use the isolated image decoder, up to 32 MiB of TIFF input, 100 million
-decoded pixels and a 4096-pixel longest output edge. EPSI supports 1, 2, 4 and 8-bit grayscale, up
-to 16 million pixels and 4,000,000 packed bytes, within the inspected text. Pictures are labelled
-**Embedded preview**. WMF pictures are named and not drawn.
+TIFF embedded pictures pass at most 32 MiB of section bytes to the existing isolated image pipeline,
+with no disk copy, up to 100 million decoded pixels and a 4096-pixel longest output edge. EPSI
+supports 1, 2, 4 and 8-bit grayscale, up to 16 million pixels and 4,000,000 packed bytes within the
+inspection limits. An unreadable or oversized picture leaves the description and source available
+with an explanation. Pictures are labelled **Embedded preview**. WMF pictures are named and not
+drawn. Selecting a binary EPS creates no preview files or Trash items.
 
-**Render pages with Ghostscript** runs only after a click. Discovery inspects
-`/opt/homebrew/bin/gs`, `/usr/local/bin/gs` and `/opt/local/bin/gs`, plus the optional absolute
-**Ghostscript path** (`settings.previews.ghostscriptPath`, default empty). It does not search
-`PATH`. The click first checks the program's Ghostscript identity and version. Rendering uses the
-shared versioned preview cache and cancellation, a private copy, safe mode, batch/no-prompt flags, a
-minimal environment and low process priority. Input is capped at 256 MiB, PDF output at 32 MiB and
-rendering at 60 seconds; identity probing has a separate 3-second limit. The original is only read.
-The output opens in the existing PDF preview, labelled with Ghostscript's version. Failure and
-cancellation keep the described preview. Temporary copies follow the transfer owner's identity
-checks and Trash-only cleanup; failed cleanup retains the copy. The Store edition and agent routes
-cannot start this conversion. Viewer bundles no Ghostscript.
+**Render pages with Ghostscript** runs only after a click. Discovery checks only
+`/opt/homebrew/bin/gs`, `/usr/local/bin/gs` and `/opt/local/bin/gs`; there is no custom executable
+setting or `PATH` search. The click first checks Ghostscript's identity and version. Rendering uses
+the shared versioned preview cache, resource authority and cancellation. The PostScript section goes
+to standard input; the original is only read and no document copy is written. EPS pages are cropped
+to the drawing with `-dEPSCrop`. Safe mode, batch/no-prompt flags and a minimal environment are
+fixed. The process group runs at background priority and is stopped together on cancellation or a
+limit. An exited wrapper or a descendant holding a pipe cannot retain the render slot.
+
+Input is capped at 256 MiB. **32 MiB bounds the PDF result on standard output**, not scratch space.
+The private scratch stage is monitored every 50 ms with a 64 MiB total-size limit; a burst can
+overshoot between checks. Monitoring also bounds directory traversal to 4096 entries and eight
+levels, without following links. `-K131072` sets Ghostscript's allocation budget to 128 MiB; process
+RSS also includes executable code and shared libraries. Rendering has a 60-second limit; identity
+probing has a separate 3-second limit. Neither child inherits `GS_OPTIONS`.
+
+A normal render leaves an empty stage, disposed through Viewer's existing rule for its own empty
+stage directories. The resulting PDF stays in the preview cache. Stopped or failed rendering can
+leave Ghostscript scratch; only that leftover is moved to Trash, named **Viewer Ghostscript
+scratch** with a unique suffix. A failed Trash operation keeps the scratch and reports failure. If
+Viewer crashes during a render, the detached interpreter can continue until it finishes or the
+person stops it; the time and scratch monitor no longer runs, and its stage can remain. The Store
+edition and agent routes cannot start this conversion. Viewer bundles no Ghostscript.
 
 **FictionBook.** An `.fb2` book, up to 32 MB, is read as XML without a DTD or entity declarations; a
 book that has one does not open. The encoding its declaration names, such as Windows-1251, is used.

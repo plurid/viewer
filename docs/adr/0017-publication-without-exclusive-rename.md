@@ -24,8 +24,9 @@ operation's empty reservation. A folder is opened without following links immedi
 `mkdirat`, and its identity comes from `fstat` on that descriptor, not a later lookup by path.
 Directory contents are checked through its descriptor, with close-on-exec reader descriptors.
 Immediately before rename, a no-follow lookup must still identify that reservation and it must still
-be empty. The complete source is then renamed over the reservation. Nothing streams into the final
-name.
+be empty. Viewer compares device and inode as exact unsigned 64-bit values from a single stat call,
+including when Node reports an inode as a negative BigInt. The complete source is then renamed over
+the reservation. Nothing streams into the final name.
 
 ## Recovery without permanent deletion
 
@@ -34,13 +35,25 @@ folder beside the destination and renames the entry at the final name into that 
 before inspecting it. This claim preserves the entry even if another process replaced or filled the
 reservation just before cleanup. The holding folder remains on the same volume.
 
+A crash during recovery can leave that hidden holding folder without a report. The move aside can
+also overwrite an entry planted at its private child name after the holding folder is created; its
+name carries 128 random bits, which makes discovery unlikely but does not eliminate this accepted
+race. Such an entry can lose its content. Both limits are accepted.
+
 The retained reservation descriptor identifies what was claimed. Only the same still-empty
 reservation is returned to TypeScript as eligible for disposal. `desktop/operations/removal.ts`
 checks its identity and emptiness again and uses the existing native Trash service. An empty owned
 holding folder follows through that same service. When preservation is enabled or the Trash refuses
 the item, it stays in place and the error reports its path. Neither native recovery nor this
 TypeScript disposal path calls a permanent-removal helper. Viewer deletes nothing permanently in
-recovery.
+recovery. Native identities arrive as exact decimal strings; TypeScript normalizes them before
+comparison, so an unchanged empty file reservation on exFAT follows the same Trash path as on APFS.
+
+Safe integer identities from older journals remain readable. New large identities carry an
+exact-value marker, so an older rounded number cannot authorize Undo. New output proofs are
+versioned; an older proof is checked only when every recorded identity component can still be
+represented exactly. An untrustworthy older record refuses Undo with: "Cannot undo because this
+older record does not have an exact file identity."
 
 A claimed foreign item, including bytes written into the reservation, is never sent to the Trash.
 Recovery restores it when the original name is free, using exclusive rename or the same
@@ -89,21 +102,6 @@ original unsupported-rename error without attempting reservation publication or 
 The Store fallback also needs access to the destination's parent folder: a grant to a single file
 cannot authorize opening its parent. The operation fails with a permission error and keeps its
 source or complete stage until the person grants the folder and retries.
-
-## Verification provenance
-
-The initial agent scenario did not reach any file operation: its 12-character volume label caused
-`hdiutil create` to report "Operation not permitted". That refusal was not evidence of an
-environment limitation. The reviewer reported that shortening only the label let all four scenario
-steps and unmount pass with an externally built helper. The reviewer also reported broader exFAT
-workflows, concurrent publication and APFS, HFS+ and FAT controls on `e12829d0`.
-
-The agent subsequently ran the corrected `ViewerQA` scenario with this recovery implementation and
-an externally compiled helper: file/folder copy, picture-paste publication, a same-volume move,
-rename and unmount passed on a real exFAT image. Both preservation flags were set. Standalone native
-tests force cleanup interleavings against real folders. These runs do not establish signed Store,
-physical-device, OS clipboard UI or cross-volume source-removal acceptance. Run-specific receipts,
-helper hashes and retained fixture paths remain in generated evidence.
 
 [Operation reference](../reference/file-operations.md) · [Platforms](../reference/platforms.md) ·
 [Testing](../development/testing.md)

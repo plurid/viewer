@@ -1,5 +1,9 @@
-import { constants, type Stats } from 'node:fs';
-import { chmod, lstat, mkdir, open, readdir } from 'node:fs/promises';
+import { lstat, fileStat } from '../files/stats';
+import type { FileStats as Stats } from '../files/stats';
+
+import { sameItem } from '../files/item-identity';
+import { constants } from 'node:fs';
+import { chmod, mkdir, open, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 import { Archives, archiveFingerprint } from '../previews/archives';
@@ -11,8 +15,7 @@ export interface ArchiveWork {
   progress(file: string, done: number, total: number): void;
 }
 const same = (before: Stats, after: Stats) =>
-  before.dev === after.dev &&
-  before.ino === after.ino &&
+  sameItem(before, after) &&
   before.ctimeMs === after.ctimeMs &&
   before.mtimeMs === after.mtimeMs &&
   before.size === after.size;
@@ -81,11 +84,7 @@ export async function createArchive(
         await work.access([actual]);
         if (entry.info.isFile()) {
           const hydrated = await lstat(actual);
-          if (
-            !hydrated.isFile() ||
-            hydrated.dev !== entry.info.dev ||
-            hydrated.ino !== entry.info.ino
-          )
+          if (!hydrated.isFile() || !sameItem(hydrated, entry.info))
             throw new Error('A source changed while waiting for its file provider.');
           // Placeholder metadata is captured during traversal; hydrated length
           // and modification times are captured before the first content byte.
@@ -107,7 +106,7 @@ export async function createArchive(
             constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
           );
           try {
-            if (!same(entry.info, await input.stat()))
+            if (!same(entry.info, await fileStat(input)))
               throw new Error('A source changed before archiving.');
             const buffer = Buffer.allocUnsafe(64 * 1024);
             let offset = 0;

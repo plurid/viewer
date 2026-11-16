@@ -1,3 +1,4 @@
+import { fileStat } from '../src/desktop/files/stats';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
@@ -71,7 +72,7 @@ it.skipIf(!ready)(
         const handle = await open(file, 'r');
         try {
           const output = await decode(
-            { file, handle, info: await handle.stat() },
+            { file, handle, info: await fileStat(handle) },
             'image',
             new AbortController().signal,
             size,
@@ -127,7 +128,7 @@ it.skipIf(!ready)(
     try {
       await expect(
         decode(
-          { file, handle, info: await handle.stat() },
+          { file, handle, info: await fileStat(handle) },
           'image',
           new AbortController().signal,
           128,
@@ -141,7 +142,7 @@ it.skipIf(!ready)(
     const good = await open(goodFile, 'r');
     try {
       const result = await decode(
-        { file: goodFile, handle: good, info: await good.stat() },
+        { file: goodFile, handle: good, info: await fileStat(good) },
         'image',
         new AbortController().signal,
         128,

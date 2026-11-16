@@ -1,9 +1,12 @@
-import { constants, type Stats } from 'node:fs';
+import { lstat, fileStat } from '../files/stats';
+import type { FileStats as Stats } from '../files/stats';
+
+import { sameItem } from '../files/item-identity';
+import { constants } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 import {
   chmod,
   link,
-  lstat,
   mkdir,
   open,
   readdir,
@@ -137,7 +140,7 @@ export async function publish(
     await rename(source, destination);
   } catch (error) {
     const current = await lstat(destination).catch(() => null);
-    if (current?.dev === reserved.dev && current.ino === reserved.ino)
+    if (current && sameItem(current, reserved))
       await removeEmptyDirectory(destination).catch(() => undefined);
     throw error;
   }
@@ -263,9 +266,8 @@ export async function copyTree(
           );
           let output: Awaited<ReturnType<typeof open>> | undefined;
           try {
-            const opened = await input.stat();
-            if (opened.dev !== info.dev || opened.ino !== info.ino)
-              throw new Error('Source folder changed during the copy.');
+            const opened = await fileStat(input);
+            if (!sameItem(opened, info)) throw new Error('Source folder changed during the copy.');
             output = await open(
               fileCoordination.path(target),
               constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
@@ -321,11 +323,10 @@ async function copyFile(
   );
   let output: Awaited<ReturnType<typeof open>> | undefined, owned: Stats | undefined;
   try {
-    const opened = await input.stat();
+    const opened = await fileStat(input);
     if (
       !opened.isFile() ||
-      opened.dev !== info.dev ||
-      opened.ino !== info.ino ||
+      !sameItem(opened, info) ||
       opened.size !== info.size ||
       opened.mtimeMs !== info.mtimeMs ||
       opened.ctimeMs !== info.ctimeMs
@@ -339,15 +340,14 @@ async function copyFile(
         output = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
     } else {
       output = await open(target, 'wx', info.mode);
-      owned = await output.stat();
+      owned = await fileStat(output);
       await streamFile(input, output, info, job, signal);
     }
     signal?.throwIfAborted();
     if (durability === 'flushed') await output?.sync();
     const after = await lstat(source);
     if (
-      after.dev !== info.dev ||
-      after.ino !== info.ino ||
+      !sameItem(after, info) ||
       after.mtimeMs !== info.mtimeMs ||
       after.ctimeMs !== info.ctimeMs ||
       after.size !== info.size
@@ -357,7 +357,7 @@ async function copyFile(
     if (process.platform !== 'darwin') await utimes(target, info.atime, info.mtime);
   } catch (error) {
     const current = owned && (await lstat(target).catch(() => null));
-    if (current && owned && current.dev === owned.dev && current.ino === owned.ino)
+    if (current && owned && sameItem(current, owned))
       await unlinkVerified(target).catch(() => undefined);
     throw error;
   } finally {

@@ -1,5 +1,9 @@
+import { lstat, stat, fileStat } from '../files/stats';
+
+import { itemIdentity } from '../../domain/files/item-identity';
+import { sameItem } from '../files/item-identity';
 import { constants } from 'node:fs';
-import { lstat, open, realpath, stat } from 'node:fs/promises';
+import { open, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DocumentStore } from '../persistence/document-store';
@@ -103,18 +107,17 @@ export class AgentAccess {
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
     try {
-      const before = await source.stat();
+      const before = await fileStat(source);
       if (!before.isFile() || before.size > 16000000)
         throw new Error('The private agent approval is not a bounded regular file. It was kept.');
       const bytes = await source.readFile();
-      const after = await source.stat();
+      const after = await fileStat(source);
       const current = await lstat(this.store.file);
       if (
         bytes.length !== before.size ||
         before.ctimeMs !== after.ctimeMs ||
         before.mtimeMs !== after.mtimeMs ||
-        current.dev !== before.dev ||
-        current.ino !== before.ino
+        !sameItem(current, before)
       )
         throw new Error('The private agent approval changed. Review it again.');
       const backup = await open(
@@ -236,7 +239,7 @@ export class AgentAccess {
         return {
           path: absolute(file),
           canonical: actual,
-          identity: info ? `${info.dev}:${info.ino}` : undefined,
+          identity: info ? itemIdentity(info) : undefined,
         };
       }),
     );

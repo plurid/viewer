@@ -15,6 +15,7 @@ import { embeddedSamples } from './samples/embedded';
 import { inspectionSamples } from './samples/inspection';
 import { messageSamples } from './samples/messages';
 import { textSamples } from './samples/text';
+import { postscriptSamples } from './samples/postscript';
 import type { RemoteSample, Sample } from './types';
 import { officeDrawingSamples, officeLayoutSamples } from './office-layout';
 import { fontSamples } from './fonts';
@@ -71,6 +72,7 @@ function drawing(): string {
 export async function localSamples(): Promise<Sample[]> {
   const result: Sample[] = [
     ...textSamples(),
+    ...postscriptSamples(),
     ...documentSamples(await assetBytes('study.jpg')),
     ...officeSamples(),
     ...(await modelSamples()),

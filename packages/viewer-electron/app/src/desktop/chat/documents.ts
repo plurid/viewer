@@ -1,3 +1,5 @@
+import { fileStat } from '../files/stats';
+import { sameItem } from '../files/item-identity';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -27,7 +29,7 @@ export class ChatDocumentStore {
         constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
       );
       try {
-        const before = await handle.stat();
+        const before = await fileStat(handle);
         if (!before.isFile() || before.size > maximumStoredBytes)
           throw new Error('The conversation is not a bounded regular file.');
         const bytes = Buffer.alloc(before.size);
@@ -37,10 +39,9 @@ export class ChatDocumentStore {
           if (!bytesRead) throw new Error('The conversation changed while it was read.');
           offset += bytesRead;
         }
-        const after = await handle.stat();
+        const after = await fileStat(handle);
         if (
-          before.ino !== after.ino ||
-          before.dev !== after.dev ||
+          !sameItem(before, after) ||
           before.size !== after.size ||
           before.ctimeMs !== after.ctimeMs ||
           before.mtimeMs !== after.mtimeMs

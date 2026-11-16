@@ -1548,6 +1548,7 @@ describe('an item from start to finish', () => {
     to: '',
     remove: true,
     proof: await outputProof(file),
+    proofVersion: 2 as const,
     ...(await version(file)),
   });
   const stepBack = async (from: string, to: string, caseOnly = false) => ({
@@ -2118,6 +2119,7 @@ describe('an item from start to finish', () => {
           trash: true,
           directory: false,
           proof: await outputProof(file),
+          proofVersion: 2 as const,
           ...(await version(file)),
         };
       };

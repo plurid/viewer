@@ -1,7 +1,10 @@
+import { itemIdentity } from '../../domain/files/item-identity';
+import type { FileStats as Stats } from '../files/stats';
+import { fileStat } from '../files/stats';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
-import type { Stats } from 'node:fs';
+
 import type { DocumentData } from '../../domain/services';
 import type { MailboxRow, MailboxSpan } from '../../domain/previews/mail/mailbox';
 import type { SavedPage } from '../../domain/previews/saved-page';
@@ -32,7 +35,7 @@ async function openMailbox(file: string) {
     fileCoordination.path(file),
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
   );
-  const info = await handle.stat().catch(async (error: unknown) => {
+  const info = await fileStat(handle).catch(async (error: unknown) => {
     await handle.close();
     throw error;
   });
@@ -44,7 +47,7 @@ async function openMailbox(file: string) {
 }
 /** The key of a mailbox's scanned messages. */
 const mailboxVersion = (file: string, info: Stats) =>
-  JSON.stringify([file, info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs]);
+  JSON.stringify([file, itemIdentity(info), info.size, info.mtimeMs, info.ctimeMs]);
 const messageTooLarge = 'This message is larger than 64 MB.';
 
 /** Reads the mailbox from its start, a chunk at a time, until `until` is located or a limit
@@ -149,7 +152,7 @@ export async function openedMessageBytes(
   message: number | undefined,
   signal: AbortSignal,
 ): Promise<Uint8Array> {
-  const info = await handle.stat();
+  const info = await fileStat(handle);
   if (!info.isFile()) throw new Error('This message is not a regular file.');
   if (format === 'mbox') {
     if (message === undefined) throw new Error('Choose a message of this mailbox.');

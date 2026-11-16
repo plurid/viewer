@@ -1,5 +1,7 @@
+import { lstat } from '../files/stats';
+import { itemIdentity } from '../../domain/files/item-identity';
 import { randomUUID } from 'node:crypto';
-import { lstat, realpath } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import type { FileEntry } from '../../domain/contracts';
 import type {
@@ -53,7 +55,7 @@ interface WorktreePorts {
 }
 
 const leaseLifetime = 5 * 60_000;
-const identityOf = (info: { dev: number; ino: number }) => `${info.dev}:${info.ino}`;
+const identityOf = itemIdentity;
 
 /** Owner-bound discovery and explicit human creation. Never switches, prunes or removes. */
 export class GitWorktrees {

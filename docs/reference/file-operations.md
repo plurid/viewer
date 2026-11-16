@@ -108,11 +108,19 @@ reservation is still empty, then renames the complete item over it. The final na
 empty reservation. Names occupied when the reservation is created are refused; a final link is never
 followed. Any other native rename error is reported without this fallback.
 
+Viewer compares device and inode as exact unsigned 64-bit values from a single stat call, including
+when Node reports an inode as a negative BigInt.
+
 After a failed rename, Viewer first moves whatever is at the final name into a random hidden
 `.viewer-rename-` holding folder beside it. It then checks what was moved. Its own unchanged empty
 reservation, and any empty owned holding folder, go through the removal module to the system Trash.
 With no Trash or with preservation enabled, they stay and the error names their paths. Viewer
 deletes nothing permanently in this recovery path.
+
+The exact native and Node identities agree for empty file reservations on exFAT too. A genuinely
+changed recovery entry is kept and reported. Older safe integer identities remain readable; newer
+large identities carry an exact-value marker. An older rounded identity cannot authorize Undo:
+"Cannot undo because this older record does not have an exact file identity."
 
 Someone else's item, including content added to the reservation, is never sent to the Trash. Viewer
 puts it back when its original name is free, using the same guarded rename steps. If the name is

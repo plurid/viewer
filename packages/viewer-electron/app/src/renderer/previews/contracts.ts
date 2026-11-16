@@ -1,9 +1,9 @@
+import type { FilePreview } from '../../domain/previews/formats';
 import type { EvidenceNavigation } from '../../domain/files/inspection';
 import type { DocumentData } from '../../domain/services';
 import type { ComponentType } from 'react';
 import type {
   ArchiveListing,
-  FileEntry,
   FolderListing,
   Resource,
   ResourceRead,
@@ -109,16 +109,7 @@ export interface PreviewContext {
     release(id: string): Promise<void>;
   };
 }
-export interface PreviewModule {
-  id: string;
-  label: string;
-  /** The module can open its underlying source in Viewer's text editor. */
-  editing?: 'text';
-  /** The module offers Show as hex itself, only for a file whose bytes may be shown: a private
-   * key's never are. Other modules' files can be shown as hex by the host. */
-  hex?: 'own';
-  formats: readonly string[];
-  detect(entry: FileEntry): number;
+export interface PreviewModule extends FilePreview {
   load(): Promise<{ default: ComponentType<PreviewContext> }>;
   metadata?(context: PreviewContext): Promise<Record<string, string>>;
   thumbnail?(context: PreviewContext): Promise<string | null>;

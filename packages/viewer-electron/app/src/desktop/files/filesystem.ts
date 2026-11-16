@@ -1,4 +1,6 @@
-import { lstat, stat, readlink, readdir } from 'node:fs/promises';
+import { lstat, stat } from './stats';
+import { itemIdentity } from '../../domain/files/item-identity';
+import { readlink, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { lookup } from 'mime-types';
 import type { FileEntry, FolderListing } from '../../domain/contracts';
@@ -63,7 +65,7 @@ export async function entry(file: string): Promise<FileEntry> {
     created: info.birthtimeMs,
     hidden: name.startsWith('.'),
     mime: lookup(name) || 'application/octet-stream',
-    identity: `${info.dev}:${info.ino}`,
+    identity: itemIdentity(info),
     linkTarget,
     error,
   };

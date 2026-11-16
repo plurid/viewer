@@ -1,6 +1,9 @@
+import { lstat, fileStat } from '../files/stats';
+
+import { itemIdentity } from '../../domain/files/item-identity';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, realpath, statfs } from 'node:fs/promises';
+import { mkdir, open, realpath, statfs } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import {
@@ -148,7 +151,7 @@ export class SpeechModels {
         info.isFile() &&
         !info.isSymbolicLink() &&
         info.size === model.bytes &&
-        `${info.dev}:${info.ino}` === record.identity &&
+        itemIdentity(info) === record.identity &&
         info.mtimeMs === record.modified
       );
     } catch {
@@ -269,7 +272,7 @@ export class SpeechModels {
           constants.O_RDONLY | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0),
         );
         try {
-          const before = await source.stat();
+          const before = await fileStat(source);
           if (!before.isFile() || before.size !== model.bytes)
             throw new Error('This file does not match the selected model size.');
           const buffer = Buffer.alloc(1024 * 1024);
@@ -278,7 +281,7 @@ export class SpeechModels {
             if (!read.bytesRead) break;
             await saveChunk(buffer.subarray(0, read.bytesRead));
           }
-          const after = await source.stat();
+          const after = await fileStat(source);
           if (before.mtimeMs !== after.mtimeMs || before.size !== after.size)
             throw new Error('The imported model changed while reading.');
         } finally {
@@ -308,9 +311,9 @@ export class SpeechModels {
           'Model checksum verification failed. The unverified file was retained and was not selected.',
         );
       await handle.sync();
-      const info = await handle.stat();
+      const info = await fileStat(handle);
       signal.throwIfAborted();
-      record.identity = `${info.dev}:${info.ino}`;
+      record.identity = itemIdentity(info);
       record.modified = info.mtimeMs;
       record.status = 'ready';
       await this.store.save(state);

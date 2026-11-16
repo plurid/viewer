@@ -1,3 +1,5 @@
+import { lstat } from '../files/stats';
+import { itemIdentity, nativeItemIdentity } from '../../domain/files/item-identity';
 /**
  * The only module that removes filesystem entries without the native Trash;
  * ESLint rejects `rm`, `rmdir` and `unlink` elsewhere. Each function names the
@@ -8,7 +10,7 @@
  * `removePrivateFile`. Failed native publication uses the Trash or keeps its
  * recovered reservations; that path never permanently deletes an entry.
  */
-import { lstat, readdir, rm, rmdir, unlink } from 'node:fs/promises';
+import { readdir, rm, rmdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   NativeRenameContainer,
@@ -20,12 +22,16 @@ import { errorMessage } from '../../domain/errors';
 
 type ReservationTrash = (file: string) => Promise<TrashReceipt>;
 
-const identity = (info: { dev: number; ino: number }) => `${info.dev}:${info.ino}`;
+const identity = itemIdentity;
 
 async function ownedContainer(container: NativeRenameContainer): Promise<boolean> {
   if (!/^\.viewer-rename-[a-f0-9]{32}$/.test(path.basename(container.path))) return false;
   const info = await lstat(container.path);
-  return info.isDirectory() && !info.isSymbolicLink() && identity(info) === container.identity;
+  return (
+    info.isDirectory() &&
+    !info.isSymbolicLink() &&
+    identity(info) === nativeItemIdentity(container.identity)
+  );
 }
 
 async function ownedReservation(
@@ -35,7 +41,7 @@ async function ownedReservation(
   const container = containers.find((item) => item.path === path.dirname(entry.path));
   if (!container || !(await ownedContainer(container))) return false;
   const info = await lstat(entry.path);
-  if (identity(info) !== entry.identity || info.isSymbolicLink()) return false;
+  if (identity(info) !== nativeItemIdentity(entry.identity) || info.isSymbolicLink()) return false;
   return entry.directory
     ? info.isDirectory() && (await readdir(entry.path)).length === 0
     : info.isFile() && info.size === 0 && info.nlink === 1;
