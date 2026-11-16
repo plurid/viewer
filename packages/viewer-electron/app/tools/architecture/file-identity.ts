@@ -19,14 +19,18 @@ export function inspectStatIdentity(
   app: string,
   overrides: ReadonlyMap<string, string> = new Map(),
 ): IdentityViolation[] {
-  const config = ts.readConfigFile(path.join(app, 'tsconfig.main.json'), ts.sys.readFile);
-  if (config.error)
-    throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'));
-  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, app);
-  const host = ts.createCompilerHost(parsed.options);
+  const projects = ['main', 'renderer', 'preload'].map((name) => {
+    const config = ts.readConfigFile(path.join(app, `tsconfig.${name}.json`), ts.sys.readFile);
+    if (config.error)
+      throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'));
+    return ts.parseJsonConfigFileContent(config.config, ts.sys, app);
+  });
+  const options = { ...projects[0]!.options, jsx: ts.JsxEmit.ReactJSX };
+  const host = ts.createCompilerHost(options);
   const read = host.readFile;
   host.readFile = (file) => overrides.get(path.resolve(file)) ?? read(file);
-  const program = ts.createProgram(parsed.fileNames, parsed.options, host);
+  const files = [...new Set(projects.flatMap((project) => project.fileNames))];
+  const program = ts.createProgram(files, options, host);
   const checker = program.getTypeChecker();
   const violations: IdentityViolation[] = [];
   const isNumber = (type: ts.Type): boolean =>
@@ -43,6 +47,25 @@ export function inspectStatIdentity(
     const visit = (node: ts.Node): void => {
       if (ts.isPropertyAccessExpression(node) && ['dev', 'ino'].includes(node.name.text))
         report(node, 'Device/inode reads belong to the shared exact-identity implementation.');
+      if (
+        ts.isElementAccessExpression(node) &&
+        node.argumentExpression &&
+        ts.isStringLiteralLike(node.argumentExpression) &&
+        ['dev', 'ino'].includes(node.argumentExpression.text)
+      )
+        report(node, 'Device/inode reads belong to the shared exact-identity implementation.');
+      if (ts.isBindingElement(node)) {
+        const key = node.propertyName ?? node.name;
+        const property = ts.isComputedPropertyName(key) ? key.expression : key;
+        if (
+          (ts.isIdentifier(property) || ts.isStringLiteralLike(property)) &&
+          ['dev', 'ino'].includes(property.text)
+        )
+          report(
+            node,
+            'Destructured device/inode reads belong to the shared exact-identity implementation.',
+          );
+      }
       if (ts.isCallExpression(node)) {
         const declaration = checker.getResolvedSignature(node)?.declaration;
         const owner =

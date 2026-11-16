@@ -1,3 +1,4 @@
+import { sameCapturedItem } from '../../domain/files/entries';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { mkdir, open, opendir, readFile, realpath, rename } from 'node:fs/promises';
@@ -36,7 +37,7 @@ import type { FileChange } from '../../domain/files/changes';
 import type { RenameInput } from '../../domain/operations/batch-rename';
 import type { Operations } from '../operations/operations';
 const same = (a: FileEntry, b: FileEntry) =>
-  a.identity === b.identity && a.size === b.size && a.modified === b.modified && a.kind === b.kind;
+  sameCapturedItem(a, b) && a.size === b.size && a.modified === b.modified;
 interface Dependencies {
   rename?(input: RenameInput, signal: AbortSignal): Promise<string[]>;
   snapshot?(title: string, sources: string[], signal: AbortSignal): Promise<string>;
@@ -546,7 +547,8 @@ export class ActionPlanner {
         const destination = await entry(row.destination);
         if (
           !sources.has(row.destination) &&
-          (destination.identity !== row.source?.identity ||
+          (!row.source ||
+            !sameCapturedItem(destination, row.source) ||
             row.destination.toLowerCase() !== row.source?.path.toLowerCase())
         )
           row.issue = 'The destination already exists. Edit the name.';

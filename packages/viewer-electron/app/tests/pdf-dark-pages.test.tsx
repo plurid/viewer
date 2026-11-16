@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * A PDF WITH DARK PAGES. pdf.js draws the printed page off screen, where it is turned dark and its
  * photographs put back as they were, and only then shown, so nothing white flashes; light pages
@@ -185,7 +186,7 @@ function open(
     },
     evidence: options.anchor && {
       path: '/Jobs/Bracket.pdf',
-      version: { identity: '1:2', modified: 1, size: 1 },
+      version: { identity: temporalIdentity('1:2'), modified: 1, size: 1 },
       anchor: options.anchor,
       quote: '',
     },

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * A PDF OPENED AT EVIDENCE stays on its anchored page. Its quote lists the pages that match, but
  * the first match never moves the page; `search: false` does not search at all. A region is
@@ -93,7 +94,7 @@ function open(anchor: EvidenceAnchor) {
     },
     evidence: {
       path: '/Jobs/Bracket.pdf',
-      version: { identity: '1:2', modified: 1, size: 1 },
+      version: { identity: temporalIdentity('1:2'), modified: 1, size: 1 },
       anchor,
       quote: 'holes 48 mm',
     },

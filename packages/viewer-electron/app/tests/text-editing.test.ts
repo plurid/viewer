@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * Editing text in planes: a previewed file edited where it is, its unsaved edits kept
  * and restored, saves checked against the version read, Edit menu commands routed to the editor,
@@ -38,7 +39,7 @@ beforeAll(() => {
     ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }) as DOMRectList;
 });
 const version = (n: number): TextVersion => ({
-  identity: '1:1',
+  identity: temporalIdentity('1:1'),
   modified: n,
   size: 4,
   sha256: String(n).repeat(64),

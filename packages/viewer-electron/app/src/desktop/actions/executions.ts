@@ -1,3 +1,4 @@
+import { sameCapturedItem } from '../../domain/files/entries';
 import { itemIdentity } from '../../domain/files/item-identity';
 import { sameItem } from '../files/item-identity';
 import { stat } from '../files/stats';
@@ -171,7 +172,7 @@ export class Executions {
     const original = await stat(cwd);
     if (!original.isDirectory()) throw new Error('Action folder is unavailable.');
     for (const file of target.selection)
-      if ((await entry(file.path)).identity !== file.identity)
+      if (!sameCapturedItem(await entry(file.path), file))
         throw new Error(`Selection changed: ${file.name}. Review the action again.`);
     if (profile) await this.confirmProfile(profile);
     else await this.confirm(action);

@@ -1,3 +1,4 @@
+import { itemIdentity } from '../src/domain/files/item-identity';
 /** In-memory security regressions. No real files, processes or Trash are used or removed. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
@@ -118,7 +119,7 @@ function action(executor: CustomAction['executor']): CustomAction {
     executor,
   };
 }
-async function fixture(roots = ['/Granted'], content = false) {
+async function fixture(roots = ['/Granted'], content = false, navigation = false) {
   const settings = new SettingsService(
     '/Memory/Viewer',
     '/Home',
@@ -153,13 +154,14 @@ async function fixture(roots = ['/Granted'], content = false) {
   const exportTransform = vi.fn(async (_proposal: AgentProposal) => ({
     operationID: 'typed-export',
   }));
+  const navigate = vi.fn(async () => {});
   const requests: AgentRequests = new AgentRequests(
     '/Memory/Viewer',
     settings,
     () => {},
     execute,
     { read: () => ({ cwd: '/Granted', output: 'Screen' }) },
-    undefined,
+    navigation ? navigate : undefined,
     {
       actor: () => broker.clients.actor(),
       check: (proposal) => broker.authorizeProposal(proposal),
@@ -197,6 +199,7 @@ async function fixture(roots = ['/Granted'], content = false) {
         'propose',
         'execute',
         'terminal-write',
+        ...(navigation ? ['navigation' as const] : []),
         ...(content ? ['content' as const] : []),
       ],
       budgets: { maxReadBytes: 1024 * 1024, maxTasks: 4 },
@@ -213,6 +216,7 @@ async function fixture(roots = ['/Granted'], content = false) {
     settings,
     config,
     target,
+    navigate,
     execute,
     write,
     cancelOperation,
@@ -934,4 +938,43 @@ describe('recipe bindings an agent cannot change (2026-10-20)', () => {
       expect(() => change({ data: 'full-text' })).toThrow('stay with you');
     expect(change({ name: 'Renamed by agent' }).valid).toBe(true);
   });
+});
+
+describe('synthetic captured agent selections', () => {
+  it.each(['command', 'selection'] as const)(
+    'keeps %s review guarded across synthetic inode changes',
+    async (flow) => {
+      const f = await fixture(['/Granted'], false, flow === 'selection');
+      const captured = { ...item(), identity: itemIdentity({ dev: 1n, ino: -1n }) };
+      f.target.selection = [captured];
+      memory.files.set(captured.path, {
+        ...captured,
+        identity: itemIdentity({ dev: 1n, ino: -2n }),
+      });
+      const prepare = () =>
+        flow === 'command'
+          ? f.call<{ id: string }>('propose_command', { commandID: 'trash' })
+          : f.broker.clients.context.run(f.created.client.id, () =>
+              f.requests.navigation({ kind: 'select-files', files: [captured] }, f.target),
+            );
+      const proposal = await prepare();
+      memory.files.set(captured.path, {
+        ...captured,
+        identity: itemIdentity({ dev: 1n, ino: -3n }),
+      });
+      await f.requests.review(proposal.id, true);
+      const dispatched = flow === 'command' ? f.execute : f.navigate;
+      expect(dispatched).toHaveBeenCalledOnce();
+      expect(memory.remove).not.toHaveBeenCalled();
+      const another = await prepare();
+      dispatched.mockClear();
+      memory.files.set(captured.path, {
+        ...captured,
+        identity: itemIdentity({ dev: 1n, ino: -4n }),
+        created: captured.created + 1,
+      });
+      await expect(f.requests.review(another.id, true)).rejects.toThrow('Selection changed');
+      expect(dispatched).not.toHaveBeenCalled();
+    },
+  );
 });

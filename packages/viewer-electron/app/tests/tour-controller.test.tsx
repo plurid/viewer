@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { itemIdentity, temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * A TOUR THROUGH THE REAL CONTROLLER: a stop's evidence replaces the last one even when it has
  * none, the stop it leaves loses its mark, a tour or project file never opens, and on Plurid's
@@ -22,7 +23,7 @@ vi.mock('../src/renderer/workspace/framing', async (original) => ({
   frameWorkspace: vi.fn(),
 }));
 
-const version = { identity: '1:2', modified: 1_761_800_000_000, size: 100 };
+const version = { identity: temporalIdentity('1:2'), modified: 1_761_800_000_000, size: 100 };
 const file = (path: string): FileEntry => ({
   path,
   name: path.split('/').at(-1)!,
@@ -31,6 +32,7 @@ const file = (path: string): FileEntry => ({
   kind: 'file',
   directory: false,
   ...version,
+  identity: itemIdentity({ dev: 1n, ino: 2n }),
   created: 1,
   hidden: false,
   mime: 'application/octet-stream',

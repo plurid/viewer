@@ -9,13 +9,25 @@ import { provisionFormats } from '../previews/data/provision';
 import { shortcutFormats } from '../previews/data/shortcuts';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-export function sameSelection(a: FileEntry, b: FileEntry): boolean {
+type CapturedItem = Pick<FileEntry, 'identity' | 'kind' | 'created' | 'modified' | 'size'>;
+/** Captured authority never accepts the unreadable-entry convenience used by selection refresh. */
+export function sameCapturedItem(current: CapturedItem, captured: CapturedItem): boolean {
+  return (
+    current.identity !== '' &&
+    captured.identity !== '' &&
+    current.kind === captured.kind &&
+    sameSelection(current, captured)
+  );
+}
+export function sameSelection(a: CapturedItem, b: CapturedItem): boolean {
   if (a.identity === '' && b.identity === '') return true;
-  const previous = temporalIdentity(b.identity, b.kind);
-  if (previous.endsWith(':synthetic:file'))
+  if (a.kind !== b.kind) return false;
+  if (!b.identity.endsWith(':u64')) return sameIdentity(a.identity, b.identity);
+  const previous = temporalIdentity(b.identity, b.kind, b.created);
+  if (previous.includes(':synthetic:file:'))
     return (
       a.kind === 'file' &&
-      sameTemporalIdentity(temporalIdentity(a.identity, a.kind), previous, a.kind, b.kind) &&
+      sameTemporalIdentity(temporalIdentity(a.identity, a.kind, a.created), previous) &&
       a.size === b.size &&
       a.modified === b.modified &&
       a.created === b.created
@@ -26,8 +38,12 @@ function renamedSelection(
   cached: FileEntry,
   index: ReturnType<typeof indexEntries>,
 ): FileEntry | undefined {
-  if (!temporalIdentity(cached.identity, cached.kind).endsWith(':synthetic:file'))
-    return index.identities.get(cached.identity) ?? undefined;
+  if (
+    !temporalIdentity(cached.identity, cached.kind, cached.created).includes(':synthetic:file:')
+  ) {
+    const candidate = index.identities.get(cached.identity);
+    return candidate && sameSelection(candidate, cached) ? candidate : undefined;
+  }
   let found: FileEntry | undefined;
   for (const entry of index.paths.values()) {
     if (
@@ -74,7 +90,7 @@ export function reconcileSelection(
         : cached?.identity
           ? renamedSelection(cached, index)
           : undefined;
-    if (entry && (!cached || sameSelection(entry, cached))) {
+    if (entry) {
       cache.set(entry.path, entry);
       next.push(entry.path);
     }

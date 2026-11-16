@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * THE CHECK PANEL: what is sent and at which level, the permission pictures need, Run and each
  * step with its time, the graded findings with Viewer's reasons and a shared cause's readings, a
@@ -72,7 +73,7 @@ const meta: ModelProvider = {
   allowContent: false,
 };
 const folder = '/Jobs/Job 1042';
-const version = { identity: '1:2', modified: 1_761_800_000_000, size: 1000 };
+const version = { identity: temporalIdentity('1:2'), modified: 1_761_800_000_000, size: 1000 };
 const plate = `${folder}/g6-PL60-B2-2buc.dxf`;
 const corrected = `${folder}/g6-PL60-B2-2buc (corrected).dxf`;
 const opening: CheckOpening = {
@@ -291,7 +292,7 @@ beforeEach(() => {
     },
     stat: async (path: string) => ({
       path,
-      identity: '1:9',
+      identity: temporalIdentity('1:9'),
       modified: 1_761_900_000_000,
       size: 1002,
     }),
@@ -1043,7 +1044,7 @@ const drawingEntry: FileEntry = {
   created: 1,
   hidden: false,
   mime: 'application/pdf',
-  identity: version.identity,
+  identity: String(version.identity),
 };
 /** The job checked, with the panel and the tour bar in the space's overlay, as the window has them. */
 async function checkedWithTour(): Promise<void> {

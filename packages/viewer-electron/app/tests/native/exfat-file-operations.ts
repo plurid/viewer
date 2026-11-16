@@ -2,7 +2,7 @@
  * Unmounting is the only cleanup. The disk image, profile and all inputs remain retained. */
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import {
   copyFile,
@@ -13,6 +13,7 @@ import {
   realpath,
   rename,
   writeFile,
+  utimes,
 } from 'node:fs/promises';
 import { setTimeout } from 'node:timers/promises';
 import path from 'node:path';
@@ -21,7 +22,11 @@ import { promisify } from 'node:util';
 import type { OperationJob, OperationRequest } from '../../src/domain/contracts';
 import type { NativeRenameRecovery } from '../../src/desktop/native/macos-files';
 import { disposeRenameRecovery } from '../../src/desktop/operations/removal';
-import { itemIdentity, nativeItemIdentity } from '../../src/domain/files/item-identity';
+import {
+  itemIdentity,
+  nativeItemIdentity,
+  syntheticInode,
+} from '../../src/domain/files/item-identity';
 import { setAssetRoot } from '../../src/desktop/native/assets';
 import { macFiles } from '../../src/desktop/native/macos-files';
 import { fileCoordination } from '../../src/desktop/files/file-coordination';
@@ -134,6 +139,66 @@ async function scenario(filesystem: ScenarioFilesystem): Promise<void> {
   }
 
   const lifetimes: Record<string, unknown> = {};
+  async function creationSubstitutions(
+    incoming: string,
+    copied: string,
+    moved: string,
+  ): Promise<void> {
+    const preserved = path.join(mount, 'Preserved substitution originals');
+    await mkdir(preserved);
+    const records: Record<string, unknown>[] = [];
+    for (const flow of ['copy', 'folder copy', 'move'] as const) {
+      const source = path.join(
+        incoming,
+        'Creation ' + flow + (flow === 'folder copy' ? '' : '.txt'),
+      );
+      if (flow === 'folder copy') {
+        await mkdir(source);
+        await writeFile(path.join(source, 'Child.txt'), 'same bytes', { flag: 'wx' });
+      } else await writeFile(source, 'same bytes', { flag: 'wx' });
+      // Whole seconds avoid the driver's truncation of floating-point timestamp input. Keep
+      // mtime after creation, so setting it cannot pull the new item's birth time backwards.
+      const modified = Math.ceil(Date.now() / 2000) * 2 + 10;
+      const sourceFile = flow === 'folder copy' ? path.join(source, 'Child.txt') : source;
+      await utimes(sourceFile, modified, modified);
+      if (flow === 'folder copy') await utimes(source, modified, modified);
+      const destination = flow === 'move' ? moved : copied;
+      const id = operations.start({
+        kind: flow === 'move' ? 'move' : 'copy',
+        sources: [source],
+        destination,
+      });
+      await completed(filesystem + ': prepare creation-time ' + flow, id);
+      const output = path.join(destination, path.basename(source));
+      const file = flow === 'folder copy' ? path.join(output, 'Child.txt') : output;
+      const before = await lstat(file);
+      const parent = await lstat(path.dirname(file));
+      await rename(file, path.join(preserved, randomUUID()));
+      // FAT's creation timestamp can be quantized to two seconds on this driver.
+      await setTimeout(2100);
+      await writeFile(file, 'same bytes', { flag: 'wx' });
+      await utimes(file, before.atimeMs / 1000, before.mtimeMs / 1000);
+      if (flow === 'folder copy')
+        await utimes(path.dirname(file), parent.atimeMs / 1000, parent.mtimeMs / 1000);
+      const after = await lstat(file);
+      assert.equal(after.size, before.size);
+      assert.equal(after.mtimeMs, before.mtimeMs);
+      assert.notEqual(after.birthtimeMs, before.birthtimeMs);
+      await assert.rejects(operations.undo(id), /changed since the operation/);
+      assert.equal(await readFile(file, 'utf8'), 'same bytes');
+      records.push({
+        flow,
+        file,
+        createdBefore: before.birthtimeMs,
+        createdAfter: after.birthtimeMs,
+      });
+    }
+    lifetimes.creationSubstitutions = records;
+    console.log(
+      filesystem + ': changed-creation copy, folder-copy and move stand-ins survived Undo',
+    );
+  }
+
   async function identities(files: string[]): Promise<Record<string, string>> {
     return Object.fromEntries(
       await Promise.all(
@@ -180,6 +245,9 @@ async function scenario(filesystem: ScenarioFilesystem): Promise<void> {
       replaced,
     ];
     const before = await identities(watched);
+    const createdBefore = Object.fromEntries(
+      await Promise.all(watched.map(async (file) => [file, (await lstat(file)).birthtimeMs])),
+    );
     console.log(filesystem + ': waiting 15 seconds for untouched synthetic inodes');
     await setTimeout(15000);
     const after = await identities(watched);
@@ -187,6 +255,10 @@ async function scenario(filesystem: ScenarioFilesystem): Promise<void> {
       milliseconds: 15000,
       before,
       after,
+      createdBefore,
+      createdAfter: Object.fromEntries(
+        await Promise.all(watched.map(async (file) => [file, (await lstat(file)).birthtimeMs])),
+      ),
       changed: watched.filter((file) => before[file] !== after[file]),
     };
     operations.resolve(replaceID, 'replace', false);
@@ -238,16 +310,44 @@ async function scenario(filesystem: ScenarioFilesystem): Promise<void> {
     await completed('prepare file move for remount Undo', remountMoveID);
     const paths = [path.join(copied, 'Remount source.txt'), path.join(moved, 'Remount move.txt')];
     const previous = await identities(paths);
+    const creationBefore = await Promise.all(
+      paths.map(async (file) => (await lstat(file)).birthtimeMs),
+    );
     await run('/usr/sbin/diskutil', ['unmount', mount], { timeout: 45000 });
     await mkdir(mount, { recursive: true });
     await run('/usr/sbin/diskutil', ['mount', '-mountPoint', mount, device], { timeout: 45000 });
     const current = await identities(paths);
-    lifetimes.remount = { before: previous, after: current };
-    await operations.undo(copyID);
-    await operations.undo(remountMoveID);
-    assert.equal(await readFile(remountMove, 'utf8'), 'Complete moved content.');
-    await assert.rejects(lstat(paths[0]!), { code: 'ENOENT' });
-    console.log('exFAT: copy and move Undo after remount passed');
+    const creationAfter = await Promise.all(
+      paths.map(async (file) => (await lstat(file)).birthtimeMs),
+    );
+    assert.deepEqual(creationAfter, creationBefore);
+    const outcomes: string[] = [];
+    for (const [index, id] of [copyID, remountMoveID].entries()) {
+      const file = paths[index]!;
+      if (syntheticInode(await lstat(file, { bigint: true }))) {
+        await operations.undo(id);
+        outcomes.push('undone-synthetic-inode');
+        await assert.rejects(lstat(file), { code: 'ENOENT' });
+      } else {
+        await assert.rejects(operations.undo(id), /changed since the operation/);
+        assert.equal(
+          await readFile(file, 'utf8'),
+          index === 0 ? 'Complete remount content.' : 'Complete moved content.',
+        );
+        outcomes.push('refused-stable-inode');
+      }
+    }
+    lifetimes.remount = {
+      before: previous,
+      after: current,
+      creationBefore,
+      creationAfter,
+      outcomes,
+    };
+    console.log(
+      'exFAT: remount Undo respected creation time and the current synthetic-ID requirement: ' +
+        outcomes.join(', '),
+    );
   }
 
   try {
@@ -433,6 +533,7 @@ async function scenario(filesystem: ScenarioFilesystem): Promise<void> {
       await assert.rejects(lstat(failedTarget), { code: 'ENOENT' });
       console.log('failed publication reservation reached the retained Trash adapter: passed');
     }
+    await creationSubstitutions(incoming, copied, moved);
     await temporalFlows(incoming, copied, moved, mounted['dev-entry']);
     for (const name of (await readdir(copied)).filter((name) => name.startsWith('.viewer-')))
       assert.deepEqual(await readdir(path.join(copied, name)), []);

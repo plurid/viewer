@@ -1,3 +1,4 @@
+import { sameCapturedItem } from '../../domain/files/entries';
 import type { CapturedTarget } from '../../domain/automation/actions';
 import { isTourFile } from '../../domain/tours/tour';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -520,7 +521,7 @@ export class AgentBroker {
       for (const file of request.files) {
         await this.authorize(file.path);
         const actual = await entry(file.path);
-        if (actual.identity !== file.identity || (await realpath(actual.parent)) !== directory)
+        if (!sameCapturedItem(actual, file) || (await realpath(actual.parent)) !== directory)
           throw new Error('Selection changed. Ask the agent for a new proposal.');
       }
     } else {

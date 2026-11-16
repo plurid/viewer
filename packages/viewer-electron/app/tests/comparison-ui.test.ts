@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
@@ -29,7 +30,7 @@ const resource = (file: string) =>
     url: `viewer-resource://test/asset/${file.split('/').at(-1)}`,
     entry: { path: file, name: file.split('/').at(-1), mime: 'text/plain' },
   }) as Resource;
-const version = { identity: '1:1', modified: 1, size: 8, sha256: '1'.repeat(64) };
+const version = { identity: temporalIdentity('1:1'), modified: 1, size: 8, sha256: '1'.repeat(64) };
 const viewer = {
   save: vi.fn(async () => {}),
   resource: vi.fn(async (file: string) => resource(file)),

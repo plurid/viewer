@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../../src/domain/files/item-identity';
 /**
  * The fabrication evaluation over the generated evaluation set (tools/playground/samples/
  * fabrication.ts): names read, drawings measured, findings graded and corrections made, then a
@@ -129,7 +130,9 @@ export function evaluateFabrication(
       ...inventory[0]!,
       path: `fixture:${truth.part}/requirements.txt`,
       version: {
-        identity: 'generated:' + createHash('sha256').update(requirement.text).digest('hex'),
+        identity: temporalIdentity(
+          'generated:' + createHash('sha256').update(requirement.text).digest('hex'),
+        ),
         size: Buffer.byteLength(requirement.text),
         modified: 0,
       },

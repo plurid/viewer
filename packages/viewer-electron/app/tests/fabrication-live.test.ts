@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * THE LIVE EVALUATION, offline: its eight jobs hold the problems their truth plants, and the runner,
  * with the network stubbed by replies shaped as Muse Spark's and SAM 3.1's, counts what was found,
@@ -139,7 +140,11 @@ async function drawnText(job: LiveJob, part: string): Promise<string> {
     const file = path.join(pages, `${job.truth.id} ${pdf.name}`);
     await writeFile(file, pdf.bytes);
     const [source] = buildInventory([
-      { path: file, kind: 'drawing', version: { identity: '1:1', size: 1, modified: 1 } },
+      {
+        path: file,
+        kind: 'drawing',
+        version: { identity: temporalIdentity('1:1'), size: 1, modified: 1 },
+      },
     ]);
     const { pages: drawn } = await drawPagesInNode([{ ...source!, sending: 'pages' }]);
     const text = drawn[0]!.text;

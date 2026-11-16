@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { randomUUID } from 'node:crypto';
 import { readFile, writeFile, symlink } from 'node:fs/promises';
 import path from 'node:path';
@@ -21,7 +22,7 @@ const inspection = (
   text = 'supplier,unit,shipping,days\nNorth,42,180,7\n',
 ): InspectionResult => ({
   path: file,
-  version: { identity: '1:2', modified: 1, size: text.length },
+  version: { identity: temporalIdentity('1:2'), modified: 1, size: text.length },
   availability: 'available',
   facts: {},
   evidence: [{ source: 'text', text, anchor: { kind: 'text', line: 1, start: 0, end: 8 } }],

@@ -66,46 +66,64 @@ stats at identity consumers.
 
 macOS FSKit can assign descending synthetic inodes to empty FAT32 files and to empty or newly
 created exFAT files. These identities last one mount or less and can change while untouched. The
-shared rule recognizes a regular-file inode with bit 63 set. HFS+ file IDs are 32-bit and APFS inode
-object IDs are 60-bit, so their real inode IDs cannot enter this range. A distinct temporal identity
-records the unsigned device and regular-file type, without retaining that inode as evidence.
+shared rule recognizes only a regular-file inode in the top 2^32 unsigned values, from `2^64 - 2^32`
+through `2^64 - 1`. It needs no additional filesystem lookup per file. HFS+ file IDs are 32-bit and
+APFS inode object IDs are 60-bit. Real upper-half IDs such as `2^63 + 5` stay exact. An unrelated
+filesystem using the narrow reserved range receives the conservative synthetic-file checks too.
+Folders and links always retain their exact inode, with their type retained for large identities;
+decoding an untyped older record never assumes a regular file.
 
-A retained synthetic identity also matches a later stable inode on the same device, once the type
-and the caller's other evidence agree. This permits Undo after remount. It does not make same-name
-items equal during a collision. Same-moment and temporal identities have separate TypeScript types.
+A synthetic temporal identity records device, regular-file type and creation time. The current item
+must still have a synthetic inode, and its creation time must still match. A stable stand-in is
+refused even when its size and modification time agree. If remount gives a genuine file a stable
+inode, Undo is refused as well and leaves the item in place. This is the conservative consequence of
+retaining that range check. Immediate collision and reservation checks remain exact.
 
-| Check                             | Evidence retained for a synthetic regular file                                                                                                 |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Save text read earlier            | Device, file type, size, modification time and the text hash                                                                                   |
-| Undo a new file                   | Path, device, type, size, dates, mode and the output proof                                                                                     |
-| Undo a move                       | Recorded paths, device, file type, size and modification time                                                                                  |
-| Undo a folder copy                | Relative paths and types, devices, sizes, modification and change times, modes and link targets; non-synthetic descendants retain inode checks |
-| Delayed Replace                   | Device, file type, size, modification and change times                                                                                         |
-| Remove a fully copied move source | Each fingerprint's device, type, size, dates and directory children; the existing final change-time and size check runs before removal         |
-| Keep a saved selection            | Path or one unambiguous candidate, device, type, size, modification and creation times                                                         |
+| Check                                                  | Evidence retained for a synthetic regular file                                                                                                                                    |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Save text read earlier                                 | Device, file type, creation time, size, modification time and the text hash                                                                                                       |
+| Undo a new file                                        | Path, device, type, creation time, size, dates, mode and the output proof                                                                                                         |
+| Undo a move                                            | Recorded paths, device, file type, creation time, size and modification time                                                                                                      |
+| Undo a folder copy                                     | Relative paths and types, devices, creation times of synthetic files, sizes, modification and change times, modes and link targets; non-synthetic descendants retain inode checks |
+| Delayed Replace                                        | Device, file type, creation time, size, modification and change times                                                                                                             |
+| Remove a fully copied move source                      | Each fingerprint's device, type, creation time, size, dates and directory children; the existing final change-time and size check runs before removal                             |
+| Keep a saved selection or confirm a captured selection | Path or one unambiguous candidate, device, type, creation time, size and modification time                                                                                        |
 
-Metadata cannot distinguish a substituted item with exactly the same fallback evidence. This is
-accepted for synthetic inodes, whose previous rounded representation already provided no useful
-inode evidence across time. An exact immediate check remains mandatory wherever ownership, rather
-than a retained version, is required. Native reviewed Trash materializes a fresh exact identity,
-then the helper verifies it and the reviewed content hash inside its coordinated accessor.
+The old rounded representation discarded low inode bits but still refused a stand-in with a stable
+inode. The temporal form preserves that distinction and adds creation time. Modification and change
+time alone are insufficient on these drivers because both can follow a freely set modification date.
+Metadata can still match a different item with exactly the same evidence; it is not a
+content-ownership token. Exact immediate checks remain mandatory for reservation ownership. Native
+reviewed Trash materializes a fresh exact identity, then the helper verifies it and the reviewed
+content hash inside its coordinated accessor.
+
+Moment and temporal identities have required, incompatible TypeScript brands. String conversion,
+interpolation and JSON serialization cannot implicitly construct a temporal field. Boundary schemas
+and explicit constructors read serialized values. As with other TypeScript types, an explicit
+assertion, `any` or unchecked `JSON.parse` can bypass the type system; runtime comparisons still
+validate the identity. The architecture guard covers main, renderer and preload sources, including
+aliases, descriptor stats, bracket reads and destructured variables or parameters.
 
 ## Journal compatibility
 
 Safe integer identities retain the earlier representation. A proof containing only safe identities
 uses the earlier numeric hash layout and omits `proofVersion`, so an older strict reader accepts
-APFS records in that range. A large identity requires a versioned proof. A synthetic descendant's
-relative path is recorded separately, so its inode stays excluded even when remount assigns a stable
-inode. Other descendants keep their own identity checks.
+APFS records in that range. Large identities require a versioned proof. Synthetic identities carry
+creation time in their temporal string; a proof also records its synthetic descendants and marks
+that creation time was hashed. This makes a missing creation-time requirement distinguishable from a
+changed current descendant. Other descendants keep their own identity checks.
 
-Older safe proofs remain readable. Earlier exact version 2 proofs can still validate while their
-recorded inode evidence remains reproducible; they cannot be reconstructed after a synthetic inode
-has changed, because their descendant identities were only hashed. Undo refuses that case. An
-unmarked rounded identity never authorizes Undo: "Cannot undo because this older record does not
-have an exact file identity." Exceeding the proof item limit is reported as changed contents.
+Older records remain readable. A synthetic record or descendant proof lacking creation time cannot
+authorize Undo: "Cannot undo because this older record does not include the file creation time."
+Unmarked rounded identities retain the exact-identity refusal. Safe older proofs and earlier exact
+version 2 proofs without synthetic files remain verifiable. A current safe tree that acquires a
+synthetic empty descendant is reported as changed contents, not as an older record. Exceeding the
+proof item limit also reports changed contents.
 
 Large or synthetic proof records require this format. An older strict reader can set those records
-aside as unreadable on downgrade; safe records keep the earlier layout and their Undo history.
+aside as unreadable on downgrade; safe records keep the earlier layout and their Undo history. A
+saved server pane with an older rounded identity remains loadable: its untrusted pin is discarded,
+the pane restores stopped, and a later explicit start obtains fresh checked folder access.
 
 ## Accepted race and invariant
 

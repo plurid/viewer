@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -26,7 +27,11 @@ it('reapplies saved editing decisions to current authorized media in a new draft
     id: randomUUID(),
     revision: 2,
     sources: [
-      { path: file, version: { identity: 'another-computer', modified: 1, size: 1 }, info },
+      {
+        path: file,
+        version: { identity: temporalIdentity('another-computer'), modified: 1, size: 1 },
+        info,
+      },
     ],
     plan: { kind: 'media', format: 'mp4', segments: [{ source: 0, start: 1, end: 4 }] },
   });

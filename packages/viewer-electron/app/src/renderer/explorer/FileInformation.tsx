@@ -1,3 +1,5 @@
+import { sameIdentity, temporalIdentity } from '../../domain/files/item-identity';
+import { sameCapturedItem } from '../../domain/files/entries';
 import { useEffect, useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files/entries';
@@ -22,16 +24,25 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
   const [reload, setReload] = useState(0);
   const [tagName, setTagName] = useState('');
   const [saved, setSaved] = useState(false);
+  const { path: file, identity, kind } = entry;
+  const synthetic = temporalIdentity(identity, kind, entry.created).includes(':synthetic:file:');
+  const created = synthetic ? entry.created : 0;
+  const modified = synthetic ? entry.modified : 0;
+  const size = synthetic ? entry.size : 0;
   useEffect(() => {
     let active = true;
     setLoading(true);
     setOriginal(undefined);
     setDraft(undefined);
     void window.viewer
-      .fileInformation(entry.path)
-      .then((value) => {
+      .fileInformation(file)
+      .then(async (value) => {
+        const latest = await window.viewer.stat(file);
         if (!active) return;
-        if (value.identity !== entry.identity)
+        if (
+          !sameCapturedItem(latest, { identity, kind, created, modified, size }) ||
+          !sameIdentity(value.identity, latest.identity)
+        )
           throw new Error('This item was replaced. Close Get Info and select it again.');
         setOriginal(value);
         setDraft(value);
@@ -47,7 +58,7 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
     return () => {
       active = false;
     };
-  }, [entry.path, entry.identity, reload]);
+  }, [file, identity, kind, created, modified, size, reload]);
   const changes = original && draft ? informationChanges(original, draft) : {};
   const dirty = Object.keys(changes).length > 0;
   const disabled = busy || loading || !draft?.canEdit;

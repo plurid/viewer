@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, mkdir, writeFile, symlink, realpath } from 'node:fs/promises';
 import path from 'node:path';
@@ -20,7 +21,7 @@ const description = (joint = '<axis xyz="0 0 1"/>', type = 'revolute') => `<robo
 </robot>`;
 const inspection = (text: string, file = '/arm.urdf'): InspectionResult => ({
   path: file,
-  version: { identity: 'fixture', modified: 1, size: Buffer.byteLength(text) },
+  version: { identity: temporalIdentity('fixture'), modified: 1, size: Buffer.byteLength(text) },
   availability: 'available',
   facts: {},
   evidence: [{ source: 'text', text }],

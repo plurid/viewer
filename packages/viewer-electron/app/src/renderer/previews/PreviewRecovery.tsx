@@ -1,3 +1,4 @@
+import { sameCapturedItem } from '../../domain/files/entries';
 import { useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import { renamedSibling } from '../../domain/previews/recovery';
@@ -40,7 +41,7 @@ export function PreviewRecovery({
                       'No unique renamed file was found in this folder. Use Locate file to choose its new path.',
                     );
                   const latest = await window.viewer.stat(found.path);
-                  if (latest.identity !== entry.identity)
+                  if (!sameCapturedItem(latest, entry))
                     throw new Error('The found file changed. Check again.');
                   await locate(latest);
                 })

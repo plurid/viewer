@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { expect, it, vi } from 'vitest';
 import type { ViewerAPI } from '../src/domain/contracts';
 import type { MediaDraft } from '../src/domain/media/documents';
@@ -12,7 +13,7 @@ function fixture() {
     sources: [
       {
         path: '/fixture/movie.mp4',
-        version: { identity: 'fixture:1', modified: 1, size: 1 },
+        version: { identity: temporalIdentity('fixture:1'), modified: 1, size: 1 },
         info: {
           duration: 10,
           extension: 'mp4',

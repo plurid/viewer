@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../../src/domain/files/item-identity';
 /** Deterministic host workflow qualification. Fixture HTML is not attributed to a model. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -64,7 +65,11 @@ const seedCanvas = async (html: string, title: string, sourceFile?: string) => {
     const text = await readFile(sourceFile, 'utf8');
     const attached = await service.source(1, initial.id, revision, {
       path: sourceFile,
-      version: { identity: 'fixture-reply', modified: 1, size: Buffer.byteLength(text) },
+      version: {
+        identity: temporalIdentity('fixture-reply'),
+        modified: 1,
+        size: Buffer.byteLength(text),
+      },
       availability: 'available',
       facts: {},
       coverage: { content: 'complete' },

@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -59,7 +60,7 @@ describe('append-only operation log', () => {
       {
         from: path.join(root, 'out', 'a'),
         to: path.join(root, 'a'),
-        identity: '1:1',
+        identity: temporalIdentity('1:1'),
         size: 0,
         modified: 0,
       },

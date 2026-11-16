@@ -112,24 +112,31 @@ Viewer compares device and inode as exact unsigned 64-bit values from a single s
 when Node reports an inode as a negative BigInt.
 
 On macOS FSKit, empty files on FAT32 and empty or newly created files on exFAT can receive synthetic
-inode numbers that last one mount or less. For checks across time, Viewer uses their device and
-regular-file type plus the evidence already checked by the operation: size and dates, text hashes,
-output proofs and folder contents. A proof records which descendants had synthetic identities, so
-Undo still verifies them after remount. Immediate collision and reservation checks retain exact
-inodes. The shared rule is the unsigned upper half of regular-file inode numbers; real APFS and HFS+
-inode IDs cannot enter that range.
+inode numbers that last one mount or less. The shared rule uses only regular files with an unsigned
+inode in the top 2^32 values. Real upper-half IDs below that range stay exact, and folders and links
+keep their exact identity at every value. Real APFS and HFS+ inode IDs cannot enter the synthetic
+range.
 
-For a text save, the text hash also binds the bytes read earlier. Replace keeps its size,
-modification-time and change-time checks. A cross-volume move verifies every copied source and its
-folder children before the existing source-removal checks. Saved selections keep only the same path
-or one unambiguous match with the same type, size, modification and creation times. Metadata can
-still match a different item with identical values when a synthetic inode supplies no durable
-identity evidence.
+Across time, a synthetic file must remain in that range on the same device, keep its regular-file
+type and creation time, and satisfy the operation's other evidence. Text saves also compare size,
+modification time and the text hash. Replace checks size, modification time and change time. Undo
+checks its recorded path, metadata and output proof; proofs include the creation time of each
+synthetic descendant. Moves verify copied sources, their dates and their folder children before the
+existing source-removal checks. Selections keep the same path or one unambiguous candidate with the
+same type, creation time, size and modification time. A captured action, plan, agent proposal or Git
+selection uses that same temporal comparison, with all its existing authority checks.
+
+The earlier rounded form still rejected a stable-ID stand-in. Viewer keeps that check and adds
+creation time because modification and change time can both be freely set on these drivers. If a
+remount assigns a stable ID to a genuine file, Undo refuses and keeps it in place. Immediate
+collision and reservation checks always retain exact inodes. Metadata can still match a different
+item with identical values; it does not prove ownership of a reservation.
 
 Safe proofs retain the earlier numeric layout with no version field, so an older build accepts those
 records on downgrade. Proofs needing large identities use the newer layout; an older strict reader
-can set those records aside. Old exact proofs that already hashed a synthetic inode cannot be
-reconstructed after it changes, so Undo refuses them. The
+can set those records aside. Older synthetic records without creation time remain readable but
+cannot authorize Undo. A workspace with an older rounded server-pane identity also remains readable;
+Viewer discards that untrusted pin and restores the server stopped. The
 [decision](../adr/0017-publication-without-exclusive-rename.md) records these compatibility limits.
 
 After a failed rename, Viewer first moves whatever is at the final name into a random hidden

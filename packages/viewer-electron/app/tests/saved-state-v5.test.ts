@@ -36,6 +36,21 @@ const state = (version: number, panes: unknown[]) => ({
 it('uses the current plane format', () => {
   expect(CURRENT_STATE_VERSION).toBe(12);
 });
+it('loads a legacy rounded server pin without losing the workspace and omits that pin on save', async () => {
+  const storage = new Storage(path.join(root, 'Legacy server state.json'));
+  const original = state(CURRENT_STATE_VERSION, [
+    { id: 'server', type: 'server', path: root, sourceIdentity: '12:18446744073709552000' },
+    { id: 'preview', type: 'preview', path: path.join(root, 'Kept.txt') },
+  ]);
+  await writeFile(storage.file, JSON.stringify(original), { flag: 'wx' });
+  const loaded = await storage.load();
+  expect(loaded.recovery).toBeUndefined();
+  expect(loaded.state?.workspaces[0]?.panes).toHaveLength(2);
+  expect(loaded.state?.workspaces[0]?.panes[0]).toMatchObject({ id: 'server', path: root });
+  expect(loaded.state?.workspaces[0]?.panes[0]).toHaveProperty('sourceIdentity', undefined);
+  await storage.save(loaded.state!);
+  expect(await readFile(storage.file, 'utf8')).not.toContain('18446744073709552000');
+});
 it('saves a server pane with an exact large folder identity', async () => {
   const value = stateSchema.parse(
     state(CURRENT_STATE_VERSION, [

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
@@ -26,7 +27,7 @@ it('mounts with the real store, saves range edits and keeps them when an editor 
     sources: [
       {
         path: '/fixture/movie.mp4',
-        version: { identity: '1:2', modified: 1, size: 3 },
+        version: { identity: temporalIdentity('1:2'), modified: 1, size: 3 },
         info: {
           duration: 5,
           extension: 'mp4',

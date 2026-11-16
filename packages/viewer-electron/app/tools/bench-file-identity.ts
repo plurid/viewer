@@ -11,7 +11,7 @@ import { performance } from 'node:perf_hooks';
 import { fileStats } from '../src/desktop/files/stats';
 import type { FileStats } from '../src/desktop/files/stats';
 import { entry, list } from '../src/desktop/files/filesystem';
-import { indexEntries } from '../src/domain/files/entries';
+import { indexEntries, reconcileSelection } from '../src/domain/files/entries';
 import { temporaryRoot, adoptRetainedNativeFixture } from './temporary';
 import type * as StatsModule from '../src/desktop/files/stats';
 import type * as FileSystemModule from '../src/desktop/files/filesystem';
@@ -137,17 +137,48 @@ for (let pass = 0; pass < 7; pass++) {
   assert.equal(previousEntries.indexEntries(entries).paths.size, entries.length);
   previousIndexes.push(performance.now() - previousStart);
 }
+const selected = entries.slice(0, 20000);
+const selectedPaths = selected.map((item) => item.path);
+const refreshed = indexEntries(selected.map((item) => ({ ...item })));
+const refreshes: number[] = [];
+const previousRefreshes: number[] = [];
+for (let pass = 0; pass < 12; pass++) {
+  const cache = new Map(selected.map((item) => [item.path, item]));
+  const previousCache = new Map(cache);
+  const started = performance.now();
+  assert.equal(reconcileSelection(selectedPaths, cache, folder, refreshed).length, selected.length);
+  const elapsed = performance.now() - started;
+  const previousStart = performance.now();
+  assert.equal(
+    previousEntries.reconcileSelection(selectedPaths, previousCache, folder, refreshed).length,
+    selected.length,
+  );
+  if (pass >= 3) {
+    refreshes.push(elapsed);
+    previousRefreshes.push(performance.now() - previousStart);
+  }
+}
 const result = {
   baseline,
   conversionMicroseconds: median(costs),
   listing20000Milliseconds: median(listings),
   retainedStatsBytes,
   index100000Milliseconds: median(indexes),
+  selectAllRefresh20000Milliseconds: median(refreshes),
   controls: {
     previousListingMilliseconds: median(previousListings),
     previousIndexMilliseconds: median(previousIndexes),
+    previousRefresh20000Milliseconds: median(previousRefreshes),
   },
-  samples: { costs, listings, indexes, previousListings, previousIndexes },
+  samples: {
+    costs,
+    listings,
+    indexes,
+    previousListings,
+    previousIndexes,
+    refreshes,
+    previousRefreshes,
+  },
   method:
     'Warm filesystem.list over 20,000 real files; retained snapshots include array storage and unique inode BigInts; indexEntries over 100,000 distinct rows.',
 };

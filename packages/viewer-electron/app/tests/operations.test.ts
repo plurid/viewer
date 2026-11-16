@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import type * as FileSystemModule from 'node:fs/promises';
 import type * as MacFilesModule from '../src/desktop/native/macos-files';
 import type * as OperationJournalModule from '../src/desktop/operations/operation-journal';
@@ -971,7 +972,7 @@ describe('replace safety', () => {
         expectedSources: [
           {
             path: path.join(root, 'elsewhere.txt'),
-            version: { identity: '1:1', modified: 0, size: 0 },
+            version: { identity: temporalIdentity('1:1'), modified: 0, size: 0 },
           },
         ],
       }),
@@ -1539,7 +1540,11 @@ describe('an item from start to finish', () => {
       .map(({ intent, durable, present }) => ({ intent, durable, present }));
   const version = async (file: string) => {
     const info = await lstat(file);
-    return { identity: `${info.dev}:${info.ino}`, modified: info.mtimeMs, size: info.size };
+    return {
+      identity: temporalIdentity(`${info.dev}:${info.ino}`),
+      modified: info.mtimeMs,
+      size: info.size,
+    };
   };
   /** Each job's Undo steps, as a restart reads them. */
   async function undoSteps(): Promise<Map<string, OperationReceipt['undo']>> {

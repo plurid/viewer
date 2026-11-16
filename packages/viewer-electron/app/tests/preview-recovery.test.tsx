@@ -1,3 +1,4 @@
+import { itemIdentity } from '../src/domain/files/item-identity';
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -51,4 +52,34 @@ it('revalidates a renamed sibling before attaching it and leaves recovery availa
   fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
   expect(retry).toHaveBeenCalledOnce();
   expect(screen.getByRole('status').textContent).toContain('last loaded version');
+});
+
+it('revalidates synthetic creation time when attaching a recovered preview', async () => {
+  const captured = {
+    ...source,
+    identity: itemIdentity({ dev: 1n, ino: -1n }),
+    created: 1,
+    modified: 2,
+    size: 0,
+  };
+  const found = {
+    ...captured,
+    path: '/fixture/New.pdf',
+    identity: itemIdentity({ dev: 1n, ino: -2n }),
+  };
+  const latest = { ...found, identity: itemIdentity({ dev: 1n, ino: -3n }) };
+  const locate = vi.fn();
+  Object.assign(window, {
+    viewer: { list: vi.fn(async () => ({ entries: [found] })), stat: vi.fn(async () => latest) },
+  });
+  render(
+    <PreviewRecovery path={captured.path} entry={captured} retry={() => {}} locate={locate} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Find renamed file' }));
+  await waitFor(() => expect(locate).toHaveBeenCalledWith(latest));
+  locate.mockClear();
+  window.viewer.stat = vi.fn(async () => ({ ...latest, created: 3 }));
+  fireEvent.click(screen.getByRole('button', { name: 'Find renamed file' }));
+  await screen.findByText('The found file changed. Check again.');
+  expect(locate).not.toHaveBeenCalled();
 });

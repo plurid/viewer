@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * WHAT A CHECK READS: files only as the version listed, rendered pages checked and bounded, photos
  * re-encoded small and without their metadata, and a request read without its addresses.
@@ -24,7 +25,7 @@ import { jobDrawing, jobRequest } from '../tools/playground/samples/fabrication'
 import { temporaryRoot } from '../tools/temporary';
 import { jpeg } from './fabrication-fixtures';
 
-const version = { identity: '1:2', modified: 1, size: 1 };
+const version = { identity: temporalIdentity('1:2'), modified: 1, size: 1 };
 const page = (patch: Partial<RenderedPage> = {}): RenderedPage => ({
   ref: 'S2',
   version,

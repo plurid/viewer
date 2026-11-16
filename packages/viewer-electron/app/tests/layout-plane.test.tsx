@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * The Layout plane: it reads the selection, opens in the mode the files suggest with the best
  * layout, offers other modes and candidates, and saves exactly the plan its preview draws.
@@ -76,7 +77,7 @@ const inspection = (path: string): InspectionResult => {
   const [width, height] = photos[path]!.stored;
   return {
     path,
-    version: { identity: 'id:' + path, modified: 1, size: 1000 },
+    version: { identity: temporalIdentity('id:' + path), modified: 1, size: 1000 },
     availability: 'available',
     facts: {
       width: { value: width, unit: 'px', source: 'image header' },
@@ -187,7 +188,7 @@ describe('the Layout plane', () => {
       Object.keys(photos).map((path) => ({
         path,
         version: {
-          identity: 'id:' + path.split('/').at(-1),
+          identity: temporalIdentity('id:' + path.split('/').at(-1)),
           modified: Date.UTC(2026, 9, 21, 12),
           size: 1000,
         },

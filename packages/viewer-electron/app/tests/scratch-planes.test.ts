@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * Scratch planes and unsaved text: planes of text kept in the profile until saved or
  * discarded, the close prompt that asks first, and the recovery of text no plane holds.
@@ -45,9 +46,14 @@ const viewer = {
   textPrompt: vi.fn(async (): Promise<'save' | 'discard' | 'cancel'> => 'cancel'),
   textSaveAs: vi.fn(async () => ({
     file: '/fixtures/Desktop/Untitled 1.txt',
-    version: { identity: '1:2', modified: 1, size: 5, sha256: '0'.repeat(64) },
+    version: { identity: temporalIdentity('1:2'), modified: 1, size: 5, sha256: '0'.repeat(64) },
   })),
-  textSave: vi.fn(async () => ({ identity: '1:2', modified: 2, size: 5, sha256: '1'.repeat(64) })),
+  textSave: vi.fn(async () => ({
+    identity: temporalIdentity('1:2'),
+    modified: 2,
+    size: 5,
+    sha256: '1'.repeat(64),
+  })),
 };
 beforeEach(() => {
   vi.useFakeTimers();
@@ -184,7 +190,12 @@ describe('closing planes with unsaved text', () => {
   });
   it("saves a file's unsaved edits over the version they were made on", async () => {
     const pane = addPane('/fixtures/notes.txt', 'preview', true);
-    const base = { identity: '1:1', modified: 1, size: 3, sha256: 'a'.repeat(64) };
+    const base = {
+      identity: temporalIdentity('1:1'),
+      modified: 1,
+      size: 3,
+      sha256: 'a'.repeat(64),
+    };
     keepBuffer({
       id: '0b6f3a52-0a8e-4c7e-8d0f-58f3f3b7f1c2',
       kind: 'file',

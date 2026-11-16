@@ -5,7 +5,6 @@ import {
   itemIdentity,
   versionIdentity,
   matchesVersionIdentity,
-  sameTemporalIdentity,
   temporalIdentity,
 } from '../../domain/files/item-identity';
 import type { TemporalIdentity } from '../../domain/files/item-identity';
@@ -83,6 +82,7 @@ type BackingItem = {
   file: string;
   root: TrashRoot;
   rootIdentity: string;
+  observedIdentity: string;
   version: RetainedItem;
   item: TrashItem;
   parents: BackingItem[];
@@ -425,6 +425,7 @@ export class Trash {
       file,
       root,
       rootIdentity,
+      observedIdentity: identity(info),
       item,
       parents,
       version: {
@@ -624,7 +625,7 @@ export class Trash {
             name,
             ...(receipt &&
             (receipt.identity === identity(info) ||
-              (matchesVersionIdentity(info, receipt.identity) &&
+              (matchesVersionIdentity(info, temporalIdentity(receipt.identity)) &&
                 receipt.size === info.size &&
                 receipt.modified === info.mtimeMs))
               ? { originalPath: receipt.originalPath }
@@ -696,12 +697,7 @@ export class Trash {
         const date = byPath.get(backing.file);
         const added =
           date &&
-          sameTemporalIdentity(
-            temporalIdentity(nativeItemIdentity(date.identity) ?? ''),
-            backing.version.identity,
-            'file',
-            'file',
-          ) &&
+          nativeItemIdentity(date.identity) === backing.observedIdentity &&
           date.size === backing.version.size &&
           Math.abs(date.modified - backing.version.modified) < 0.01 &&
           typeof date.added === 'number' &&

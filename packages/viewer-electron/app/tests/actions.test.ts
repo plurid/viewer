@@ -1,3 +1,5 @@
+import * as fileSystem from '../src/desktop/files/filesystem';
+import { itemIdentity } from '../src/domain/files/item-identity';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -191,6 +193,29 @@ async function refuses(work: Promise<unknown>, message: string): Promise<void> {
   await expect(work).rejects.toHaveProperty('message', message);
 }
 describe('reviewed file action transactions', () => {
+  it('applies a captured plan after its synthetic file IDs change', async () => {
+    let phase = 0n;
+    const original = fileSystem.entry;
+    const probe = vi.spyOn(fileSystem, 'entry').mockImplementation(async (file) => {
+      const current = await original(file);
+      if (!file.startsWith(files) || current.kind !== 'file') return current;
+      const [dev, ino] = current.identity.split(':');
+      return {
+        ...current,
+        identity: itemIdentity({ dev: BigInt(dev!), ino: -(BigInt(ino!) % 1000000n) - 1n - phase }),
+      };
+    });
+    try {
+      const plan = await batch();
+      phase = 1000000n;
+      await planner.apply(approve(plan));
+      expect(await readFile(at('New A.txt'), 'utf8')).toBe('original A');
+      expect(await readFile(at('New B.txt'), 'utf8')).toBe('original B');
+    } finally {
+      probe.mockRestore();
+    }
+  });
+
   it('cancels a queued agent recipe on global withdrawal without cancelling a user recipe', async () => {
     let finish!: () => void;
     const gate = new Promise<void>((resolve) => {

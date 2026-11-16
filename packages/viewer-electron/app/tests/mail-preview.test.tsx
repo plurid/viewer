@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import MailPreview from '../src/renderer/previews/modules/MailPreview';
@@ -288,7 +289,10 @@ describe('saving attachments from the preview host', () => {
         name,
         transform: { kind: 'mail-attachment', part },
         expectedSources: [
-          { path: message.path, version: { identity: '1:42', modified: 1700, size: 4096 } },
+          {
+            path: message.path,
+            version: { identity: temporalIdentity('1:42'), modified: 1700, size: 4096 },
+          },
         ],
       })),
     );

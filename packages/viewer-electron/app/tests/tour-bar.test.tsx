@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * THE TOUR BAR: this stop's caption and where it is, how far along, the finding's grade, what is
  * not as recorded, and Previous, Pause, Next and Stop with their keys.
@@ -26,7 +27,7 @@ import {
   tourDraft,
 } from '../src/renderer/workspace/tours/recorder';
 
-const version = { identity: '1:10', modified: 1_761_800_000_000, size: 1000 };
+const version = { identity: temporalIdentity('1:10'), modified: 1_761_800_000_000, size: 1000 };
 const file = (path: string, size = 1000): FileEntry => ({
   path,
   name: path.split('/').at(-1)!,

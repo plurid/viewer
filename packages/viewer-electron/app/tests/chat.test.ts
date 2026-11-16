@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import {
   chmod,
   mkdir,
@@ -374,7 +375,7 @@ describe('quoted conversations and canvases', () => {
     await writeFile(path.join(root, 'context', 'part.stl'), mesh);
     inspect.mockResolvedValue({
       path: file,
-      version: { identity: 'fixture', modified: 1, size: model.length },
+      version: { identity: temporalIdentity('fixture'), modified: 1, size: model.length },
       availability: 'available',
       facts: {},
       evidence: [{ source: 'text', text: model }],
@@ -407,7 +408,7 @@ describe('quoted conversations and canvases', () => {
     await writeFile(path.join(root, 'context', 'part.stl'), Buffer.alloc(134));
     inspect.mockResolvedValue({
       path: file,
-      version: { identity: 'fixture', modified: 1, size: model.length },
+      version: { identity: temporalIdentity('fixture'), modified: 1, size: model.length },
       availability: 'available',
       facts: {},
       evidence: [{ source: 'text', text: model }],
@@ -432,7 +433,7 @@ describe('quoted conversations and canvases', () => {
     const file = path.join(root, 'context', 'notes.txt');
     inspect.mockResolvedValue({
       path: file,
-      version: { identity: 'a', modified: 1, size: 16 },
+      version: { identity: temporalIdentity('a'), modified: 1, size: 16 },
       availability: 'available',
       facts: {},
       evidence: [{ source: 'text', text: 'Original content' }],

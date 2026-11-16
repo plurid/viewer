@@ -143,6 +143,7 @@ export function adaptMacFiles(native: NativeFileBindings): MacFiles {
         kind: identityKind(info.mode),
         modified: info.mtimeMs,
         size: info.size,
+        created: info.birthtimeMs,
       });
       if (!sameSourceVersion(current, expected.version))
         throw new Error('The file changed after confirmation. It was preserved.');

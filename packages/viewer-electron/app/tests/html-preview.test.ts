@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
@@ -17,7 +18,7 @@ const capabilityID = (sequence: number) =>
   `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
 const buffers = new Map<string, TextBuffer>();
 const version = (n: number): TextVersion => ({
-  identity: '1:1',
+  identity: temporalIdentity('1:1'),
   modified: n,
   size: original.length,
   sha256: String(n).repeat(64),

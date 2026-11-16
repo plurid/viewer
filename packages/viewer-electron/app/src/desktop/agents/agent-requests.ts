@@ -1,3 +1,4 @@
+import { sameCapturedItem } from '../../domain/files/entries';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -292,7 +293,7 @@ export class AgentRequests {
       // what the item is, read from the disk: the selection's `directory` came from the window,
       // so a folder sent as a file was listed, and approved, as one path
       const actual = await entry(file.path);
-      if (actual.identity !== file.identity)
+      if (!sameCapturedItem(actual, file))
         throw new Error('Selection changed. Ask the agent for a new proposal.');
       if (!actual.directory) {
         lines.push(file.path);
@@ -544,7 +545,7 @@ export class AgentRequests {
           for (const file of proposal.target!.selection) {
             const current = await entry(file.path);
             if (
-              current.identity !== file.identity ||
+              !sameCapturedItem(current, file) ||
               (resolved === 'trash' &&
                 !sameSourceVersion(sourceVersion(current), sourceVersion(file)))
             )

@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { randomUUID } from 'node:crypto';
 import { symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -59,7 +60,7 @@ describe('generated tool host', () => {
     const source = sourceSnapshot({
       path: '/project/model.urdf',
       availability: 'available',
-      version: { identity: 'fixture', modified: 1, size: text.length },
+      version: { identity: temporalIdentity('fixture'), modified: 1, size: text.length },
       facts: {},
       evidence: [{ source: 'text', text }],
       coverage: { content: 'complete' },

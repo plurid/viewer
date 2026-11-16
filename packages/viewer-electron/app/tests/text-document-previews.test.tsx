@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * Notebooks, calendars and contacts, and subtitles render as documents from their text, keep a
  * Source view of that text, and fall back to the text view for content they do not read.
@@ -234,7 +235,7 @@ describe('subtitles preview', () => {
     const found = context('episode.srt', srt);
     found.evidence = {
       path: found.resource.entry.path,
-      version: { size: srt.length, modified: 1, identity: '1:1' },
+      version: { size: srt.length, modified: 1, identity: temporalIdentity('1:1') },
       anchor: { kind: 'text', line: 7, start: 0, end: 7 },
       quote: 'General Kenobi',
     };

@@ -2,7 +2,6 @@ import {
   itemIdentity,
   versionIdentity,
   syntheticInode,
-  syntheticVersionIdentity,
   temporalIdentity,
   legacyIdentityParts,
 } from '../../domain/files/item-identity';
@@ -58,6 +57,7 @@ export const undoStepSchema = z
     proof: z.string().length(64).optional(),
     proofVersion: z.literal(2).optional(),
     proofSynthetic: z.array(z.string().max(32768)).max(10000).optional(),
+    proofBirthtime: z.literal(true).optional(),
     trash: z.boolean().optional(),
     bookmark: z.string().min(1).max(65536).optional(),
     directory: z.boolean().optional(),
@@ -172,13 +172,14 @@ export const operationJournal = (dataPath: string) =>
 /** The most items an output may hold for Undo to remove it. */
 export const outputProofLimit = 10000;
 export type OutputProofVersion = 1 | 2;
-export type ProofFailure = 'limit' | 'legacy-identity';
+export type ProofFailure = 'limit' | 'legacy-identity' | 'changed';
 export interface OutputEvidence {
   proof?: string;
   proofVersion?: 2;
   failure?: ProofFailure;
   exactProof?: string;
   proofSynthetic?: string[];
+  proofBirthtime?: true;
 }
 
 /** Safe trees retain the earlier byte layout. Large identities need a versioned proof; synthetic
@@ -187,9 +188,10 @@ export async function outputEvidence(
   root: string,
   version?: OutputProofVersion,
   proofSynthetic?: readonly string[],
+  proofBirthtime?: true,
 ): Promise<OutputEvidence> {
   const temporal = createHash('sha256');
-  const exact = version === 2 ? createHash('sha256') : undefined;
+  const exact = version === 2 && !proofBirthtime ? createHash('sha256') : undefined;
   let large = false;
   const synthetic = new Set(proofSynthetic);
   const recordedSynthetic: string[] = [];
@@ -202,10 +204,9 @@ export async function outputEvidence(
     const info = await lstat(file);
     const previous = legacyIdentityParts(info);
     if (!previous) large = true;
-    const unstable =
-      proofSynthetic === undefined
-        ? info.isFile() && syntheticInode(info)
-        : synthetic.has(relative);
+    const unstable = info.isFile() && syntheticInode(info);
+    if (version === 2 && unstable && !proofBirthtime) return { failure: 'legacy-identity' };
+    if (synthetic.has(relative) && !unstable) return { failure: 'changed' };
     if (unstable) {
       recordedSynthetic.push(relative);
       large = true;
@@ -220,7 +221,7 @@ export async function outputEvidence(
     temporal.update(
       JSON.stringify([
         relative,
-        ...(unstable ? [syntheticVersionIdentity(info)] : (previous ?? [versionIdentity(info)])),
+        ...(unstable ? [versionIdentity(info)] : (previous ?? [versionIdentity(info)])),
         ...metadata,
       ]),
     );
@@ -229,13 +230,15 @@ export async function outputEvidence(
       for (const name of (await readdir(file)).sort().reverse())
         queue.push(path.join(relative, name));
   }
-  if (version === 1 && large) return { failure: 'legacy-identity' };
+  if (version === 1 && large) return { failure: 'changed' };
   if (version === 2 || large)
     return {
       proof: temporal.digest('hex'),
       proofVersion: 2,
       exactProof: exact?.digest('hex'),
-      ...(recordedSynthetic.length ? { proofSynthetic: recordedSynthetic } : {}),
+      ...(recordedSynthetic.length
+        ? { proofSynthetic: recordedSynthetic, proofBirthtime: true }
+        : {}),
     };
   return { proof: temporal.digest('hex') };
 }
@@ -252,8 +255,9 @@ export async function matchesOutputProof(
   proof: string,
   version?: OutputProofVersion,
   proofSynthetic?: readonly string[],
+  proofBirthtime?: true,
 ): Promise<{ matches: boolean; failure?: ProofFailure }> {
-  const current = await outputEvidence(root, version ?? 1, proofSynthetic);
+  const current = await outputEvidence(root, version ?? 1, proofSynthetic, proofBirthtime);
   return {
     matches: current.proof === proof || (version === 2 && current.exactProof === proof),
     failure: current.failure,

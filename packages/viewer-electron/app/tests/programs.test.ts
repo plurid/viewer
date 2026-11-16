@@ -1,3 +1,5 @@
+import * as fileSystem from '../src/desktop/files/filesystem';
+import { itemIdentity } from '../src/domain/files/item-identity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -55,6 +57,50 @@ afterEach(async () => {
 });
 
 describe('literal command execution', () => {
+  it.each([false, true])(
+    'revalidates a synthetic captured selection before launch (substituted: %s)',
+    async (substituted) => {
+      const file = path.join(root, 'Empty.txt');
+      await fs.writeFile(file, '', { flag: 'wx' });
+      const captured = { ...(await entry(file)), identity: itemIdentity({ dev: 1n, ino: -1n }) };
+      const original = fileSystem.entry;
+      const probe = vi.spyOn(fileSystem, 'entry').mockImplementation(async (name) =>
+        name === file
+          ? {
+              ...captured,
+              identity: itemIdentity({ dev: 1n, ino: -2n }),
+              created: captured.created + (substituted ? 1 : 0),
+            }
+          : original(name),
+      );
+      const action = command({
+        kind: 'executable',
+        executable: process.execPath,
+        args: ['-e', ''],
+        perItem: false,
+      });
+      config.customActions = [action];
+      const executions = new Executions(
+        () => config,
+        () => {},
+        undefined,
+        async () => {},
+      );
+      cleanup.push(() => executions.close());
+      try {
+        const selected = { ...target(), selection: [captured] };
+        if (substituted)
+          await expect(executions.start(action.id, selected)).rejects.toThrow('Selection changed');
+        else {
+          await executions.start(action.id, selected);
+          await vi.waitFor(() => expect(executions.list()[0]?.status).toBe('completed'));
+        }
+      } finally {
+        probe.mockRestore();
+      }
+    },
+  );
+
   it('keeps parameter substitutions literal and enforces folder scope in the service', async () => {
     const literal = '$(touch should-not-exist) {directory} "quotes"';
     const action = command({

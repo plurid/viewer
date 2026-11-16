@@ -1,7 +1,9 @@
 import type { TemporalIdentity } from '../../domain/files/item-identity';
 import {
   olderIdentityMessage,
+  olderCreationMessage,
   readTemporalIdentity,
+  missingTemporalEvidence,
   sameDevice,
   versionIdentity,
   matchesVersionIdentity,
@@ -85,6 +87,7 @@ interface UndoStep {
   proof?: string;
   proofVersion?: 2;
   proofSynthetic?: string[];
+  proofBirthtime?: true;
   trash?: boolean;
   bookmark?: string;
   directory?: boolean;
@@ -342,8 +345,15 @@ export class Operations {
       current.size !== step.size
     )
       return false;
-    return (await matchesOutputProof(file, step.proof!, step.proofVersion, step.proofSynthetic))
-      .matches;
+    return (
+      await matchesOutputProof(
+        file,
+        step.proof!,
+        step.proofVersion,
+        step.proofSynthetic,
+        step.proofBirthtime,
+      )
+    ).matches;
   }
   /** Clearing finished notifications preserves receipts, recovery paths and Undo. */
   async dismiss(ids: readonly string[]): Promise<void> {
@@ -714,7 +724,7 @@ export class Operations {
           }
           // Undo moves the saved version to the Trash, then puts back the one it replaced.
           const evidence = await outputEvidence(file);
-          const { proof, proofVersion, proofSynthetic } = evidence;
+          const { proof, proofVersion, proofSynthetic, proofBirthtime } = evidence;
           if (proof) {
             const info = await lstat(file);
             task.undo.push({
@@ -724,6 +734,7 @@ export class Operations {
               proof,
               ...(proofVersion === 2 ? { proofVersion } : {}),
               ...(proofSynthetic ? { proofSynthetic } : {}),
+              ...(proofBirthtime ? { proofBirthtime } : {}),
               identity: versionIdentity(info),
               modified: info.mtimeMs,
               size: info.size,
@@ -909,6 +920,7 @@ export class Operations {
     // Validate the entire undo first, so a known conflict never produces a partial undo.
     for (const step of task.undo) {
       if (!readTemporalIdentity(step.identity)) throw new Error(olderIdentityMessage);
+      if (missingTemporalEvidence(step.identity)) throw new Error(olderCreationMessage);
       await this.withStep(step, async () => {
         const info = await lstat(step.from);
         if (
@@ -922,8 +934,9 @@ export class Operations {
             step.proof,
             step.proofVersion,
             step.proofSynthetic,
+            step.proofBirthtime,
           );
-          if (proof.failure === 'legacy-identity') throw new Error(olderIdentityMessage);
+          if (proof.failure === 'legacy-identity') throw new Error(olderCreationMessage);
           if (!proof.matches)
             throw new Error(
               `Cannot undo: ${step.from} or its contents changed since the operation.`,
@@ -971,6 +984,7 @@ export class Operations {
                   step.proof,
                   step.proofVersion,
                   step.proofSynthetic,
+                  step.proofBirthtime,
                 )
               ).matches
             )
@@ -1084,7 +1098,9 @@ export class Operations {
     if (!receipt) return;
     try {
       await this.receiptAccess(receipt, async () => {
-        const { proof, proofVersion, proofSynthetic } = await outputEvidence(receipt.path);
+        const { proof, proofVersion, proofSynthetic, proofBirthtime } = await outputEvidence(
+          receipt.path,
+        );
         // Too large to prove unchanged, so there is no Undo; said, as a missing bookmark is.
         if (!proof)
           throw new Error(
@@ -1100,6 +1116,7 @@ export class Operations {
           proof,
           ...(proofVersion === 2 ? { proofVersion } : {}),
           ...(proofSynthetic ? { proofSynthetic } : {}),
+          ...(proofBirthtime ? { proofBirthtime } : {}),
           identity: versionIdentity(info),
           modified: info.mtimeMs,
           size: info.size,
@@ -1928,7 +1945,8 @@ export class Operations {
       });
     }
     if (!move && creatingKinds.includes(task.request.kind)) {
-      const { proof, proofVersion, proofSynthetic } = await outputEvidence(destination);
+      const { proof, proofVersion, proofSynthetic, proofBirthtime } =
+        await outputEvidence(destination);
       if (!proof) (task.unproven ??= []).push(destination);
       if (proof) {
         const info = await lstat(destination);
@@ -1939,6 +1957,7 @@ export class Operations {
           proof,
           ...(proofVersion === 2 ? { proofVersion } : {}),
           ...(proofSynthetic ? { proofSynthetic } : {}),
+          ...(proofBirthtime ? { proofBirthtime } : {}),
           identity: versionIdentity(info),
           modified: info.mtimeMs,
           size: info.size,

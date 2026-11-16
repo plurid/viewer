@@ -26,6 +26,27 @@ describe('application module seams', () => {
     expect(violations).toHaveLength(4);
     expect(violations.every((value) => value.reason.includes('BigInt stat'))).toBe(true);
   });
+  it('detects destructured and bracket identity reads in every process project', () => {
+    const app = fileURLToPath(new URL('..', import.meta.url));
+    const files = [
+      'src/desktop/actions/executions.ts',
+      'src/renderer/workspace/agent-navigation.ts',
+      'src/preload.ts',
+    ];
+    const source = [
+      "import type { Stats } from 'node:fs';",
+      'export function probe(info: Stats) {',
+      '  const { dev, ino: inode } = info;',
+      "  return [dev, inode, info['ino']];",
+      '}',
+      'export function helper({ dev, ino }: Stats) { return [dev, ino]; }',
+    ].join('\n');
+    const report = inspectStatIdentity(
+      app,
+      new Map(files.map((file) => [path.join(app, file), source])),
+    );
+    for (const file of files) expect(report.filter((value) => value.file === file)).toHaveLength(5);
+  });
   it('keeps platform adapters out of the domain and native services out of the renderer', async () => {
     const root = fileURLToPath(new URL('../src', import.meta.url));
     const report = await inspectImports(path.resolve(root));

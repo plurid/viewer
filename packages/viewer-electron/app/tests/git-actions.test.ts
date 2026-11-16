@@ -1,3 +1,5 @@
+import * as fileSystem from '../src/desktop/files/filesystem';
+import { itemIdentity } from '../src/domain/files/item-identity';
 import { execFile } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -100,6 +102,28 @@ async function fixture(name = 'repository') {
 }
 
 describe('fixed human Git actions', () => {
+  it('prepares selected staging after a synthetic inode changes without launching it', async () => {
+    const f = await fixture();
+    const file = path.join(f.root, 'Empty.txt');
+    await writeFile(file, '', { flag: 'wx' });
+    const captured = { ...(await entry(file)), identity: itemIdentity({ dev: 1n, ino: -1n }) };
+    f.target.selection = [captured];
+    const original = fileSystem.entry;
+    const probe = vi
+      .spyOn(fileSystem, 'entry')
+      .mockImplementation(async (name) =>
+        name === file
+          ? { ...captured, identity: itemIdentity({ dev: 1n, ino: -2n }) }
+          : original(name),
+      );
+    try {
+      await f.service.start(f.request('stage-selected'), 5);
+      expect(f.launch).toHaveBeenCalledOnce();
+    } finally {
+      probe.mockRestore();
+    }
+  });
+
   it('preserves spaces and embedded newlines in repository paths', async () => {
     const f = await fixture('a repository\nwith spaces');
     const reply = await f.service.start(f.request('status'), 7);

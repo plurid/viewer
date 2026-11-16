@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
   CheckOpening,
@@ -26,7 +27,7 @@ import {
 import { addContentPane } from '../src/renderer/state/panes';
 
 const folder = '/fixtures/Job';
-const version = { identity: '1:2', modified: 1, size: 100 };
+const version = { identity: temporalIdentity('1:2'), modified: 1, size: 100 };
 const opening: CheckOpening = {
   kind: 'opened',
   id: '6f1c2a9e-3b4d-4e5f-8a7b-9c0d1e2f3a4b',

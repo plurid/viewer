@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * TOUR FILES: `<job>.viewer-tour.jsonc`, stops at files inside the tour's folder. Reading one never
  * runs anything; a stop is ready, missing or changed by its file as it is now.
@@ -24,7 +25,11 @@ import {
 import { anchorFromPreviewState, recordedCaption } from '../src/domain/tours/record';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
-const version = { identity: '16777232:90210', modified: 1_761_800_000_000, size: 48_213 };
+const version = {
+  identity: temporalIdentity('16777232:90210'),
+  modified: 1_761_800_000_000,
+  size: 48_213,
+};
 const stop = (change: Partial<TourStop> = {}): TourStop => ({
   id: 'drawing',
   caption: 'The drawing asks for 48 mm between the holes',
@@ -144,7 +149,7 @@ describe('stop states', () => {
     // a copy on another computer: new identity, same size and date (to 2 s)
     expect(
       stopState(stop(), {
-        file: { ...version, identity: '1:5', modified: version.modified + 1500 },
+        file: { ...version, identity: temporalIdentity('1:5'), modified: version.modified + 1500 },
       }),
     ).toBe('ready');
     expect(stopState(stop(), { file: { ...version, size: 48_214 } })).toBe('changed');

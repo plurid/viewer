@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { itemIdentity, temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * A TOUR ON THE REAL ENGINE: Plurid's application (0.0.0-43) mounted as the workspace surface
  * mounts it, its roots from the workspace and placed by `placeRoots`, and Viewer's controller and
@@ -31,7 +32,7 @@ import { placeRoots } from '../src/renderer/workspace/root-placement';
 import { playTour, stopTour, subscribeTour, tourPlayback } from '../src/renderer/workspace/tour';
 import { flattenTree, hostID, surfaceRoutes } from '../src/renderer/workspace/tree';
 
-const version = { identity: '1:2', modified: 1_761_800_000_000, size: 100 };
+const version = { identity: temporalIdentity('1:2'), modified: 1_761_800_000_000, size: 100 };
 const file = (path: string): FileEntry => ({
   path,
   name: path.split('/').at(-1)!,
@@ -40,6 +41,7 @@ const file = (path: string): FileEntry => ({
   kind: 'file',
   directory: false,
   ...version,
+  identity: itemIdentity({ dev: 1n, ino: 2n }),
   created: 1,
   hidden: false,
   mime: 'message/rfc822',

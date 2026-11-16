@@ -1,3 +1,4 @@
+import { sameCapturedItem } from '../../domain/files/entries';
 import { lstat, stat, fileStat } from '../files/stats';
 
 import { versionIdentity } from '../../domain/files/item-identity';
@@ -314,7 +315,7 @@ export class GitActions {
       const selected = path.resolve(captured.path);
       const current = await entry(selected);
       if (
-        current.identity !== captured.identity ||
+        !sameCapturedItem(current, captured) ||
         current.modified !== captured.modified ||
         current.size !== captured.size
       )

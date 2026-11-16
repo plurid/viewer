@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import type * as FramingModule from '../src/renderer/workspace/framing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
@@ -164,7 +165,7 @@ describe('closing a plane returns to its surviving context', () => {
     const view = mount();
     const evidence: SearchEvidence = {
       path: '/fixture/project/source/notes.txt',
-      version: { identity: '1:2', modified: 1, size: 20 },
+      version: { identity: temporalIdentity('1:2'), modified: 1, size: 20 },
       anchor: { kind: 'text', line: 2, start: 0, end: 7 },
       quote: 'Orchard',
       coverage: 'complete',

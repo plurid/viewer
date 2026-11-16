@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { randomUUID } from 'node:crypto';
 import { readFile, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
@@ -143,7 +144,7 @@ async function setup() {
   let doc = await canvases.create(1, randomUUID(), root);
   const bound = await canvases.source(1, doc.id, doc.revision, {
     path: '/test/arm.urdf',
-    version: { identity: 'robot', size: xml.length, modified: 1 },
+    version: { identity: temporalIdentity('robot'), size: xml.length, modified: 1 },
     availability: 'available',
     facts: {},
     evidence: [{ source: 'text', text: xml }],

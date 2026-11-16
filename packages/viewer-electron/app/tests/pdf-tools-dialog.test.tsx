@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { FileEntry, ViewerAPI, OperationJob } from '../src/domain/contracts';
@@ -45,7 +46,7 @@ function setup(operate: ViewerAPI['operate']) {
       cancelJob: vi.fn(async () => {}),
       pdfInspect: vi.fn(async (file) => ({
         pages: file.endsWith('First.pdf') ? 3 : 2,
-        version: { identity: file, modified: 7, size: 100 },
+        version: { identity: temporalIdentity(file), modified: 7, size: 100 },
       })),
       save: vi.fn(async () => {}),
     },
@@ -79,7 +80,7 @@ it('submits the reordered extraction with source versions from inspection and on
     },
     expectedSources: files.map((file) => ({
       path: file.path,
-      version: { identity: file.path, modified: 7, size: 100 },
+      version: { identity: temporalIdentity(file.path), modified: 7, size: 100 },
     })),
   });
 });

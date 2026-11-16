@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -17,6 +18,7 @@ import {
   undoStepSchema,
 } from '../src/desktop/operations/operation-journal';
 import { Resources } from '../src/desktop/previews/resources';
+import { StaticRoot } from '../src/desktop/previews/web/static-root';
 import { Trash } from '../src/desktop/operations/trash';
 import { adaptMacFiles } from '../src/desktop/native/macos-files';
 import { inspectReviewedFile } from '../src/desktop/native/reviewed-file';
@@ -29,12 +31,16 @@ import {
   itemIdentity,
   nativeIdentityArgument,
   olderIdentityMessage,
+  olderCreationMessage,
 } from '../src/domain/files/item-identity';
-import { sameSourceVersion } from '../src/domain/files/inspection';
+import { sameSourceVersion, sourceVersion } from '../src/domain/files/inspection';
 import { indexEntries, reconcileSelection } from '../src/domain/files/entries';
 import { temporaryRoot } from '../tools/temporary';
 
 const inodes = vi.hoisted(() => new Map<bigint, bigint>());
+const substitutedDates = vi.hoisted(
+  () => new Map<bigint, { mtimeNs: bigint; ctimeNs: bigint; birthtimeNs: bigint }>(),
+);
 const interleaving = vi.hoisted(() => ({
   afterRead: undefined as (() => Promise<void>) | undefined,
   afterPublish: undefined as (() => Promise<void>) | undefined,
@@ -77,7 +83,10 @@ vi.mock('electron', () => ({
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof FileSystemModule>();
   const projected = (info: Stats | BigIntStats, file: PathLike) => {
-    const inode = inodes.get(BigInt.asUintN(64, BigInt(info.ino)));
+    const physical = BigInt.asUintN(64, BigInt(info.ino));
+    const dates = substitutedDates.get(physical);
+    if (dates && 'birthtimeNs' in info) Object.assign(info, dates);
+    const inode = inodes.get(physical);
     if (inode !== undefined) {
       if (typeof info.ino === 'bigint') info.ino = inode;
       else info.ino = Number(BigInt.asUintN(64, inode));
@@ -126,6 +135,7 @@ const services: Operations[] = [];
 beforeEach(async () => {
   root = await temporaryRoot('viewer-exact-identity-');
   inodes.clear();
+  substitutedDates.clear();
   interleaving.afterRead = undefined;
   interleaving.afterPublish = undefined;
   interleaving.foreign = '';
@@ -150,6 +160,28 @@ async function highInode(file: string, inode: bigint): Promise<void> {
   const actual = await vi.importActual<typeof FileSystemModule>('node:fs/promises');
   inodes.set(BigInt.asUintN(64, (await actual.lstat(file, { bigint: true })).ino), inode);
 }
+async function substitute(file: string): Promise<void> {
+  const actual = await vi.importActual<typeof FileSystemModule>('node:fs/promises');
+  const before = await actual.lstat(file, { bigint: true });
+  const parent = await actual.lstat(path.dirname(file), { bigint: true });
+  const bytes = await readFile(file);
+  await rename(file, path.join(root, 'Preserved original ' + randomUUID()));
+  await writeFile(file, bytes, { flag: 'wx' });
+  const replacement = await actual.lstat(file, { bigint: true });
+  substitutedDates.set(BigInt.asUintN(64, replacement.ino), {
+    mtimeNs: before.mtimeNs,
+    ctimeNs: before.ctimeNs,
+    birthtimeNs: before.birthtimeNs + 1000000000n,
+  });
+  // The synthetic driver's change time can equal its freely set modification time. Keep
+  // parent metadata equal too, so these cases prove the descendant creation-time check.
+  substitutedDates.set(BigInt.asUintN(64, parent.ino), {
+    mtimeNs: parent.mtimeNs,
+    ctimeNs: parent.ctimeNs,
+    birthtimeNs: parent.birthtimeNs,
+  });
+  await highInode(file, -30n);
+}
 function operations(data?: string): Operations {
   const result = new Operations(
     async (file) => {
@@ -169,6 +201,90 @@ function operations(data?: string): Operations {
 }
 
 describe('exact identity at operation boundaries', () => {
+  it('keeps a large folder server pin in the same exact form as its captured selection', async () => {
+    const folder = path.join(root, 'Server folder');
+    await mkdir(folder);
+    await highInode(folder, (1n << 63n) + 5n);
+    const captured = itemIdentity(await lstat(folder, { bigint: true }));
+    const reader = await StaticRoot.capture(
+      folder,
+      async () => {},
+      { active: 0 },
+      new AbortController().signal,
+      captured,
+    );
+    try {
+      expect(reader.root.requestedIdentity).toBe(captured);
+      await reader.verify();
+    } finally {
+      await reader.close();
+    }
+  });
+  it.each(['copy', 'rename'] as const)(
+    'supports a large real folder identity through %s and Undo',
+    async (kind) => {
+      const folder = path.join(root, 'Folder');
+      const destination = path.join(root, 'Destination');
+      await mkdir(folder);
+      await mkdir(destination);
+      await writeFile(path.join(folder, 'Child.txt'), 'kept child', { flag: 'wx' });
+      await highInode(folder, (1n << 63n) + 5n);
+      const service = operations();
+      const id = service.start(
+        kind === 'copy'
+          ? { kind, sources: [folder], destination }
+          : { kind, sources: [folder], name: 'Renamed folder' },
+      );
+      await service.drained();
+      expect(service.all().find((job) => job.id === id)?.status).toBe('completed');
+      await service.undo(id);
+      expect(await readFile(path.join(folder, 'Child.txt'), 'utf8')).toBe('kept child');
+    },
+  );
+
+  it.each(['copy', 'folder copy', 'move', 'cross-volume move'] as const)(
+    'refuses a stand-in with changed creation time during %s',
+    async (flow) => {
+      const folder = path.join(root, 'Folder');
+      const destination = path.join(root, 'Destination');
+      await mkdir(folder);
+      await mkdir(destination);
+      const source = path.join(folder, 'Child.txt');
+      await writeFile(source, 'same bytes', { flag: 'wx' });
+      await highInode(source, -1n);
+      interleaving.createdSynthetic = true;
+      const copiedFolder = flow === 'folder copy' || flow === 'cross-volume move';
+      const move = flow === 'move' || flow === 'cross-volume move';
+      const service = operations();
+      const removalAttempt = vi.spyOn(removal, 'unlinkVerified');
+      if (flow === 'cross-volume move') {
+        interleaving.foreign = destination;
+        interleaving.afterPublish = async () => {
+          await substitute(source);
+        };
+      }
+      const id = service.start({
+        kind: move ? 'move' : 'copy',
+        sources: [copiedFolder ? folder : source],
+        destination,
+      });
+      await service.drained();
+      if (flow === 'cross-volume move') {
+        const job = service.all().find((job) => job.id === id)!;
+        expect(job.status).toBe('failed');
+        expect(job.errors[0]?.message).toContain('Source changed during the move');
+        expect(removalAttempt).not.toHaveBeenCalled();
+        expect(await readFile(source, 'utf8')).toBe('same bytes');
+      } else {
+        expect(service.all().find((job) => job.id === id)?.status).toBe('completed');
+        const published = path.join(destination, copiedFolder ? 'Folder/Child.txt' : 'Child.txt');
+        await substitute(published);
+        await expect(service.undo(id)).rejects.toThrow('changed since the operation');
+        expect(await readFile(published, 'utf8')).toBe('same bytes');
+      }
+      expect((await readdir(root)).some((name) => name.startsWith('Retained '))).toBe(false);
+    },
+  );
   it('writes safe copy and Trash proofs in the exact layout accepted by the earlier reader', async () => {
     const file = path.join(root, 'Source.txt');
     const destination = path.join(root, 'Destination');
@@ -190,7 +306,11 @@ describe('exact identity at operation boundaries', () => {
       (item) => item.job.id === trashID,
     )!;
     expect(trashReceipt.undo[0]?.trash).toBe(true);
-    const oldReader = undoStepSchema.omit({ proofVersion: true, proofSynthetic: true });
+    const oldReader = undoStepSchema.omit({
+      proofVersion: true,
+      proofSynthetic: true,
+      proofBirthtime: true,
+    });
     for (const step of [...receipt.undo, ...trashReceipt.undo]) {
       expect(step.proofVersion).toBeUndefined();
       expect(step.proofSynthetic).toBeUndefined();
@@ -232,7 +352,7 @@ describe('exact identity at operation boundaries', () => {
           to: '',
           remove: true,
           proof,
-          identity: `${info.dev}:${info.ino}`,
+          identity: temporalIdentity(`${info.dev}:${info.ino}`),
           modified: info.mtimeMs,
           size: info.size,
         },
@@ -240,6 +360,54 @@ describe('exact identity at operation boundaries', () => {
     });
     interleaving.many = folder;
     await expect(operations(data).undo(id)).rejects.toThrow('contents changed');
+  });
+  it.each(['identity', 'descendant proof'] as const)(
+    'reads older synthetic %s evidence and safely refuses Undo',
+    async (legacy) => {
+      const folder = path.join(root, 'Folder');
+      const destination = path.join(root, 'Destination');
+      const data = path.join(root, 'Profile');
+      await mkdir(folder);
+      await mkdir(destination);
+      await writeFile(path.join(folder, 'Empty.txt'), '', { flag: 'wx' });
+      interleaving.createdSynthetic = true;
+      const service = operations(data);
+      const id = service.start({
+        kind: 'copy',
+        sources: [legacy === 'identity' ? path.join(folder, 'Empty.txt') : folder],
+        destination,
+      });
+      await service.drained();
+      expect(service.all().find((job) => job.id === id)?.status).toBe('completed');
+      await service.close();
+      const receipt = (await new OperationLog(data).load()).receipts.find(
+        (item) => item.job.id === id,
+      )!;
+      const step = receipt.undo[0]!;
+      if (legacy === 'identity')
+        step.identity = temporalIdentity(step.identity.slice(0, step.identity.lastIndexOf(':')));
+      else delete step.proofBirthtime;
+      const legacyData = path.join(root, 'Legacy Profile');
+      await new OperationLog(legacyData).record(receipt);
+      await expect(operations(legacyData).undo(id)).rejects.toThrow(olderCreationMessage);
+      expect((await readdir(destination)).length).toBeGreaterThan(0);
+    },
+  );
+
+  it('reports changed contents when a current safe proof acquires a synthetic empty descendant', async () => {
+    const folder = path.join(root, 'Folder');
+    const destination = path.join(root, 'Destination');
+    await mkdir(folder);
+    await mkdir(destination);
+    await writeFile(path.join(folder, 'Child.txt'), 'nonempty', { flag: 'wx' });
+    const service = operations();
+    const id = service.start({ kind: 'copy', sources: [folder], destination });
+    await service.drained();
+    const child = path.join(destination, 'Folder/Child.txt');
+    await writeFile(child, '');
+    await highInode(child, -1n);
+    await expect(service.undo(id)).rejects.toThrow('contents changed');
+    expect((await lstat(child)).size).toBe(0);
   });
 
   it('keeps unreadable entries selected at the same path', async () => {
@@ -311,7 +479,7 @@ describe('exact identity at operation boundaries', () => {
       const snapshot = await trash.list();
       const item = snapshot.items.find((item) => item.name === 'Retained.txt')!;
       expect(item.addedToTrash).toBe(new Date(1700000000000).toISOString());
-      await highInode(file, 42n);
+      await highInode(file, -2n);
       await trash.copyPaths([item.id]);
     } finally {
       trash.close();
@@ -333,13 +501,15 @@ describe('exact identity at operation boundaries', () => {
       expect.objectContaining({ version: expect.objectContaining({ identity: raw }) }),
     );
     expect(raw).toMatch(/:18446744073709551615$/);
-    await highInode(file, 42n);
+    await highInode(file, -2n);
     await adapter.trash(file, 'purpose', reviewed);
     expect(recorded).toHaveBeenLastCalledWith(
       file,
       'purpose',
       expect.objectContaining({
-        version: expect.objectContaining({ identity: raw.slice(0, raw.indexOf(':')) + ':42' }),
+        version: expect.objectContaining({
+          identity: raw.slice(0, raw.indexOf(':')) + ':18446744073709551614',
+        }),
       }),
     );
   });
@@ -354,7 +524,7 @@ describe('exact identity at operation boundaries', () => {
       .update(
         JSON.stringify([
           '',
-          '18446744073709551615:synthetic:file',
+          '18446744073709551615:synthetic:file:' + info.birthtimeMs,
           info.size,
           info.mtimeMs,
           info.ctimeMs,
@@ -380,6 +550,22 @@ describe('exact identity at operation boundaries', () => {
     expect(job.status, JSON.stringify(job.errors)).toBe('completed');
     expect(await readFile(file, 'utf8')).toBe('saved content');
   });
+  it('refuses a text save and source version when only synthetic creation time changed', async () => {
+    const file = path.join(root, 'Empty.txt');
+    await writeFile(file, '', { flag: 'wx' });
+    await highInode(file, -1n);
+    const read = await readText(file);
+    const captured = await entry(file);
+    await substitute(file);
+    expect(sameSourceVersion(sourceVersion(captured), sourceVersion(await entry(file)))).toBe(
+      false,
+    );
+    const { sha256, ...version } = read.version;
+    await expect(
+      operations().writeText(file, 'should stay unsaved', { version, sha256 }),
+    ).rejects.toThrow('The file changed on disk since it was opened.');
+    expect((await lstat(file)).size).toBe(0);
+  });
 
   it('undoes a new empty file after its synthetic inode changes', async () => {
     interleaving.createdSynthetic = true;
@@ -387,7 +573,7 @@ describe('exact identity at operation boundaries', () => {
     const service = operations();
     const job = await service.writeText(file, '');
     expect(job.status).toBe('completed');
-    await highInode(file, 42n);
+    await highInode(file, -2n);
     await service.undo(job.id);
     await expect(lstat(file)).rejects.toMatchObject({ code: 'ENOENT' });
     const retained = (await readdir(root)).find((name) => name.startsWith('Retained '));
@@ -406,7 +592,7 @@ describe('exact identity at operation boundaries', () => {
     const id = service.start({ kind: 'copy', sources: [source], destination });
     await service.drained();
     expect(service.all().find((job) => job.id === id)?.status).toBe('completed');
-    await highInode(path.join(destination, 'Folder/Empty.txt'), 42n);
+    await highInode(path.join(destination, 'Folder/Empty.txt'), -2n);
     await service.undo(id);
     const retained = (await readdir(root)).find((name) => name.startsWith('Retained '));
     expect((await lstat(path.join(root, retained!, 'Empty.txt'))).size).toBe(0);
@@ -533,8 +719,8 @@ describe('exact identity at operation boundaries', () => {
     const receipt = (await new OperationLog(data).load()).receipts.find(
       (item) => item.job.id === id,
     )!;
-    expect(receipt.undo[0]?.identity).toMatch(/:synthetic:file$/);
-    await highInode(path.join(destination, 'report.txt'), 42n);
+    expect(receipt.undo[0]?.identity).toMatch(/:synthetic:file:/);
+    await highInode(path.join(destination, 'report.txt'), -2n);
     const restored = operations(data);
     await restored.undo(id);
     expect(await readFile(source, 'utf8')).toBe('complete');
@@ -575,7 +761,15 @@ describe('exact identity at operation boundaries', () => {
           undoable: true,
         },
         request: { kind: 'move', sources: [original], destination: root },
-        undo: [{ from: current, to: original, identity, modified: info.mtimeMs, size: info.size }],
+        undo: [
+          {
+            from: current,
+            to: original,
+            identity: temporalIdentity(identity),
+            modified: info.mtimeMs,
+            size: info.size,
+          },
+        ],
       };
       if (log) await new OperationLog(data).record(receipt);
       else await operationJournal(data).save({ version: 1, records: [receipt] });
@@ -642,7 +836,7 @@ describe('exact identity at operation boundaries', () => {
             to: '',
             remove: true,
             proof: hash.digest('hex'),
-            identity: `${info.dev}:${info.ino}`,
+            identity: temporalIdentity(`${info.dev}:${info.ino}`),
             modified: info.mtimeMs,
             size: info.size,
           },
@@ -650,7 +844,7 @@ describe('exact identity at operation boundaries', () => {
       });
       const service = operations(data);
       if (rounded) {
-        await expect(service.undo(id)).rejects.toThrow(olderIdentityMessage);
+        await expect(service.undo(id)).rejects.toThrow('contents changed');
         expect(await readFile(child, 'utf8')).toBe('kept content');
       } else {
         await service.undo(id);
@@ -726,10 +920,10 @@ describe('exact identity at operation boundaries', () => {
     >;
     expect(first.identity).toMatch(/:18446744073709551615:u64$/);
     const cache = new Map([[file, first]]);
-    await highInode(file, 42n);
+    await highInode(file, -2n);
     const second = await entry(file);
     expect(reconcileSelection([file], cache, root, indexEntries([second]))).toEqual([file]);
-    const old = { identity: '12:18446744073709552000', modified: 1, size: 0 };
+    const old = { identity: temporalIdentity('12:18446744073709552000'), modified: 1, size: 0 };
     expect(sameSourceVersion(old, old)).toBe(false);
   });
 

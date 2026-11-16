@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -239,7 +240,7 @@ it('round trips private work as independent copies, relinks paths, and preserves
     'workspace:draft': {
       'text.scale': 18,
       'scroll.text': 120,
-      _sourceVersion: { identity: 'old', modified: 1, size: 8 },
+      _sourceVersion: { identity: temporalIdentity('old'), modified: 1, size: 8 },
     },
   };
   state.previewHistory = {
@@ -247,7 +248,10 @@ it('round trips private work as independent copies, relinks paths, and preserves
       {
         path: file,
         updated: 1,
-        values: { 'pdf.page': 3, _sourceVersion: { identity: 'old', modified: 1, size: 8 } },
+        values: {
+          'pdf.page': 3,
+          _sourceVersion: { identity: temporalIdentity('old'), modified: 1, size: 8 },
+        },
       },
     ],
   };
@@ -495,7 +499,7 @@ it('restores checks as inspectable copies, remaps stack identities, and never re
     target = path.join(root, 'Relinked');
   for (const folder of [first, second, source, target]) await mkdir(folder);
   const checkID = randomUUID();
-  const version = { identity: 'captured-source', modified: 1, size: 5 };
+  const version = { identity: temporalIdentity('captured-source'), modified: 1, size: 5 };
   const requirement = {
     status: 'human-confirmed' as const,
     key: 'finding:F1',

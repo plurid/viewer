@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { FileEntry, ViewerAPI } from '../src/domain/contracts';
@@ -168,7 +169,11 @@ it('estimates as quantities change and saves a valid nesting plan', async () => 
     name: 'Nesting of 3 parts',
     expectedSources: files.map((file) => ({
       path: file.path,
-      version: { identity: file.identity, modified: file.modified, size: file.size },
+      version: {
+        identity: temporalIdentity(file.identity),
+        modified: file.modified,
+        size: file.size,
+      },
     })),
   });
   const plan = validateTransform(request.transform, 3);

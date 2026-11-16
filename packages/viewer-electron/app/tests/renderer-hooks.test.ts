@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
@@ -224,7 +225,10 @@ describe('new folder with selection', () => {
       sources: ['/Work/a.txt'],
       destination: '/Work/Items copy',
       expectedSources: [
-        { path: '/Work/a.txt', version: { identity: '1:5', modified: 3, size: 4 } },
+        {
+          path: '/Work/a.txt',
+          version: { identity: temporalIdentity('1:5'), modified: 3, size: 4 },
+        },
       ],
     });
   });

@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../../src/domain/files/item-identity';
 /** Owned native checks with deterministic source data; no provider calls or removals. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -33,7 +34,7 @@ const service = new Canvases(profile, { changed: () => {} });
 const initial = await service.create(1, conversation, root);
 const bound = await service.source(1, initial.id, 0, {
   path: csv,
-  version: { identity: 'fixture', modified: 1, size: 40 },
+  version: { identity: temporalIdentity('fixture'), modified: 1, size: 40 },
   availability: 'available',
   facts: {},
   evidence: [

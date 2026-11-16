@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * RECONCILING A JOB: the request first, a drawing's title block next, the file name last.
  * Disagreements become findings Viewer grades with the exact quotes; a drawing of several separate
@@ -14,7 +15,7 @@ import type { GradeJob } from '../src/domain/fabrication/grade';
 import { reconcileJob } from '../src/domain/fabrication/reconcile';
 import { partValuesText } from '../src/domain/fabrication/part-values';
 
-const version = { identity: '1:2', modified: 1, size: 1 };
+const version = { identity: temporalIdentity('1:2'), modified: 1, size: 1 };
 const sources: InventorySource[] = [
   { ref: 'S1', kind: 'request', name: 'Request.eml', pages: 1, path: '/jobs/Request.eml', version },
   { ref: 'S2', kind: 'drawing', name: 'Drawing.pdf', pages: 1, path: '/jobs/Drawing.pdf', version },

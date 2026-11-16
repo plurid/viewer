@@ -1,3 +1,4 @@
+import { sameCapturedItem } from '../../domain/files/entries';
 import type { AgentNavigation } from '../../domain/agents/requests';
 import type { CapturedTarget } from '../../domain/automation/actions';
 import { activeWorkspace, getState, navigate } from '../state/store';
@@ -91,7 +92,7 @@ export async function executeAgentNavigation(
   for (const expected of request.files) {
     const actual = await window.viewer.stat(expected.path);
     origin();
-    if (actual.identity !== expected.identity || actual.parent !== expected.parent)
+    if (!sameCapturedItem(actual, expected) || actual.parent !== expected.parent)
       throw new Error(
         'A selected file changed or is outside the captured folder. Request a new proposal.',
       );

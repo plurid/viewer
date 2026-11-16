@@ -2,7 +2,7 @@ import { sameVersionItem } from '../../files/item-identity';
 import { lstat, fileStat } from '../../files/stats';
 import type { FileStats as Stats } from '../../files/stats';
 
-import { versionIdentity } from '../../../domain/files/item-identity';
+import { itemIdentity } from '../../../domain/files/item-identity';
 import { constants } from 'node:fs';
 import { open, opendir, realpath, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
@@ -31,7 +31,8 @@ export interface StaticRootIdentity {
   identity: string;
 }
 
-const identity = versionIdentity;
+// Roots are folders or links, which keep exact IDs and share the server's public folder pin.
+const identity = itemIdentity;
 const stable = (before: Stats, after: Stats) =>
   sameVersionItem(before, after) &&
   before.size === after.size &&
@@ -80,7 +81,7 @@ export class StaticRoot {
     const alias = await lstat(requested);
     if (
       (!alias.isDirectory() && !alias.isSymbolicLink()) ||
-      (sourceIdentity && identity(alias) !== sourceIdentity)
+      (sourceIdentity && itemIdentity(alias) !== sourceIdentity)
     )
       throw new WebPreviewError(403, 'The selected folder changed. Select it again.');
     const actual = await realpath(requested);

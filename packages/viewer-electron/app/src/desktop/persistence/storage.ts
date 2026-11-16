@@ -100,7 +100,9 @@ const pane = z.discriminatedUnion('type', [
       sourceIdentity: z
         .string()
         .max(100)
-        .refine((value) => readItemIdentity(value) !== undefined)
+        .refine((value) => readItemIdentity(value) !== undefined || /^\d+:\d+$/.test(value))
+        // Rounded older pins cannot prove ownership. The stopped server remains restorable.
+        .transform((value) => readItemIdentity(value))
         .optional(),
     })
     .strict(),

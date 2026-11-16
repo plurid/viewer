@@ -1,3 +1,4 @@
+import { itemIdentity } from '../src/domain/files/item-identity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CapturedTarget } from '../src/domain/automation/actions';
 import type { FileEntry, FolderPane, Workspace } from '../src/domain/contracts';
@@ -68,6 +69,20 @@ afterEach(async () => {
 });
 
 describe('workspace agent navigation through existing host records', () => {
+  it('keeps renderer selection review across synthetic IDs and refuses changed creation time', async () => {
+    const captured = target();
+    const file = { ...entry('/shared/Empty.txt'), identity: itemIdentity({ dev: 1n, ino: -1n }) };
+    const current = { ...file, identity: itemIdentity({ dev: 1n, ino: -2n }) };
+    stat.mockResolvedValue(current);
+    const request = { kind: 'select-files' as const, files: [file] };
+    await executeAgentNavigation(request, captured, controller, switchTo);
+    expect(browseSession(captured.paneID, captured.directory).selection).toEqual([file.path]);
+    stat.mockResolvedValue({ ...current, created: file.created + 1 });
+    await expect(executeAgentNavigation(request, captured, controller, switchTo)).rejects.toThrow(
+      'selected file changed',
+    );
+  });
+
   it('focuses a captured destination plane and rejects replacement paths', async () => {
     const captured = target();
     const pane = { id: captured.paneID, type: 'folder' as const, path: captured.panePath! };

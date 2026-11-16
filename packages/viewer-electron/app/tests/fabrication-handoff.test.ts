@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * THE HANDOFF: a checked job saved for the shop through File operations, staged and undoable:
  * `Evidence/` copies with their dates, the tour pointed at them, the check record, and each
@@ -37,7 +38,7 @@ import { defaultSettings } from '../src/domain/services';
 import { temporaryRoot } from '../tools/temporary';
 import { allowed, drawingPage, jobAnswer, jpeg, meta, writeJob } from './fabrication-fixtures';
 
-const version = { identity: '1:2', modified: 1_761_800_000_000, size: 10 };
+const version = { identity: temporalIdentity('1:2'), modified: 1_761_800_000_000, size: 10 };
 const file = (name: string) => ({ path: `/jobs/1042/${name}`, version });
 
 describe('handoff plans', () => {
@@ -359,7 +360,7 @@ describe('handoff export', () => {
       const copy = await stat(path.join(output, stop.target.path));
       expect(
         sameRecordedFile(stop.target.version, {
-          identity: '',
+          identity: temporalIdentity(''),
           size: copy.size,
           modified: copy.mtimeMs,
         }),

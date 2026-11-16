@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { Finding, InventoryItem } from '../src/domain/fabrication/answer';
@@ -41,7 +42,7 @@ import {
 } from '../tools/playground/samples/fabrication';
 import { cad, drawing } from '../tools/playground/samples/nesting';
 
-const version = { identity: '1:2', modified: 1, size: 1 };
+const version = { identity: temporalIdentity('1:2'), modified: 1, size: 1 };
 const part = (file: string) => jobParts.find((item) => item.file === file)!;
 const dxfOf = (file: string) => autocadDXF(part(file).entities);
 function measured(source: string): Measurement {
@@ -246,7 +247,7 @@ const job: GradeJob = {
   sources: inventory.map((item) => ({
     ...item,
     path: `/job/${item.name}`,
-    version: { identity: item.ref, size: 1, modified: 1 },
+    version: { identity: temporalIdentity(item.ref), size: 1, modified: 1 },
   })),
   dxf: (ref) =>
     ref === 'S4'

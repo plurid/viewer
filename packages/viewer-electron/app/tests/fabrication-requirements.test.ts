@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { describe, expect, it } from 'vitest';
 import type {
   FabricationAnswer,
@@ -21,7 +22,7 @@ import { measureDrawing } from '../src/domain/fabrication/measure';
 import { parseDrawing } from '../src/domain/previews/drawings/dxf/geometry';
 import { autocadDXF, jobParts } from '../tools/playground/samples/fabrication';
 
-const version = { identity: '1:2', modified: 1, size: 100 };
+const version = { identity: temporalIdentity('1:2'), modified: 1, size: 100 };
 const drawing: InventorySource = {
   ref: 'S1',
   kind: 'drawing',

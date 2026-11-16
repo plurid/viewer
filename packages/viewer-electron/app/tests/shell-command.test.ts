@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { chmod, readFile, realpath, stat, symlink, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -40,7 +41,11 @@ describe('shell command installation', () => {
     await command.uninstall();
     expect(trash).toHaveBeenCalledExactlyOnceWith({
       path: command.file,
-      version: { identity: `${info.dev}:${info.ino}`, modified: info.mtimeMs, size: info.size },
+      version: {
+        identity: temporalIdentity(`${info.dev}:${info.ino}`),
+        modified: info.mtimeMs,
+        size: info.size,
+      },
       sha256: createHash('sha256').update(script).digest('hex'),
     });
     // The recording Trash validates the approved scope while preserving the actual fixture.

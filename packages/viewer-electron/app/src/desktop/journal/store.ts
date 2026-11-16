@@ -1,3 +1,4 @@
+import type { TemporalIdentity } from '../../domain/files/item-identity';
 import { lstat, fileStat } from '../files/stats';
 
 import { versionIdentity, matchesVersionIdentity } from '../../domain/files/item-identity';
@@ -36,7 +37,7 @@ export class JournalStore {
   private readonly limits: JournalLimits;
   private readonly ready: Promise<void>;
   private handle?: FileHandle;
-  private identity?: string;
+  private identity?: TemporalIdentity;
   private records: JournalRecord[] = [];
   private pending: { record: JournalRecord; line: string }[] = [];
   private bytes = 0;

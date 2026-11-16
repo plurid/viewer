@@ -80,16 +80,18 @@ prompts for copy, move and rename between different files on the volume. It uses
 operation engine; picture bytes enter through its desktop paste entry point, without changing the OS
 clipboard. Each volume waits 15 seconds before saving text over an empty file, Undo of an empty file
 and a move, Undo of a folder with an empty descendant, and delayed Replace. The exFAT scenario also
-unmounts and remounts before copy and move Undo. It records exact before/after identities and
-whether the driver reassigned them. A cross-volume move verifies a source tree and completes its
-copy, then must stop at the preservation guard before source removal. Cleanup only unmounts the
-generated image and keeps every artifact. The failed-publication check compiles the standalone
-algorithm outside the repository: its exclusive syscall uses the real image, and a test-only commit
-seam returns an error. The production TypeScript recovery module then moves its verified empty
-reservation and empty holding folder through a retained Trash adapter within the image; it never
-invokes the OS Trash or deletes fixtures. Only this injected adapter runs with preservation
-temporarily disabled. Supply a rebuilt helper outside the repository, or omit
-`VIEWER_TEST_MAC_BINDING` after the owner has rebuilt the bundled helper:
+unmounts and remounts before copy and move Undo. Synthetic IDs must keep their creation time; if
+remount assigns stable IDs, those Undo steps must refuse and preserve the items. It records exact
+before/after identities, creation times, the checked Undo outcome and whether the driver reassigned
+them. A cross-volume move verifies a source tree and completes its copy, then must stop at the
+preservation guard before source removal. Cleanup only unmounts the generated image and keeps every
+artifact. The failed-publication check compiles the standalone algorithm outside the repository: its
+exclusive syscall uses the real image, and a test-only commit seam returns an error. The production
+TypeScript recovery module then moves its verified empty reservation and empty holding folder
+through a retained Trash adapter within the image; it never invokes the OS Trash or deletes
+fixtures. Only this injected adapter runs with preservation temporarily disabled. Supply a rebuilt
+helper outside the repository, or omit `VIEWER_TEST_MAC_BINDING` after the owner has rebuilt the
+bundled helper:
 
 ```sh
 VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 VIEWER_TEST_MAC_BINDING=/tmp/viewer-native-build/assets/viewer-macos-files.node pnpm --filter viewer-electron exec node --import tsx tests/native/exfat-file-operations.ts

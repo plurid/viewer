@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * EVIDENCE ANCHORS: a place in a file that a search hit, an inspection or a tour stop opens at.
  * New anchors (regions, drawings, models) are additive, so evidence saved before them still opens.
@@ -21,7 +22,7 @@ import {
 import { focusBounds, focusFill, framedView } from '../src/renderer/previews/dxf/canvas';
 import type { Drawing, DrawingEntity } from '../src/domain/previews/drawings/dxf/math';
 
-const version = { identity: '1:2', modified: 1_700_000_000_000, size: 4096 };
+const version = { identity: temporalIdentity('1:2'), modified: 1_700_000_000_000, size: 4096 };
 
 describe('evidence anchors', () => {
   it('reads every anchor saved before regions, drawings and models', () => {

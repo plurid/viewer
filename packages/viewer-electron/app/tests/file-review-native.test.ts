@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /** Production native review checks with a recording OS Trash selector. Fixtures stay on disk. */
 import { expect, it } from 'vitest';
 import { createRequire } from 'node:module';
@@ -55,7 +56,7 @@ it.skipIf(process.platform !== 'darwin' || !process.env.VIEWER_TEST_REVIEW_BINDI
 
     const changedVersion = {
       ...inspected.reviewed,
-      version: { ...inspected.reviewed.version, identity: '1:999' },
+      version: { ...inspected.reviewed.version, identity: temporalIdentity('1:999') },
     };
     await expect(native.trash(file, undefined, changedVersion)).rejects.toThrow('preserved');
     await expect(

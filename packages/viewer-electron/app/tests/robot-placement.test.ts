@@ -1,3 +1,4 @@
+import { temporalIdentity } from '../src/domain/files/item-identity';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -46,7 +47,7 @@ async function setup() {
   const bind = (name: string, text: string, revision: number) =>
     canvases.source(1, doc.id, revision, {
       path: '/' + name,
-      version: { identity: name, size: text.length, modified: 1 },
+      version: { identity: temporalIdentity(name), size: text.length, modified: 1 },
       availability: 'available',
       facts: {},
       evidence: [{ source: 'text', text }],

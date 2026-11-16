@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * ASK VIEWER BY VOICE, in the window: "Check this job and prepare the cut sheets" spoken over Job
  * 1042 is transcribed through the Speech settings' provider, shown, planned by Ask Viewer's model,
@@ -58,7 +59,7 @@ const meta: ModelProvider = {
   allowContent: false,
 };
 const folder = '/Jobs/Job 1042';
-const version = { identity: '1:2', modified: 1_761_800_000_000, size: 1000 };
+const version = { identity: temporalIdentity('1:2'), modified: 1_761_800_000_000, size: 1000 };
 const names = ['Job 1042 request.eml', 'Job 1042 drawing.pdf', 'g6-PL60-B2-2buc.dxf'];
 const plate = `${folder}/g6-PL60-B2-2buc.dxf`;
 const opening: CheckOpening = {

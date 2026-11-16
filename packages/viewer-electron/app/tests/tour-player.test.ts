@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { temporalIdentity } from '../src/domain/files/item-identity';
 /**
  * PLAYING A TOUR: each stop's file opened at its anchor and brought into view, then held for its
  * dwell. A missing stop shows its card and is skipped; a changed one opens without its anchor and
@@ -32,7 +33,11 @@ import {
 } from '../src/renderer/state/store';
 import { playTour, stopTour, tourPlayback } from '../src/renderer/workspace/tour';
 
-const recorded: SourceVersion = { identity: '1:10', modified: 1_761_800_000_000, size: 1000 };
+const recorded: SourceVersion = {
+  identity: temporalIdentity('1:10'),
+  modified: 1_761_800_000_000,
+  size: 1000,
+};
 const entry = (path: string, change: Partial<FileEntry> = {}): FileEntry => ({
   path,
   name: path.split('/').at(-1)!,
@@ -137,7 +142,7 @@ describe('the tour player, with a fake stage', () => {
         path: '/Jobs/Recca/Bracket.pdf',
         evidence: {
           path: '/Jobs/Recca/Bracket.pdf',
-          version: { identity: '7:70', modified: recorded.modified, size: 1000 },
+          version: { identity: temporalIdentity('7:70'), modified: recorded.modified, size: 1000 },
           anchor: tour.stops[0]!.target.kind === 'file' ? tour.stops[0]!.target.anchor : undefined,
           quote: '48',
         },

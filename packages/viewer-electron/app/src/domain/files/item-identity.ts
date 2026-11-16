@@ -3,11 +3,12 @@ declare const identityLifetime: unique symbol;
 export type MomentIdentity = string & { readonly [identityLifetime]: 'moment' };
 export type SerializedIdentity = string & { readonly [identityLifetime]?: 'serialized' };
 export type ObservedIdentity = MomentIdentity | SerializedIdentity;
-/** Unbranded serialized input remains readable, but a moment identity is not assignable here. */
-export type TemporalIdentity = string & { readonly [identityLifetime]?: 'temporal' };
+/** Serialized strings become temporal identities only through the explicit boundary parser. */
+export type TemporalIdentity = string & { readonly [identityLifetime]: 'temporal' };
 export type IdentityKind = 'file' | 'directory' | 'symlink' | 'other';
 export interface VersionStat extends StatIdentity {
   mode: number;
+  birthtimeMs: number;
 }
 
 export interface StatIdentity {
@@ -19,6 +20,8 @@ const maximum = (1n << 64n) - 1n;
 const safeMaximum = BigInt(Number.MAX_SAFE_INTEGER);
 export const olderIdentityMessage =
   'Cannot undo because this older record does not have an exact file identity.';
+export const olderCreationMessage =
+  'Cannot undo because this older record does not include the file creation time.';
 
 function unsigned(value: IdentityComponent): bigint {
   if (typeof value === 'number' && (!Number.isSafeInteger(value) || value < 0))
@@ -37,11 +40,12 @@ export function itemIdentity(info: StatIdentity): MomentIdentity {
   return `${device}:${inode}${suffix}` as MomentIdentity;
 }
 
-/** FSKit allocates descending regular-file IDs in the unsigned upper half. They can change
- * without a content change. HFS+ CNIDs are 32-bit and APFS inode object IDs occupy 60 bits, so
- * neither filesystem's real inode IDs enter this range. Immediate comparisons still use them. */
+/** FSKit counts down from UINT64_MAX. Reserve only its top 2^32 values for regular files,
+ * without another filesystem lookup per entry. This excludes real upper-half IDs such as NFS
+ * IDs near 2^63. APFS object IDs are 60-bit and HFS+ CNIDs are 32-bit. A different filesystem
+ * using this narrow range still receives the conservative synthetic-file checks. */
 export function syntheticInode(info: StatIdentity): boolean {
-  return unsigned(info.ino) >= 1n << 63n;
+  return unsigned(info.ino) >= (1n << 64n) - (1n << 32n);
 }
 
 export function identityKind(mode: number): IdentityKind {
@@ -57,58 +61,68 @@ export function identityKind(mode: number): IdentityKind {
   }
 }
 
-export function temporalIdentity(value: string, kind: IdentityKind = 'file'): TemporalIdentity {
-  if (kind === 'file' && value.endsWith(':u64')) {
+/** Type is observed by the caller, never guessed while decoding an older record. Synthetic
+ * evidence carries creation time on the wire; safe identities retain their earlier layout. */
+export function temporalIdentity(
+  value: string,
+  kind?: IdentityKind,
+  created?: number,
+): TemporalIdentity {
+  if (kind && value.endsWith(':u64')) {
     const exact = readItemIdentity(value);
     if (exact) {
       const [dev, ino] = exact.split(':');
-      if (syntheticInode({ dev: BigInt(dev!), ino: BigInt(ino!) }))
-        return `${dev}:synthetic:file` as TemporalIdentity;
+      if (kind === 'file' && syntheticInode({ dev: BigInt(dev!), ino: BigInt(ino!) }))
+        return `${dev}:synthetic:file${Number.isFinite(created) ? ':' + created : ''}` as TemporalIdentity;
+      return `${exact}:${kind}` as TemporalIdentity;
     }
   }
   return value as TemporalIdentity;
 }
 
 export function versionIdentity(info: VersionStat): TemporalIdentity {
-  return temporalIdentity(itemIdentity(info), identityKind(info.mode));
+  return temporalIdentity(itemIdentity(info), identityKind(info.mode), info.birthtimeMs);
 }
 
-export function syntheticVersionIdentity(info: VersionStat): TemporalIdentity {
-  return `${unsigned(info.dev)}:synthetic:${identityKind(info.mode)}` as TemporalIdentity;
+export function missingTemporalEvidence(value: string): boolean {
+  if (/^\d+:synthetic:file$/.test(value)) return true;
+  const exact = value.endsWith(':u64') ? readItemIdentity(value) : undefined;
+  if (!exact) return false;
+  const [dev, ino] = exact.split(':');
+  return syntheticInode({ dev: BigInt(dev!), ino: BigInt(ino!) });
 }
 
 export function matchesVersionIdentity(current: VersionStat, expected: TemporalIdentity): boolean {
   const previous = readTemporalIdentity(expected);
-  if (previous?.endsWith(':synthetic:file')) return syntheticVersionIdentity(current) === previous;
-  return previous !== undefined && versionIdentity(current) === previous;
+  return (
+    previous !== undefined &&
+    !missingTemporalEvidence(previous) &&
+    versionIdentity(current) === previous
+  );
 }
 
 export function readTemporalIdentity(value: string): TemporalIdentity | undefined {
-  const synthetic = /^(0|[1-9]\d*):synthetic:file$/.exec(value);
+  const synthetic = /^(0|[1-9]\d*):synthetic:file(?::(.+))?$/.exec(value);
   if (synthetic) {
-    if (BigInt(synthetic[1]!) <= maximum) return value as TemporalIdentity;
+    if (BigInt(synthetic[1]!) > maximum) return;
+    const created = synthetic[2];
+    if (
+      created === undefined ||
+      (Number.isFinite(Number(created)) && String(Number(created)) === created)
+    )
+      return value as TemporalIdentity;
     return;
   }
+  const typed = /^(.*:u64):(file|directory|symlink|other)$/.exec(value);
+  if (typed) return readItemIdentity(typed[1]!) ? (value as TemporalIdentity) : undefined;
   const exact = readItemIdentity(value);
-  return exact ? temporalIdentity(exact) : undefined;
+  return exact ? (exact as unknown as TemporalIdentity) : undefined;
 }
 
-export function sameTemporalIdentity(
-  a: TemporalIdentity,
-  b: TemporalIdentity,
-  kindA?: IdentityKind,
-  kindB?: IdentityKind,
-): boolean {
+export function sameTemporalIdentity(a: TemporalIdentity, b: TemporalIdentity): boolean {
   if (!/^-?\d+:/.test(a) && !/^-?\d+:/.test(b)) return a !== '' && a === b;
-  const left = readTemporalIdentity(a);
-  const right = readTemporalIdentity(b);
-  if (left === undefined || right === undefined) return false;
-  if (left === right) return true;
-  if (left.endsWith(':synthetic:file') && kindB === 'file')
-    return left.slice(0, left.indexOf(':')) === right.slice(0, right.indexOf(':'));
-  if (right.endsWith(':synthetic:file') && kindA === 'file')
-    return left.slice(0, left.indexOf(':')) === right.slice(0, right.indexOf(':'));
-  return false;
+  if (a !== b || missingTemporalEvidence(a)) return false;
+  return readTemporalIdentity(a) !== undefined;
 }
 
 export function exactIdentityParts(info: StatIdentity): { dev: bigint; ino: bigint } {
@@ -134,8 +148,10 @@ export function readItemIdentity(value: string): MomentIdentity | undefined {
 export function sameIdentity(a: string, b: string): boolean {
   // Virtual resources use opaque capability identities rather than filesystem identities.
   if (!/^-?\d+:/.test(a) && !/^-?\d+:/.test(b)) return a !== '' && a === b;
-  const identity = readItemIdentity(a);
-  return identity !== undefined && identity === readItemIdentity(b);
+  if (a !== b) return false;
+  // The common APFS form fits well below MAX_SAFE_INTEGER; avoid BigInt parsing per selection.
+  if (/^\d{1,15}:\d{1,15}$/.test(a)) return true;
+  return readItemIdentity(a) !== undefined;
 }
 
 export function sameDevice(a: StatIdentity, b: StatIdentity): boolean {
