@@ -5,7 +5,11 @@ import path from 'node:path';
 import type { Decoder } from './derived';
 import type { PreviewCopyOptions } from './input-copy';
 import type { GhostscriptStatus } from '../../domain/previews/documents/postscript';
-import { binaryEPS, epsHeader, inspectPostScript } from '../../domain/previews/documents/postscript';
+import {
+  binaryEPS,
+  epsHeader,
+  inspectPostScript,
+} from '../../domain/previews/documents/postscript';
 import { errorMessage } from '../../domain/errors';
 import { withPreviewCopy } from './input-copy';
 import { runProcessor } from '../transforms/process';
@@ -46,17 +50,25 @@ export class Ghostscript {
     const info = await stat(file);
     if (!info.isFile()) return undefined;
     await access(file, constants.X_OK);
-    const identity = JSON.stringify([file, info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs]);
+    const identity = JSON.stringify([
+      file,
+      info.dev,
+      info.ino,
+      info.size,
+      info.mtimeMs,
+      info.ctimeMs,
+    ]);
     return { file, identity, key: createHash('sha256').update(identity).digest('hex') };
   }
 
   async status(): Promise<GhostscriptStatus> {
     if (this.options.store()) return { kind: 'store' };
-    return { kind: await this.find() ? 'found' : 'missing' };
+    return { kind: (await this.find()) ? 'found' : 'missing' };
   }
 
   async variant(): Promise<string> {
-    if (this.options.store()) throw new Error('PostScript rendering is unavailable in the Store edition.');
+    if (this.options.store())
+      throw new Error('PostScript rendering is unavailable in the Store edition.');
     const executable = await this.find();
     if (!executable) throw new Error('Pages can be rendered if Ghostscript is installed.');
     return executable.key;
@@ -82,40 +94,55 @@ export class Ghostscript {
         outputLimit: 64 * 1024,
         lowPriority: true,
       });
-      const version = /\b(?:GPL |AFPL |Artifex )?Ghostscript (\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)\b/.exec(help.toString())?.[1];
+      const version =
+        /\b(?:GPL |AFPL |Artifex )?Ghostscript (\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)\b/.exec(
+          help.toString(),
+        )?.[1];
       if (!version) throw new Error('The selected program did not identify itself as Ghostscript.');
       if ((await this.executable(executable.file))?.identity !== executable.identity)
         throw new Error('Ghostscript changed; choose Render pages again.');
       const data = await withPreviewCopy(source, section, signal, this.options, async (file) => {
-        return runProcessor(executable.file, [
-          '-dSAFER',
-          '-dBATCH',
-          '-dNOPAUSE',
-          '-dNOPROMPT',
-          '-dQUIET',
-          '-dNumRenderingThreads=1',
-          '-sDEVICE=pdfwrite',
-          '-sOutputFile=%stdout',
-          '-sstdout=%stderr',
-          '--',
-          file,
-        ], [], signal, {
-          timeout: this.options.timeout ?? postscriptTimeout,
-          outputLimit: this.options.outputLimit ?? postscriptOutputLimit,
-          lowPriority: true,
-          cwd: path.dirname(file),
-        });
+        return runProcessor(
+          executable.file,
+          [
+            '-dSAFER',
+            '-dBATCH',
+            '-dNOPAUSE',
+            '-dNOPROMPT',
+            '-dQUIET',
+            '-dNumRenderingThreads=1',
+            '-sDEVICE=pdfwrite',
+            '-sOutputFile=%stdout',
+            '-sstdout=%stderr',
+            '--',
+            file,
+          ],
+          [],
+          signal,
+          {
+            timeout: this.options.timeout ?? postscriptTimeout,
+            outputLimit: this.options.outputLimit ?? postscriptOutputLimit,
+            lowPriority: true,
+            cwd: path.dirname(file),
+          },
+        );
       });
-      if (data.length < 16 || data.subarray(0, 5).toString() !== '%PDF-' ||
-        !data.subarray(-1024).includes(Buffer.from('%%EOF')))
+      if (
+        data.length < 16 ||
+        data.subarray(0, 5).toString() !== '%PDF-' ||
+        !data.subarray(-1024).includes(Buffer.from('%%EOF'))
+      )
         throw new Error('Ghostscript did not produce a complete PDF.');
       return { data, extension: 'pdf', kind: 'postscript', decoder: `Ghostscript ${version}` };
     } catch (error) {
       if (signal.aborted) throw new Error('PostScript rendering was cancelled.');
       const message = errorMessage(error);
-      if (message.includes('timed out')) throw new Error('Ghostscript exceeded the rendering time limit.');
-      if (message.includes('output exceeded')) throw new Error('Ghostscript exceeded the PDF output size limit.');
-      if (message.includes('Media processor failed')) throw new Error('Ghostscript could not render this document.');
+      if (message.includes('timed out'))
+        throw new Error('Ghostscript exceeded the rendering time limit.');
+      if (message.includes('output exceeded'))
+        throw new Error('Ghostscript exceeded the PDF output size limit.');
+      if (message.includes('Media processor failed'))
+        throw new Error('Ghostscript could not render this document.');
       throw error;
     }
   };

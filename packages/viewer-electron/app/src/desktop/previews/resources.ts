@@ -225,7 +225,9 @@ export class Resources {
     const format =
       target.isFile() && transportStreamExtensions.includes(extension)
         ? await this.recording(actual).catch(() => undefined)
-        : target.isFile() ? await this.postscriptFormat(actual, extension) : undefined;
+        : target.isFile()
+          ? await this.postscriptFormat(actual, extension)
+          : undefined;
     const id = randomUUID();
     const resource = {
       dimensions: item.mime.startsWith('image/')
@@ -263,14 +265,20 @@ export class Resources {
   }
   /** Bind a header-based route to the version inspected so later reads cannot reuse a stale kind. */
   private async postscriptFormat(file: string, extension: string): Promise<Grant['format']> {
-    const handle = await open(fileCoordination.path(file), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const handle = await open(
+      fileCoordination.path(file),
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
     try {
       const info = await handle.stat();
       const head = await readAt(handle, 0, Math.min(info.size, 256));
       const identity = identifyBytes(head, path.basename(file));
-      if (!identity?.extension || !['ps', 'eps', 'ai'].includes(identity.extension)) return undefined;
+      if (!identity?.extension || !['ps', 'eps', 'ai'].includes(identity.extension))
+        return undefined;
       return {
-        extension: postscriptFormats.some((format) => format === extension) ? extension : identity.extension,
+        extension: postscriptFormats.some((format) => format === extension)
+          ? extension
+          : identity.extension,
         version: fileVersion(info),
       };
     } finally {
@@ -683,13 +691,18 @@ export class Resources {
     let child: Resource | undefined;
     return this.documentRead(id, requestID, (file, signal, format) =>
       this.coordinated(id, async () => {
-        const input = await open(fileCoordination.path(file), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        const input = await open(
+          fileCoordination.path(file),
+          constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+        );
         try {
           const info = await input.stat();
           if (!info.isFile()) throw new Error('Choose a regular PostScript file.');
           const inspected = await readPostScript({ file, handle: input, info }, format, signal);
-          if (fileVersion(info) !== fileVersion(await input.stat()) ||
-            fileVersion(info) !== fileVersion(await lstat(file)))
+          if (
+            fileVersion(info) !== fileVersion(await input.stat()) ||
+            fileVersion(info) !== fileVersion(await lstat(file))
+          )
             throw new Error('This PostScript file changed while opening.');
           await this.access([file]);
           signal.throwIfAborted();
@@ -724,8 +737,14 @@ export class Resources {
     variant?: string,
   ): Promise<Resource> {
     const grant = this.get(id);
-    const decoder = mode === 'office' ? this.office : mode === 'image' ? this.images
-      : mode === 'postscript' ? this.postscript?.cache : this.derived;
+    const decoder =
+      mode === 'office'
+        ? this.office
+        : mode === 'image'
+          ? this.images
+          : mode === 'postscript'
+            ? this.postscript?.cache
+            : this.derived;
     if (!decoder) return Promise.reject(new Error('The local preview decoder is unavailable.'));
     return this.documentRead(id, requestID, async (file, signal, format) => {
       const lease = await decoder.read(file, mode, signal, 4096, variant, format);

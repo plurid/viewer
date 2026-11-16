@@ -77,23 +77,23 @@ import, follow or download it.
 
 ## Read PostScript, EPS and Illustrator files
 
-1. Select a `.ps`, `.eps`, `.epsf`, `.epsi` or `.ai` file and press **Space**. The preview shows
-   the kind and its **Document comments**: title, creator, creation date, pages, size and language
+1. Select a `.ps`, `.eps`, `.epsf`, `.epsi` or `.ai` file and press **Space**. The preview shows the
+   kind and its **Document comments**: title, creator, creation date, pages, size and language
    level. A missing comment reads **Unknown**.
 2. Choose **Source** to read the program as text. For a binary EPS, this is only its PostScript
    part. An **Embedded preview** is the picture saved in the EPS, not a rendering of its pages.
-3. To render pages, choose **Render pages with Ghostscript**. This button appears when Viewer
-   finds an executable in a known installation location or at **Settings → Previews → Ghostscript
-   path**. That setting takes an absolute path. Viewer checks the program's identity and version
-   after the click, then renders a copy and shows the resulting PDF with its version label.
+3. To render pages, choose **Render pages with Ghostscript**. This button appears when Viewer finds
+   an executable in a known installation location or at **Settings → Previews → Ghostscript path**.
+   That setting takes an absolute path. Viewer checks the program's identity and version after the
+   click, then renders a copy and shows the resulting PDF with its version label.
 4. Choose **Cancel rendering** to stop. A failure leaves the document details, source and embedded
    picture available. **Source**, **Embedded preview** and **Rendered pages** switch between the
    available views.
 
 Opening or selecting a file never runs Ghostscript. Without it, you can still read the comments,
 source and embedded picture. An Illustrator file with a PDF inside opens directly in the PDF
-preview. In the Store edition you get the described preview and embedded pictures, or the PDF
-inside an Illustrator file; the render button is absent.
+preview. In the Store edition you get the described preview and embedded pictures, or the PDF inside
+an Illustrator file; the render button is absent.
 
 [Supported formats](../reference/formats.md) gives inspection and rendering limits.
 

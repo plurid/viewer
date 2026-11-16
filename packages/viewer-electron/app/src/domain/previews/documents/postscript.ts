@@ -38,7 +38,8 @@ export interface EPSIBitmap {
 }
 const invalid = () => new Error('This PostScript file is malformed; its bytes are shown below.');
 const starts = (bytes: Uint8Array, text: string) =>
-  bytes.length >= text.length && [...text].every((value, index) => bytes[index] === value.charCodeAt(0));
+  bytes.length >= text.length &&
+  [...text].every((value, index) => bytes[index] === value.charCodeAt(0));
 
 export const binaryEPS = (bytes: Uint8Array) =>
   bytes[0] === 0xc5 && bytes[1] === 0xd0 && bytes[2] === 0xd3 && bytes[3] === 0xc6;
@@ -128,8 +129,10 @@ export function postscriptMetadata(bytes: Uint8Array): PostScriptMetadata {
       if (size && size[0]! > 0 && size[1]! > 0)
         result.size = { width: size[0]!, height: size[1]!, kind: 'Page size' };
     }
-    if ((key === 'BoundingBox' || key === 'HiResBoundingBox' || key === 'PageBoundingBox') &&
-      (!result.size || (result.size.kind === 'Bounding box' && !hires))) {
+    if (
+      (key === 'BoundingBox' || key === 'HiResBoundingBox' || key === 'PageBoundingBox') &&
+      (!result.size || (result.size.kind === 'Bounding box' && !hires))
+    ) {
       const box = numbers(value, 4);
       if (box && box[2]! > box[0]! && box[3]! > box[1]!) {
         result.size = { width: box[2]! - box[0]!, height: box[3]! - box[1]!, kind: 'Bounding box' };
@@ -151,10 +154,17 @@ export function decodeEPSI(bytes: Uint8Array): EPSIBitmap | undefined {
     const fields = numbers(line.slice('%%BeginPreview:'.length), 4);
     if (!fields || fields.some((field) => !Number.isInteger(field))) throw invalid();
     const [width = 0, height = 0, depth = 0, count = 0] = fields;
-    const stride = Math.ceil(width * depth / 8);
-    if (width < 1 || height < 1 || width * height > 16_000_000 ||
-      ![1, 2, 4, 8].includes(depth) || count < 1 || count > 100_000 ||
-      stride * height > previewTextLimit) throw invalid();
+    const stride = Math.ceil((width * depth) / 8);
+    if (
+      width < 1 ||
+      height < 1 ||
+      width * height > 16_000_000 ||
+      ![1, 2, 4, 8].includes(depth) ||
+      count < 1 ||
+      count > 100_000 ||
+      stride * height > previewTextLimit
+    )
+      throw invalid();
     const data = new Uint8Array(stride * height);
     let digits = 0;
     for (let index = 0; index < count; index++) {
@@ -191,27 +201,32 @@ export function epsiBMP(bitmap: EPSIBitmap): Uint8Array {
   view.setUint16(28, 8, true);
   view.setUint32(46, 256, true);
   for (let gray = 0; gray < 256; gray++) output.fill(gray, 54 + gray * 4, 57 + gray * 4);
-  const sourceStride = Math.ceil(width * depth / 8);
+  const sourceStride = Math.ceil((width * depth) / 8);
   const mask = (1 << depth) - 1;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const bit = x * depth;
-      const pixel = (bytes[y * sourceStride + (bit >> 3)]! >> (8 - depth - bit % 8)) & mask;
-      output[offset + (height - 1 - y) * stride + x] = 255 - Math.round(pixel * 255 / mask);
+      const pixel = (bytes[y * sourceStride + (bit >> 3)]! >> (8 - depth - (bit % 8))) & mask;
+      output[offset + (height - 1 - y) * stride + x] = 255 - Math.round((pixel * 255) / mask);
     }
   }
   return output;
 }
 
-export function inspectPostScript(bytes: Uint8Array, extension: string):
-  Omit<PostScriptInspection, 'preview' | 'wmf'> {
+export function inspectPostScript(
+  bytes: Uint8Array,
+  extension: string,
+): Omit<PostScriptInspection, 'preview' | 'wmf'> {
   const illustrator = extension.toLowerCase() === 'ai';
   const pdf = illustrator && starts(bytes, '%PDF');
   if (!pdf && !starts(bytes, '%!PS')) throw invalid();
   const first = new TextDecoder().decode(bytes.subarray(0, 256)).split(/[\r\n]/)[0] ?? '';
   return {
-    kind: illustrator ? 'Illustrator' : /EPSF-/.test(first) || /^eps[fi]?$/.test(extension)
-      ? 'Encapsulated PostScript' : 'PostScript document',
+    kind: illustrator
+      ? 'Illustrator'
+      : /EPSF-/.test(first) || /^eps[fi]?$/.test(extension)
+        ? 'Encapsulated PostScript'
+        : 'PostScript document',
     pdf,
     metadata: pdf ? {} : postscriptMetadata(bytes),
     source: { text: pdf ? '' : new TextDecoder().decode(bytes), binary: false, truncated: false },

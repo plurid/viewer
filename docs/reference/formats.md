@@ -16,8 +16,8 @@ and platform limits still apply.
 | PDF                     | `.pdf`                                                                                                                                                                 | Pages, text-layer search/selection, thumbnails and outline navigation.                                                                                                                                                                                                   |
 | Books                   | `.epub`, `.fb2`                                                                                                                                                        | Chapters, local illustrations, internal links/footnotes, book search and named bookmarks. A FictionBook opens on its cover, title and authors.                                                                                                                           |
 | DjVu                    | `.djvu`, `.djv`                                                                                                                                                        | Page rendering and text-layer search.                                                                                                                                                                                                                                    |
-| PostScript and EPS       | `.ps`, `.eps`, `.epsf`, `.epsi` | Document comments and bounded source text; labelled TIFF or EPSI embedded pictures. Pages render only on request through an installed Ghostscript, outside the Store edition. |
-| Illustrator             | `.ai` | A file beginning with `%PDF` opens in the PDF preview and is labelled as Illustrator; older PostScript files use the PostScript preview. |
+| PostScript and EPS      | `.ps`, `.eps`, `.epsf`, `.epsi`                                                                                                                                        | Document comments and bounded source text; labelled TIFF or EPSI embedded pictures. Pages render only on request through an installed Ghostscript, outside the Store edition.                                                                                            |
+| Illustrator             | `.ai`                                                                                                                                                                  | A file beginning with `%PDF` opens in the PDF preview and is labelled as Illustrator; older PostScript files use the PostScript preview.                                                                                                                                 |
 | Word                    | `.doc`, `.docx`, `.docm`, `.dot`, `.dotx`, `.dotm`, `.rtf`                                                                                                             | Local paginated layout; the OOXML forms also have bounded Reading view. Macros never run.                                                                                                                                                                                |
 | Excel                   | `.xls`, `.xlsx`, `.xlsm`, `.xlt`, `.xltx`, `.xltm`                                                                                                                     | Local print layout with worksheet navigation; the OOXML forms also have stored-value cell inspection.                                                                                                                                                                    |
 | PowerPoint              | `.ppt`, `.pptx`, `.pptm`, `.pps`, `.ppsx`, `.pot`, `.potx`, `.potm`                                                                                                    | Local slide layout, including supported charts, pictures and backgrounds.                                                                                                                                                                                                |
@@ -128,30 +128,30 @@ A `.mbox` folder, as Mail exports one, opens as a folder.
 
 **PostScript, EPS and Illustrator.** First bytes `%!PS` and the binary EPS magic identify these
 files even under another extension. `%PDF` identifies the PDF inside an `.ai`. The comments supply
-title, creator, creation date, page count, page or bounding-box dimensions in points and millimetres,
-and language level. Missing or invalid comments stay **Unknown**. Inspection and source use the
-existing 4,000,000-byte text limit, with a 4096-byte line limit and 1024-character comment values;
-comments in nested documents or after binary/data blocks are excluded. Comments beyond the bounded
-inspection stay unknown. A binary EPS shows only its PostScript section as source. Every section
-must fit inside the file and be disjoint; absent optional pictures have zero offset and length.
-Malformed files show their bytes and a plain explanation.
+title, creator, creation date, page count, page or bounding-box dimensions in points and
+millimetres, and language level. Missing or invalid comments stay **Unknown**. Inspection and source
+use the existing 4,000,000-byte text limit, with a 4096-byte line limit and 1024-character comment
+values; comments in nested documents or after binary/data blocks are excluded. Comments beyond the
+bounded inspection stay unknown. A binary EPS shows only its PostScript section as source. Every
+section must fit inside the file and be disjoint; absent optional pictures have zero offset and
+length. Malformed files show their bytes and a plain explanation.
 
 TIFF embedded pictures use the isolated image decoder, up to 32 MiB of TIFF input, 100 million
-decoded pixels and a 4096-pixel longest output edge. EPSI supports 1, 2, 4 and 8-bit grayscale, up to
-16 million pixels and 4,000,000 packed bytes, within the inspected text. Pictures are labelled
+decoded pixels and a 4096-pixel longest output edge. EPSI supports 1, 2, 4 and 8-bit grayscale, up
+to 16 million pixels and 4,000,000 packed bytes, within the inspected text. Pictures are labelled
 **Embedded preview**. WMF pictures are named and not drawn.
 
 **Render pages with Ghostscript** runs only after a click. Discovery inspects
 `/opt/homebrew/bin/gs`, `/usr/local/bin/gs` and `/opt/local/bin/gs`, plus the optional absolute
 **Ghostscript path** (`settings.previews.ghostscriptPath`, default empty). It does not search
 `PATH`. The click first checks the program's Ghostscript identity and version. Rendering uses the
-shared versioned preview cache and cancellation, a private copy, safe mode, batch/no-prompt flags,
-a minimal environment and low process priority. Input is capped at 256 MiB, PDF output at 32 MiB
-and rendering at 60 seconds; identity probing has a separate 3-second limit. The original is only
-read. The output opens in the existing PDF preview, labelled with Ghostscript's version. Failure
-and cancellation keep the described preview. Temporary copies follow the transfer owner's
-identity checks and Trash-only cleanup; failed cleanup retains the copy. The Store edition and
-agent routes cannot start this conversion. Viewer bundles no Ghostscript.
+shared versioned preview cache and cancellation, a private copy, safe mode, batch/no-prompt flags, a
+minimal environment and low process priority. Input is capped at 256 MiB, PDF output at 32 MiB and
+rendering at 60 seconds; identity probing has a separate 3-second limit. The original is only read.
+The output opens in the existing PDF preview, labelled with Ghostscript's version. Failure and
+cancellation keep the described preview. Temporary copies follow the transfer owner's identity
+checks and Trash-only cleanup; failed cleanup retains the copy. The Store edition and agent routes
+cannot start this conversion. Viewer bundles no Ghostscript.
 
 **FictionBook.** An `.fb2` book, up to 32 MB, is read as XML without a DTD or entity declarations; a
 book that has one does not open. The encoding its declaration names, such as Windows-1251, is used.

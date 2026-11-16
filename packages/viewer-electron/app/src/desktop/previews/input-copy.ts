@@ -18,18 +18,34 @@ export async function withPreviewCopy<T>(
   read: (file: string) => Promise<T>,
 ): Promise<T> {
   const { offset, length } = section;
-  if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) ||
-    offset < 0 || length < 1 || offset > source.info.size || length > source.info.size - offset)
+  if (
+    !Number.isSafeInteger(offset) ||
+    !Number.isSafeInteger(length) ||
+    offset < 0 ||
+    length < 1 ||
+    offset > source.info.size ||
+    length > source.info.size - offset
+  )
     throw new Error('This preview section lies outside its source.');
   signal.throwIfAborted();
-  const stage = await privateStage(options.directory ?? os.tmpdir(), 'viewer-preview-', options.trash, true);
+  const stage = await privateStage(
+    options.directory ?? os.tmpdir(),
+    'viewer-preview-',
+    options.trash,
+    true,
+  );
   try {
     const output = await open(stage.file, 'wx', 0o600);
     try {
       const chunk = Buffer.alloc(Math.min(length, 1024 * 1024));
       for (let copied = 0; copied < length;) {
         signal.throwIfAborted();
-        const { bytesRead } = await source.handle.read(chunk, 0, Math.min(chunk.length, length - copied), offset + copied);
+        const { bytesRead } = await source.handle.read(
+          chunk,
+          0,
+          Math.min(chunk.length, length - copied),
+          offset + copied,
+        );
         if (!bytesRead) throw new Error('The preview source changed while copying.');
         let written = 0;
         while (written < bytesRead) {

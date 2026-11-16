@@ -178,8 +178,14 @@ export async function createFixtures(): Promise<{
   await writeFile(path.join(files, 'Documents', 'Saved bitmap.epsi'), epsiSample);
   await writeFile(path.join(files, 'Documents', 'Illustrator PDF.ai'), pdfFixture());
   await writeFile(path.join(files, 'Documents', 'Legacy Illustrator.ai'), postscriptSample);
-  await writeFile(path.join(files, 'Documents', 'WMF picture.eps'), binaryEPSSample(postscriptSample, Buffer.alloc(0), Buffer.from('WMF')));
-  await writeFile(path.join(files, 'Documents', 'Broken EPS.eps'), Buffer.from([0xc5, 0xd0, 0xd3, 0xc6]));
+  await writeFile(
+    path.join(files, 'Documents', 'WMF picture.eps'),
+    binaryEPSSample(postscriptSample, Buffer.alloc(0), Buffer.from('WMF')),
+  );
+  await writeFile(
+    path.join(files, 'Documents', 'Broken EPS.eps'),
+    Buffer.from([0xc5, 0xd0, 0xd3, 0xc6]),
+  );
   await writeFile(path.join(files, 'Documents', 'Book.epub'), epubFixture());
   await writeFile(
     path.join(files, 'Data', 'Materials.json'),

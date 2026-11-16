@@ -16,7 +16,10 @@ import type { ImageRenditionRequest } from '../../domain/previews/images/rendere
 import type { OfficeLayoutRequest } from '../../domain/previews/documents/layout';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import type { PageColors } from '../../domain/previews/documents/dark-pages';
-import type { GhostscriptStatus, PostScriptInspection } from '../../domain/previews/documents/postscript';
+import type {
+  GhostscriptStatus,
+  PostScriptInspection,
+} from '../../domain/previews/documents/postscript';
 
 /** Renderer-only capabilities: preview modules never import the workspace or explorer. */
 export interface PreviewCommand {

@@ -228,7 +228,7 @@ export const previewModules: PreviewModule[] = [
     id: 'postscript',
     label: 'PostScript / EPS / Illustrator',
     formats: postscriptFormats,
-    detect: (entry) => entry.directory ? 0 : documentExtension(postscriptFormats)(entry),
+    detect: (entry) => (entry.directory ? 0 : documentExtension(postscriptFormats)(entry)),
     load: () => import('./modules/PostScriptPreview'),
   },
   {

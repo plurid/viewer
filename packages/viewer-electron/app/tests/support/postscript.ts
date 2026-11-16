@@ -44,8 +44,16 @@ showpage
 
 export function tiffSample(): Buffer {
   const tags = [
-    [256, 4, 2], [257, 4, 1], [258, 3, 8], [259, 3, 1], [262, 3, 1],
-    [273, 4, 134], [277, 3, 1], [278, 4, 1], [279, 4, 2], [284, 3, 1],
+    [256, 4, 2],
+    [257, 4, 1],
+    [258, 3, 8],
+    [259, 3, 1],
+    [262, 3, 1],
+    [273, 4, 134],
+    [277, 3, 1],
+    [278, 4, 1],
+    [279, 4, 2],
+    [284, 3, 1],
   ];
   const bytes = Buffer.alloc(136);
   bytes.write('II');
@@ -79,7 +87,10 @@ export function pdfSample(): Buffer {
   }
   const xref = Buffer.byteLength(body);
   body += 'xref\n0 5\n0000000000 65535 f \n';
-  body += offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  body += offsets
+    .slice(1)
+    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
+    .join('');
   body += `trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(body);
 }

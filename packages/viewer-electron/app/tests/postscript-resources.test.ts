@@ -11,18 +11,31 @@ import { imageDimensions } from '../src/desktop/previews/image-dimensions';
 import { previewTextLimit } from '../src/domain/files/read-limits';
 import { choosePreview } from '../src/renderer/previews/registry';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
-import { binaryEPSSample, epsiSample, pdfSample, postscriptSample, tiffSample } from './support/postscript';
+import {
+  binaryEPSSample,
+  epsiSample,
+  pdfSample,
+  postscriptSample,
+  tiffSample,
+} from './support/postscript';
 
 vi.mock('../src/desktop/files/file-coordination', async (importOriginal) => {
   const original = await importOriginal<typeof Coordination>();
-  return { ...original, fileCoordination: new original.FileCoordination(() => ({
-    coordinateStart: async (_id, intents) => intents.map((intent) => intent.path),
-    coordinateEnd: async () => {}, coordinateCancel: () => {}, coordinateSameItem: () => false,
-  })) };
+  return {
+    ...original,
+    fileCoordination: new original.FileCoordination(() => ({
+      coordinateStart: async (_id, intents) => intents.map((intent) => intent.path),
+      coordinateEnd: async () => {},
+      coordinateCancel: () => {},
+      coordinateSameItem: () => false,
+    })),
+  };
 });
 let root: string;
 const services: Resources[] = [];
-beforeEach(async () => { root = await temporaryRoot('viewer-postscript-resources-'); });
+beforeEach(async () => {
+  root = await temporaryRoot('viewer-postscript-resources-');
+});
 afterEach(async () => {
   await Promise.all(services.map((service) => service.close()));
   services.length = 0;
@@ -35,17 +48,25 @@ const create = (images?: DerivedPreviews) => {
 };
 
 describe('authorized PostScript inspection', () => {
-  it.each(['data', 'txt'])('routes a .%s file by its PostScript header without running it', async (extension) => {
-    const file = path.join(root, `unexpected.${extension}`);
-    await writeFile(file, postscriptSample);
-    const service = create();
-    const resource = await service.grant(file);
-    expect(choosePreview(resource.entry).id).toBe('postscript');
-    expect((await service.inspectPostscript(resource.id, 'read')).source.text).toBe(postscriptSample);
-  });
+  it.each(['data', 'txt'])(
+    'routes a .%s file by its PostScript header without running it',
+    async (extension) => {
+      const file = path.join(root, `unexpected.${extension}`);
+      await writeFile(file, postscriptSample);
+      const service = create();
+      const resource = await service.grant(file);
+      expect(choosePreview(resource.entry).id).toBe('postscript');
+      expect((await service.inspectPostscript(resource.id, 'read')).source.text).toBe(
+        postscriptSample,
+      );
+    },
+  );
   it('shows only the PostScript section of a binary EPS and names an undrawn WMF', async () => {
     const file = path.join(root, 'drawing.eps');
-    await writeFile(file, binaryEPSSample(postscriptSample, Buffer.alloc(0), Buffer.from('WMF bytes')));
+    await writeFile(
+      file,
+      binaryEPSSample(postscriptSample, Buffer.alloc(0), Buffer.from('WMF bytes')),
+    );
     const service = create();
     const resource = await service.grant(file);
     const result = await service.inspectPostscript(resource.id, 'read');
@@ -73,7 +94,11 @@ describe('authorized PostScript inspection', () => {
     expect(result.preview?.entry.extension).toBe('bmp');
     expect(result.preview?.dimensions).toEqual({ width: 8, height: 2 });
     const response = await service.response(new Request(result.preview!.url));
-    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString()).toBe('BM');
+    expect(
+      Buffer.from(await response.arrayBuffer())
+        .subarray(0, 2)
+        .toString(),
+    ).toBe('BM');
     service.release(resource.id);
     await expect(service.read(result.preview!.id)).rejects.toThrow('expired');
   });
@@ -82,7 +107,10 @@ describe('authorized PostScript inspection', () => {
     await writeFile(file, pdf ? pdfSample() : Buffer.from(postscriptSample));
     const service = create();
     const resource = await service.grant(file);
-    expect(await service.inspectPostscript(resource.id, 'read')).toMatchObject({ kind: 'Illustrator', pdf });
+    expect(await service.inspectPostscript(resource.id, 'read')).toMatchObject({
+      kind: 'Illustrator',
+      pdf,
+    });
   });
   it('rejects invalid binary ranges before the TIFF decoder is called', async () => {
     const file = path.join(root, 'malformed.eps');
@@ -102,23 +130,35 @@ describe('authorized PostScript inspection', () => {
     try {
       const abort = new AbortController();
       abort.abort();
-      await expect(readPostScript({ file, handle, info: await handle.stat() }, 'ps', abort.signal)).rejects.toThrow();
-    } finally { await handle.close(); }
+      await expect(
+        readPostScript({ file, handle, info: await handle.stat() }, 'ps', abort.signal),
+      ).rejects.toThrow();
+    } finally {
+      await handle.close();
+    }
   });
   const helper = path.resolve('assets/viewer-image-preview');
-  it.skipIf(process.platform !== 'darwin' || !existsSync(helper))('decodes only the TIFF picture through the existing isolated image pipeline', async () => {
-    const file = path.join(root, 'embedded.eps');
-    const bytes = binaryEPSSample(undefined, tiffSample());
-    await writeFile(file, bytes);
-    const images = new DerivedPreviews(async () => {}, imageDecoder(helper, undefined, undefined, { directory: root }));
-    const service = create(images);
-    const resource = await service.grant(file);
-    const result = await service.inspectPostscript(resource.id, 'read');
-    expect(result.preview?.entry.extension).toBe('png');
-    const response = await service.response(new Request(result.preview!.url));
-    const picture = Buffer.from(await response.arrayBuffer());
-    expect(imageDimensions(picture)).toEqual({ width: 2, height: 1 });
-    expect(await readFile(file)).toEqual(bytes);
-    await expect(images.read(file, 'image', new AbortController().signal)).rejects.toThrow('Only an embedded TIFF');
-  });
+  it.skipIf(process.platform !== 'darwin' || !existsSync(helper))(
+    'decodes only the TIFF picture through the existing isolated image pipeline',
+    async () => {
+      const file = path.join(root, 'embedded.eps');
+      const bytes = binaryEPSSample(undefined, tiffSample());
+      await writeFile(file, bytes);
+      const images = new DerivedPreviews(
+        async () => {},
+        imageDecoder(helper, undefined, undefined, { directory: root }),
+      );
+      const service = create(images);
+      const resource = await service.grant(file);
+      const result = await service.inspectPostscript(resource.id, 'read');
+      expect(result.preview?.entry.extension).toBe('png');
+      const response = await service.response(new Request(result.preview!.url));
+      const picture = Buffer.from(await response.arrayBuffer());
+      expect(imageDimensions(picture)).toEqual({ width: 2, height: 1 });
+      expect(await readFile(file)).toEqual(bytes);
+      await expect(images.read(file, 'image', new AbortController().signal)).rejects.toThrow(
+        'Only an embedded TIFF',
+      );
+    },
+  );
 });

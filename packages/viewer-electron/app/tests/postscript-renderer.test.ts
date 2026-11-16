@@ -31,7 +31,9 @@ vi.mock('../src/desktop/files/file-coordination', async (importOriginal) => {
 });
 let root: string;
 const resources: Resources[] = [];
-beforeEach(async () => { root = await realpath(await temporaryRoot('viewer-postscript-runner-')); });
+beforeEach(async () => {
+  root = await realpath(await temporaryRoot('viewer-postscript-runner-'));
+});
 afterEach(async () => {
   await Promise.all(resources.map((resource) => resource.close()));
   resources.length = 0;
@@ -71,12 +73,31 @@ if (args.includes('-h')) {
     outputLimit: mode === 'oversized' ? 1024 : 1_000_000,
   });
   const cache = new DerivedPreviews(async () => {}, renderer.decode);
-  const service = new Resources(async () => {}, undefined, 12000, undefined, undefined, undefined, undefined, { renderer, cache });
+  const service = new Resources(
+    async () => {},
+    undefined,
+    12000,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { renderer, cache },
+  );
   resources.push(service);
   const granted = await service.grant(source);
-  const calls = async () => (await readFile(log, 'utf8').catch(() => '')).trim().split('\n').filter(Boolean).map((line) => JSON.parse(line) as {
-    args: string[]; environment: string[]; cwd: string;
-  });
+  const calls = async () =>
+    (await readFile(log, 'utf8').catch(() => ''))
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            args: string[];
+            environment: string[];
+            cwd: string;
+          },
+      );
   return { service, renderer, source, sourceBytes, granted, calls, executable };
 }
 
@@ -95,9 +116,17 @@ describe('explicit, bounded Ghostscript rendering', () => {
     const calls = await f.calls();
     expect(calls).toHaveLength(2);
     expect(calls[0]!.args).toEqual(['-h']);
-    expect(calls[1]!.args).toEqual(expect.arrayContaining([
-      '-dSAFER', '-dBATCH', '-dNOPAUSE', '-dNOPROMPT', '-sDEVICE=pdfwrite', '-sOutputFile=%stdout', '--',
-    ]));
+    expect(calls[1]!.args).toEqual(
+      expect.arrayContaining([
+        '-dSAFER',
+        '-dBATCH',
+        '-dNOPAUSE',
+        '-dNOPROMPT',
+        '-sDEVICE=pdfwrite',
+        '-sOutputFile=%stdout',
+        '--',
+      ]),
+    );
     expect(calls[1]!.args).not.toContain(f.source);
     expect(path.dirname(calls[1]!.args.at(-1)!)).toBe(calls[1]!.cwd);
     expect(calls[1]!.environment).toEqual(expect.arrayContaining(['PATH', 'LC_ALL', 'LANG']));
@@ -109,15 +138,22 @@ describe('explicit, bounded Ghostscript rendering', () => {
     await expect(f.service.read(cached.id)).rejects.toThrow('expired');
   });
   it.each([
-    ['timeout', 'time limit'], ['failure', 'could not render'], ['oversized', 'output size limit'],
+    ['timeout', 'time limit'],
+    ['failure', 'could not render'],
+    ['oversized', 'output size limit'],
     ['impostor', 'did not identify itself'],
-  ] as const)('ends %s in one sentence and leaves the described preview readable', async (mode, message) => {
-    const f = await fixture(mode);
-    await expect(f.service.renderPostscript(f.granted.id, 'render')).rejects.toThrow(message);
-    expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).metadata.title).toBe('Two squares');
-    expect(await readFile(f.source)).toEqual(f.sourceBytes);
-    if (mode === 'impostor') expect(await f.calls()).toHaveLength(1);
-  });
+  ] as const)(
+    'ends %s in one sentence and leaves the described preview readable',
+    async (mode, message) => {
+      const f = await fixture(mode);
+      await expect(f.service.renderPostscript(f.granted.id, 'render')).rejects.toThrow(message);
+      expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).metadata.title).toBe(
+        'Two squares',
+      );
+      expect(await readFile(f.source)).toEqual(f.sourceBytes);
+      if (mode === 'impostor') expect(await f.calls()).toHaveLength(1);
+    },
+  );
   it('cancels an owned process and leaves the source available', async () => {
     const f = await fixture('timeout');
     const work = f.service.renderPostscript(f.granted.id, 'render');
@@ -125,11 +161,15 @@ describe('explicit, bounded Ghostscript rendering', () => {
     await vi.waitFor(async () => expect(await f.calls()).toHaveLength(2));
     f.service.cancelDocument(f.granted.id, 'render');
     expect(await outcome).toBeInstanceOf(Error);
-    expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).kind).toBe('Encapsulated PostScript');
+    expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).kind).toBe(
+      'Encapsulated PostScript',
+    );
   });
   it('cancels when the preview closes and refuses late derived resources', async () => {
     const f = await fixture('timeout');
-    const outcome = f.service.renderPostscript(f.granted.id, 'render').catch((error: Error) => error);
+    const outcome = f.service
+      .renderPostscript(f.granted.id, 'render')
+      .catch((error: Error) => error);
     await vi.waitFor(async () => expect(await f.calls()).toHaveLength(2));
     f.service.release(f.granted.id);
     expect(await outcome).toBeInstanceOf(Error);
@@ -138,8 +178,12 @@ describe('explicit, bounded Ghostscript rendering', () => {
   it('never probes or renders in the Store edition, even through a direct service request', async () => {
     const f = await fixture('success', true);
     expect(await f.service.postscriptStatus()).toEqual({ kind: 'store' });
-    expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).source.text).toBe(postscriptSample);
-    await expect(f.service.renderPostscript(f.granted.id, 'render')).rejects.toThrow('Store edition');
+    expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).source.text).toBe(
+      postscriptSample,
+    );
+    await expect(f.service.renderPostscript(f.granted.id, 'render')).rejects.toThrow(
+      'Store edition',
+    );
     expect(await f.calls()).toEqual([]);
   });
 });
@@ -149,33 +193,59 @@ describe('human-only rendering boundary', () => {
     const f = await fixture();
     const handlers = createResourceHandlers({
       resources: f.service,
-      thumbnails: { get: vi.fn() }, webPreviews: { releaseResource: vi.fn() },
-      files: { extract: vi.fn() }, fileAccess: { require: vi.fn() },
-      forgetGitResource: vi.fn(), warmOffice: vi.fn(), isAgent: () => true,
+      thumbnails: { get: vi.fn() },
+      webPreviews: { releaseResource: vi.fn() },
+      files: { extract: vi.fn() },
+      fileAccess: { require: vi.fn() },
+      forgetGitResource: vi.fn(),
+      warmOffice: vi.fn(),
+      isAgent: () => true,
     });
     expect(() => handlers.renderPostscript([f.granted.id, 'render'], 1)).toThrow('never to agents');
     expect(await f.calls()).toEqual([]);
     expect(methodWindows.renderPostscript).toBe('viewer');
-    expect(schemas.renderPostscript.safeParse([f.granted.id, 'render', { actor: 'user' }]).success).toBe(false);
+    expect(
+      schemas.renderPostscript.safeParse([f.granted.id, 'render', { actor: 'user' }]).success,
+    ).toBe(false);
   });
   it('rejects rendering commands, executable aliases and nested actions on the shared CLI/MCP agent path', () => {
     const actions: CustomAction[] = [
       { id: 'render', name: 'Render', executor: { kind: 'builtin', command: 'postscript-render' } },
       { id: 'nested', name: 'Nested', executor: { kind: 'sequence', commands: ['custom.render'] } },
     ] as CustomAction[];
-    for (const command of ['postscript-render', 'preview.postscript-render', 'renderPostscript', 'custom.render', 'custom.nested'])
+    for (const command of [
+      'postscript-render',
+      'preview.postscript-render',
+      'renderPostscript',
+      'custom.render',
+      'custom.nested',
+    ])
       expect(() => agentCommandID(command, actions)).toThrow();
     expect(serviceToolNames.has('renderPostscript')).toBe(false);
-    expect(Object.keys(agentToolCatalog).some((name) => /postscript|ghostscript/i.test(name))).toBe(false);
-    expect(() => agentConfigurationPath(['settings', 'previews', 'ghostscriptPath'])).toThrow('never through agents');
+    expect(Object.keys(agentToolCatalog).some((name) => /postscript|ghostscript/i.test(name))).toBe(
+      false,
+    );
+    expect(() => agentConfigurationPath(['settings', 'previews', 'ghostscriptPath'])).toThrow(
+      'never through agents',
+    );
     expect(() => agentConfigurationPath(['settings', 'previews'])).toThrow('never through agents');
     expect(() => agentConfigurationPath(['settings', 'previews', 'textFontSize'])).not.toThrow();
   });
   it('validates the custom setting as an absolute path with no NUL and no shell expansion', () => {
     const defaults = defaultSettings('/fixtures');
     for (const value of ['gs', '~/bin/gs', '/fixtures/gs\0ignored'])
-      expect(settingsSchema.safeParse({ ...defaults, previews: { ...defaults.previews, ghostscriptPath: value } }).success).toBe(false);
+      expect(
+        settingsSchema.safeParse({
+          ...defaults,
+          previews: { ...defaults.previews, ghostscriptPath: value },
+        }).success,
+      ).toBe(false);
     for (const value of ['', '/fixtures/gs'])
-      expect(settingsSchema.safeParse({ ...defaults, previews: { ...defaults.previews, ghostscriptPath: value } }).success).toBe(true);
+      expect(
+        settingsSchema.safeParse({
+          ...defaults,
+          previews: { ...defaults.previews, ghostscriptPath: value },
+        }).success,
+      ).toBe(true);
   });
 });

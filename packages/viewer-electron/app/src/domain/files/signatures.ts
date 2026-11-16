@@ -410,9 +410,10 @@ const signatures: readonly Signature[] = [
   { magic: 'PK\x05\x06', identity: { label: 'ZIP archive', extension: 'zip' } },
   {
     magic: '%PDF',
-    identity: (_head, name) => /\.ai$/i.test(name)
-      ? { label: 'Illustrator with a PDF inside', extension: 'ai' }
-      : { label: 'PDF document', extension: 'pdf' },
+    identity: (_head, name) =>
+      /\.ai$/i.test(name)
+        ? { label: 'Illustrator with a PDF inside', extension: 'ai' }
+        : { label: 'PDF document', extension: 'pdf' },
   },
   { magic: '%!PS', identity: postscript },
   { magic: [0xc5, 0xd0, 0xd3, 0xc6], identity: postscript },

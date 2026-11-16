@@ -3,44 +3,67 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Resource } from '../src/domain/contracts';
-import type { PostScriptInspection, GhostscriptStatus } from '../src/domain/previews/documents/postscript';
+import type {
+  PostScriptInspection,
+  GhostscriptStatus,
+} from '../src/domain/previews/documents/postscript';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
 import { inspectPostScript } from '../src/domain/previews/documents/postscript';
 import { postscriptSample } from './support/postscript';
 import PostScriptPreview from '../src/renderer/previews/modules/PostScriptPreview';
 
 const children = vi.hoisted(() => ({ text: vi.fn(), image: vi.fn(), pdf: vi.fn() }));
-vi.mock('../src/renderer/previews/modules/TextPreview', () => ({ default: (context: PreviewContext) => {
-  children.text(context);
-  return <div>Existing text viewer</div>;
-} }));
-vi.mock('../src/renderer/previews/modules/ImagePreview', () => ({ default: (context: PreviewContext) => {
-  children.image(context);
-  return <div>Existing image viewer</div>;
-} }));
-vi.mock('../src/renderer/previews/modules/PDFPreview', () => ({ default: (context: PreviewContext) => {
-  children.pdf(context);
-  return <div>Existing PDF viewer</div>;
-} }));
+vi.mock('../src/renderer/previews/modules/TextPreview', () => ({
+  default: (context: PreviewContext) => {
+    children.text(context);
+    return <div>Existing text viewer</div>;
+  },
+}));
+vi.mock('../src/renderer/previews/modules/ImagePreview', () => ({
+  default: (context: PreviewContext) => {
+    children.image(context);
+    return <div>Existing image viewer</div>;
+  },
+}));
+vi.mock('../src/renderer/previews/modules/PDFPreview', () => ({
+  default: (context: PreviewContext) => {
+    children.pdf(context);
+    return <div>Existing PDF viewer</div>;
+  },
+}));
 vi.mock('../src/renderer/previews/HexView', () => ({ HexView: () => <div>File bytes</div> }));
 afterEach(cleanup);
 
-const child = (extension: string): Resource => ({
-  id: `child-${extension}`, url: `viewer-resource://child-${extension}/asset/file.${extension}`,
-  entry: { name: `file.${extension}`, extension, path: '/fixtures/file', size: 100 },
-  derivation: { kind: 'postscript', decoder: 'Ghostscript 10.99.1' },
-} as Resource);
-function fixture(status: GhostscriptStatus = { kind: 'found' }, partial: Partial<PostScriptInspection> = {}) {
-  const document: PostScriptInspection = { ...inspectPostScript(Buffer.from(postscriptSample), 'ps'), wmf: false, ...partial };
+const child = (extension: string): Resource =>
+  ({
+    id: `child-${extension}`,
+    url: `viewer-resource://child-${extension}/asset/file.${extension}`,
+    entry: { name: `file.${extension}`, extension, path: '/fixtures/file', size: 100 },
+    derivation: { kind: 'postscript', decoder: 'Ghostscript 10.99.1' },
+  }) as Resource;
+function fixture(
+  status: GhostscriptStatus = { kind: 'found' },
+  partial: Partial<PostScriptInspection> = {},
+) {
+  const document: PostScriptInspection = {
+    ...inspectPostScript(Buffer.from(postscriptSample), 'ps'),
+    wmf: false,
+    ...partial,
+  };
   const services = {
     inspectPostscript: vi.fn(async () => document),
     postscriptStatus: vi.fn(async () => status),
     renderPostscript: vi.fn(async () => child('pdf')),
-    cancelDocument: vi.fn(async () => {}), release: vi.fn(async () => {}),
+    cancelDocument: vi.fn(async () => {}),
+    release: vi.fn(async () => {}),
   };
   const context = {
     resource: { ...child('ps'), id: 'source' },
-    services, active: true, interactive: true, look: 'dark', signal: new AbortController().signal,
+    services,
+    active: true,
+    interactive: true,
+    look: 'dark',
+    signal: new AbortController().signal,
   } as unknown as PreviewContext;
   return { context, services, document };
 }
@@ -59,11 +82,16 @@ describe('PostScript preview composition and explicit rendering', () => {
     expect(sourceContext.editing).toBeUndefined();
   });
   it('keeps missing comments unknown and labels the EPS picture separately', async () => {
-    const f = fixture({ kind: 'found' }, { kind: 'Encapsulated PostScript', metadata: {}, preview: child('bmp'), wmf: true });
+    const f = fixture(
+      { kind: 'found' },
+      { kind: 'Encapsulated PostScript', metadata: {}, preview: child('bmp'), wmf: true },
+    );
     render(<PostScriptPreview {...f.context} />);
     expect(await screen.findByText('Encapsulated PostScript')).toBeTruthy();
     expect(screen.getAllByText('Unknown')).toHaveLength(6);
-    expect(screen.getByText('Embedded EPS preview; this is the picture saved in the file.')).toBeTruthy();
+    expect(
+      screen.getByText('Embedded EPS preview; this is the picture saved in the file.'),
+    ).toBeTruthy();
     expect(screen.getByText('Embedded WMF preview; this picture is not displayed.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Source' }));
     expect(screen.getByText('Existing text viewer')).toBeTruthy();
@@ -89,7 +117,9 @@ describe('PostScript preview composition and explicit rendering', () => {
   });
   it('keeps the described preview after a rendering failure', async () => {
     const f = fixture();
-    f.services.renderPostscript.mockRejectedValueOnce(new Error('Ghostscript exceeded the rendering time limit.'));
+    f.services.renderPostscript.mockRejectedValueOnce(
+      new Error('Ghostscript exceeded the rendering time limit.'),
+    );
     render(<PostScriptPreview {...f.context} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Render pages with Ghostscript' }));
     expect(await screen.findByText('Ghostscript exceeded the rendering time limit.')).toBeTruthy();
@@ -109,7 +139,12 @@ describe('PostScript preview composition and explicit rendering', () => {
   it('cancels explicitly and releases a late result without replacing the description', async () => {
     const f = fixture();
     let finish!: (value: Resource) => void;
-    f.services.renderPostscript.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    f.services.renderPostscript.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
     render(<PostScriptPreview {...f.context} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Render pages with Ghostscript' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel rendering' }));
@@ -122,7 +157,12 @@ describe('PostScript preview composition and explicit rendering', () => {
   it('cancels on close and releases a late embedded preview', async () => {
     const f = fixture();
     let finish!: (value: PostScriptInspection) => void;
-    f.services.inspectPostscript.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    f.services.inspectPostscript.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
     const mounted = render(<PostScriptPreview {...f.context} />);
     mounted.unmount();
     await act(async () => finish({ ...f.document, preview: child('png') }));
@@ -131,10 +171,14 @@ describe('PostScript preview composition and explicit rendering', () => {
   });
   it('shows a malformed file as bytes with one plain sentence', async () => {
     const f = fixture();
-    f.services.inspectPostscript.mockRejectedValueOnce(new Error('This PostScript file is malformed; its bytes are shown below.'));
+    f.services.inspectPostscript.mockRejectedValueOnce(
+      new Error('This PostScript file is malformed; its bytes are shown below.'),
+    );
     render(<PostScriptPreview {...f.context} />);
     await waitFor(() => expect(screen.getByText('File bytes')).toBeTruthy());
-    expect(screen.getByRole('status').textContent).toBe('This PostScript file is malformed; its bytes are shown below.');
+    expect(screen.getByRole('status').textContent).toBe(
+      'This PostScript file is malformed; its bytes are shown below.',
+    );
     expect(screen.queryByRole('button', { name: 'Render pages with Ghostscript' })).toBeNull();
   });
 });

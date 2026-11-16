@@ -400,7 +400,8 @@ export const settingCatalog: SettingDefinition[] = [
     path: 'settings.previews.ghostscriptPath',
     category: 'Previews',
     label: 'Ghostscript path',
-    detail: 'Optional absolute path. Pages render only when you choose Render pages with Ghostscript; unavailable in the Store edition.',
+    detail:
+      'Optional absolute path. Pages render only when you choose Render pages with Ghostscript; unavailable in the Store edition.',
     kind: 'text',
   },
   {

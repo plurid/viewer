@@ -24,7 +24,8 @@ export function imageDecoder(
     const signature = Buffer.alloc(Math.min(30, source.info.size));
     await source.handle.read(signature, 0, signature.length, 0);
     const eps = binaryEPS(signature);
-    const embedded = variant === 'eps-tiff' ? epsHeader(signature, source.info.size)?.tiff : undefined;
+    const embedded =
+      variant === 'eps-tiff' ? epsHeader(signature, source.info.size)?.tiff : undefined;
     if ((eps || signature.subarray(0, 4).toString() === '%!PS') && !embedded)
       throw new Error('Only an embedded TIFF picture can be decoded from PostScript.');
     if (variant === 'eps-tiff' && (!embedded || embedded.length > 32 * 1024 * 1024))

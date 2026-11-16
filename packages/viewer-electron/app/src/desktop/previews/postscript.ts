@@ -1,6 +1,11 @@
 import type { Source } from './derived';
 import type { EPSHeader, PostScriptInspection } from '../../domain/previews/documents/postscript';
-import { decodeEPSI, epsHeader, epsiBMP, inspectPostScript } from '../../domain/previews/documents/postscript';
+import {
+  decodeEPSI,
+  epsHeader,
+  epsiBMP,
+  inspectPostScript,
+} from '../../domain/previews/documents/postscript';
 import { previewTextLimit } from '../../domain/files/read-limits';
 
 export interface InspectedPostScript {
@@ -24,7 +29,12 @@ export async function readPostScript(
   let read = 0;
   while (read < length) {
     signal.throwIfAborted();
-    const { bytesRead } = await source.handle.read(bytes, read, length - read, section.offset + read);
+    const { bytesRead } = await source.handle.read(
+      bytes,
+      read,
+      length - read,
+      section.offset + read,
+    );
     if (!bytesRead) throw new Error('This PostScript file changed while opening.');
     read += bytesRead;
   }
