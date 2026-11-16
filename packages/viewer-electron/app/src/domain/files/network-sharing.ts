@@ -1,4 +1,7 @@
 export type SharingServiceState = 'running' | 'off' | 'unknown';
+export type NetworkSharingStatus = 'ready' | 'unknown' | 'unavailable';
+export type NetworkFolderStatus = 'ready' | 'unknown';
+export type NetworkAddressFamily = 'IPv4' | 'IPv6';
 export function modelCommandLabel(command: { id: string; label: string }): string {
   return command.id === 'network-sharing' ? 'Network sharing' : command.label;
 }
@@ -20,12 +23,12 @@ export interface SharingInterface {
   name: string;
   kind: NetworkInterfaceKind;
   address: string;
-  family: 'IPv4' | 'IPv6';
+  family: NetworkAddressFamily;
 }
 
 export interface NetworkFolderSharing {
   path: string;
-  status: 'ready' | 'unknown';
+  status: NetworkFolderStatus;
   shares: NetworkShare[];
 }
 
@@ -36,7 +39,7 @@ export interface SharingAddress {
 }
 
 export interface NetworkSharingSnapshot {
-  status: 'ready' | 'unknown' | 'unavailable';
+  status: NetworkSharingStatus;
   shares: NetworkShare[];
   service: SharingServiceState;
   host: string;

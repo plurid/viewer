@@ -5,8 +5,9 @@ import { normalize, scoreLabel } from '../../domain/search/name-score';
 export { normalize } from '../../domain/search/name-score';
 
 export type CommandScope = 'window' | 'folder' | 'files' | 'preview' | 'sidebar' | 'workspace';
+export type CommandInvocation = 'person' | 'custom-action';
 export interface CommandContext {
-  invocation?: 'person' | 'custom-action';
+  invocation?: CommandInvocation;
   scope: CommandScope;
   workspaceID: string;
   rootID?: string;

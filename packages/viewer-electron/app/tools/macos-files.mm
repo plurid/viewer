@@ -185,7 +185,7 @@ static NSArray<NSString *> *hiddenNames(NSString *folder, int *failure) {
     if (!count) break;
     size_t offset = 0;
     for (int index = 0; index < count; ++index) {
-      if (offset + sizeof(Record) > sizeof(buffer)) { *failure = EIO; break; }
+      if (offset + sizeof(uint32_t) > sizeof(buffer)) { *failure = EIO; break; }
       const Record *record = reinterpret_cast<const Record *>(buffer + offset);
       if (record->length < sizeof(uint32_t) || record->length > sizeof(buffer) - offset) { *failure = EIO; break; }
       if (record->length < sizeof(Record) || !(record->returned.commonattr & ATTR_CMN_NAME)) { offset += record->length; continue; }

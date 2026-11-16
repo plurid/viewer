@@ -50,15 +50,20 @@ for (let pass = 0; pass < 9; pass++) {
 }
 const entryBefore: number[] = [];
 const entryAfter: number[] = [];
-const item = path.join(folder, 'File 0.txt');
-async function measureEntries(read: () => ReturnType<typeof entry>, samples: number[]) {
+const files = Array.from({ length: count }, (_, index) => path.join(folder, `File ${index}.txt`));
+async function measureEntries(read: typeof entry, samples: number[]) {
   const started = performance.now();
-  for (let index = 0; index < count; index++) await read();
+  for (const file of files) await read(file);
   samples.push(performance.now() - started);
 }
 for (let pass = 0; pass < 3; pass++) {
-  await measureEntries(() => entryWithVisibility(item, native), entryBefore);
-  await measureEntries(() => entry(item), entryAfter);
+  if (pass % 2) {
+    await measureEntries(entry, entryAfter);
+    await measureEntries((file) => entryWithVisibility(file, native), entryBefore);
+  } else {
+    await measureEntries((file) => entryWithVisibility(file, native), entryBefore);
+    await measureEntries(entry, entryAfter);
+  }
 }
 const result = {
   count,
@@ -69,7 +74,7 @@ const result = {
   entrySamples: { before: entryBefore, after: entryAfter },
   samples: { before, after },
   method:
-    'Warm 20,000-file filesystem.list, nine interleaved controls, identical identity and listing code, empty flag reader versus rebuilt native bulk attributes.',
+    'Warm 20,000-file filesystem.list, nine interleaved controls, empty flag reader versus native bulk attributes. Three interleaved entry() passes over the same 20,000 distinct files compare native per-item flags with metadata only.',
 };
 await writeFile(path.join(root, 'performance.json'), JSON.stringify(result, null, 2) + '\n', {
   flag: 'wx',
