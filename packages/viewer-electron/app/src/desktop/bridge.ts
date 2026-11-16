@@ -1,4 +1,6 @@
 import { realpath } from 'node:fs/promises';
+import { releaseName } from '../domain/updates/feed';
+import { installedRelease } from './windows/about';
 import { folderEntry, prepareFolderHistory } from './files/folder-history';
 import { containsPath } from './files/containment';
 import { Reconstructions } from './canvases/reconstruction';
@@ -1101,7 +1103,7 @@ export class Desktop {
         access,
         workspaceState: async () => this.workspaceCatalog,
         authorizeTask: (setup) => this.agentTaskWorkflows.authorize(setup),
-        version: app.getVersion(),
+        version: releaseName(installedRelease()),
         // nothing is requested while config.jsonc and its last valid copy cannot be read
         agentAccess: new AgentAccess(dataPath, () => {
           const snapshot = this.settings.snapshot();

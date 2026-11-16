@@ -3,7 +3,7 @@ import type { FileEntry } from '../../domain/contracts';
 import { needsFolderAccess } from '../../domain/files/access';
 import { refreshConcerns } from '../state/refresh';
 import { onWindowEvent } from '../app/window-events';
-import { followNetworkSharing, refreshNetworkSharing } from './network-sharing-state';
+import { followNetworkSharing, refreshSharingOnRequest } from './network-sharing-state';
 interface Dataset {
   entries: FileEntry[];
   loading: boolean;
@@ -188,7 +188,7 @@ export function useFolder(path: string) {
         );
         value.refresh = refresh;
         const stopRefresh = onWindowEvent('viewer:refresh', (request) => {
-          refreshNetworkSharing();
+          refreshSharingOnRequest();
           if (refreshConcerns(request, path)) refresh();
         });
         value.stop = () => {

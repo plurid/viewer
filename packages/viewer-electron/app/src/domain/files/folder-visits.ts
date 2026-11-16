@@ -55,11 +55,13 @@ export function remapFolderVisits(
   )
     return visits;
   const map = typeof changes === 'function' ? changes : pathMapper(changes);
-  const entries = Object.entries(visits).map(([path, visit]) => ({
-    path,
-    visit,
-    destination: map(path),
-  })).filter((item) => item.path !== item.destination);
+  const entries = Object.entries(visits)
+    .map(([path, visit]) => ({
+      path,
+      visit,
+      destination: map(path),
+    }))
+    .filter((item) => item.path !== item.destination);
   if (!entries.length) return visits;
   const next: Record<string, Visit> = { ...visits };
   for (const { path } of entries) delete next[path];

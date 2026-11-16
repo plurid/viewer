@@ -76,6 +76,7 @@ import { installAboutPanel, installedRelease, openAcknowledgements } from './des
 import { applicationUpdates } from './desktop/updates/native';
 import { applicationLicense } from './desktop/license/native';
 import { licenseLine } from './domain/license/license';
+import { releaseName } from './domain/updates/feed';
 import type { LicenseStatus } from './domain/license/license';
 import type { Updates } from './desktop/updates/updates';
 const terminalArguments = process.argv.slice(app.isPackaged ? 1 : 2);
@@ -777,7 +778,7 @@ app
           try {
             process.exitCode = await runCLI(terminalArguments, {
               dataPath: app.getPath('userData'),
-              version: app.getVersion(),
+              version: releaseName(installedRelease()),
               cwd: process.cwd(),
               home: os.homedir(),
               token: process.env.VIEWER_AGENT_TOKEN,

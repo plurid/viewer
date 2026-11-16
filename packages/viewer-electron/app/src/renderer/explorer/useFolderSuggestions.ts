@@ -27,10 +27,16 @@ export function useFolderSuggestions(query: string, enabled = true, jump = false
   );
   // Saving an equal snapshot must not empty an open list or repeat its metadata reads.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const candidates = useMemo(() => (jump ? rankFolderJump : rankFrecent)(visits, query, Date.now()), [signature, query, jump]);
+  const candidates = useMemo(
+    () => (jump ? rankFolderJump : rankFrecent)(visits, query, Date.now()),
+    [signature, query, jump],
+  );
   const limit = jump ? 10 : folderSuggestionLimit;
   const known = useMemo(() => knownFolderPaths(), [candidates]);
-  const initial = useMemo(() => jump ? candidates.filter((path) => known.has(path)).slice(0, limit) : emptyPaths, [candidates, known, jump, limit]);
+  const initial = useMemo(
+    () => (jump ? candidates.filter((path) => known.has(path)).slice(0, limit) : emptyPaths),
+    [candidates, known, jump, limit],
+  );
   const complete = jump && (initial.length === limit || initial.length === candidates.length);
   const [result, setResult] = useState<{
     candidates: readonly string[];
@@ -40,33 +46,39 @@ export function useFolderSuggestions(query: string, enabled = true, jump = false
   useEffect(() => {
     if (!enabled || !candidates.length || complete) return;
     const controller = new AbortController();
-    const timer = setTimeout(() => {
-      const publish = (paths: string[], checking: boolean) => {
-        if (!controller.signal.aborted)
-          setResult((previous) => ({
-            candidates,
-            checking,
-            paths: [
-              ...new Set([
-                ...(previous?.candidates === candidates ? previous.paths : initial),
-                ...paths,
-              ]),
-            ].slice(0, limit),
-          }));
-      };
-      void checkFolderCandidates(
-        candidates,
-        (path) => jump && known.has(path) ? Promise.resolve({ directory: true }) : window.viewer.stat(path),
-        controller.signal,
-        {
-          limit,
-          onResult: (path, value) => knowFolder(path, value.directory),
-          onUpdate: (paths) => publish(paths, true),
-        },
-      ).then((paths) => {
-        publish(paths, false);
-      });
-    }, jump ? 0 : 80);
+    const timer = setTimeout(
+      () => {
+        const publish = (paths: string[], checking: boolean) => {
+          if (!controller.signal.aborted)
+            setResult((previous) => ({
+              candidates,
+              checking,
+              paths: [
+                ...new Set([
+                  ...(previous?.candidates === candidates ? previous.paths : initial),
+                  ...paths,
+                ]),
+              ].slice(0, limit),
+            }));
+        };
+        void checkFolderCandidates(
+          candidates,
+          (path) =>
+            jump && known.has(path)
+              ? Promise.resolve({ directory: true })
+              : window.viewer.stat(path),
+          controller.signal,
+          {
+            limit,
+            onResult: (path, value) => knowFolder(path, value.directory),
+            onUpdate: (paths) => publish(paths, true),
+          },
+        ).then((paths) => {
+          publish(paths, false);
+        });
+      },
+      jump ? 0 : 80,
+    );
     return () => {
       clearTimeout(timer);
       controller.abort();

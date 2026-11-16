@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import type { ViewerAPI } from '../src/domain/contracts';
 import { initialize } from '../src/renderer/state/store';
 import { useFolder } from '../src/renderer/explorer/useFolder';
 import { sendWindowEvent } from '../src/renderer/app/window-events';
 
 it('refreshes sharing when a folder opens, on return and on request, but not on listing events', async () => {
   const path = '/fixtures/Sharing trigger';
-  const sharing = vi.fn(async () => ({ status: 'ready', shares: [], folders: [], service: 'off', host: '', ipv4: [] }));
+  const sharing = vi.fn<ViewerAPI['networkSharing']>(async () => ({ status: 'ready', shares: [], folders: [], service: 'off', host: '', ipv4: [] }));
   let changed: (event: { type: 'folder-changed'; path: string }) => void = () => {};
   Object.assign(window, { viewer: {
     networkSharing: sharing, save: vi.fn(async () => {}), list: vi.fn(async () => ({ path, parent: '/fixtures', entries: [] })),
@@ -24,5 +25,6 @@ it('refreshes sharing when a folder opens, on return and on request, but not on 
   await waitFor(() => expect(sharing).toHaveBeenCalledTimes(2));
   act(() => sendWindowEvent('viewer:refresh', { paths: [path] }));
   await waitFor(() => expect(sharing).toHaveBeenCalledTimes(3));
+  expect(sharing.mock.calls.at(-1)?.[0]).toMatchObject({ kind: 'refresh', force: true });
   view.unmount();
 });

@@ -1,12 +1,13 @@
-import { useSyncExternalStore } from 'react';
-
 let folders: ReadonlySet<string> = new Set();
-const listeners = new Set<() => void>();
 export const knownFolderPaths = () => folders;
 
 export function resetKnownFolders(paths: readonly string[] = []): void {
   folders = new Set(paths);
-  for (const listener of listeners) listener();
+}
+
+export function retainKnownFolders(paths: readonly string[]): void {
+  const retained = new Set(paths);
+  folders = new Set([...folders].filter((path) => retained.has(path)));
 }
 
 export function knowFolder(path: string, present = true): void {
@@ -16,17 +17,4 @@ export function knowFolder(path: string, present = true): void {
   else next.delete(path);
   while (next.size > 500) next.delete(next.values().next().value!);
   folders = next;
-  for (const listener of listeners) listener();
-}
-
-export function useKnownFolders(): ReadonlySet<string> {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-    () => folders,
-  );
 }

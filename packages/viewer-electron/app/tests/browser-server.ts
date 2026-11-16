@@ -516,25 +516,23 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
           return license?.status();
       }
     }
-    case 'networkSharing':
-      schemas.networkSharing.parse(args);
+    case 'networkSharing': {
+      const [request] = schemas.networkSharing.parse(args);
+      const share = {
+        path: networkFolder, name: 'Network Drop 日本', guests: true,
+        readOnly: false, guestWritable: true,
+      };
       return {
         status: networkSharingScenario ? 'ready' : 'unavailable',
-        shares: networkSharingScenario
-          ? [
-              {
-                path: networkFolder,
-                name: 'Network Drop 日本',
-                guests: true,
-                readOnly: false,
-                guestWritable: true,
-              },
-            ]
-          : [],
+        shares: networkSharingScenario ? [share] : [],
+        folders: request.kind === 'refresh' ? (request.paths ?? []).map((file) => ({
+          path: file, status: 'ready', shares: networkSharingScenario && file === networkFolder ? [share] : [],
+        })) : [],
         service: 'running',
         host: 'Studio-Mac',
         ipv4: ['192.168.1.12', '10.0.0.3'],
       };
+    }
     case 'fileInformation':
       return information.get(scoped(args[0] as string));
     case 'fileInformationUpdate':

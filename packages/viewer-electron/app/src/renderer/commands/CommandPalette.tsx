@@ -390,7 +390,11 @@ function useSmartRows(
   const home = getState().bootstrap.home;
   const intent = useMemo(() => paletteIntent(query, home, directory), [query, home, directory]);
   const folderQuery = intent?.kind === 'jump' ? intent.text : !intent ? query : '';
-  const folders = useFolderSuggestions(folderQuery, (!intent || intent.kind === 'jump') && !!folderQuery.trim(), intent?.kind === 'jump');
+  const folders = useFolderSuggestions(
+    folderQuery,
+    (!intent || intent.kind === 'jump') && !!folderQuery.trim(),
+    intent?.kind === 'jump',
+  );
   const [listing, setListing] = useState<{ directory: string; entries: FileEntry[] }>();
   const listed = intent?.kind === 'path' ? intent.directory : '';
   useEffect(() => {

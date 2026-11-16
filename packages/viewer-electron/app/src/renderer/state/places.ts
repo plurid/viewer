@@ -1,10 +1,10 @@
 // Sidebar favorites, shortcut labels and recent folders.
-import { recordVisit, remembersFolder } from '../../domain/files/folder-visits';
+import { folderPath, recordVisit, remembersFolder } from '../../domain/files/folder-visits';
 import { reorder } from '../../domain/preferences/ui';
 import { getState, savePatch } from './core';
 import { changePreferences } from './preferences';
 import { folderVisitSync } from './folder-visits';
-import { knowFolder } from '../explorer/folder-availability';
+import { knowFolder, retainKnownFolders } from '../explorer/folder-availability';
 
 export function addFavorite(path: string, name: string, before?: string): void {
   if (
@@ -33,12 +33,17 @@ export function renameShortcut(path: string, name: string): void {
 }
 export function remember(path: string, options: { visit?: boolean } = {}): void {
   if (!remembersFolder(path)) return;
-  if (options.visit !== false) knowFolder(path);
+  const visits =
+    options.visit !== false
+      ? recordVisit(getState().saved.visits ?? {}, path, Date.now())
+      : undefined;
+  if (visits) {
+    retainKnownFolders(Object.keys(visits));
+    knowFolder(folderPath(path));
+  }
   savePatch({
     recents: [path, ...getState().saved.recents.filter((item) => item !== path)].slice(0, 50),
-    ...(options.visit !== false
-      ? { visits: recordVisit(getState().saved.visits ?? {}, path, Date.now()) }
-      : {}),
+    ...(visits ? { visits } : {}),
   });
 }
 export function rememberFolderVisit(path: string): void {
