@@ -40,6 +40,7 @@
     "test:watch": "vitest",
     "test:browser": "tsx tests/browser-server.ts",
     "test:desktop": "tsx tests/electron-smoke.ts",
+    "test:report-window": "node --import tsx tools/report-window-check.ts",
     "test:mas": "tsx tests/mas-native.ts",
     "test:fabrication-native": "tsx tests/native/fabrication.ts",
     "qualify": "tsx tools/qualification.ts",

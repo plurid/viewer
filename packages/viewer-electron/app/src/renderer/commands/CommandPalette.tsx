@@ -30,8 +30,6 @@ import { focusPlane } from '../workspace/sessions';
 import type { FileEntry } from '../../domain/contracts';
 import { calculate, paletteIntent } from './smart-palette';
 import { useFolderSuggestions } from '../explorer/useFolderSuggestions';
-import { rankFolderJump } from '../../domain/files/folder-visits';
-import { useKnownFolders } from '../explorer/folder-availability';
 import { LineFinder } from '../command-line/LineFinder';
 import { PromptFinder } from '../command-line/PromptFinder';
 import { QuickCommand } from '../terminals/QuickCommand';
@@ -200,7 +198,7 @@ function CommandFinder({
   const settings = mode === 'settings';
   const nested = workspaces || settings;
   const onCommands = () => onMode('commands');
-  const smart = useSmartRows(nested ? '' : query, context, directory);
+  const smart = useSmartRows(nested || folder.length ? '' : query, context, directory);
   // Listing evaluates every command. The window's and this plane's commands change with their
   // revision; the palette's own rows, re-registered on every keystroke, do not count.
   const scoped = useSyncExternalStore(registry.subscribe, () => registry.scopedSnapshot(active));
@@ -392,15 +390,7 @@ function useSmartRows(
   const home = getState().bootstrap.home;
   const intent = useMemo(() => paletteIntent(query, home, directory), [query, home, directory]);
   const folderQuery = intent?.kind === 'jump' ? intent.text : !intent ? query : '';
-  const folders = useFolderSuggestions(folderQuery, !intent && !!folderQuery.trim());
-  const known = useKnownFolders();
-  const visits = useViewer((state) => state.saved.visits);
-  const jump =
-    intent?.kind === 'jump'
-      ? rankFolderJump(visits ?? {}, intent.text, Date.now())
-          .filter((path) => known.has(path))
-          .slice(0, 10)
-      : [];
+  const folders = useFolderSuggestions(folderQuery, (!intent || intent.kind === 'jump') && !!folderQuery.trim(), intent?.kind === 'jump');
   const [listing, setListing] = useState<{ directory: string; entries: FileEntry[] }>();
   const listed = intent?.kind === 'path' ? intent.directory : '';
   useEffect(() => {
@@ -445,7 +435,7 @@ function useSmartRows(
   });
   const definitions: CommandDefinition[] = (() => {
     if (!intent || intent.kind === 'jump')
-      return (intent?.kind === 'jump' ? jump : folders.paths).map((path) =>
+      return folders.paths.map((path) =>
         row(`folder:${path}`, {
           label: path.split('/').pop() || path,
           detail: path,
@@ -547,7 +537,7 @@ function useSmartRows(
       valid: (invocation) => invocation.workspaceID === activeWorkspace().id,
     },
     // the palette's context is a new object each render: republishing on it never settled
-    [intent, listing, folders.paths, known, visits],
+    [intent, listing, folders.paths],
   );
   return definitions.length ? registry.list({ sources: [sourceID] }) : [];
 }

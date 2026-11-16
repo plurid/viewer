@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 
 let folders: ReadonlySet<string> = new Set();
 const listeners = new Set<() => void>();
+export const knownFolderPaths = () => folders;
 
 export function resetKnownFolders(paths: readonly string[] = []): void {
   folders = new Set(paths);

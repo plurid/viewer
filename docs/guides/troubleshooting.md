@@ -148,17 +148,27 @@ until you fix it. Keep API keys in the model settings, never in the settings fil
 ## Report a problem
 
 1. Choose **Help → Copy Report…**. Read the Markdown report, then choose **Copy** (Return). Escape
-   closes without copying. The report is made on your Mac and sends nothing.
+   closes without copying. Copy puts the text on the clipboard, which other apps can read and
+   macOS may carry to your other devices through Universal Clipboard.
 2. Choose **Help → Report an Issue…** and paste the report. Describe the steps, what you expected
    and what happened. Attach a small generated sample if you can.
 
-The report includes Viewer's version, build, edition and trial or licensed status, macOS and Mac
-hardware, display count and scales, language and region, and up to 20 recent failures, newest first.
-It leaves out settings, file listings, clipboard contents, environment variables, license email,
-order reference and key. Names, personal paths, network addresses, emails, credentials and address
-queries are redacted. Paths below Home retain only their depth and extension, such as `~/…/….pdf`;
-Viewer's bundle and data paths keep their diagnostic names. If a privacy check fails, the report
-names the unchecked value and omits failure excerpts. Read it before sharing.
+By default, the report contains no personal file names or message text. It includes Viewer's version,
+build, edition and trial or licensed status, macOS, display count and scales, language and region.
+Model, chip and memory appear when available. Up to 20 recent failures appear newest first, with
+their time, kind, known error class, validated code and locations inside Viewer's code. Other stack
+frames are counted without their paths. Both the direct and Mac App Store editions use this report;
+the default needs no user, computer-name or volume lookup.
+
+Turn on **Include message text** only if you want excerpts. Message text can contain file names,
+addresses and other private text. Viewer removes what it can recognise. Read it before you share it.
+Recognised paths are reduced; code paths inside Viewer's bundle retain their diagnostic names, while
+the data folder keeps only fixed Viewer folder names. Failed privacy checks omit excerpts and name
+what could not be checked. Turning the checkbox off restores the default report. Copy copies exactly
+the displayed text.
+
+Viewer sends neither report to its developer. The report does not add settings, file listings,
+clipboard contents, environment variables or license buyer details.
 
 **Help → Show Diagnostic Log** reveals the original local log. **Help → Show Crash Reports** opens
 crash reports kept on this Mac. Neither is sent. These original files can contain private paths and

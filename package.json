@@ -20,6 +20,7 @@
     "test": "pnpm --filter viewer-electron test",
     "test:browser": "pnpm --filter viewer-electron test:browser",
     "test:desktop": "pnpm --filter viewer-electron test:desktop",
+    "test:report-window": "pnpm --filter viewer-electron test:report-window",
     "test:mas": "pnpm --filter viewer-electron test:mas",
     "test:fabrication-native": "pnpm --filter viewer-electron test:fabrication-native",
     "qualify": "pnpm --filter viewer-electron qualify",

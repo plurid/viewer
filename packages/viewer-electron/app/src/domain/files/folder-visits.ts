@@ -59,9 +59,10 @@ export function remapFolderVisits(
     path,
     visit,
     destination: map(path),
-  }));
-  if (entries.every((item) => item.path === item.destination)) return visits;
-  const next: Record<string, Visit> = {};
+  })).filter((item) => item.path !== item.destination);
+  if (!entries.length) return visits;
+  const next: Record<string, Visit> = { ...visits };
+  for (const { path } of entries) delete next[path];
   for (const { visit, destination } of entries) {
     if (!remembersFolder(destination)) continue;
     next[destination] = {

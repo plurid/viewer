@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { chromeUserAgent } from '../src/domain/previews/browser';
 
 const electron =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Viewer/1.0.0 Chrome/142.0.7444.52 Electron/45.1.0 Safari/537.36';
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Viewer/0.1.0 Chrome/142.0.7444.52 Electron/45.1.0 Safari/537.36';
 
 describe('a browser plane’s user agent', () => {
   it('is Chromium’s own, without the app’s and Electron’s tokens', () => {
@@ -22,7 +22,7 @@ describe('a browser plane’s user agent', () => {
     expect(chromeUserAgent('Mozilla/5.0 AxB/1 Chrome/1', 'A.B')).toBe('Mozilla/5.0 AxB/1 Chrome/1');
   });
   it('leaves an agent without those tokens as it is', () => {
-    const chrome = electron.replace(' Viewer/1.0.0', '').replace(' Electron/45.1.0', '');
+    const chrome = electron.replace(' Viewer/0.1.0', '').replace(' Electron/45.1.0', '');
     expect(chromeUserAgent(chrome, 'Viewer')).toBe(chrome);
   });
 });

@@ -82,14 +82,21 @@ These executables and external apps have their own permissions.
 ## Reporting a problem
 
 Choose **Help → Copy Report…**, read the report and choose **Copy** (Return). Escape closes it.
-Paste it into **Help → Report an Issue…** if you choose to share it. Both editions make the report
-on the Mac and send nothing. It contains version/build, edition, trial or licensed status, macOS,
-model, chip, memory, display count/scales, language/region and up to 20 recent failures, newest
-first. Names, personal paths, network addresses, emails, keys, tokens and address queries are
-redacted. Home paths retain depth and extension; Viewer's bundle and data paths keep their
-diagnostic names. Failed privacy checks are named and failure excerpts are omitted. Settings, file
-listings, clipboard contents, environment variables and license buyer details are excluded. Read
-before sharing.
+Copy puts the report on the clipboard, which other apps can read and macOS may carry to your other
+devices through Universal Clipboard. Paste it into **Help → Report an Issue…** if you choose.
+
+By default, the report contains no personal file names or message text. Both editions include
+version/build, edition, trial or licensed status, macOS, display count/scales, language/region and up
+to 20 recent failures, newest first. Model, chip and memory are optional. Each failure contains time,
+kind, a known error class, a validated code and locations inside Viewer's code. Outside stack frames
+are counted without paths. The Mac App Store default needs no identity or volume lookup.
+
+**Include message text** is off by default. Excerpts can contain file names, addresses and other
+private text. Viewer removes what it can recognise; read them before sharing. Recognised paths are
+reduced, bundle code names are retained and the data folder keeps only fixed Viewer folder names.
+Failed privacy checks are named and excerpts are omitted. Turning the checkbox off restores the
+default report. Viewer sends neither version to its developer and adds no settings, file listings,
+clipboard contents, environment variables or license buyer details.
 
 Include the Viewer version/build, macOS version, Apple Silicon model, direct/App Store edition,
 exact steps and expected result. A small generated example is preferable to a confidential file.

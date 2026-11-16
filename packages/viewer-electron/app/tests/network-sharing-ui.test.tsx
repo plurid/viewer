@@ -292,6 +292,7 @@ it('opens the captured folder dialog from the command and refreshes it when the 
   render(<Host />);
   fireEvent.click(screen.getByRole('button', { name: 'Share on the Network…' }));
   expect(await screen.findByText('This folder is not shared.')).toBeTruthy();
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open File Sharing Settings' }));
   expect(
     screen.getByText(
       /Control-click the folder under Shared Folders, choose Advanced Options/,
@@ -379,4 +380,44 @@ it('offers the two command names for exactly one folder and refuses custom actio
   ).toThrow('named command');
   await registry.invoke('network-sharing', { paneID: 'folder' });
   expect(opened).toHaveBeenCalledWith(context);
+});
+
+it('shows inherited sharing and its guest warning, and never calls an unknown folder unshared', async () => {
+  const inherited = { ...snapshot.shares[0]!, path: '/fixtures', inside: true, relative: file.name };
+  snapshot = { ...snapshot, folders: [{ path: file.path, status: 'ready', shares: [inherited] }] };
+  await readNetworkSharing([file.path]);
+  const mark = render(<FileIcon entry={file} />);
+  expect(screen.getByRole('img', { name: 'Shared' }).getAttribute('aria-description')).toContain('Inside the shared folder Drop folder 日本.');
+  mark.unmount();
+  const info = render(<NetworkSharingSection path={file.path} />);
+  expect(screen.getByText('Inside the shared folder Drop folder 日本')).toBeTruthy();
+  expect(screen.getByText(/Anyone on the same network can open this folder without a password/)).toBeTruthy();
+  info.unmount();
+  snapshot = { ...snapshot, folders: [{ path: file.path, status: 'unknown', shares: [] }] };
+  await readNetworkSharing([file.path]);
+  render(<NetworkSharingDialog path={file.path} onClose={() => {}} />);
+  expect(screen.queryByText('This folder is not shared.')).toBeNull();
+});
+
+it('lets the person open sharing while an unrelated custom invocation is waiting', async () => {
+  let finish = () => {};
+  const waiting = new Promise<void>((resolve) => { finish = resolve; });
+  const opened = vi.fn(async () => {});
+  const command = folderCommands({ networkSharing: opened } as unknown as FolderActions).find((item) => item.id === 'network-sharing')!;
+  const registry = new CommandRegistry();
+  registry.register('folder:folder', {
+    context: () => context,
+    definitions: () => [command, {
+      id: 'custom.wait', label: 'Wait', group: 'Actions', when: () => true,
+      run: async () => waiting,
+    }],
+  });
+  const custom = registry.invoke('custom.wait', { paneID: 'folder' });
+  try {
+    await registry.invoke('network-sharing', { paneID: 'folder' });
+    expect(opened).toHaveBeenCalledWith(context);
+  } finally {
+    finish();
+    await custom;
+  }
 });

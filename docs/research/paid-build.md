@@ -63,11 +63,13 @@ Viewer's data folder and verified again at every launch; there is no "paid" swit
 
 ## Open questions
 
-- **The license of the source.** Viewer 1.0.0 was published under the delicense, which lets anyone
-  rebuild and resell it, and that grant stays. A later release can carry a license that forbids
-  reselling builds as Viewer while leaving the code readable and usable; the choice is the owner's.
-- **Updates.** Whether a key covers every later version or one major version has to be decided
-  before the second major version, and said on the purchase page before the first sale.
+- **The license of the source.** The first public build of Viewer, published as 1.0.0 (build 553),
+  used the delicense, which lets anyone rebuild and resell it, and that grant stays. A later release
+  can carry a license that forbids reselling builds as Viewer while leaving the code readable and
+  usable; the choice is the owner's.
+- **Updates.** Whether a key covers every later update, or every update until the next revision
+  (the third number), remains the owner's decision. State it on the purchase page before the first
+  sale.
 - **The Mac App Store edition.** The store has its own purchase rules, and a key bought directly
   does not unlock it. The edition's text and links need a separate review before submission.
 - **Existing 1.0.0 folders.** Their trial starts at the first launch of the paid build.

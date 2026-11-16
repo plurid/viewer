@@ -24,3 +24,4 @@ These records explain decisions that still shape the application. Feature usage 
 - [Offline license keys for direct builds](0016-offline-license-keys.md)
 - [Publication without exclusive rename](0017-publication-without-exclusive-rename.md)
 - [Explicit PostScript rendering](0018-explicit-postscript-rendering.md)
+- [Alpha versioning](0019-alpha-versioning.md)
