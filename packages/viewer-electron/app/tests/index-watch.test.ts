@@ -11,6 +11,18 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('bounded recursive index reconciliation', () => {
+  it('passes one coalesced batch to the shared visibility reconciliation', async () => {
+    const changed = vi.fn(async (_file: string) => {});
+    const batch = vi.fn(async (_files: readonly string[]) => {});
+    const watcher = new IndexWatcher(defaultSettings('/chosen').search, changed, vi.fn(), batch);
+    const callbacks = watch.mock.calls[0][1];
+    for (let index = 0; index < 511; index++) callbacks.changed(`/chosen/file-${index}`);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(batch.mock.calls[0]?.[0]).toHaveLength(511);
+    expect(changed).not.toHaveBeenCalled();
+    await watcher.close();
+  });
   it('collapses a bulk transfer into a root reconciliation and suppresses excluded paths', async () => {
     const changed = vi.fn(async (_file: string) => {});
     const config = {

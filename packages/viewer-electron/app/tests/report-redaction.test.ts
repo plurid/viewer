@@ -6,7 +6,9 @@ const home = '/Users/zoe';
 const values: ReportPrivateValue[] = [
   { kind: 'home', value: home },
   { kind: 'home', value: '/People/Home With Spaces' },
+  { kind: 'home', value: '/People/Zoë Example' },
   { kind: 'short name', value: 'art' },
+  { kind: 'short name', value: 'zoe' },
   { kind: 'full name', value: 'Zoë Example' },
   { kind: 'computer name', value: "Example's Research Computer" },
   { kind: 'local host name', value: 'example-research-computer' },
@@ -17,6 +19,21 @@ const values: ReportPrivateValue[] = [
 ];
 
 describe('optional message redaction', () => {
+  it('leaves ordinary text without private values unchanged', () => {
+    const text = 'The operation failed. Please try again.';
+    expect(redactReport(text, values)).toBe(text);
+  });
+
+  it('removes a longer private value before one contained inside it', () => {
+    const privateValues: ReportPrivateValue[] = [
+      { kind: 'short name', value: 'Example' },
+      { kind: 'computer name', value: 'Example Research Computer' },
+    ];
+    expect(redactReport('Example Research Computer Example', privateValues)).toBe(
+      '<private> <private>',
+    );
+  });
+
   it.each([
     '/Users/zoe/Documents/Diagnosis.pdf',
     '/private/Users/zoe/Documents/Diagnosis.pdf',
@@ -41,6 +58,9 @@ describe('optional message redaction', () => {
     '/People/Home+With+Spaces/Documents/Diagnosis.pdf',
     '/People/Home-With-Spaces/Documents/Diagnosis.pdf',
     '/People/Home_With_Spaces/Documents/Diagnosis.pdf',
+    '/People/Zoë Example/Documents/Diagnosis.pdf',
+    encodeURI('/People/Zoë Example/Documents/Diagnosis.pdf'),
+    '/People/Zoë Example/Documents/Diagnosis.pdf'.normalize('NFD'),
   ])('hides every tested home spelling: %s', (injected) => {
     const result = redactReport('open ' + injected, values);
     expect(result).not.toContain(injected);
@@ -48,12 +68,15 @@ describe('optional message redaction', () => {
     expect(() => encodeURIComponent(result)).not.toThrow();
   });
 
-  it.each([';', '|', '=', '!', '\t', '\n', ',', ')'])('hides a home with any terminator (%s)', (terminator) => {
-    expect(redactReport('/People/Home With Spaces' + terminator, values)).not.toContain('Home');
-  });
+  it.each([';', '|', '=', '!', '\t', '\n', ',', ')'])(
+    'hides a home with any terminator (%s)',
+    (terminator) => {
+      expect(redactReport('/People/Home With Spaces' + terminator, values)).not.toContain('Home');
+    },
+  );
 
   it.each([
-    "/Users/Shared/Client Acme/Payroll 2026",
+    '/Users/Shared/Client Acme/Payroll 2026',
     '/Users/another/Medical Records/Diagnosis.pdf',
     '/tmp/SecretProject/secret.txt',
     '/net/private-server/SecretProject',
@@ -64,7 +87,9 @@ describe('optional message redaction', () => {
   ])('reduces absolute and quoted relative paths: %s', (injected) => {
     const result = redactReport('open ' + injected, values);
     expect(result).not.toContain(injected);
-    expect(result).not.toMatch(/Acme|Payroll|another|Medical|Diagnosis|SecretProject|old-server|unmounted-share|No Longer Mounted/);
+    expect(result).not.toMatch(
+      /Acme|Payroll|another|Medical|Diagnosis|SecretProject|old-server|unmounted-share|No Longer Mounted/,
+    );
   });
 
   it('gets an extension from the path, never from a later word on the line', () => {
@@ -74,20 +99,26 @@ describe('optional message redaction', () => {
   });
 
   it('keeps bundle code names, only fixed data folders and no named lens', () => {
-    expect(redactReport('/Applications/Viewer.app/Contents/Resources/app.asar', values))
-      .toBe('<Viewer>/Contents/Resources/app.asar');
+    expect(redactReport('/Applications/Viewer.app/Contents/Resources/app.asar', values)).toBe(
+      '<Viewer>/Contents/Resources/app.asar',
+    );
     const data = home + '/Library/Application Support/Viewer';
     expect(redactReport(data + '/Logs/diagnostics.log', values)).toBe('<Viewer data>/Logs/….log');
-    expect(redactReport(data + '/lenses/Private Client.json', values)).not.toMatch(/Private|Client/);
+    expect(redactReport(data + '/lenses/Private Client.json', values)).not.toMatch(
+      /Private|Client/,
+    );
     expect(redactReport(data + '/../../PrivateClient.txt', values)).not.toContain('PrivateClient');
     expect(redactReport(data + '-other/PrivateClient.txt', values)).not.toContain('PrivateClient');
   });
 
   it('handles individual full-name words, apostrophes, host labels and NetBIOS names', () => {
-    const result = redactReport("ZOË Example art_1 2ART artist cart Example’s Research Computer research_machine RESEARCH_MACHIN", values);
+    const result = redactReport(
+      'ZOË Example art_1 2ART artist cart Example’s Research Computer research_machine RESEARCH_MACHIN',
+      values,
+    );
     expect(result).not.toMatch(/ZOË|Example|art_1|2ART|research_machine|RESEARCH_MACHIN/i);
     expect(result).toContain('artist cart');
-    expect(redactReport("Example's Research Computer.local", values)).not.toContain("Example");
+    expect(redactReport("Example's Research Computer.local", values)).not.toContain('Example');
   });
 
   it.each([
@@ -106,7 +137,9 @@ describe('optional message redaction', () => {
   ])('drops addresses and URL paths: %s', (injected) => {
     const result = redactReport(injected, values);
     expect(result).not.toContain(injected);
-    expect(result).not.toMatch(/Secret_Project|Secret_Second|private_host|private_server|person|password|hidden|fragment|1A:2B|192\.168|fe80|db8|::|münchen/);
+    expect(result).not.toMatch(
+      /Secret_Project|Secret_Second|private_host|private_server|person|password|hidden|fragment|1A:2B|192\.168|fe80|db8|::|münchen/,
+    );
   });
 
   it.each([
@@ -121,20 +154,29 @@ describe('optional message redaction', () => {
     'Authorization: Basic ZXhhbXBsZTpwYXNz',
     'Bearer private-token',
     '“viewer-license-1.\n  eyJlbWFpbCI6Imh1bnRlcjIifQ.\n  abcdefghijklmno”',
+    '“vie\n wer- license -1.\n eyJlbWFpbCI6Imh1bnRlcjIifQ.\n abcdefghijklmno”',
     'AKIAIOSFODNN7EXAMPLE',
     'AbCd1234/AbCd1234/AbCd1234/AbCd1234/AbCd1234=',
     'eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImFiYyJ9.abcdefghijklmno',
   ])('redacts recognized credentials: %s', (injected) => {
-    expect(redactReport(injected, values)).not.toMatch(/hunter2|several|private words|private-cookie|private-token|ZXhhb|eyJ|abcdefghijk|AKIA|AbCd1234/);
+    expect(redactReport(injected, values)).not.toMatch(
+      /hunter2|several|private words|private-cookie|private-token|ZXhhb|eyJ|abcdefghijk|AKIA|AbCd1234/,
+    );
   });
 
-  it('does not mistake dotted function identifiers in a stack frame for hosts', () => {
-    expect(redactReport('Error: failed\n    at FolderService.list (/Applications/Viewer.app/Contents/app.cjs:12:3)', values))
-      .toContain('FolderService.list');
+  it('applies address masking to every optional line, including frame-shaped message text', () => {
+    expect(
+      redactReport(
+        'Error: failed\n    at FolderService.list (/Applications/Viewer.app/Contents/app.cjs:12:3)',
+        values,
+      ),
+    ).not.toContain('FolderService.list');
   });
 
   it('fails closed for missing checks and bounds overlarge inputs before scanning', () => {
-    expect(redactReport('private', [{ kind: 'computer name', value: undefined }])).toContain('could not be checked');
+    expect(redactReport('private', [{ kind: 'computer name', value: undefined }])).toContain(
+      'could not be checked',
+    );
     expect(redactReport('a'.repeat(64000), values).length).toBeLessThan(8000);
     expect(redactReport('private %252525252541 value', values)).toContain('Encoded text omitted');
   });
@@ -143,14 +185,42 @@ describe('optional message redaction', () => {
     let seed = 0x5eed;
     for (let index = 0; index < 300; index++) {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      const value = 'PrivatePerson' + seed.toString(36);
+      const value = 'Sample Person' + seed.toString(36);
       const privateValues: ReportPrivateValue[] = [{ kind: 'full name', value }];
-      for (const injected of [value, value.toUpperCase(), encodeURIComponent(value), '\\u0050' + value.slice(1)]) {
+      for (const injected of [
+        value,
+        value.toUpperCase(),
+        encodeURIComponent(value),
+        '\\u0053' + value.slice(1),
+      ]) {
         const result = redactReport('before ' + injected + ' after', privateValues);
         expect(result.toLowerCase()).not.toContain(injected.toLowerCase());
         expect(result.toLowerCase()).not.toContain(value.toLowerCase());
         expect(result).toBe('before <private> after');
       }
+    }
+  });
+
+  it('removes every exact injected spelling from seeded random mixes of values and filler', () => {
+    let seed = 0x5eed;
+    const random = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed;
+    };
+    for (let round = 0; round < 200; round++) {
+      const privateValues: ReportPrivateValue[] = [];
+      const injections: string[] = [];
+      for (let index = 0; index < 8; index++) {
+        const value = 'Sample Person' + random().toString(36);
+        privateValues.push({ kind: 'full name', value });
+        const spellings = [value, value.toUpperCase(), encodeURIComponent(value)];
+        injections.push(spellings[random() % spellings.length]!);
+      }
+      const text = injections.map((value) => 'filler ' + value + ' more filler').join(' ');
+      const result = redactReport(text, privateValues);
+      for (const injected of injections) expect(result).not.toContain(injected);
+      for (const { value } of privateValues) expect(result).not.toContain(value);
+      expect(result).toBe(injections.map(() => 'filler <private> more filler').join(' '));
     }
   });
 });

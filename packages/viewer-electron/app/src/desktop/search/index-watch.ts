@@ -15,6 +15,7 @@ export class IndexWatcher {
     config: ApplicationSettings['search'],
     private changed: (file: string) => Promise<void>,
     failed: (root: string, error: Error) => void,
+    private batch?: (files: readonly string[]) => Promise<void>,
   ) {
     const excluded = searchExclusions(config.exclusions);
     for (const root of new Set(config.roots))
@@ -53,6 +54,10 @@ export class IndexWatcher {
             if (this.closed) return;
             if (parents.some((parent) => containsPath(parent, file))) continue;
             parents.push(file);
+          }
+          if (this.batch) await this.batch(parents);
+          else for (const file of parents) {
+            if (this.closed) return;
             await this.changed(file);
           }
         }

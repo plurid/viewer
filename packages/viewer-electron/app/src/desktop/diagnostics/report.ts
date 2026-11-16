@@ -8,6 +8,7 @@ import { boundedText, withoutControls } from '../../domain/diagnostics/text';
 import { reportFailure } from '../../domain/diagnostics/report-failure';
 import { redactReport } from '../../domain/diagnostics/report-redaction';
 import type { ReportPrivateValue } from '../../domain/diagnostics/report-redaction';
+import type { ReportSnapshot } from '../../domain/diagnostics/report-window';
 import type { InstalledRelease } from '../../domain/updates/feed';
 import type { LicenseStatus } from '../../domain/license/license';
 import { realHome } from '../native/home';
@@ -57,7 +58,8 @@ export function diagnosticReport(input: ReportInput): string {
   const fact = (value: string | undefined) =>
     value ? boundedText(withoutControls(value), 128).trim() : 'unavailable';
   const lines = [
-    '# Viewer report', '',
+    '# Viewer report',
+    '',
     '- Viewer: ' + fact(facts.release.version),
     '- Build: ' + (facts.release.build ?? 'development'),
     '- Edition: ' + facts.edition,
@@ -66,12 +68,17 @@ export function diagnosticReport(input: ReportInput): string {
   ];
   if (facts.model) lines.push('- Model: ' + fact(facts.model));
   if (facts.chip) lines.push('- Chip: ' + fact(facts.chip));
-  if (facts.memory !== undefined) lines.push('- Memory: ' + Math.round(facts.memory / 1024 ** 3) + ' GiB');
+  if (facts.memory !== undefined)
+    lines.push('- Memory: ' + Math.round(facts.memory / 1024 ** 3) + ' GiB');
   lines.push(
-    '- Displays: ' + facts.scales.length + (facts.scales.length ? ' (' + facts.scales.map((scale) => scale + '×').join(', ') + ')' : ''),
+    '- Displays: ' +
+      facts.scales.length +
+      (facts.scales.length ? ' (' + facts.scales.map((scale) => scale + '×').join(', ') + ')' : ''),
     '- Language: ' + fact(facts.language),
     '- Region: ' + fact(facts.region),
-    '', '## Recent failures (newest first)', '',
+    '',
+    '## Recent failures (newest first)',
+    '',
   );
   if (unchecked.length)
     lines.push('Message text omitted: could not check ' + unchecked.join(', ') + '.', '');
@@ -85,26 +92,41 @@ export function diagnosticReport(input: ReportInput): string {
           typeof entry.at === 'string' &&
           /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(entry.at) &&
           Number.isFinite(Date.parse(entry.at)) &&
-          typeof entry.kind === 'string' && failureKinds.has(entry.kind) &&
+          typeof entry.kind === 'string' &&
+          failureKinds.has(entry.kind) &&
           typeof entry.detail === 'string'
-        ) entries.push(entry);
+        )
+          entries.push(entry);
       } catch {
         // Malformed records cannot supply any report field.
       }
     }
-    const recent = entries.toReversed().toSorted((a, b) => String(b.at).localeCompare(String(a.at)))
+    const recent = entries
+      .toReversed()
+      .toSorted((a, b) => String(b.at).localeCompare(String(a.at)))
       .slice(0, reportLimits.failures);
     for (const entry of recent) {
-      const failure = reportFailure(entry, input.bundleRoot);
-      lines.push('### ' + String(entry.at) + ' (' + String(entry.kind) + ')', '', '- Class: ' + failure.name);
+      const failure = reportFailure(entry, input.bundleRoot, new Set(Object.keys(os.constants?.errno ?? {})));
+      lines.push(
+        '### ' + String(entry.at) + ' (' + String(entry.kind) + ')',
+        '',
+        '- Class: ' + failure.name,
+      );
       if (failure.code) lines.push('- Code: ' + failure.code);
       for (const frame of failure.frames)
-        lines.push('- ' + (frame.function ? frame.function + ' (' : '') +
-          frame.path + ':' + frame.line + ':' + frame.column + (frame.function ? ')' : ''));
+        lines.push('- ' + frame.path + ':' + frame.line + ':' + frame.column);
       if (failure.outside)
-        lines.push('- ' + failure.outside + (failure.outside === 1 ? ' frame' : ' frames') + ' outside Viewer');
+        lines.push(
+          '- ' +
+            failure.outside +
+            (failure.outside === 1 ? ' frame' : ' frames') +
+            ' outside Viewer',
+        );
       if (input.includeMessageText && !unchecked.length) {
-        const message = boundedText(redactReport(String(entry.detail), privateValues), reportLimits.message);
+        const message = boundedText(
+          redactReport(String(entry.detail), privateValues),
+          reportLimits.message,
+        );
         lines.push('', ...message.split('\n').map((line) => '> ' + line));
       }
       lines.push('');
@@ -174,8 +196,9 @@ async function reportPrivateValues(bundleRoot: string | undefined): Promise<Repo
     { kind: 'Bonjour name', value: localHost ? localHost + '.local' : undefined },
     { kind: 'application bundle', value: bundleRoot },
     { kind: 'application data', value: localFact(() => app.getPath('userData')) },
-    ...(volumes?.map((value) => ({ kind: 'volume name' as const, value })) ??
-      [{ kind: 'volume name' as const, value: undefined }]),
+    ...(volumes?.map((value) => ({ kind: 'volume name' as const, value })) ?? [
+      { kind: 'volume name' as const, value: undefined },
+    ]),
   ];
 }
 
@@ -184,26 +207,47 @@ export async function makeDiagnosticReport(
   license: LicenseStatus | undefined,
   includeMessageText = false,
 ): Promise<string> {
-  const bundleRoot = localFact(() => app.isPackaged
-    ? path.resolve(process.execPath, '../../..') : path.join(app.getAppPath(), 'src'));
-  const [model, chip, log, privateValues] = await Promise.all([
+  const snapshot = await makeDiagnosticReportSnapshot(file, license);
+  return includeMessageText ? snapshot.withMessageText() : snapshot.report;
+}
+
+/** Both views share the same facts and log bytes; only explicit opt-in collects private values. */
+export async function makeDiagnosticReportSnapshot(
+  file: string,
+  license: LicenseStatus | undefined,
+): Promise<ReportSnapshot> {
+  const bundleRoot = localFact(() =>
+    app.isPackaged
+      ? path.resolve(process.execPath, '../../..')
+      : path.join(app.getAppPath(), 'src'),
+  );
+  const [model, chip, log] = await Promise.all([
     localValue('/usr/sbin/sysctl', ['-n', 'hw.model']),
     localValue('/usr/sbin/sysctl', ['-n', 'machdep.cpu.brand_string']),
     logTail(file),
-    includeMessageText ? reportPrivateValues(bundleRoot) : [],
   ]);
-  return diagnosticReport({
-    bundleRoot, includeMessageText, privateValues, log,
+  const input: ReportInput = {
+    bundleRoot,
+    privateValues: [],
+    log,
     facts: {
       release: installedRelease(),
       edition: process.mas ? 'Mac App Store' : 'direct',
       license: process.mas || license?.kind === 'licensed' ? 'licensed' : 'trial',
       macOS: localFact(() => process.getSystemVersion()),
-      model, chip,
+      model,
+      chip,
       memory: localFact(() => os.totalmem()),
       scales: localFact(() => screen.getAllDisplays().map((display) => display.scaleFactor)) ?? [],
       language: localFact(() => app.getLocale()),
       region: localFact(() => app.getLocaleCountryCode()),
     },
-  });
+  };
+  let messages: Promise<string> | undefined;
+  return {
+    report: diagnosticReport(input),
+    withMessageText: () => messages ??= reportPrivateValues(bundleRoot).then((privateValues) =>
+      diagnosticReport({ ...input, privateValues, includeMessageText: true }),
+    ),
+  };
 }

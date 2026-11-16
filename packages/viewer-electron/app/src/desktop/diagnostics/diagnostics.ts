@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { boundedText } from '../../domain/diagnostics/text';
+import { diagnosticFailure, knownErrorCode, knownErrorName } from '../../domain/diagnostics/failure';
+import type { DiagnosticErrorFields } from '../../domain/diagnostics/failure';
 import { redactSecrets } from './failures';
 
 export type DiagnosticKind =
@@ -26,9 +29,21 @@ export class DiagnosticLog {
     readonly file: string,
     private limit = 1024 * 1024,
   ) {}
-  record(kind: DiagnosticKind, detail: string): Promise<void> {
+  record(kind: DiagnosticKind, value: unknown, fields?: DiagnosticErrorFields): Promise<void> {
+    const failure = value instanceof Error ? diagnosticFailure(value) : {
+      detail: String(value),
+      ...fields,
+    };
+    const errno = new Set(Object.keys(os.constants?.errno ?? {}));
     const line =
-      JSON.stringify({ at: new Date().toISOString(), kind, detail: boundedText(redactSecrets(detail)) }) + '\n';
+      JSON.stringify({
+        at: new Date().toISOString(),
+        kind,
+        detail: boundedText(redactSecrets(failure.detail)),
+        errorClass: knownErrorName(failure.errorClass),
+        code: knownErrorCode(failure.code, errno),
+        stack: failure.stack ? boundedText(redactSecrets(failure.stack)) : undefined,
+      }) + '\n';
     this.queue = this.queue.then(() => this.append(line)).catch(() => {});
     return this.queue;
   }

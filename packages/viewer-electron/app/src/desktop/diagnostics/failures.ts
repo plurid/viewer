@@ -1,5 +1,7 @@
 import { boundedText, boundedTextTail } from '../../domain/diagnostics/text';
 import { redactCredentials } from '../../domain/diagnostics/secrets';
+import { diagnosticFailure } from '../../domain/diagnostics/failure';
+import type { DiagnosticErrorFields } from '../../domain/diagnostics/failure';
 
 /** At most `limit` entries a minute from one source: a failure loop cannot flood the log. */
 export class DiagnosticBudget {
@@ -23,7 +25,7 @@ export class DiagnosticBudget {
 
 /** Credentials a message may quote, replaced before it is kept. */
 export function redactSecrets(text: string): string {
-  return boundedText(text).split(/\n(?=[ \t]{0,16}at )/).map(redactCredentials).join('\n');
+  return redactCredentials(text);
 }
 
 /** A value as a log line names it: strings, numbers and errors as they read; any other object by
@@ -46,13 +48,16 @@ export function diagnosticText(values: readonly unknown[]): string {
 /** Keeps writing to the console as before, and records a bounded share of what it writes. */
 export function recordConsoleErrors(
   output: Pick<Console, 'error'>,
-  record: (detail: string) => void,
+  record: (detail: string, fields?: DiagnosticErrorFields) => void,
   budget: DiagnosticBudget,
 ): void {
   const write = output.error.bind(output);
   output.error = (...values: unknown[]) => {
     write(...values);
-    if (budget.take('console')) record(diagnosticText(values));
+    if (budget.take('console')) {
+      const error = values.find((value) => value instanceof Error);
+      record(diagnosticText(values), error ? diagnosticFailure(error) : undefined);
+    }
   };
 }
 
@@ -96,7 +101,7 @@ export interface MainFailureHost {
   showLog(): void;
   /** Quits through the quit sequence, which saves every window first. */
   quit(): void;
-  record(detail: string): void;
+  record(detail: string, fields?: DiagnosticErrorFields): void;
 }
 
 /**
@@ -127,6 +132,7 @@ export class MainFailures {
   }
 
   rejection(reason: unknown): void {
-    if (this.budget.take('rejection')) this.host.record(diagnosticText([reason]));
+    if (this.budget.take('rejection'))
+      this.host.record(diagnosticText([reason]), reason instanceof Error ? diagnosticFailure(reason) : undefined);
   }
 }

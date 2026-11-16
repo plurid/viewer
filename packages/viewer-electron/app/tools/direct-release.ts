@@ -16,7 +16,7 @@ import { httpsAddress } from '../src/desktop/updates/signature';
 import { licenseEndpoint } from '../src/desktop/license/signature';
 import { licenseConfiguration } from '../src/desktop/release';
 import type { LicenseConfiguration } from '../src/desktop/release';
-import { releaseName } from '../src/domain/updates/feed';
+import { alphaVersionSchema } from '../src/domain/updates/version';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
   exec = promisify(execFile);
 
@@ -137,7 +137,20 @@ export interface ReleaseSource {
 }
 
 export function releaseTagCommand(version: string, source: ReleaseSource): string {
-  return `git tag v${releaseName({ version, build: Number(source.build) })} ${source.commit}`;
+  return `git tag v${alphaVersionSchema.parse(version)} ${source.commit}`;
+}
+
+export function releaseInstallerName(version: string): string {
+  return `Viewer-${alphaVersionSchema.parse(version)}-arm64`;
+}
+
+export async function releaseTagAvailable(
+  version: string,
+  git: GitCommand = runGit,
+): Promise<void> {
+  const tag = `v${alphaVersionSchema.parse(version)}`;
+  if ((await git(['tag', '--list', tag])).trim())
+    throw new Error(`Tag ${tag} already exists. Raise N with pnpm version:next before releasing.`);
 }
 
 /** A release is built from committed source with its full history: the build number is the
@@ -167,7 +180,7 @@ function pnpm(script: string, env: NodeJS.ProcessEnv): Promise<void> {
   });
 }
 
-/** Rewrite this version's notes for each release; Git and published feeds keep earlier notes. */
+/** Each release keeps its own notes, named by the manifest's version. */
 export async function versionNotes(version: string): Promise<string> {
   const file = path.join(root, 'release-notes', version + '.txt');
   const text = await readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => {
@@ -184,6 +197,9 @@ async function bundleValue(app: string, key: string): Promise<string> {
 }
 
 async function main() {
+  const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+  const version = alphaVersionSchema.parse(manifest.version);
+  await releaseTagAvailable(version);
   if (process.platform !== 'darwin' || process.arch !== 'arm64')
     throw new Error('The initial direct release targets Apple Silicon macOS.');
   releaseLicenseConfiguration();
@@ -193,9 +209,6 @@ async function main() {
     throw new Error(
       'Set VIEWER_DIRECT_IDENTITY to the Developer ID Application identity and VIEWER_NOTARY_PROFILE to a notarytool Keychain profile. Private keys/passwords stay in Keychain.',
     );
-  const version = (
-    JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')) as { version: string }
-  ).version;
   // Everything that can refuse the release does so before the long gates run.
   const source = await releaseSource();
   if (directBuildNumber(root) !== source.build)
@@ -203,7 +216,7 @@ async function main() {
   const notes = await versionNotes(version);
   const feedKey = await signingKey(process.env);
   const endpoint = releaseFeedEndpoint(feedKey);
-  const name = `Viewer-${releaseName({ version, build: Number(source.build) })}-arm64`;
+  const name = releaseInstallerName(version);
   const download = httpsAddress(
     process.env.VIEWER_RELEASE_DOWNLOAD_URL?.trim() || new URL(name + '.dmg', endpoint.feed).href,
     'VIEWER_RELEASE_DOWNLOAD_URL',

@@ -54,7 +54,10 @@ function archive(content: string) {
 
 describe('Plurid registry qualification', () => {
   it('updates only the direct pins without mutating the current manifest', () => {
-    const current = { dependencies: { '@plurid/a': '0.0.0-1', react: '19.3.0' }, version: '0.1.0' };
+    const current = {
+      dependencies: { '@plurid/a': '0.0.0-1', react: '19.3.0' },
+      version: '0.1.0-0',
+    };
     expect(updatedManifest(current, plan)).toEqual({
       ...current,
       dependencies: { '@plurid/a': '0.0.0-2', react: '19.3.0' },

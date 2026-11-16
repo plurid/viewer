@@ -1,4 +1,4 @@
-import { boundedText, withoutControls } from './text';
+import { boundedText } from './text';
 
 function valueEnd(text: string, start: number): number {
   const quote = text[start];
@@ -17,12 +17,29 @@ function valueEnd(text: string, start: number): number {
 
 /** Key and value scanning is bounded and never retries a long value at each character. */
 export function redactCredentials(input: string): string {
-  const text = withoutControls(boundedText(input));
+  const original = boundedText(input).replace(/[\p{Cc}\p{Cf}]/gu, (character) =>
+    /[\n\r\t\u200c\u200d]/u.test(character) ? character : '',
+  );
+  let text = '';
+  const offsets: number[] = [];
+  for (let index = 0; index < original.length; index++) {
+    const character = original[index]!;
+    if (/[\p{Cc}\p{Cf}]/u.test(character)) continue;
+    text += character;
+    offsets.push(index);
+  }
   const spans: { start: number; end: number }[] = [];
   const assignments = /\b[A-Za-z][A-Za-z0-9_-]{0,79}["']?\s{0,32}[:=]\s{0,32}/g;
   for (let match = assignments.exec(text); match; match = assignments.exec(text)) {
-    const key = match[0].replace(/["'\s:=]/g, '').toLowerCase().replace(/[-_]/g, '');
-    if (!/(?:password|passwd|pwd|pass|secret|token|cookie|authorization|apikey|accesskey|privatekey)$/.test(key))
+    const key = match[0]
+      .replace(/["'\s:=]/g, '')
+      .toLowerCase()
+      .replace(/[-_]/g, '');
+    if (
+      !/(?:password|passwd|pwd|pass|secret|token|cookie|authorization|apikey|accesskey|privatekey)$/.test(
+        key,
+      )
+    )
       continue;
     const start = match.index + match[0].length;
     const end = /(?:cookie|authorization)$/.test(key) ? text.length : valueEnd(text, start);
@@ -40,16 +57,30 @@ export function redactCredentials(input: string): string {
       pattern.lastIndex = Math.max(pattern.lastIndex, end);
     }
   }
-  const license = /\bviewer-license-1/gi;
-  for (let match = license.exec(text); match; match = license.exec(text)) {
-    let end = match.index + match[0].length;
-    while (end < text.length && /[A-Za-z0-9_+/.=\s"'“”‘’\x60<>()\[\]-]/.test(text[end]!)) end++;
-    spans.push({ start: match.index, end });
-    license.lastIndex = end;
+  let compact = '';
+  const positions: number[] = [];
+  for (let index = 0; index < text.length; index++) {
+    if (/[\s"'“”‘’\x60<>()\[\]]/.test(text[index]!)) continue;
+    compact += text[index];
+    positions.push(index);
   }
-  for (const match of text.matchAll(/\b(?:sk|pk|rk|gh[pousr]|xox[abprs])[-_][A-Za-z0-9_-]{8,}|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g))
+  const lower = compact.toLowerCase();
+  for (let start = lower.indexOf('viewer-license-1'); start >= 0;) {
+    let end = start + 'viewer-license-1'.length;
+    while (end < compact.length && /[A-Za-z0-9_+/.=-]/.test(compact[end]!)) end++;
+    spans.push({ start: positions[start]!, end: positions[end - 1]! + 1 });
+    start = lower.indexOf('viewer-license-1', end);
+  }
+  for (const match of text.matchAll(
+    /\b(?:sk|pk|rk|gh[pousr]|xox[abprs]|glpat|github_pat)[-_][A-Za-z0-9_-]{8,}|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|\b[a-fA-F0-9]{20,}\b|\b[A-Za-z0-9+/]{12,}={1,2}(?![A-Za-z0-9=])/g,
+  ))
     spans.push({ start: match.index, end: match.index + match[0].length });
-  const ordered = spans.toSorted((a, b) => a.start - b.start || b.end - a.end);
+  for (const match of text.matchAll(/-----BEGIN [A-Z ]{1,32}PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]{1,32}PRIVATE KEY-----|$)/g))
+    spans.push({ start: match.index, end: match.index + match[0].length });
+  const ordered = spans.map((span) => ({
+    start: offsets[span.start] ?? original.length,
+    end: span.end > span.start ? (offsets[span.end - 1] ?? original.length - 1) + 1 : original.length,
+  })).toSorted((a, b) => a.start - b.start || b.end - a.end);
   let output = '';
   let end = 0;
   for (const span of ordered) {
@@ -57,8 +88,8 @@ export function redactCredentials(input: string): string {
       end = Math.max(end, span.end);
       continue;
     }
-    output += text.slice(end, span.start) + '[redacted]';
+    output += original.slice(end, span.start) + '[redacted]';
     end = span.end;
   }
-  return output + text.slice(end);
+  return output + original.slice(end);
 }

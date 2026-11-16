@@ -1,6 +1,7 @@
 import type { ApplicationSettings, IndexStatus } from '../../domain/services';
 import { FileIndex } from '../search/index-core';
 import { IndexWatcher } from '../search/index-watch';
+import { HiddenPaths } from '../files/hidden-paths';
 import { extractDocument } from '../previews/formats';
 import { inspectFile } from '../files/inspection';
 import { readDrawingGeometry } from '../previews/drawing-geometry';
@@ -51,6 +52,14 @@ async function configureNow(value: ApplicationSettings['search'], rebuild = fals
     (root) => {
       watchFailures.add(root);
       port.postMessage({ event: 'index', value: watchedStatus(index!.status()) });
+    },
+    async (files) => {
+      const visibility = new HiddenPaths();
+      for (const file of files) {
+        if (config !== value) return;
+        extracted.invalidate(file);
+        await index?.update(file, false, visibility);
+      }
     },
   );
 }

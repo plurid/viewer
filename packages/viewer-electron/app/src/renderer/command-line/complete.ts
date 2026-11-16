@@ -148,7 +148,9 @@ function complete(
       const entries =
         sources.listing?.directory === directory
           ? sources.listing.entries.filter(
-              (entry) => entry.name.startsWith(base) && (base.startsWith('.') || !entry.name.startsWith('.')),
+              (entry) =>
+                entry.name.startsWith(base) &&
+                (base.startsWith('.') || !entry.name.startsWith('.')),
             )
           : [];
       return {

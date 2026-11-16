@@ -3,6 +3,12 @@ export const reportCloseChannel = 'viewer:close-report';
 export const reportOptionsChannel = 'viewer:report-options';
 export const reportUpdateChannel = 'viewer:report-update';
 export const reportShownChannel = 'viewer:report-shown';
+export const reportReadyChannel = 'viewer:report-ready';
+
+export interface ReportSnapshot {
+  report: string;
+  withMessageText(): Promise<string>;
+}
 
 export interface ReportUpdate {
   revision: number;

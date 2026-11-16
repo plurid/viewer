@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FolderVisits } from '../../domain/files/folder-visits';
+import type { FolderVisits, Visit } from '../../domain/files/folder-visits';
 import { rankFrecent, rankFolderJump } from '../../domain/files/folder-visits';
 import { useViewer } from '../state/core';
-import { checkFolderCandidates, folderCheckLimit } from '../../domain/files/folder-checks';
+import {
+  checkFolderCandidates,
+  folderCheckLimit,
+  FolderCheckPool,
+} from '../../domain/files/folder-checks';
 import { knowFolder, knownFolderPaths } from './folder-availability';
 
 export const folderSuggestionChecks = folderCheckLimit;
 export const folderSuggestionLimit = 8;
 const emptyPaths: readonly string[] = [];
 const emptyVisits: FolderVisits = {};
+const metadataChecks = new FolderCheckPool();
+export type FolderSuggestionMode = 'habit' | 'jump';
 
 /** Debounced callers check only the leading candidates, using asynchronous desktop metadata IO.
  * Failed checks hide a folder for this query without forgetting an unmounted volume. */
@@ -20,19 +26,26 @@ export async function existingFolders(
   return checkFolderCandidates(paths, check, signal);
 }
 
-export function useFolderSuggestions(query: string, enabled = true, jump = false) {
+export function useFolderSuggestions(
+  query: string,
+  enabled = true,
+  mode: FolderSuggestionMode = 'habit',
+) {
+  const jump = mode === 'jump';
   const visits = useViewer((state) => state.saved.visits) ?? emptyVisits;
   const signature = JSON.stringify(
     Object.entries(visits).sort(([first], [second]) => first.localeCompare(second)),
   );
   // Saving an equal snapshot must not empty an open list or repeat its metadata reads.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const candidates = useMemo(
-    () => (jump ? rankFolderJump : rankFrecent)(visits, query, Date.now()),
-    [signature, query, jump],
-  );
+  const candidates = useMemo(() => {
+    const recorded = Object.fromEntries(JSON.parse(signature) as [string, Visit][]);
+    return (jump ? rankFolderJump : rankFrecent)(recorded, query, Date.now());
+  }, [signature, query, jump]);
   const limit = jump ? 10 : folderSuggestionLimit;
-  const known = useMemo(() => knownFolderPaths(), [candidates]);
+  const known = useMemo(
+    () => new Set(candidates.filter((path) => knownFolderPaths().has(path))),
+    [candidates],
+  );
   const initial = useMemo(
     () => (jump ? candidates.filter((path) => known.has(path)).slice(0, limit) : emptyPaths),
     [candidates, known, jump, limit],
@@ -66,7 +79,7 @@ export function useFolderSuggestions(query: string, enabled = true, jump = false
           (path) =>
             jump && known.has(path)
               ? Promise.resolve({ directory: true })
-              : window.viewer.stat(path),
+              : metadataChecks.run(path, (folder) => window.viewer.stat(folder), controller.signal),
           controller.signal,
           {
             limit,

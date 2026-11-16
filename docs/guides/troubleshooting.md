@@ -148,17 +148,17 @@ until you fix it. Keep API keys in the model settings, never in the settings fil
 ## Report a problem
 
 1. Choose **Help → Copy Report…**. Read the Markdown report, then choose **Copy** (Return). Escape
-   closes without copying. Copy puts the text on the clipboard, which other apps can read and
-   macOS may carry to your other devices through Universal Clipboard.
+   closes without copying. Copy puts the text on the clipboard, which other apps can read and macOS
+   may carry to your other devices through Universal Clipboard.
 2. Choose **Help → Report an Issue…** and paste the report. Describe the steps, what you expected
    and what happened. Attach a small generated sample if you can.
 
-By default, the report contains no personal file names or message text. It includes Viewer's version,
-build, edition and trial or licensed status, macOS, display count and scales, language and region.
-Model, chip and memory appear when available. Up to 20 recent failures appear newest first, with
-their time, kind, known error class, validated code and locations inside Viewer's code. Other stack
-frames are counted without their paths. Both the direct and Mac App Store editions use this report;
-the default needs no user, computer-name or volume lookup.
+By default, the report contains no personal file names or message text. It includes Viewer's
+version, build, edition and trial or licensed status, macOS, display count and scales, language and
+region. Model, chip and memory appear when available. Up to 20 recent failures appear newest first,
+with their time, kind, known error class, validated code and locations inside Viewer's code. Other
+stack frames are counted without their paths. Both the direct and Mac App Store editions use this
+report; the default needs no user, computer-name or volume lookup.
 
 Turn on **Include message text** only if you want excerpts. Message text can contain file names,
 addresses and other private text. Viewer removes what it can recognise. Read it before you share it.

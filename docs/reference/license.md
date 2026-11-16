@@ -22,6 +22,9 @@ payload is UTF-8 JSON with these required fields:
 | `order`   | Non-empty order reference, at most 256 characters |
 | `issued`  | Valid date in `YYYY-MM-DD` form                   |
 
+The key carries no Viewer version or build, and verification applies no version or build
+restriction.
+
 Later payload fields are accepted. The signature covers the exact payload bytes, including any JSON
 whitespace. Verification never recomputes a canonical JSON representation. The app applies no
 address pattern to signed email text. The issuer requires exactly one `@`, text on both sides, and

@@ -32,7 +32,11 @@ import { resetKnownFolders } from '../src/renderer/explorer/folder-availability'
 import { remember, clearRecentFolders } from '../src/renderer/state/places';
 import { receiveFileChanges } from '../src/renderer/state/file-changes';
 import { flushState } from '../src/renderer/state/persistence';
-import { folderCheckTimeout, checkFolderCandidates } from '../src/domain/files/folder-checks';
+import {
+  folderCheckTimeout,
+  checkFolderCandidates,
+  FolderCheckPool,
+} from '../src/domain/files/folder-checks';
 import { catalogCommands } from '../src/renderer/commands/window-commands/catalog';
 import { navigationCommands } from '../src/renderer/commands/window-commands/navigation';
 import { windowScopes } from '../src/renderer/commands/window-commands/scope';
@@ -266,6 +270,7 @@ describe('Go to folder suggestions', () => {
       true,
     );
     expect(screen.getByRole('listbox', { name: 'Folder suggestions' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: /\/fixtures\/Design\/Drafts/ })).toBeTruthy();
     expect(getState().saved.visits?.['/Volumes/Offline/Design']).toBeDefined();
   });
 
@@ -275,9 +280,25 @@ describe('Go to folder suggestions', () => {
     fireEvent.change(field(), { target: { value: 'design' } });
     await waitFor(() => expect(options()).toHaveLength(1));
     expect(options()[0]?.textContent).toContain('Drafts');
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toContain('1 suggested folder.'),
+    );
     fireEvent.change(field(), { target: { value: 'documetns' } });
     await waitFor(() => expect(options()).toHaveLength(1));
     expect(options()[0]?.textContent).toContain('Documents');
+  });
+
+  it('describes unavailable remembered history without asking for a first visit', async () => {
+    history();
+    available.clear();
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        'No remembered folders are available. Enter a folder path.',
+      ),
+    );
+    expect(options()).toHaveLength(0);
+    expect(getState().saved.visits?.['/fixtures/Documents']).toBeDefined();
   });
 
   it('opens a keyboard choice with arrows and Return while keeping focus in the field', async () => {
@@ -398,6 +419,47 @@ describe('Go to folder suggestions', () => {
 });
 
 describe('bounded existence checks', () => {
+  it('shares four outstanding reads across a cancelled query and the next query', async () => {
+    vi.useFakeTimers();
+    try {
+      const pool = new FolderCheckPool();
+      const pending = new Map<string, () => void>();
+      let active = 0;
+      let maximum = 0;
+      const check = vi.fn(async (path: string) => {
+        maximum = Math.max(maximum, ++active);
+        if (path.startsWith('/slow/'))
+          await new Promise<void>((resolve) => pending.set(path, resolve));
+        active--;
+        return { directory: true };
+      });
+      const first = new AbortController();
+      const old = checkFolderCandidates(
+        ['/slow/a', '/slow/b', '/slow/c', '/slow/d'],
+        (path) => pool.run(path, check, first.signal),
+        first.signal,
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      first.abort();
+      const next = new AbortController();
+      const fresh = checkFolderCandidates(
+        ['/fresh/a', '/fresh/b', '/fresh/c'],
+        (path) => pool.run(path, check, next.signal),
+        next.signal,
+      );
+      await vi.advanceTimersByTimeAsync(10);
+      expect(check).toHaveBeenCalledTimes(4);
+      pending.get('/slow/a')!();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await fresh).toEqual(['/fresh/a', '/fresh/b', '/fresh/c']);
+      expect(maximum).toBe(4);
+      for (const resolve of pending.values()) resolve();
+      await vi.advanceTimersByTimeAsync(folderCheckTimeout);
+      expect(await old).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('publishes available folders before a slow check times out, keeping outstanding checks bounded', async () => {
     vi.useFakeTimers();
     try {

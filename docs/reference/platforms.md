@@ -62,15 +62,15 @@ Network sharing follows the direct-only system-tool rule used for Spotlight. It 
 `/usr/sbin/sharing -l -f json`, the `com.apple.smbd` launch job, the local host name and physical
 network interfaces with bounded, shell-free calls. Empty, malformed or unsupported output means
 unknown sharing state. Unescaped text records cannot safely identify sharing permissions. It opens
-the installed macOS Sharing settings for the person to make changes. The
-Store edition runs none of these tools and offers no sharing mark, section or command.
+the installed macOS Sharing settings for the person to make changes. The Store edition runs none of
+these tools and offers no sharing mark, section or command.
 
 Both macOS editions can read the native hidden flag when built with the current file helper. The
 helper reads directory flags in bulk and falls back to native per-entry flags on filesystems that do
 not support bulk attributes. After changing `tools/macos-files.mm`, rebuild the helper before
-shipping: an older or unavailable helper only supplies the existing dot-name rule. Flag-read failures
-also keep listings available with the dot-name rule. Source tests with a
-separately compiled helper do not qualify a signed Store build.
+shipping: an older or unavailable helper only supplies the existing dot-name rule. Flag-read
+failures also keep listings available with the dot-name rule. Source tests with a separately
+compiled helper do not qualify a signed Store build.
 
 The shipped source leaves license configuration empty. Such a direct build has no trial, license
 menu, Settings page or reminder, and writes no license record. Configured direct builds keep all

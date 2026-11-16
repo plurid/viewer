@@ -15,6 +15,8 @@ trial. **Viewer → About Viewer** and **Settings → License** show the days le
 Viewer makes no activation request. Buying happens in your browser, under the purchase site's own
 terms.
 
+A license key works with every later version of Viewer.
+
 ## Enter your key
 
 1. Choose **Viewer → License Key…**.

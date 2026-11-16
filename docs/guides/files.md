@@ -67,11 +67,11 @@ empty space and choose **View → Group by**, then **Group by kind** or **Group 
 **Group by kind** places them in **Aliases** before **Folders**. They still open their targets;
 ordinary name, date and size sorting keep their existing order.
 
-On macOS, a helper built from the current source also hides items carrying the hidden flag, such
-as files a Windows PC marked hidden on an SMB share. This includes system folders hidden in Finder:
-`~/Library`, `/bin`, `/sbin`, `/usr`, `/tmp`, `/var` and `/Volumes`. They still complete when you type
-a path. Viewer uses the flag and dot-prefixed names, never a filename pattern. An older or missing
-helper, or an unreadable flag, falls back to the dot-name rule without blocking the listing.
+On macOS, a helper built from the current source also hides items carrying the hidden flag, such as
+files a Windows PC marked hidden on an SMB share. This includes system folders hidden in Finder:
+`~/Library`, `/bin`, `/sbin`, `/usr`, `/tmp`, `/var` and `/Volumes`. They still complete when you
+type a path. Viewer uses the flag and dot-prefixed names, never a filename pattern. An older or
+missing helper, or an unreadable flag, falls back to the dot-name rule without blocking the listing.
 
 **Columns** shows the path from the filesystem root to the current folder and scrolls that folder
 into view. Scroll left to reach its ancestors, or use the left and right arrow keys to follow the
@@ -225,23 +225,24 @@ Privacy & Security**.
    beside a Windows address, then paste it into File Explorer's address bar on the PC. Keep spaces
    in a Windows address as shown. On another Mac, use Finder's **Go → Connect to Server…** with the
    Mac address. Wi-Fi and Ethernet addresses are labelled; VPN and virtual interfaces are omitted.
-   With IPv6 only, use the local host name address. Both computers must be on the same local network.
+   With IPv6 only, use the local host name address. Both computers must be on the same local
+   network.
 
 Shared folders and the folders inside them have a **Shared** mark in file views and the sidebar.
-Inside a share, the details say **Inside the shared folder** and its name. **Get info…** (**⌘I**) shows
-the share name, registered or guest access, read-only status, the File Sharing service and copyable
-addresses under **Network sharing**. If File Sharing is off, the share still exists but nobody can
-connect. **Refresh sharing** reads its state again. Viewer also refreshes when a folder view opens
-and when you return to the app. Navigation reuses sharing state for at least five seconds;
-**Refresh sharing** and returning to the app request a fresh read. If Viewer cannot read the state,
-it shows no mark or sharing details and does not say that the folder is not shared.
+Inside a share, the details say **Inside the shared folder** and its name. **Get info…** (**⌘I**)
+shows the share name, registered or guest access, read-only status, the File Sharing service and
+copyable addresses under **Network sharing**. If File Sharing is off, the share still exists but
+nobody can connect. **Refresh sharing** reads its state again. Viewer also refreshes when a folder
+view opens and when you return to the app. Navigation reuses sharing state for at least five
+seconds; **Refresh sharing** and returning to the app request a fresh read. If Viewer cannot read
+the state, it shows no mark or sharing details and does not say that the folder is not shared.
 
 The warning **Anyone on the same network can open this folder without a password.** means guest
 access is on. When the share also allows writes and the folder's Everyone permissions or access
-control list allow writes, Viewer adds **They can also add, change and delete files in this folder.**
-If those permissions cannot be read or understood, it warns that guests may also be able to write.
-These warnings stay visible. Choose **Network Sharing…** and clear **Allow guest users** in
-**Advanced Options**, as described above, if that is not what you intended.
+control list allow writes, Viewer adds **They can also add, change and delete files in this
+folder.** If those permissions cannot be read or understood, it warns that guests may also be able
+to write. These warnings stay visible. Choose **Network Sharing…** and clear **Allow guest users**
+in **Advanced Options**, as described above, if that is not what you intended.
 
 To stop, choose **Network Sharing… → Open File Sharing Settings**, select the folder under **Shared
 Folders**, then click the remove button. Return to Viewer to see the result. Viewer reads sharing

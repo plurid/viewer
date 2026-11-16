@@ -81,15 +81,15 @@ These executables and external apps have their own permissions.
 
 ## Reporting a problem
 
-Choose **Help → Copy Report…**, read the report and choose **Copy** (Return). Escape closes it.
-Copy puts the report on the clipboard, which other apps can read and macOS may carry to your other
+Choose **Help → Copy Report…**, read the report and choose **Copy** (Return). Escape closes it. Copy
+puts the report on the clipboard, which other apps can read and macOS may carry to your other
 devices through Universal Clipboard. Paste it into **Help → Report an Issue…** if you choose.
 
 By default, the report contains no personal file names or message text. Both editions include
-version/build, edition, trial or licensed status, macOS, display count/scales, language/region and up
-to 20 recent failures, newest first. Model, chip and memory are optional. Each failure contains time,
-kind, a known error class, a validated code and locations inside Viewer's code. Outside stack frames
-are counted without paths. The Mac App Store default needs no identity or volume lookup.
+version/build, edition, trial or licensed status, macOS, display count/scales, language/region and
+up to 20 recent failures, newest first. Model, chip and memory are optional. Each failure contains
+time, kind, a known error class, a validated code and locations inside Viewer's code. Outside stack
+frames are counted without paths. The Mac App Store default needs no identity or volume lookup.
 
 **Include message text** is off by default. Excerpts can contain file names, addresses and other
 private text. Viewer removes what it can recognise; read them before sharing. Recognised paths are

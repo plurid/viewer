@@ -6,7 +6,9 @@ import { feedPublicKey, readSignedFeed } from '../src/desktop/updates/signature'
 import {
   notarizeRetained,
   releaseGates,
+  releaseInstallerName,
   releaseSource,
+  releaseTagAvailable,
   releaseTagCommand,
   stapleApplicationRetained,
   versionNotes,
@@ -159,12 +161,23 @@ describe('release gates', () => {
   });
 
   it('prints the alpha release tag for the built commit', () => {
-    expect(releaseTagCommand('0.1.0', { commit, build: '580' })).toBe(
-      `git tag v0.1.0-580 ${commit}`,
+    expect(releaseTagCommand('0.1.0-0', { commit, build: '584' })).toBe(
+      `git tag v0.1.0-0 ${commit}`,
     );
-    expect(releaseTagCommand('0.1.0', { commit, build: '600' })).toBe(
-      `git tag v0.1.0-600 ${commit}`,
+    expect(releaseTagCommand('0.1.0-0', { commit, build: '600' })).toBe(
+      `git tag v0.1.0-0 ${commit}`,
     );
+    expect(releaseInstallerName('0.1.0-0')).toBe('Viewer-0.1.0-0-arm64');
+    expect(() => releaseInstallerName('1.0.0-0')).toThrow();
+  });
+
+  it('requires the owner to raise N when the manifest version already has a local tag', async () => {
+    const existing = git({ 'tag --list v0.1.0-0': 'v0.1.0-0\n' });
+    await expect(releaseTagAvailable('0.1.0-0', existing)).rejects.toThrow(
+      'Tag v0.1.0-0 already exists. Raise N with pnpm version:next before releasing.',
+    );
+    expect(existing).toHaveBeenCalledExactlyOnceWith(['tag', '--list', 'v0.1.0-0']);
+    await expect(releaseTagAvailable('0.1.0-1', git({}))).resolves.toBeUndefined();
   });
 
   it('refuses a dirty tree, untracked files included, and a shallow clone', async () => {
@@ -199,13 +212,15 @@ describe('release gates', () => {
     expect(() => releaseNotes('x'.repeat(4001))).toThrow('at most 4000');
   });
 
-  it('reads the current release notes from the reused 0.1.0 file only once written', async () => {
-    const text = await readFile(path.resolve('release-notes/0.1.0.txt'), 'utf8');
+  it('reads the notes belonging to the manifest release only once written', async () => {
+    const text = await readFile(path.resolve('release-notes/0.1.0-0.txt'), 'utf8');
     if (!text.split('\n').some((line) => line.trim() && !line.trim().startsWith('#')))
-      await expect(versionNotes('0.1.0')).rejects.toThrow('Write the release notes');
-    else await expect(versionNotes('0.1.0')).resolves.toBe(releaseNotes(text));
-    await expect(versionNotes('0.0.0-generated')).rejects.toThrow(
-      'Write the release notes in release-notes/0.0.0-generated.txt and commit them.',
+      await expect(versionNotes('0.1.0-0')).rejects.toThrow(
+        'Write the release notes and commit them before shipping.',
+      );
+    else await expect(versionNotes('0.1.0-0')).resolves.toBe(releaseNotes(text));
+    await expect(versionNotes('0.1.0-999999999')).rejects.toThrow(
+      'Write the release notes in release-notes/0.1.0-999999999.txt and commit them.',
     );
   });
 });
@@ -263,10 +278,10 @@ describe('the release feed', () => {
     const key = pair();
     const directory = await temporaryRoot('viewer-release-feed-');
     const feed = {
-      version: '0.1.0',
+      version: '0.1.0-0',
       build: 812,
       notes: 'Generated notes.',
-      url: 'https://updates.example.invalid/viewer/Viewer-0.1.0-812-arm64.dmg',
+      url: 'https://updates.example.invalid/viewer/Viewer-0.1.0-0-arm64.dmg',
       sha256: 'b'.repeat(64),
       minimumSystemVersion: '14.0',
     };

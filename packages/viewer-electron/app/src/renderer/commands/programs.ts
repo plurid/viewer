@@ -50,6 +50,11 @@ export function programCommands(
   tools: ProgramTools = {},
 ): CommandDefinition[] {
   const { showServers, newBrowser, imageTools, optimizeFiles, pdfTools } = tools;
+  const customInvoke = (id: string, context: CommandContext) => {
+    if (id === 'network-sharing')
+      throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
+    return invoke(id, context);
+  };
   const customLine = async (text: string) => {
     for (const step of parseCommandLine(text)) {
       const name = resolveName(step.name);
@@ -398,7 +403,7 @@ export function programCommands(
                 continue;
               }
               const step = index ? (live?.() ?? context) : context;
-              if ((await invoke(command, { ...step, invocation: 'custom-action' })) === false)
+              if ((await customInvoke(command, step)) === false)
                 throw new Error(
                   `“${action.name}” stopped at “${command}”, which is not a command available here.`,
                 );
@@ -409,7 +414,7 @@ export function programCommands(
             if (executor.command.startsWith('custom.'))
               throw new Error('Custom actions cannot call another custom action.');
             // an unknown or unavailable command did nothing, silently
-            if ((await invoke(executor.command, { ...context, invocation: 'custom-action' })) === false)
+            if ((await customInvoke(executor.command, context)) === false)
               throw new Error(
                 `“${action.name}” runs “${executor.command}”, which is not a command available here.`,
               );

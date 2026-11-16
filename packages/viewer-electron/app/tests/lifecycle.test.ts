@@ -117,7 +117,7 @@ const application = Object.assign(new EventEmitter(), {
   requestSingleInstanceLock: () => true,
   getPath: () => native.profile,
   getAppPath: () => process.cwd(),
-  getVersion: () => '0.0.0',
+  getVersion: () => '0.1.0-0',
   setAboutPanelOptions: vi.fn(),
   whenReady: () => native.ready,
   terminated: false,

@@ -12,9 +12,15 @@ for (const [entry, name] of [
   ['src/report-preload.ts', 'report-preload'],
 ]) {
   await build({
-    configFile: false, logLevel: 'warn',
+    ssr: { noExternal: true },
+    configFile: false,
+    logLevel: 'warn',
     build: {
-      target: 'node24', ssr: true, emptyOutDir: false, outDir: root, minify: false,
+      target: 'node24',
+      ssr: true,
+      emptyOutDir: false,
+      outDir: root,
+      minify: false,
       lib: { entry, formats: ['cjs'], fileName: () => name + '.cjs' },
       rollupOptions: { external: [...builtinModules, 'electron'] },
     },
@@ -23,7 +29,8 @@ for (const [entry, name] of [
 const require = createRequire(import.meta.url);
 const binary = require('electron') as string;
 const child = spawn(binary, [path.join(root, 'report-window.cjs'), root], {
-  stdio: 'inherit', timeout: 120000,
+  stdio: 'inherit',
+  timeout: 120000,
 });
 process.exitCode = await new Promise<number>((resolve, reject) => {
   child.once('error', reject);

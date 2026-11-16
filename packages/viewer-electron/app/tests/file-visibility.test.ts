@@ -1,7 +1,11 @@
 import { expect, it, vi } from 'vitest';
 import { chmod, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { entry as ordinaryEntry, entryWithVisibility as entry, list } from '../src/desktop/files/filesystem';
+import {
+  entry as ordinaryEntry,
+  entryWithVisibility as entry,
+  list,
+} from '../src/desktop/files/filesystem';
 import { createFileVisibility, fileVisibility } from '../src/desktop/files/visibility';
 import { temporaryRoot } from '../tools/temporary';
 
@@ -31,11 +35,17 @@ it('lists with an old helper or a missing helper and does not call native flags 
   const folder = await temporaryRoot('viewer-visibility-compatibility-');
   const file = path.join(folder, 'visible.txt');
   await writeFile(file, 'fixture');
-  for (const binding of [() => ({}), () => { throw new Error('No helper'); }]) {
+  for (const binding of [
+    () => ({}),
+    () => {
+      throw new Error('No helper');
+    },
+  ]) {
     expect((await list(folder, createFileVisibility(binding))).entries).toHaveLength(1);
   }
   const native = vi.spyOn(fileVisibility, 'fileHidden');
-  for (let index = 0; index < 20; index++) expect((await ordinaryEntry(file)).name).toBe('visible.txt');
+  for (let index = 0; index < 20; index++)
+    expect((await ordinaryEntry(file)).name).toBe('visible.txt');
   expect(native).not.toHaveBeenCalled();
   native.mockRestore();
 });
@@ -44,8 +54,17 @@ it('keeps the listing permission code when optional flags fail earlier', async (
   const folder = await temporaryRoot('viewer-visibility-denied-');
   await chmod(folder, 0);
   try {
-    await expect(list(folder, { hiddenEntries: async () => { throw Object.assign(new Error('flags'), { code: 'EIO' }); }, fileHidden: vi.fn() })).rejects.toMatchObject({ code: 'EACCES' });
-  } finally { await chmod(folder, 0o700); }
+    await expect(
+      list(folder, {
+        hiddenEntries: async () => {
+          throw Object.assign(new Error('flags'), { code: 'EIO' });
+        },
+        fileHidden: vi.fn(),
+      }),
+    ).rejects.toMatchObject({ code: 'EACCES' });
+  } finally {
+    await chmod(folder, 0o700);
+  }
 });
 
 it('keeps a readable listing when its optional flag read fails', async () => {

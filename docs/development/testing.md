@@ -83,8 +83,8 @@ This builds the window and its private preload into a new retained temporary fol
 replacing packaged output. Hidden Electron windows exercise the default report, **Include message
 text**, its warning, Copy, Return, Escape and both themes at normal/minimum sizes. Copy is
 intercepted to preserve the operator's clipboard. The folder holds screenshots, `result.json` and
-`example-default-report.txt`. Accessibility-tree presence is checked; physical VoiceOver and a signed
-Store binary require separate acceptance.
+`example-default-report.txt`. Accessibility-tree presence is checked; physical VoiceOver and a
+signed Store binary require separate acceptance.
 
 `tests/native/exfat-file-operations.ts` creates retained 64 MiB exFAT and FAT32 images and mounts
 each in its own temporary folder. It checks the real helper's unsupported exclusive-rename error,

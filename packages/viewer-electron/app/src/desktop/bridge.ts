@@ -1,6 +1,5 @@
 import { realpath } from 'node:fs/promises';
-import { releaseName } from '../domain/updates/feed';
-import { installedRelease } from './windows/about';
+import type { DiagnosticErrorFields } from '../domain/diagnostics/failure';
 import { folderEntry, prepareFolderHistory } from './files/folder-history';
 import { containsPath } from './files/containment';
 import { Reconstructions } from './canvases/reconstruction';
@@ -23,7 +22,7 @@ import { createAutomationHandlers } from './ipc/automation-handlers';
 import { createCommandLineHandlers } from './ipc/command-line-handlers';
 import { createComparisonHandlers } from './ipc/comparison-handlers';
 import { createFileHandlers } from './ipc/file-handlers';
-import { createNetworkSharingHandlers } from './ipc/network-sharing-handlers';
+import { createNetworkSharingHandlers, networkSharingFolderGuard } from './ipc/network-sharing-handlers';
 import {
   NetworkSharing,
   networkSharingAvailable,
@@ -383,7 +382,7 @@ export class Desktop {
       /** Remembers the Settings window's category with its frame. */
       settingsCategory?(category: string): void;
       /** Records a renderer failure in the local diagnostic log. */
-      diagnose?(detail: string): void;
+      diagnose?(detail: string, fields?: DiagnosticErrorFields): void;
       /** Records a service's failure, as the windows are told of it. */
       serviceError?(service: string, message: string): void;
     },
@@ -1103,7 +1102,7 @@ export class Desktop {
         access,
         workspaceState: async () => this.workspaceCatalog,
         authorizeTask: (setup) => this.agentTaskWorkflows.authorize(setup),
-        version: releaseName(installedRelease()),
+        version: app.getVersion(),
         // nothing is requested while config.jsonc and its last valid copy cannot be read
         agentAccess: new AgentAccess(dataPath, () => {
           const snapshot = this.settings.snapshot();
@@ -2152,10 +2151,8 @@ export class Desktop {
         available: networkSharingAvailable,
         sharing: this.networkSharing,
         isAgent,
-        requireFolder: async (file) => {
-          await this.fileAccess.require([file]);
-          if (!(await entry(file)).directory) throw new Error('Choose one folder.');
-        },
+        access: (file) => this.fileAccess.require([file]),
+        requireFolder: networkSharingFolderGuard(this.fileAccess, this.networkSharing),
         openSettings: () =>
           openSharingSettings(Number(process.getSystemVersion().split('.')[0]), (url) =>
             shell.openExternal(url),

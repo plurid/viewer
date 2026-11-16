@@ -8,6 +8,9 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import store from './mac-app-store.json' with { type: 'json' };
+import manifest from './package.json' with { type: 'json' };
+import { alphaVersionSchema, storeVersion } from './src/domain/updates/version';
+import { restoreAlphaVersion } from './tools/bundle-version';
 import { macChannel, storeConfiguration, storeInputs } from './tools/mas-configuration';
 import { documentTypes } from './tools/document-types';
 import { copyPDFRuntime } from './tools/pdf-runtime';
@@ -23,6 +26,7 @@ const appRoot = path.dirname(fileURLToPath(import.meta.url));
 const channel = macChannel(process.env.VIEWER_MAC_CHANNEL);
 const storeConfig = storeConfiguration.parse(store);
 const inputs = channel === 'direct' ? undefined : storeInputs(process.env, channel);
+const version = alphaVersionSchema.parse(manifest.version);
 const directIdentity =
   channel === 'direct' ? process.env.VIEWER_DIRECT_IDENTITY?.trim() : undefined;
 const notaryProfile = channel === 'direct' ? process.env.VIEWER_NOTARY_PROFILE?.trim() : undefined;
@@ -56,7 +60,10 @@ const storeSigning = inputs
   : undefined;
 const config: ForgeConfig = {
   packagerConfig: {
+    appVersion: inputs ? storeVersion(version) : version,
     asar: { unpack: '**/{node-pty,@napi-rs}/**' },
+    // Packager writes appVersion into the copied manifest before this hook and signs after ASAR.
+    beforeAsar: inputs ? [({ buildPath }) => restoreAlphaVersion(buildPath, version)] : [],
     extraResource: [
       'assets/licenses',
       `assets/${officeRuntimeName}`,

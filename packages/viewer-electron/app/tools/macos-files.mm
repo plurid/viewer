@@ -18,6 +18,8 @@
 #include <sys/acl.h>
 #include <membership.h>
 #include <grp.h>
+#include <pwd.h>
+#include <vector>
 
 // A small in-process bridge: dynamic PowerBox grants belong to this process.
 // Filesystem work runs on N-API's bounded pool, never the Cocoa/renderer thread.
@@ -236,13 +238,40 @@ static NSArray<NSString *> *hiddenNames(NSString *folder, int *failure) {
   return *failure ? nil : names;
 }
 static NSString *guestACLState(NSString *file) {
+  struct stat info{};
+  if (stat(file.fileSystemRepresentation, &info) != 0) return @"unreadable";
+  struct passwd guest{}, *foundGuest = nullptr; char guestBuffer[16384];
+  bool knownGuest = getpwnam_r("nobody", &guest, guestBuffer, sizeof(guestBuffer), &foundGuest) == 0 && foundGuest;
+  struct group everyone{}, *foundEveryone = nullptr; char groupBuffer[16384];
+  bool knownEveryone = getgrnam_r("everyone", &everyone, groupBuffer, sizeof(groupBuffer), &foundEveryone) == 0 && foundEveryone;
+  int groupCount = 32; std::vector<int> groups(groupCount);
+  bool knownGroups = knownGuest;
+  if (knownGuest && getgrouplist(guest.pw_name, (int)guest.pw_gid, groups.data(), &groupCount) < 0) {
+    if (groupCount > 0 && groupCount <= 1024) {
+      groups.resize(groupCount);
+      knownGroups = getgrouplist(guest.pw_name, (int)guest.pw_gid, groups.data(), &groupCount) == 0;
+    } else knownGroups = false;
+  }
+  auto member = [&](gid_t group) -> int {
+    if (knownEveryone && group == everyone.gr_gid) return 1;
+    if (knownGuest && group == guest.pw_gid) return 1;
+    if (!knownGroups) return -1;
+    for (int index = 0; index < groupCount; ++index) if ((gid_t)groups[index] == group) return 1;
+    return 0;
+  };
+  bool unknown = false;
+  bool writable = (info.st_mode & S_IWOTH) || (knownGuest && info.st_uid == guest.pw_uid && (info.st_mode & S_IWUSR));
+  if (info.st_mode & S_IWGRP) {
+    int membership = member(info.st_gid);
+    if (membership > 0) writable = true; else if (membership < 0) unknown = true;
+  }
   acl_t acl = acl_get_file(file.fileSystemRepresentation, ACL_TYPE_EXTENDED);
   if (!acl) {
-    if (errno == ENOENT) { struct stat info{}; if (lstat(file.fileSystemRepresentation, &info) == 0) return @"none"; }
-    return @"unknown";
+    if (writable) return @"write";
+    if (errno == ENOENT) return unknown ? @"unknown" : @"none";
+    return @"unreadable";
   }
   if (acl_valid(acl) != 0) { acl_free(acl); return @"unknown"; }
-  bool unknown = false, writable = false;
   acl_entry_t entry;
   int state = acl_get_entry(acl, ACL_FIRST_ENTRY, &entry);
   while (state == 0) {
@@ -250,16 +279,24 @@ static NSString *guestACLState(NSString *file) {
     acl_permset_t permissions;
     if (acl_get_tag_type(entry, &tag) != 0 || acl_get_permset(entry, &permissions) != 0) { unknown = true; break; }
     if (tag == ACL_EXTENDED_ALLOW) {
-      int add = acl_get_perm_np(permissions, ACL_ADD_FILE), directory = acl_get_perm_np(permissions, ACL_ADD_SUBDIRECTORY), remove = acl_get_perm_np(permissions, ACL_DELETE_CHILD);
-      if (add < 0 || directory < 0 || remove < 0) { unknown = true; break; }
-      if (add || directory || remove) {
+      const acl_perm_t modifying[] = { ACL_ADD_FILE, ACL_ADD_SUBDIRECTORY, ACL_DELETE_CHILD, ACL_DELETE,
+        ACL_WRITE_ATTRIBUTES, ACL_WRITE_EXTATTRIBUTES, ACL_WRITE_SECURITY, ACL_CHANGE_OWNER };
+      bool modifies = false;
+      for (acl_perm_t right : modifying) {
+        int allowed = acl_get_perm_np(permissions, right);
+        if (allowed < 0) unknown = true;
+        if (allowed > 0) modifies = true;
+      }
+      if (modifies) {
         void *qualifier = acl_get_qualifier(entry);
         id_t identifier = 0; int type = 0;
-        struct group group{}, *found = nullptr; char buffer[4096];
-        bool everyone = qualifier && mbr_uuid_to_id((const unsigned char *)qualifier, &identifier, &type) == 0 &&
-          type == ID_TYPE_GID && getgrnam_r("everyone", &group, buffer, sizeof(buffer), &found) == 0 && found && identifier == group.gr_gid;
+        int applies = -1;
+        if (qualifier && mbr_uuid_to_id((const unsigned char *)qualifier, &identifier, &type) == 0) {
+          if (type == ID_TYPE_UID && knownGuest) applies = (uid_t)identifier == guest.pw_uid ? 1 : 0;
+          else if (type == ID_TYPE_GID) applies = member((gid_t)identifier);
+        }
         if (qualifier) acl_free(qualifier);
-        if (everyone) writable = true; else unknown = true;
+        if (applies > 0) writable = true; else if (applies < 0) unknown = true;
       }
     } else if (tag != ACL_EXTENDED_DENY) unknown = true;
     state = acl_get_entry(acl, ACL_NEXT_ENTRY, &entry);

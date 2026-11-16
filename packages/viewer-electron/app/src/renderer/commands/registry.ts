@@ -329,7 +329,9 @@ export class CommandRegistry {
   ): Promise<void> {
     if (definition.humanOnly && context.invocation === 'custom-action')
       throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
-    await definition.run(definition.id.startsWith('custom.') ? { ...context, invocation: 'custom-action' } : context);
+    await definition.run(
+      definition.id.startsWith('custom.') ? { ...context, invocation: 'custom-action' } : context,
+    );
   }
 }
 

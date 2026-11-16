@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { feedLimits, launchCheckDue, releaseName, updateDecision } from '../../domain/updates/feed';
+import { feedLimits, launchCheckDue, updateDecision } from '../../domain/updates/feed';
 import type { InstalledRelease, UpdateFeed } from '../../domain/updates/feed';
 import { DocumentStore } from '../persistence/document-store';
 import type { UpdateFeedConfiguration } from '../release';
@@ -124,6 +124,8 @@ export function updateNotice(
   installed: InstalledRelease,
   systemVersion: string,
 ): UpdateNotice {
+  const installedName =
+    installed.build === undefined ? installed.version : `${installed.version} (${installed.build})`;
   switch (check.kind) {
     case 'store':
       return {
@@ -139,18 +141,18 @@ export function updateNotice(
     case 'current':
       return {
         message: 'Viewer is up to date',
-        detail: `Version ${releaseName(installed)} is the latest version.`,
+        detail: `Version ${installedName} is the latest version.`,
       };
     case 'available':
       return {
-        message: `Viewer ${releaseName(check.feed)} is available`,
-        detail: `You have version ${releaseName(installed)}.\n\n${check.feed.notes}`,
+        message: `Viewer ${check.feed.version} is available`,
+        detail: `You have version ${installedName}.\n\n${check.feed.notes}`,
         download: check.feed.url,
       };
     case 'unsupported-system':
       return {
-        message: `Viewer ${releaseName(check.feed)} needs macOS ${check.feed.minimumSystemVersion} or later`,
-        detail: `This Mac has macOS ${systemVersion}. Version ${releaseName(installed)} keeps working.`,
+        message: `Viewer ${check.feed.version} needs macOS ${check.feed.minimumSystemVersion} or later`,
+        detail: `This Mac has macOS ${systemVersion}. Version ${installedName} keeps working.`,
       };
     case 'failed':
       return { message: 'Viewer could not check for updates', detail: check.message };

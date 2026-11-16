@@ -7,17 +7,23 @@ export interface FileVisibility {
 }
 
 /** Older development helpers keep the dot rule until the owner rebuilds the native helper. */
-export function createFileVisibility(binding: () => Pick<MacFiles, 'hiddenEntries' | 'fileHidden'>): FileVisibility {
-return {
-  hiddenEntries: async (folder) => {
-    try {
-      return process.platform === 'darwin' ? ((await binding().hiddenEntries?.(folder)) ?? []) : [];
-    } catch {
-      return [];
-    }
-  },
-  fileHidden: async (file) =>
-    process.platform === 'darwin' ? ((await binding().fileHidden?.(file)) ?? false) : false,
-};
+export function createFileVisibility(
+  binding: () => Pick<MacFiles, 'hiddenEntries' | 'fileHidden'>,
+): FileVisibility {
+  return {
+    hiddenEntries: async (folder) => {
+      try {
+        return process.platform === 'darwin'
+          ? ((await binding().hiddenEntries?.(folder)) ?? [])
+          : [];
+      } catch {
+        return [];
+      }
+    },
+    fileHidden: async (file) => {
+      try { return process.platform === 'darwin' ? ((await binding().fileHidden?.(file)) ?? false) : false; }
+      catch { return false; }
+    },
+  };
 }
 export const fileVisibility = createFileVisibility(macFiles);

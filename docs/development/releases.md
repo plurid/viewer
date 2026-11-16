@@ -18,20 +18,30 @@ native dependencies before publishing.
 Viewer follows [alpha versioning](https://github.com/ly3xqhl8g9/alpha-versioning):
 `ender.launcher.revisioner-developmenter`, starting at `0.0.0-0`. Viewer is launched, so its series
 is `0.1.0-N`: ender **0** means development continues, launcher **1** means launched, revisioner
-**0** is the current general revision, and developmenter **N** is the existing build number. The
-third number changes only when the owner declares a general revision. `1.0.0` is reserved for the
-end of development.
+**0** is the current general revision, and developmenter **N** is the release counter, starting
+at 0. The first release is `0.1.0-0`, followed by `0.1.0-1`. After cutting a release, the owner runs
+`pnpm version:next` and commits the next version. The third number changes only on a declared
+general revision. Alpha versions keep their first number at 0; `1.0.0` is reserved for the end of
+development.
 
-For direct packages, including local ones, N is the commit count (`git rev-list --count HEAD`).
-Never rewrite published history. Store builds use `VIEWER_MAS_BUILD` for N. The manifest version,
-`CFBundleShortVersionString` and feed `version` stay `0.1.0`; `CFBundleVersion` and feed `build`
-hold N. About shows `0.1.0-812` once. A development run shows `0.1.0`, development. Tag a release
-`v0.1.0-812`; Help links use that tag, or `master` in development. The installer remains
-`Viewer-<version>-<build>-arm64.dmg`.
+The manifest is the version's single source. Direct bundles stamp `0.1.0-0` into
+`CFBundleShortVersionString`; feed `version` carries the same alpha version. The machine build stays
+separate in `CFBundleVersion` and feed `build`: the commit count for direct builds, or
+`VIEWER_MAS_BUILD` for the Store. Never rewrite published history. About shows `0.1.0-0 (584)`; a
+development run shows `0.1.0-0`, development, and receives no update offers. Tags use `v<version>`,
+and installers use `Viewer-<version>-arm64.dmg`. Help links use the version tag, or `master` in
+development.
 
-The first public build, published as `1.0.0` (build 553), predates this rule. Install `0.1.0-N`
-over it once by hand: its update check will not offer a lower dotted version. Keep tag `v1.0.0`
-because those copies' Help links use it. See the [decision](../adr/0019-alpha-versioning.md).
+Apple's Store requires increasing three-integer versions. Its bundle short version drops the alpha
+ender: `0.1.0-0` becomes `1.0.0`, `0.1.0-N` becomes `1.0.N`, and `0.1.1-0` becomes `1.1.0`. The
+embedded app manifest and all in-app surfaces keep the alpha version. No separate Store version is
+maintained. The feed orders all four alpha numbers numerically, then the build for equal versions;
+macOS system versions keep their dotted comparison.
+
+The event build of 2026-11-03, named `1.0.0` (build 553), was withdrawn on 2026-11-16 with its
+GitHub releases and `v1.0.0` tag. Commit `1a0dcf04e50fa4c74f506ea07035a52da68d4a04` stays in
+history. Install `0.1.0-N` over a copy from that build once by hand: its update check will not offer
+a lower dotted version. See the [decision](../adr/0019-alpha-versioning.md).
 
 Viewer declares macOS 14.0 (`macOSMinimum` in `tools/native-build/macos-target.ts`). Native helpers
 are built for it; a reused helper or the pinned speech engine must not need a newer macOS. The build
@@ -119,11 +129,12 @@ Viewer**, which opens the configured page in the person's browser. See the
 
 ### Make a release
 
-1. Keep `version` in `packages/viewer-electron/app/package.json` at `0.1.0` until a declared
-   general revision.
-2. Rewrite `packages/viewer-electron/app/release-notes/0.1.0.txt` for the release being cut: a few
-   plain lines for the update dialog. Earlier notes stay in Git history and each published feed.
-   Lines starting with `#` are left out. The release refuses empty notes.
+1. Use the alpha `version` in `packages/viewer-electron/app/package.json`, currently `0.1.0-0`.
+   After cutting it, run `pnpm version:next` to prepare `0.1.0-1`. A local `v<version>` tag for the
+   current version stops the release and asks you to raise N first.
+2. Write `packages/viewer-electron/app/release-notes/<version>.txt`, starting with
+   `release-notes/0.1.0-0.txt`: a few plain lines for the update dialog, committed separately for
+   each release. Lines starting with `#` are left out. The release refuses empty notes.
 3. Commit everything. The release refuses a tree with changes or untracked files, and a shallow
    clone.
 4. Create a notarization profile privately in Terminal with
@@ -172,13 +183,28 @@ cannot change which app the receipt identifies.
 ### Publish
 
 1. Qualify the installer (below) before anyone can download it.
-2. Upload the disk image and `SHA256SUMS.txt` to the download address the command printed.
+2. Upload the disk image and `SHA256SUMS.txt` to the download address the command printed. Build the
+   demo from the folder holding the saved **Front** and **Rear** tools. From
+   `packages/viewer-electron/app`, run:
+
+   ```sh
+   pnpm_config_verify_deps_before_run=false pnpm demo:archive \
+     /absolute/path/saved-tools /absolute/path/demo-output
+   ```
+
+   Both paths must be absolute, and the output must be outside the source. Move any existing
+   `Viewer-Demo.zip` and `Viewer-Demo.sha256` away first. The command keeps and prints its staging
+   folder, skips dot files and refuses symbolic links. It reports the size, SHA-256 and saved tool
+   names. Attach `Viewer-Demo.zip` and `Viewer-Demo.sha256` to every release under those fixed
+   names: the [demo guide](../guides/demo-project.md) downloads the archive through the latest
+   release's asset URL.
+
 3. Upload `viewer-update.json` and `viewer-update.json.sig` to the feed address. Upload the feed
    last, so it never points at a missing disk image.
 4. Run `pnpm updates:verify`. It reads the published feed as the app does and prints the version it
    offers.
-5. Tag the release commit the command printed, `git tag v<version>-<build> <commit>`, and push the
-   tag. Help menu links open the guides at that tag.
+5. Tag the release commit the command printed, `git tag v<version> <commit>`, and push the tag. Help
+   menu links open the guides at that tag.
 
 Installed copies find the release at their next launch check, at most a day later, or at once with
 **Viewer → Check for Updates…**. Download opens the disk image's https address in the browser;
@@ -187,7 +213,7 @@ nothing is installed automatically.
 For GitHub Releases, create and push the version tag for the qualified source commit, then prepare a
 draft release with the disk image, checksums, feed and signature. Set `VIEWER_RELEASE_DOWNLOAD_URL`
 during the build to the disk image's version-specific URL under
-`https://github.com/plurid/viewer/releases/download/v<version>-<build>/`. Publish the draft as the latest
+`https://github.com/plurid/viewer/releases/download/v<version>/`. Publish the draft as the latest
 release only after its assets have uploaded. This makes the installer and feed available together.
 Run `pnpm updates:verify` against the published assets, then check the website's download link.
 

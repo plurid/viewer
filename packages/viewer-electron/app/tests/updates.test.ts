@@ -6,7 +6,6 @@ import {
   compareVersions,
   launchCheckDue,
   launchCheckInterval,
-  releaseName,
   updateDecision,
   updateFeedSchema,
 } from '../src/domain/updates/feed';
@@ -27,10 +26,10 @@ function keys() {
 }
 
 const feed: UpdateFeed = {
-  version: '0.1.0',
+  version: '0.1.0-1',
   build: 600,
   notes: 'Generated release notes.\nA second line.',
-  url: 'https://downloads.example.invalid/Viewer-0.1.0-600-arm64.dmg',
+  url: 'https://downloads.example.invalid/Viewer-0.1.0-1-arm64.dmg',
   sha256: 'a'.repeat(64),
   minimumSystemVersion: '14.0',
 };
@@ -61,7 +60,7 @@ async function updates(options: Partial<UpdateHost> & { publicKey?: string } = {
   const host: UpdateHost = {
     configuration: { url: feedURL, publicKey: options.publicKey ?? keys().publicKey },
     store: false,
-    installed: { version: '0.1.0', build: 580 },
+    installed: { version: '0.1.0-0', build: 584 },
     systemVersion: () => '15.1.0',
     checkAtLaunch: () => true,
     present: vi.fn(async (notice: UpdateNotice) => {
@@ -105,7 +104,8 @@ describe('the signed update feed', () => {
       { ...feed, sha256: 'A'.repeat(64) },
       { ...feed, notes: '   ' },
       { ...feed, version: '0.1' },
-      { ...feed, version: '0.1.0-600' },
+      { ...feed, version: '0.1.0' },
+      { ...feed, version: '1.0.0-0' },
       { ...feed, build: 0 },
       { ...feed, minimumSystemVersion: 'Sonoma' },
     ]) {
@@ -143,18 +143,11 @@ describe('the signed update feed', () => {
 });
 
 describe('versions', () => {
-  it('names a release with its build and leaves development runs unsuffixed', () => {
-    expect(releaseName({ version: '0.1.0', build: 580 })).toBe('0.1.0-580');
-    expect(releaseName({ version: '0.1.0', build: 600 })).toBe('0.1.0-600');
-    expect(releaseName({ version: '0.1.0' })).toBe('0.1.0');
-    expect(releaseName({ version: '0.1.1', build: 812 })).toBe('0.1.1-812');
-  });
-
   it.each([
-    ['0.1.0', '0.1.0', 0],
-    ['0.1.1', '0.1.0', 1],
-    ['0.10.0', '0.9.0', 1],
-    ['2.0.0', '10.0.0', -1],
+    ['14.0', '14.0', 0],
+    ['14.0.1', '14.0.0', 1],
+    ['14.10', '14.9', 1],
+    ['14.2', '14.10', -1],
     ['14', '14.0.0', 0],
     ['13.3', '14.0', -1],
   ])('compares %s with %s', (left, right, expected) => {
@@ -162,24 +155,23 @@ describe('versions', () => {
   });
 
   it('offers a newer version, or the same version with a later build', () => {
-    expect(updateDecision(feed, { version: '0.0.0', build: 580 }, '14.0')).toBe('available');
-    expect(updateDecision(feed, { version: '0.1.0', build: 580 }, '14.0')).toBe('available');
-    expect(updateDecision(feed, { version: '0.1.0', build: 600 }, '14.0')).toBe('current');
-    expect(updateDecision(feed, { version: '0.1.0', build: 601 }, '14.0')).toBe('current');
-    expect(updateDecision(feed, { version: '0.1.1', build: 100 }, '14.0')).toBe('current');
-    // a development run has no build, so only a newer version counts
-    expect(updateDecision(feed, { version: '0.1.0' }, '14.0')).toBe('current');
+    expect(updateDecision(feed, { version: '0.1.0-0', build: 900 }, '14.0')).toBe('available');
+    expect(updateDecision(feed, { version: '0.1.0-1', build: 584 }, '14.0')).toBe('available');
+    expect(updateDecision(feed, { version: '0.1.0-1', build: 600 }, '14.0')).toBe('current');
+    expect(updateDecision(feed, { version: '0.1.0-1', build: 601 }, '14.0')).toBe('current');
+    expect(updateDecision(feed, { version: '0.1.1-0', build: 100 }, '14.0')).toBe('current');
   });
 
-  it('does not offer the alpha release to a copy published as 1.0.0', () => {
-    expect(updateDecision(feed, { version: '1.0.0', build: 553 }, '14.0')).toBe('current');
+  it('does not offer updates to development runs, including a later alpha release', () => {
+    expect(updateDecision(feed, { version: '0.1.0-0' }, '14.0')).toBe('current');
+    expect(updateDecision(feed, { version: '0.1.0-1' }, '14.0')).toBe('current');
   });
 
   it('says when the newer release needs a later macOS', () => {
     expect(
       updateDecision(
         { ...feed, minimumSystemVersion: '15.2' },
-        { version: '0.1.0', build: 580 },
+        { version: '0.1.0-0', build: 584 },
         '15.1.0',
       ),
     ).toBe('unsupported-system');
@@ -187,9 +179,9 @@ describe('versions', () => {
 
   it('reads the bundle build from Info.plist', () => {
     const plist =
-      '<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>0.1.0</string>\n  <key>CFBundleVersion</key>\n  <string>812</string></dict></plist>';
+      '<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>0.1.0-0</string>\n  <key>CFBundleVersion</key>\n  <string>812</string></dict></plist>';
     expect(bundleBuild(plistBundleVersion(plist))).toBe(812);
-    expect(bundleBuild('0.1.0')).toBeUndefined();
+    expect(bundleBuild('0.1.0-0')).toBeUndefined();
     expect(bundleBuild('0')).toBeUndefined();
     expect(bundleBuild(undefined)).toBeUndefined();
   });
@@ -225,9 +217,9 @@ describe('the launch check', () => {
     const f = await updates({ request: live.request, publicKey: live.publicKey, now: () => now });
     expect(await f.updates.checkAtLaunch()).toMatchObject({ kind: 'available' });
     expect(f.notices).toEqual([
-      expect.objectContaining({ message: 'Viewer 0.1.0-600 is available', download: feed.url }),
+      expect.objectContaining({ message: 'Viewer 0.1.0-1 is available', download: feed.url }),
     ]);
-    expect(f.notices[0]!.detail).toContain('You have version 0.1.0-580.');
+    expect(f.notices[0]!.detail).toContain('You have version 0.1.0-0 (584).');
     expect(f.notices[0]!.detail).toContain(feed.notes);
     expect(live.request).toHaveBeenCalledTimes(2);
     now += 60 * 60 * 1000;
@@ -266,12 +258,12 @@ describe('Check for Updates', () => {
     await none.updates.checkFromMenu();
     expect(none.notices[0]?.message).toBe('Updates are not configured for this build');
 
-    const current = server({ ...feed, version: '0.1.0', build: 580 });
+    const current = server({ ...feed, version: '0.1.0-0', build: 584 });
     const latest = await updates({ request: current.request, publicKey: current.publicKey });
     await latest.updates.checkFromMenu();
     expect(latest.notices[0]).toEqual({
       message: 'Viewer is up to date',
-      detail: 'Version 0.1.0-580 is the latest version.',
+      detail: 'Version 0.1.0-0 (584) is the latest version.',
     });
 
     const forged = server();
@@ -322,7 +314,7 @@ describe('Check for Updates', () => {
   });
 
   it('points the Store edition at the App Store', () => {
-    expect(updateNotice({ kind: 'store' }, { version: '0.1.0' }, '15.0').message).toBe(
+    expect(updateNotice({ kind: 'store' }, { version: '0.1.0-0' }, '15.0').message).toBe(
       'The App Store keeps Viewer up to date',
     );
   });

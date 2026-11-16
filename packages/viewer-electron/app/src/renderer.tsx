@@ -1,4 +1,5 @@
 import './renderer/native-api';
+import { diagnosticFailure } from './domain/diagnostics/failure';
 import { createRoot } from 'react-dom/client';
 import { initialize } from './renderer/state/store';
 import { markStartup } from './renderer/app/startup';
@@ -10,8 +11,7 @@ import './renderer/styles.css';
 let reports = 0;
 const diagnose = (value: unknown) => {
   if (++reports > 50) return;
-  const detail = value instanceof Error ? (value.stack ?? value.message) : String(value);
-  void window.viewer?.diagnosticReport?.(detail.slice(0, 8000)).catch(() => {});
+  void window.viewer?.diagnosticReport?.(diagnosticFailure(value)).catch(() => {});
 };
 window.addEventListener('error', (event) => diagnose(event.error ?? event.message));
 window.addEventListener('unhandledrejection', (event) => diagnose(event.reason));

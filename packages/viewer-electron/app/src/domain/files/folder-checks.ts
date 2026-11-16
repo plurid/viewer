@@ -7,6 +7,52 @@ export const folderCheckLimit = 40;
 export const folderCheckConcurrency = 4;
 export const folderCheckTimeout = 150;
 
+/** Share capacity across queries, including reads whose callers have already timed out. */
+export class FolderCheckPool {
+  private running = new Map<string, Promise<CheckedFolder>>();
+  private waiters = new Set<() => void>();
+
+  async run(
+    path: string,
+    check: (path: string) => Promise<CheckedFolder>,
+    signal: AbortSignal,
+  ): Promise<CheckedFolder> {
+    const deadline = performance.now() + folderCheckTimeout;
+    while (!signal.aborted) {
+      const existing = this.running.get(path);
+      if (existing) return existing;
+      if (this.running.size < folderCheckConcurrency) {
+        const work = check(path).finally(() => {
+          this.running.delete(path);
+          for (const waiter of this.waiters) waiter();
+        });
+        this.running.set(path, work);
+        return work;
+      }
+      const remaining = deadline - performance.now();
+      if (remaining <= 0) break;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let abort: (() => void) | undefined;
+      let resume: (() => void) | undefined;
+      try {
+        const ready = await new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(false), remaining);
+          abort = () => resolve(false);
+          resume = () => resolve(true);
+          this.waiters.add(resume);
+          signal.addEventListener('abort', abort, { once: true });
+        });
+        if (!ready) break;
+      } finally {
+        clearTimeout(timer);
+        if (abort) signal.removeEventListener('abort', abort);
+        if (resume) this.waiters.delete(resume);
+      }
+    }
+    throw new Error('Folder checking is busy. Try again.');
+  }
+}
+
 export function folderVolume(path: string): string | undefined {
   return /^(\/Volumes\/[^/]+)(?:\/|$)/.exec(path)?.[1];
 }

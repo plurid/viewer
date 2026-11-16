@@ -11,6 +11,7 @@ import {
 } from '../../domain/files/item-identity';
 import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
 import { lstat } from '../files/stats';
+export type GuestACLState = 'write' | 'none' | 'unknown' | 'unreadable' | 'unavailable';
 export interface NativeVolume {
   path: string;
   name: string;
@@ -73,7 +74,7 @@ export interface MacFiles {
   datesAdded(files: string[]): Promise<NativeAddedDate[]>;
   hiddenEntries?(folder: string): Promise<string[]>;
   fileHidden?(file: string): Promise<boolean>;
-  guestACL?(folder: string): Promise<'write' | 'none' | 'unknown'>;
+  guestACL?(folder: string): Promise<GuestACLState>;
   information(file: string): Promise<string>;
   updateInformation(file: string, revision: string, json: string): Promise<string>;
   alias(source: string, destination: string): Promise<void>;

@@ -9,6 +9,7 @@ export interface Visit {
   last: number;
 }
 export type FolderVisits = Readonly<Record<string, Visit>>;
+export type FolderRemapping = readonly FileChange[] | ((path: string) => string);
 export function sameFolderVisits(first: FolderVisits, second: FolderVisits): boolean {
   return (
     Object.keys(first).length === Object.keys(second).length &&
@@ -45,10 +46,7 @@ export function folderPath(path: string): string {
 }
 
 /** Multiple formerly distinct destinations can become one folder after a move. */
-export function remapFolderVisits(
-  visits: FolderVisits,
-  changes: readonly FileChange[] | ((path: string) => string),
-): FolderVisits {
+export function remapFolderVisits(visits: FolderVisits, changes: FolderRemapping): FolderVisits {
   if (
     typeof changes !== 'function' &&
     !changes.some((change) => ancestors(visits).has(change.source))

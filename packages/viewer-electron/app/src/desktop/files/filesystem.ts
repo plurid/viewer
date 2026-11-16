@@ -34,6 +34,10 @@ export async function exists(file: string): Promise<boolean> {
   }
 }
 export async function entry(file: string): Promise<FileEntry> {
+  return entryWithVisibility(file, fileVisibility);
+}
+/** A scan supplies its folder's flags in bulk instead of asking the helper for every item. */
+export async function entryForScan(file: string): Promise<FileEntry> {
   return entryWithVisibility(file, fileVisibility, false);
 }
 export async function entryWithVisibility(
@@ -72,7 +76,7 @@ export async function entryWithVisibility(
     size: info.size,
     modified: info.mtimeMs,
     created: info.birthtimeMs,
-    hidden: name.startsWith('.') || (knownHidden ?? (await visibility.fileHidden(normalized))),
+    hidden: name.startsWith('.') || (knownHidden ?? (await visibility.fileHidden(normalized).catch(() => false))),
     mime: lookup(name) || 'application/octet-stream',
     identity: itemIdentity(info),
     linkTarget,
@@ -88,9 +92,12 @@ export async function list(
   const entries: FileEntry[] = [];
   // Native bulk attributes overlap the existing metadata work instead of delaying its start.
   await Promise.all([
-    visibility.hiddenEntries(normalized).then((names) => {
-      hidden = new Set(names);
-    }).catch(() => {}),
+    visibility
+      .hiddenEntries(normalized)
+      .then((names) => {
+        hidden = new Set(names);
+      })
+      .catch(() => {}),
     (async () => {
       const names = await readdir(normalized);
       // Bound metadata fan-out, including on mounted network folders.

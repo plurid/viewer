@@ -3,11 +3,19 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { FileEntry, ViewerAPI } from '../src/domain/contracts';
 import type { NetworkSharingSnapshot } from '../src/domain/files/network-sharing';
+import type { CustomAction } from '../src/domain/automation/actions';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import type { FolderActions } from '../src/renderer/commands/folder';
 import type { LineHost } from '../src/renderer/command-line/host';
 import type * as WorkspaceModule from '../src/renderer/workspace/context';
-import { changePreferences, initialize } from '../src/renderer/state/store';
+import {
+  changePreferences,
+  getState,
+  initialize,
+  receiveSettings,
+} from '../src/renderer/state/store';
+import { programCommands } from '../src/renderer/commands/programs';
+import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { FileInformation } from '../src/renderer/explorer/FileInformation';
 import type { FileViewProps } from '../src/renderer/explorer/views';
 import type { ColumnNavigation } from '../src/renderer/explorer/column-navigation';
@@ -74,9 +82,17 @@ let snapshot: NetworkSharingSnapshot;
 const api = vi.fn<ViewerAPI['networkSharing']>();
 const copyText = vi.fn(async (_text: string) => {});
 function reply(paths = [file.path]): NetworkSharingSnapshot {
-  return { ...snapshot, folders: paths.map((path) => snapshot.folders?.find((folder) => folder.path === path) ?? {
-    path, status: 'ready', shares: snapshot.shares.filter((share) => share.path === path),
-  }) };
+  return {
+    ...snapshot,
+    folders: paths.map(
+      (path) =>
+        snapshot.folders?.find((folder) => folder.path === path) ?? {
+          path,
+          status: 'ready',
+          shares: snapshot.shares.filter((share) => share.path === path),
+        },
+    ),
+  };
 }
 
 beforeEach(async () => {
@@ -109,7 +125,9 @@ beforeEach(async () => {
     ipv4: ['10.0.0.3', '192.168.1.12'],
   };
   api.mockReset();
-  api.mockImplementation(async (request) => reply(request.kind === 'refresh' ? request.paths : undefined));
+  api.mockImplementation(async (request) =>
+    reply(request.kind === 'refresh' ? request.paths : undefined),
+  );
   Object.assign(window, {
     viewer: {
       networkSharing: api,
@@ -292,11 +310,10 @@ it('opens the captured folder dialog from the command and refreshes it when the 
   render(<Host />);
   fireEvent.click(screen.getByRole('button', { name: 'Share on the Network…' }));
   expect(await screen.findByText('This folder is not shared.')).toBeTruthy();
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open File Sharing Settings' }));
+  const primary = await screen.findByRole('button', { name: 'Open File Sharing Settings' });
+  await waitFor(() => expect(document.activeElement).toBe(primary));
   expect(
-    screen.getByText(
-      /Control-click the folder under Shared Folders, choose Advanced Options/,
-    ),
+    screen.getByText(/Control-click the folder under Shared Folders, choose Advanced Options/),
   ).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Copy folder path' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Open File Sharing Settings' }));
@@ -383,15 +400,24 @@ it('offers the two command names for exactly one folder and refuses custom actio
 });
 
 it('shows inherited sharing and its guest warning, and never calls an unknown folder unshared', async () => {
-  const inherited = { ...snapshot.shares[0]!, path: '/fixtures', inside: true, relative: file.name };
+  const inherited = {
+    ...snapshot.shares[0]!,
+    path: '/fixtures',
+    inside: true,
+    relative: file.name,
+  };
   snapshot = { ...snapshot, folders: [{ path: file.path, status: 'ready', shares: [inherited] }] };
   await readNetworkSharing([file.path]);
   const mark = render(<FileIcon entry={file} />);
-  expect(screen.getByRole('img', { name: 'Shared' }).getAttribute('aria-description')).toContain('Inside the shared folder Drop folder 日本.');
+  expect(screen.getByRole('img', { name: 'Shared' }).getAttribute('aria-description')).toContain(
+    'Inside the shared folder Drop folder 日本.',
+  );
   mark.unmount();
   const info = render(<NetworkSharingSection path={file.path} />);
   expect(screen.getByText('Inside the shared folder Drop folder 日本')).toBeTruthy();
-  expect(screen.getByText(/Anyone on the same network can open this folder without a password/)).toBeTruthy();
+  expect(
+    screen.getByText(/Anyone on the same network can open this folder without a password/),
+  ).toBeTruthy();
   info.unmount();
   snapshot = { ...snapshot, folders: [{ path: file.path, status: 'unknown', shares: [] }] };
   await readNetworkSharing([file.path]);
@@ -401,16 +427,26 @@ it('shows inherited sharing and its guest warning, and never calls an unknown fo
 
 it('lets the person open sharing while an unrelated custom invocation is waiting', async () => {
   let finish = () => {};
-  const waiting = new Promise<void>((resolve) => { finish = resolve; });
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
   const opened = vi.fn(async () => {});
-  const command = folderCommands({ networkSharing: opened } as unknown as FolderActions).find((item) => item.id === 'network-sharing')!;
+  const command = folderCommands({ networkSharing: opened } as unknown as FolderActions).find(
+    (item) => item.id === 'network-sharing',
+  )!;
   const registry = new CommandRegistry();
   registry.register('folder:folder', {
     context: () => context,
-    definitions: () => [command, {
-      id: 'custom.wait', label: 'Wait', group: 'Actions', when: () => true,
-      run: async () => waiting,
-    }],
+    definitions: () => [
+      command,
+      {
+        id: 'custom.wait',
+        label: 'Wait',
+        group: 'Actions',
+        when: () => true,
+        run: async () => waiting,
+      },
+    ],
   });
   const custom = registry.invoke('custom.wait', { paneID: 'folder' });
   try {
@@ -420,4 +456,44 @@ it('lets the person open sharing while an unrelated custom invocation is waiting
     finish();
     await custom;
   }
+});
+
+it('refuses sharing in actual builtin, plain sequence and command-line custom executors', async () => {
+  const invoke = vi.fn(async () => true);
+  const line = vi.fn(async () => ({ ok: true }));
+  const executors: CustomAction['executor'][] = [
+    { kind: 'builtin', command: 'network-sharing' },
+    { kind: 'sequence', commands: ['network-sharing'] },
+    { kind: 'sequence', commands: ['network-sharing | copy'] },
+  ];
+  for (const executor of executors) {
+    const settings = structuredClone(getState().settings);
+    settings.revision++;
+    settings.settings.customActions = [
+      {
+        id: 'review',
+        name: 'Review',
+        aliases: [],
+        icon: 'command',
+        shortcut: '',
+        order: 0,
+        pinned: false,
+        when: { target: 'any', extensions: [], min: 0, max: 10000 },
+        executor,
+      },
+    ];
+    act(() => receiveSettings(settings));
+    const action = programCommands(
+      {} as WorkspaceController,
+      invoke,
+      undefined,
+      () => context,
+      line,
+    ).find((item) => item.id === 'custom.review')!;
+    await expect(action.run({ ...context, directory: '/fixtures' })).rejects.toThrow(
+      'custom action',
+    );
+  }
+  expect(invoke).not.toHaveBeenCalled();
+  expect(line).not.toHaveBeenCalled();
 });

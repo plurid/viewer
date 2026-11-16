@@ -2,6 +2,8 @@ export type SharingServiceState = 'running' | 'off' | 'unknown';
 export type NetworkSharingStatus = 'ready' | 'unknown' | 'unavailable';
 export type NetworkFolderStatus = 'ready' | 'unknown';
 export type NetworkAddressFamily = 'IPv4' | 'IPv6';
+export type GuestWriteReason = 'build' | 'access-list' | 'permissions';
+export type GlobalGuestAccess = 'on' | 'off' | 'unknown';
 export function modelCommandLabel(command: { id: string; label: string }): string {
   return command.id === 'network-sharing' ? 'Network sharing' : command.label;
 }
@@ -13,6 +15,8 @@ export interface NetworkShare {
   readOnly: boolean;
   guestWritable: boolean;
   guestWriteUnknown?: boolean;
+  guestWriteReason?: GuestWriteReason;
+  accessPath?: string;
   identity?: string;
   inside?: boolean;
   relative?: string;
@@ -46,20 +50,41 @@ export interface NetworkSharingSnapshot {
   ipv4: string[];
   interfaces?: SharingInterface[];
   folders?: NetworkFolderSharing[];
+  guestAccess?: GlobalGuestAccess;
 }
 
 export type NetworkSharingRequest =
-  | { kind: 'refresh'; paths?: string[]; force?: boolean }
-  | { kind: 'settings'; path: string };
+  { kind: 'refresh'; paths?: string[]; force?: boolean } | { kind: 'settings'; path: string };
 
-export function guestWarning(share: NetworkShare): string | undefined {
-  if (!share.guests) return undefined;
-  const warning = 'Anyone on the same network can open this folder without a password.';
+export function guestWarning(
+  share: NetworkShare,
+  service: SharingServiceState = 'running',
+  guestAccess: GlobalGuestAccess = 'unknown',
+): string | undefined {
+  if (!share.guests || guestAccess === 'off') return undefined;
+  const warning = service === 'off'
+    ? 'File Sharing is off, so nobody can connect now. If it is turned on, anyone on the same network will be able to open this folder without a password.'
+    : service === 'unknown'
+      ? 'If File Sharing is running, anyone on the same network can open this folder without a password.'
+      : 'Anyone on the same network can open this folder without a password.';
+  const reason = share.guestWriteReason === 'build'
+    ? "Viewer could not check this folder's access list with this build."
+    : share.guestWriteReason === 'access-list'
+      ? "Viewer could not read this folder's access list."
+      : 'Viewer could not fully determine guest permissions for this folder.';
   return share.guestWritable
-    ? warning + ' They can also add, change and delete files in this folder.'
+    ? warning + (service === 'off' ? ' Guests will also be able to modify this folder or its contents.' : ' Guests can also modify this folder or its contents.')
     : share.guestWriteUnknown
-      ? warning + ' Guests may also be able to add, change and delete files in this folder because its permissions could not be read.'
-    : warning;
+      ? warning + ' Guests may also be able to modify this folder or its contents. ' + reason
+      : warning;
+}
+
+function sharingSegments(share: NetworkShare): string[] {
+  return [share.name, ...(share.relative ? share.relative.split('/') : [])];
+}
+export function windowsSharingAddressProblem(share: NetworkShare): string | undefined {
+  if (sharingSegments(share).some((segment) => /[\\/\u0000-\u001f\u007f:*?"<>|]/.test(segment)))
+    return 'Windows addresses are unavailable because a folder or share name contains a character Windows cannot use.';
 }
 
 export function sharingAddresses(
@@ -68,18 +93,30 @@ export function sharingAddresses(
   ipv4: readonly string[],
   interfaces?: readonly SharingInterface[],
 ): SharingAddress[] {
-  if (!ipv4.length && !interfaces?.length) return [];
   const addresses: SharingAddress[] = [];
   // Explorer's address bar takes literal UNC names, including spaces. A URL needs a path segment.
-  const uncName = !/[\\/\u0000-\u001f]/.test(share.name);
-  const segments = [share.name, ...(share.relative?.split('/') ?? [])];
+  const uncName = !windowsSharingAddressProblem(share);
+  const segments = sharingSegments(share);
   const uncPath = segments.join('\\');
   if (uncName)
     for (const address of ipv4)
-      addresses.push({ system: 'Windows', address: `\\\\${address}\\${uncPath}`, label: interfaces?.find((item) => item.address === address)?.kind ?? 'Local network' });
+      addresses.push({
+        system: 'Windows',
+        address: `\\\\${address}\\${uncPath}`,
+        label: interfaces?.find((item) => item.address === address)?.kind ?? 'Local network',
+      });
   if (host && uncName) {
-    addresses.push({ system: 'Windows', address: `\\\\${host}.local\\${uncPath}`, label: 'Local host name' });
-    if (host.length <= 15) addresses.push({ system: 'Windows', address: `\\\\${host}\\${uncPath}`, label: 'Short host name' });
+    addresses.push({
+      system: 'Windows',
+      address: `\\\\${host}.local\\${uncPath}`,
+      label: 'Local host name',
+    });
+    if (host.length <= 15)
+      addresses.push({
+        system: 'Windows',
+        address: `\\\\${host}\\${uncPath}`,
+        label: 'Short host name',
+      });
   }
   if (host)
     addresses.push({

@@ -25,6 +25,7 @@
     "test:fabrication-native": "pnpm --filter viewer-electron test:fabrication-native",
     "qualify": "pnpm --filter viewer-electron qualify",
     "direct:release": "pnpm --filter viewer-electron direct:release",
+    "version:next": "pnpm --filter viewer-electron version:next",
     "updates:keys": "pnpm --filter viewer-electron updates:keys",
     "updates:verify": "pnpm --filter viewer-electron updates:verify",
     "license:keys": "pnpm --filter viewer-electron license:keys",

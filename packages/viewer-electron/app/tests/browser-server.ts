@@ -519,15 +519,23 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'networkSharing': {
       const [request] = schemas.networkSharing.parse(args);
       const share = {
-        path: networkFolder, name: 'Network Drop 日本', guests: true,
-        readOnly: false, guestWritable: true,
+        path: networkFolder,
+        name: 'Network Drop 日本',
+        guests: true,
+        readOnly: false,
+        guestWritable: true,
       };
       return {
         status: networkSharingScenario ? 'ready' : 'unavailable',
         shares: networkSharingScenario ? [share] : [],
-        folders: request.kind === 'refresh' ? (request.paths ?? []).map((file) => ({
-          path: file, status: 'ready', shares: networkSharingScenario && file === networkFolder ? [share] : [],
-        })) : [],
+        folders:
+          request.kind === 'refresh'
+            ? (request.paths ?? []).map((file) => ({
+                path: file,
+                status: 'ready',
+                shares: networkSharingScenario && file === networkFolder ? [share] : [],
+              }))
+            : [],
         service: 'running',
         host: 'Studio-Mac',
         ipv4: ['192.168.1.12', '10.0.0.3'],

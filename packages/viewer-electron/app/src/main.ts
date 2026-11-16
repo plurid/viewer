@@ -36,7 +36,7 @@ import {
 } from './desktop/windows/window-state';
 import { errorMessage } from './domain/errors';
 import { DiagnosticLog } from './desktop/diagnostics/diagnostics';
-import { makeDiagnosticReport } from './desktop/diagnostics/report';
+import { makeDiagnosticReportSnapshot } from './desktop/diagnostics/report';
 import { ReportWindow } from './desktop/windows/report-window';
 import { protectDiagnosticOutput } from './desktop/diagnostics/output';
 import { applicationCSP } from './desktop/windows/application-csp';
@@ -76,7 +76,6 @@ import { installAboutPanel, installedRelease, openAcknowledgements } from './des
 import { applicationUpdates } from './desktop/updates/native';
 import { applicationLicense } from './desktop/license/native';
 import { licenseLine } from './domain/license/license';
-import { releaseName } from './domain/updates/feed';
 import type { LicenseStatus } from './domain/license/license';
 import type { Updates } from './desktop/updates/updates';
 const terminalArguments = process.argv.slice(app.isPackaged ? 1 : 2);
@@ -185,7 +184,7 @@ process.on(
   (error, origin) =>
     void diagnostics.record(
       origin === 'unhandledRejection' ? 'main-rejection' : 'main-exception',
-      failure(error),
+      error,
     ),
 );
 // One budget for every source the app records on its own: a loop cannot flood the log.
@@ -193,7 +192,7 @@ const diagnosticBudget = new DiagnosticBudget();
 if (!headless) {
   recordConsoleErrors(
     console,
-    (detail) => void diagnostics.record('main-error', detail),
+    (detail, fields) => void diagnostics.record('main-error', detail, fields),
     diagnosticBudget,
   );
   reportWorkers({
@@ -288,7 +287,7 @@ const mainFailures = new MainFailures({
   },
   showLog: () => shell.showItemInFolder(diagnostics.file),
   quit: () => app.quit(),
-  record: (detail) => void diagnostics.record('main-rejection', detail),
+  record: (detail, fields) => void diagnostics.record('main-rejection', detail, fields),
 });
 if (!headless) {
   process.on('uncaughtException', (error) => mainFailures.exception(error));
@@ -309,7 +308,7 @@ const pendingPaths: string[] = [];
 let updates: Updates | undefined;
 let licenseStatus: LicenseStatus | undefined;
 const reports = new ReportWindow(
-  (includeMessageText) => makeDiagnosticReport(diagnostics.file, licenseStatus, includeMessageText),
+  () => makeDiagnosticReportSnapshot(diagnostics.file, licenseStatus),
   () => desktop?.windowPreferences()?.look ?? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light'),
   !backgroundTest,
 );
@@ -446,7 +445,7 @@ function menu(): void {
 
 function reportApplicationCommandFailure(error: unknown): void {
   const message = errorMessage(error);
-  void diagnostics.record('main-rejection', failure(error));
+  void diagnostics.record('main-rejection', error);
   desktop?.emit({ type: 'service-error', service: 'window', message });
   if (!backgroundTest) dialog.showErrorBox('Viewer could not complete this command', message);
 }
@@ -625,7 +624,7 @@ function watchRenderer(created: BrowserWindow, services: Desktop): void {
         );
     },
     resumed: () => services.windowResumed(created),
-    report: (error) => void diagnostics.record('main-rejection', failure(error)),
+    report: (error) => void diagnostics.record('main-rejection', error),
   });
 }
 function rememberWindow(created: BrowserWindow): void {
@@ -778,7 +777,7 @@ app
           try {
             process.exitCode = await runCLI(terminalArguments, {
               dataPath: app.getPath('userData'),
-              version: releaseName(installedRelease()),
+              version: app.getVersion(),
               cwd: process.cwd(),
               home: os.homedir(),
               token: process.env.VIEWER_AGENT_TOKEN,
@@ -847,7 +846,7 @@ app
         applyBackdrop();
         void previous
           ?.flush()
-          .catch((error) => diagnostics.record('main-rejection', failure(error)));
+          .catch((error) => diagnostics.record('main-rejection', error));
       },
       quitting: () => quit.closingWindows(),
       hotkeyStatus: () => hotkey?.snapshot() ?? { registered: false, shortcut: 'Alt+Space' },
@@ -867,7 +866,7 @@ app
         if (settings)
           hotkey?.configure(settings.enabled, accelerator(settings.shortcut) ?? settings.shortcut);
       },
-      diagnose: (detail) => void diagnostics.record('renderer-error', detail),
+      diagnose: (detail, fields) => void diagnostics.record('renderer-error', detail, fields),
       serviceError: (service, message) => {
         if (diagnosticBudget.take('service:' + service))
           void diagnostics.record('service-error', `${service}: ${redactSecrets(message)}`);

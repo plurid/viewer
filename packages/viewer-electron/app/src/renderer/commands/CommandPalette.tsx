@@ -393,7 +393,7 @@ function useSmartRows(
   const folders = useFolderSuggestions(
     folderQuery,
     (!intent || intent.kind === 'jump') && !!folderQuery.trim(),
-    intent?.kind === 'jump',
+    intent?.kind === 'jump' ? 'jump' : 'habit',
   );
   const [listing, setListing] = useState<{ directory: string; entries: FileEntry[] }>();
   const listed = intent?.kind === 'path' ? intent.directory : '';
@@ -478,7 +478,7 @@ function useSmartRows(
               }),
             ]),
         ...rankFiles(
-          entries.filter((entry) => hidden || !entry.hidden),
+          entries.filter((entry) => hidden || !entry.name.startsWith('.')),
           intent.partial,
           12,
         ).map((entry) =>

@@ -51,7 +51,9 @@ describe('what the log keeps', () => {
     for (const limit of [500, 1000, 2000, 8000]) {
       const text = 'x'.repeat(limit - 1) + '😀';
       expect(boundedText(text, limit)).toHaveLength(limit - 1);
-      expect(() => encodeURIComponent(boundedTextTail('😀' + 'x'.repeat(limit - 1), limit))).not.toThrow();
+      expect(() =>
+        encodeURIComponent(boundedTextTail('😀' + 'x'.repeat(limit - 1), limit)),
+      ).not.toThrow();
     }
     const text = 'x'.repeat(7999) + '😀';
     expect(() => encodeURIComponent(diagnosticText([text]))).not.toThrow();
@@ -63,15 +65,22 @@ describe('what the log keeps', () => {
   });
 
   it.each([
-    'DB_PASSWORD=hunter2', 'client_secret="private words"', "MYAPP_API_KEY='private words'",
-    'passwd=hunter2 pwd=hunter2 pass: hunter2', '-u user:hunter2', '--password "private words"',
+    'DB_PASSWORD=hunter2',
+    'client_secret="private words"',
+    "MYAPP_API_KEY='private words'",
+    'passwd=hunter2 pwd=hunter2 pass: hunter2',
+    '-u user:hunter2',
+    '--password "private words"',
     'Cookie: session=hunter2; private-cookie=value',
     '“viewer-license-1.\n eyJlbWFpbCI6Imh1bnRlcjIifQ.\n abcdefghijklmno”',
+    '“vie\n wer- license -1.\n eyJlbWFpbCI6Imh1bnRlcjIifQ.\n abcdefghijklmno”',
   ])('does not persist recognizable credential forms: %s', async (text) => {
     expect(redactSecrets(text)).not.toMatch(/hunter2|private words|private-cookie|eyJ|abcdefghijk/);
     const log = new DiagnosticLog(path.join(root, 'credentials.log'));
     await log.record('renderer-error', text);
-    expect(await readFile(log.file, 'utf8')).not.toMatch(/hunter2|private words|private-cookie|eyJ|abcdefghijk/);
+    expect(await readFile(log.file, 'utf8')).not.toMatch(
+      /hunter2|private words|private-cookie|eyJ|abcdefghijk/,
+    );
   });
 
   it('names objects by their kind, never their contents, and redacts credentials', () => {

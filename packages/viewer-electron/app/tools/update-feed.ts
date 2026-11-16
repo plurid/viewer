@@ -5,7 +5,7 @@ import type { KeyObject } from 'node:crypto';
 import { readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { feedLimits, releaseName, updateFeedSchema } from '../src/domain/updates/feed';
+import { feedLimits, updateFeedSchema } from '../src/domain/updates/feed';
 import type { UpdateFeed } from '../src/domain/updates/feed';
 import { updateFeedConfiguration } from '../src/desktop/release';
 import type { UpdateFeedConfiguration } from '../src/desktop/release';
@@ -86,7 +86,7 @@ export function releaseFeedEndpoint(
     );
   const probe = signFeed(
     {
-      version: '0.0.1',
+      version: '0.1.0-0',
       build: 1,
       notes: 'Key check.',
       url: endpoint.feed.href,
@@ -106,7 +106,7 @@ export function releaseNotes(text: string): string {
     .filter((line) => !line.trimStart().startsWith('#'))
     .join('\n')
     .trim();
-  if (!notes) throw new Error('Write the release notes before shipping.');
+  if (!notes) throw new Error('Write the release notes and commit them before shipping.');
   if (notes.length > feedLimits.notes)
     throw new Error(`Release notes must be at most ${feedLimits.notes} characters.`);
   return notes;
@@ -157,7 +157,7 @@ async function main(command: string | undefined, argument: string | undefined) {
     if (!endpoint) throw new Error('This build has no update feed configured.');
     const feed = await fetchFeed(endpoint, fetch);
     console.log(
-      `${endpoint.feed.href} is signed by the embedded key: Viewer ${releaseName(feed)}, ${feed.url}`,
+      `${endpoint.feed.href} is signed by the embedded key: Viewer ${feed.version} (${feed.build}), ${feed.url}`,
     );
     return;
   }

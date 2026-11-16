@@ -9,7 +9,7 @@ import {
   type FileQuery,
   type QueryEntry,
 } from '../../domain/search/query';
-import { absolute, entry } from '../files/filesystem';
+import { absolute, entryForScan as entry } from '../files/filesystem';
 import { HiddenPaths } from '../files/hidden-paths';
 import { searchExclusions } from './exclusions';
 import { commonSearchExclusions } from '../../domain/search/exclusions';
@@ -145,7 +145,8 @@ export class Search {
           const directory = await opendir(folder);
           for await (const child of directory) {
             if (abort.signal.aborted) break;
-            const childHidden = current.hidden || child.name.startsWith('.') || hidden.has(child.name);
+            const childHidden =
+              current.hidden || child.name.startsWith('.') || hidden.has(child.name);
             if (!request.showHidden && childHidden) continue;
             visited++;
             const file = path.join(folder, child.name);

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { ensureElectronRuntime } from './native-build/runtime';
+import { alphaVersionSchema } from '../src/domain/updates/version';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /** A file a package keeps its license or notices in: LICENSE, COPYING, NOTICE, and the notices of
@@ -19,7 +20,16 @@ type Package = {
   license: string;
   homepage?: string;
 };
+
+export function noticesSource(version: string): string {
+  const ref = `v${alphaVersionSchema.parse(version)}`;
+  return `https://github.com/plurid/viewer/blob/${ref}/packages/viewer-electron/app/forge.config.ts`;
+}
+
 export async function licenseInventory() {
+  const { version } = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')) as {
+    version: string;
+  };
   const raw = JSON.parse(
     (
       await exec('pnpm', ['licenses', 'list', '--prod', '--json'], {
@@ -35,10 +45,10 @@ export async function licenseInventory() {
     homepage?: string;
     notices: { file: string; sha256: string }[];
   }[] = [];
-  // Committed notices cannot name their own commit count, so this link follows the source branch.
   const text: string[] = [
     'Viewer third-party notices\n\nDeclared production packages, including optional packages. Bundling may eliminate unused code. Electron/Chromium and Open CASCADE notices are also supplied separately.\n\nnode-pty 1.1.0 is modified during packaging to apply macOS terminal settings to the owned PTY master for App Sandbox compatibility. Source and exact patch: ' +
-      'https://github.com/plurid/viewer/blob/master/packages/viewer-electron/app/forge.config.ts\n',
+      noticesSource(version) +
+      '\n',
   ];
   text.push(
     '\nOffice layout includes the unmodified Noto Sans CJK 2.004 and Noto Serif CJK 2.001 collections (SIL Open Font License 1.1), providing Japanese, Korean, Simplified/Traditional Chinese and Hong Kong serif/sans/monospace faces. The original copyrights and license are in noto-cjk-2.004.txt. The exact upstream commit, URLs and SHA-256 values are recorded in src/desktop/previews/office-font-manifest.ts; the fonts are bundled inside the Office virtual filesystem and never installed into the host OS.\n',

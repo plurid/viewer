@@ -6,13 +6,12 @@ import path from 'node:path';
 import type { ApplicationSettings } from '../../domain/services';
 import { defaultShortcuts, accelerator, menuShortcuts } from '../../domain/preferences/shortcuts';
 import { planeAlignments, planeSizePresets } from '../../domain/workspaces/plane-layout';
-import { releaseName } from '../../domain/updates/feed';
 import type { InstalledRelease } from '../../domain/updates/feed';
 import { installedRelease } from './about';
 
 /** Development runs have no release tag, so their guides follow the default branch. */
 export function guide(page: string, release: InstalledRelease = installedRelease()): string {
-  const ref = release.build === undefined ? 'master' : `v${releaseName(release)}`;
+  const ref = release.build === undefined ? 'master' : `v${release.version}`;
   return `https://github.com/plurid/viewer/blob/${ref}/docs/${page}`;
 }
 

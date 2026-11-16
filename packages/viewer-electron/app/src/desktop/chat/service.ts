@@ -508,7 +508,10 @@ export class Chats {
         const input = {
           stepsRemaining: 8 - round,
           context: document.scopes,
-          commands: principal.commands.map((command) => ({ id: command.id, label: modelCommandLabel(command) })),
+          commands: principal.commands.map((command) => ({
+            id: command.id,
+            label: modelCommandLabel(command),
+          })),
           messages: [] as ChatMessage[],
           quote: document.branch?.quote,
           contextEncoding:

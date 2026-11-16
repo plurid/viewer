@@ -8,7 +8,7 @@ access in **System Settings → Privacy & Security**
 
 ## Install
 
-1. Download the Viewer disk image, `Viewer-<version>-<build>-arm64.dmg`, from the
+1. Download the Viewer disk image, `Viewer-<version>-arm64.dmg`, from the
    [Viewer website](https://plurid.com/viewer).
 2. Open the disk image and drag **Viewer** onto **Applications**.
 3. Eject the disk image: select it in the Finder sidebar and press **⌘E**.

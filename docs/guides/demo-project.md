@@ -6,8 +6,8 @@ the controls. This walkthrough runs locally without a model account or API key.
 
 ## Open the Front tool
 
-1. [Install Viewer](install.md), then download **Viewer-1.0.0-Demo.zip** from the
-   [first public release](https://github.com/plurid/viewer/releases/tag/v1.0.0).
+1. [Install Viewer](install.md), then download
+   [**Viewer-Demo.zip**](https://github.com/plurid/viewer/releases/latest/download/Viewer-Demo.zip).
 2. Extract the archive. In Viewer, press **⌘⇧O** and open its **Viewer Demo** folder.
 3. Press **⌘K**, choose **Chat about files**, then choose **Open canvas…** in the Chat toolbar.
 4. Select **Front** inside **Viewer Demo**. Viewer opens **Six-slot station · Front** with its saved

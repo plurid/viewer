@@ -3,7 +3,12 @@ import type { BrowserWindowConstructorOptions, MenuItemConstructorOptions } from
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReportWindow, reportDisclosure, reportPage } from '../src/desktop/windows/report-window';
 import {
-  reportCloseChannel, reportCopyChannel, reportOptionsChannel, reportUpdateChannel, reportShownChannel,
+  reportCloseChannel,
+  reportCopyChannel,
+  reportOptionsChannel,
+  reportUpdateChannel,
+  reportShownChannel,
+  reportReadyChannel,
 } from '../src/domain/diagnostics/report-window';
 import { installApplicationMenu } from '../src/desktop/windows/application-menu';
 import { dispatchApplicationCommand } from '../src/desktop/windows/application-dispatch';
@@ -57,7 +62,13 @@ vi.mock('electron', async () => {
       });
       show = vi.fn();
       focus = vi.fn();
-      loadURL = vi.fn(async () => {});
+      loadURL = vi.fn(async () => {
+        this.webContents.emit('did-start-loading');
+        this.webContents.ipc.emit(reportReadyChannel, {
+          sender: this.webContents,
+          senderFrame: this.webContents.mainFrame,
+        });
+      });
       isMinimized = () => false;
       restore = vi.fn();
       isDestroyed = () => this.destroyed;
@@ -76,6 +87,17 @@ vi.mock('electron', async () => {
 beforeEach(() => {
   native.windows.length = 0;
 });
+function reviewWindow(
+  make: (include: boolean) => Promise<string>,
+  look: () => 'dark' | 'light',
+  present = true,
+): ReportWindow {
+  return new ReportWindow(async () => ({
+    report: await make(false),
+    withMessageText: () => make(true),
+  }), look, present);
+}
+
 const report = '# Viewer report\n\n- Edition: direct\n\n> Failed ~/…/….pdf\n';
 
 describe('report review window', () => {
@@ -83,6 +105,8 @@ describe('report review window', () => {
     document.documentElement.innerHTML = reportPage(report, 'dark');
     await import('../src/report-preload');
     window.dispatchEvent(new Event('DOMContentLoaded'));
+    expect(native.ipcSend).toHaveBeenCalledWith(reportReadyChannel);
+    native.ipcSend.mockClear();
     document.querySelector('button')!.click();
     expect(native.ipcSend).toHaveBeenCalledExactlyOnceWith(reportCopyChannel);
     for (const [key, channel] of [
@@ -105,7 +129,7 @@ describe('report review window', () => {
     checkbox.dispatchEvent(new Event('change'));
     expect(warning.hidden).toBe(false);
     expect(button.disabled).toBe(true);
-    expect(native.ipcSend).toHaveBeenLastCalledWith(reportOptionsChannel, true);
+    expect(native.ipcSend).toHaveBeenLastCalledWith(reportOptionsChannel, 1, true);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
     expect(native.ipcSend).toHaveBeenCalledTimes(4);
     const update = native.ipcOn.mock.calls.find(([channel]) => channel === reportUpdateChannel)![1];
@@ -116,12 +140,19 @@ describe('report review window', () => {
     checkbox.checked = false;
     checkbox.dispatchEvent(new Event('change'));
     expect(warning.hidden).toBe(true);
+    update({}, { revision: 1, report: 'Late private excerpt', includeMessageText: true });
+    expect(checkbox.checked).toBe(false);
+    expect(document.querySelector('pre')!.textContent).toBe('Optional <quoted text>');
+    expect(button.disabled).toBe(true);
     update({}, { revision: 2, report, includeMessageText: false });
+    expect(document.querySelector('pre')!.textContent).toBe(report);
+    update({}, { revision: 3, report: 'Unrequested excerpt', includeMessageText: true });
+    expect(checkbox.checked).toBe(false);
     expect(document.querySelector('pre')!.textContent).toBe(report);
   });
 
   it('accepts copy only from this window main frame with no arguments', async () => {
-    const owner = new ReportWindow(
+    const owner = reviewWindow(
       async () => report,
       () => 'dark',
     );
@@ -138,13 +169,13 @@ describe('report review window', () => {
   });
 
   it('copies only the report acknowledged as shown after the person opts in', async () => {
-    const make = vi.fn(async (include: boolean) => include ? 'Optional message text' : report);
-    const owner = new ReportWindow(make, () => 'dark');
+    const make = vi.fn(async (include: boolean) => (include ? 'Optional message text' : report));
+    const owner = reviewWindow(make, () => 'dark');
     await owner.open();
     const contents = native.windows[0]!.webContents;
     const event = { sender: contents, senderFrame: contents.mainFrame };
     expect(make).toHaveBeenCalledExactlyOnceWith(false);
-    contents.ipc.emit(reportOptionsChannel, event, true);
+    contents.ipc.emit(reportOptionsChannel, event, 1, true);
     contents.ipc.emit(reportCopyChannel, event);
     expect(native.writeText).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(contents.send).toHaveBeenCalled());
@@ -156,6 +187,99 @@ describe('report review window', () => {
     contents.ipc.emit(reportShownChannel, event, update.revision);
     contents.ipc.emit(reportCopyChannel, event);
     await vi.waitFor(() => expect(native.writeText).toHaveBeenCalledWith(update.report));
+  });
+
+  it('does not replace the default with an excerpt that finishes after opting out', async () => {
+    let complete: (text: string) => void = () => {};
+    const excerpt = new Promise<string>((resolve) => {
+      complete = resolve;
+    });
+    const owner = reviewWindow(
+      async (include) => (include ? excerpt : report),
+      () => 'dark',
+    );
+    await owner.open();
+    const contents = native.windows[0]!.webContents;
+    const event = { sender: contents, senderFrame: contents.mainFrame };
+    contents.ipc.emit(reportOptionsChannel, event, 1, true);
+    contents.ipc.emit(reportOptionsChannel, event, 2, false);
+    const update = contents.send.mock.calls[0]![1];
+    contents.ipc.emit(reportShownChannel, event, update.revision);
+    complete('Late optional excerpt');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(contents.send).toHaveBeenCalledTimes(1);
+    contents.ipc.emit(reportCopyChannel, event);
+    expect(native.writeText).toHaveBeenCalledExactlyOnceWith(report);
+  });
+
+  it('restores the default and explains when optional message preparation fails', async () => {
+    const owner = reviewWindow(
+      async (include) => {
+        if (include) throw new Error('Private lookup details');
+        return report;
+      },
+      () => 'dark',
+    );
+    await owner.open();
+    const contents = native.windows[0]!.webContents;
+    const event = { sender: contents, senderFrame: contents.mainFrame };
+    contents.ipc.emit(reportOptionsChannel, event, 1, true);
+    await vi.waitFor(() => expect(contents.send).toHaveBeenCalled());
+    const update = contents.send.mock.calls[0]![1];
+    expect(update).toMatchObject({ report, includeMessageText: false });
+    expect(update.error).toBe('Message text could not be prepared. The default report is shown.');
+    contents.ipc.emit(reportShownChannel, event, update.revision);
+    contents.ipc.emit(reportCopyChannel, event);
+    expect(native.writeText).toHaveBeenCalledExactlyOnceWith(report);
+  });
+
+  it('resets Copy to the default on every page load and waits for the new document', async () => {
+    const owner = reviewWindow(async (include) => include ? 'Optional private excerpt' : report, () => 'dark');
+    await owner.open();
+    const contents = native.windows[0]!.webContents;
+    const event = { sender: contents, senderFrame: contents.mainFrame };
+    contents.ipc.emit(reportOptionsChannel, event, 1, true);
+    await vi.waitFor(() => expect(contents.send).toHaveBeenCalled());
+    contents.ipc.emit(reportShownChannel, event, contents.send.mock.calls[0]![1].revision);
+    contents.emit('did-start-loading');
+    contents.ipc.emit(reportCopyChannel, event);
+    expect(native.writeText).not.toHaveBeenCalled();
+    contents.ipc.emit(reportReadyChannel, event);
+    contents.ipc.emit(reportCopyChannel, event);
+    expect(native.writeText).toHaveBeenCalledExactlyOnceWith(report);
+  });
+
+  it('cuts long reports at a whole line and discloses shortening in the copied text', async () => {
+    const line = '- assets/renderer.js:123:45\n';
+    const owner = reviewWindow(async () => '# Viewer report\n\n' + line.repeat(5000), () => 'dark');
+    await owner.open();
+    const window = native.windows[0]!;
+    document.documentElement.innerHTML = decodeURIComponent(window.loadURL.mock.calls[0]![0].slice('data:text/html,'.length));
+    const shown = document.querySelector('pre')!.textContent!;
+    expect(new TextEncoder().encode(shown).length).toBeLessThanOrEqual(65536);
+    expect(shown).toMatch(/:123:45\n\nReport shortened to fit this window\.\n$/);
+    window.webContents.ipc.emit(reportCopyChannel, { sender: window.webContents, senderFrame: window.webContents.mainFrame });
+    expect(native.writeText).toHaveBeenCalledExactlyOnceWith(shown);
+  });
+
+  it('opens after an emoji crosses the report limit and copies the same complete scalars', async () => {
+    const owner = reviewWindow(
+      async () => 'a'.repeat(65535) + '😀private',
+      () => 'dark',
+    );
+    await expect(owner.open()).resolves.toBeUndefined();
+    const window = native.windows[0]!;
+    const page = decodeURIComponent(
+      window.loadURL.mock.calls[0]![0].slice('data:text/html,'.length),
+    );
+    document.documentElement.innerHTML = page;
+    const shown = document.querySelector('pre')!.textContent;
+    expect(shown).toBe('\n\nReport shortened to fit this window.\n');
+    window.webContents.ipc.emit(reportCopyChannel, {
+      sender: window.webContents,
+      senderFrame: window.webContents.mainFrame,
+    });
+    expect(native.writeText).toHaveBeenCalledExactlyOnceWith(shown);
   });
   it.each(['light', 'dark'] as const)(
     'shows the sentence, exact report and one Copy action in %s',
@@ -190,7 +314,7 @@ describe('report review window', () => {
 
   it('copies the immutable reviewed report from its private control, then closes', async () => {
     const make = vi.fn(async () => report);
-    const owner = new ReportWindow(make, () => 'dark');
+    const owner = reviewWindow(make, () => 'dark');
     await owner.open();
     const window = native.windows.at(-1)!;
     window.webContents.ipc.emit(reportCopyChannel, {
@@ -205,7 +329,7 @@ describe('report review window', () => {
   });
 
   it('Escape closes without reading or writing the clipboard', async () => {
-    const owner = new ReportWindow(
+    const owner = reviewWindow(
       async () => report,
       () => 'dark',
     );
@@ -220,7 +344,7 @@ describe('report review window', () => {
   });
 
   it('keeps the report open and offers recovery if copying fails', async () => {
-    const owner = new ReportWindow(
+    const owner = reviewWindow(
       async () => report,
       () => 'dark',
     );
@@ -236,7 +360,7 @@ describe('report review window', () => {
 
   it('coalesces opens and retains the same reviewed snapshot until closed', async () => {
     const make = vi.fn(async () => report);
-    const owner = new ReportWindow(make, () => 'light');
+    const owner = reviewWindow(make, () => 'light');
     await Promise.all([owner.open(), owner.open()]);
     await owner.open();
     expect(native.windows).toHaveLength(1);
@@ -245,7 +369,7 @@ describe('report review window', () => {
   });
 
   it('has only its private preload, denies permissions and navigation, and blocks every network request', async () => {
-    const owner = new ReportWindow(
+    const owner = reviewWindow(
       async () => report,
       () => 'dark',
       false,

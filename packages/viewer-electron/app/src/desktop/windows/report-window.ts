@@ -2,20 +2,26 @@ import { BrowserWindow, clipboard, dialog, session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
-  reportCloseChannel, reportCopyChannel, reportOptionsChannel, reportUpdateChannel, reportShownChannel,
+  reportCloseChannel,
+  reportCopyChannel,
+  reportOptionsChannel,
+  reportUpdateChannel,
+  reportShownChannel,
+  reportReadyChannel,
 } from '../../domain/diagnostics/report-window';
-import type { ReportUpdate } from '../../domain/diagnostics/report-window';
-import { boundedText } from '../../domain/diagnostics/text';
+import type { ReportSnapshot, ReportUpdate } from '../../domain/diagnostics/report-window';
+import { boundedReport } from '../../domain/diagnostics/text';
 import { isolatedContent } from './web-content-policy';
 
 export type ReportLook = 'light' | 'dark';
 
 export const reportDisclosure =
-  "By default, the report holds versions, hardware and each failure's kind, code and location in Viewer, with no personal file names or message text.";
+  "By default, the report holds Viewer version and build, edition, license status, macOS version, available hardware, display count and scales, language, region, and each failure's time, kind, class, code and location in Viewer, with no personal file names or message text.";
 
-export const reportMessageWarning = 'Message text can contain file names, addresses and other private text. Viewer removes what it can recognise. Read it before you share it.';
+export const reportMessageWarning =
+  'Message text can contain file names, addresses and other private text. Viewer removes what it can recognise. Read it before you share it.';
 
-/** The page has no scripts, links or report-reading API. The isolated preload only binds Copy. */
+/** Isolated local controls avoid giving any page a callable report or log reader. */
 export function reportPage(report: string, look: ReportLook): string {
   const escape = (value: string) =>
     value.replace(
@@ -105,7 +111,7 @@ export class ReportWindow {
   private opening: Promise<void> | undefined;
 
   constructor(
-    private makeReport: (includeMessageText: boolean) => Promise<string>,
+    private makeReport: () => Promise<ReportSnapshot>,
     private look: () => ReportLook,
     private present = true,
   ) {}
@@ -127,27 +133,48 @@ export class ReportWindow {
   }
 
   private async create(): Promise<void> {
-    const defaultReport = boundedText(await this.makeReport(false), 64 * 1024);
+    const snapshot = await this.makeReport();
+    const defaultReport = boundedReport(snapshot.report);
     let visibleReport = defaultReport;
-    let pending = false;
+    let pending = true;
     let revision = 0;
+    let generation = 0;
+    let ready = false;
     let proposal: ReportUpdate | undefined;
     const look = this.look();
     const page = 'data:text/html,' + encodeURIComponent(reportPage(defaultReport, look));
     const isolated = session.fromPartition('viewer-report-' + randomUUID(), { cache: false });
     isolated.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     isolated.setPermissionCheckHandler(() => false);
-    isolated.webRequest.onBeforeRequest((details, callback) => callback({ cancel: details.url !== page }));
+    isolated.webRequest.onBeforeRequest((details, callback) =>
+      callback({ cancel: details.url !== page }),
+    );
     const window = new BrowserWindow({
-      title: 'Copy Report', width: 600, height: 640, minWidth: 440, minHeight: 480,
+      title: 'Copy Report',
+      width: 600,
+      height: 640,
+      minWidth: 440,
+      minHeight: 480,
       backgroundColor: look === 'light' ? '#ffffff' : '#31353d',
-      show: false, minimizable: false, maximizable: false,
+      show: false,
+      minimizable: false,
+      maximizable: false,
       webPreferences: {
-        ...isolatedContent, preload: path.join(__dirname, 'report-preload.cjs'),
-        devTools: false, session: isolated,
+        ...isolatedContent,
+        preload: path.join(__dirname, 'report-preload.cjs'),
+        devTools: false,
+        session: isolated,
       },
     });
     this.window = window;
+    window.webContents.on('did-start-loading', () => {
+      generation++;
+      revision = 0;
+      visibleReport = defaultReport;
+      pending = true;
+      ready = false;
+      proposal = undefined;
+    });
     window.on('closed', () => {
       revision++;
       if (this.window === window) this.window = undefined;
@@ -164,36 +191,62 @@ export class ReportWindow {
         dialog.showErrorBox('Report not copied', 'Try Copy again.');
       }
     };
-    const update = async (includeMessageText: boolean) => {
-      const requested = ++revision;
+    const update = async (requested: number, includeMessageText: boolean) => {
+      if (!ready || requested <= revision) return;
+      revision = requested;
+      const document = generation;
       pending = true;
       let result: ReportUpdate;
       try {
         result = {
           revision: requested,
-          report: includeMessageText ? boundedText(await this.makeReport(true), 64 * 1024) : defaultReport,
+          report: includeMessageText
+            ? boundedReport(await snapshot.withMessageText())
+            : defaultReport,
           includeMessageText,
         };
       } catch {
         result = {
-          revision: requested, report: defaultReport, includeMessageText: false,
+          revision: requested,
+          report: defaultReport,
+          includeMessageText: false,
           error: 'Message text could not be prepared. The default report is shown.',
         };
       }
-      if (requested !== revision || window.isDestroyed()) return;
+      if (requested !== revision || document !== generation || window.isDestroyed()) return;
       proposal = result;
       window.webContents.send(reportUpdateChannel, result);
     };
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
-    for (const channel of [reportCopyChannel, reportCloseChannel, reportOptionsChannel, reportShownChannel])
+    for (const channel of [
+      reportCopyChannel,
+      reportCloseChannel,
+      reportOptionsChannel,
+      reportShownChannel,
+      reportReadyChannel,
+    ])
       window.webContents.ipc.on(channel, (event, ...args: unknown[]) => {
-        if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame)
+        if (
+          event.sender !== window.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
           return;
-        if (channel === reportOptionsChannel) {
-          if (args.length === 1 && typeof args[0] === 'boolean') void update(args[0]);
+        if (channel === reportReadyChannel) {
+          if (!args.length && !ready) {
+            ready = true;
+            pending = false;
+          }
+        } else if (channel === reportOptionsChannel) {
+          if (args.length === 2 && Number.isSafeInteger(args[0]) && Number(args[0]) > 0 && typeof args[1] === 'boolean')
+            void update(Number(args[0]), args[1]);
         } else if (channel === reportShownChannel) {
-          if (args.length === 1 && proposal && args[0] === proposal.revision && args[0] === revision) {
+          if (
+            args.length === 1 &&
+            proposal &&
+            args[0] === proposal.revision &&
+            args[0] === revision
+          ) {
             visibleReport = proposal.report;
             pending = false;
             proposal = undefined;

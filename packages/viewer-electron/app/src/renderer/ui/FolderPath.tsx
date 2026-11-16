@@ -6,9 +6,12 @@ export function FolderPath({ path }: { path: string }) {
   const tail = parts.length > 3 ? parts.slice(-2).join('/') : parts.at(-1)!;
   const start = path.slice(0, path.length - tail.length);
   return (
-    <small className="folder-path" title={path} aria-label={path}>
-      <span aria-hidden="true">{start}</span>
-      <span aria-hidden="true">{tail}</span>
-    </small>
+    <>
+      <small className="folder-path" title={path} aria-hidden="true">
+        <span>{start}</span>
+        <span>{tail}</span>
+      </small>
+      <span className="visually-hidden">{path}</span>
+    </>
   );
 }

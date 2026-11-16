@@ -723,7 +723,15 @@ export const schemas = {
   contextPublish: z.tuple([contextSchema]),
   thumbnail: z.tuple([localPath, z.number().int().min(128).max(2048)]),
   appIcon: z.tuple([localPath, z.enum(['small', 'large'])]),
-  diagnosticReport: z.tuple([z.string().max(8000)]),
+  diagnosticReport: z.tuple([z.union([
+    z.string().max(8000),
+    z.object({
+      detail: z.string().max(8000),
+      errorClass: z.string().max(64).optional(),
+      code: z.string().max(64).optional(),
+      stack: z.string().max(8000).optional(),
+    }).strict(),
+  ])]),
   document: z.tuple([id, documentRequestSchema.optional()]),
   cancelDocument: z.tuple([id, id]),
   resourceFormat: z.tuple([id, z.string().regex(/^[a-z0-9]{1,8}$/)]),

@@ -13,6 +13,7 @@ async function invoke(
   args: string[],
   options: {
     call?: CLICall;
+    version?: string;
     token?: string;
     input?: string;
     stream?: Readable;
@@ -36,7 +37,7 @@ async function invoke(
   });
   const code = await runCLI(args, {
     dataPath: '/private/generated-profile',
-    version: '0.1.0',
+    version: '0.1.0-0',
     cwd: '/work/project',
     home: '/people/example',
     input: stream ?? Readable.from(textInput ? [textInput] : []),
@@ -198,6 +199,18 @@ describe('terminal command contract', () => {
 });
 
 describe('headless command results', () => {
+  it.each(['0.1.0-0', '0.1.0-1'])(
+    'prints the supplied release name %s without credentials or a running app',
+    async (version) => {
+      const plain = await invoke(['--version'], { version });
+      expect(plain.code).toBe(0);
+      expect(JSON.parse(plain.stdout)).toEqual({ version });
+      const json = await invoke(['--version', '--json'], { version });
+      expect(json.code).toBe(0);
+      expect(JSON.parse(json.stdout)).toMatchObject({ result: { version } });
+    },
+  );
+
   it('prints help and version without credentials or a running app', async () => {
     expect(await invoke(['--version', '--json'])).toMatchObject({ code: 0, stderr: '' });
     const help = await invoke(['--help']);

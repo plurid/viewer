@@ -12,7 +12,7 @@ const native = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: {
     isPackaged: false,
-    getVersion: () => '0.1.0',
+    getVersion: () => '0.1.0-0',
     setAboutPanelOptions: native.about,
   },
   Menu: { buildFromTemplate: native.menu, setApplicationMenu: vi.fn() },
@@ -20,19 +20,19 @@ vi.mock('electron', () => ({
 }));
 
 describe('About Viewer', () => {
-  it('supplies the alpha version once and suppresses the native build suffix', () => {
-    installAboutPanel({ version: '0.1.0', build: 580 });
+  it('supplies the alpha version and the separate native build suffix', () => {
+    installAboutPanel({ version: '0.1.0-0', build: 584 });
     expect(native.about).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ applicationVersion: '0.1.0-580', version: '' }),
+      expect.objectContaining({ applicationVersion: '0.1.0-0', version: '584' }),
     );
   });
 
   it('labels a development run without inventing a build', () => {
     const release = installedRelease();
-    expect(release).toEqual({ version: '0.1.0' });
+    expect(release).toEqual({ version: '0.1.0-0' });
     installAboutPanel(release);
     expect(native.about).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ applicationVersion: '0.1.0', version: 'development' }),
+      expect.objectContaining({ applicationVersion: '0.1.0-0', version: 'development' }),
     );
   });
 });
@@ -41,10 +41,13 @@ describe('Help guide links', () => {
   it.each(['guides/getting-started.md', 'reference/shortcuts.md'])(
     'opens %s at the alpha release tag, or master during development',
     (page) => {
-      expect(guide(page, { version: '0.1.0', build: 580 })).toBe(
-        `https://github.com/plurid/viewer/blob/v0.1.0-580/docs/${page}`,
+      expect(guide(page, { version: '0.1.0-0', build: 584 })).toBe(
+        `https://github.com/plurid/viewer/blob/v0.1.0-0/docs/${page}`,
       );
-      expect(guide(page, { version: '0.1.0' })).toBe(
+      expect(guide(page, { version: '0.1.0-0', build: 600 })).toBe(
+        `https://github.com/plurid/viewer/blob/v0.1.0-0/docs/${page}`,
+      );
+      expect(guide(page, { version: '0.1.0-0' })).toBe(
         `https://github.com/plurid/viewer/blob/master/docs/${page}`,
       );
     },

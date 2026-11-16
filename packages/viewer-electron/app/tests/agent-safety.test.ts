@@ -7,7 +7,13 @@ import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { Readable, Writable } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import { reportCopyChannel, reportOptionsChannel, reportUpdateChannel, reportShownChannel } from '../src/domain/diagnostics/report-window';
+import {
+  reportCopyChannel,
+  reportOptionsChannel,
+  reportUpdateChannel,
+  reportShownChannel,
+  reportReadyChannel,
+} from '../src/domain/diagnostics/report-window';
 import { runCLI } from '../src/desktop/cli/run';
 import type { FileEntry, OperationJob } from '../src/domain/contracts';
 import type { CapturedTarget, CustomAction } from '../src/domain/automation/actions';
@@ -243,12 +249,18 @@ describe('agent removal safety', () => {
   it('keeps the actual report IPC route private to its own main frame', async () => {
     const clipboard = vi.fn(async (_text: string) => {});
     const contents = Object.assign(new EventEmitter(), {
-      ipc: new EventEmitter(), mainFrame: {}, send: vi.fn(), setWindowOpenHandler: vi.fn(),
+      ipc: new EventEmitter(),
+      mainFrame: {},
+      send: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
     });
     class ReviewWindow extends EventEmitter {
       webContents = contents;
       isDestroyed = () => false;
-      loadURL = vi.fn(async () => {});
+      loadURL = vi.fn(async () => {
+        contents.emit('did-start-loading');
+        contents.ipc.emit(reportReadyChannel, { sender: contents, senderFrame: contents.mainFrame });
+      });
       show = vi.fn();
       close = vi.fn();
     }
@@ -256,20 +268,34 @@ describe('agent removal safety', () => {
       BrowserWindow: ReviewWindow,
       clipboard: { writeText: clipboard },
       dialog: { showErrorBox: vi.fn() },
-      session: { fromPartition: () => ({
-        setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(),
-        webRequest: { onBeforeRequest: vi.fn() },
-      }) },
+      session: {
+        fromPartition: () => ({
+          setPermissionRequestHandler: vi.fn(),
+          setPermissionCheckHandler: vi.fn(),
+          webRequest: { onBeforeRequest: vi.fn() },
+        }),
+      },
     }));
     try {
       const { ReportWindow } = await import('../src/desktop/windows/report-window');
-      const makeReport = vi.fn(async (include: boolean) => include ? 'Explicit excerpt' : 'Structured report');
-      const review = new ReportWindow(makeReport, () => 'dark', false);
+      const makeReport = vi.fn(async (include: boolean) =>
+        include ? 'Explicit excerpt' : 'Structured report',
+      );
+      const review = new ReportWindow(async () => ({
+        report: await makeReport(false),
+        withMessageText: () => makeReport(true),
+      }), () => 'dark', false);
       await review.open();
       const agentContents = { id: 900, mainFrame: {} };
-      for (const channel of [reportOptionsChannel, reportCopyChannel, reportShownChannel]) {
-        contents.ipc.emit(channel, { sender: agentContents, senderFrame: agentContents.mainFrame }, true);
-        contents.ipc.emit(channel, { sender: contents, senderFrame: {} }, true);
+      for (const channel of [reportOptionsChannel, reportCopyChannel, reportShownChannel, reportReadyChannel]) {
+        const args =
+          channel === reportOptionsChannel ? [1, true] : channel === reportShownChannel ? [1] : [];
+        contents.ipc.emit(
+          channel,
+          { sender: agentContents, senderFrame: contents.mainFrame },
+          ...args,
+        );
+        contents.ipc.emit(channel, { sender: contents, senderFrame: {} }, ...args);
       }
       await Promise.resolve();
       expect(makeReport).toHaveBeenCalledExactlyOnceWith(false);
@@ -278,8 +304,10 @@ describe('agent removal safety', () => {
 
       // The positive control proves the test exercised the real installed route.
       const person = { sender: contents, senderFrame: contents.mainFrame };
-      contents.ipc.emit(reportOptionsChannel, person, true);
-      await vi.waitFor(() => expect(contents.send).toHaveBeenCalledWith(reportUpdateChannel, expect.any(Object)));
+      contents.ipc.emit(reportOptionsChannel, person, 1, true);
+      await vi.waitFor(() =>
+        expect(contents.send).toHaveBeenCalledWith(reportUpdateChannel, expect.any(Object)),
+      );
       const update = contents.send.mock.calls[0]![1];
       contents.ipc.emit(reportShownChannel, person, update.revision);
       contents.ipc.emit(reportCopyChannel, person);
@@ -294,16 +322,30 @@ describe('agent removal safety', () => {
     const file = '/Memory/Viewer/Logs/diagnostics.log';
     await expect(f.call('read_content', { path: file })).rejects.toThrow('Private Viewer');
     memory.aliases.set('/Granted/log-alias', file);
-    await expect(f.call('read_content', { path: '/Granted/log-alias' })).rejects.toThrow('Private Viewer');
+    await expect(f.call('read_content', { path: '/Granted/log-alias' })).rejects.toThrow(
+      'Private Viewer',
+    );
     let output = '';
     const sink = new Writable({
-      write(chunk, _encoding, done) { output += String(chunk); done(); },
+      write(chunk, _encoding, done) {
+        output += String(chunk);
+        done();
+      },
     });
-    const code = await runCLI(['tools', 'call', 'read_content', '--args', JSON.stringify({ path: file })], {
-      dataPath: '/Memory/Viewer', version: 'test', cwd: '/Granted', home: '/Home',
-      input: Readable.from([]), output: sink, error: sink,
-      call: (method, params, signal) => f.broker.handle(f.created.token, { method, params }, signal),
-    });
+    const code = await runCLI(
+      ['tools', 'call', 'read_content', '--args', JSON.stringify({ path: file })],
+      {
+        dataPath: '/Memory/Viewer',
+        version: 'test',
+        cwd: '/Granted',
+        home: '/Home',
+        input: Readable.from([]),
+        output: sink,
+        error: sink,
+        call: (method, params, signal) =>
+          f.broker.handle(f.created.token, { method, params }, signal),
+      },
+    );
     expect(code).not.toBe(0);
     expect(output).toContain('Private Viewer');
     expect(f.execute).not.toHaveBeenCalled();

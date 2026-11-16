@@ -5,7 +5,7 @@ import type { FolderActions } from '../commands/folder';
 import { DestinationDialog } from '../commands/DestinationDialog';
 import { FileInformation } from './FileInformation';
 import { NetworkSharingDialog } from './NetworkSharing';
-import { readNetworkSharing } from './network-sharing-state';
+import { networkSharingEnabled } from './network-sharing-state';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { GoToFolderDialog } from './GoToFolderDialog';
 import { getState, report, settledJob } from '../state/store';
@@ -174,11 +174,10 @@ export function useFileDialogs(): {
       dialog: (kind, context) => setName({ kind, context }),
       destination: (kind, context) => setDestination({ kind, context }),
       info: setInfo,
-      networkSharing: async (context) => {
+      networkSharing: (context) => {
         const file = context.selection[0];
         if (!file?.directory || context.selection.length !== 1) return;
-        const value = await readNetworkSharing([file.path]);
-        if (value.status !== 'unavailable') setSharing(file.path);
+        if (networkSharingEnabled()) setSharing(file.path);
       },
       openWith: setApplications,
       trash: (context) => {

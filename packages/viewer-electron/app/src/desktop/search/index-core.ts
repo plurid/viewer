@@ -20,10 +20,13 @@ import type {
   IndexedResult,
   IndexStatus,
 } from '../../domain/services';
-import { absolute, entry } from '../files/filesystem';
+import { absolute, entryForScan as entry } from '../files/filesystem';
 import { HiddenPaths } from '../files/hidden-paths';
 import { searchExclusions, searchExclusionRules } from './exclusions';
 import { containsPath } from '../files/containment';
+interface IndexedEntry extends FileEntry {
+  hiddenRoot?: string;
+}
 export class FileIndex {
   private db: DatabaseSync;
   /**
@@ -349,7 +352,16 @@ export class FileIndex {
         params.push(root, prefix.length, prefix);
       }
     }
-    if (!request.showHidden) where.push('files.hidden=0');
+    if (!request.showHidden) {
+      if (root) {
+        // An explicitly opened hidden folder does not hide its ordinary children.
+        const prefix = root.replace(/\/$/, '') + '/';
+        where.push(
+          "(files.hidden=0 OR (json_extract(files.data,'$.hiddenRoot') IS NOT NULL AND substr(json_extract(files.data,'$.hiddenRoot'),1,?)<>?))",
+        );
+        params.push(prefix.length, prefix);
+      } else where.push('files.hidden=0');
+    }
     let join = '';
     const long = words.filter((word) => word.length >= 3);
     const short = words.filter((word) => word.length < 3);
@@ -412,9 +424,14 @@ export class FileIndex {
     let entries: FileEntry[];
     let more: boolean;
     let scanLimited = false;
+    const decode = (row: { data: string }): FileEntry => {
+      const { hiddenRoot, ...item } = JSON.parse(row.data) as IndexedEntry;
+      if (root && hiddenRoot) item.hidden = hiddenRoot !== root && containsPath(root, hiddenRoot);
+      return item;
+    };
     if (exact) {
       const rows = select(limit + 1, offset);
-      entries = rows.slice(0, limit).map((row) => JSON.parse(row.data) as FileEntry);
+      entries = rows.slice(0, limit).map(decode);
       more = rows.length > limit;
     } else {
       // the query decides each row: read pages until enough match, at most 20,000 rows
@@ -425,7 +442,7 @@ export class FileIndex {
         const rows = select(500, read);
         read += rows.length;
         for (const row of rows) {
-          const item = JSON.parse(row.data) as FileEntry;
+          const item = decode(row);
           if (matchesQuery(check, item, facts)) matched.push(item);
         }
         if (rows.length < 500 || matched.length >= wanted || read >= 20000) {
@@ -626,6 +643,7 @@ export class FileIndex {
     root: IndexStatus['roots'][number],
     generation: number,
     ownerRoot = root.path,
+    visibility = new HiddenPaths(),
   ): Promise<void> {
     const buffer: {
       item: FileEntry;
@@ -641,7 +659,6 @@ export class FileIndex {
     };
     const seen = this.stamp();
     const queue = [absolute(root.path)];
-    const visibility = new HiddenPaths();
     let cursor = 0;
     let tick = 0;
     while (cursor < queue.length && generation === this.generation) {
@@ -654,8 +671,9 @@ export class FileIndex {
           const file = path.join(folder, child.name);
           if (this.excluded(file)) continue;
           try {
-            const item = await entry(file);
-            item.hidden ||= await visibility.hidden(file, ownerRoot);
+            const item: IndexedEntry = await entry(file);
+            item.hiddenRoot = await visibility.hiddenRoot(file, ownerRoot);
+            item.hidden ||= item.hiddenRoot !== undefined;
             let content: string | DocumentData | undefined = '';
             if (
               !item.directory &&
@@ -737,7 +755,7 @@ export class FileIndex {
     root.status = 'ready';
     this.emit(this.status());
   }
-  update(file: string, removed = false): Promise<void> {
+  update(file: string, removed = false, visibility = new HiddenPaths()): Promise<void> {
     const task = this.updates
       .catch(() => {})
       .then(async () => {
@@ -751,8 +769,9 @@ export class FileIndex {
         if (!root || this.excluded(file) || this.config?.paused) return;
         try {
           const generation = this.generation;
-          const item = await entry(file);
-          item.hidden ||= await new HiddenPaths().hidden(file, root);
+          const item: IndexedEntry = await entry(file);
+          item.hiddenRoot = await visibility.hiddenRoot(file, root);
+          item.hidden ||= item.hiddenRoot !== undefined;
           item.hidden ||= path
             .relative(root, file)
             .split('/')
@@ -772,6 +791,7 @@ export class FileIndex {
               { path: file, status: 'indexing', count: 0, errors: 0 },
               this.generation,
               root,
+              visibility,
             );
         } catch {
           this.remove(file);

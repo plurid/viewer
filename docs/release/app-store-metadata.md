@@ -9,7 +9,8 @@ Resolve every release gate before using these drafts publicly.
 | Subtitle                         | Files in a spatial workspace                                                                            |
 | Bundle identifier                | `com.pluridviewer.app`                                                                                  |
 | Team                             | Propal Invest SRL, `49W9L8Z9J5`                                                                         |
-| Version                          | `0.1.0`; final Store build number must be unique                                                        |
+| Version                          | `1.0.0`, derived from the first alpha release `0.1.0-0`                                                 |
+| Build                            | The Store's own unique `VIEWER_MAS_BUILD` number                                                        |
 | Primary category                 | Utilities                                                                                               |
 | Initial platform                 | macOS, Apple Silicon, minimum macOS 14                                                                  |
 | SKU                              | `viewer-macos-001` (confirm uniqueness in App Store Connect)                                            |
@@ -19,6 +20,12 @@ Resolve every release gate before using these drafts publicly.
 | Copyright / price / availability | Publisher decision; do not infer from the signing Team ID                                               |
 | Age rating                       | Complete the current questionnaire using actual optional AI, external links and executable capabilities |
 | Export compliance                | Publisher declaration based on the final binary's cryptography; do not infer from local signing success |
+
+Apple requires three period-separated integers and an increase for each release. The owner's Store
+exception drops the alpha ender: `0.1.0-0` maps to `1.0.0`, `0.1.0-N` to `1.0.N`, and `0.1.1-0` to
+`1.1.0`. The Store's own build number stays in `CFBundleVersion`. The embedded manifest and every
+in-app version display keep the alpha version. The tooling derives the Store number from the
+manifest; no second version is maintained.
 
 ## Description draft
 

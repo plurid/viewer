@@ -105,6 +105,38 @@ it('retains unsaved visits on a foreign broadcast before beginning a save', () =
   expect(sessions.snapshot()?.visits?.[path]?.count).toBe(2);
 });
 
+it('counts 3000 deterministic random visit/save interleavings without replaying shared totals', () => {
+  const { sessions, a, b, visit, begin, finish } = setup();
+  const peers = [a, b];
+  const pending = new Map<number, ReturnType<typeof begin>>();
+  let seed = 1729;
+  let expected = 0;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed;
+  };
+  for (let index = 0; index < 3000; index++) {
+    const peer = peers[(random() >>> 16) % peers.length]!;
+    const action = (random() >>> 8) % 4;
+    if (action < 2) {
+      visit(peer);
+      expected++;
+    } else if (!pending.has(peer.owner)) pending.set(peer.owner, begin(peer));
+    else {
+      finish(peer, pending.get(peer.owner)!);
+      pending.delete(peer.owner);
+    }
+  }
+  for (const peer of peers) {
+    const sent = pending.get(peer.owner);
+    if (sent) finish(peer, sent);
+  }
+  for (const peer of peers) finish(peer, begin(peer));
+  expect(sessions.snapshot()?.visits?.[path]?.count).toBe(expected);
+  expect(a.saved.visits?.[path]?.count).toBe(expected);
+  expect(b.saved.visits?.[path]?.count).toBe(expected);
+});
+
 it('clears unseen peer folders and counts a revisit from zero, including after a failed save', () => {
   const { sessions, a, b, visit, clear, begin, finish } = setup();
   for (let index = 0; index < 10; index++) visit(a);

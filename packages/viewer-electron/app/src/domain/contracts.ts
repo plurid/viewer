@@ -1,4 +1,5 @@
 import type { ObservedIdentity } from './files/item-identity';
+import type { DiagnosticFailure } from './diagnostics/failure';
 import type { FolderVisitReply, FolderVisitSave } from './files/folder-visit-changes';
 import type { NetworkSharingRequest, NetworkSharingSnapshot } from './files/network-sharing';
 import type { ReconstructionRequest, ReconstructionReply } from './canvases/reconstruction';
@@ -901,7 +902,7 @@ export interface ViewerAPI {
   /** Finder's icon for an application bundle, as a data URL. */
   appIcon(path: string, size: 'small' | 'large'): Promise<string>;
   /** Records a renderer failure in the local diagnostic log; nothing is sent anywhere. */
-  diagnosticReport(detail: string): Promise<void>;
+  diagnosticReport(detail: string | DiagnosticFailure): Promise<void>;
   document(id: string, request?: DocumentRequest): Promise<DocumentData>;
   cancelDocument(id: string, requestID: string): Promise<void>;
   /** Reads a previewed file as `extension` once its own first bytes say it is one: Show as, for a

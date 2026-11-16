@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron';
+import type { DiagnosticErrorFields } from '../../domain/diagnostics/failure';
 import type { ApiHandlers } from './schemas';
 import type { HotkeyStatus } from '../windows/hotkey-window';
 import type { ShellCommand } from '../windows/shell-command';
@@ -25,7 +26,7 @@ interface WindowHost {
   hotkeyStatus?(): HotkeyStatus;
   restoreWindow?(): void;
   settingsCategory?(category: string): void;
-  diagnose?(detail: string): void;
+  diagnose?(detail: string, fields?: DiagnosticErrorFields): void;
 }
 interface WindowPorts {
   host: WindowHost;
@@ -79,7 +80,8 @@ export function createWindowHandlers(ports: WindowPorts): WindowHandlers {
       const recent = (reports.get(owner) ?? []).filter((at) => now - at < 60_000);
       if (recent.length >= 30) return;
       reports.set(owner, [...recent, now]);
-      ports.host.diagnose?.(detail);
+      if (typeof detail === 'string') ports.host.diagnose?.(detail);
+      else ports.host.diagnose?.(detail.detail, detail);
     },
     flushed: ([token, result], owner) => {
       ports.flushes.acknowledge(token, owner, result ?? { ok: true });
