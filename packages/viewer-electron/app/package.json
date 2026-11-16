@@ -1,7 +1,7 @@
 {
   "name": "viewer-electron",
   "productName": "Viewer",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "A spatial file manager with modular, powerful previews",
   "keywords": [
     "viewer",

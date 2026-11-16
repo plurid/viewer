@@ -1,13 +1,19 @@
 import { BrowserWindow, clipboard, dialog, session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { reportCloseChannel, reportCopyChannel } from '../../domain/diagnostics/report-window';
+import {
+  reportCloseChannel, reportCopyChannel, reportOptionsChannel, reportUpdateChannel, reportShownChannel,
+} from '../../domain/diagnostics/report-window';
+import type { ReportUpdate } from '../../domain/diagnostics/report-window';
+import { boundedText } from '../../domain/diagnostics/text';
 import { isolatedContent } from './web-content-policy';
 
 export type ReportLook = 'light' | 'dark';
 
 export const reportDisclosure =
-  'Names, personal paths, network addresses and credentials were removed; still read the report before sharing.';
+  "By default, the report holds versions, hardware and each failure's kind, code and location in Viewer, with no personal file names or message text.";
+
+export const reportMessageWarning = 'Message text can contain file names, addresses and other private text. Viewer removes what it can recognise. Read it before you share it.';
 
 /** The page has no scripts, links or report-reading API. The isolated preload only binds Copy. */
 export function reportPage(report: string, look: ReportLook): string {
@@ -48,6 +54,12 @@ export function reportPage(report: string, look: ReportLook): string {
     html, body { height: 100%; margin: 0; }
     main { height: 100%; display: flex; flex-direction: column; gap: 16px; padding: 18px; }
     p, pre { margin: 0; }
+    [hidden] { display: none !important; }
+    .report-options { display: grid; gap: 6px; }
+    .report-options label { display: flex; align-items: center; gap: 8px; user-select: none; }
+    .report-options label:focus-within { background: var(--selection); border-radius: 5px; }
+    input { accent-color: var(--accent); }
+    #message-warning, #report-status { color: var(--muted); font-size: 12px; }
     pre {
       flex: 1; min-height: 0; padding: 12px; border-radius: 5px;
       background: var(--field); white-space: pre-wrap; overflow-wrap: anywhere;
@@ -74,8 +86,13 @@ export function reportPage(report: string, look: ReportLook): string {
   <main aria-label="Copy Report" aria-describedby="privacy">
     <p id="privacy">${reportDisclosure}</p>
     <pre role="document" aria-label="Report" tabindex="0">${escape(report)}</pre>
+    <section class="report-options" aria-label="Report options">
+      <label><input id="include-message-text" type="checkbox" aria-describedby="message-warning">Include message text</label>
+      <p id="message-warning" hidden>${reportMessageWarning}</p>
+      <p id="report-status" role="status" hidden></p>
+    </section>
     <footer>
-      <p>Paste this report into Help → Report an Issue… after copying.</p>
+      <p>Copy puts this report on the clipboard; other apps and your other devices may read it. You can paste it into Help → Report an Issue….</p>
       <button type="button">Copy</button>
     </footer>
   </main>
@@ -88,7 +105,7 @@ export class ReportWindow {
   private opening: Promise<void> | undefined;
 
   constructor(
-    private makeReport: () => Promise<string>,
+    private makeReport: (includeMessageText: boolean) => Promise<string>,
     private look: () => ReportLook,
     private present = true,
   ) {}
@@ -110,69 +127,89 @@ export class ReportWindow {
   }
 
   private async create(): Promise<void> {
-    const report = await this.makeReport();
+    const defaultReport = boundedText(await this.makeReport(false), 64 * 1024);
+    let visibleReport = defaultReport;
+    let pending = false;
+    let revision = 0;
+    let proposal: ReportUpdate | undefined;
     const look = this.look();
-    const page = 'data:text/html,' + encodeURIComponent(reportPage(report, look));
+    const page = 'data:text/html,' + encodeURIComponent(reportPage(defaultReport, look));
     const isolated = session.fromPartition('viewer-report-' + randomUUID(), { cache: false });
     isolated.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     isolated.setPermissionCheckHandler(() => false);
-    isolated.webRequest.onBeforeRequest((details, callback) =>
-      callback({ cancel: details.url !== page }),
-    );
+    isolated.webRequest.onBeforeRequest((details, callback) => callback({ cancel: details.url !== page }));
     const window = new BrowserWindow({
-      title: 'Copy Report',
-      width: 600,
-      height: 560,
-      minWidth: 440,
-      minHeight: 360,
+      title: 'Copy Report', width: 600, height: 640, minWidth: 440, minHeight: 480,
       backgroundColor: look === 'light' ? '#ffffff' : '#31353d',
-      show: false,
-      minimizable: false,
-      maximizable: false,
+      show: false, minimizable: false, maximizable: false,
       webPreferences: {
-        ...isolatedContent,
-        preload: path.join(__dirname, 'report-preload.cjs'),
-        devTools: false,
-        session: isolated,
+        ...isolatedContent, preload: path.join(__dirname, 'report-preload.cjs'),
+        devTools: false, session: isolated,
       },
     });
     this.window = window;
     window.on('closed', () => {
+      revision++;
       if (this.window === window) this.window = undefined;
     });
     let copying = false;
     const copy = async () => {
-      if (copying) return;
+      if (copying || pending) return;
       copying = true;
       try {
-        await clipboard.writeText(report);
+        await clipboard.writeText(visibleReport);
         if (!window.isDestroyed()) window.close();
       } catch {
         copying = false;
         dialog.showErrorBox('Report not copied', 'Try Copy again.');
       }
     };
+    const update = async (includeMessageText: boolean) => {
+      const requested = ++revision;
+      pending = true;
+      let result: ReportUpdate;
+      try {
+        result = {
+          revision: requested,
+          report: includeMessageText ? boundedText(await this.makeReport(true), 64 * 1024) : defaultReport,
+          includeMessageText,
+        };
+      } catch {
+        result = {
+          revision: requested, report: defaultReport, includeMessageText: false,
+          error: 'Message text could not be prepared. The default report is shown.',
+        };
+      }
+      if (requested !== revision || window.isDestroyed()) return;
+      proposal = result;
+      window.webContents.send(reportUpdateChannel, result);
+    };
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    window.webContents.on('will-navigate', (event) => {
-      event.preventDefault();
-    });
-    for (const channel of [reportCopyChannel, reportCloseChannel])
+    window.webContents.on('will-navigate', (event) => event.preventDefault());
+    for (const channel of [reportCopyChannel, reportCloseChannel, reportOptionsChannel, reportShownChannel])
       window.webContents.ipc.on(channel, (event, ...args: unknown[]) => {
-        if (
-          args.length ||
-          event.sender !== window.webContents ||
-          event.senderFrame !== window.webContents.mainFrame
-        )
+        if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame)
           return;
-        if (channel === reportCopyChannel) void copy();
-        else window.close();
+        if (channel === reportOptionsChannel) {
+          if (args.length === 1 && typeof args[0] === 'boolean') void update(args[0]);
+        } else if (channel === reportShownChannel) {
+          if (args.length === 1 && proposal && args[0] === proposal.revision && args[0] === revision) {
+            visibleReport = proposal.report;
+            pending = false;
+            proposal = undefined;
+          }
+        } else if (!args.length) {
+          if (channel === reportCopyChannel) void copy();
+          else window.close();
+        }
       });
     try {
       await window.loadURL(page);
       if (this.present && !window.isDestroyed()) window.show();
-    } catch (error) {
+    } catch {
       if (!window.isDestroyed()) window.close();
-      throw error;
+      // Electron includes the data URL in load errors, which must never enter the diagnostic log.
+      throw new Error('The report window could not open.');
     }
   }
 }

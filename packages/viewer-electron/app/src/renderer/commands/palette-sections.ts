@@ -22,12 +22,15 @@ export function withFrequentFolders(
   view: PaletteView,
   folders: readonly ResolvedCommand[],
 ): PaletteView {
-  const paths = new Set(folders.map((folder) => folder.detail));
-  const commands = view.rows.filter((row) => row.group !== 'Places' || !paths.has(row.detail));
-  const shown = folders.slice(0, commands.length ? 4 : 8);
+  const places = new Set(
+    view.rows.filter((row) => row.group === 'Places').map((row) => row.detail),
+  );
+  const shown = folders
+    .filter((folder) => !places.has(folder.detail))
+    .slice(0, view.rows.length ? 4 : 8);
   const headings = new Map(view.headings);
   if (shown[0]) headings.set(shown[0].id, 'Frequent folders');
-  return { rows: [...commands, ...shown], headings };
+  return { rows: [...view.rows, ...shown], headings };
 }
 
 /** An explicitly named action wins over interpreting its remaining words as an argument. */

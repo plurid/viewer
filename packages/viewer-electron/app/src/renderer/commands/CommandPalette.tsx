@@ -30,6 +30,8 @@ import { focusPlane } from '../workspace/sessions';
 import type { FileEntry } from '../../domain/contracts';
 import { calculate, paletteIntent } from './smart-palette';
 import { useFolderSuggestions } from '../explorer/useFolderSuggestions';
+import { rankFolderJump } from '../../domain/files/folder-visits';
+import { useKnownFolders } from '../explorer/folder-availability';
 import { LineFinder } from '../command-line/LineFinder';
 import { PromptFinder } from '../command-line/PromptFinder';
 import { QuickCommand } from '../terminals/QuickCommand';
@@ -390,7 +392,15 @@ function useSmartRows(
   const home = getState().bootstrap.home;
   const intent = useMemo(() => paletteIntent(query, home, directory), [query, home, directory]);
   const folderQuery = intent?.kind === 'jump' ? intent.text : !intent ? query : '';
-  const folders = useFolderSuggestions(folderQuery, !!folderQuery.trim());
+  const folders = useFolderSuggestions(folderQuery, !intent && !!folderQuery.trim());
+  const known = useKnownFolders();
+  const visits = useViewer((state) => state.saved.visits);
+  const jump =
+    intent?.kind === 'jump'
+      ? rankFolderJump(visits ?? {}, intent.text, Date.now())
+          .filter((path) => known.has(path))
+          .slice(0, 10)
+      : [];
   const [listing, setListing] = useState<{ directory: string; entries: FileEntry[] }>();
   const listed = intent?.kind === 'path' ? intent.directory : '';
   useEffect(() => {
@@ -435,11 +445,11 @@ function useSmartRows(
   });
   const definitions: CommandDefinition[] = (() => {
     if (!intent || intent.kind === 'jump')
-      return folders.paths.map((path) =>
+      return (intent?.kind === 'jump' ? jump : folders.paths).map((path) =>
         row(`folder:${path}`, {
           label: path.split('/').pop() || path,
           detail: path,
-          group: 'Frequent folders',
+          group: intent?.kind === 'jump' ? 'Go' : 'Frequent folders',
           icon: 'folder',
           run: open(path, true),
         }),
@@ -537,7 +547,7 @@ function useSmartRows(
       valid: (invocation) => invocation.workspaceID === activeWorkspace().id,
     },
     // the palette's context is a new object each render: republishing on it never settled
-    [intent, listing, folders.paths],
+    [intent, listing, folders.paths, known, visits],
   );
   return definitions.length ? registry.list({ sources: [sourceID] }) : [];
 }

@@ -16,6 +16,7 @@ import { httpsAddress } from '../src/desktop/updates/signature';
 import { licenseEndpoint } from '../src/desktop/license/signature';
 import { licenseConfiguration } from '../src/desktop/release';
 import type { LicenseConfiguration } from '../src/desktop/release';
+import { releaseName } from '../src/domain/updates/feed';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
   exec = promisify(execFile);
 
@@ -135,6 +136,10 @@ export interface ReleaseSource {
   build: string;
 }
 
+export function releaseTagCommand(version: string, source: ReleaseSource): string {
+  return `git tag v${releaseName({ version, build: Number(source.build) })} ${source.commit}`;
+}
+
 /** A release is built from committed source with its full history: the build number is the
  * commit count (tools/build-number.ts), and the receipt names the commit. */
 export async function releaseSource(git: GitCommand = runGit): Promise<ReleaseSource> {
@@ -162,7 +167,7 @@ function pnpm(script: string, env: NodeJS.ProcessEnv): Promise<void> {
   });
 }
 
-/** The release notes this version ships with, from release-notes/<version>.txt. */
+/** Rewrite this version's notes for each release; Git and published feeds keep earlier notes. */
 export async function versionNotes(version: string): Promise<string> {
   const file = path.join(root, 'release-notes', version + '.txt');
   const text = await readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => {
@@ -198,7 +203,7 @@ async function main() {
   const notes = await versionNotes(version);
   const feedKey = await signingKey(process.env);
   const endpoint = releaseFeedEndpoint(feedKey);
-  const name = `Viewer-${version}-${source.build}-arm64`;
+  const name = `Viewer-${releaseName({ version, build: Number(source.build) })}-arm64`;
   const download = httpsAddress(
     process.env.VIEWER_RELEASE_DOWNLOAD_URL?.trim() || new URL(name + '.dmg', endpoint.feed).href,
     'VIEWER_RELEASE_DOWNLOAD_URL',
@@ -332,7 +337,7 @@ async function main() {
       'Signed and notarized local installer: ' +
         path.relative(root, dmg) +
         `\nPublish it at ${download.href}, then ${path.basename(feed.feed)} and its .sig at ${endpoint.feed.href}.` +
-        `\nTag the release: git tag v${version} ${source.commit}` +
+        `\nTag the release: ${releaseTagCommand(version, source)}` +
         '\nNo public publishing was performed.',
     );
   } finally {

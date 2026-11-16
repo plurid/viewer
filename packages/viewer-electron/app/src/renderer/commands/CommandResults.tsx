@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '../ui/Icon';
+import { FolderPath } from '../ui/FolderPath';
 import type { DiscoverableCommand, ResolvedCommand } from './registry';
 
 /** Search retains focus while arrows move the active descendant through results. */
@@ -188,7 +189,12 @@ export function CommandResults({
               />
               <span className="command-result-text">
                 <span>{row.label}</span>
-                {row.detail && <small>{row.detail}</small>}
+                {row.detail &&
+                  (row.id.startsWith('smart:folder:') ? (
+                    <FolderPath path={row.detail} />
+                  ) : (
+                    <small>{row.detail}</small>
+                  ))}
               </span>
               {typeof row.setting?.value === 'boolean' ? (
                 <span

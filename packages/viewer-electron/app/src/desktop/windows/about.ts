@@ -1,7 +1,7 @@
 import { app, shell } from 'electron';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { bundleBuild } from '../../domain/updates/feed';
+import { bundleBuild, releaseName } from '../../domain/updates/feed';
 import type { InstalledRelease } from '../../domain/updates/feed';
 import { assetPath } from '../native/assets';
 import { applicationCopyright } from '../release';
@@ -26,8 +26,9 @@ export function installedRelease(): InstalledRelease {
 export function installAboutPanel(release: InstalledRelease, line?: string): void {
   app.setAboutPanelOptions({
     applicationName: 'Viewer',
-    applicationVersion: release.version,
-    version: release.build === undefined ? 'development' : String(release.build),
+    applicationVersion: releaseName(release),
+    // An empty build label keeps the native panel from repeating it in parentheses.
+    version: release.build === undefined ? 'development' : '',
     copyright: applicationCopyright,
     credits: [
       line,

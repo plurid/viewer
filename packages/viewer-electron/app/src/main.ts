@@ -308,7 +308,7 @@ const pendingPaths: string[] = [];
 let updates: Updates | undefined;
 let licenseStatus: LicenseStatus | undefined;
 const reports = new ReportWindow(
-  () => makeDiagnosticReport(diagnostics.file, licenseStatus),
+  (includeMessageText) => makeDiagnosticReport(diagnostics.file, licenseStatus, includeMessageText),
   () => desktop?.windowPreferences()?.look ?? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light'),
   !backgroundTest,
 );

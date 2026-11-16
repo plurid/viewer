@@ -15,6 +15,9 @@
 #include <sys/attr.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <sys/acl.h>
+#include <membership.h>
+#include <grp.h>
 
 // A small in-process bridge: dynamic PowerBox grants belong to this process.
 // Filesystem work runs on N-API's bounded pool, never the Cocoa/renderer thread.
@@ -136,7 +139,7 @@ static napi_value clipboardWrite(napi_env env, napi_callback_info info) {
   }
 }
 
-enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject, Alias, DatesAdded, Clone, HiddenFolder, HiddenFile };
+enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject, Alias, DatesAdded, Clone, HiddenFolder, HiddenFile, GuestACL };
 struct Work {
   napi_async_work work; napi_deferred deferred; Kind kind;
   int source = -1, target = -1;
@@ -184,20 +187,19 @@ static NSArray<NSString *> *hiddenNames(NSString *folder, int *failure) {
     for (int index = 0; index < count; ++index) {
       if (offset + sizeof(Record) > sizeof(buffer)) { *failure = EIO; break; }
       const Record *record = reinterpret_cast<const Record *>(buffer + offset);
-      if (record->length < sizeof(Record) || record->length > sizeof(buffer) - offset ||
-          !(record->returned.commonattr & ATTR_CMN_NAME)) { *failure = EIO; break; }
+      if (record->length < sizeof(uint32_t) || record->length > sizeof(buffer) - offset) { *failure = EIO; break; }
+      if (record->length < sizeof(Record) || !(record->returned.commonattr & ATTR_CMN_NAME)) { offset += record->length; continue; }
       int64_t nameOffset = offsetof(Record, name) + (int64_t)record->name.attr_dataoffset;
       size_t nameLength = record->name.attr_length;
       if (nameOffset < (int64_t)sizeof(Record) || !nameLength ||
-          (uint64_t)nameOffset + nameLength > record->length) { *failure = EIO; break; }
+          (uint64_t)nameOffset + nameLength > record->length) { offset += record->length; continue; }
       const char *name = buffer + offset + nameOffset;
-      if (name[nameLength - 1] != '\0' || strnlen(name, nameLength) != nameLength - 1 || strchr(name, '/')) { *failure = EIO; break; }
+      if (name[nameLength - 1] != '\0' || strnlen(name, nameLength) != nameLength - 1 || strchr(name, '/')) { offset += record->length; continue; }
       uint32_t flags = record->flags;
       if (!(record->returned.commonattr & ATTR_CMN_FLAGS)) {
         struct stat info{};
         if (fstatat(descriptor, name, &info, AT_SYMLINK_NOFOLLOW) != 0) {
-          if (errno == ENOENT) { offset += record->length; continue; }
-          *failure = errno; break;
+          offset += record->length; continue;
         }
         flags = info.st_flags;
       }
@@ -222,8 +224,7 @@ static NSArray<NSString *> *hiddenNames(NSString *folder, int *failure) {
       if (!strcmp(item->d_name, ".") || !strcmp(item->d_name, "..")) continue;
       struct stat info{};
       if (fstatat(dirfd(directory), item->d_name, &info, AT_SYMLINK_NOFOLLOW) != 0) {
-        if (errno == ENOENT) continue;
-        *failure = errno; break;
+        continue;
       }
       if (info.st_flags & UF_HIDDEN) {
         NSString *value = [NSFileManager.defaultManager stringWithFileSystemRepresentation:item->d_name length:strlen(item->d_name)];
@@ -234,11 +235,45 @@ static NSArray<NSString *> *hiddenNames(NSString *folder, int *failure) {
   } else close(descriptor);
   return *failure ? nil : names;
 }
+static NSString *guestACLState(NSString *file) {
+  acl_t acl = acl_get_file(file.fileSystemRepresentation, ACL_TYPE_EXTENDED);
+  if (!acl) {
+    if (errno == ENOENT) { struct stat info{}; if (lstat(file.fileSystemRepresentation, &info) == 0) return @"none"; }
+    return @"unknown";
+  }
+  if (acl_valid(acl) != 0) { acl_free(acl); return @"unknown"; }
+  bool unknown = false, writable = false;
+  acl_entry_t entry;
+  int state = acl_get_entry(acl, ACL_FIRST_ENTRY, &entry);
+  while (state == 0) {
+    acl_tag_t tag;
+    acl_permset_t permissions;
+    if (acl_get_tag_type(entry, &tag) != 0 || acl_get_permset(entry, &permissions) != 0) { unknown = true; break; }
+    if (tag == ACL_EXTENDED_ALLOW) {
+      int add = acl_get_perm_np(permissions, ACL_ADD_FILE), directory = acl_get_perm_np(permissions, ACL_ADD_SUBDIRECTORY), remove = acl_get_perm_np(permissions, ACL_DELETE_CHILD);
+      if (add < 0 || directory < 0 || remove < 0) { unknown = true; break; }
+      if (add || directory || remove) {
+        void *qualifier = acl_get_qualifier(entry);
+        id_t identifier = 0; int type = 0;
+        struct group group{}, *found = nullptr; char buffer[4096];
+        bool everyone = qualifier && mbr_uuid_to_id((const unsigned char *)qualifier, &identifier, &type) == 0 &&
+          type == ID_TYPE_GID && getgrnam_r("everyone", &group, buffer, sizeof(buffer), &found) == 0 && found && identifier == group.gr_gid;
+        if (qualifier) acl_free(qualifier);
+        if (everyone) writable = true; else unknown = true;
+      }
+    } else if (tag != ACL_EXTENDED_DENY) unknown = true;
+    state = acl_get_entry(acl, ACL_NEXT_ENTRY, &entry);
+  }
+  acl_free(acl);
+  return writable ? @"write" : unknown ? @"unknown" : @"none";
+}
 static void execute(napi_env, void *data) {
   Work *task = static_cast<Work *>(data);
   @autoreleasepool { @try {
     NSError *error = nil;
-    if (task->kind == Kind::HiddenFolder) {
+    if (task->kind == Kind::GuestACL) {
+      task->result = guestACLState(task->file);
+    } else if (task->kind == Kind::HiddenFolder) {
       task->files = hiddenNames(task->file, &task->errorNumber);
       if (!task->files) task->error = @"Could not read hidden file flags.";
     } else if (task->kind == Kind::HiddenFile) {
@@ -425,7 +460,7 @@ static void complete(napi_env env, napi_status status, void *data) {
       property(env, error, "renameRecovery", renameRecovery(env, task->renameResult));
     }
     if (task->errorNumber) {
-      const char *code = task->errorNumber == EXDEV ? "EXDEV" : task->errorNumber == EEXIST ? "EEXIST" : task->errorNumber == ENOENT ? "ENOENT" : task->errorNumber == EBUSY ? "EBUSY" : task->errorNumber == ENOTSUP ? "ENOTSUP" : task->errorNumber == EOPNOTSUPP ? "EOPNOTSUPP" : task->errorNumber == EINVAL ? "EINVAL" : task->errorNumber == ENOSYS ? "ENOSYS" : "EIO";
+      const char *code = task->errorNumber == EACCES ? "EACCES" : task->errorNumber == EPERM ? "EPERM" : task->errorNumber == ENOTDIR ? "ENOTDIR" : task->errorNumber == EXDEV ? "EXDEV" : task->errorNumber == EEXIST ? "EEXIST" : task->errorNumber == ENOENT ? "ENOENT" : task->errorNumber == EBUSY ? "EBUSY" : task->errorNumber == ENOTSUP ? "ENOTSUP" : task->errorNumber == EOPNOTSUPP ? "EOPNOTSUPP" : task->errorNumber == EINVAL ? "EINVAL" : task->errorNumber == ENOSYS ? "ENOSYS" : "EIO";
       property(env, error, "code", text(env, [NSString stringWithUTF8String:code]));
     }
     napi_reject_deferred(env, task->deferred, error);
@@ -460,6 +495,7 @@ static void complete(napi_env env, napi_status status, void *data) {
       }
     }
     if (task->kind == Kind::HiddenFile) result = boolean(env, task->hidden);
+    if (task->kind == Kind::GuestACL) result = text(env, task->result);
     if (task->kind == Kind::HiddenFolder) {
       napi_create_array(env, &result); uint32_t index = 0;
       for (NSString *name in task->files) napi_set_element(env, result, index++, text(env, name));
@@ -532,6 +568,7 @@ static napi_value alias(napi_env env, napi_callback_info info) { return pairWork
 static napi_value eject(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::Eject); }
 static napi_value hiddenEntries(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::HiddenFolder); }
 static napi_value fileHidden(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::HiddenFile); }
+static napi_value guestACL(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::GuestACL); }
 static napi_value datesAdded(napi_env env, napi_callback_info info) {
   @autoreleasepool {
     size_t count = 1; napi_value args[1]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
@@ -577,6 +614,7 @@ static napi_value init(napi_env env, napi_value exports) {
     {"datesAdded", nullptr, datesAdded, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"hiddenEntries", nullptr, hiddenEntries, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"fileHidden", nullptr, fileHidden, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"guestACL", nullptr, guestACL, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"eject", nullptr, eject, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(methods)/sizeof(methods[0]), methods); return exports;

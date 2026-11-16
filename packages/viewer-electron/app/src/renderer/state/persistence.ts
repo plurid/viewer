@@ -21,6 +21,7 @@ let pendingEngineFlush = false;
 let flushRequested = false;
 let flushing: Promise<void> | undefined;
 let nextArrangementRevision = 0;
+let historyRetries = 0;
 /** Saves after a quiet period; a later request replaces an earlier one. */
 function schedulePersist(flushEngine: boolean): void {
   pendingEngineFlush ||= flushEngine;
@@ -48,6 +49,7 @@ export function resetPersistence(): void {
   clearTimeout(persistTimer);
   pendingEngineFlush = false;
   flushRequested = false;
+  historyRetries = 0;
   adapters.clear();
   dirtyArrangements.clear();
   closedPanes.clear();
@@ -119,18 +121,27 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
   replaceState({ ...getState(), saved });
   const visitSave = folderVisitSync.begin(saved.visits ?? {}, saved.recents);
   try {
-    const shared = await window.viewer.save(saved, visitSave);
+    let shared = await window.viewer.save(saved, visitSave);
+    if (shared && folderVisitSync.needsRefresh(shared.revision))
+      shared = await window.viewer.folderHistory();
     const current = getState();
     const visits = folderVisitSync.complete(
       visitSave.id,
       shared?.visits ?? saved.visits ?? {},
       current.saved.visits ?? {},
       shared?.revision ?? visitSave.revision,
+      shared?.clearRevision ?? visitSave.clearRevision,
     );
     if (visits !== current.saved.visits)
       update({ ...current, saved: { ...current.saved, visits } });
+    historyRetries = 0;
   } catch (error) {
     folderVisitSync.failed(visitSave.id);
+    if ((error as { code?: string }).code === 'FOLDER_HISTORY_REFRESH' && historyRetries++ < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      flushRequested = true;
+      return;
+    }
     throw error;
   }
   for (const [id, revision] of arrangementRevisions)

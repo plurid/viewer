@@ -5,7 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import path from 'node:path';
 import type { FileVisibility } from '../src/desktop/files/visibility';
-import { list } from '../src/desktop/files/filesystem';
+import { entry, entryWithVisibility, list } from '../src/desktop/files/filesystem';
 import { temporaryRoot } from './temporary';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
@@ -48,10 +48,25 @@ for (let pass = 0; pass < 9; pass++) {
     await measure(native, after);
   }
 }
+const entryBefore: number[] = [];
+const entryAfter: number[] = [];
+const item = path.join(folder, 'File 0.txt');
+async function measureEntries(read: () => ReturnType<typeof entry>, samples: number[]) {
+  const started = performance.now();
+  for (let index = 0; index < count; index++) await read();
+  samples.push(performance.now() - started);
+}
+for (let pass = 0; pass < 3; pass++) {
+  await measureEntries(() => entryWithVisibility(item, native), entryBefore);
+  await measureEntries(() => entry(item), entryAfter);
+}
 const result = {
   count,
   beforeMilliseconds: median(before),
   afterMilliseconds: median(after),
+  entryBeforeMilliseconds: median(entryBefore),
+  entryAfterMilliseconds: median(entryAfter),
+  entrySamples: { before: entryBefore, after: entryAfter },
   samples: { before, after },
   method:
     'Warm 20,000-file filesystem.list, nine interleaved controls, identical identity and listing code, empty flag reader versus rebuilt native bulk attributes.',

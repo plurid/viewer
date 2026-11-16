@@ -15,9 +15,11 @@ const local = vi.hoisted(() => ({
       '/usr/sbin/sysctl -n hw.model': 'Mac16,1',
       '/usr/sbin/sysctl -n machdep.cpu.brand_string': 'Apple M4',
     };
+    if ([file, ...args].join(' ') === local.failCommand) throw new Error('private lookup details');
     return { stdout: values[[file, ...args].join(' ')] ?? '' };
   }),
   log: '',
+  failCommand: '',
   offset: 0,
   capacity: 0,
   close: vi.fn(async () => {}),
@@ -48,6 +50,7 @@ vi.mock('node:os', () => ({
   },
 }));
 vi.mock('node:fs/promises', () => ({
+  realpath: async (file: string) => file,
   readdir: (file: string) => {
     expect(file).toBe('/Volumes');
     return local.volumes();
@@ -98,128 +101,125 @@ const fixture = (): ReportInput => ({
 
 beforeEach(() => {
   local.log = '';
+  local.failCommand = '';
   local.readError = undefined;
 });
 afterEach(() => vi.restoreAllMocks());
 
 describe('report contents', () => {
-  it('includes only the requested facts and the newest twenty validated failures', () => {
+  it('includes only requested facts and the newest twenty validated failures', () => {
     const input = fixture();
-    input.log =
-      Array.from({ length: 30 }, (_, index) => entry(index)).join('\n') +
-      '\n' +
-      [
-        'partial private JSON',
-        JSON.stringify({ at: 'a private date', kind: 'renderer-error', detail: 'ignored one' }),
-        JSON.stringify({
-          at: '2026-11-01T12:01:00.000Z',
-          kind: 'a private kind',
-          detail: 'ignored two',
-        }),
-      ].join('\n');
+    input.log = Array.from({ length: 30 }, (_, index) => entry(index)).join('\n') + '\n' + [
+      'partial private JSON',
+      JSON.stringify({ at: 'a private date', kind: 'renderer-error', detail: 'ignored one' }),
+      JSON.stringify({ at: '2026-11-01T12:01:00.000Z', kind: 'a private kind', detail: 'ignored two' }),
+    ].join('\n');
     const report = diagnosticReport(input);
     expect(report).toContain('- Build: 123\n- Edition: direct\n- License: trial');
     expect(report).toContain('- Memory: 16 GiB\n- Displays: 2 (2×, 1×)');
     expect(report).toContain('- Language: en-GB\n- Region: GB');
     expect(report.match(/^### /gm)).toHaveLength(reportLimits.failures);
-    expect(report.indexOf('Failure 29')).toBeLessThan(report.indexOf('Failure 28'));
-    expect(report).not.toMatch(/Failure 9\b|partial|ignored|must-not-be-copied|settings/);
+    expect(report.indexOf('12:29:00')).toBeLessThan(report.indexOf('12:28:00'));
+    expect(report).not.toMatch(/12:09:00|Failure|partial|ignored|must-not-be-copied|settings/);
   });
 
   it('puts the last recorded failure first when timestamps are equal', () => {
     const report = diagnosticReport({
-      ...fixture(),
-      log: [entry(1, 'Earlier failure'), entry(1, 'Latest failure')].join('\n'),
+      ...fixture(), log: [entry(1, 'ENOENT: earlier'), entry(1, 'EACCES: latest')].join('\n'),
     });
-    expect(report.indexOf('Latest failure')).toBeLessThan(report.indexOf('Earlier failure'));
+    expect(report.indexOf('EACCES')).toBeLessThan(report.indexOf('ENOENT'));
+    expect(report).not.toMatch(/earlier|latest/);
   });
 
-  it('redacts before truncating messages and quotes Markdown content as text', () => {
+  it('includes bounded, well-formed excerpts only after opt-in', () => {
     const input = fixture();
-    input.log = entry(
-      1,
-      'Start ' +
-        'A'.repeat(2100) +
-        '\n<img src="https://private.invalid/file?secret=value">\n' +
-        '/Home/Example/Private/Report.pdf',
-    );
+    input.includeMessageText = true;
+    input.log = entry(1, 'Start ' + 'A'.repeat(2100) + '\n' + '/Home/Example/Private/Report.pdf');
     const report = diagnosticReport(input);
-    expect(report).not.toMatch(/A{20}|private\.invalid|secret=value|Private\/Report/);
+    expect(report).not.toMatch(/A{20}|Private|Report\.pdf/);
     expect(report).toContain('> Start <token>');
-    expect(report).toContain('> ~/…/….pdf');
-    expect(diagnosticReport({ ...input, log: entry(1, 'safe '.repeat(1000)) }).length).toBeLessThan(
-      2600,
-    );
+    expect(() => encodeURIComponent(report)).not.toThrow();
+    const long = diagnosticReport({ ...input, log: entry(1, 'safe '.repeat(399) + '😀') });
+    expect(() => encodeURIComponent(long)).not.toThrow();
   });
 
-  it('keeps safe facts and omits all failures when a privacy check is unavailable', () => {
+  it('keeps structured failures when opt-in privacy checks fail', () => {
     const input = fixture();
+    input.includeMessageText = true;
     input.privateValues.push({ kind: 'computer name', value: undefined });
     const report = diagnosticReport(input);
-    expect(report).toContain('- Model: Mac16,1');
-    expect(report).toContain('Could not check: computer name. Failure excerpts omitted.');
+    expect(report).toContain('Message text omitted: could not check computer name.');
+    expect(report.match(/^### /gm)).toHaveLength(2);
     expect(report).not.toContain('Failure 1');
   });
 
-  it('distinguishes no failures from an unreadable diagnostic log', () => {
+  it('makes each hardware line optional', () => {
+    const input = fixture();
+    input.facts.model = undefined;
+    input.facts.chip = undefined;
+    input.facts.memory = undefined;
+    const report = diagnosticReport(input);
+    expect(report).not.toMatch(/- Model:|- Chip:|- Memory:/);
+  });
+
+  it('distinguishes no failures from an unreadable log', () => {
     expect(diagnosticReport({ ...fixture(), log: '' })).toContain('No failures recorded.');
     expect(diagnosticReport({ ...fixture(), log: undefined })).toContain('could not be read');
   });
 });
 
 describe('local report collection', () => {
-  it('reads a bounded tail and uses only fixed local metadata commands', async () => {
-    local.log =
-      'x'.repeat(reportLimits.bytes) +
-      '\n' +
-      entry(1, 'Failed /Home/Example/Private/Report.pdf') +
-      '\n';
-    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', {
-      kind: 'licensed',
-      email: 'never-copy@buyer.invalid',
-    });
+  it('bounds the tail and makes no user, host or volume lookup for the default', async () => {
+    local.log = 'x'.repeat(reportLimits.bytes) + '\n' + entry(1, 'Failed /Home/Example/Private/Report.pdf') + '\n';
+    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', { kind: 'licensed', email: 'never-copy@buyer.invalid' });
     expect(local.capacity).toBe(reportLimits.bytes);
     expect(local.offset).toBeGreaterThan(0);
     expect(local.close).toHaveBeenCalledOnce();
     expect(report).toContain('- License: licensed');
-    expect(report).toContain('~/…/….pdf');
-    expect(report).not.toMatch(/never-copy|buyer\.invalid|Example|Private\/Report/);
+    expect(report).not.toMatch(/never-copy|buyer\.invalid|Example|Private|Report\.pdf/);
     expect(local.commands.mock.calls.map(([file, args]) => [file, ...args].join(' '))).toEqual([
-      '/usr/bin/id -F',
-      '/usr/sbin/scutil --get ComputerName',
-      '/usr/sbin/scutil --get LocalHostName',
-      '/usr/sbin/sysctl -n hw.model',
-      '/usr/sbin/sysctl -n machdep.cpu.brand_string',
+      '/usr/sbin/sysctl -n hw.model', '/usr/sbin/sysctl -n machdep.cpu.brand_string',
     ]);
+    expect(local.volumes).not.toHaveBeenCalled();
     for (const [, , options] of local.commands.mock.calls)
       expect(options).toEqual({ timeout: 2000, maxBuffer: 4096 });
   });
 
-  it('never exposes failed identity lookups or their error messages', async () => {
-    local.log = entry(1, 'This might contain an unknown host');
-    local.commands.mockRejectedValueOnce(new Error('private lookup details'));
-    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', {
-      kind: 'trial',
-      daysLeft: 5,
-    });
-    expect(report).toContain('Could not check: full name. Failure excerpts omitted.');
-    expect(report).not.toMatch(/unknown host|private lookup details|daysLeft/);
+  it('looks up identities only for explicitly requested messages and fails closed', async () => {
+    local.log = entry(1, 'Might contain an unknown host');
+    local.failCommand = '/usr/sbin/scutil --get ComputerName';
+    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', undefined, true);
+    expect(report).toContain('Message text omitted: could not check computer name.');
+    expect(report).not.toMatch(/unknown host|private lookup details/);
   });
 
-  it('fails closed when volumes cannot be checked', async () => {
+  it('checks the real path of the home only in the optional path', async () => {
+    local.log = entry(1, 'open /Home/Example/Private/Report.pdf');
+    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', undefined, true);
+    expect(report).toContain('~/…/….pdf');
+    expect(report).not.toMatch(/Private|Report\.pdf/);
+    expect(local.volumes).toHaveBeenCalledOnce();
+  });
+
+  it('does not let unavailable volume checks suppress the default report', async () => {
     local.volumes.mockRejectedValueOnce(new Error('private mount names'));
-    expect(await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', undefined)).toContain(
-      'volume name. Failure excerpts omitted.',
-    );
+    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', undefined);
+    expect(report).toContain('No failures recorded.');
+    expect(local.volumes).not.toHaveBeenCalled();
+    // Consume the injected failure only on the optional path.
+    expect(await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', undefined, true))
+      .toContain('could not check volume name');
   });
 
-  it('uses the same report for the Store edition, with licensed as the status word', async () => {
+  it('keeps the same default report in the Store edition without identity lookups', async () => {
     const previous = Object.getOwnPropertyDescriptor(process, 'mas');
     Object.defineProperty(process, 'mas', { configurable: true, value: true });
     try {
       const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', undefined);
       expect(report).toContain('- Edition: Mac App Store\n- License: licensed');
       expect(report).toContain('No failures recorded.');
+      expect(local.volumes).not.toHaveBeenCalled();
+      expect(local.commands.mock.calls.every(([file]) => file === '/usr/sbin/sysctl')).toBe(true);
     } finally {
       if (previous) Object.defineProperty(process, 'mas', previous);
       else Reflect.deleteProperty(process, 'mas');

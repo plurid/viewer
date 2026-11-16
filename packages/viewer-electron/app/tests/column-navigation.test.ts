@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import type { FileEntry } from '../src/domain/contracts';
 import { pathAncestry } from '../src/domain/files/paths';
@@ -31,13 +31,13 @@ const models = entry('/Projects/Models'),
 const entries = [entry('/Projects/Models/Parts')];
 beforeEach(clearSessions);
 afterEach(cleanup);
-function mount(onVisit?: (path: string) => void) {
+function mount() {
   const session = browseSession('folder', models.path);
   const selecting = new FileSelection(session, (selection) =>
     updateBrowseSession('folder', models.path, { selection }),
   );
   const hook = renderHook(() =>
-    useColumnNavigation('folder', models.path, entries, true, selecting, onVisit),
+    useColumnNavigation('folder', models.path, entries, true, selecting),
   );
   act(() => {
     hook.result.current.register('/', [entry('/Projects')]);
@@ -81,15 +81,13 @@ it('does not prune an accessible descendant when an ancestor listing is filtered
   expect(result.current.trail).toEqual(['/', '/Projects']);
   expect(result.current.directory()).toBe('/Projects');
 });
-it('records changed column destinations, including keyboard traversal, once per change', () => {
-  const visit = vi.fn();
-  const { result } = mount(visit);
-  expect(visit).not.toHaveBeenCalled();
+it('moves column selection through folders without opening them', () => {
+  const { result } = mount();
   act(() => result.current.choose(other, plain, [models, other]));
   act(() => result.current.choose(other, plain, [models, other]));
-  expect(visit.mock.calls).toEqual([[other.path]]);
+  expect(result.current.directory()).toBe(other.path);
   act(() => result.current.activate('/Projects'));
   act(() => result.current.choose(models, plain, [models, other]));
   act(() => result.current.right());
-  expect(visit.mock.calls).toEqual([[other.path], ['/Projects'], [models.path], [entries[0].path]]);
+  expect(result.current.directory()).toBe(entries[0].path);
 });

@@ -13,7 +13,6 @@ export function useColumnNavigation(
   entries: FileEntry[],
   ready: boolean,
   selecting: FileSelection,
-  onVisit?: (path: string) => void,
 ) {
   const session = browseSession(id, path);
   const [trail, setTrail] = useBrowseField(id, path, 'columnTrail');
@@ -22,9 +21,8 @@ export function useColumnNavigation(
     (directory: string) => {
       if (session.columnDirectory === directory) return;
       setDirectory(directory);
-      onVisit?.(directory);
     },
-    [session, setDirectory, onVisit],
+    [session, setDirectory],
   );
   // Fresh per plane and folder: the keys reset these mutable holders on navigation.
   // eslint-disable-next-line react-hooks/exhaustive-deps

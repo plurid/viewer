@@ -11,6 +11,24 @@ import { WorkspaceSessions, mergeChanged } from '../src/desktop/windows/workspac
 import { restoreBackupState } from '../src/desktop/persistence/backup-state';
 import { stateSchema } from '../src/desktop/persistence/storage';
 import { agentCommandID } from '../src/domain/agents/safety';
+import type { SavedState } from '../src/domain/contracts';
+
+function visitSaver(sessions: WorkspaceSessions) {
+  const baselines = new Map<number, FolderVisits>();
+  return (owner: number, state: SavedState, clear = false) => {
+    const base = baselines.get(owner) ?? {};
+    const merged = sessions.save(owner, state, {
+      id: crypto.randomUUID(),
+      base,
+      clear,
+      restored: {},
+      revision: sessions.folderHistory().revision,
+      clearRevision: sessions.folderHistory().clearRevision,
+    });
+    baselines.set(owner, structuredClone(state.visits ?? {}));
+    return merged;
+  };
+}
 
 const now = Date.UTC(2026, 10, 1, 12);
 const day = 86_400_000;
@@ -75,36 +93,65 @@ describe('folder visit ranking', () => {
     ).toEqual({ '/fixtures/daily': { count: 8, last: now } });
     expect(boundFolderVisits({ 'viewer://trash': { count: 100, last: now } }, now)).toEqual({});
   });
+
+  it('ranks own-name quality ahead of parent matches and drops scattered letters', () => {
+    const visits = {
+      '/fixtures/Downloads': { count: 1, last: now },
+      '/fixtures/Downloads/Archive': { count: 1000, last: now },
+      '/fixtures/deep/old/wood/nest': { count: 1000, last: now },
+      '/fixtures/cold/atlas': { count: 1000, last: now },
+      '/fixtures/Catalog': { count: 1, last: now },
+      '/Users/example/Research': { count: 1000, last: now },
+    };
+    expect(rankFrecent(visits, 'down', now)).toEqual([
+      '/fixtures/Downloads',
+      '/fixtures/Downloads/Archive',
+    ]);
+    expect(rankFrecent(visits, 'cat', now)).toEqual(['/fixtures/Catalog']);
+    expect(rankFrecent(visits, 'usr', now)).toEqual([]);
+  });
+
+  it('keeps a newly recorded folder at capacity so its next visit can accumulate', () => {
+    const visits = Object.fromEntries(
+      Array.from({ length: 500 }, (_, index) => [`/fixtures/${index}`, { count: 100, last: now }]),
+    );
+    const first = recordVisit(visits, '/fixtures/new', now);
+    expect(Object.keys(first)).toHaveLength(500);
+    expect(first['/fixtures/new']?.count).toBe(1);
+    expect(recordVisit(first, '/fixtures/new/', now)['/fixtures/new']?.count).toBe(2);
+  });
 });
 
 describe('shared private folder history', () => {
   it('merges concurrent increments, clears counts, and does not revive stale history', () => {
     const sessions = new WorkspaceSessions();
+    const save = visitSaver(sessions);
     const first = sessions.create('/fixtures', 'First');
     const second = sessions.create('/fixtures', 'Second');
     const a = sessions.open(1, '/fixtures', first);
     const b = sessions.open(2, '/fixtures', second);
     a.visits = { '/fixtures/daily': { count: 2, last: now } };
     a.recents = ['/fixtures/daily'];
-    sessions.save(1, a);
+    save(1, a);
     b.visits = { '/fixtures/daily': { count: 1, last: now + 1 } };
     b.recents = ['/fixtures/daily'];
-    sessions.save(2, b);
+    save(2, b);
     expect(sessions.snapshot()?.visits?.['/fixtures/daily']).toEqual({ count: 3, last: now + 1 });
     expect(mergeChanged(a, sessions.snapshot()!)).toBe(true);
     a.visits = {};
     a.recents = [];
-    sessions.save(1, a);
-    sessions.save(2, b);
+    save(1, a, true);
+    save(2, b);
     expect(sessions.snapshot()?.visits).toEqual({});
     expect(sessions.snapshot()?.recents).toEqual([]);
     b.visits = { '/fixtures/daily': { count: 2, last: now + 2 } };
-    sessions.save(2, b);
+    save(2, b);
     expect(sessions.snapshot()?.visits?.['/fixtures/daily']?.count).toBe(1);
   });
 
   it('bounds overlapping windows and saves and relinks visits with recents in backups', () => {
     const sessions = new WorkspaceSessions();
+    const save = visitSaver(sessions);
     const first = sessions.create('/fixtures', 'First');
     const second = sessions.create('/fixtures', 'Second');
     const a = sessions.open(1, '/fixtures', first);
@@ -116,8 +163,8 @@ describe('shared private folder history', () => {
       Array.from({ length: 300 }, (_, index) => [`/fixtures/b/${index}`, { count: 1, last: now }]),
     );
     a.recents = ['/fixtures/a/0'];
-    sessions.save(1, a);
-    sessions.save(2, b);
+    save(1, a);
+    save(2, b);
     const saved = stateSchema.parse(sessions.snapshot());
     expect(Object.keys(saved.visits ?? {})).toHaveLength(500);
     const restored = restoreBackupState(saved, new Map(), [

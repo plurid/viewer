@@ -73,6 +73,11 @@ const context = {
 let snapshot: NetworkSharingSnapshot;
 const api = vi.fn<ViewerAPI['networkSharing']>();
 const copyText = vi.fn(async (_text: string) => {});
+function reply(paths = [file.path]): NetworkSharingSnapshot {
+  return { ...snapshot, folders: paths.map((path) => snapshot.folders?.find((folder) => folder.path === path) ?? {
+    path, status: 'ready', shares: snapshot.shares.filter((share) => share.path === path),
+  }) };
+}
 
 beforeEach(async () => {
   vi.stubGlobal(
@@ -104,7 +109,7 @@ beforeEach(async () => {
     ipv4: ['10.0.0.3', '192.168.1.12'],
   };
   api.mockReset();
-  api.mockImplementation(async () => snapshot);
+  api.mockImplementation(async (request) => reply(request.kind === 'refresh' ? request.paths : undefined));
   Object.assign(window, {
     viewer: {
       networkSharing: api,
@@ -143,11 +148,11 @@ beforeEach(async () => {
     locations: [{ path: file.path, name: file.name }],
     openPaths: [],
   });
-  await readNetworkSharing();
+  await readNetworkSharing([file.path]);
 });
 afterEach(async () => {
   cleanup();
-  await readNetworkSharing();
+  await readNetworkSharing([file.path]);
 });
 
 it('marks folders with an accessible name and the strongest guest warning across share names in every file view and sidebar', async () => {
@@ -158,7 +163,7 @@ it('marks folders with an accessible name and the strongest guest warning across
       ...snapshot.shares,
     ],
   };
-  await readNetworkSharing();
+  await readNetworkSharing([file.path]);
   const { unmount } = render(<FileIcon entry={file} />);
   expect(screen.getByRole('img', { name: 'Shared' }).getAttribute('aria-description')).toContain(
     'Anyone on the same network can open this folder without a password. They can also add, change and delete files in this folder.',
@@ -212,7 +217,7 @@ it('shows Get Info sharing details and copies literal Windows and encoded Mac ad
   const address = 'smb://Studio-Mac.local/Drop%20folder%20%E6%97%A5%E6%9C%AC';
   fireEvent.click(section.getByRole('button', { name: 'Copy Mac address ' + address }));
   await waitFor(() => expect(copyText).toHaveBeenCalledWith(address));
-  expect(section.getAllByRole('button', { name: /^Copy Windows address/ })).toHaveLength(3);
+  expect(section.getAllByRole('button', { name: /^Copy Windows address/ })).toHaveLength(4);
 });
 
 it('keeps the read-only guest warning visible and omits it for registered users', async () => {
@@ -220,7 +225,7 @@ it('keeps the read-only guest warning visible and omits it for registered users'
     ...snapshot,
     shares: [{ ...snapshot.shares[0]!, readOnly: true, guestWritable: false }],
   };
-  await readNetworkSharing();
+  await readNetworkSharing([file.path]);
   const { unmount } = render(<NetworkSharingSection path={file.path} />);
   expect(screen.getByText('Read-only')).toBeTruthy();
   expect(
@@ -228,11 +233,11 @@ it('keeps the read-only guest warning visible and omits it for registered users'
   ).toBeTruthy();
   expect(document.querySelector('details')).toBeNull();
   await act(async () => {
-    await readNetworkSharing();
+    await readNetworkSharing([file.path]);
   });
   unmount();
   snapshot = { ...snapshot, shares: [{ ...snapshot.shares[0]!, guests: false }] };
-  await readNetworkSharing();
+  await readNetworkSharing([file.path]);
   render(<NetworkSharingSection path={file.path} />);
   expect(screen.queryByText(/Anyone on the same network/)).toBeNull();
   expect(screen.getByText('Registered users only')).toBeTruthy();
@@ -240,7 +245,7 @@ it('keeps the read-only guest warning visible and omits it for registered users'
 
 it('has no sharing UI or command in the Store edition or for unknown share points', async () => {
   snapshot = { ...snapshot, status: 'unknown', shares: [] };
-  await readNetworkSharing();
+  await readNetworkSharing([file.path]);
   const { unmount } = render(
     <>
       <FileIcon entry={file} />
@@ -283,13 +288,13 @@ it('opens the captured folder dialog from the command and refreshes it when the 
     );
   }
   snapshot = { ...snapshot, shares: [] };
-  await readNetworkSharing();
+  await readNetworkSharing([file.path]);
   render(<Host />);
   fireEvent.click(screen.getByRole('button', { name: 'Share on the Network…' }));
   expect(await screen.findByText('This folder is not shared.')).toBeTruthy();
   expect(
     screen.getByText(
-      /Turn “Allow guest users” off unless you mean to share with everyone on the network/,
+      /Control-click the folder under Shared Folders, choose Advanced Options/,
     ),
   ).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Copy folder path' })).toBeTruthy();
@@ -314,10 +319,10 @@ it('opens the captured folder dialog from the command and refreshes it when the 
 
 it('keeps the dialog usable with no local network and an unavailable Settings pane', async () => {
   snapshot = { ...snapshot, ipv4: [] };
-  await readNetworkSharing();
+  await readNetworkSharing([file.path]);
   api.mockImplementation(async (request) => {
     if (request.kind === 'settings') throw new Error('Settings unavailable');
-    return snapshot;
+    return reply(request.kind === 'refresh' ? request.paths : undefined);
   });
   render(<NetworkSharingDialog path={file.path} onClose={() => {}} />);
   expect(screen.getByText(/No local network address/)).toBeTruthy();
@@ -337,7 +342,7 @@ it('offers the two command names for exactly one folder and refuses custom actio
   expect(command.when({ ...context, selection: [file, file] })).toBe(false);
   expect(command.when({ ...context, selection: [{ ...file, directory: false }] })).toBe(false);
   snapshot = { ...snapshot, shares: [] };
-  await readNetworkSharing();
+  await readNetworkSharing([file.path]);
   expect(typeof command.label === 'function' && command.label(context)).toBe(
     'Share on the Network…',
   );
@@ -351,8 +356,8 @@ it('offers the two command names for exactly one folder and refuses custom actio
         label: 'Direct',
         group: 'Actions',
         when: () => true,
-        run: async () => {
-          await registry.invoke('network-sharing', { paneID: 'folder' });
+        run: async (captured) => {
+          await registry.invoke('network-sharing', { paneID: 'folder', context: captured });
         },
       },
       {
@@ -360,8 +365,8 @@ it('offers the two command names for exactly one folder and refuses custom actio
         label: 'Sequence',
         group: 'Actions',
         when: () => true,
-        run: async () => {
-          await registry.invoke('custom.direct', { paneID: 'folder' });
+        run: async (captured) => {
+          await registry.invoke('custom.direct', { paneID: 'folder', context: captured });
         },
       },
     ],

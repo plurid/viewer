@@ -508,7 +508,9 @@ export interface UIPreferences {
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
+  checkedFolders?: string[];
   folderHistoryRevision?: number;
+  folderClearRevision?: number;
   networkSharingAvailable?: boolean;
   license?: LicenseStatus;
   gitActionsAvailable?: boolean;
@@ -700,7 +702,13 @@ export type DesktopEvent =
   | { type: 'canvas-action'; event: CanvasActionEvent }
   | { type: 'agent-session'; id: string }
   | { type: 'launch'; request: LaunchRequest }
-  | { type: 'workspaces'; state: SavedState; visitSaveID?: string; folderHistoryRevision?: number }
+  | {
+      type: 'workspaces';
+      state: SavedState;
+      visitSaveID?: string;
+      folderHistoryRevision?: number;
+      folderClearRevision?: number;
+    }
   | { type: 'watch-rule'; rule: WatchRule }
   /** Settings shows this setting: a command for a setting the workspace does not change itself. */
   | { type: 'settings-focus'; path?: string }
@@ -962,6 +970,7 @@ export interface ViewerAPI {
   /** Opens the system print sheet for a previewed PDF stored as a file. */
   printPDF(id: string, password?: string): Promise<void>;
   save(state: SavedState, visitSave?: FolderVisitSave): Promise<FolderVisitReply | void>;
+  folderHistory(): Promise<FolderVisitReply>;
   flushed(token: string, result?: FlushResult): Promise<void>;
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;
   clipboardWriteText(text: string): Promise<void>;

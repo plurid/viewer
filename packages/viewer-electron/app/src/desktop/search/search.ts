@@ -10,7 +10,7 @@ import {
   type QueryEntry,
 } from '../../domain/search/query';
 import { absolute, entry } from '../files/filesystem';
-import { fileVisibility } from '../files/visibility';
+import { HiddenPaths } from '../files/hidden-paths';
 import { searchExclusions } from './exclusions';
 import { commonSearchExclusions } from '../../domain/search/exclusions';
 
@@ -71,7 +71,8 @@ export class Search {
     abort: AbortController,
   ): Promise<void> {
     const excluded = searchExclusions(this.exclusions());
-    const queue = [request.root];
+    const queue = [{ path: request.root, hidden: false }];
+    const visibility = new HiddenPaths();
     let visited = 0,
       errors = 0,
       found = 0,
@@ -114,7 +115,10 @@ export class Search {
           if (hiddenPart(relative) || excluded(file)) continue;
           try {
             await this.authorize(file);
+            const hidden = await visibility.hidden(file, request.root);
+            if (!request.showHidden && hidden) continue;
             const item = await entry(file);
+            item.hidden ||= hidden;
             if (!request.showHidden && item.hidden) continue;
             if (!matchesQuery(query, item, facts)) continue;
             entries.push(item);
@@ -132,23 +136,22 @@ export class Search {
     try {
       let cursor = 0;
       while (cursor < queue.length && !abort.signal.aborted) {
-        const folder = queue[cursor++]!;
+        const current = queue[cursor++]!;
+        const folder = current.path;
         if (excluded(folder)) continue;
         try {
           await this.authorize(folder);
-          const hidden = request.showHidden
-            ? new Set<string>()
-            : new Set(await fileVisibility.hiddenEntries(folder));
+          const hidden = await visibility.names(folder);
           const directory = await opendir(folder);
           for await (const child of directory) {
             if (abort.signal.aborted) break;
-            if (!request.showHidden && (child.name.startsWith('.') || hidden.has(child.name)))
-              continue;
+            const childHidden = current.hidden || child.name.startsWith('.') || hidden.has(child.name);
+            if (!request.showHidden && childHidden) continue;
             visited++;
             const file = path.join(folder, child.name);
             if (excluded(file)) continue;
             // Do not recurse through symlinks (cycles and unintended external trees).
-            if (child.isDirectory()) queue.push(file);
+            if (child.isDirectory()) queue.push({ path: file, hidden: childHidden });
             if (!shown.has(file)) {
               // a directory read answers names, extensions and kinds; sizes and dates need a stat
               const light: QueryEntry = {
@@ -156,7 +159,7 @@ export class Search {
                 path: file,
                 extension: path.extname(child.name).slice(1).toLowerCase(),
                 directory: child.isDirectory(),
-                hidden: child.name.startsWith('.'),
+                hidden: childHidden,
                 kind: child.isSymbolicLink()
                   ? 'symlink'
                   : child.isDirectory()
@@ -167,6 +170,7 @@ export class Search {
                 try {
                   await this.authorize(file);
                   const item = await entry(file);
+                  item.hidden ||= childHidden;
                   if (!query.needsStat || matchesQuery(query, item, facts)) {
                     entries.push(item);
                     found++;

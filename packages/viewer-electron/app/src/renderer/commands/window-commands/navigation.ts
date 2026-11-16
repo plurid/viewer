@@ -6,6 +6,7 @@ import type { CommandDefinition } from '../registry';
 import { requestProject, type ProjectCommand } from '../../workspace/projects';
 import type { WindowScopes } from './scope';
 import { sendWindowEvent } from '../../app/window-events';
+import { clearRecentFolders } from '../../state/places';
 
 /** Projects, opening places, the palette, settings and navigation chrome. */
 export function navigationCommands({
@@ -18,6 +19,17 @@ export function navigationCommands({
 }: WindowScopes): CommandDefinition[] {
   const ui = effectiveWindowUI(state);
   const commands: CommandDefinition[] = [
+    {
+      id: 'clear-recent-folders',
+      label: 'Clear recent folders',
+      group: 'Navigation',
+      icon: 'close',
+      aliases: ['clear folder history', 'forget frequent folders'],
+      when: (context) =>
+        (windowScope(context) || (sidebar(context) && context.sidebar?.section === 'recents')) &&
+        (state.saved.recents.length > 0 || Object.keys(state.saved.visits ?? {}).length > 0),
+      run: clearRecentFolders,
+    },
     {
       id: 'new-native-window',
       label: 'New window',

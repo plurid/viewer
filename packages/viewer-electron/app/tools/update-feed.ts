@@ -5,7 +5,7 @@ import type { KeyObject } from 'node:crypto';
 import { readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { feedLimits, updateFeedSchema } from '../src/domain/updates/feed';
+import { feedLimits, releaseName, updateFeedSchema } from '../src/domain/updates/feed';
 import type { UpdateFeed } from '../src/domain/updates/feed';
 import { updateFeedConfiguration } from '../src/desktop/release';
 import type { UpdateFeedConfiguration } from '../src/desktop/release';
@@ -99,7 +99,7 @@ export function releaseFeedEndpoint(
   return endpoint;
 }
 
-/** Release notes for one version: lines starting with # are guidance and left out. */
+/** Lines starting with # guide the owner without appearing in the published feed. */
 export function releaseNotes(text: string): string {
   const notes = text
     .split('\n')
@@ -157,7 +157,7 @@ async function main(command: string | undefined, argument: string | undefined) {
     if (!endpoint) throw new Error('This build has no update feed configured.');
     const feed = await fetchFeed(endpoint, fetch);
     console.log(
-      `${endpoint.feed.href} is signed by the embedded key: Viewer ${feed.version} (${feed.build}), ${feed.url}`,
+      `${endpoint.feed.href} is signed by the embedded key: Viewer ${releaseName(feed)}, ${feed.url}`,
     );
     return;
   }

@@ -1,4 +1,5 @@
 import { macFiles } from '../native/macos-files';
+import type { MacFiles } from '../native/macos-files';
 
 export interface FileVisibility {
   hiddenEntries(folder: string): Promise<readonly string[]>;
@@ -6,9 +7,17 @@ export interface FileVisibility {
 }
 
 /** Older development helpers keep the dot rule until the owner rebuilds the native helper. */
-export const fileVisibility: FileVisibility = {
-  hiddenEntries: async (folder) =>
-    process.platform === 'darwin' ? ((await macFiles().hiddenEntries?.(folder)) ?? []) : [],
+export function createFileVisibility(binding: () => Pick<MacFiles, 'hiddenEntries' | 'fileHidden'>): FileVisibility {
+return {
+  hiddenEntries: async (folder) => {
+    try {
+      return process.platform === 'darwin' ? ((await binding().hiddenEntries?.(folder)) ?? []) : [];
+    } catch {
+      return [];
+    }
+  },
   fileHidden: async (file) =>
-    process.platform === 'darwin' ? ((await macFiles().fileHidden?.(file)) ?? false) : false,
+    process.platform === 'darwin' ? ((await binding().fileHidden?.(file)) ?? false) : false,
 };
+}
+export const fileVisibility = createFileVisibility(macFiles);

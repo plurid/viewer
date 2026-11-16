@@ -1,4 +1,5 @@
 import { realpath } from 'node:fs/promises';
+import { folderEntry, prepareFolderHistory } from './files/folder-history';
 import { containsPath } from './files/containment';
 import { Reconstructions } from './canvases/reconstruction';
 import { reconstructionCredentialID } from '../domain/canvases/reconstruction';
@@ -302,6 +303,7 @@ export class Desktop {
    * reading it moves a damaged file aside, and a second read would lose that notice. */
   private storedEarly?: ReturnType<Storage['load']>;
   private settingsPrepared?: Promise<void>;
+  private folderHistoryPrepared?: Promise<{ checked: string[] }>;
   /** Settings loaded as bootstrap loads them (seeded from saved state on a first configuration), so
    * the window is made with its backdrop (backdrop.ts). */
   prepareSettings(): Promise<void> {
@@ -1706,7 +1708,7 @@ export class Desktop {
   emit(event: DesktopEvent, except?: number): void {
     if (event.type === 'file-changes') {
       this.workspaceSessions.remapFolderHistory(event.changes);
-      event = { ...event, folderHistoryRevision: this.workspaceSessions.folderHistory().revision };
+      event = { ...event, folderHistoryRevision: this.workspaceSessions.folderHistoryRevision };
     }
     if (event.type === 'job') this.activity.job(event.job);
     if (event.type === 'service-error') this.options.serviceError?.(event.service, event.message);
@@ -1984,6 +1986,20 @@ export class Desktop {
     }
     await this.credentials.load();
     performanceMeter.mark('bootstrap:settings');
+    const history = await (this.folderHistoryPrepared ??= (async () => {
+      const prepared = await prepareFolderHistory(
+        stored.state?.visits ?? {},
+        async (path) => {
+          await this.fileAccess.require([path]);
+          return folderEntry(path);
+        },
+        Date.now(),
+      );
+      if (stored.state) stored.state.visits = prepared.visits;
+      this.workspaceSessions.seed(stored.state);
+      this.workspaceSessions.seedFolderHistory(prepared.visits);
+      return prepared;
+    })());
     this.workspaceSessions.seed(stored.state);
     stored.state = this.workspaceSessions.open(
       sender,
@@ -2012,6 +2028,8 @@ export class Desktop {
       ...stored,
       launches,
       folderHistoryRevision: this.workspaceSessions.folderHistory().revision,
+      checkedFolders: history.checked,
+      folderClearRevision: this.workspaceSessions.folderHistory().clearRevision,
       home,
       freshSession,
       gitActionsAvailable: !process.mas,
@@ -2063,6 +2081,7 @@ export class Desktop {
         state,
         visitSaveID: visitSave?.id,
         folderHistoryRevision: history.revision,
+        folderClearRevision: history.clearRevision,
       },
       mergeChanged(input, state) ? undefined : sender,
     );
@@ -2461,6 +2480,7 @@ export class Desktop {
         return request.kind === 'send' ? this.activity.send(request.id, work) : work();
       },
       bootstrap: (_args, sender) => this.bootstrap(sender),
+      folderHistory: () => this.workspaceSessions.folderHistory(),
       save: ([input, visitSave], sender) => this.saveWorkspaces(input, sender, visitSave),
       commandsPublish: (args, sender) => {
         const record = this.requireRecord(sender);

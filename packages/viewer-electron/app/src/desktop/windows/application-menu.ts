@@ -6,10 +6,15 @@ import path from 'node:path';
 import type { ApplicationSettings } from '../../domain/services';
 import { defaultShortcuts, accelerator, menuShortcuts } from '../../domain/preferences/shortcuts';
 import { planeAlignments, planeSizePresets } from '../../domain/workspaces/plane-layout';
+import { releaseName } from '../../domain/updates/feed';
+import type { InstalledRelease } from '../../domain/updates/feed';
+import { installedRelease } from './about';
 
-/** A page of the guides as released with this version: the source at its tag, such as v1.0.0. */
-const guide = (page: string) =>
-  `https://github.com/plurid/viewer/blob/v${app.getVersion()}/docs/${page}`;
+/** Development runs have no release tag, so their guides follow the default branch. */
+export function guide(page: string, release: InstalledRelease = installedRelease()): string {
+  const ref = release.build === undefined ? 'master' : `v${releaseName(release)}`;
+  return `https://github.com/plurid/viewer/blob/${ref}/docs/${page}`;
+}
 
 /**
  * Build native menus from the same command IDs and shortcuts as the renderer. `quit` learns

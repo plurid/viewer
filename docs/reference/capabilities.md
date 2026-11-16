@@ -32,17 +32,30 @@ for the selection, says why one is unavailable, and pins up to eight to the plan
 
 ### Open and move around
 
-**Go to folder…** suggests up to eight existing folders, ranked by visit count and the age of the
-last visit. An empty field shows the highest ranked; a fragment matches any part of the name or
-path, including near-miss spellings. **↑**, **↓** and **Return** choose a folder. A typed existing
-path takes priority. **⌘K** shows the same matches after commands: at most four with other results,
-eight alone. `z` followed by a fragment also finds these folders.
+**Go to folder…** opens with the current folder path selected, or Home without a folder. Untouched
+or empty, it suggests up to eight existing folders by visit count and age of last visit. Fragments
+match names and paths, including near misses. Match quality comes before visit score, with the
+folder's own name preferred to its parents. **↑** and **↓** explicitly choose a suggestion;
+**Return** opens it. Without that choice, an existing typed path wins and an unavailable typed path
+shows an error. Submitting a fragment during checking waits for a result.
+
+**⌘K** appends habit matches below existing rows: at most four with other results, eight alone.
+Favorites and recent folders retain their command ranking. `z` followed by a fragment immediately
+lists up to ten previously checked folders. Its words match literally, in order through the path,
+with the last word in the folder's own name.
 
 Viewer keeps at most 500 visit records beside the last 50 recents. The sidebar still shows the
-latest eight recents. Suggestions check up to 40 candidates asynchronously, four at a time; an
-unavailable folder stays remembered. **Clear recent folders** in the dialog clears both lists.
-Counts follow recents through local saves, personal backups and folder renames. They are excluded
-from settings exports and are not exposed to agents.
+latest eight recents. A deliberate folder open counts; session restoration, new-workspace Home,
+templates, Back/Forward and Columns selection do not. A new visit stays when the record bound is
+reached. On load, filesystem spelling merges duplicate folders and confirmed file entries are
+removed from visit records. Unavailable folders stay remembered.
+
+Suggestions scan at most 500 records, making at most 40 asynchronous metadata checks, four at a
+time, with 150 ms per check. An unavailable volume is checked once per query; checking continues
+past its folders. Results appear as checks finish. **Clear recent folders** in the palette, dialog
+or Recent section clears both lists, including older saves arriving from another window. Counts
+follow recents through local saves, personal backups and folder renames. They are excluded from
+settings exports and are not exposed to agents.
 
 | Feature                                      | Key                              | ⌘K command                                                         | Menu                                                             | Learn                                        |
 | -------------------------------------------- | -------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------- |
@@ -52,7 +65,7 @@ from settings exports and are not exposed to agents.
 | Back and forward through a folder's history  | **⌘[** / **⌘]**; **⌥←** / **⌥→** | **Back** `back`, **Forward** `forward`                             | Right-click → **Navigation**                                     | [First steps](../guides/getting-started.md)  |
 | Parent folder                                | **⌘↑**                           | **Parent folder** `parent`                                         | Right-click → **Navigation**                                     | [First steps](../guides/getting-started.md)  |
 | Show the folder's path                       |                                  | **Show folder path** `path`                                        | Right-click → **Navigation**                                     | [Browse](../guides/files.md)                 |
-| Go to a favorite or location                 |                                  | Type its name: `location:<path>`                                   | The sidebar                                                      | [First steps](../guides/getting-started.md)  |
+| Go to a favorite, recent folder or location  |                                  | Type its name: `location:<path>`                                   | The sidebar                                                      | [First steps](../guides/getting-started.md)  |
 | Add the folder to Favorites, or remove it    |                                  | **Add folder to Favorites** `favorite`                             | Right-click → **Folder**                                         | [Browse](../guides/files.md)                 |
 | Show or hide the window's sidebar            | **⌥⌘S**                          | **Hide window navigation** `toggle-sidebar`                        | **View → Show / Hide Window Navigation**                         | [Shortcuts](shortcuts.md)                    |
 | Show or hide a folder plane's own sidebar    |                                  | **Hide plane navigation** `plane-sidebar`                          | **View → Show / Hide Plane Navigation**; right-click → **Plane** | [Workspaces](../guides/workspaces.md)        |

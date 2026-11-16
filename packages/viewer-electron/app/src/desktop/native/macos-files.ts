@@ -73,6 +73,7 @@ export interface MacFiles {
   datesAdded(files: string[]): Promise<NativeAddedDate[]>;
   hiddenEntries?(folder: string): Promise<string[]>;
   fileHidden?(file: string): Promise<boolean>;
+  guestACL?(folder: string): Promise<'write' | 'none' | 'unknown'>;
   information(file: string): Promise<string>;
   updateInformation(file: string, revision: string, json: string): Promise<string>;
   alias(source: string, destination: string): Promise<void>;

@@ -92,6 +92,7 @@ typings/
 
 # Vite
 .vite/
+.vitest/json/output.json
 
 # Electron-Forge
 out/

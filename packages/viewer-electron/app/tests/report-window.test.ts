@@ -2,7 +2,9 @@
 import type { BrowserWindowConstructorOptions, MenuItemConstructorOptions } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReportWindow, reportDisclosure, reportPage } from '../src/desktop/windows/report-window';
-import { reportCloseChannel, reportCopyChannel } from '../src/domain/diagnostics/report-window';
+import {
+  reportCloseChannel, reportCopyChannel, reportOptionsChannel, reportUpdateChannel, reportShownChannel,
+} from '../src/domain/diagnostics/report-window';
 import { installApplicationMenu } from '../src/desktop/windows/application-menu';
 import { dispatchApplicationCommand } from '../src/desktop/windows/application-dispatch';
 
@@ -12,6 +14,7 @@ const native = vi.hoisted(() => ({
     webContents: {
       emit(name: string, ...args: unknown[]): boolean;
       setWindowOpenHandler: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
       mainFrame: object;
       ipc: { emit(name: string, ...args: unknown[]): boolean };
     };
@@ -22,6 +25,7 @@ const native = vi.hoisted(() => ({
   }[],
   writeText: vi.fn(),
   ipcSend: vi.fn(),
+  ipcOn: vi.fn(),
   showErrorBox: vi.fn(),
   setPermissionRequestHandler: vi.fn(),
   setPermissionCheckHandler: vi.fn(),
@@ -33,7 +37,7 @@ vi.mock('electron', async () => {
   return {
     app: { isPackaged: true },
     clipboard: { writeText: native.writeText },
-    ipcRenderer: { send: native.ipcSend },
+    ipcRenderer: { send: native.ipcSend, on: native.ipcOn },
     dialog: { showErrorBox: native.showErrorBox },
     Menu: { buildFromTemplate: native.buildFromTemplate, setApplicationMenu: vi.fn() },
     session: {
@@ -47,6 +51,7 @@ vi.mock('electron', async () => {
       destroyed = false;
       webContents = Object.assign(new EventEmitter(), {
         setWindowOpenHandler: vi.fn(),
+        send: vi.fn(),
         ipc: new EventEmitter(),
         mainFrame: {},
       });
@@ -91,6 +96,28 @@ describe('report review window', () => {
     }
     expect(native.ipcSend).toHaveBeenCalledTimes(3);
     expect(Reflect.get(window, 'viewer')).toBeUndefined();
+    const checkbox = document.querySelector<HTMLInputElement>('#include-message-text')!;
+    const warning = document.getElementById('message-warning')!;
+    const button = document.querySelector('button')!;
+    expect(checkbox.checked).toBe(false);
+    expect(warning.hidden).toBe(true);
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
+    expect(warning.hidden).toBe(false);
+    expect(button.disabled).toBe(true);
+    expect(native.ipcSend).toHaveBeenLastCalledWith(reportOptionsChannel, true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
+    expect(native.ipcSend).toHaveBeenCalledTimes(4);
+    const update = native.ipcOn.mock.calls.find(([channel]) => channel === reportUpdateChannel)![1];
+    update({}, { revision: 1, report: 'Optional <quoted text>', includeMessageText: true });
+    expect(document.querySelector('pre')!.textContent).toBe('Optional <quoted text>');
+    expect(button.disabled).toBe(false);
+    expect(native.ipcSend).toHaveBeenLastCalledWith(reportShownChannel, 1);
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+    expect(warning.hidden).toBe(true);
+    update({}, { revision: 2, report, includeMessageText: false });
+    expect(document.querySelector('pre')!.textContent).toBe(report);
   });
 
   it('accepts copy only from this window main frame with no arguments', async () => {
@@ -108,6 +135,27 @@ describe('report review window', () => {
       'read',
     );
     expect(native.writeText).not.toHaveBeenCalled();
+  });
+
+  it('copies only the report acknowledged as shown after the person opts in', async () => {
+    const make = vi.fn(async (include: boolean) => include ? 'Optional message text' : report);
+    const owner = new ReportWindow(make, () => 'dark');
+    await owner.open();
+    const contents = native.windows[0]!.webContents;
+    const event = { sender: contents, senderFrame: contents.mainFrame };
+    expect(make).toHaveBeenCalledExactlyOnceWith(false);
+    contents.ipc.emit(reportOptionsChannel, event, true);
+    contents.ipc.emit(reportCopyChannel, event);
+    expect(native.writeText).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(contents.send).toHaveBeenCalled());
+    const update = contents.send.mock.calls[0]![1];
+    expect(update.report).toBe('Optional message text');
+    contents.ipc.emit(reportShownChannel, event, update.revision + 1);
+    contents.ipc.emit(reportCopyChannel, event);
+    expect(native.writeText).not.toHaveBeenCalled();
+    contents.ipc.emit(reportShownChannel, event, update.revision);
+    contents.ipc.emit(reportCopyChannel, event);
+    await vi.waitFor(() => expect(native.writeText).toHaveBeenCalledWith(update.report));
   });
   it.each(['light', 'dark'] as const)(
     'shows the sentence, exact report and one Copy action in %s',

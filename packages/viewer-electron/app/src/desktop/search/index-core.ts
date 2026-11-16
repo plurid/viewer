@@ -21,6 +21,7 @@ import type {
   IndexStatus,
 } from '../../domain/services';
 import { absolute, entry } from '../files/filesystem';
+import { HiddenPaths } from '../files/hidden-paths';
 import { searchExclusions, searchExclusionRules } from './exclusions';
 import { containsPath } from '../files/containment';
 export class FileIndex {
@@ -640,6 +641,7 @@ export class FileIndex {
     };
     const seen = this.stamp();
     const queue = [absolute(root.path)];
+    const visibility = new HiddenPaths();
     let cursor = 0;
     let tick = 0;
     while (cursor < queue.length && generation === this.generation) {
@@ -653,6 +655,7 @@ export class FileIndex {
           if (this.excluded(file)) continue;
           try {
             const item = await entry(file);
+            item.hidden ||= await visibility.hidden(file, ownerRoot);
             let content: string | DocumentData | undefined = '';
             if (
               !item.directory &&
@@ -749,6 +752,7 @@ export class FileIndex {
         try {
           const generation = this.generation;
           const item = await entry(file);
+          item.hidden ||= await new HiddenPaths().hidden(file, root);
           item.hidden ||= path
             .relative(root, file)
             .split('/')

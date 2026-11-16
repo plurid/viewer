@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { feedLimits, launchCheckDue, updateDecision } from '../../domain/updates/feed';
+import { feedLimits, launchCheckDue, releaseName, updateDecision } from '../../domain/updates/feed';
 import type { InstalledRelease, UpdateFeed } from '../../domain/updates/feed';
 import { DocumentStore } from '../persistence/document-store';
 import type { UpdateFeedConfiguration } from '../release';
@@ -118,9 +118,6 @@ export async function fetchFeed(
   return readSignedFeed(feed, Buffer.from(signature).toString('utf8'), endpoint.key);
 }
 
-const release = (installed: InstalledRelease) =>
-  installed.build === undefined ? installed.version : `${installed.version} (${installed.build})`;
-
 /** What a check tells the person. A launch check shows only an available update. */
 export function updateNotice(
   check: UpdateCheck,
@@ -142,18 +139,18 @@ export function updateNotice(
     case 'current':
       return {
         message: 'Viewer is up to date',
-        detail: `Version ${release(installed)} is the latest version.`,
+        detail: `Version ${releaseName(installed)} is the latest version.`,
       };
     case 'available':
       return {
-        message: `Viewer ${check.feed.version} is available`,
-        detail: `You have version ${release(installed)}.\n\n${check.feed.notes}`,
+        message: `Viewer ${releaseName(check.feed)} is available`,
+        detail: `You have version ${releaseName(installed)}.\n\n${check.feed.notes}`,
         download: check.feed.url,
       };
     case 'unsupported-system':
       return {
-        message: `Viewer ${check.feed.version} needs macOS ${check.feed.minimumSystemVersion} or later`,
-        detail: `This Mac has macOS ${systemVersion}. Version ${release(installed)} keeps working.`,
+        message: `Viewer ${releaseName(check.feed)} needs macOS ${check.feed.minimumSystemVersion} or later`,
+        detail: `This Mac has macOS ${systemVersion}. Version ${releaseName(installed)} keeps working.`,
       };
     case 'failed':
       return { message: 'Viewer could not check for updates', detail: check.message };

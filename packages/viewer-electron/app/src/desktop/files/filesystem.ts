@@ -34,7 +34,7 @@ export async function exists(file: string): Promise<boolean> {
   }
 }
 export async function entry(file: string): Promise<FileEntry> {
-  return entryWithVisibility(file, fileVisibility);
+  return entryWithVisibility(file, fileVisibility, false);
 }
 export async function entryWithVisibility(
   file: string,
@@ -90,7 +90,7 @@ export async function list(
   await Promise.all([
     visibility.hiddenEntries(normalized).then((names) => {
       hidden = new Set(names);
-    }),
+    }).catch(() => {}),
     (async () => {
       const names = await readdir(normalized);
       // Bound metadata fan-out, including on mounted network folders.

@@ -1,5 +1,6 @@
 import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
-import { mergeFolderVisits, recordVisit } from '../../domain/files/folder-visits';
+import { mergeFolderVisits } from '../../domain/files/folder-visits';
+import { resetKnownFolders } from '../explorer/folder-availability';
 import { folderVisitSync } from './folder-visits';
 import { presentationValue } from '../../domain/preferences/presentation/profile-fields';
 // Workspace lifecycle: startup, switching, creation, deletion and restoring.
@@ -109,11 +110,12 @@ export function initialize(bootstrap: Bootstrap): void {
     }
   }
   const active = activeWorkspace({ saved } as ViewerState);
-  folderVisitSync.reset(original.visits ?? {}, bootstrap.folderHistoryRevision);
-  const now = Date.now();
-  for (const pane of active.panes) {
-    if (pane.type === 'folder') saved.visits = recordVisit(saved.visits ?? {}, pane.path, now);
-  }
+  folderVisitSync.reset(
+    original.visits ?? {},
+    bootstrap.folderHistoryRevision,
+    bootstrap.folderClearRevision,
+  );
+  resetKnownFolders(bootstrap.checkedFolders);
   saved.workspaceVisits = mergeWorkspaceVisits(saved.workspaces, saved.workspaceVisits, {
     [active.id]: Date.now(),
   });
@@ -159,14 +161,21 @@ export function receiveWorkspaces(
   saved: SavedState,
   visitSaveID?: string,
   historyRevision?: number,
+  clearRevision?: number,
 ): void {
   const current = getState();
-  const recents = folderVisitSync.recentFolders(saved.recents, current.saved.recents, visitSaveID);
+  const recents = folderVisitSync.recentFolders(
+    saved.recents,
+    current.saved.recents,
+    visitSaveID,
+    clearRevision,
+  );
   const visits = folderVisitSync.receive(
     saved.visits ?? {},
     current.saved.visits ?? {},
     visitSaveID,
     historyRevision,
+    clearRevision,
   );
   const active = activeWorkspace();
   const workspaces = saved.workspaces.map((space) => (space.id === active.id ? active : space));
@@ -237,7 +246,6 @@ export async function newWorkspace(name: string): Promise<void> {
     activeWorkspace: workspace.id,
     profile: undefined,
     workspaceVisits: { ...getState().saved.workspaceVisits, [workspace.id]: Date.now() },
-    visits: recordVisit(getState().saved.visits ?? {}, pane.path, Date.now()),
   });
   update({ ...getState(), activePane: pane.id });
   await flushState(false);

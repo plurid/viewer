@@ -728,12 +728,19 @@ export const schemas = {
   cancelDocument: z.tuple([id, id]),
   resourceFormat: z.tuple([id, z.string().regex(/^[a-z0-9]{1,8}$/)]),
   bootstrap: z.tuple([]),
+  folderHistory: z.tuple([]),
   list: z.tuple([localPath]),
   stat: z.tuple([localPath]),
   fileInformation: z.tuple([localPath]),
   networkSharing: z.tuple([
     z.discriminatedUnion('kind', [
-      z.object({ kind: z.literal('refresh') }).strict(),
+      z
+        .object({
+          kind: z.literal('refresh'),
+          paths: z.array(localPath).max(1000).optional(),
+          force: z.boolean().optional(),
+        })
+        .strict(),
       z.object({ kind: z.literal('settings'), path: localPath }).strict(),
     ]),
   ]),
@@ -823,6 +830,7 @@ export const schemas = {
         clear: z.boolean(),
         revision: z.number().int().nonnegative().optional(),
         restored: folderVisitsSchema.optional(),
+        clearRevision: z.number().int().nonnegative().optional(),
       })
       .strict()
       .optional(),
@@ -1059,6 +1067,7 @@ export const methodWindows = {
   officeImage: 'viewer',
   printPDF: 'viewer',
   save: 'viewer',
+  folderHistory: 'viewer',
   flushed: 'both',
   clipboardWrite: 'viewer',
   clipboardWriteText: 'both',

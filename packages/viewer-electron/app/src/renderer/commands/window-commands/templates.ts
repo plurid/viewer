@@ -72,7 +72,7 @@ export function templateCommands({
     const path = (value: string) => templatePath(value, home, current);
     const panes = template.planes.map((plane) =>
       plane.kind === 'folder'
-        ? addPane(path(plane.path), 'folder', true).id
+        ? addPane(path(plane.path), 'folder', true, { remember: false }).id
         : plane.kind === 'file'
           ? addPane(path(plane.path), 'preview', true).id
           : plane.kind === 'terminal'

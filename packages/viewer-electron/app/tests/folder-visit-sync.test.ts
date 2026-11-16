@@ -36,16 +36,23 @@ function setup() {
   };
   const begin = (window: WindowState) => ({
     state: structuredClone(window.saved),
-    metadata: window.sync.begin(window.saved.visits ?? {}),
+    metadata: window.sync.begin(window.saved.visits ?? {}, window.saved.recents),
   });
   const finish = (window: WindowState, sent: { state: SavedState; metadata: FolderVisitSave }) => {
     const merged = sessions.save(window.owner, sent.state, sent.metadata);
     for (const peer of windows) {
+      peer.saved.recents = peer.sync.recentFolders(
+        merged.recents,
+        peer.saved.recents,
+        sent.metadata.id,
+        sessions.folderHistory().clearRevision,
+      );
       peer.saved.visits = peer.sync.receive(
         merged.visits ?? {},
         peer.saved.visits ?? {},
         sent.metadata.id,
         sessions.folderHistory().revision,
+        sessions.folderHistory().clearRevision,
       );
     }
     window.saved.visits = window.sync.complete(
@@ -53,6 +60,7 @@ function setup() {
       merged.visits ?? {},
       window.saved.visits ?? {},
       sessions.folderHistory().revision,
+      sessions.folderHistory().clearRevision,
     );
   };
   const remap = (changes: FileChange[]) => {
@@ -156,6 +164,50 @@ it('does not restore old visits from an unchanged snapshot sent before a peer cl
   finish(a, begin(a));
   finish(b, stale);
   expect(sessions.snapshot()?.visits).toEqual({});
+});
+
+it('keeps a clear ahead of a peer snapshot already in flight, including recents', () => {
+  const { sessions, a, b, visit, clear, begin, finish } = setup();
+  visit(a);
+  a.saved.recents = [path];
+  finish(a, begin(a));
+  visit(b, '/fixtures/old-peer');
+  b.saved.recents = ['/fixtures/old-peer', path];
+  const sent = begin(b);
+  clear(a);
+  finish(a, begin(a));
+  finish(b, sent);
+  expect(sessions.snapshot()?.recents).toEqual([]);
+  expect(sessions.snapshot()?.visits).toEqual({});
+  expect(a.saved.recents).toEqual([]);
+  expect(b.saved.recents).toEqual([]);
+  finish(b, begin(b));
+  expect(sessions.snapshot()?.recents).toEqual([]);
+  visit(b, '/fixtures/new-peer');
+  b.saved.recents = ['/fixtures/new-peer'];
+  finish(b, begin(b));
+  expect(sessions.snapshot()?.recents).toEqual(['/fixtures/new-peer']);
+  expect(sessions.snapshot()?.visits?.['/fixtures/new-peer']?.count).toBe(1);
+});
+
+it('refreshes a very old snapshot with bounded replay, then saves its remapped visits exactly', () => {
+  const { sessions, a, visit, begin, remap } = setup();
+  visit(a);
+  const sent = begin(a);
+  for (let index = 0; index < 1000; index++)
+    remap([
+      {
+        source: index % 2 ? '/fixtures/renamed' : path,
+        destination: index % 2 ? path : '/fixtures/renamed',
+      },
+    ]);
+  expect(() => sessions.save(a.owner, sent.state, sent.metadata)).toThrow(
+    'Retry with the current folders.',
+  );
+  a.sync.failed(sent.metadata.id);
+  const fresh = begin(a);
+  const merged = sessions.save(a.owner, fresh.state, fresh.metadata);
+  expect(merged.visits).toEqual({ [path]: { count: 1, last: now } });
 });
 
 it('keeps navigation after a response-only acknowledgement and retries unacknowledged failures', () => {

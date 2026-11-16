@@ -7,11 +7,13 @@ export interface FolderVisitSave {
   clear: boolean;
   revision?: number;
   restored?: FolderVisits;
+  clearRevision?: number;
 }
 
 export interface FolderVisitReply {
   visits: FolderVisits;
   revision: number;
+  clearRevision?: number;
 }
 
 export interface FolderVisitChanges {
@@ -71,5 +73,9 @@ export function applyFolderVisitChanges(
       last: Math.max(visits[path]?.last ?? 0, visit.last),
     };
   }
-  return boundFolderVisits(visits, now);
+  return boundFolderVisits(
+    visits,
+    now,
+    Object.keys(changes.added).filter((path) => changes.added[path]!.count > 0),
+  );
 }

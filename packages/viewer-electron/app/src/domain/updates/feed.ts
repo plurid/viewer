@@ -35,9 +35,14 @@ export interface InstalledRelease {
   build?: number;
 }
 
+/** Bundle and feed fields stay separate; people and release tags use the alpha version. */
+export function releaseName(release: InstalledRelease): string {
+  return release.build === undefined ? release.version : `${release.version}-${release.build}`;
+}
+
 export type UpdateDecision = 'available' | 'current' | 'unsupported-system';
 
-/** Compares dotted numbers, such as 1.0.2 or macOS 14.5: a missing part counts as 0. */
+/** Compares dotted numbers, such as 0.1.2 or macOS 14.5: a missing part counts as 0. */
 export function compareVersions(left: string, right: string): number {
   const a = left.split('.').map(Number);
   const b = right.split('.').map(Number);

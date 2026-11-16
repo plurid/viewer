@@ -204,6 +204,7 @@ const api: ViewerAPI = {
   officeImage: (id, part, requestID) => invoke('officeImage', id, part, requestID),
   printPDF: (id, password) => invoke('printPDF', id, password),
   save: (state, visitSave) => invoke('save', state, visitSave),
+  folderHistory: () => invoke('folderHistory'),
   flushed: (token) => invoke('flushed', token),
   clipboardWrite: (files, cut) => invoke('clipboardWrite', files, cut),
   clipboardWriteText: (text) => invoke('clipboardWriteText', text),

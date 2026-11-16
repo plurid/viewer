@@ -6,6 +6,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { Readable, Writable } from 'node:stream';
+import { EventEmitter } from 'node:events';
+import { reportCopyChannel, reportOptionsChannel, reportUpdateChannel, reportShownChannel } from '../src/domain/diagnostics/report-window';
 import { runCLI } from '../src/desktop/cli/run';
 import type { FileEntry, OperationJob } from '../src/domain/contracts';
 import type { CapturedTarget, CustomAction } from '../src/domain/automation/actions';
@@ -238,45 +240,72 @@ beforeEach(() => {
 });
 
 describe('agent removal safety', () => {
-  it('refuses diagnostic reports and logs through MCP, CLI, commands and custom aliases', async () => {
+  it('keeps the actual report IPC route private to its own main frame', async () => {
+    const clipboard = vi.fn(async (_text: string) => {});
+    const contents = Object.assign(new EventEmitter(), {
+      ipc: new EventEmitter(), mainFrame: {}, send: vi.fn(), setWindowOpenHandler: vi.fn(),
+    });
+    class ReviewWindow extends EventEmitter {
+      webContents = contents;
+      isDestroyed = () => false;
+      loadURL = vi.fn(async () => {});
+      show = vi.fn();
+      close = vi.fn();
+    }
+    vi.doMock('electron', () => ({
+      BrowserWindow: ReviewWindow,
+      clipboard: { writeText: clipboard },
+      dialog: { showErrorBox: vi.fn() },
+      session: { fromPartition: () => ({
+        setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(),
+        webRequest: { onBeforeRequest: vi.fn() },
+      }) },
+    }));
+    try {
+      const { ReportWindow } = await import('../src/desktop/windows/report-window');
+      const makeReport = vi.fn(async (include: boolean) => include ? 'Explicit excerpt' : 'Structured report');
+      const review = new ReportWindow(makeReport, () => 'dark', false);
+      await review.open();
+      const agentContents = { id: 900, mainFrame: {} };
+      for (const channel of [reportOptionsChannel, reportCopyChannel, reportShownChannel]) {
+        contents.ipc.emit(channel, { sender: agentContents, senderFrame: agentContents.mainFrame }, true);
+        contents.ipc.emit(channel, { sender: contents, senderFrame: {} }, true);
+      }
+      await Promise.resolve();
+      expect(makeReport).toHaveBeenCalledExactlyOnceWith(false);
+      expect(contents.send).not.toHaveBeenCalled();
+      expect(clipboard).not.toHaveBeenCalled();
+
+      // The positive control proves the test exercised the real installed route.
+      const person = { sender: contents, senderFrame: contents.mainFrame };
+      contents.ipc.emit(reportOptionsChannel, person, true);
+      await vi.waitFor(() => expect(contents.send).toHaveBeenCalledWith(reportUpdateChannel, expect.any(Object)));
+      const update = contents.send.mock.calls[0]![1];
+      contents.ipc.emit(reportShownChannel, person, update.revision);
+      contents.ipc.emit(reportCopyChannel, person);
+      await vi.waitFor(() => expect(clipboard).toHaveBeenCalledExactlyOnceWith('Explicit excerpt'));
+    } finally {
+      vi.doUnmock('electron');
+    }
+  });
+
+  it('refuses the real content-read tool and CLI route for the diagnostic log and aliases', async () => {
     const f = await fixture(['/Granted', '/Memory'], true);
-    f.config.customActions = [action({ kind: 'builtin', command: 'copy-report' })];
-    for (const commandID of ['copy-report', 'show-diagnostic-log', 'custom.cleanup']) {
-      await expect(f.call('propose_command', { commandID })).rejects.toThrow();
-    }
-    for (const name of [
-      'copy_report',
-      'diagnostic_report',
-      'diagnosticReport',
-      'read_diagnostic_log',
-    ]) {
-      await expect(f.call(name)).rejects.toThrow('Unknown agent tool');
-    }
-    await expect(f.broker.authorize('/Memory/Viewer/Logs/diagnostics.log')).rejects.toThrow(
-      'Private Viewer',
-    );
-    memory.aliases.set('/Granted/log-alias', '/Memory/Viewer/Logs/diagnostics.log');
-    await expect(f.broker.authorize('/Granted/log-alias')).rejects.toThrow('Private Viewer');
+    const file = '/Memory/Viewer/Logs/diagnostics.log';
+    await expect(f.call('read_content', { path: file })).rejects.toThrow('Private Viewer');
+    memory.aliases.set('/Granted/log-alias', file);
+    await expect(f.call('read_content', { path: '/Granted/log-alias' })).rejects.toThrow('Private Viewer');
     let output = '';
     const sink = new Writable({
-      write(chunk, _encoding, done) {
-        output += String(chunk);
-        done();
-      },
+      write(chunk, _encoding, done) { output += String(chunk); done(); },
     });
-    const code = await runCLI(['tools', 'call', 'copy_report', '--args', '{}'], {
-      dataPath: '/Memory/Viewer',
-      version: 'test',
-      cwd: '/Granted',
-      home: '/Home',
-      input: Readable.from([]),
-      output: sink,
-      error: sink,
-      call: (method, params, signal) =>
-        f.broker.handle(f.created.token, { method, params }, signal),
+    const code = await runCLI(['tools', 'call', 'read_content', '--args', JSON.stringify({ path: file })], {
+      dataPath: '/Memory/Viewer', version: 'test', cwd: '/Granted', home: '/Home',
+      input: Readable.from([]), output: sink, error: sink,
+      call: (method, params, signal) => f.broker.handle(f.created.token, { method, params }, signal),
     });
     expect(code).not.toBe(0);
-    expect(output).toContain('Unknown agent tool');
+    expect(output).toContain('Private Viewer');
     expect(f.execute).not.toHaveBeenCalled();
     await f.broker.close();
   });

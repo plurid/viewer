@@ -11,21 +11,25 @@ keeps its own selection.
 
 ## Go to a folder
 
-1. Press **⌘L** or **⇧⌘G** for **Go to folder…**. With the field empty, Viewer suggests folders you
-   visit often and have used recently.
+1. Press **⌘L** or **⇧⌘G** for **Go to folder…**. The current path starts selected, ready to copy
+   with **⌘C** or extend with **End**. Untouched or empty, the field suggests folders you visit
+   often and have used recently.
 2. Type part of a folder's name or path to narrow the suggestions. Near-miss spellings match too.
-3. Use **↑** and **↓** to choose, then **Return** to open. You can also click a suggestion. A typed
-   existing folder path takes priority when you press **Return** or choose **Go**. `~` and
-   `~/Documents` start at Home.
+   Matches in the folder's own name come first; frequency and recency break equal matches.
+3. Use **↑** and **↓** to choose, then **Return** to open that suggestion. You can also click it.
+   Without an arrowed choice, an existing typed path opens. A mistyped path shows an error and stays
+   in the field. `~` and `~/Documents` start at Home.
 
-You can also type a fragment in **⌘K**. Matching **Frequent folders** follow the commands.
-Unavailable folders stay hidden until they are available again; disconnecting a disk does not forget
-its folders. The sidebar's **Recent** list keeps its newest-first order.
+You can also type a fragment in **⌘K**. Matching **Frequent folders** arrive below the existing
+results. Favorites and recent folders keep their place. Type `z` and a fragment for immediate
+matches with literal words in order, ending in the folder's name. Unavailable folders stay hidden
+until they are available again; disconnecting a disk does not forget its folders. The sidebar's
+**Recent** list keeps its newest-first order.
 
-Choose **Clear recent folders** in **Go to folder…** to clear both the Recent list and visit counts.
-This history stays on this Mac and is included with recents in a personal backup. Trash and archive
-contents are never learned. See the
-[navigation limits](../reference/capabilities.md#open-and-move-around).
+Choose **Clear recent folders** in **⌘K** or **Go to folder…**, or **Clear** beside the sidebar's
+**Recent** heading, to clear both the Recent list and visit counts across windows. This history
+stays on this Mac and is included with recents in a personal backup. Trash and archive contents are
+never learned. See the [navigation limits](../reference/capabilities.md#open-and-move-around).
 
 ## Open and save in Viewer
 

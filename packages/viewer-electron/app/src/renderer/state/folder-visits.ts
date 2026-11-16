@@ -1,7 +1,12 @@
 import type { FolderVisits } from '../../domain/files/folder-visits';
-import { mergeFolderVisits, remapFolderVisits } from '../../domain/files/folder-visits';
+import {
+  mergeFolderVisits,
+  remapFolderVisits,
+  sameFolderVisits,
+} from '../../domain/files/folder-visits';
 import type { FileChange } from '../../domain/files/changes';
 import { pathMapper } from '../../domain/files/changes';
+import { FolderHistoryRemaps } from '../../domain/files/folder-history-remaps';
 import type { FolderVisitChanges, FolderVisitSave } from '../../domain/files/folder-visit-changes';
 import {
   applyFolderVisitChanges,
@@ -15,15 +20,17 @@ export class FolderVisitSync {
   private pendingClear = false;
   private pendingRestored: FolderVisits = {};
   private revision = 0;
-  private remappings: { revision: number; changes: FileChange[] }[] = [];
+  private clearRevision = 0;
+  private remappings = new FolderHistoryRemaps();
 
-  reset(base: FolderVisits, revision = 0): void {
+  reset(base: FolderVisits, revision = 0, clearRevision = 0): void {
     this.base = base;
     this.inFlight = undefined;
     this.pendingClear = false;
     this.pendingRestored = {};
     this.revision = revision;
-    this.remappings = [];
+    this.clearRevision = clearRevision;
+    this.remappings = new FolderHistoryRemaps();
   }
 
   remap(changes: FileChange[], revision = this.revision + 1): void {
@@ -37,7 +44,7 @@ export class FolderVisitSync {
     pending.restored = remapFolderVisits(pending.restored, changes);
     pending.removed = pending.removed.map(map);
     // A reply can describe the paths from before a rename that arrived during its write.
-    this.remappings.push({ revision, changes });
+    this.remappings.add(changes, revision);
   }
 
   clear(): void {
@@ -66,13 +73,20 @@ export class FolderVisitSync {
       clear: this.pendingClear,
       revision: this.revision,
       restored: this.pendingRestored,
+      clearRevision: this.clearRevision,
     };
     this.pendingClear = false;
     this.pendingRestored = {};
     return save;
   }
 
-  recentFolders(incoming: string[], current: string[], acknowledgement?: string): string[] {
+  recentFolders(
+    incoming: string[],
+    current: string[],
+    acknowledgement?: string,
+    clearRevision = this.clearRevision,
+  ): string[] {
+    if (clearRevision < this.clearRevision) return current;
     if (this.clearing) return current;
     const sent = this.inFlight;
     if (
@@ -93,21 +107,33 @@ export class FolderVisitSync {
     current: FolderVisits,
     acknowledgement?: string,
     revision = this.revision,
+    clearRevision = this.clearRevision,
   ): FolderVisits {
-    for (const batch of this.remappings)
-      if (batch.revision > revision) incoming = remapFolderVisits(incoming, batch.changes);
+    if (clearRevision < this.clearRevision) return current;
+    if (clearRevision > this.clearRevision && !this.clearing) {
+      this.base = incoming;
+      this.inFlight = undefined;
+      this.pendingRestored = {};
+      this.clearRevision = clearRevision;
+      this.remappings = new FolderHistoryRemaps();
+      return incoming;
+    }
+    this.clearRevision = clearRevision;
+    if (this.remappings.needsRefresh(revision)) return current;
+    incoming = this.remappings.apply(incoming, revision);
     const now = Date.now();
     const projected = this.inFlight
       ? applyFolderVisitChanges(this.base, this.inFlight.changes, now)
       : this.base;
     const pending = folderVisitChanges(projected, current, this.pendingClear, this.pendingRestored);
     if (acknowledgement === this.inFlight?.id) this.inFlight = undefined;
-    if (!this.inFlight) this.remappings = [];
+    if (!this.inFlight) this.remappings = new FolderHistoryRemaps();
     this.base = incoming;
     const shared = this.inFlight
       ? applyFolderVisitChanges(incoming, this.inFlight.changes, now)
       : incoming;
-    return applyFolderVisitChanges(shared, pending, now);
+    const result = applyFolderVisitChanges(shared, pending, now);
+    return sameFolderVisits(result, current) ? current : result;
   }
 
   complete(
@@ -115,9 +141,12 @@ export class FolderVisitSync {
     incoming: FolderVisits,
     current: FolderVisits,
     revision = this.revision,
+    clearRevision = this.clearRevision,
   ): FolderVisits {
     // The event can acknowledge the write before the IPC response reaches this window.
-    return this.inFlight?.id === id ? this.receive(incoming, current, id, revision) : current;
+    return this.inFlight?.id === id
+      ? this.receive(incoming, current, id, revision, clearRevision)
+      : current;
   }
 
   failed(id: string): void {
@@ -130,7 +159,11 @@ export class FolderVisitSync {
       );
     this.pendingClear ||= this.inFlight.changes.clear;
     this.inFlight = undefined;
-    this.remappings = [];
+    this.remappings = new FolderHistoryRemaps();
+  }
+
+  needsRefresh(revision: number): boolean {
+    return this.remappings.needsRefresh(revision);
   }
 }
 

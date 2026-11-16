@@ -45,7 +45,7 @@ import {
 } from './core';
 import { closedPanes, retainedPaneIDs } from './persistence';
 import { trimNoteSessions } from '../notes/sessions';
-import { remember, rememberFolderVisit } from './places';
+import { remember } from './places';
 import { folderPresentation, updateFolderPresentation } from './presentation';
 
 export const folderPane = (path: string, sidebar?: PaneSidebar): FolderPane => ({
@@ -193,7 +193,11 @@ function followPair(id: string, from: string, to: string): void {
 export function historyNavigate(id: string, delta: number): void {
   const pane = activeWorkspace().panes.find((item) => item.id === id);
   if (pane?.type !== 'folder') return;
-  const index = pane.historyIndex + delta;
+  let index = pane.historyIndex + delta;
+  const step = Math.sign(delta);
+  if (!step) return;
+  while (index >= 0 && index < pane.history.length && pane.history[index] === pane.path)
+    index += step;
   const target = index >= 0 ? pane.history[index] : undefined;
   if (target !== undefined && target !== pane.path) {
     updatePane(id, {
@@ -201,7 +205,6 @@ export function historyNavigate(id: string, delta: number): void {
       historyIndex: index,
       ...panePresentation(folderPresentation(target)),
     });
-    rememberFolderVisit(target);
   }
 }
 export function addPane(
@@ -264,7 +267,6 @@ export function addContentPane(
     roots: root ? [...space.roots, pane.id] : space.roots,
     activePane: pane.id,
   }));
-  if (pane.type === 'folder') rememberFolderVisit(pane.path);
   setActivePane(pane.id);
 }
 

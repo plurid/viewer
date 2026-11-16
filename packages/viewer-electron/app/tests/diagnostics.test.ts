@@ -12,6 +12,7 @@ import {
 } from '../src/desktop/diagnostics/failures';
 import { UtilityClient, reportWorkers } from '../src/desktop/workers/utility-client';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { boundedText, boundedTextTail } from '../src/domain/diagnostics/text';
 
 let root: string;
 beforeEach(async () => {
@@ -46,6 +47,33 @@ describe('diagnostic log', () => {
   });
 });
 describe('what the log keeps', () => {
+  it('cuts every diagnostic boundary without leaving a surrogate half', async () => {
+    for (const limit of [500, 1000, 2000, 8000]) {
+      const text = 'x'.repeat(limit - 1) + '😀';
+      expect(boundedText(text, limit)).toHaveLength(limit - 1);
+      expect(() => encodeURIComponent(boundedTextTail('😀' + 'x'.repeat(limit - 1), limit))).not.toThrow();
+    }
+    const text = 'x'.repeat(7999) + '😀';
+    expect(() => encodeURIComponent(diagnosticText([text]))).not.toThrow();
+    const log = new DiagnosticLog(path.join(root, 'emoji.log'));
+    await log.record('renderer-error', text);
+    const kept = JSON.parse((await readFile(log.file, 'utf8')).trim()).detail;
+    expect(() => encodeURIComponent(kept)).not.toThrow();
+    expect(kept).toHaveLength(7999);
+  });
+
+  it.each([
+    'DB_PASSWORD=hunter2', 'client_secret="private words"', "MYAPP_API_KEY='private words'",
+    'passwd=hunter2 pwd=hunter2 pass: hunter2', '-u user:hunter2', '--password "private words"',
+    'Cookie: session=hunter2; private-cookie=value',
+    '“viewer-license-1.\n eyJlbWFpbCI6Imh1bnRlcjIifQ.\n abcdefghijklmno”',
+  ])('does not persist recognizable credential forms: %s', async (text) => {
+    expect(redactSecrets(text)).not.toMatch(/hunter2|private words|private-cookie|eyJ|abcdefghijk/);
+    const log = new DiagnosticLog(path.join(root, 'credentials.log'));
+    await log.record('renderer-error', text);
+    expect(await readFile(log.file, 'utf8')).not.toMatch(/hunter2|private words|private-cookie|eyJ|abcdefghijk/);
+  });
+
   it('names objects by their kind, never their contents, and redacts credentials', () => {
     const text = diagnosticText([
       'Save failed',
@@ -63,7 +91,7 @@ describe('what the log keeps', () => {
       'key sk-proj-abcdef1234567890 Authorization: Bearer abc.def.ghi123 apiKey="hunter22" token=xyz98765',
     );
     expect(secrets).not.toMatch(/abcdef1234567890|abc\.def|hunter22|xyz98765/);
-    expect(secrets).toContain('apiKey="[redacted]');
+    expect(secrets).toContain('[redacted]');
   });
 
   it('allows each source a bounded number of entries a minute', () => {

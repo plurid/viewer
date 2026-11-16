@@ -11,18 +11,20 @@ import { Icon } from '../ui/Icon';
 import {
   followNetworkSharing,
   networkSharingEnabled,
-  refreshNetworkSharing,
+  refreshSharingOnRequest,
   sharedFolder,
+  useSharingFolder,
   useNetworkSharing,
 } from './network-sharing-state';
 import './network-sharing.css';
 
 export function SharedMark({ path }: { path: string }) {
   const snapshot = useNetworkSharing();
+  useSharingFolder(path);
   const share = sharedFolder(path);
   if (!share) return null;
   const description = [
-    `Shared as ${share.name}.`,
+    share.inside ? `Inside the shared folder ${share.name}.` : `Shared as ${share.name}.`,
     sharingServiceText(snapshot.service),
     guestWarning(share),
   ]
@@ -49,10 +51,11 @@ function ShareDetails({
   snapshot: NetworkSharingSnapshot;
 }) {
   const warning = guestWarning(share);
-  const addresses = sharingAddresses(share, snapshot.host, snapshot.ipv4);
+  const addresses = sharingAddresses(share, snapshot.host, snapshot.ipv4, snapshot.interfaces);
   return (
     <>
       {warning && <p className="network-sharing-warning">{warning}</p>}
+      {share.inside && <p>Inside the shared folder {share.name}</p>}
       <div>
         <dl className="network-sharing-details">
           <dt>Share name</dt>
@@ -66,9 +69,9 @@ function ShareDetails({
       <p>{sharingServiceText(snapshot.service)}</p>
       {addresses.length ? (
         <ul className="network-sharing-addresses">
-          {addresses.map(({ system, address }) => (
+          {addresses.map(({ system, address, label }) => (
             <li key={address}>
-              <span>{system}</span>
+              <span>{system}{label ? ' (' + label + ')' : ''}</span>
               <span className="network-sharing-address">
                 <span>{address}</span>
                 <CopyButton copy={{ text: address }} label={`Copy ${system} address ${address}`} />
@@ -87,10 +90,11 @@ function ShareDetails({
 
 export function NetworkSharingSection({ path }: { path: string }) {
   const snapshot = useNetworkSharing();
+  const folder = useSharingFolder(path);
   useEffect(() => followNetworkSharing(), []);
   const shares =
     networkSharingEnabled() && snapshot.status === 'ready'
-      ? snapshot.shares.filter((share) => share.path === path)
+      ? folder?.shares ?? []
       : [];
   if (!shares.length) return null;
   return (
@@ -99,7 +103,7 @@ export function NetworkSharingSection({ path }: { path: string }) {
       {shares.map((share) => (
         <ShareDetails key={share.name} share={share} snapshot={snapshot} />
       ))}
-      <Button variant="secondary" onClick={refreshNetworkSharing}>
+      <Button variant="secondary" onClick={refreshSharingOnRequest}>
         Refresh sharing
       </Button>
     </section>
@@ -108,10 +112,11 @@ export function NetworkSharingSection({ path }: { path: string }) {
 
 export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(): void }) {
   const snapshot = useNetworkSharing();
+  const folder = useSharingFolder(path);
   const [error, setError] = useState('');
   useEffect(() => followNetworkSharing(), []);
   const shares =
-    snapshot.status === 'ready' ? snapshot.shares.filter((share) => share.path === path) : [];
+    snapshot.status === 'ready' ? folder?.shares ?? [] : [];
   return (
     <Dialog title="Network sharing" onClose={onClose} className="network-sharing-dialog">
       <div className="network-sharing-body">
@@ -121,10 +126,10 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
         </p>
         <PathField path={path} label="Copy folder path" />
         <div role="status" aria-live="polite">
-          {snapshot.status === 'ready' ? (
+          {snapshot.status === 'ready' && folder?.status === 'ready' ? (
             shares.length ? (
               <>
-                <p>This folder is shared.</p>
+                <p>{shares.every((share) => share.inside) ? 'This folder is inside a shared folder.' : 'This folder is shared.'}</p>
                 {shares.map((share) => (
                   <ShareDetails key={share.name} share={share} snapshot={snapshot} />
                 ))}
@@ -144,8 +149,10 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
             and click the remove button.
           </li>
           <li>
-            Choose who can connect and whether they can read or write. Turn “Allow guest users” off
-            unless you mean to share with everyone on the network.
+            Choose who can connect and whether they can read or write. On macOS 13 to 15,
+            Control-click the folder under Shared Folders, choose Advanced Options, and clear
+            “Allow guest users” unless you mean to share with everyone on the network. The location
+            may differ on other macOS versions.
           </li>
         </ol>
         {error && (
@@ -155,7 +162,7 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
         )}
       </div>
       <footer>
-        <Button variant="secondary" onClick={refreshNetworkSharing}>
+        <Button variant="secondary" onClick={refreshSharingOnRequest}>
           Refresh
         </Button>
         <Button variant="quiet" onClick={onClose}>
@@ -163,6 +170,7 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
         </Button>
         <Button
           variant="primary"
+          data-autofocus
           onClick={() => {
             setError('');
             void window.viewer

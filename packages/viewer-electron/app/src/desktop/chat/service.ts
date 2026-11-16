@@ -1,4 +1,5 @@
 import type { Canvases } from '../canvases/service';
+import { modelCommandLabel } from '../../domain/files/network-sharing';
 import { canvasInstructions } from '../canvases/runtime';
 import { canvasInvocationSchema } from '../../domain/canvases/actions';
 import { canvasHostContract } from '../../domain/canvases/scaffold';
@@ -507,7 +508,7 @@ export class Chats {
         const input = {
           stepsRemaining: 8 - round,
           context: document.scopes,
-          commands: principal.commands.map(({ id, label }) => ({ id, label })),
+          commands: principal.commands.map((command) => ({ id: command.id, label: modelCommandLabel(command) })),
           messages: [] as ChatMessage[],
           quote: document.branch?.quote,
           contextEncoding:

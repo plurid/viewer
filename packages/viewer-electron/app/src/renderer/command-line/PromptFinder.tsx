@@ -4,6 +4,7 @@ import type { PromptAnswer, PromptContext } from '../../domain/command-line/prom
 import { modelPermissionCovers } from '../../domain/models/permissions';
 import { CommandResults } from '../commands/CommandResults';
 import type { ResolvedCommand } from '../commands/registry';
+import { modelCommandLabel } from '../../domain/files/network-sharing';
 import { activeWorkspace, getState, rememberLine, useViewer } from '../state/store';
 import { IconButton } from '../ui/primitives';
 import type { IconName } from '../ui/Icon';
@@ -41,7 +42,7 @@ function promptContext(host: LineHost): PromptContext {
       .list({ scope: 'window', paneID: context.paneID, context })
       .filter((command) => !command.id.includes(':') && !command.id.startsWith('setting.'))
       .slice(0, 600)
-      .map((command) => ({ id: command.id, label: command.label.slice(0, 200) })),
+      .map((command) => ({ id: command.id, label: modelCommandLabel(command).slice(0, 200) })),
     userCommands: [...userCommands().keys()],
   };
 }

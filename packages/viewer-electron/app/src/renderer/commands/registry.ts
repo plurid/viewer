@@ -6,6 +6,7 @@ export { normalize } from '../../domain/search/name-score';
 
 export type CommandScope = 'window' | 'folder' | 'files' | 'preview' | 'sidebar' | 'workspace';
 export interface CommandContext {
+  invocation?: 'person' | 'custom-action';
   scope: CommandScope;
   workspaceID: string;
   rootID?: string;
@@ -125,7 +126,6 @@ function commandLabel(
 
 /** One action path for menus, shortcuts, toolbars and preview extensions. */
 export class CommandRegistry {
-  private customDepth = 0;
   private sources = new Map<string, CommandSource>();
   private listeners = new Set<() => void>();
   private revision = 0;
@@ -326,15 +326,9 @@ export class CommandRegistry {
     definition: CommandDefinition,
     context: CommandContext,
   ): Promise<void> {
-    if (definition.humanOnly && this.customDepth)
+    if (definition.humanOnly && context.invocation === 'custom-action')
       throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
-    const custom = definition.id.startsWith('custom.');
-    if (custom) this.customDepth++;
-    try {
-      await definition.run(context);
-    } finally {
-      if (custom) this.customDepth--;
-    }
+    await definition.run(definition.id.startsWith('custom.') ? { ...context, invocation: 'custom-action' } : context);
   }
 }
 

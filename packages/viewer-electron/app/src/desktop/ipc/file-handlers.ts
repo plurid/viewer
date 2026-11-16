@@ -4,12 +4,13 @@ import type { FileAccess } from '../files/file-access';
 import type { FileServices } from '../files/file-services';
 import type { FileInformationService } from '../files/file-information';
 import type { Watchers } from '../files/watchers';
-import { entry, list } from '../files/filesystem';
+import { list } from '../files/filesystem';
 import { macFiles } from '../native/macos-files';
 import { linkAddress } from '../../domain/previews/data/shortcuts';
 import { identifyBytes } from '../../domain/files/signatures';
 import { readHead } from '../models/file-guess';
 import path from 'node:path';
+import { folderEntry } from '../files/folder-history';
 
 type FileHandlers = Pick<
   ApiHandlers,
@@ -45,7 +46,7 @@ export function createFileHandlers(ports: FilePorts): FileHandlers {
     },
     stat: async ([file]) => {
       await ports.fileAccess.require([file]);
-      return entry(file);
+      return folderEntry(file);
     },
     inspect: ([file, content, ocr]) => ports.files.inspect(file, content, ocr),
     fileInformation: ([file]) => ports.information.get(file),

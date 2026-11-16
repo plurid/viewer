@@ -7,6 +7,7 @@ import {
   notarizeRetained,
   releaseGates,
   releaseSource,
+  releaseTagCommand,
   stapleApplicationRetained,
   versionNotes,
 } from '../tools/direct-release';
@@ -157,6 +158,15 @@ describe('release gates', () => {
     await expect(releaseSource(git(committed))).resolves.toEqual({ commit, build: '812' });
   });
 
+  it('prints the alpha release tag for the built commit', () => {
+    expect(releaseTagCommand('0.1.0', { commit, build: '580' })).toBe(
+      `git tag v0.1.0-580 ${commit}`,
+    );
+    expect(releaseTagCommand('0.1.0', { commit, build: '600' })).toBe(
+      `git tag v0.1.0-600 ${commit}`,
+    );
+  });
+
   it('refuses a dirty tree, untracked files included, and a shallow clone', async () => {
     await expect(
       releaseSource(
@@ -189,12 +199,13 @@ describe('release gates', () => {
     expect(() => releaseNotes('x'.repeat(4001))).toThrow('at most 4000');
   });
 
-  it('ships the committed 1.0.0 notes only once they are written', async () => {
-    const text = await readFile(path.resolve('release-notes/1.0.0.txt'), 'utf8');
+  it('reads the current release notes from the reused 0.1.0 file only once written', async () => {
+    const text = await readFile(path.resolve('release-notes/0.1.0.txt'), 'utf8');
     if (!text.split('\n').some((line) => line.trim() && !line.trim().startsWith('#')))
-      await expect(versionNotes('1.0.0')).rejects.toThrow('Write the release notes');
+      await expect(versionNotes('0.1.0')).rejects.toThrow('Write the release notes');
+    else await expect(versionNotes('0.1.0')).resolves.toBe(releaseNotes(text));
     await expect(versionNotes('0.0.0-generated')).rejects.toThrow(
-      'release-notes/0.0.0-generated.txt',
+      'Write the release notes in release-notes/0.0.0-generated.txt and commit them.',
     );
   });
 });
@@ -252,10 +263,10 @@ describe('the release feed', () => {
     const key = pair();
     const directory = await temporaryRoot('viewer-release-feed-');
     const feed = {
-      version: '1.0.0',
+      version: '0.1.0',
       build: 812,
       notes: 'Generated notes.',
-      url: 'https://updates.example.invalid/viewer/Viewer-1.0.0-812-arm64.dmg',
+      url: 'https://updates.example.invalid/viewer/Viewer-0.1.0-812-arm64.dmg',
       sha256: 'b'.repeat(64),
       minimumSystemVersion: '14.0',
     };

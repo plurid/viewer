@@ -485,6 +485,19 @@ select {
 .sidebar-group {
   margin-bottom: 18px;
 }
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+}
+.sidebar-section-header .sidebar-section-title {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-clear-recent {
+  color: var(--muted);
+  font-size: var(--text-label);
+  padding: var(--gap-tight) var(--gap-small);
+}
 .sidebar-section-title {
   width: 100%;
   display: flex;

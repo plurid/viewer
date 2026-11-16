@@ -4,6 +4,7 @@ import { reorder } from '../../domain/preferences/ui';
 import { getState, savePatch } from './core';
 import { changePreferences } from './preferences';
 import { folderVisitSync } from './folder-visits';
+import { knowFolder } from '../explorer/folder-availability';
 
 export function addFavorite(path: string, name: string, before?: string): void {
   if (
@@ -32,6 +33,7 @@ export function renameShortcut(path: string, name: string): void {
 }
 export function remember(path: string, options: { visit?: boolean } = {}): void {
   if (!remembersFolder(path)) return;
+  if (options.visit !== false) knowFolder(path);
   savePatch({
     recents: [path, ...getState().saved.recents.filter((item) => item !== path)].slice(0, 50),
     ...(options.visit !== false

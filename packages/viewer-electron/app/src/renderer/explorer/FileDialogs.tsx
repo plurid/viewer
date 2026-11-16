@@ -177,7 +177,7 @@ export function useFileDialogs(): {
       networkSharing: async (context) => {
         const file = context.selection[0];
         if (!file?.directory || context.selection.length !== 1) return;
-        const value = await readNetworkSharing();
+        const value = await readNetworkSharing([file.path]);
         if (value.status !== 'unavailable') setSharing(file.path);
       },
       openWith: setApplications,
@@ -194,6 +194,7 @@ export function useFileDialogs(): {
         )}
         {name?.kind === 'go-to' && (
           <GoToFolderDialog
+            initial={name.context.directory || getState().bootstrap.home}
             onClose={() => setName(undefined)}
             onOpen={(path) =>
               workspace.openPath(path, {

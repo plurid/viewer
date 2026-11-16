@@ -26,6 +26,7 @@ import { effectiveWindowUI } from '../../state/effective-ui';
 import { changeSetting } from '../../commands/window-commands/settings';
 import { sendWindowEvent } from '../../app/window-events';
 import { SharedMark } from '../../explorer/NetworkSharing';
+import { clearRecentFolders } from '../../state/places';
 
 const titles = { locations: 'Locations', favorites: 'Favorites', recents: 'Recent' };
 export const SIDEBAR_DRAG = 'application/x-viewer-sidebar';
@@ -60,6 +61,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
   // what this sidebar shows, rather than all saved state: each folder plane has one
   const favorites = useViewer((state) => state.saved.favorites);
   const recents = useViewer((state) => state.saved.recents);
+  const hasFolderHistory = useViewer((state) => Object.keys(state.saved.visits ?? {}).length > 0);
   const bootstrap = useViewer((state) => state.bootstrap);
   const workspaceID = useViewer((state) => activeWorkspace(state).id);
   const owner = useViewer((state) =>
@@ -269,27 +271,39 @@ export function Sidebar({ paneID }: { paneID?: string }) {
               void finishDrop(event, section).catch(report);
             }}
           >
-            <button
-              className="sidebar-section-title"
-              draggable
-              onDragStart={(event) => drag(event, section)}
-              aria-expanded={!sidebar.collapsed.includes(section)}
-              onContextMenu={(event) => context(section, event)}
-              onClick={() =>
-                changePreferences((ui) => ({
-                  ...ui,
-                  sidebar: {
-                    ...ui.sidebar,
-                    collapsed: ui.sidebar.collapsed.includes(section)
-                      ? ui.sidebar.collapsed.filter((item) => item !== section)
-                      : [...ui.sidebar.collapsed, section],
-                  },
-                }))
-              }
-            >
-              <Icon name={sidebar.collapsed.includes(section) ? 'right' : 'down'} size={12} />
-              <span>{titles[section]}</span>
-            </button>
+            <div className="sidebar-section-header">
+              <button
+                className="sidebar-section-title"
+                draggable
+                onDragStart={(event) => drag(event, section)}
+                aria-expanded={!sidebar.collapsed.includes(section)}
+                onContextMenu={(event) => context(section, event)}
+                onClick={() =>
+                  changePreferences((ui) => ({
+                    ...ui,
+                    sidebar: {
+                      ...ui.sidebar,
+                      collapsed: ui.sidebar.collapsed.includes(section)
+                        ? ui.sidebar.collapsed.filter((item) => item !== section)
+                        : [...ui.sidebar.collapsed, section],
+                    },
+                  }))
+                }
+              >
+                <Icon name={sidebar.collapsed.includes(section) ? 'right' : 'down'} size={12} />
+                <span>{titles[section]}</span>
+              </button>
+              {section === 'recents' && (recents.length > 0 || hasFolderHistory) && (
+                <button
+                  type="button"
+                  className="sidebar-clear-recent"
+                  aria-label="Clear recent folders"
+                  onClick={clearRecentFolders}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
             {!sidebar.collapsed.includes(section) && (
               <div>
                 {groups[section].map((item) => (

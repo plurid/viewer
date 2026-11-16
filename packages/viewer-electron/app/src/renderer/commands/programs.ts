@@ -1,5 +1,5 @@
 import { effectiveWindowSettings } from '../state/effective-ui';
-import { plainCommandID } from '../../domain/command-line/verbs';
+import { parseCommandLine, plainCommandID, resolveName } from '../../domain/command-line/verbs';
 import { withArguments } from '../../domain/command-line/lex';
 import type { CommandContext, CommandDefinition } from './registry';
 import { actionAvailable, actionInputs, terminalDirectory } from '../../domain/automation/actions';
@@ -50,6 +50,14 @@ export function programCommands(
   tools: ProgramTools = {},
 ): CommandDefinition[] {
   const { showServers, newBrowser, imageTools, optimizeFiles, pdfTools } = tools;
+  const customLine = async (text: string) => {
+    for (const step of parseCommandLine(text)) {
+      const name = resolveName(step.name);
+      if (name.kind === 'id' && name.id === 'network-sharing')
+        throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
+    }
+    return line ? line(text) : { ok: false, message: 'Command line unavailable.' };
+  };
   const folder = (context: CommandContext) => !!context.directory || !!context.folder;
   const target = (context: CommandContext) => {
     const captured = captureTarget(context, workspace);
@@ -363,7 +371,7 @@ export function programCommands(
                   await executeAction(child, captured, values);
                 } else {
                   const result = line
-                    ? await line(step.line)
+                    ? await customLine(step.line)
                     : { ok: false, message: 'Command line unavailable.' };
                   if (!result.ok) throw new Error(result.message || 'Command did not finish.');
                 }
@@ -382,7 +390,7 @@ export function programCommands(
               if (!plainCommandID(command)) {
                 // run from a menu or a key, a named sequence has no words: $1… are empty
                 const text = withArguments(command, [], executor.command ?? action.name);
-                const result = line ? await line(text) : { ok: false };
+                const result = line ? await customLine(text) : { ok: false };
                 if (!result.ok)
                   throw new Error(
                     `“${action.name}” stopped at “${command}”${result.message ? `: ${result.message}` : '.'}`,
@@ -390,7 +398,7 @@ export function programCommands(
                 continue;
               }
               const step = index ? (live?.() ?? context) : context;
-              if ((await invoke(command, step)) === false)
+              if ((await invoke(command, { ...step, invocation: 'custom-action' })) === false)
                 throw new Error(
                   `“${action.name}” stopped at “${command}”, which is not a command available here.`,
                 );
@@ -401,7 +409,7 @@ export function programCommands(
             if (executor.command.startsWith('custom.'))
               throw new Error('Custom actions cannot call another custom action.');
             // an unknown or unavailable command did nothing, silently
-            if ((await invoke(executor.command, context)) === false)
+            if ((await invoke(executor.command, { ...context, invocation: 'custom-action' })) === false)
               throw new Error(
                 `“${action.name}” runs “${executor.command}”, which is not a command available here.`,
               );

@@ -75,7 +75,7 @@ vi.mock('electron', () => ({
   app: { getName: () => 'Viewer' },
   session: {
     fromPartition: () => ({
-      getUserAgent: () => 'Mozilla/5.0 Viewer/1.0.0 Chrome/142.0.0.0 Electron/45.1.0',
+      getUserAgent: () => 'Mozilla/5.0 Viewer/0.1.0 Chrome/142.0.0.0 Electron/45.1.0',
       setUserAgent: fixture.userAgent,
       setPermissionRequestHandler: vi.fn(),
       setPermissionCheckHandler: vi.fn(),

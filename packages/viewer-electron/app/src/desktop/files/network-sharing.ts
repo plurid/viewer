@@ -1,160 +1,179 @@
 import { execFile } from 'node:child_process';
+import { realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type {
-  NetworkSharingSnapshot,
-  SharingServiceState,
-} from '../../domain/files/network-sharing';
+import type { NetworkShare, NetworkFolderSharing, NetworkSharingSnapshot, SharingInterface } from '../../domain/files/network-sharing';
+import { itemIdentity } from '../../domain/files/item-identity';
 import { stat } from './stats';
+import { macFiles } from '../native/macos-files';
 import { parseSharePoints } from './sharing-parser';
 
 export const networkSharingAvailable = process.platform === 'darwin' && !process.mas;
-type SharingRead = 'shares' | 'service' | 'host';
-export interface SharingOutput {
-  stdout: string;
-  stderr: string;
-  ok: boolean;
-}
+type SharingRead = 'shares' | 'service' | 'host' | 'interfaces';
+export interface SharingOutput { stdout: string; stderr: string; ok: boolean }
 export type SharingRunner = (read: SharingRead) => Promise<SharingOutput>;
 const reads: Record<SharingRead, { file: string; args: string[] }> = {
-  shares: { file: '/usr/sbin/sharing', args: ['-l'] },
+  shares: { file: '/usr/sbin/sharing', args: ['-l', '-f', 'json'] },
   service: { file: '/bin/launchctl', args: ['print', 'system/com.apple.smbd'] },
   host: { file: '/usr/sbin/scutil', args: ['--get', 'LocalHostName'] },
+  interfaces: { file: '/usr/sbin/networksetup', args: ['-listallhardwareports'] },
 };
-
-export const runSharingRead: SharingRunner = (read) =>
-  new Promise((resolve) => {
-    const { file, args } = reads[read];
-    execFile(
-      file,
-      args,
-      { timeout: 2000, maxBuffer: 1024 * 1024, encoding: 'utf8', shell: false },
-      (error, stdout, stderr) => resolve({ stdout, stderr, ok: !error }),
-    );
-  });
+export const runSharingRead: SharingRunner = (read) => new Promise((resolve) => {
+  const { file, args } = reads[read];
+  execFile(file, args, { timeout: 2000, maxBuffer: 1024 * 1024, encoding: 'utf8', shell: false },
+    (error, stdout, stderr) => resolve({ stdout, stderr, ok: !error }));
+});
 
 export function localIPv4(interfaces: ReturnType<typeof os.networkInterfaces>): string[] {
-  return [
-    ...new Set(
-      Object.values(interfaces).flatMap((addresses) =>
-        (addresses ?? [])
-          .filter(
-            (item) =>
-              item.family === 'IPv4' && !item.internal && !/^(?:0|127)\./.test(item.address),
-          )
-          .map((item) => item.address),
-      ),
-    ),
-  ].sort();
+  return [...new Set(Object.values(interfaces).flatMap((addresses) => (addresses ?? [])
+    .filter((item) => item.family === 'IPv4' && !item.internal && !/^(?:0|127)\./.test(item.address))
+    .map((item) => item.address)))].sort();
+}
+export function physicalAddresses(output: string, interfaces: ReturnType<typeof os.networkInterfaces>): SharingInterface[] {
+  const result: SharingInterface[] = [];
+  let kind: SharingInterface['kind'] | undefined;
+  for (const line of output.split('\n')) {
+    if (line.startsWith('Hardware Port:')) {
+      kind = /Wi-Fi|AirPort/i.test(line) ? 'Wi-Fi' : /Ethernet|LAN|Thunderbolt/i.test(line) ? 'Ethernet' : undefined;
+    } else if (kind && /^Device: en\d+$/.test(line.trim())) {
+      const name = line.slice(line.indexOf(':') + 1).trim();
+      for (const item of interfaces[name] ?? [])
+        if (!item.internal && (item.family === 'IPv4' || item.family === 'IPv6') &&
+            !/^(?:0|127)\./.test(item.address))
+          result.push({ name, kind, address: item.address, family: item.family });
+    }
+  }
+  return result.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
 }
 
+export type GuestACL = 'write' | 'none' | 'unknown';
+export interface SharingFolder {
+  directory: boolean;
+  mode: number;
+  identity: string;
+  canonical: string;
+}
+export async function sharingFolder(file: string): Promise<SharingFolder> {
+  const info = await stat(file);
+  return { directory: info.isDirectory(), mode: info.mode, identity: itemIdentity(info), canonical: await realpath(file) };
+}
 interface SharingPorts {
   available: boolean;
   run: SharingRunner;
-  folder: (file: string) => Promise<{ directory: boolean; mode: number }>;
+  folder: (file: string) => Promise<SharingFolder>;
   addresses: () => string[];
+  acl?: (file: string) => Promise<GuestACL>;
+  network?: () => ReturnType<typeof os.networkInterfaces>;
+  now?: () => number;
+  timeoutMs?: number;
 }
 const empty = (status: NetworkSharingSnapshot['status']): NetworkSharingSnapshot => ({
-  status,
-  shares: [],
-  service: 'unknown',
-  host: '',
-  ipv4: [],
+  status, shares: [], service: 'unknown', host: '', ipv4: [], interfaces: [],
 });
-
-/** Listings only read this cache. Explicit view openings and focus changes refresh it. */
+function limited<T>(work: Promise<T>, milliseconds: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([work, new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error('Sharing metadata timed out.'), { code: 'ETIMEDOUT' })), milliseconds);
+  })]).finally(() => clearTimeout(timer));
+}
 export class NetworkSharing {
   private value = empty('unknown');
   private pending?: Promise<NetworkSharingSnapshot>;
-  constructor(
-    private readonly ports: SharingPorts = {
-      available: networkSharingAvailable,
-      run: runSharingRead,
-      folder: async (file) => {
-        const info = await stat(file);
-        return { directory: info.isDirectory(), mode: info.mode };
-      },
-      addresses: () => localIPv4(os.networkInterfaces()),
+  private refreshed = -Infinity;
+  constructor(private readonly ports: SharingPorts = {
+    available: networkSharingAvailable, run: runSharingRead, folder: sharingFolder,
+    addresses: () => [], network: () => os.networkInterfaces(),
+    acl: async (file) => {
+      try { return (await macFiles().guestACL?.(file)) ?? 'unknown'; } catch { return 'unknown'; }
     },
-  ) {}
-
-  snapshot(): NetworkSharingSnapshot {
-    return this.value;
+  }) {}
+  snapshot(): NetworkSharingSnapshot { return this.value; }
+  refresh(force = false): Promise<NetworkSharingSnapshot> {
+    if (!this.ports.available) return Promise.resolve(this.value = empty('unavailable'));
+    if (this.pending) return this.pending;
+    const now = (this.ports.now ?? Date.now)();
+    if (!force && now - this.refreshed < 5000) return Promise.resolve(this.value);
+    this.refreshed = now;
+    return this.pending = this.read().finally(() => { this.pending = undefined; });
   }
-
-  refresh(): Promise<NetworkSharingSnapshot> {
-    if (!this.ports.available) return Promise.resolve((this.value = empty('unavailable')));
-    return (this.pending ??= this.read().finally(() => {
-      this.pending = undefined;
-    }));
+  private folder(file: string): Promise<SharingFolder> {
+    return limited(this.ports.folder(file), this.ports.timeoutMs ?? 700);
   }
-
+  private async access(file: string, mode: number, share: NetworkShare): Promise<NetworkShare> {
+    if (!share.guests || share.readOnly) return { ...share, guestWritable: false, guestWriteUnknown: false };
+    if (mode & 0o002) return { ...share, guestWritable: true, guestWriteUnknown: false };
+    let acl: GuestACL = 'unknown';
+    try { acl = await limited(this.ports.acl?.(file) ?? Promise.resolve('unknown'), this.ports.timeoutMs ?? 700); } catch { /* Unknown permissions must never reassure a guest share. */ }
+    return { ...share, guestWritable: acl === 'write', guestWriteUnknown: acl === 'unknown' };
+  }
   private async read(): Promise<NetworkSharingSnapshot> {
     try {
-      const [listing, service, host] = await Promise.all([
-        this.ports.run('shares'),
-        this.ports.run('service'),
-        this.ports.run('host'),
+      const [listing, service, host, hardware] = await Promise.all([
+        this.ports.run('shares'), this.ports.run('service'), this.ports.run('host'), this.ports.run('interfaces'),
       ]);
       const points = listing.ok ? parseSharePoints(listing.stdout) : undefined;
-      if (!points) return (this.value = empty('unknown'));
-      const shares = await Promise.all(
-        points.map(async (point) => {
-          try {
-            const file = path.normalize(point.path);
-            const info = await this.ports.folder(file);
-            if (info.directory)
-              return {
-                ...point,
-                path: file,
-                guestWritable: point.guests && !point.readOnly && !!(info.mode & 0o002),
-              };
-          } catch {
-            /* A stale share point is not a folder the person can share. */
-          }
-          return undefined;
-        }),
-      );
-      // A loaded on-demand job can accept SMB connections even while its process is idle.
-      const state: SharingServiceState = service.ok
-        ? 'running'
-        : /Could not find service/.test(service.stderr)
-          ? 'off'
-          : 'unknown';
+      if (!points) return this.value = empty('unknown');
+      const shares: NetworkShare[] = [];
+      for (const point of points) {
+        try {
+          const info = await this.folder(point.path);
+          if (!info.directory) continue;
+          shares.push(await this.access(info.canonical, info.mode, { ...point, path: info.canonical, identity: info.identity, guestWritable: false }));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+      }
       const name = host.ok ? host.stdout.trim() : '';
-      return (this.value = {
-        status: 'ready',
-        shares: shares.filter((share) => share !== undefined),
-        service: state,
+      const interfaces = this.ports.network && hardware.ok ? physicalAddresses(hardware.stdout, this.ports.network()) : undefined;
+      return this.value = {
+        status: 'ready', shares,
+        service: service.ok ? 'running' : /Could not find service/.test(service.stderr) ? 'off' : 'unknown',
         host: /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(name) ? name : '',
-        ipv4: this.ports.addresses(),
-      });
-    } catch {
-      return (this.value = empty('unknown'));
+        ipv4: interfaces ? interfaces.filter((item) => item.family === 'IPv4').map((item) => item.address) : this.ports.addresses(),
+        interfaces,
+      };
+    } catch { return this.value = empty('unknown'); }
+  }
+  async inspect(paths: readonly string[], force = false): Promise<NetworkSharingSnapshot> {
+    const snapshot = await this.refresh(force);
+    if (snapshot.status !== 'ready') return snapshot;
+    const reads = new Map<string, Promise<SharingFolder>>();
+    const folder = (file: string) => {
+      let read = reads.get(file);
+      if (!read) { read = this.folder(file); reads.set(file, read); }
+      return read;
+    };
+    const folders: NetworkFolderSharing[] = [];
+    for (const requested of paths) {
+      try {
+        const target = await folder(requested);
+        let current = target;
+        let ancestor = target.canonical;
+        const relative: string[] = [];
+        const shares: NetworkShare[] = [];
+        for (;;) {
+          for (const share of snapshot.shares) if (share.identity === current.identity) {
+            const access = await this.access(target.canonical, target.mode, share);
+            shares.push({ ...access, inside: relative.length > 0, relative: [...relative].reverse().join('/') });
+          }
+          const parent = path.dirname(ancestor);
+          if (parent === ancestor) break;
+          relative.push(path.basename(ancestor));
+          ancestor = parent;
+          current = await folder(parent);
+        }
+        folders.push({ path: requested, status: 'ready', shares });
+      } catch { folders.push({ path: requested, status: 'unknown', shares: [] }); }
     }
+    return { ...snapshot, folders };
   }
 }
-
 export function sharingSettingsURLs(major: number): string[] {
   return major >= 13
-    ? [
-        'x-apple.systempreferences:com.apple.Sharing-Settings.extension?Services_PersonalFileSharing',
-        'x-apple.systempreferences:com.apple.Sharing-Settings.extension',
-      ]
-    : [
-        'x-apple.systempreferences:com.apple.preferences.sharing?Services_PersonalFileSharing',
-        'x-apple.systempreferences:com.apple.preferences.sharing',
-      ];
+    ? ['x-apple.systempreferences:com.apple.Sharing-Settings.extension?Services_PersonalFileSharing', 'x-apple.systempreferences:com.apple.Sharing-Settings.extension']
+    : ['x-apple.systempreferences:com.apple.preferences.sharing?Services_PersonalFileSharing', 'x-apple.systempreferences:com.apple.preferences.sharing'];
 }
-
-export async function openSharingSettings(
-  major: number,
-  open: (url: string) => Promise<void>,
-): Promise<void> {
+export async function openSharingSettings(major: number, open: (url: string) => Promise<void>): Promise<void> {
   const [specific, general] = sharingSettingsURLs(major);
-  try {
-    await open(specific!);
-  } catch {
-    await open(general!);
-  }
+  try { await open(specific!); } catch { await open(general!); }
 }

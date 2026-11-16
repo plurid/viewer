@@ -1,3 +1,6 @@
+import { boundedText, boundedTextTail } from '../../domain/diagnostics/text';
+import { redactCredentials } from '../../domain/diagnostics/secrets';
+
 /** At most `limit` entries a minute from one source: a failure loop cannot flood the log. */
 export class DiagnosticBudget {
   private spent = new Map<string, number[]>();
@@ -18,22 +21,9 @@ export class DiagnosticBudget {
   }
 }
 
-const secretPatterns: readonly RegExp[] = [
-  // provider keys and tokens by their published prefixes
-  /\b(?:sk|pk|rk|ghp|gho|ghs|ghu|xox[abprs])[-_][A-Za-z0-9_-]{8,}/g,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,
-  // `apiKey: …`, `token=…`, `"password": "…"`
-  /\b((?:api[-_]?key|access[-_]?token|token|password|secret|authorization)["']?\s*[:=]\s*["']?)[^\s"',;&]+/gi,
-];
-
 /** Credentials a message may quote, replaced before it is kept. */
 export function redactSecrets(text: string): string {
-  let redacted = text;
-  for (const pattern of secretPatterns)
-    redacted = redacted.replace(pattern, (match, prefix?: string) =>
-      typeof prefix === 'string' ? prefix + '[redacted]' : '[redacted]',
-    );
-  return redacted;
+  return boundedText(text).split(/\n(?=[ \t]{0,16}at )/).map(redactCredentials).join('\n');
 }
 
 /** A value as a log line names it: strings, numbers and errors as they read; any other object by
@@ -50,7 +40,7 @@ function describe(value: unknown): string {
 
 /** What a console line says, bounded and with secrets redacted. */
 export function diagnosticText(values: readonly unknown[]): string {
-  return redactSecrets(values.map(describe).join(' ')).slice(0, 8000);
+  return boundedText(redactSecrets(values.map(describe).join(' ')));
 }
 
 /** Keeps writing to the console as before, and records a bounded share of what it writes. */
@@ -80,7 +70,7 @@ export class WorkerOutput {
   write(chunk: Buffer | string): void {
     const lines = (this.partial + chunk.toString()).split('\n');
     // a line without its end yet is held, bounded
-    this.partial = lines.pop()!.slice(-2000);
+    this.partial = boundedTextTail(lines.pop()!, 2000);
     for (const line of lines) {
       const text = line.trim();
       if (!text) continue;
@@ -92,7 +82,7 @@ export class WorkerOutput {
         ? ` (${this.skipped} earlier ${this.skipped === 1 ? 'line' : 'lines'} left out)`
         : '';
       this.skipped = 0;
-      this.record(`${this.name}${omitted}: ${redactSecrets(text).slice(0, 1000)}`);
+      this.record(`${this.name}${omitted}: ${boundedText(redactSecrets(text), 1000)}`);
     }
   }
 }
@@ -128,7 +118,7 @@ export class MainFailures {
     this.handling = true;
     const message = error instanceof Error ? error.message : String(error);
     void this.host
-      .ask(redactSecrets(message).slice(0, 500))
+      .ask(boundedText(redactSecrets(message), 500))
       .then((choice) => {
         if (choice === 'show-log') this.host.showLog();
       })

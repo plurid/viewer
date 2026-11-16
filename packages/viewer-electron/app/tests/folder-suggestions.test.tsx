@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { FileEntry, SavedState } from '../src/domain/contracts';
 import type { FolderVisitSave } from '../src/domain/files/folder-visit-changes';
-import type { CommandContext } from '../src/renderer/commands/registry';
+import type { CommandContext, CommandDefinition } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { WorkspaceContext } from '../src/renderer/workspace/context';
 import { CommandsContext } from '../src/renderer/commands/context';
@@ -20,10 +20,24 @@ import {
   receiveWorkspaces,
   appendRestoredWorkspaces,
 } from '../src/renderer/state/workspaces';
-import { addPane, historyNavigate, navigate } from '../src/renderer/state/panes';
+import {
+  addPane,
+  addContentPane,
+  historyNavigate,
+  navigate,
+  updatePane,
+} from '../src/renderer/state/panes';
+import { newWorkspace } from '../src/renderer/state/workspaces';
+import { resetKnownFolders } from '../src/renderer/explorer/folder-availability';
 import { remember, clearRecentFolders } from '../src/renderer/state/places';
 import { receiveFileChanges } from '../src/renderer/state/file-changes';
 import { flushState } from '../src/renderer/state/persistence';
+import { folderCheckTimeout, checkFolderCandidates } from '../src/domain/files/folder-checks';
+import { catalogCommands } from '../src/renderer/commands/window-commands/catalog';
+import { navigationCommands } from '../src/renderer/commands/window-commands/navigation';
+import { windowScopes } from '../src/renderer/commands/window-commands/scope';
+import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
+import { Sidebar } from '../src/renderer/ui/navigation/Sidebar';
 
 HTMLDialogElement.prototype.showModal ??= function () {
   this.setAttribute('open', '');
@@ -97,20 +111,43 @@ const field = () => screen.getByRole('combobox', { name: 'Folder path or name' }
 const options = () => screen.queryAllByRole('option');
 
 describe('recording folder views', () => {
-  it('counts initial folders, navigation and history without changing the recents order', () => {
+  it('counts deliberate opens, excluding launch, reload, Back, Forward and restored planes', async () => {
     const pane = activeWorkspace().panes[0]!;
-    expect(getState().saved.visits?.['/fixtures']?.count).toBe(1);
+    expect(getState().saved.visits?.['/fixtures']).toBeUndefined();
     navigate(pane.id, '/fixtures/Documents');
     navigate(pane.id, '/fixtures/Documents');
     navigate(pane.id, '/fixtures/Design');
     const recents = getState().saved.recents;
     historyNavigate(pane.id, -1);
     expect(getState().saved.recents).toEqual(recents);
-    expect(getState().saved.visits?.['/fixtures/Documents']).toEqual({ count: 2, last: now });
+    expect(getState().saved.visits?.['/fixtures/Documents']).toEqual({ count: 1, last: now });
     historyNavigate(pane.id, 1);
-    expect(getState().saved.visits?.['/fixtures/Design']?.count).toBe(2);
+    expect(getState().saved.visits?.['/fixtures/Design']?.count).toBe(1);
     addPane('/fixtures/Documents', 'folder', true);
-    expect(getState().saved.visits?.['/fixtures/Documents']?.count).toBe(3);
+    expect(getState().saved.visits?.['/fixtures/Documents']?.count).toBe(2);
+    const before = getState().saved.visits;
+    for (let index = 0; index < 5; index++)
+      initialize({ ...getState().bootstrap, state: getState().saved });
+    expect(getState().saved.visits).toEqual(before);
+    addContentPane({ ...activeWorkspace().panes[0]!, id: 'restored' } as Parameters<
+      typeof addContentPane
+    >[0]);
+    await newWorkspace('Another');
+    expect(getState().saved.visits).toEqual(before);
+  });
+
+  it('skips repeated history entries so Back and Forward cannot stick', () => {
+    const pane = activeWorkspace().panes[0]!;
+    updatePane(pane.id, {
+      path: '/fixtures/A',
+      history: ['/fixtures/X', '/fixtures/A', '/fixtures/A'],
+      historyIndex: 2,
+    });
+    historyNavigate(pane.id, -1);
+    expect(activeWorkspace().panes[0]).toMatchObject({ path: '/fixtures/X', historyIndex: 0 });
+    historyNavigate(pane.id, 1);
+    expect(activeWorkspace().panes[0]).toMatchObject({ path: '/fixtures/A', historyIndex: 1 });
+    expect(getState().saved.visits ?? {}).toEqual({});
   });
 
   it('retains the existing recents bound and exclusions and never counts preview files', () => {
@@ -179,17 +216,55 @@ describe('recording folder views', () => {
     await flushing;
     expect(save.mock.calls.at(-1)?.[0].recents).toEqual(['/fixtures/Second', '/fixtures/First']);
   });
+
+  it('offers recents as Places and Clear recent folders in the palette and Recent section', async () => {
+    remember('/fixtures/Documents');
+    const scopes = windowScopes({
+      ready: true,
+      workspace: { openPath: open },
+    } as unknown as WindowActions);
+    const places = catalogCommands(scopes);
+    expect(places.find((command) => command.id === 'location:/fixtures/Documents')).toMatchObject({
+      group: 'Places',
+      label: 'Documents',
+    });
+    const clearing = navigationCommands(scopes).find(
+      (command) => command.id === 'clear-recent-folders',
+    )!;
+    const context = { scope: 'window', selection: [] } as unknown as CommandContext;
+    expect(clearing.when?.(context)).toBe(true);
+    expect(clearing.when?.({ ...context, scope: 'sidebar', sidebar: { section: 'recents' } })).toBe(
+      true,
+    );
+    updatePane(getState().activePane, { sidebar: { visible: true, width: 210 } });
+    render(
+      <WorkspaceContext.Provider value={{ openPath: open } as unknown as WorkspaceController}>
+        <Sidebar paneID={getState().activePane} />
+      </WorkspaceContext.Provider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+    expect(getState().saved.recents).toEqual([]);
+    expect(getState().saved.visits).toEqual({});
+    remember('/fixtures/Documents');
+    clearing.run(context);
+    expect(getState().saved.visits).toEqual({});
+  });
 });
 
 describe('Go to folder suggestions', () => {
-  it('starts empty, ranks daily folders, and hides unavailable folders without forgetting them', async () => {
+  it('starts with the selected current path and shows top folders without claiming a choice', async () => {
     history();
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
-    expect((field() as HTMLInputElement).value).toBe('');
+    expect((field() as HTMLInputElement).value).toBe('/fixtures');
+    expect((field() as HTMLInputElement).selectionStart).toBe(0);
+    expect((field() as HTMLInputElement).selectionEnd).toBe('/fixtures'.length);
     await waitFor(() => expect(options()).toHaveLength(2));
     expect(options()[0]?.textContent).toContain('Drafts');
     expect(document.activeElement).toBe(field());
-    expect(field().getAttribute('aria-activedescendant')).toBe(options()[0]?.id);
+    expect(field().getAttribute('aria-activedescendant')).toBeNull();
+    expect(options().every((option) => option.getAttribute('aria-selected') === 'false')).toBe(
+      true,
+    );
     expect(screen.getByRole('listbox', { name: 'Folder suggestions' })).toBeTruthy();
     expect(getState().saved.visits?.['/Volumes/Offline/Design']).toBeDefined();
   });
@@ -210,6 +285,7 @@ describe('Go to folder suggestions', () => {
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
     await waitFor(() => expect(options()).toHaveLength(2));
     fireEvent.keyDown(field(), { key: 'ArrowDown' });
+    fireEvent.keyDown(field(), { key: 'ArrowDown' });
     expect(field().getAttribute('aria-activedescendant')).toBe(options()[1]?.id);
     expect(document.activeElement).toBe(field());
     fireEvent.keyDown(field(), { key: 'Enter' });
@@ -217,7 +293,7 @@ describe('Go to folder suggestions', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it('prefers a typed existing path, including home expansion, over the highlighted suggestion', async () => {
+  it('prefers a typed existing path, including home expansion, without an arrowed choice', async () => {
     history();
     available.add('/fixtures/Design');
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
@@ -235,12 +311,50 @@ describe('Go to folder suggestions', () => {
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
     await waitFor(() => expect(options()).toHaveLength(2));
     available.delete('/fixtures/Design/Drafts');
+    fireEvent.keyDown(field(), { key: 'ArrowDown' });
     fireEvent.keyDown(field(), { key: 'Enter' });
     expect((await screen.findByRole('alert')).textContent).toBe('Folder unavailable.');
     expect(document.activeElement).toBe(field());
     expect((field() as HTMLInputElement).readOnly).toBe(false);
     expect(open).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])(
+    'opens the arrowed suggestion even if the typed path is a folder: %s',
+    async (directory) => {
+      history();
+      available.add('/fixtures/Design');
+      if (!directory)
+        stat.mockImplementation(async (path) => entry(path, path !== '/fixtures/Design'));
+      render(<GoToFolderDialog onOpen={open} onClose={close} />);
+      fireEvent.change(field(), { target: { value: '/fixtures/Design' } });
+      await waitFor(() => expect(options()).toHaveLength(1));
+      fireEvent.keyDown(field(), { key: 'ArrowDown' });
+      fireEvent.keyDown(field(), { key: 'Enter' });
+      await waitFor(() => expect(open).toHaveBeenCalledWith('/fixtures/Design/Drafts'));
+    },
+  );
+
+  it('keeps a mistyped path error instead of opening a near-match folder', async () => {
+    history();
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.change(field(), { target: { value: '/fixtures/Documetns' } });
+    await waitFor(() => expect(options()).toHaveLength(1));
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect((await screen.findByRole('alert')).textContent).toBe('Folder unavailable.');
+    expect(open).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('waits for an immediate fragment submission and opens its result without a schema error', async () => {
+    history();
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.change(field(), { target: { value: 'documetns' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await waitFor(() => expect(open).toHaveBeenCalledWith('/fixtures/Documents'));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(stat.mock.calls.every(([path]) => path.startsWith('/'))).toBe(true);
   });
 
   it('clears counts and recents in the dialog and retains input focus', async () => {
@@ -284,6 +398,67 @@ describe('Go to folder suggestions', () => {
 });
 
 describe('bounded existence checks', () => {
+  it('publishes available folders before a slow check times out, keeping outstanding checks bounded', async () => {
+    vi.useFakeTimers();
+    try {
+      const updates: string[][] = [];
+      let active = 0;
+      let maximum = 0;
+      const check = vi.fn(async (path: string) => {
+        maximum = Math.max(maximum, ++active);
+        if (path === '/fixtures/slow') await new Promise((resolve) => setTimeout(resolve, 3000));
+        active--;
+        return { directory: true };
+      });
+      const done = checkFolderCandidates(
+        ['/fixtures/slow', ...Array.from({ length: 30 }, (_, index) => `/fixtures/${index}`)],
+        check,
+        new AbortController().signal,
+        { onUpdate: (paths) => updates.push(paths) },
+      );
+      await vi.advanceTimersByTimeAsync(folderCheckTimeout - 1);
+      expect(updates.at(-1)).toHaveLength(8);
+      expect(updates.at(-1)).not.toContain('/fixtures/slow');
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await done).toHaveLength(8);
+      expect(maximum).toBeLessThanOrEqual(4);
+      expect(check.mock.calls.length).toBeLessThanOrEqual(folderSuggestionChecks);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('checks an absent volume once and continues past 45 unavailable folders to fill the list', async () => {
+    const paths = [
+      ...Array.from({ length: 45 }, (_, index) => `/Volumes/Offline/${index}`),
+      ...Array.from({ length: 455 }, (_, index) => `/fixtures/${index}`),
+    ];
+    const check = vi.fn(async (path: string) => {
+      if (path === '/Volumes/Offline') throw new Error('Volume is not mounted.');
+      return { directory: true };
+    });
+    expect(await existingFolders(paths, check, new AbortController().signal)).toEqual(
+      paths.slice(45, 53),
+    );
+    expect(check.mock.calls.filter(([path]) => path.startsWith('/Volumes/Offline'))).toEqual([
+      ['/Volumes/Offline'],
+    ]);
+    expect(check.mock.calls.length).toBeLessThanOrEqual(folderSuggestionChecks);
+  });
+
+  it('keeps an open list and its checks stable across an equal saved history snapshot', async () => {
+    history();
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    await waitFor(() => expect(options()).toHaveLength(2));
+    await waitFor(() => expect(screen.getByRole('status').textContent).not.toContain('Checking'));
+    const calls = stat.mock.calls.length;
+    await act(async () => {
+      await flushState(false);
+    });
+    expect(options()).toHaveLength(2);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(stat).toHaveBeenCalledTimes(calls);
+  });
   it('checks at most 40 paths, four at a time, and rejects files', async () => {
     let running = 0;
     let maximum = 0;
@@ -296,9 +471,9 @@ describe('bounded existence checks', () => {
     });
     const paths = Array.from({ length: 100 }, (_, index) => `/fixtures/${index}`);
     const result = await existingFolders(paths, check, new AbortController().signal);
-    expect(check).toHaveBeenCalledTimes(folderSuggestionChecks);
+    expect(check.mock.calls.length).toBeLessThanOrEqual(folderSuggestionChecks);
     expect(maximum).toBe(4);
-    expect(result).toEqual(paths.slice(1, 40));
+    expect(result).toEqual(paths.slice(1, 9));
   });
 
   it('stops scheduling checks when the query is cancelled', async () => {
@@ -313,7 +488,7 @@ describe('bounded existence checks', () => {
 });
 
 describe('palette folder results', () => {
-  function palette(command = true) {
+  function palette(command = true, extra: CommandDefinition[] = []) {
     const registry = new CommandRegistry();
     const context = (): CommandContext => ({
       scope: 'window',
@@ -326,8 +501,9 @@ describe('palette folder results', () => {
     });
     registry.register('window', {
       context,
-      definitions: () =>
-        command
+      definitions: () => [
+        ...extra,
+        ...(command
           ? [
               {
                 id: 'document-action',
@@ -337,7 +513,8 @@ describe('palette folder results', () => {
                 run: vi.fn(),
               },
             ]
-          : [],
+          : []),
+      ],
     });
     const workspace = { openPath: open } as unknown as WorkspaceController;
     return render(
@@ -359,6 +536,62 @@ describe('palette folder results', () => {
       ),
     });
   }
+  it('keeps Documents above Duplicate document when habit results arrive, including Return', async () => {
+    manyFolders();
+    const documents = '/fixtures/Documents';
+    available.add(documents);
+    savePatch({ visits: { ...getState().saved.visits, [documents]: { count: 40, last: now } } });
+    const choose = vi.fn();
+    const duplicate = vi.fn();
+    palette(false, [
+      {
+        id: `location:${documents}`,
+        label: 'Documents',
+        detail: documents,
+        group: 'Places',
+        when: () => true,
+        run: choose,
+      },
+      {
+        id: 'duplicate',
+        label: 'Duplicate document',
+        group: 'Files',
+        when: () => true,
+        run: duplicate,
+      },
+    ]);
+    const search = screen.getByRole('combobox', { name: 'Search commands' });
+    fireEvent.change(search, { target: { value: 'docu' } });
+    expect(options()[0]?.textContent).toContain('Documents');
+    const active = search.getAttribute('aria-activedescendant');
+    await waitFor(() => expect(options()).toHaveLength(6));
+    expect(options()[0]?.textContent).toContain('Documents');
+    expect(search.getAttribute('aria-activedescendant')).toBe(active);
+    fireEvent.keyDown(search, { key: 'Enter' });
+    await waitFor(() => expect(choose).toHaveBeenCalledOnce());
+    expect(duplicate).not.toHaveBeenCalled();
+  });
+  it('retains a favorite ranked fifth through eighth in history when only four habits fit', async () => {
+    manyFolders();
+    const favorite = '/fixtures/Documents 6';
+    palette(true, [
+      {
+        id: `location:${favorite}`,
+        label: 'Documents favorite',
+        detail: favorite,
+        group: 'Places',
+        when: () => true,
+        run: vi.fn(),
+      },
+    ]);
+    const search = screen.getByRole('combobox', { name: 'Search commands' });
+    fireEvent.change(search, { target: { value: 'documents' } });
+    await waitFor(() => expect(options()).toHaveLength(6));
+    expect(
+      options().filter((option) => option.textContent?.includes('Documents favorite')),
+    ).toHaveLength(1);
+    expect(options()[0]?.textContent).toContain('Documents');
+  });
   it('offers ranked fragments after commands, capped at four, and opens the keyboard choice', async () => {
     manyFolders();
     palette();
@@ -394,5 +627,27 @@ describe('palette folder results', () => {
     fireEvent.keyDown(search, { key: 'Enter' });
     await waitFor(() => expect(getState().notice).toBe('This folder is no longer available.'));
     expect(open).not.toHaveBeenCalled();
+  });
+  it('does not check history for an ordinary command query with no meaningful folder matches', async () => {
+    manyFolders();
+    palette(false, [{ id: 'copy', label: 'Copy', group: 'Files', when: () => true, run: vi.fn() }]);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search commands' }), {
+      target: { value: 'copy' },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    expect(options()).toHaveLength(1);
+    expect(stat).not.toHaveBeenCalled();
+  });
+  it('answers z immediately with ten literal ordered matches and no per-query stat calls', () => {
+    manyFolders();
+    resetKnownFolders([...available]);
+    palette(false);
+    stat.mockClear();
+    const search = screen.getByRole('combobox', { name: 'Search commands' });
+    fireEvent.change(search, { target: { value: 'z documents' } });
+    expect(options()).toHaveLength(10);
+    expect(stat).not.toHaveBeenCalled();
+    fireEvent.change(search, { target: { value: 'z documetns' } });
+    expect(options()).toHaveLength(0);
   });
 });

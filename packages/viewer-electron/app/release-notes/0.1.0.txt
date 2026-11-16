@@ -1,0 +1,4 @@
+# Rewrite these notes for each release of Viewer 0.1.0, then commit them before building.
+# Lines starting with # are guidance and left out of the published feed.
+# Earlier notes stay in Git history and in each published feed.
+# Write a few short lines below for Check for Updates. Empty notes stop the release.

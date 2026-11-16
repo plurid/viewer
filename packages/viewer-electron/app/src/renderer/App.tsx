@@ -542,7 +542,12 @@ function AppWindow() {
       } else if (event.type === 'settings') receiveSettings(event.snapshot);
       else if (event.type === 'session-keys') receiveSessionKeys(event.session);
       else if (event.type === 'workspaces')
-        receiveWorkspaces(event.state, event.visitSaveID, event.folderHistoryRevision);
+        receiveWorkspaces(
+          event.state,
+          event.visitSaveID,
+          event.folderHistoryRevision,
+          event.folderClearRevision,
+        );
       else if (event.type === 'launch') void handleLaunch(event.request).catch(report);
       else if (event.type === 'file-changes') {
         receiveFileChanges(event.changes, event.folderHistoryRevision);

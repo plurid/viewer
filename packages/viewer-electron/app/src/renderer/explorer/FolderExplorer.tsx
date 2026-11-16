@@ -59,7 +59,6 @@ import { SelectionSize } from './sizes';
 import { useFileDialogs } from './FileDialogs';
 import { FileTable } from './FileTable';
 import { useColumnNavigation } from './column-navigation';
-import { rememberFolderVisit } from '../state/places';
 import { FILE_DRAG, rememberDrag, useFileDrop } from './file-drop';
 import { folderDragNavigation } from './folder-drag';
 import { blankFileSpace, useFileKeyboard, useFileSelection, type FileModifiers } from './selection';
@@ -221,7 +220,6 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     entries,
     pane?.mode === 'columns' && !listing.loading && !listing.unavailable,
     selecting,
-    rememberFolderVisit,
   );
   const chooseColumn = columns.choose;
   const dragNavigation = useMemo(() => folderDragNavigation(id), [id]);

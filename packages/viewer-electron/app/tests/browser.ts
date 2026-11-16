@@ -20,6 +20,7 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  folderHistory: () => invoke('folderHistory'),
   networkSharing: (request) => invoke('networkSharing', request),
   license: (request) => invoke('license', request),
   dialog: async () => ({ prompt: null }),
@@ -230,7 +231,7 @@ const api: ViewerAPI = {
   officeWarm: () => invoke('officeWarm'),
   officeImage: (id, part, requestID) => invoke('officeImage', id, part, requestID),
   printPDF: (id, password) => invoke('printPDF', id, password),
-  save: (state) => invoke('save', state),
+  save: (state, visitSave) => invoke('save', state, visitSave),
   flushed: (token, result) => invoke('flushed', token, result),
   clipboardWrite: (paths, cut) => invoke('clipboardWrite', paths, cut),
   clipboardWriteText: (text) => invoke('clipboardWriteText', text),

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { boundedText } from '../../domain/diagnostics/text';
+import { redactSecrets } from './failures';
 
 export type DiagnosticKind =
   | 'main-exception'
@@ -26,7 +28,7 @@ export class DiagnosticLog {
   ) {}
   record(kind: DiagnosticKind, detail: string): Promise<void> {
     const line =
-      JSON.stringify({ at: new Date().toISOString(), kind, detail: detail.slice(0, 8000) }) + '\n';
+      JSON.stringify({ at: new Date().toISOString(), kind, detail: boundedText(redactSecrets(detail)) }) + '\n';
     this.queue = this.queue.then(() => this.append(line)).catch(() => {});
     return this.queue;
   }
