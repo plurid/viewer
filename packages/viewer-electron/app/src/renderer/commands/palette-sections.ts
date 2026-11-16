@@ -17,6 +17,19 @@ export interface PaletteView {
   headings: ReadonlyMap<string, string>;
 }
 
+/** History follows commands, with the same four/eight budget as matching settings. */
+export function withFrequentFolders(
+  view: PaletteView,
+  folders: readonly ResolvedCommand[],
+): PaletteView {
+  const paths = new Set(folders.map((folder) => folder.detail));
+  const commands = view.rows.filter((row) => row.group !== 'Places' || !paths.has(row.detail));
+  const shown = folders.slice(0, commands.length ? 4 : 8);
+  const headings = new Map(view.headings);
+  if (shown[0]) headings.set(shown[0].id, 'Frequent folders');
+  return { rows: [...commands, ...shown], headings };
+}
+
 /** An explicitly named action wins over interpreting its remaining words as an argument. */
 export function paletteSuggestions(
   commands: readonly ResolvedCommand[],

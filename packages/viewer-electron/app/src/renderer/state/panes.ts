@@ -45,7 +45,7 @@ import {
 } from './core';
 import { closedPanes, retainedPaneIDs } from './persistence';
 import { trimNoteSessions } from '../notes/sessions';
-import { remember } from './places';
+import { remember, rememberFolderVisit } from './places';
 import { folderPresentation, updateFolderPresentation } from './presentation';
 
 export const folderPane = (path: string, sidebar?: PaneSidebar): FolderPane => ({
@@ -195,12 +195,14 @@ export function historyNavigate(id: string, delta: number): void {
   if (pane?.type !== 'folder') return;
   const index = pane.historyIndex + delta;
   const target = index >= 0 ? pane.history[index] : undefined;
-  if (target !== undefined)
+  if (target !== undefined && target !== pane.path) {
     updatePane(id, {
       path: target,
       historyIndex: index,
       ...panePresentation(folderPresentation(target)),
     });
+    rememberFolderVisit(target);
+  }
 }
 export function addPane(
   path: string,
@@ -227,7 +229,7 @@ export function addPane(
     panes: [...space.panes, pane],
     roots: root ? [...space.roots, pane.id] : space.roots,
   }));
-  if (options?.remember !== false) remember(path);
+  if (options?.remember !== false) remember(path, { visit: type === 'folder' });
   return pane;
 }
 
@@ -262,6 +264,7 @@ export function addContentPane(
     roots: root ? [...space.roots, pane.id] : space.roots,
     activePane: pane.id,
   }));
+  if (pane.type === 'folder') rememberFolderVisit(pane.path);
   setActivePane(pane.id);
 }
 

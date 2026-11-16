@@ -429,7 +429,7 @@ export interface SavedState {
   profile?: { id: string; previous: Record<string, JSONValue> };
   /** Explicit presentation choices restored only in their owning workspace window. */
   windowProfiles?: Record<string, { id: string; previous: Record<string, JSONValue> }>;
-  /** Folders' visits for `z` in the palette: how many, and the last. */
+  /** Local folder history for Go to folder and the palette, kept with recents. */
   visits?: Record<string, { count: number; last: number }>;
   /** Lines run from the command line, the latest first. */
   lineHistory?: string[];

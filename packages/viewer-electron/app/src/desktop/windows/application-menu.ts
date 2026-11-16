@@ -21,6 +21,7 @@ export function installApplicationMenu(
   diagnosticFile: string,
   quit: (byShortcut: boolean) => void,
   licenseVisible = false,
+  copyReport: () => void = () => {},
 ): void {
   const quitItem: MenuItemConstructorOptions = {
     label: 'Quit Viewer',
@@ -392,6 +393,7 @@ export function installApplicationMenu(
             click: () => void shell.openExternal(guide('reference/shortcuts.md')),
           },
           { type: 'separator' },
+          { label: 'Copy Report…', click: copyReport },
           {
             label: 'Report an Issue…',
             click: () => void shell.openExternal('https://github.com/plurid/viewer/issues'),

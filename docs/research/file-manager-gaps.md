@@ -7,13 +7,10 @@ behavior is in the [capability reference](../reference/capabilities.md).
 
 ## Small additions
 
-Each is about a day of work, and each is something a person meets in the first hour. Start with the
-first two.
+Each is about a day of work, and each is something a person meets in the first hour.
 
 | Feature                        | Viewer today                                                                                                                              | Proposal                                                                                                                                                          |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Go to a folder by habit        | Viewer keeps the last 50 folders, newest first, and the sidebar shows 8. Nothing counts how often a folder is used.                       | Rank visited folders by how often and how recently they were opened, and match part of a name in **Go to folder…** and ⌘K.                                        |
-| A report that is safe to share | **Help → Show Diagnostic Log** reveals a local log, and **Report an Issue…** opens GitHub. Names and paths have to be edited out by hand. | **Copy report**: Markdown with the Viewer version, macOS, hardware and recent failures, with the user name, home folder, computer name and network names removed. |
 | Recent files                   | Only folders are remembered.                                                                                                              | A **Recent files** list of what was opened or saved in Viewer, kept on this Mac.                                                                                  |
 | Change the default app         | **Open With…** marks the default app and cannot change it.                                                                                | **Always open with** for the file's kind, where macOS allows it.                                                                                                  |
 | Timed lyrics                   | A video reads the subtitle file beside it. A song ignores the `.lrc` file beside it.                                                      | Read `.lrc` as timed lines and show the current line while the song plays.                                                                                        |

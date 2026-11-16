@@ -22,6 +22,7 @@ export async function dispatchApplicationCommand<Window extends MenuWindow>(
     acknowledgements(): Promise<void>;
     focusedWindow(): Window | null;
     settingsWindow(): Window | null;
+    reportWindow?(): Window | undefined;
     workspaceCommand(command: string): void;
   },
 ): Promise<void> {
@@ -32,7 +33,7 @@ export async function dispatchApplicationCommand<Window extends MenuWindow>(
   if (command === 'check-for-updates') return host.checkForUpdates();
   if (command === 'acknowledgements') return host.acknowledgements();
   const focused = host.focusedWindow();
-  if (focused && focused === host.settingsWindow()) {
+  if (focused && (focused === host.settingsWindow() || focused === host.reportWindow?.())) {
     const action = settingsEdits[command];
     if (action) focused.webContents[action]();
     return;

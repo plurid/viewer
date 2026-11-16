@@ -15,6 +15,7 @@ its key beside it. A key belongs to one command only.
 | **Open folder…**                                  | **⇧⌘O**                               | `choose-folder`                             |
 | **New folder plane**                              | **⇧⌘N**                               | `new-root-folder`                           |
 | **Go to folder…**                                 | **⌘L**, also **⇧⌘G**                  | `go-to`                                     |
+| Choose a suggested folder in **Go to folder…**    | **↑** / **↓**, then **Return**        |                                             |
 | **Open** the selection                            | **⌘O**, also **⌘↓** or **⌃↓**         | `open-selection`                            |
 | **Parent folder**                                 | **⌘↑**                                | `parent`                                    |
 | **Back** / **Forward**                            | **⌘[** / **⌘]**, also **⌥←** / **⌥→** | `back` / `forward`                          |

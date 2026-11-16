@@ -1,7 +1,8 @@
 import type { FileEntry, FolderPane, OperationJob, SidebarSection } from '../../domain/contracts';
 import type { ClipboardContent } from '../../domain/files/clipboard';
 import type { IconName } from '../ui/Icon';
-import { typoScore } from '../../domain/search/approximate';
+import { normalize, scoreLabel } from '../../domain/search/name-score';
+export { normalize } from '../../domain/search/name-score';
 
 export type CommandScope = 'window' | 'folder' | 'files' | 'preview' | 'sidebar' | 'workspace';
 export interface CommandContext {
@@ -320,25 +321,6 @@ export class CommandRegistry {
   }
 }
 
-export const normalize = (value: string) =>
-  value
-    .toLocaleLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-function scoreLabel(label: string, query: string): number {
-  if (label.startsWith(query)) return 1000;
-  if (label.split(/[\s…./-]+/).some((word) => word.startsWith(query))) return 900;
-  const index = label.indexOf(query);
-  if (index >= 0) return 800 - index;
-  let position = -1;
-  let first = -1;
-  for (const char of query) {
-    position = label.indexOf(char, position + 1);
-    if (position < 0) return typoScore(label, query);
-    if (first < 0) first = position;
-  }
-  return 100 - Math.min(90, position - first - query.length + 1);
-}
 /** Rank lightweight filenames before constructing at most 150 executable commands. */
 export function rankFiles(entries: readonly FileEntry[], query: string, limit = 150): FileEntry[] {
   const needle = normalize(query.trim());

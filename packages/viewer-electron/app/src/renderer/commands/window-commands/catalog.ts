@@ -62,11 +62,9 @@ export function catalogCommands({
       when: (context) => windowScope(context) && actions.ready,
       run: () => actions.workspace.openTaskArea(area.id),
     });
-  const destinations = [
-    ...state.saved.favorites,
-    ...state.bootstrap.locations,
-    ...state.saved.recents.map((path) => ({ path, name: baseName(path) })),
-  ].filter((item, index, all) => all.findIndex((other) => other.path === item.path) === index);
+  const destinations = [...state.saved.favorites, ...state.bootstrap.locations].filter(
+    (item, index, all) => all.findIndex((other) => other.path === item.path) === index,
+  );
   for (const item of destinations)
     commands.push({
       id: `location:${item.path}`,

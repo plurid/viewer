@@ -1,5 +1,5 @@
 // Sidebar favorites, shortcut labels and recent folders.
-import { recordVisit } from '../commands/smart-palette';
+import { recordVisit, remembersFolder } from '../../domain/files/folder-visits';
 import { reorder } from '../../domain/preferences/ui';
 import { getState, savePatch } from './core';
 import { changePreferences } from './preferences';
@@ -29,12 +29,21 @@ export function renameShortcut(path: string, name: string): void {
     sidebar: { ...ui.sidebar, labels: { ...ui.sidebar.labels, [path]: name.trim() } },
   }));
 }
-export function remember(path: string): void {
+export function remember(path: string, options: { visit?: boolean } = {}): void {
+  if (!remembersFolder(path)) return;
   savePatch({
     recents: [path, ...getState().saved.recents.filter((item) => item !== path)].slice(0, 50),
-    // frecency for `z` in the palette (commands/smart-palette.ts)
-    visits: recordVisit(getState().saved.visits ?? {}, path, Date.now()),
+    ...(options.visit !== false
+      ? { visits: recordVisit(getState().saved.visits ?? {}, path, Date.now()) }
+      : {}),
   });
+}
+export function rememberFolderVisit(path: string): void {
+  if (!remembersFolder(path)) return;
+  savePatch({ visits: recordVisit(getState().saved.visits ?? {}, path, Date.now()) });
+}
+export function clearRecentFolders(): void {
+  savePatch({ recents: [], visits: {} });
 }
 export function favorite(path: string, name: string): void {
   if (getState().saved.favorites.some((item) => item.path === path)) removeFavorite(path);

@@ -5,6 +5,7 @@ import type { FolderActions } from '../commands/folder';
 import { DestinationDialog } from '../commands/DestinationDialog';
 import { FileInformation } from './FileInformation';
 import { Dialog, NameDialog } from '../ui/primitives';
+import { GoToFolderDialog } from './GoToFolderDialog';
 import { getState, report, settledJob } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { OpenWithDialog } from '../ui/navigation/OpenWithDialog';
@@ -178,7 +179,18 @@ export function useFileDialogs(): {
         {applications && (
           <OpenWithDialog paths={applicationPaths} onClose={() => setApplications(undefined)} />
         )}
-        {name && (
+        {name?.kind === 'go-to' && (
+          <GoToFolderDialog
+            onClose={() => setName(undefined)}
+            onOpen={(path) =>
+              workspace.openPath(path, {
+                paneID: name.context.paneID,
+                workspaceID: name.context.workspaceID,
+              })
+            }
+          />
+        )}
+        {name && name.kind !== 'go-to' && (
           <NameDialog
             title={
               name.kind === 'rename'
@@ -191,22 +203,20 @@ export function useFileDialogs(): {
                       ? `New folder with ${name.context.selection.length} ${name.context.selection.length === 1 ? 'item' : 'items'}`
                       : 'Go to folder'
             }
-            label={name.kind === 'go-to' ? 'Folder path' : 'Name'}
+            label="Name"
             initial={
               name.kind === 'rename'
                 ? name.context.selection[0]?.name
-                : name.kind === 'go-to'
-                  ? name.context.directory
-                  : name.kind === 'group'
-                    ? 'New Folder With Items'
-                    : name.kind === 'mkfile'
-                      ? untitledFileName(
-                          effectiveWindowSettings(getState()).browsing.newFileExtension,
-                        )
-                      : ''
+                : name.kind === 'group'
+                  ? 'New Folder With Items'
+                  : name.kind === 'mkfile'
+                    ? untitledFileName(
+                        effectiveWindowSettings(getState()).browsing.newFileExtension,
+                      )
+                    : ''
             }
-            maxLength={name.kind === 'go-to' ? 32768 : 255}
-            action={name.kind === 'rename' ? 'Rename' : name.kind === 'go-to' ? 'Go' : 'Create'}
+            maxLength={255}
+            action={name.kind === 'rename' ? 'Rename' : 'Create'}
             secondaryAction={
               name.kind === 'rename'
                 ? (busy) => (
@@ -220,19 +230,8 @@ export function useFileDialogs(): {
             }
             onClose={() => setName(undefined)}
             onSubmit={async (value) => {
-              if (name.kind === 'go-to') {
-                const resolved =
-                  value === '~' || value.startsWith('~/')
-                    ? getState().bootstrap.home + value.slice(1)
-                    : value;
-                const entry = await window.viewer.stat(resolved);
-                if (!entry.directory) throw new Error('Choose a folder path.');
-                await workspace.openPath(entry.path, {
-                  paneID: name.context.paneID,
-                  workspaceID: name.context.workspaceID,
-                });
-              } else if (name.kind === 'group') await groupSelection(name.context, value);
-              else
+              if (name.kind === 'group') await groupSelection(name.context, value);
+              else if (name.kind !== 'go-to')
                 await window.viewer.operate({
                   kind: name.kind,
                   name: value,

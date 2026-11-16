@@ -36,6 +36,8 @@ import {
 } from './desktop/windows/window-state';
 import { errorMessage } from './domain/errors';
 import { DiagnosticLog } from './desktop/diagnostics/diagnostics';
+import { makeDiagnosticReport } from './desktop/diagnostics/report';
+import { ReportWindow } from './desktop/windows/report-window';
 import { protectDiagnosticOutput } from './desktop/diagnostics/output';
 import { applicationCSP } from './desktop/windows/application-csp';
 import { debuggingAllowed } from './desktop/diagnostics/debugging';
@@ -305,6 +307,11 @@ const quitShortcut = new QuitShortcut({
 const pendingPaths: string[] = [];
 let updates: Updates | undefined;
 let licenseStatus: LicenseStatus | undefined;
+const reports = new ReportWindow(
+  () => makeDiagnosticReport(diagnostics.file, licenseStatus),
+  () => desktop?.windowPreferences()?.look ?? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light'),
+  !backgroundTest,
+);
 
 async function saveFailure(
   error: unknown,
@@ -420,6 +427,7 @@ function menu(): void {
         ),
       focusedWindow: () => BrowserWindow.getFocusedWindow(),
       settingsWindow: () => settingsWindow,
+      reportWindow: () => reports.window,
       workspaceCommand: (id) => desktop?.emit({ type: 'command', command: id }),
     }).catch(reportApplicationCommandFailure);
   };
@@ -429,6 +437,9 @@ function menu(): void {
     diagnostics.file,
     (byShortcut) => quitShortcut.request(byShortcut),
     !!licenseStatus,
+    () => {
+      if (!headless && quit.accepting()) void reports.open().catch(reportApplicationCommandFailure);
+    },
   );
 }
 

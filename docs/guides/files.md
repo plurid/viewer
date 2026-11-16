@@ -9,6 +9,24 @@ any command by name · **File** and **Edit** in the menu bar
 Each folder remembers its own view, sort order and column widths. A second plane on the same folder
 keeps its own selection.
 
+## Go to a folder
+
+1. Press **⌘L** or **⇧⌘G** for **Go to folder…**. With the field empty, Viewer suggests folders you
+   visit often and have used recently.
+2. Type part of a folder's name or path to narrow the suggestions. Near-miss spellings match too.
+3. Use **↑** and **↓** to choose, then **Return** to open. You can also click a suggestion. A typed
+   existing folder path takes priority when you press **Return** or choose **Go**. `~` and
+   `~/Documents` start at Home.
+
+You can also type a fragment in **⌘K**. Matching **Frequent folders** follow the commands.
+Unavailable folders stay hidden until they are available again; disconnecting a disk does not forget
+its folders. The sidebar's **Recent** list keeps its newest-first order.
+
+Choose **Clear recent folders** in **Go to folder…** to clear both the Recent list and visit counts.
+This history stays on this Mac and is included with recents in a personal backup. Trash and archive
+contents are never learned. See the
+[navigation limits](../reference/capabilities.md#open-and-move-around).
+
 ## Open and save in Viewer
 
 File, folder and save dialogs open inside the Viewer window that requested them. Settings uses its

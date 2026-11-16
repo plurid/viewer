@@ -32,15 +32,27 @@ for the selection, says why one is unavailable, and pins up to eight to the plan
 
 ### Open and move around
 
+**Go to folder…** suggests up to eight existing folders, ranked by visit count and the age of the
+last visit. An empty field shows the highest ranked; a fragment matches any part of the name or
+path, including near-miss spellings. **↑**, **↓** and **Return** choose a folder. A typed existing
+path takes priority. **⌘K** shows the same matches after commands: at most four with other results,
+eight alone. `z` followed by a fragment also finds these folders.
+
+Viewer keeps at most 500 visit records beside the last 50 recents. The sidebar still shows the
+latest eight recents. Suggestions check up to 40 candidates asynchronously, four at a time; an
+unavailable folder stays remembered. **Clear recent folders** in the dialog clears both lists.
+Counts follow recents through local saves, personal backups and folder renames. They are excluded
+from settings exports and are not exposed to agents.
+
 | Feature                                      | Key                              | ⌘K command                                                         | Menu                                                             | Learn                                        |
 | -------------------------------------------- | -------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------- |
 | Open a folder                                | **⌘⇧O**                          | **Open folder…** `choose-folder`                                   | **File → Open Folder…**                                          | [First steps](../guides/getting-started.md)  |
-| Go to a folder by typing its path            | **⌘L** or **⌘⇧G**                | **Go to folder…** `go-to`                                          | **View → Go to Folder…**                                         | [Browse](../guides/files.md)                 |
+| Go to a folder by path or a remembered name  | **⌘L** or **⌘⇧G**                | **Go to folder…** `go-to`                                          | **View → Go to Folder…**                                         | [Browse](../guides/files.md)                 |
 | Open the selection                           | **⌘O** or **⌘↓**                 | **Open** `open-selection`                                          | **File → Open Selection**; right-click                           | [Browse](../guides/files.md)                 |
 | Back and forward through a folder's history  | **⌘[** / **⌘]**; **⌥←** / **⌥→** | **Back** `back`, **Forward** `forward`                             | Right-click → **Navigation**                                     | [First steps](../guides/getting-started.md)  |
 | Parent folder                                | **⌘↑**                           | **Parent folder** `parent`                                         | Right-click → **Navigation**                                     | [First steps](../guides/getting-started.md)  |
 | Show the folder's path                       |                                  | **Show folder path** `path`                                        | Right-click → **Navigation**                                     | [Browse](../guides/files.md)                 |
-| Go to a favorite, location or recent folder  |                                  | Type its name: `location:<path>`                                   | The sidebar                                                      | [First steps](../guides/getting-started.md)  |
+| Go to a favorite or location                 |                                  | Type its name: `location:<path>`                                   | The sidebar                                                      | [First steps](../guides/getting-started.md)  |
 | Add the folder to Favorites, or remove it    |                                  | **Add folder to Favorites** `favorite`                             | Right-click → **Folder**                                         | [Browse](../guides/files.md)                 |
 | Show or hide the window's sidebar            | **⌥⌘S**                          | **Hide window navigation** `toggle-sidebar`                        | **View → Show / Hide Window Navigation**                         | [Shortcuts](shortcuts.md)                    |
 | Show or hide a folder plane's own sidebar    |                                  | **Hide plane navigation** `plane-sidebar`                          | **View → Show / Hide Plane Navigation**; right-click → **Plane** | [Workspaces](../guides/workspaces.md)        |
@@ -393,6 +405,7 @@ each proposal waits for your review.
 | Unsaved text survives quitting                                      |                  |                                                                                                                       | Automatic                                                                                 | [Project](../guides/develop.md) · [Operations](file-operations.md) |
 | Reopen the last workspace at launch                                 |                  | **Turn off: Restore the previous workspace** `setting.settings.browsing.restoreSession`                               | **Settings → Browsing**                                                                   | [Workspaces](../guides/workspaces.md)                              |
 | A window that stopped working                                       |                  |                                                                                                                       | **Reload** or **Close** when Viewer asks                                                  | [Troubleshoot](../guides/troubleshooting.md)                       |
+| Review and copy a redacted local support report                    | Return copies; Escape closes |                                                                                                               | **Help → Copy Report…**                                                                  | [Troubleshoot](../guides/troubleshooting.md#report-a-problem)       |
 | The local error log and crash reports                               |                  |                                                                                                                       | **Help → Show Diagnostic Log**, **Help → Show Crash Reports**                             | [Troubleshoot](../guides/troubleshooting.md)                       |
 | Quit only on a second **⌘Q**                                        | **⌘Q** twice     | **Turn off: Warn before quitting with ⌘Q** `setting.settings.quit.warnShortcut` opens Settings                        | **Viewer → Quit Viewer** quits at once                                                    | [Shortcuts](shortcuts.md)                                          |
 

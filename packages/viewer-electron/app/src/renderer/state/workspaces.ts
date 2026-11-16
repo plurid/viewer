@@ -1,4 +1,5 @@
 import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
+import { mergeFolderVisits, recordVisit } from '../../domain/files/folder-visits';
 import { presentationValue } from '../../domain/preferences/presentation/profile-fields';
 // Workspace lifecycle: startup, switching, creation, deletion and restoring.
 import { overridable, type WorkspaceOverrides } from '../../domain/preferences/overrides';
@@ -107,6 +108,10 @@ export function initialize(bootstrap: Bootstrap): void {
     }
   }
   const active = activeWorkspace({ saved } as ViewerState);
+  const now = Date.now();
+  for (const pane of active.panes) {
+    if (pane.type === 'folder') saved.visits = recordVisit(saved.visits ?? {}, pane.path, now);
+  }
   saved.workspaceVisits = mergeWorkspaceVisits(saved.workspaces, saved.workspaceVisits, {
     [active.id]: Date.now(),
   });
@@ -164,6 +169,7 @@ export function receiveWorkspaces(saved: SavedState): void {
       workspaces,
       saved.favorites,
       saved.recents,
+      saved.visits,
       saved.lineHistory,
       workspaceVisits,
       saved.openWindows,
@@ -172,6 +178,7 @@ export function receiveWorkspaces(saved: SavedState): void {
       current.saved.workspaces,
       current.saved.favorites,
       current.saved.recents,
+      current.saved.visits,
       current.saved.lineHistory,
       current.saved.workspaceVisits,
       current.saved.openWindows,
@@ -189,6 +196,7 @@ export function receiveWorkspaces(saved: SavedState): void {
       openWindows: saved.openWindows,
       favorites: saved.favorites,
       recents: saved.recents,
+      visits: saved.visits,
       lineHistory: saved.lineHistory,
     },
   });
@@ -216,6 +224,7 @@ export async function newWorkspace(name: string): Promise<void> {
     activeWorkspace: workspace.id,
     profile: undefined,
     workspaceVisits: { ...getState().saved.workspaceVisits, [workspace.id]: Date.now() },
+    visits: recordVisit(getState().saved.visits ?? {}, pane.path, Date.now()),
   });
   update({ ...getState(), activePane: pane.id });
   await flushState(false);
@@ -242,6 +251,7 @@ export async function appendRestoredWorkspaces(imported: SavedState): Promise<vo
     previewHistory: { ...current.previewHistory, ...imported.previewHistory },
     favorites: favorites.slice(0, 200),
     recents: [...new Set([...current.recents, ...imported.recents])].slice(0, 50),
+    visits: mergeFolderVisits(current.visits ?? {}, imported.visits ?? {}, Date.now()),
   });
   await flushState(false);
   await switchWorkspace(imported.activeWorkspace);

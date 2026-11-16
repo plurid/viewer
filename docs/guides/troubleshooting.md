@@ -4,7 +4,7 @@ Use this guide when something in Viewer is not working: a folder that shows noth
 stopped, a failed copy, a model that asks for permission, or Viewer that will not quit. Each section
 names what you see and what to choose.
 
-**Find it:** **Help → Show Diagnostic Log** · **Help → Show Crash Reports** · **Help → Report an
+**Find it:** **Help → Copy Report…** · **Help → Show Diagnostic Log** · **Help → Show Crash Reports** · **Help → Report an
 Issue…** · the **File operations** button in the title bar
 
 ## A folder shows nothing, or the Trash is empty
@@ -147,10 +147,19 @@ until you fix it. Keep API keys in the model settings, never in the settings fil
 
 ## Report a problem
 
-1. Choose **Help → Show Diagnostic Log** to find Viewer's local error log; it says **No problems
-   have been recorded.** when there is none. After a crash, **Help → Show Crash Reports** opens the
-   crash reports Viewer kept on this Mac. Neither is ever sent anywhere.
-2. Choose **Help → Report an Issue…** and describe the Viewer version and build from **Viewer →
-   About Viewer**, the macOS version, the steps, what you expected and what happened.
-3. Attach a small sample file if you can, and the log if it helps. Remove personal paths, keys and
-   anything private from screenshots and logs first.
+1. Choose **Help → Copy Report…**. Read the Markdown report, then choose **Copy** (Return).
+   Escape closes without copying. The report is made on your Mac and sends nothing.
+2. Choose **Help → Report an Issue…** and paste the report. Describe the steps, what you expected
+   and what happened. Attach a small generated sample if you can.
+
+The report includes Viewer's version, build, edition and trial or licensed status, macOS and Mac
+hardware, display count and scales, language and region, and up to 20 recent failures, newest first.
+It leaves out settings, file listings, clipboard contents, environment variables, license email,
+order reference and key. Names, personal paths, network addresses, emails, credentials and address
+queries are redacted. Paths below Home retain only their depth and extension, such as `~/…/….pdf`;
+Viewer's bundle and data paths keep their diagnostic names. If a privacy check fails, the report
+names the unchecked value and omits failure excerpts. Read it before sharing.
+
+**Help → Show Diagnostic Log** reveals the original local log. **Help → Show Crash Reports** opens
+crash reports kept on this Mac. Neither is sent. These original files can contain private paths and
+names; edit them before sharing, along with any screenshots.

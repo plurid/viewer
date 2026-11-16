@@ -28,7 +28,8 @@ import { useIndexedSearch } from '../explorer/useIndexedSearch';
 import { useWorkspace } from '../workspace/context';
 import { focusPlane } from '../workspace/sessions';
 import type { FileEntry } from '../../domain/contracts';
-import { calculate, paletteIntent, rankFrecent } from './smart-palette';
+import { calculate, paletteIntent } from './smart-palette';
+import { useFolderSuggestions } from '../explorer/useFolderSuggestions';
 import { LineFinder } from '../command-line/LineFinder';
 import { PromptFinder } from '../command-line/PromptFinder';
 import { QuickCommand } from '../terminals/QuickCommand';
@@ -43,6 +44,7 @@ import {
   settingRows,
   unavailableRows,
   withSuggested,
+  withFrequentFolders,
 } from './palette-sections';
 import { palettePrefixes, type PaletteMode } from './palette-modes';
 import { clearRecentCommands } from './history';
@@ -211,7 +213,7 @@ function CommandFinder({
     [registry, active, scoped],
   );
   // settings apart (palette-sections.ts): their own section, or `,` for them alone
-  const view = workspaces
+  const commandView = workspaces
     ? {
         rows: rankCommands(
           commands.filter((command) => command.id.startsWith('workspace:')),
@@ -219,7 +221,7 @@ function CommandFinder({
           recent,
           'menu',
         ),
-        headings: undefined,
+        headings: new Map<string, string>(),
       }
     : settings
       ? settingRows(commands, query)
@@ -230,9 +232,17 @@ function CommandFinder({
             recent,
           )
         : paletteRows(commands, query, recent);
+  const view = withFrequentFolders(
+    commandView,
+    smart.filter((row) => row.group === 'Frequent folders'),
+  );
   const folderView = commandFolders(
     commands,
-    paletteSuggestions(view.rows, smart, query),
+    paletteSuggestions(
+      view.rows,
+      smart.filter((row) => row.group !== 'Frequent folders'),
+      query,
+    ),
     folder,
     query,
   );
@@ -379,6 +389,8 @@ function useSmartRows(
   const workspace = useWorkspace();
   const home = getState().bootstrap.home;
   const intent = useMemo(() => paletteIntent(query, home, directory), [query, home, directory]);
+  const folderQuery = intent?.kind === 'jump' ? intent.text : !intent ? query : '';
+  const folders = useFolderSuggestions(folderQuery, !!folderQuery.trim());
   const [listing, setListing] = useState<{ directory: string; entries: FileEntry[] }>();
   const listed = intent?.kind === 'path' ? intent.directory : '';
   useEffect(() => {
@@ -419,7 +431,16 @@ function useSmartRows(
     when: () => true,
   });
   const definitions: CommandDefinition[] = (() => {
-    if (!intent) return [];
+    if (!intent || intent.kind === 'jump')
+      return folders.paths.map((path) =>
+        row(`folder:${path}`, {
+          label: path.split('/').pop() || path,
+          detail: path,
+          group: 'Frequent folders',
+          icon: 'folder',
+          run: open(path),
+        }),
+      );
     if (intent.kind === 'calc') {
       const value = calculate(intent.expression);
       if (value === undefined) return [];
@@ -434,18 +455,6 @@ function useSmartRows(
         }),
       ];
     }
-    if (intent.kind === 'jump')
-      return rankFrecent(getState().saved.visits ?? {}, intent.text, Date.now())
-        .slice(0, 10)
-        .map((path) =>
-          row(`jump:${path}`, {
-            label: path.split('/').pop() || path,
-            detail: path,
-            group: 'Frecent folders',
-            icon: 'folder',
-            run: open(path),
-          }),
-        );
     if (intent.kind === 'path') {
       const entries = listing?.directory === intent.directory ? listing.entries : [];
       const hidden = intent.partial.startsWith('.');
@@ -525,7 +534,7 @@ function useSmartRows(
       valid: (invocation) => invocation.workspaceID === activeWorkspace().id,
     },
     // the palette's context is a new object each render: republishing on it never settled
-    [intent, listing],
+    [intent, listing, folders.paths],
   );
   return definitions.length ? registry.list({ sources: [sourceID] }) : [];
 }

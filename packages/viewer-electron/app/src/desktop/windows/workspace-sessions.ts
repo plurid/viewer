@@ -1,4 +1,5 @@
 import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
+import { boundFolderVisits } from '../../domain/files/folder-visits';
 import { randomUUID } from 'node:crypto';
 import { boundPreviewHistory } from '../../domain/previews/history';
 import { CURRENT_STATE_VERSION, type SavedState, type Workspace } from '../../domain/contracts';
@@ -14,6 +15,7 @@ const shared = (state: SavedState) => ({
   workspaces: state.workspaces,
   favorites: state.favorites,
   recents: state.recents,
+  visits: state.visits,
   lineHistory: state.lineHistory,
   workspaceVisits: state.workspaceVisits,
   openWindows: state.openWindows,
@@ -254,15 +256,21 @@ export class WorkspaceSessions {
       Object.assign(merged, { [key]: values.slice(0, maximum) });
     }
     const visits = { ...merged.visits };
+    for (const path of Object.keys(baseline.visits ?? {})) {
+      if (!Object.hasOwn(input.visits ?? {}, path)) delete visits[path];
+    }
     for (const [path, visit] of Object.entries(input.visits ?? {})) {
       const previous = baseline.visits?.[path];
       if (sameJSON(previous, visit)) continue;
       visits[path] = {
-        count: (visits[path]?.count ?? 0) + Math.max(0, visit.count - (previous?.count ?? 0)),
+        count: Math.min(
+          1e9,
+          (visits[path]?.count ?? 0) + Math.max(0, visit.count - (previous?.count ?? 0)),
+        ),
         last: Math.max(visits[path]?.last ?? 0, visit.last),
       };
     }
-    merged.visits = visits;
+    merged.visits = boundFolderVisits(visits, Date.now());
     const previewStates = { ...merged.previewStates };
     for (const [key, value] of Object.entries(input.previewStates ?? {})) {
       const workspace = key.slice(0, key.indexOf(':'));

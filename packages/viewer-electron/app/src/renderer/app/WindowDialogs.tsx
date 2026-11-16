@@ -8,6 +8,7 @@ import type { ImageExportPreset, PDFExportPreset } from '../../domain/operations
 import type { WorkspaceController } from '../workspace/context';
 import type { TaskWorkflowDraft } from '../../domain/command-line/task';
 import { Dialog, NameDialog } from '../ui/primitives';
+import { GoToFolderDialog } from '../explorer/GoToFolderDialog';
 import { captureCurrentLayout, saveLayoutTemplate } from '../commands/window-commands/templates';
 import { captureProfile, saveProfile } from '../commands/window-commands/profiles';
 import { commandName } from '../command-line/names';
@@ -121,7 +122,6 @@ export function WindowDialogs({
 }) {
   const onClose = () => closeRequest(dialog);
 
-  const bootstrap = useViewer((state) => state.bootstrap);
   const [busy, setBusy] = useState(false);
   const workspaceDialog = dialog?.type === 'workspace' ? dialog : undefined;
   const targetWorkspace = useViewer((state) =>
@@ -393,21 +393,7 @@ export function WindowDialogs({
           />
         )}
         {goTo && (
-          <NameDialog
-            title="Go to folder"
-            label="Folder path"
-            maxLength={32768}
-            initial={bootstrap.home}
-            action="Go"
-            onClose={() => onClose()}
-            onSubmit={async (path) => {
-              const resolved =
-                path === '~' || path.startsWith('~/') ? bootstrap.home + path.slice(1) : path;
-              const entry = await window.viewer.stat(resolved);
-              if (!entry.directory) throw new Error('Choose a folder.');
-              await controller.openPath(entry.path);
-            }}
-          />
+          <GoToFolderDialog onClose={onClose} onOpen={(path) => controller.openPath(path)} />
         )}
         {connecting && (
           <NameDialog
