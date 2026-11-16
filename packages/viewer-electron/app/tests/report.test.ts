@@ -151,7 +151,7 @@ describe('report contents', () => {
     input.log = entry(1, 'Start ' + 'A'.repeat(2100) + '\n' + '/Home/Example/Private/Report.pdf');
     const report = diagnosticReport(input);
     expect(report).not.toMatch(/A{20}|Private|Report\.pdf/);
-    expect(report).toContain('> Start <token>');
+    expect(report).toContain('> Start [redacted]');
     expect(() => encodeURIComponent(report)).not.toThrow();
     const long = diagnosticReport({ ...input, log: entry(1, 'safe '.repeat(399) + '😀') });
     expect(() => encodeURIComponent(long)).not.toThrow();
@@ -183,6 +183,21 @@ describe('report contents', () => {
 });
 
 describe('local report collection', () => {
+  it('builds both views from one snapshot even if the log changes before opt-in', async () => {
+    local.log = entry(1, 'First snapshot failure', 'ENOENT');
+    const snapshot = await makeDiagnosticReportSnapshot('/Private/Viewer/Logs/diagnostics.log', undefined);
+    local.log = entry(2, 'Later failure must not appear', 'EACCES');
+    expect(snapshot.report).toContain('12:01:00');
+    expect(snapshot.report).not.toContain('12:02:00');
+    const messages = await snapshot.withMessageText();
+    expect(messages).toContain('12:01:00');
+    expect(messages).toContain('First snapshot failure');
+    expect(messages).not.toMatch(/12:02:00|Later failure|EACCES/);
+    expect(local.close).toHaveBeenCalledOnce();
+    expect(await snapshot.withMessageText()).toBe(messages);
+    expect(local.volumes).toHaveBeenCalledOnce();
+  });
+
   it('bounds the tail and makes no user, host or volume lookup for the default', async () => {
     local.log =
       'x'.repeat(reportLimits.bytes) +

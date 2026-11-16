@@ -170,6 +170,13 @@ async function verify(): Promise<void> {
       await click(contents, 'input');
       await shown(contents, report);
       assert.deepEqual(requests, [false, true]);
+    } else {
+      const loaded = new Promise<void>((resolve) => contents.once('did-finish-load', () => resolve()));
+      contents.reload();
+      await loaded;
+      await shown(contents, report);
+      assert.equal(await inspect(contents, pageCall(() => document.querySelector<HTMLInputElement>('input')!.checked)), false);
+      assert.deepEqual(requests, [false, true]);
     }
     const expected = await inspect(
       contents,

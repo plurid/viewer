@@ -176,8 +176,6 @@ crashReporter.start({ uploadToServer: false, compress: true });
 const diagnostics = new DiagnosticLog(
   path.join(app.getPath('userData'), 'Logs', 'diagnostics.log'),
 );
-const failure = (value: unknown) =>
-  value instanceof Error ? (value.stack ?? value.message) : String(value);
 // Monitors observe failures without changing how Node and Electron handle them.
 process.on(
   'uncaughtExceptionMonitor',

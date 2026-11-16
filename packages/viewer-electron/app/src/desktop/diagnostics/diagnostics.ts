@@ -32,7 +32,9 @@ export class DiagnosticLog {
   record(kind: DiagnosticKind, value: unknown, fields?: DiagnosticErrorFields): Promise<void> {
     const failure = value instanceof Error ? diagnosticFailure(value) : {
       detail: String(value),
-      ...fields,
+      errorClass: fields?.errorClass,
+      code: fields?.code,
+      stack: fields?.stack,
     };
     const errno = new Set(Object.keys(os.constants?.errno ?? {}));
     const line =

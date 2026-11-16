@@ -156,9 +156,11 @@ until you fix it. Keep API keys in the model settings, never in the settings fil
 By default, the report contains no personal file names or message text. It includes Viewer's
 version, build, edition and trial or licensed status, macOS, display count and scales, language and
 region. Model, chip and memory appear when available. Up to 20 recent failures appear newest first,
-with their time, kind, known error class, validated code and locations inside Viewer's code. Other
-stack frames are counted without their paths. Both the direct and Mac App Store editions use this
-report; the default needs no user, computer-name or volume lookup.
+with their time, kind and known error class. Codes come only from recorded error fields and a fixed
+list of known codes. Recorded stack locations inside Viewer keep the code path, line and column;
+function names are omitted. Other stack frames are counted without their paths. Both the direct
+and Mac App Store editions use this report; the default needs no user, computer-name or volume
+lookup.
 
 Turn on **Include message text** only if you want excerpts. Message text can contain file names,
 addresses and other private text. Viewer removes what it can recognise. Read it before you share it.
@@ -166,6 +168,13 @@ Recognised paths are reduced; code paths inside Viewer's bundle retain their dia
 the data folder keeps only fixed Viewer folder names. Failed privacy checks omit excerpts and name
 what could not be checked. Turning the checkbox off restores the default report. Copy copies exactly
 the displayed text.
+
+In the Mac App Store edition, message text needs the same additional privacy checks: account and
+Home details, the real Home path, full name, computer and host names, and mounted volume names.
+These use local account information, `id`, `scutil`, a Home realpath check and `/Volumes`. If macOS
+refuses any check, Viewer names it and leaves out message text. The default failure details remain
+available. Both views use the same log snapshot. A report that exceeds the window's size limit says
+it was shortened and ends at a whole line.
 
 Viewer sends neither report to its developer. The report does not add settings, file listings,
 clipboard contents, environment variables or license buyer details.

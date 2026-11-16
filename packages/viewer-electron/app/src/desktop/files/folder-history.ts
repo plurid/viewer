@@ -5,7 +5,7 @@ import { boundFolderVisits, folderPath, remembersFolder } from '../../domain/fil
 import { checkFolderCandidates } from '../../domain/files/folder-checks';
 import { entry } from './filesystem';
 
-/** Navigation and remembered history use the filesystem's spelling, including case. */
+/** Only history records use filesystem spelling; navigation retains the chosen path. */
 export async function folderEntry(file: string): Promise<FileEntry> {
   const item = await entry(file);
   if (!item.directory) return item;
@@ -15,7 +15,7 @@ export async function folderEntry(file: string): Promise<FileEntry> {
 
 export async function prepareFolderHistory(
   history: FolderVisits,
-  check: (path: string) => Promise<{ path?: string; directory: boolean }>,
+  check: (path: string) => Promise<{ path?: string; directory: boolean; unavailable?: boolean }>,
   now: number,
 ) {
   const normalized: Record<string, Visit> = {};
@@ -27,7 +27,7 @@ export async function prepareFolderHistory(
       last: Math.max(normalized[key]?.last ?? 0, visit.last),
     };
   }
-  const observed = new Map<string, { path?: string; directory: boolean }>();
+  const observed = new Map<string, { path?: string; directory: boolean; unavailable?: boolean }>();
   await checkFolderCandidates(Object.keys(normalized), check, new AbortController().signal, {
     limit: 500,
     checks: 1000,
@@ -37,7 +37,7 @@ export async function prepareFolderHistory(
   const checked = new Set<string>();
   for (const [old, visit] of Object.entries(normalized)) {
     const known = observed.get(old);
-    if (known && !known.directory) continue;
+    if (known && !known.directory && !known.unavailable) continue;
     const key = folderPath(known?.path ?? old);
     if (!remembersFolder(key)) continue;
     visits[key] = {

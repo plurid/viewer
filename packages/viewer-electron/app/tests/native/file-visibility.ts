@@ -10,6 +10,8 @@ import { temporaryRoot } from '../../tools/temporary';
 import { needsFolderAccess } from '../../src/domain/files/access';
 import type { GuestACL } from '../../src/desktop/files/network-sharing';
 import { NetworkSharing, sharingFolder } from '../../src/desktop/files/network-sharing';
+import { fileVisibility } from '../../src/desktop/files/visibility';
+import { entry as singleEntry, entryForScan } from '../../src/desktop/files/filesystem';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');
 assert.equal(process.env.VIEWER_TEST_NO_REMOVAL, '1');
@@ -48,6 +50,9 @@ for (const name of ['hidden by flag.txt', '.dot-file', 'Thumbs.db', 'visible 日
   await writeFile(path.join(folder, name), 'fixture', { flag: 'wx' });
 execFileSync('/usr/bin/chflags', ['hidden', path.join(folder, 'hidden by flag.txt')]);
 assert.equal(await visibility.fileHidden(path.join(folder, 'hidden by flag.txt')), true);
+fileVisibility.fileHidden = (file) => visibility.fileHidden(file);
+assert.equal((await singleEntry(path.join(folder, 'hidden by flag.txt'))).hidden, true);
+assert.equal((await entryForScan(path.join(folder, 'hidden by flag.txt'))).hidden, false);
 assert.equal(await visibility.fileHidden(path.join(folder, 'Thumbs.db')), false);
 assert.deepEqual(await visibility.hiddenEntries(folder), ['hidden by flag.txt']);
 assert.equal((await entry(path.join(folder, 'hidden by flag.txt'), visibility)).hidden, true);
@@ -147,13 +152,30 @@ execFileSync('/bin/chmod', [
 ]);
 assert.equal(await visibility.guestACL(aclFolder), 'write');
 assert.equal((await sharing.refresh(true)).shares[0]?.guestWritable, true);
-assert.equal(await visibility.guestACL(path.join(root, 'Missing ACL')), 'unknown');
+assert.equal(await visibility.guestACL(path.join(root, 'Missing ACL')), 'unreadable');
 sharePath = path.join(root, 'Unreadable ACL');
 await mkdir(sharePath, { mode: 0o755 });
 execFileSync('/bin/chmod', ['+a', 'everyone deny readsecurity', sharePath]);
-assert.equal(await visibility.guestACL(sharePath), 'unknown');
+assert.equal(await visibility.guestACL(sharePath), 'unreadable');
 // Denying readsecurity also blocks stat on macOS, so the whole share read must stay unknown.
 assert.equal((await sharing.refresh(true)).status, 'unknown');
+for (const right of ['add_file', 'add_subdirectory', 'delete_child', 'delete', 'writeattr', 'writeextattr', 'writesecurity', 'chown']) {
+  const target = path.join(root, 'Everyone ' + right);
+  await mkdir(target, { mode: 0o755 });
+  execFileSync('/bin/chmod', ['+a', 'everyone allow ' + right, target]);
+  assert.equal(await visibility.guestACL(target), 'write', right);
+}
+for (const principal of ['group:staff', 'user:' + process.getuid!(), 'user:nobody']) {
+  const target = path.join(root, 'Principal ' + principal.replace(':', '-'));
+  await mkdir(target, { mode: 0o755 });
+  execFileSync('/bin/chmod', ['+a', principal + ' allow add_file', target]);
+  assert.equal(await visibility.guestACL(target), principal === 'user:nobody' ? 'write' : 'none', principal);
+}
+const groupFolder = path.join(root, 'Guest group');
+await mkdir(groupFolder, { mode: 0o775 });
+execFileSync('/usr/bin/chgrp', ['everyone', groupFolder]);
+await chmod(groupFolder, 0o775);
+assert.equal(await visibility.guestACL(groupFolder), 'write');
 console.log(
   JSON.stringify(
     {

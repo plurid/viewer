@@ -5,6 +5,9 @@ import { DiagnosticLog } from '../src/desktop/diagnostics/diagnostics';
 import { diagnosticReport } from '../src/desktop/diagnostics/report';
 import { redactReport } from '../src/domain/diagnostics/report-redaction';
 import { redactSecrets } from '../src/desktop/diagnostics/failures';
+import { diagnosticFailure } from '../src/domain/diagnostics/failure';
+import { schemas } from '../src/desktop/ipc/schemas';
+import { createWindowHandlers } from '../src/desktop/ipc/window-handlers';
 import { reportFixture } from './support/report-fixtures';
 import { temporaryRoot } from '../tools/temporary';
 import type { ReportPrivateValue } from '../src/domain/diagnostics/report-redaction';
@@ -37,9 +40,71 @@ describe('report privacy regressions', () => {
         const entry = JSON.parse(input.log!);
         input.log = JSON.stringify({ ...entry, code: privateValue, errorClass: privateValue });
         expect(diagnosticReport(input)).toBe(baseline);
+        input.log = JSON.stringify({ ...entry, code: 'ERR_' + privateValue, errorClass: privateValue });
+        expect(diagnosticReport(input)).toBe(baseline);
       }
     }
     expect(diagnosticReport(reportFixture(['Error: ZOE_PASSPORT is not an image.']))).not.toContain('ZOE_PASSPORT');
+  });
+
+  it('accepts only real structured errno, known Node codes and exported Viewer codes', async () => {
+    const root = await temporaryRoot('viewer-report-codes-');
+    const log = new DiagnosticLog(path.join(root, 'diagnostics.log'));
+    for (const code of ['ENOENT', 'ERR_INVALID_ARG_TYPE', 'VIEWER_NO_TRASH', 'ZOE_PASSPORT', 'ERR_ZOE_PASSPORT'])
+      await log.record('main-rejection', Object.assign(new Error('private'), { code }));
+    const codes = (await readFile(log.file, 'utf8')).trim().split('\n').map((line) => JSON.parse(line).code);
+    expect(codes).toEqual(['ENOENT', 'ERR_INVALID_ARG_TYPE', 'VIEWER_NO_TRASH', undefined, undefined]);
+  });
+
+  it('keeps renderer locations without names and rejects alternate hosts and encoded traversal', async () => {
+    const root = await temporaryRoot('viewer-report-renderer-');
+    const log = new DiagnosticLog(path.join(root, 'diagnostics.log'));
+    const error = new TypeError('SECRET_CLIENT is not a function');
+    error.stack = error.name + ': ' + error.message + '\n' + [
+      '    at Medical.Diagnosis.Zoe (viewer-app://app/assets/renderer.js:120:8)',
+      '    at outside (viewer-app://other/assets/private.js:1:2)',
+      '    at outside (viewer-app://app/../private.js:1:2)',
+      '    at outside (viewer-app://app/%2e%2e/private.js:1:2)',
+      '    at outside (viewer-app://app/assets/%2E/private.js:1:2)',
+    ].join('\n');
+    const captured = diagnosticFailure(error);
+    await log.record('renderer-error', captured.detail, captured);
+    const report = diagnosticReport({ ...reportFixture(), log: await readFile(log.file, 'utf8'), bundleRoot: '/Applications/Viewer.app' });
+    expect(report).toContain('- assets/renderer.js:120:8');
+    expect(report).toContain('4 frames outside Viewer');
+    expect(report).not.toMatch(/Medical|Diagnosis|Zoe|SECRET_CLIENT|viewer-app|private\.js/);
+  });
+
+  it('passes bounded structured renderer metadata through the real write-only IPC handler', async () => {
+    const status = { path: '/fixture/viewer', installed: false, executable: false };
+    const diagnose = vi.fn();
+    const handler = createWindowHandlers({
+      host: { openSettings: async () => {}, diagnose },
+      shellCommand: { status: async () => status, install: async () => status, uninstall: async () => status },
+      sessions: { owner: () => undefined, claim: () => false },
+      flushes: { acknowledge: () => {} },
+      window: () => undefined,
+      isSettings: () => false,
+      assignWorkspace: () => {},
+      createWorkspace: () => 'fixture',
+    }).diagnosticReport;
+    const error = Object.assign(new TypeError('PRIVATE_CLIENT is not a function'), { code: 'ERR_INVALID_ARG_TYPE' });
+    error.stack = error.name + ': ' + error.message + '\n    at Object.Private (viewer-app://app/assets/renderer.js:12:3)';
+    const captured = diagnosticFailure(error);
+    const result = await handler(schemas.diagnosticReport.parse([captured]), 10);
+    expect(diagnose).toHaveBeenCalledExactlyOnceWith(captured.detail, captured);
+    expect(result).toBeUndefined();
+    for (const invalid of [
+      { ...captured, stack: 'x'.repeat(8001) },
+      { ...captured, code: 'x'.repeat(65) },
+      { ...captured, read: '/private/diagnostics.log' },
+    ]) expect(schemas.diagnosticReport.safeParse([invalid]).success).toBe(false);
+  });
+
+  it('retains extensions only when they are recognized path extensions', () => {
+    expect(redactReport('/Users/zoe/Documents/Diagnosis.hunter2', values)).toBe('~/…/…');
+    expect(redactReport('/Users/zoe/Documents/Diagnosis.pdf', values)).toBe('~/…/….pdf');
+    expect(redactReport('/Volumes/Sample Disk/Confidential/Payroll.xlsx', values)).toBe('/Volumes/<volume>/…/….xlsx');
   });
 
   it('records real error metadata and excludes message-injected frames and computed function names', async () => {
@@ -104,10 +169,15 @@ describe('report privacy regressions', () => {
     expect(redactReport(spelling, [{ kind: 'full name', value: name }])).not.toContain(spelling);
   });
 
-  it('preserves readable log text while recognizing secrets across joining characters', () => {
+  it('preserves readable log text while recognizing secrets across joining characters', async () => {
     expect(redactSecrets('line one\nline two')).toBe('line one\nline two');
     expect(redactSecrets('می‌خواهم')).toBe('می‌خواهم');
     expect(redactSecrets('می‌خواهم DB_PASS\u200cWORD=hunter2')).not.toContain('hunter2');
     expect(redactSecrets('token="ab\u200dcd" next')).toBe('token=[redacted] next');
+    const root = await temporaryRoot('viewer-report-readable-');
+    const log = new DiagnosticLog(path.join(root, 'diagnostics.log'));
+    await log.record('main-error', 'line one\nline two می‌خواهم DB_PASS\u200cWORD=hunter2');
+    const detail = JSON.parse((await readFile(log.file, 'utf8')).trim()).detail;
+    expect(detail).toBe('line one\nline two می‌خواهم DB_PASS\u200cWORD=[redacted]');
   });
 });

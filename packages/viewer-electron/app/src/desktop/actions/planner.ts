@@ -5,7 +5,8 @@ import { mkdir, open, opendir, readFile, realpath, rename } from 'node:fs/promis
 import { z } from 'zod';
 import { fileEntrySchema } from '../schemas';
 import { recipeReadsContent, requestActors } from '../../domain/services';
-import { absolute, entry, exists, validName } from '../files/filesystem';
+import { absolute, entry, entryForScan, exists, validName } from '../files/filesystem';
+import { HiddenPaths } from '../files/hidden-paths';
 import { DocumentStore } from '../persistence/document-store';
 import { renameNames } from '../../domain/operations/batch-rename';
 import { fileCoordination } from '../files/file-coordination';
@@ -380,9 +381,11 @@ export class ActionPlanner {
       else result.set(item.path, item);
     }
     let visited = 0;
+    const visibility = new HiddenPaths();
     // New subfolders are appended while this loop runs; `for…of` visits them too.
     for (const current of folders) {
       signal.throwIfAborted();
+      const hidden = await visibility.names(current);
       const folder = await opendir(current);
       for await (const child of folder) {
         signal.throwIfAborted();
@@ -390,8 +393,8 @@ export class ActionPlanner {
           throw new Error(
             'The selected tree exceeds the action scan limit. Select a smaller folder.',
           );
-        if (child.name.startsWith('.') || child.isSymbolicLink()) continue;
-        const item = await entry(path.join(current, child.name));
+        if (child.name.startsWith('.') || hidden.has(child.name) || child.isSymbolicLink()) continue;
+        const item = await entryForScan(path.join(current, child.name));
         if (item.directory) {
           if (request.context.recursive ?? recipe.recursive) folders.push(item.path);
         } else if (item.kind === 'file') result.set(item.path, item);

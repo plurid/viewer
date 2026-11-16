@@ -214,6 +214,11 @@ const config: ForgeConfig = {
           target: 'main',
         },
         {
+          entry: 'src/desktop/windows/folder-history-worker.ts',
+          config: 'vite.services.config.ts',
+          target: 'main',
+        },
+        {
           entry: 'src/desktop/files/folder-size-worker.ts',
           config: 'vite.services.config.ts',
           target: 'main',

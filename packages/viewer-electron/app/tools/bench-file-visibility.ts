@@ -5,7 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import path from 'node:path';
 import type { FileVisibility } from '../src/desktop/files/visibility';
-import { entry, entryWithVisibility, list } from '../src/desktop/files/filesystem';
+import { entryForScan as entry, entryWithVisibility, list } from '../src/desktop/files/filesystem';
 import { temporaryRoot } from './temporary';
 
 assert.equal(process.env.VIEWER_TEST_PRESERVE, '1');

@@ -88,8 +88,10 @@ devices through Universal Clipboard. Paste it into **Help → Report an Issue…
 By default, the report contains no personal file names or message text. Both editions include
 version/build, edition, trial or licensed status, macOS, display count/scales, language/region and
 up to 20 recent failures, newest first. Model, chip and memory are optional. Each failure contains
-time, kind, a known error class, a validated code and locations inside Viewer's code. Outside stack
-frames are counted without paths. The Mac App Store default needs no identity or volume lookup.
+time, kind and a known error class. An allowed code appears only from a recorded error field.
+Recorded Viewer stack locations keep the code path, line and column, with no function names.
+Outside stack frames are counted without paths. The Mac App Store default needs no identity or
+volume lookup.
 
 **Include message text** is off by default. Excerpts can contain file names, addresses and other
 private text. Viewer removes what it can recognise; read them before sharing. Recognised paths are
@@ -97,6 +99,12 @@ reduced, bundle code names are retained and the data folder keeps only fixed Vie
 Failed privacy checks are named and excerpts are omitted. Turning the checkbox off restores the
 default report. Viewer sends neither version to its developer and adds no settings, file listings,
 clipboard contents, environment variables or license buyer details.
+
+Store message excerpts need local account and Home information, a Home realpath check, `id` for
+the full name, `scutil` for computer and host names, and mounted names from `/Volumes`. If the
+sandbox refuses a check, the report names it and omits excerpts while keeping the default failure
+details. Both views use one log snapshot. Oversized reports end at a whole line and say they were
+shortened.
 
 Include the Viewer version/build, macOS version, Apple Silicon model, direct/App Store edition,
 exact steps and expected result. A small generated example is preferable to a confidential file.

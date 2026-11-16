@@ -245,6 +245,8 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
         return '<Viewer data>/' + (relative.length > 1 && fixedDataFolders.has(first) ? first : '…') +
           (relative.length > 1 ? summary.slice('<path>'.length).split('/').slice(1).slice(1).map((part) => '/' + part).join('') : '');
       }
+      if (homes.some((home) => normalized.toLowerCase() === home.toLowerCase() || normalized.toLowerCase().startsWith(home.toLowerCase() + '/')))
+        return pathSummary(normalized, homes);
       if (normalized.startsWith('/Volumes/')) {
         const mounted = volumeRoots.find((root) => normalized === root || normalized.startsWith(root + '/'));
         const suffix = normalized.slice(mounted?.length ?? normalized.indexOf('/', '/Volumes/'.length));

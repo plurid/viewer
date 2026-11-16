@@ -3,6 +3,7 @@ import { chmod, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   entry as ordinaryEntry,
+  entryForScan,
   entryWithVisibility as entry,
   list,
 } from '../src/desktop/files/filesystem';
@@ -31,7 +32,7 @@ it('reads flags once for the folder and keeps dot files and flagged files hidden
   expect(visibility.fileHidden).toHaveBeenCalledExactlyOnceWith(path.join(folder, 'hidden.txt'));
 });
 
-it('lists with an old helper or a missing helper and does not call native flags from entry()', async () => {
+it('lists with an old or missing helper, reads single-item flags and keeps them out of scans', async () => {
   const folder = await temporaryRoot('viewer-visibility-compatibility-');
   const file = path.join(folder, 'visible.txt');
   await writeFile(file, 'fixture');
@@ -43,10 +44,12 @@ it('lists with an old helper or a missing helper and does not call native flags 
   ]) {
     expect((await list(folder, createFileVisibility(binding))).entries).toHaveLength(1);
   }
-  const native = vi.spyOn(fileVisibility, 'fileHidden');
+  const native = vi.spyOn(fileVisibility, 'fileHidden').mockResolvedValue(true);
   for (let index = 0; index < 20; index++)
-    expect((await ordinaryEntry(file)).name).toBe('visible.txt');
+    expect((await entryForScan(file)).name).toBe('visible.txt');
   expect(native).not.toHaveBeenCalled();
+  expect((await ordinaryEntry(file)).hidden).toBe(true);
+  expect(native).toHaveBeenCalledExactlyOnceWith(file);
   native.mockRestore();
 });
 

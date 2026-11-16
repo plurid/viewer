@@ -274,7 +274,7 @@ describe('report review window', () => {
     );
     document.documentElement.innerHTML = page;
     const shown = document.querySelector('pre')!.textContent;
-    expect(shown).toBe('\n\nReport shortened to fit this window.\n');
+    expect(shown).toBe('Report shortened to fit this window.\n');
     window.webContents.ipc.emit(reportCopyChannel, {
       sender: window.webContents,
       senderFrame: window.webContents.mainFrame,

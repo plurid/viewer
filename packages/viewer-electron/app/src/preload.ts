@@ -205,6 +205,7 @@ const api: ViewerAPI = {
   printPDF: (id, password) => invoke('printPDF', id, password),
   save: (state, visitSave) => invoke('save', state, visitSave),
   folderHistory: () => invoke('folderHistory'),
+  folderCheck: (path) => invoke('folderCheck', path),
   flushed: (token) => invoke('flushed', token),
   clipboardWrite: (files, cut) => invoke('clipboardWrite', files, cut),
   clipboardWriteText: (text) => invoke('clipboardWriteText', text),

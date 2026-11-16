@@ -93,8 +93,8 @@ export function knownErrorCode(value: unknown, errno: ReadonlySet<string>): stri
 
 /** Capture before string conversion: a message can contain counterfeit frames and identifiers. */
 export function diagnosticFailure(value: unknown): DiagnosticFailure {
-  if (!(value instanceof Error)) return { detail: boundedText(String(value)) };
   try {
+    if (!(value instanceof Error)) return { detail: boundedText(String(value)) };
     const message = value.message;
     const stack = typeof value.stack === 'string' ? value.stack : undefined;
     const header = value.name + (message ? ': ' + message : '');

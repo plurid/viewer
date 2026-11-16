@@ -17,7 +17,7 @@ export class SharingMetadata {
   private pending = new Map<string, OutstandingRead>();
   constructor(private readonly milliseconds = 700, private readonly maximum = 2) {}
   read<T>(kind: MetadataKind, file: string, work: () => Promise<T>): Promise<T> {
-    const key = path.normalize(file);
+    const key = path.resolve(file);
     const existing = this.pending.get(key);
     if (existing) {
       return limited(existing.kind === kind

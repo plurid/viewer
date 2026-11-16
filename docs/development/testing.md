@@ -76,12 +76,12 @@ app.
 Run the report window against its current source:
 
 ```sh
-VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm test:report-window
+pnpm_config_verify_deps_before_run=false VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm test:report-window
 ```
 
 This builds the window and its private preload into a new retained temporary folder, without
 replacing packaged output. Hidden Electron windows exercise the default report, **Include message
-text**, its warning, Copy, Return, Escape and both themes at normal/minimum sizes. Copy is
+text**, its warning, reload, Copy, Return, Escape and both themes at normal/minimum sizes. Copy is
 intercepted to preserve the operator's clipboard. The folder holds screenshots, `result.json` and
 `example-default-report.txt`. Accessibility-tree presence is checked; physical VoiceOver and a
 signed Store binary require separate acceptance.

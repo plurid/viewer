@@ -42,5 +42,5 @@ export function boundedReport(text: string, limit = 64 * 1024): string {
     end += character.length;
   }
   const lastLine = bounded.lastIndexOf('\n', end - 1);
-  return (lastLine < 0 ? '' : bounded.slice(0, lastLine).trimEnd()) + notice;
+  return lastLine < 0 ? notice.trimStart() : bounded.slice(0, lastLine).trimEnd() + notice;
 }

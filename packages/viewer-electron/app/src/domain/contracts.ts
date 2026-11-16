@@ -1,3 +1,4 @@
+import type { CheckedFolder } from './files/folder-checks';
 import type { ObservedIdentity } from './files/item-identity';
 import type { DiagnosticFailure } from './diagnostics/failure';
 import type { FolderVisitReply, FolderVisitSave } from './files/folder-visit-changes';
@@ -972,6 +973,7 @@ export interface ViewerAPI {
   printPDF(id: string, password?: string): Promise<void>;
   save(state: SavedState, visitSave?: FolderVisitSave): Promise<FolderVisitReply | void>;
   folderHistory(): Promise<FolderVisitReply>;
+  folderCheck(path: string): Promise<CheckedFolder>;
   flushed(token: string, result?: FlushResult): Promise<void>;
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;
   clipboardWriteText(text: string): Promise<void>;
