@@ -1,4 +1,4 @@
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { stat } from '../files/stats';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -60,7 +60,7 @@ export class Ghostscript {
     await access(file, constants.X_OK);
     const identity = JSON.stringify([
       file,
-      itemIdentity(info),
+      versionIdentity(info),
       info.size,
       info.mtimeMs,
       info.ctimeMs,

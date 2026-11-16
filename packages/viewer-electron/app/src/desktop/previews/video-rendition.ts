@@ -1,5 +1,5 @@
 import { fileStat } from '../files/stats';
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import path from 'node:path';
@@ -30,7 +30,7 @@ async function countedDuration(
   try {
     const current = await fileStat(input);
     if (
-      !sameItem(current, source.info) ||
+      !sameVersionItem(current, source.info) ||
       current.mtimeMs !== source.info.mtimeMs ||
       current.size !== source.info.size
     )
@@ -143,7 +143,7 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
       try {
         const current = await fileStat(input);
         if (
-          !sameItem(current, source.info) ||
+          !sameVersionItem(current, source.info) ||
           current.mtimeMs !== source.info.mtimeMs ||
           current.ctimeMs !== source.info.ctimeMs ||
           current.size !== source.info.size
@@ -315,7 +315,7 @@ async function audioCopy(
   try {
     const current = await fileStat(input);
     if (
-      !sameItem(current, source.info) ||
+      !sameVersionItem(current, source.info) ||
       current.mtimeMs !== source.info.mtimeMs ||
       current.size !== source.info.size
     )

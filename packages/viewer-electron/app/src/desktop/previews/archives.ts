@@ -1,4 +1,4 @@
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { stat, fileStat } from '../files/stats';
 
 import { open } from 'node:fs/promises';
@@ -577,5 +577,5 @@ export class Archives {
 
 export async function archiveFingerprint(file: string): Promise<string> {
   const info = await stat(file);
-  return `${file}:${itemIdentity(info)}:${info.ctimeMs}:${info.mtimeMs}:${info.size}`;
+  return `${file}:${versionIdentity(info)}:${info.ctimeMs}:${info.mtimeMs}:${info.size}`;
 }

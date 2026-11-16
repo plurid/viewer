@@ -1,4 +1,4 @@
-import { itemIdentity, legacyIdentityParts } from '../../domain/files/item-identity';
+import { itemIdentity, versionIdentity, temporalIdentity, legacyIdentityParts } from '../../domain/files/item-identity';
 import { lstat } from '../files/stats';
 import path from 'node:path';
 import { imageConversions } from '../../domain/contracts';
@@ -40,7 +40,7 @@ export const undoStepSchema = z
   .object({
     from: file,
     to: z.string().max(32768),
-    identity: z.string().max(200),
+    identity: z.string().max(200).transform((value) => temporalIdentity(value)),
     modified: count,
     size: count,
     caseOnly: z.boolean().optional(),
@@ -161,38 +161,61 @@ export const operationJournal = (dataPath: string) =>
 /** The most items an output may hold for Undo to remove it. */
 export const outputProofLimit = 10000;
 export type OutputProofVersion = 1 | 2;
-/** Compare the entire owned output before an Undo that removes it. Large trees
- * remain valid outputs but are ineligible for automatic removal by Undo. */
-export async function outputProof(
+export type ProofFailure = 'limit' | 'legacy-identity';
+export interface OutputEvidence {
+  proof?: string;
+  proofVersion?: 2;
+  failure?: ProofFailure;
+  exactProof?: string;
+}
+
+/** Safe trees retain the earlier byte layout. Large identities need a versioned proof; synthetic
+ * IDs contribute device/type while the path, size, dates, mode and link target still bind content. */
+export async function outputEvidence(
   root: string,
-  version: OutputProofVersion = 2,
-): Promise<string | undefined> {
-  const hash = createHash('sha256');
+  version?: OutputProofVersion,
+): Promise<OutputEvidence> {
+  const temporal = createHash('sha256');
+  const exact = version === 2 ? createHash('sha256') : undefined;
+  let large = false;
   const queue = [''];
   let count = 0;
   while (queue.length) {
-    if (++count > outputProofLimit) return undefined;
+    if (++count > outputProofLimit) return { failure: 'limit' };
     const relative = queue.pop()!;
     const file = path.join(root, relative);
     const info = await lstat(file);
-    const identity = version === 1 ? legacyIdentityParts(info) : [itemIdentity(info)];
-    if (!identity) return undefined;
-    hash.update(
-      JSON.stringify([
-        relative,
-        ...identity,
-        info.size,
-        info.mtimeMs,
-        info.ctimeMs,
-        info.mode,
-        info.isSymbolicLink() ? await readlink(file) : '',
-      ]),
-    );
+    const previous = legacyIdentityParts(info);
+    if (!previous) large = true;
+    const metadata = [
+      info.size, info.mtimeMs, info.ctimeMs, info.mode,
+      info.isSymbolicLink() ? await readlink(file) : '',
+    ];
+    temporal.update(JSON.stringify([relative, ...(previous ?? [versionIdentity(info)]), ...metadata]));
+    exact?.update(JSON.stringify([relative, itemIdentity(info), ...metadata]));
     if (info.isDirectory())
-      for (const name of (await readdir(file)).sort().reverse())
-        queue.push(path.join(relative, name));
+      for (const name of (await readdir(file)).sort().reverse()) queue.push(path.join(relative, name));
   }
-  return hash.digest('hex');
+  if (version === 1 && large) return { failure: 'legacy-identity' };
+  if (version === 2 || large)
+    return { proof: temporal.digest('hex'), proofVersion: 2, exactProof: exact?.digest('hex') };
+  return { proof: temporal.digest('hex') };
+}
+
+export async function outputProof(root: string, version?: OutputProofVersion): Promise<string | undefined> {
+  return (await outputEvidence(root, version)).proof;
+}
+
+export async function matchesOutputProof(
+  root: string,
+  proof: string,
+  version?: OutputProofVersion,
+): Promise<{ matches: boolean; failure?: ProofFailure }> {
+  const current = await outputEvidence(root, version ?? 1);
+  return {
+    matches: current.proof === proof || (version === 2 && current.exactProof === proof),
+    failure: current.failure,
+  };
 }
 
 /** One append-only line in a job's log. Replaying them rebuilds the receipt. */

@@ -1,6 +1,6 @@
 import { lstat, stat, fileStat } from '../files/stats';
 
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { constants } from 'node:fs';
 import { open, realpath } from 'node:fs/promises';
 import path from 'node:path';
@@ -133,16 +133,16 @@ function boundedArgument(value: unknown, label: string, maximum = 32768): assert
     throw new Error(`${label} is empty, contains a null character or exceeds its size limit.`);
 }
 
-const identity = itemIdentity;
+const identity = versionIdentity;
 
 async function metadataStamp(file: string): Promise<unknown> {
   try {
     const [link, target, canonical] = await Promise.all([lstat(file), stat(file), realpath(file)]);
     return [
       canonical,
-      itemIdentity(link),
+      versionIdentity(link),
       link.ctimeMs,
-      itemIdentity(target),
+      versionIdentity(target),
       target.size,
       target.mtimeMs,
       target.ctimeMs,

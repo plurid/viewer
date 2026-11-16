@@ -2,7 +2,7 @@ import { lstat, fileStat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
 
 import { itemIdentity } from '../../domain/files/item-identity';
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
 import { constants } from 'node:fs';
 import { open, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -58,7 +58,7 @@ async function sha256(file: string, info: Stats): Promise<string | undefined> {
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = await fileStat(handle);
-    if (!sameItem(before, info) || before.size > tourHashLimit) return;
+    if (!sameVersionItem(before, info) || before.size > tourHashLimit) return;
     const hash = createHash('sha256');
     if (before.size)
       for await (const chunk of handle.createReadStream({

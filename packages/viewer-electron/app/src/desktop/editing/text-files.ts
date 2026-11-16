@@ -1,6 +1,6 @@
 import { lstat, fileStat } from '../files/stats';
 
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { constants } from 'node:fs';
 import { access as permitted, open, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
@@ -79,7 +79,7 @@ export async function readText(file: string): Promise<{ text: string; version: T
     return {
       text,
       version: {
-        identity: itemIdentity(after),
+        identity: versionIdentity(after),
         modified: after.mtimeMs,
         size: after.size,
         sha256: sha256(data),
@@ -180,7 +180,7 @@ export class TextFiles {
     const data = Buffer.from(text, 'utf8');
     await this.operations.writeText(file, text, {
       version: {
-        identity: itemIdentity(existing),
+        identity: versionIdentity(existing),
         modified: existing.mtimeMs,
         size: existing.size,
       },
@@ -245,7 +245,7 @@ export class TextFiles {
   private async written(file: string, data: Buffer): Promise<TextVersion> {
     const info = await lstat(file);
     return {
-      identity: itemIdentity(info),
+      identity: versionIdentity(info),
       modified: info.mtimeMs,
       size: info.size,
       sha256: sha256(data),

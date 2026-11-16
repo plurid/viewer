@@ -1,5 +1,5 @@
 import { lstat } from '../files/stats';
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
 import { readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -123,7 +123,7 @@ export class Notes {
           if (
             !verified ||
             verified.revision !== request.revision ||
-            !sameItem(before, after) ||
+            !sameVersionItem(before, after) ||
             before.size !== after.size ||
             before.mtimeMs !== after.mtimeMs ||
             before.ctimeMs !== after.ctimeMs

@@ -1,6 +1,6 @@
 import { lstat, fileStat } from '../files/stats';
 
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import type { OperationJob } from '../../domain/contracts';
 import { randomUUID, createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -144,7 +144,7 @@ export class Checkpoints {
         directory: info.isDirectory(),
         mode: info.mode & 0o777,
         bytes: info.isFile() ? info.size : 0,
-        identity: itemIdentity(info),
+        identity: versionIdentity(info),
         modified: info.mtimeMs,
         changed: info.ctimeMs,
       });
@@ -257,7 +257,7 @@ export class Checkpoints {
                     const before = await fileStat(input);
                     if (
                       !before.isFile() ||
-                      itemIdentity(before) !== item.identity ||
+                      versionIdentity(before) !== item.identity ||
                       before.mtimeMs !== item.modified ||
                       before.ctimeMs !== item.changed ||
                       before.size !== item.bytes

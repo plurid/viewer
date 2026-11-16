@@ -1,6 +1,6 @@
 import { lstat, fileStat } from '../files/stats';
 
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { mkdir, open, realpath, type FileHandle } from 'node:fs/promises';
@@ -77,7 +77,7 @@ export class JournalStore {
       const file = await fileStat(this.handle);
       if (!file.isFile() || file.nlink !== 1 || file.mode & 0o077 || file.size > this.limits.bytes)
         throw new Error('Journal file is not a private bounded regular file.');
-      this.identity = itemIdentity(file);
+      this.identity = versionIdentity(file);
       this.bytes = file.size;
       const buffer = Buffer.alloc(file.size);
       let offset = 0;
@@ -117,7 +117,7 @@ export class JournalStore {
       !file.isFile() ||
       file.isSymbolicLink() ||
       file.nlink !== 1 ||
-      itemIdentity(file) !== this.identity ||
+      versionIdentity(file) !== this.identity ||
       file.size !== this.bytes ||
       file.mode & 0o077
     )

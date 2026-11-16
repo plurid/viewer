@@ -1,5 +1,5 @@
 import { fileStat } from '../files/stats';
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -41,7 +41,7 @@ export class ChatDocumentStore {
         }
         const after = await fileStat(handle);
         if (
-          !sameItem(before, after) ||
+          !sameVersionItem(before, after) ||
           before.size !== after.size ||
           before.ctimeMs !== after.ctimeMs ||
           before.mtimeMs !== after.mtimeMs

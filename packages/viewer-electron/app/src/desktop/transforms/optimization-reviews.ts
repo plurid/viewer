@@ -1,6 +1,6 @@
 import { lstat, fileStat } from '../files/stats';
 
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { mkdir, open, realpath, type FileHandle } from 'node:fs/promises';
@@ -425,7 +425,7 @@ export class OptimizationReviews implements TransformExecutor {
       }
       for (const after of [await fileStat(input), await lstat(file)])
         if (
-          !sameItem(after, before) ||
+          !sameVersionItem(after, before) ||
           after.size !== before.size ||
           after.mtimeMs !== before.mtimeMs
         )

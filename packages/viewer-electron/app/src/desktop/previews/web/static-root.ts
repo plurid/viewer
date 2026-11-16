@@ -1,7 +1,7 @@
 import { lstat, fileStat } from '../../files/stats';
 import type { FileStats as Stats } from '../../files/stats';
 
-import { itemIdentity } from '../../../domain/files/item-identity';
+import { versionIdentity } from '../../../domain/files/item-identity';
 import { constants } from 'node:fs';
 import { open, opendir, realpath, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
@@ -30,7 +30,7 @@ export interface StaticRootIdentity {
   identity: string;
 }
 
-const identity = itemIdentity;
+const identity = versionIdentity;
 const stable = (before: Stats, after: Stats) =>
   identity(before) === identity(after) &&
   before.size === after.size &&

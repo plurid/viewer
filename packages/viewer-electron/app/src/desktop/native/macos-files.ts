@@ -4,7 +4,9 @@ import type { ReviewedFileExpectation } from './reviewed-file';
 import { guardNativeTestRemovals } from './test-removal-policy';
 import type { FullscreenPhase } from '../windows/fullscreen-transition';
 import { assetPath } from './assets';
-import { nativeIdentityArgument } from '../../domain/files/item-identity';
+import { nativeIdentityArgument, itemIdentity, versionIdentity } from '../../domain/files/item-identity';
+import { sameSourceVersion } from '../../domain/files/inspection';
+import { lstat } from '../files/stats';
 export interface NativeVolume {
   path: string;
   name: string;
@@ -107,12 +109,38 @@ export interface MacFiles {
   quarantineAttachment(file: string): void;
 }
 let binding: MacFiles | undefined;
+export interface NativeReviewedExpectation {
+  version: { identity: string; modified: number; size: number };
+  sha256: string;
+}
+export type NativeFileBindings = Omit<MacFiles, 'trash'> & {
+  trash(file: string, purpose?: string, expected?: NativeReviewedExpectation): Promise<TrashReceipt>;
+};
 export interface TrashReceipt {
   path: string;
   directory: boolean;
   bookmark?: string;
 }
 export type ReceiptAccess = <T>(receipt: TrashReceipt, work: () => Promise<T>) => Promise<T>;
+export function adaptMacFiles(native: NativeFileBindings): MacFiles {
+  const adapter = Object.create(native) as MacFiles;
+  Object.defineProperty(adapter, 'trash', {
+    value: async (item: string, purpose?: string, expected?: ReviewedFileExpectation) => {
+      if (!expected) return native.trash(item, purpose);
+      // A retained review uses temporal evidence. The native accessor must receive a fresh
+      // exact identity from the same syscall as its metadata, then verify that plus the hash.
+      const info = await lstat(item);
+      const current = { identity: versionIdentity(info), modified: info.mtimeMs, size: info.size };
+      if (!sameSourceVersion(current, expected.version))
+        throw new Error('The file changed after confirmation. It was preserved.');
+      return native.trash(item, purpose, {
+        ...expected,
+        version: { ...current, identity: nativeIdentityArgument(itemIdentity(info)) },
+      });
+    },
+  });
+  return adapter;
+}
 export function macFiles(): MacFiles {
   if (process.platform !== 'darwin') throw new Error('This file service requires macOS.');
   const assets = assetPath();
@@ -121,26 +149,7 @@ export function macFiles(): MacFiles {
   const require = createRequire(path.join(assets, 'viewer-native.cjs'));
   const file = path.join(assets, 'viewer-macos-files.node');
   if (!binding) {
-    const native = guardNativeTestRemovals(require(file) as MacFiles);
-    const adapter = Object.create(native) as MacFiles;
-    // The helper's reviewed-file protocol has always used exact unsigned decimal strings.
-    Object.defineProperty(adapter, 'trash', {
-      value: (item: string, purpose?: string, expected?: ReviewedFileExpectation) =>
-        native.trash(
-          item,
-          purpose,
-          expected
-            ? {
-                ...expected,
-                version: {
-                  ...expected.version,
-                  identity: nativeIdentityArgument(expected.version.identity),
-                },
-              }
-            : undefined,
-        ),
-    });
-    binding = adapter;
+    binding = adaptMacFiles(guardNativeTestRemovals(require(file) as NativeFileBindings));
   }
   return binding;
 }

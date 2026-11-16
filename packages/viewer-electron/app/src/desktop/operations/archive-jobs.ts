@@ -1,7 +1,7 @@
 import { lstat, fileStat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
 
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
 import { constants } from 'node:fs';
 import { chmod, mkdir, open, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -15,7 +15,7 @@ export interface ArchiveWork {
   progress(file: string, done: number, total: number): void;
 }
 const same = (before: Stats, after: Stats) =>
-  sameItem(before, after) &&
+  sameVersionItem(before, after) &&
   before.ctimeMs === after.ctimeMs &&
   before.mtimeMs === after.mtimeMs &&
   before.size === after.size;
@@ -84,7 +84,7 @@ export async function createArchive(
         await work.access([actual]);
         if (entry.info.isFile()) {
           const hydrated = await lstat(actual);
-          if (!hydrated.isFile() || !sameItem(hydrated, entry.info))
+          if (!hydrated.isFile() || !sameVersionItem(hydrated, entry.info))
             throw new Error('A source changed while waiting for its file provider.');
           // Placeholder metadata is captured during traversal; hydrated length
           // and modification times are captured before the first content byte.

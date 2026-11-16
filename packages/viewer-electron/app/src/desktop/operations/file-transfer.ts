@@ -1,7 +1,9 @@
+import { versionIdentity } from '../../domain/files/item-identity';
+import type { TemporalIdentity } from '../../domain/files/item-identity';
 import { lstat, fileStat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
 
-import { sameItem } from '../files/item-identity';
+import { sameItem, sameVersionItem } from '../files/item-identity';
 import { constants } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 import {
@@ -36,6 +38,7 @@ export interface TransferJob {
 export interface CopyFingerprint {
   file: string;
   info: Stats;
+  identity: TemporalIdentity;
   children?: string[];
 }
 /**
@@ -208,7 +211,7 @@ export async function copyTree(
         job.check();
         const info = await lstat(source);
         if (!info.isFile()) throw new Error('Source changed while waiting for its file provider.');
-        fingerprints.push({ file: source, info });
+        fingerprints.push({ file: source, info, identity: versionIdentity(info) });
         await copyFile(source, target, info, job, signal, durability);
       },
       job.signal,
@@ -230,7 +233,7 @@ export async function copyTree(
         const current = await lstat(from);
         if (!current.isSymbolicLink())
           throw new Error('The symbolic link changed while waiting for its file provider.');
-        fingerprints.push({ file: source, info: current });
+        fingerprints.push({ file: source, info: current, identity: versionIdentity(current) });
         await symlink(await readlink(from), to);
         if (process.platform === 'darwin') await macFiles().copyLinkMetadata(from, to);
         signal?.throwIfAborted();
@@ -239,7 +242,7 @@ export async function copyTree(
     );
   }
   const children = info.isDirectory() ? (await readdir(source)).sort() : undefined;
-  fingerprints.push({ file: source, info, children });
+  fingerprints.push({ file: source, info, children, identity: versionIdentity(info) });
   if (info.isDirectory()) {
     await mkdir(target, { mode: info.mode | 0o700 });
     for (const name of children!)
@@ -267,7 +270,7 @@ export async function copyTree(
           let output: Awaited<ReturnType<typeof open>> | undefined;
           try {
             const opened = await fileStat(input);
-            if (!sameItem(opened, info)) throw new Error('Source folder changed during the copy.');
+            if (!sameVersionItem(opened, info)) throw new Error('Source folder changed during the copy.');
             output = await open(
               fileCoordination.path(target),
               constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
@@ -326,7 +329,7 @@ async function copyFile(
     const opened = await fileStat(input);
     if (
       !opened.isFile() ||
-      !sameItem(opened, info) ||
+      !sameVersionItem(opened, info) ||
       opened.size !== info.size ||
       opened.mtimeMs !== info.mtimeMs ||
       opened.ctimeMs !== info.ctimeMs
@@ -347,7 +350,7 @@ async function copyFile(
     if (durability === 'flushed') await output?.sync();
     const after = await lstat(source);
     if (
-      !sameItem(after, info) ||
+      !sameVersionItem(after, info) ||
       after.mtimeMs !== info.mtimeMs ||
       after.ctimeMs !== info.ctimeMs ||
       after.size !== info.size

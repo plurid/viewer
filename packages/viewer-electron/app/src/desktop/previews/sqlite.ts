@@ -1,7 +1,7 @@
 import { lstat, fileStat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
 
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
 /**
  * Reads SQLite databases for previews without changing them. A database opens read-only and
  * immutable, so SQLite takes no locks and neither creates nor reads its -wal, -shm or journal
@@ -114,7 +114,7 @@ async function readHeader(file: string, expected: Stats): Promise<Uint8Array> {
 function sameFile(before: Stats, after: Stats): boolean {
   return (
     after.isFile() &&
-    sameItem(before, after) &&
+    sameVersionItem(before, after) &&
     before.size === after.size &&
     before.mtimeMs === after.mtimeMs
   );

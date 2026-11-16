@@ -1,7 +1,7 @@
 import { lstat, fileStat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
 
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { sameItem } from '../files/item-identity';
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
@@ -54,7 +54,7 @@ export async function inspectReviewedFile(file: string, limit: number): Promise<
       reviewed: {
         path: file,
         version: {
-          identity: itemIdentity(before),
+          identity: versionIdentity(before),
           modified: before.mtimeMs,
           size: before.size,
         },

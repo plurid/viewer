@@ -1,6 +1,6 @@
 import type { FileStats as Stats } from '../files/stats';
 import { fileStat } from '../files/stats';
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 /**
  * WHAT A CHECK READS: each job file only while it is the version the check listed, hashed for the
  * check record. A request is read through the mail parser, a photo re-encoded without its metadata,
@@ -28,7 +28,7 @@ export const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).
 const sizeText = (bytes: number) =>
   bytes >= 1_000_000 ? `${Math.round(bytes / 1_000_000)} MB` : `${Math.ceil(bytes / 1000)} kB`;
 const listed = (info: Stats, version: SourceVersion) =>
-  itemIdentity(info) === version.identity &&
+  versionIdentity(info) === version.identity &&
   info.mtimeMs === version.modified &&
   info.size === version.size;
 const changed = (file: string) =>

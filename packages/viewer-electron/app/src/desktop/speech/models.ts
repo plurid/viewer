@@ -1,6 +1,6 @@
 import { lstat, fileStat } from '../files/stats';
 
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { mkdir, open, realpath, statfs } from 'node:fs/promises';
@@ -151,7 +151,7 @@ export class SpeechModels {
         info.isFile() &&
         !info.isSymbolicLink() &&
         info.size === model.bytes &&
-        itemIdentity(info) === record.identity &&
+        versionIdentity(info) === record.identity &&
         info.mtimeMs === record.modified
       );
     } catch {
@@ -313,7 +313,7 @@ export class SpeechModels {
       await handle.sync();
       const info = await fileStat(handle);
       signal.throwIfAborted();
-      record.identity = itemIdentity(info);
+      record.identity = versionIdentity(info);
       record.modified = info.mtimeMs;
       record.status = 'ready';
       await this.store.save(state);

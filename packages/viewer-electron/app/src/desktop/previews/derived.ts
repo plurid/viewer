@@ -1,4 +1,4 @@
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { lstat, fileStat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
 
@@ -51,7 +51,7 @@ interface Pending {
   work: Promise<Cached>;
   users: number;
 }
-const version = (info: Stats) => [itemIdentity(info), info.size, info.mtimeMs, info.ctimeMs];
+const version = (info: Stats) => [versionIdentity(info), info.size, info.mtimeMs, info.ctimeMs];
 const same = (a: Stats, b: Stats) => JSON.stringify(version(a)) === JSON.stringify(version(b));
 
 /** Shared bounded bytes, never filesystem authority. Views pin entries until their

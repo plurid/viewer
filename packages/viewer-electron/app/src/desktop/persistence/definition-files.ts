@@ -1,6 +1,6 @@
 import { lstat, fileStat } from '../files/stats';
 
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
 import { constants } from 'node:fs';
 import { open, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
@@ -47,7 +47,7 @@ async function source(file: string, title: string, limit: number): Promise<strin
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = await fileStat(handle);
-    if (!sameItem(before, info) || !before.isFile() || before.size > limit)
+    if (!sameVersionItem(before, info) || !before.isFile() || before.size > limit)
       throw new Error(title + ' changed while opening. Try again.');
     const data = Buffer.alloc(before.size);
     let offset = 0;

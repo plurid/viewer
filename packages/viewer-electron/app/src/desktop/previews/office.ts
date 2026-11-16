@@ -1,5 +1,5 @@
 import { lstat } from '../files/stats';
-import { sameItem } from '../files/item-identity';
+import { sameVersionItem } from '../files/item-identity';
 import path from 'node:path';
 
 import { Archives } from './archives';
@@ -292,7 +292,7 @@ export async function extractOffice(
     }
     const after = await lstat(fileCoordination.path(file));
     if (
-      !sameItem(before, after) ||
+      !sameVersionItem(before, after) ||
       before.size !== after.size ||
       before.mtimeMs !== after.mtimeMs ||
       before.ctimeMs !== after.ctimeMs

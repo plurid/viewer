@@ -1,4 +1,4 @@
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import type { FileStats as Stats } from '../files/stats';
 import { fileStat } from '../files/stats';
 import { constants } from 'node:fs';
@@ -47,7 +47,7 @@ async function openMailbox(file: string) {
 }
 /** The key of a mailbox's scanned messages. */
 const mailboxVersion = (file: string, info: Stats) =>
-  JSON.stringify([file, itemIdentity(info), info.size, info.mtimeMs, info.ctimeMs]);
+  JSON.stringify([file, versionIdentity(info), info.size, info.mtimeMs, info.ctimeMs]);
 const messageTooLarge = 'This message is larger than 64 MB.';
 
 /** Reads the mailbox from its start, a chunk at a time, until `until` is located or a limit

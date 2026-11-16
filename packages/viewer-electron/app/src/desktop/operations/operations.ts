@@ -1,8 +1,9 @@
+import type { TemporalIdentity } from '../../domain/files/item-identity';
 import {
   olderIdentityMessage,
-  readItemIdentity,
+  readTemporalIdentity,
   sameDevice,
-  itemIdentity,
+  versionIdentity,
 } from '../../domain/files/item-identity';
 
 import { lstat, stat } from '../files/stats';
@@ -33,6 +34,8 @@ import { createArchive, extractArchive } from './archive-jobs';
 import {
   OperationLog,
   outputProof,
+  outputEvidence,
+  matchesOutputProof,
   outputProofLimit,
   type OperationReceipt,
 } from './operation-journal';
@@ -49,7 +52,7 @@ import { fileCoordination } from '../files/file-coordination';
 import { removeEmptyDirectory, unlinkVerified } from './removal';
 import { ProtectedPaths } from '../files/protected-paths';
 import { convertibleExtensions, unavailableConverter, type ImageConverter } from './image-convert';
-import { holds, sameItem, unchanged, type Replaced } from '../files/item-identity';
+import { holds, sameItem, pinReplacement, unchanged, type Replaced } from '../files/item-identity';
 import { validateTransform, combinedTransform } from '../../domain/operations/transforms';
 import type { TransformExecutor } from '../transforms/transforms';
 import type { OptimizationStatistics } from '../../domain/operations/optimization-target';
@@ -73,7 +76,7 @@ import { MAX_CLIPBOARD_IMAGE_BYTES, checkClipboardImageSize } from '../../domain
 interface UndoStep {
   from: string;
   to: string;
-  identity: string;
+  identity: TemporalIdentity;
   modified: number;
   size: number;
   caseOnly?: boolean;
@@ -332,12 +335,12 @@ export class Operations {
     if (
       !current ||
       current.isSymbolicLink() ||
-      itemIdentity(current) !== step.identity ||
+      versionIdentity(current) !== step.identity ||
       current.mtimeMs !== step.modified ||
       current.size !== step.size
     )
       return false;
-    return (await outputProof(file, step.proofVersion ?? 1)) === step.proof;
+    return (await matchesOutputProof(file, step.proof!, step.proofVersion)).matches;
   }
   /** Clearing finished notifications preserves receipts, recovery paths and Undo. */
   async dismiss(ids: readonly string[]): Promise<void> {
@@ -668,7 +671,7 @@ export class Operations {
             }
             this.check(task);
             // the version read goes to the Trash, pinned to what was checked above
-            await this.publishReplacing(task, stage.file, file, existing);
+            await this.publishReplacing(task, stage.file, file, pinReplacement(existing));
           } else {
             await this.access([file]);
             task.intent = { source: '', destination: file };
@@ -701,7 +704,8 @@ export class Operations {
             );
           }
           // Undo moves the saved version to the Trash, then puts back the one it replaced.
-          const proof = await outputProof(file);
+          const evidence = await outputEvidence(file);
+          const { proof, proofVersion } = evidence;
           if (proof) {
             const info = await lstat(file);
             task.undo.push({
@@ -709,8 +713,8 @@ export class Operations {
               to: '',
               remove: true,
               proof,
-              proofVersion: 2,
-              identity: itemIdentity(info),
+              ...(proofVersion === 2 ? { proofVersion } : {}),
+              identity: versionIdentity(info),
               modified: info.mtimeMs,
               size: info.size,
             });
@@ -894,18 +898,18 @@ export class Operations {
     );
     // Validate the entire undo first, so a known conflict never produces a partial undo.
     for (const step of task.undo) {
-      if (!readItemIdentity(step.identity)) throw new Error(olderIdentityMessage);
+      if (!readTemporalIdentity(step.identity)) throw new Error(olderIdentityMessage);
       await this.withStep(step, async () => {
         const info = await lstat(step.from);
         if (
-          itemIdentity(info) !== step.identity ||
+          versionIdentity(info) !== step.identity ||
           (!info.isDirectory() && (info.mtimeMs !== step.modified || info.size !== step.size))
         )
           throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
         if (step.proof) {
-          const proof = await outputProof(step.from, step.proofVersion ?? 1);
-          if (!proof && !step.proofVersion) throw new Error(olderIdentityMessage);
-          if (proof !== step.proof)
+          const proof = await matchesOutputProof(step.from, step.proof, step.proofVersion);
+          if (proof.failure === 'legacy-identity') throw new Error(olderIdentityMessage);
+          if (!proof.matches)
             throw new Error(
               `Cannot undo: ${step.from} or its contents changed since the operation.`,
             );
@@ -915,7 +919,7 @@ export class Operations {
           const willVacate = task.undo
             .slice(task.undo.indexOf(step) + 1)
             .some((other) => other.from === step.to);
-          if (!willVacate && (!step.caseOnly || itemIdentity(destination) !== step.identity))
+          if (!willVacate && (!step.caseOnly || versionIdentity(destination) !== step.identity))
             throw new Error(`Cannot undo: ${step.to} already exists.`);
         }
       });
@@ -936,12 +940,12 @@ export class Operations {
             await this.access(step.remove ? [step.from] : [step.from, step.to]);
             const current = await lstat(step.from);
             if (
-              itemIdentity(current) !== step.identity ||
+              versionIdentity(current) !== step.identity ||
               (!current.isDirectory() &&
                 (current.size !== step.size || current.mtimeMs !== step.modified))
             )
               throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
-            if (step.proof && (await outputProof(step.from, step.proofVersion ?? 1)) !== step.proof)
+            if (step.proof && !(await matchesOutputProof(step.from, step.proof, step.proofVersion)).matches)
               throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
             if (step.remove) await this.trash(step.from);
             else if (step.caseOnly && (await exists(step.to)))
@@ -1052,7 +1056,7 @@ export class Operations {
     if (!receipt) return;
     try {
       await this.receiptAccess(receipt, async () => {
-        const proof = await outputProof(receipt.path);
+        const { proof, proofVersion } = await outputEvidence(receipt.path);
         // Too large to prove unchanged, so there is no Undo; said, as a missing bookmark is.
         if (!proof)
           throw new Error(
@@ -1066,8 +1070,8 @@ export class Operations {
           bookmark: receipt.bookmark,
           directory: receipt.directory,
           proof,
-          proofVersion: 2,
-          identity: itemIdentity(info),
+          ...(proofVersion === 2 ? { proofVersion } : {}),
+          identity: versionIdentity(info),
           modified: info.mtimeMs,
           size: info.size,
         });
@@ -1106,7 +1110,7 @@ export class Operations {
     task.undo.push({
       from: kept,
       to: destination,
-      identity: itemIdentity(info),
+      identity: versionIdentity(info),
       modified: info.mtimeMs,
       size: info.size,
     });
@@ -1368,7 +1372,7 @@ export class Operations {
           ? 'A new item cannot replace an existing one. Choose Keep both.'
           : 'The existing item contains the source, so it cannot be replaced. Choose Keep both or Skip.',
       );
-    return { path: destination, replaces: existing };
+    return { path: destination, replaces: pinReplacement(existing) };
   }
   private async transfer(
     task: Task,
@@ -1414,7 +1418,7 @@ export class Operations {
         for (const fingerprint of fingerprints) {
           const info = await lstat(fingerprint.file);
           if (
-            !sameItem(info, fingerprint.info) ||
+            versionIdentity(info) !== fingerprint.identity ||
             info.mtimeMs !== fingerprint.info.mtimeMs ||
             info.ctimeMs !== fingerprint.info.ctimeMs ||
             info.size !== fingerprint.info.size ||
@@ -1441,7 +1445,7 @@ export class Operations {
               await this.access([file]);
               const current = await lstat(file);
               if (
-                !sameItem(current, fingerprint.info) ||
+                versionIdentity(current) !== fingerprint.identity ||
                 (!current.isDirectory() &&
                   (current.ctimeMs !== fingerprint.info.ctimeMs ||
                     current.size !== fingerprint.info.size))
@@ -1888,14 +1892,14 @@ export class Operations {
       task.undo.push({
         from: destination,
         to: source,
-        identity: itemIdentity(info),
+        identity: versionIdentity(info),
         modified: info.mtimeMs,
         size: info.size,
         caseOnly: !!made.caseOnly,
       });
     }
     if (!move && creatingKinds.includes(task.request.kind)) {
-      const proof = await outputProof(destination);
+      const { proof, proofVersion } = await outputEvidence(destination);
       if (!proof) (task.unproven ??= []).push(destination);
       if (proof) {
         const info = await lstat(destination);
@@ -1904,8 +1908,8 @@ export class Operations {
           to: '',
           remove: true,
           proof,
-          proofVersion: 2,
-          identity: itemIdentity(info),
+          ...(proofVersion === 2 ? { proofVersion } : {}),
+          identity: versionIdentity(info),
           modified: info.mtimeMs,
           size: info.size,
         });

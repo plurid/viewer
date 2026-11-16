@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { sameIdentity } from '../files/item-identity';
+import { sameTemporalIdentity, temporalIdentity } from '../files/item-identity';
+import type { TemporalIdentity } from '../files/item-identity';
 
 /**
  * A text file's version as it was read: its item, date and size, and the hash of its bytes, all
@@ -7,7 +8,7 @@ import { sameIdentity } from '../files/item-identity';
  */
 export const textVersionSchema = z
   .object({
-    identity: z.string().max(300),
+    identity: z.string().max(300).transform((value): TemporalIdentity => temporalIdentity(value)),
     modified: z.number().finite(),
     size: z.number().finite().min(0),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
@@ -16,7 +17,7 @@ export const textVersionSchema = z
 export type TextVersion = z.infer<typeof textVersionSchema>;
 
 export const sameTextVersion = (a: TextVersion, b: TextVersion) =>
-  sameIdentity(a.identity, b.identity) &&
+  sameTemporalIdentity(a.identity, b.identity) &&
   a.modified === b.modified &&
   a.size === b.size &&
   a.sha256 === b.sha256;

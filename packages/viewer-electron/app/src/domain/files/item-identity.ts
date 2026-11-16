@@ -1,4 +1,12 @@
 export type IdentityComponent = number | bigint;
+declare const identityLifetime: unique symbol;
+export type MomentIdentity = string & { readonly [identityLifetime]: 'moment' };
+/** Unbranded serialized input remains readable, but a moment identity is not assignable here. */
+export type TemporalIdentity = string & { readonly [identityLifetime]?: 'temporal' };
+export type IdentityKind = 'file' | 'directory' | 'symlink' | 'other';
+export interface VersionStat extends StatIdentity {
+  mode: number;
+}
 
 export interface StatIdentity {
   dev: IdentityComponent;
@@ -21,10 +29,58 @@ function unsigned(value: IdentityComponent): bigint {
 
 /** Safe older numbers already encode an exact identity. The suffix distinguishes exact large
  * values from untrustworthy decimal strings produced by older builds from rounded numbers. */
-export function itemIdentity(info: StatIdentity): string {
+export function itemIdentity(info: StatIdentity): MomentIdentity {
   const { dev: device, ino: inode } = exactIdentityParts(info);
   const suffix = device > safeMaximum || inode > safeMaximum ? ':u64' : '';
-  return `${device}:${inode}${suffix}`;
+  return `${device}:${inode}${suffix}` as MomentIdentity;
+}
+
+/** FSKit allocates descending regular-file IDs in the unsigned upper half. They can change
+ * without a content change. HFS+ CNIDs are 32-bit and APFS inode object IDs occupy 60 bits, so
+ * neither filesystem's real inode IDs enter this range. Immediate comparisons still use them. */
+export function syntheticInode(info: StatIdentity): boolean {
+  return unsigned(info.ino) >= 1n << 63n;
+}
+
+export function identityKind(mode: number): IdentityKind {
+  switch (mode & 0o170000) {
+    case 0o100000: return 'file';
+    case 0o040000: return 'directory';
+    case 0o120000: return 'symlink';
+    default: return 'other';
+  }
+}
+
+export function temporalIdentity(value: string, kind: IdentityKind = 'file'): TemporalIdentity {
+  if (kind === 'file' && value.endsWith(':u64')) {
+    const exact = readItemIdentity(value);
+    if (exact) {
+      const [dev, ino] = exact.split(':');
+      if (syntheticInode({ dev: BigInt(dev!), ino: BigInt(ino!) }))
+        return `${dev}:synthetic:file` as TemporalIdentity;
+    }
+  }
+  return value as TemporalIdentity;
+}
+
+export function versionIdentity(info: VersionStat): TemporalIdentity {
+  return temporalIdentity(itemIdentity(info), identityKind(info.mode));
+}
+
+export function readTemporalIdentity(value: string): TemporalIdentity | undefined {
+  const synthetic = /^(0|[1-9]\d*):synthetic:file$/.exec(value);
+  if (synthetic) {
+    if (BigInt(synthetic[1]!) <= maximum) return value as TemporalIdentity;
+    return;
+  }
+  const exact = readItemIdentity(value);
+  return exact ? temporalIdentity(exact) : undefined;
+}
+
+export function sameTemporalIdentity(a: TemporalIdentity, b: TemporalIdentity): boolean {
+  if (!/^-?\d+:/.test(a) && !/^-?\d+:/.test(b)) return a !== '' && a === b;
+  const identity = readTemporalIdentity(a);
+  return identity !== undefined && identity === readTemporalIdentity(b);
 }
 
 export function exactIdentityParts(info: StatIdentity): { dev: bigint; ino: bigint } {
@@ -32,7 +88,7 @@ export function exactIdentityParts(info: StatIdentity): { dev: bigint; ino: bigi
 }
 
 /** Native identities are unsigned decimal strings, never JavaScript numbers. */
-export function nativeItemIdentity(value: string): string | undefined {
+export function nativeItemIdentity(value: string): MomentIdentity | undefined {
   const parts = /^(0|[1-9]\d*):(0|[1-9]\d*)(:u64)?$/.exec(value);
   if (!parts) return;
   const dev = BigInt(parts[1]!);
@@ -41,7 +97,7 @@ export function nativeItemIdentity(value: string): string | undefined {
   return itemIdentity({ dev, ino });
 }
 
-export function readItemIdentity(value: string): string | undefined {
+export function readItemIdentity(value: string): MomentIdentity | undefined {
   const exact = nativeItemIdentity(value);
   if (!exact || (exact.endsWith(':u64') && !value.endsWith(':u64'))) return;
   return exact;

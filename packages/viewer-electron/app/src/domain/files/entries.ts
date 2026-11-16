@@ -1,5 +1,5 @@
 import { zipContainers } from './containers';
-import { sameIdentity } from './item-identity';
+import { sameIdentity, temporalIdentity } from './item-identity';
 import type { FileEntry, SortKey } from '../contracts';
 import { modelFormats } from '../previews/models/formats';
 import { cameraRawFormats } from '../previews/images/rendered';
@@ -9,13 +9,25 @@ import { provisionFormats } from '../previews/data/provision';
 import { shortcutFormats } from '../previews/data/shortcuts';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+function selectionIdentity(entry: FileEntry): string {
+  const identity = temporalIdentity(entry.identity, entry.kind);
+  return identity === entry.identity
+    ? identity
+    : `${identity}:${entry.size}:${entry.modified}:${entry.created}`;
+}
+function sameSelection(a: FileEntry, b: FileEntry): boolean {
+  if (a.identity === '' && b.identity === '') return true;
+  const key = selectionIdentity(a);
+  return key === selectionIdentity(b) &&
+    (key !== a.identity || sameIdentity(a.identity, b.identity));
+}
 export function indexEntries(entries: readonly FileEntry[]) {
   const paths = new Map<string, FileEntry>();
   const identities = new Map<string, FileEntry | null>();
   for (const entry of entries) {
     paths.set(entry.path, entry);
-    if (sameIdentity(entry.identity, entry.identity))
-      identities.set(entry.identity, identities.has(entry.identity) ? null : entry);
+    const identity = selectionIdentity(entry);
+    identities.set(identity, identities.has(identity) ? null : entry);
   }
   return { paths, identities };
 }
@@ -36,12 +48,12 @@ export function reconcileSelection(
     }
     const exact = index.paths.get(path);
     const entry =
-      exact && (!cached || sameIdentity(exact.identity, cached.identity))
+      exact && (!cached || sameSelection(exact, cached))
         ? exact
         : cached?.identity
-          ? index.identities.get(cached.identity)
+          ? index.identities.get(selectionIdentity(cached))
           : undefined;
-    if (entry) {
+    if (entry && (!cached || sameSelection(entry, cached))) {
       cache.set(entry.path, entry);
       next.push(entry.path);
     }

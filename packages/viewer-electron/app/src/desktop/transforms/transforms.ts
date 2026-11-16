@@ -1,6 +1,6 @@
 import { lstat, fileStat } from '../files/stats';
 
-import { itemIdentity } from '../../domain/files/item-identity';
+import { versionIdentity } from '../../domain/files/item-identity';
 import { constants } from 'node:fs';
 import { open, realpath, type FileHandle } from 'node:fs/promises';
 import path from 'node:path';
@@ -153,7 +153,7 @@ export class Transforms implements TransformExecutor {
         sources.push({
           file: actual,
           handle,
-          identity: itemIdentity(info),
+          identity: versionIdentity(info),
           modified: info.mtimeMs,
           size: info.size,
         });
@@ -165,7 +165,7 @@ export class Transforms implements TransformExecutor {
       for (const source of sources)
         for (const info of [await fileStat(source.handle), await lstat(source.file)]) {
           if (
-            itemIdentity(info) !== source.identity ||
+            versionIdentity(info) !== source.identity ||
             info.mtimeMs !== source.modified ||
             info.size !== source.size
           )
@@ -398,7 +398,7 @@ export class Transforms implements TransformExecutor {
                 const info = await fileStat(input),
                   expected = sources[index]!;
                 if (
-                  itemIdentity(info) !== expected.identity ||
+                  versionIdentity(info) !== expected.identity ||
                   info.mtimeMs !== expected.modified ||
                   info.size !== expected.size
                 )

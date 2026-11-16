@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { sameIdentity } from './item-identity';
+import { sameTemporalIdentity, temporalIdentity } from './item-identity';
+import type { TemporalIdentity } from './item-identity';
 import type { FileEntry } from '../contracts';
 import type { DocumentData, DocumentEvidence } from '../services';
 export const sourceVersionSchema = z
   .object({
-    identity: z.string().max(300),
+    identity: z.string().max(300).transform((value): TemporalIdentity => temporalIdentity(value)),
     modified: z.number().finite(),
     size: z.number().finite().min(0),
   })
@@ -160,12 +161,12 @@ export interface SearchEvidence extends EvidenceNavigation {
   coverage: 'complete' | 'partial';
 }
 export const sourceVersion = (entry: FileEntry): SourceVersion => ({
-  identity: entry.identity,
+  identity: temporalIdentity(entry.identity, entry.kind),
   modified: entry.modified,
   size: entry.size,
 });
 export const sameSourceVersion = (a: SourceVersion, b: SourceVersion) =>
-  sameIdentity(a.identity, b.identity) && a.modified === b.modified && a.size === b.size;
+  sameTemporalIdentity(a.identity, b.identity) && a.modified === b.modified && a.size === b.size;
 
 /** Case/diacritic matching keeps a map back to the original passage and offsets. */
 export function originalMatch(
