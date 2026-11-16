@@ -1,6 +1,33 @@
 import type { Pane } from '../contracts';
 import type { TileLayout } from './tiling';
 import { slugID } from '../ids';
+import { z } from 'zod';
+import { maxQueryLength } from '../search/query';
+
+export function templatePlaneSchema<Extra extends z.ZodRawShape = Record<never, never>>(
+  pathSchema = z.string().max(4096).refine((value) => !value.includes('\0')),
+  terminalFields?: Extra,
+) {
+  return z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('folder'), path: pathSchema }).strict(),
+    z.object({ kind: z.literal('file'), path: pathSchema }).strict(),
+    z.object({
+      kind: z.literal('terminal'),
+      path: pathSchema,
+      profileID: z.string().max(200).optional(),
+      ...terminalFields,
+    }).strict(),
+    z.object({ kind: z.literal('scratch') }).strict(),
+    z.object({
+      kind: z.literal('search'),
+      query: z.string().max(maxQueryLength),
+      name: z.string().min(1).max(100),
+      root: pathSchema.optional(),
+      recursive: z.boolean().optional(),
+      content: z.boolean().optional(),
+    }).strict(),
+  ]);
+}
 
 /** A plane a template opens: by kind and folder, not by identity, so it opens anywhere. */
 export type TemplatePlane =

@@ -37,6 +37,7 @@ import { localPath, id } from '../schemas';
 import { optimizationRecipeSchema } from '../../domain/operations/optimization';
 import { defaultFileOpening } from '../../domain/services';
 import { maxQueryLength } from '../../domain/search/query';
+import { templatePlaneSchema } from '../../domain/workspaces/layout-templates';
 import { savedSearchCount, searchNameLength } from '../../domain/search/saved';
 import {
   clockTime,
@@ -130,28 +131,7 @@ export const layoutTemplateSchema = z
     name: z.string().min(1).max(100),
     planes: z
       .array(
-        z.discriminatedUnion('kind', [
-          z.object({ kind: z.literal('folder'), path: templatePath }).strict(),
-          z.object({ kind: z.literal('file'), path: templatePath }).strict(),
-          z
-            .object({
-              kind: z.literal('terminal'),
-              path: templatePath,
-              profileID: z.string().max(200).optional(),
-            })
-            .strict(),
-          z.object({ kind: z.literal('scratch') }).strict(),
-          z
-            .object({
-              kind: z.literal('search'),
-              query: z.string().max(maxQueryLength),
-              name: z.string().min(1).max(100),
-              root: templatePath.optional(),
-              recursive: z.boolean().optional(),
-              content: z.boolean().optional(),
-            })
-            .strict(),
-        ]),
+        templatePlaneSchema(templatePath),
       )
       .min(1)
       .max(30),
