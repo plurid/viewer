@@ -19,6 +19,9 @@ type ResourceHandlers = Pick<
   | 'imageRendition'
   | 'videoRendition'
   | 'officeLayout'
+  | 'inspectPostscript'
+  | 'postscriptStatus'
+  | 'renderPostscript'
   | 'officeWarm'
   | 'printPDF'
   | 'thumbnail'
@@ -39,6 +42,9 @@ interface ResourcePorts {
     | 'rendition'
     | 'videoRendition'
     | 'officeLayout'
+    | 'inspectPostscript'
+    | 'postscriptStatus'
+    | 'renderPostscript'
     | 'printableFile'
     | 'documentRead'
     | 'documentSource'
@@ -53,6 +59,7 @@ interface ResourcePorts {
   fileAccess: Pick<FileAccess, 'require'>;
   forgetGitResource(id: string): void;
   warmOffice(): void;
+  isAgent?(owner: number): boolean;
 }
 
 /** Previews are read through the resource leases that authorized them; a nested image is a
@@ -72,6 +79,13 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
     imageRendition: ([id, request]) => ports.resources.rendition(id, request),
     videoRendition: ([id, requestID]) => ports.resources.videoRendition(id, requestID),
     officeLayout: ([id, request]) => ports.resources.officeLayout(id, request),
+    inspectPostscript: ([id, requestID]) => ports.resources.inspectPostscript(id, requestID),
+    postscriptStatus: () => ports.resources.postscriptStatus(),
+    renderPostscript: ([id, requestID], owner) => {
+      if (!ports.isAgent || ports.isAgent(owner))
+        throw new Error('PostScript rendering is available only to the person, never to agents.');
+      return ports.resources.renderPostscript(id, requestID);
+    },
     officeWarm: async () => ports.warmOffice(),
     printPDF: async ([id, password]) => {
       if (process.platform !== 'darwin') throw new Error('Printing PDFs requires macOS.');

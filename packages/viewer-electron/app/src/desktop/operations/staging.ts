@@ -14,6 +14,7 @@ export async function privateStage(
   directory: string,
   prefix: string,
   trash?: (file: string) => Promise<unknown>,
+  trashOnly = false,
 ) {
   const root = await mkdtemp(path.join(directory, prefix)),
     info = await lstat(root);
@@ -36,12 +37,14 @@ export async function privateStage(
         // its original generated path and is reported without invoking a removal adapter.
         return (await readdir(root)).length ? root : undefined;
       }
-      try {
-        await removeEmptyDirectory(root);
-        return;
-      } catch (error) {
-        if (!['ENOTEMPTY', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? ''))
-          throw error;
+      if (!trashOnly) {
+        try {
+          await removeEmptyDirectory(root);
+          return;
+        } catch (error) {
+          if (!['ENOTEMPTY', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? ''))
+            throw error;
+        }
       }
       // A visible name: hidden folders in the Trash would use space unnoticed.
       const cleanup = path.join(

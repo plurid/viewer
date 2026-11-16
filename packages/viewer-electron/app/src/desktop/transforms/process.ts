@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { constants, setPriority } from 'node:os';
 
 /** Process ports accept argument vectors built by typed executors only. This is
  * deliberately not exposed as an IPC method or a configurable executable. */
@@ -12,6 +13,8 @@ export function runProcessor(
     progress?(seconds: number): void;
     timeout?: number;
     input?: Buffer;
+    cwd?: string;
+    lowPriority?: boolean;
   } = {},
 ): Promise<Buffer> {
   signal.throwIfAborted();
@@ -19,8 +22,16 @@ export function runProcessor(
     const child = spawn(executable, args, {
       stdio: [options.input ? 'pipe' : 'ignore', 'pipe', 'pipe', ...descriptors],
       windowsHide: true,
+      cwd: options.cwd,
       env: { PATH: '/usr/bin:/bin', LC_ALL: 'C', LANG: 'C' },
     });
+    if (options.lowPriority && child.pid) {
+      try {
+        setPriority(child.pid, constants.priority.PRIORITY_LOW);
+      } catch {
+        // A short-lived child may have exited before the scheduler could lower it.
+      }
+    }
     if (options.input) {
       child.stdin?.on('error', () => {});
       child.stdin?.end(options.input);

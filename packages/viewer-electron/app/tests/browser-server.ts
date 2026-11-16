@@ -601,6 +601,14 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return resources.cancelDocument(args[0] as string, args[1] as string);
     case 'resourceFormat':
       return resourceURL(await resources.confirmFormat(...schemas.resourceFormat.parse(args)));
+    case 'inspectPostscript': {
+      const document = await resources.inspectPostscript(...schemas.inspectPostscript.parse(args));
+      return { ...document, preview: document.preview ? resourceURL(document.preview) : undefined };
+    }
+    case 'postscriptStatus':
+      return resources.postscriptStatus();
+    case 'renderPostscript':
+      throw new Error('Ghostscript rendering is tested in the desktop service.');
     case 'thumbnail':
       return '';
     case 'contextPublish':

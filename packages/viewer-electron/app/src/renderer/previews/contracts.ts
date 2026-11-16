@@ -16,6 +16,7 @@ import type { ImageRenditionRequest } from '../../domain/previews/images/rendere
 import type { OfficeLayoutRequest } from '../../domain/previews/documents/layout';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import type { PageColors } from '../../domain/previews/documents/dark-pages';
+import type { GhostscriptStatus, PostScriptInspection } from '../../domain/previews/documents/postscript';
 
 /** Renderer-only capabilities: preview modules never import the workspace or explorer. */
 export interface PreviewCommand {
@@ -94,6 +95,9 @@ export interface PreviewContext {
     rendition(id: string, request?: ImageRenditionRequest): Promise<Resource>;
     videoRendition(id: string, requestID: string): Promise<Resource>;
     officeLayout?(id: string, request: OfficeLayoutRequest): Promise<Resource>;
+    inspectPostscript?(id: string, requestID: string): Promise<PostScriptInspection>;
+    postscriptStatus?(): Promise<GhostscriptStatus>;
+    renderPostscript?(id: string, requestID: string): Promise<Resource>;
     officeImage(id: string, part: string, requestID: string): Promise<Resource>;
     /** Files beside the previewed one, such as a video's subtitles: each is listed and read
      * through its own authorized resource. Test hosts and galleries may omit them. */

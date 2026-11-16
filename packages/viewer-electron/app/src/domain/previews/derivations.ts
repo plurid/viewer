@@ -6,5 +6,6 @@ export const PreviewDerivation = {
   Video: 'video',
   Image: 'image',
   Office: 'office',
+  PostScript: 'postscript',
 } as const;
 export type PreviewDerivationKind = (typeof PreviewDerivation)[keyof typeof PreviewDerivation];

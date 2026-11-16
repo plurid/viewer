@@ -379,6 +379,12 @@ const compound: Reading = (head, name, directory) => {
   return { label: 'Office 97-2003 or Outlook file' };
 };
 const archive = (label: string): FileIdentity => ({ label });
+const postscript: Reading = (head, name) =>
+  /\.ai$/i.test(name)
+    ? { label: 'Illustrator', extension: 'ai' }
+    : has(head, [0xc5, 0xd0, 0xd3, 0xc6]) || /EPSF-/.test(text(head, 0, Math.min(256, head.length)))
+      ? { label: 'Encapsulated PostScript', extension: 'eps' }
+      : { label: 'PostScript document', extension: 'ps' };
 /** A Safari web archive is a binary property list whose top dictionary, written first, names its
  * main resource. */
 const propertyList: Reading = (head) =>
@@ -402,7 +408,14 @@ const signatures: readonly Signature[] = [
   { magic: 'SQLite format 3\0', identity: { label: 'SQLite database', extension: 'sqlite' } },
   { magic: 'PK\x03\x04', identity: zip },
   { magic: 'PK\x05\x06', identity: { label: 'ZIP archive', extension: 'zip' } },
-  { magic: '%PDF-', identity: { label: 'PDF document', extension: 'pdf' } },
+  {
+    magic: '%PDF',
+    identity: (_head, name) => /\.ai$/i.test(name)
+      ? { label: 'Illustrator with a PDF inside', extension: 'ai' }
+      : { label: 'PDF document', extension: 'pdf' },
+  },
+  { magic: '%!PS', identity: postscript },
+  { magic: [0xc5, 0xd0, 0xd3, 0xc6], identity: postscript },
   { magic: 'AT&TFORM', identity: { label: 'DjVu document', extension: 'djvu' } },
   { magic: compoundMagic, identity: compound },
   { magic: 'bplist00', identity: propertyList },
@@ -500,7 +513,7 @@ export function identifyBytes(
   name = '',
   directory?: Uint8Array,
 ): FileIdentity | undefined {
-  if (readsAsText(head)) return undefined;
+  if (readsAsText(head) && !has(head, '%!PS') && !has(head, '%PDF')) return undefined;
   for (const signature of signatures) {
     if (!has(head, signature.magic, signature.at)) continue;
     const identity =
@@ -519,6 +532,9 @@ export function identifyBytes(
  * WMA or ASF file, and an Office 97 to 2003 template or show is the compound file of its document.
  */
 const confirmations: Readonly<Record<string, readonly string[]>> = {
+  ps: ['ps'],
+  eps: ['eps', 'epsf', 'epsi'],
+  ai: ['ai'],
   epub: ['epub'],
   webarchive: ['webarchive'],
   docx: ['docx'],

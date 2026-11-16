@@ -5,6 +5,7 @@ import { zipSync, strToU8 } from 'fflate';
 import type { SavedState } from '../src/domain/contracts';
 import { audioFixture, imageFixture, videoFixture } from './media-fixtures';
 import { temporaryRoot } from '../tools/temporary';
+import { binaryEPSSample, epsiSample, postscriptSample } from './support/postscript';
 
 export function pdfFixture(): Buffer {
   const bodies = [
@@ -173,6 +174,12 @@ export async function createFixtures(): Promise<{
     '# A wider view\n\nViewer keeps folders and previews together in one workspace.\n\n## This week\n\n- Compare the model variants\n- Organize the reference files\n- Share the final archive\n\n```typescript\nconst workspace = { name: "Studio", previews: true };\n```\n',
   );
   await writeFile(path.join(files, 'Documents', 'Project brief.pdf'), pdfFixture());
+  await writeFile(path.join(files, 'Documents', 'Print document.ps'), postscriptSample);
+  await writeFile(path.join(files, 'Documents', 'Saved bitmap.epsi'), epsiSample);
+  await writeFile(path.join(files, 'Documents', 'Illustrator PDF.ai'), pdfFixture());
+  await writeFile(path.join(files, 'Documents', 'Legacy Illustrator.ai'), postscriptSample);
+  await writeFile(path.join(files, 'Documents', 'WMF picture.eps'), binaryEPSSample(postscriptSample, Buffer.alloc(0), Buffer.from('WMF')));
+  await writeFile(path.join(files, 'Documents', 'Broken EPS.eps'), Buffer.from([0xc5, 0xd0, 0xd3, 0xc6]));
   await writeFile(path.join(files, 'Documents', 'Book.epub'), epubFixture());
   await writeFile(
     path.join(files, 'Data', 'Materials.json'),

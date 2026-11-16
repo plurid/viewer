@@ -15,6 +15,7 @@ import {
 } from '../../domain/previews/keys/certificates';
 import { shortcutFormats } from '../../domain/previews/data/shortcuts';
 import { provisionFormats } from '../../domain/previews/data/provision';
+import { postscriptFormats } from '../../domain/previews/documents/postscript';
 
 const extension = (formats: readonly string[]) => (entry: FileEntry) =>
   formats.includes(entry.extension) ? 100 : 0;
@@ -222,6 +223,13 @@ export const previewModules: PreviewModule[] = [
     formats: ['djvu', 'djv'],
     detect: extension(['djvu', 'djv']),
     load: () => import('./modules/DjVuPreview'),
+  },
+  {
+    id: 'postscript',
+    label: 'PostScript / EPS / Illustrator',
+    formats: postscriptFormats,
+    detect: (entry) => entry.directory ? 0 : documentExtension(postscriptFormats)(entry),
+    load: () => import('./modules/PostScriptPreview'),
   },
   {
     id: 'rendered-image',

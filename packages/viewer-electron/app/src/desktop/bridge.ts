@@ -25,6 +25,7 @@ import { createNoteHandlers } from './ipc/note-handlers';
 import { createOperationHandlers } from './ipc/operation-handlers';
 import { createPasteboardHandlers } from './ipc/pasteboard-handlers';
 import { createResourceHandlers } from './ipc/resource-handlers';
+import { Ghostscript } from './previews/postscript-renderer';
 import { createSearchHandlers } from './ipc/search-handlers';
 import { createSettingHandlers } from './ipc/setting-handlers';
 import { createTerminalHandlers } from './ipc/terminal-handlers';
@@ -479,6 +480,7 @@ export class Desktop {
             signal,
             options.fileBackend,
           ),
+        { trash: (file) => shell.trashItem(file) },
       ),
       64 * 1024 * 1024,
       // thumbnails and small renditions: a few helper processes at once
@@ -486,6 +488,12 @@ export class Desktop {
     );
     this.thumbnails = new Thumbnails(derived, images);
     const office = new DerivedPreviews(access, officeDecoder(assetPath(officeRuntimeName)));
+    const ghostscript = new Ghostscript({
+      customPath: () => this.settings.snapshot().settings.previews.ghostscriptPath,
+      store: () => !!process.mas,
+      trash: (file) => shell.trashItem(file),
+    });
+    const postscript = new DerivedPreviews(access, ghostscript.decode);
     this.resources = new Resources(
       access,
       undefined,
@@ -494,6 +502,7 @@ export class Desktop {
       images,
       office,
       (file, request, signal) => this.files.sqlite(file, request, signal),
+      { renderer: ghostscript, cache: postscript },
     );
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
@@ -2120,6 +2129,7 @@ export class Desktop {
         rebuildIndex: () => this.rebuildIndex(),
       }),
       ...createResourceHandlers({
+        isAgent,
         resources: this.resources,
         thumbnails: this.thumbnails,
         webPreviews: this.webPreviews,

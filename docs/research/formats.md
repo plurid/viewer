@@ -505,16 +505,16 @@ not one blob that can be renamed to another suite's extension.
 
 ### PostScript, EPS and Illustrator files
 
-A `.ps`, `.eps` or `.ai` file opens today as bytes in the hex view. macOS no longer helps: Preview
+A `.ps`, `.eps` or `.ai` file now has a described preview, embedded EPS pictures and optional Ghostscript pages. macOS no longer helps: Preview
 stopped opening PostScript in macOS 13, `pstopdf` left with macOS 14, and on macOS 15.1 the system
 converter (`CGPSConverter`) reports success and writes an empty PDF (tried 2026-11-15).
 
 | Step                        | What the person gets                                                                                        | Needs                                    |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Recognize and describe      | The kind from its first bytes; title, creator, page count, page size and language level; the source as text | Nothing new                              |
-| Embedded EPS preview        | The TIFF or EPSI picture an EPS carries, labelled as its embedded preview                                   | Nothing new                              |
-| Illustrator files           | An `.ai` file that is PDF inside, the default since Illustrator 9, opens in the PDF preview                 | Nothing new                              |
-| Rendered pages              | Every page, through a PDF copy that the PDF preview shows                                                   | Ghostscript installed on the Mac         |
+| Recognize and describe (built) | The kind from its first bytes; title, creator, page count, page size and language level; the source as text | Nothing new                              |
+| Embedded EPS preview (built) | The TIFF or EPSI picture an EPS carries, labelled as its embedded preview                                   | Nothing new                              |
+| Illustrator files (built)   | An `.ai` file that is PDF inside, the default since Illustrator 9, opens in the PDF preview                 | Nothing new                              |
+| Rendered pages (built)      | Every page, through a PDF copy that the PDF preview shows                                                   | Ghostscript installed on the Mac         |
 | Rendered pages for everyone | The same without installing anything                                                                        | An interpreter in the app; see licensing |
 
 **PostScript is a program, so rendering runs it.** The conversion is a separate process with

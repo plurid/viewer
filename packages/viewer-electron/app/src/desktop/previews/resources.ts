@@ -46,6 +46,11 @@ import { byteRange, WebPreviewError } from './web/policy';
 import { readSQLite } from './sqlite';
 import { embeddedFormat, embeddedPackage } from '../../domain/previews/documents/embedded';
 import { embeddedListing, readEmbedded } from './embedded';
+import type { Ghostscript } from './postscript-renderer';
+import type { PostScriptInspection } from '../../domain/previews/documents/postscript';
+import { postscriptFormats } from '../../domain/previews/documents/postscript';
+import { previewTextLimit } from '../../domain/files/read-limits';
+import { readPostScript } from './postscript';
 
 interface Grant {
   dispose?(): void;
@@ -63,7 +68,7 @@ interface Grant {
    * folder as a file. */
   bundle?: boolean;
 }
-const MAX_READ = 4_000_000;
+const MAX_READ = previewTextLimit;
 /** A folder granted as the document it is. */
 const documentPackage = (file: string, info: Stats) =>
   info.isDirectory() &&
@@ -111,6 +116,10 @@ export class Resources {
       request: SQLiteRequest,
       signal: AbortSignal,
     ) => Promise<SQLiteReply> = (file, request, signal) => readSQLite(file, request, { signal }),
+    private postscript?: {
+      renderer: Pick<Ghostscript, 'status' | 'variant'>;
+      cache: DerivedPreviews;
+    },
   ) {}
   grant(file: string, requestID?: string): Promise<Resource> {
     if (requestID && this.pending.has(requestID))
@@ -216,7 +225,7 @@ export class Resources {
     const format =
       target.isFile() && transportStreamExtensions.includes(extension)
         ? await this.recording(actual).catch(() => undefined)
-        : undefined;
+        : target.isFile() ? await this.postscriptFormat(actual, extension) : undefined;
     const id = randomUUID();
     const resource = {
       dimensions: item.mime.startsWith('image/')
@@ -251,6 +260,22 @@ export class Resources {
       format,
     });
     return resource;
+  }
+  /** Bind a header-based route to the version inspected so later reads cannot reuse a stale kind. */
+  private async postscriptFormat(file: string, extension: string): Promise<Grant['format']> {
+    const handle = await open(fileCoordination.path(file), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      const info = await handle.stat();
+      const head = await readAt(handle, 0, Math.min(info.size, 256));
+      const identity = identifyBytes(head, path.basename(file));
+      if (!identity?.extension || !['ps', 'eps', 'ai'].includes(identity.extension)) return undefined;
+      return {
+        extension: postscriptFormats.some((format) => format === extension) ? extension : identity.extension,
+        version: fileVersion(info),
+      };
+    } finally {
+      await handle.close();
+    }
   }
   /** The stream a `.ts` or `.mts` file holds, from its first packets; nothing for TypeScript. */
   private async recording(file: string): Promise<Grant['format']> {
@@ -315,11 +340,13 @@ export class Resources {
     this.derived?.invalidate(root);
     this.images?.invalidate(root);
     this.office?.invalidate(root);
+    this.postscript?.cache.invalidate(root);
     return canonical.then((actual) => {
       if (actual && actual !== root) this.clearKnown(actual);
       if (actual && actual !== root) this.derived?.invalidate(actual);
       if (actual && actual !== root) this.images?.invalidate(actual);
       if (actual && actual !== root) this.office?.invalidate(actual);
+      if (actual && actual !== root) this.postscript?.cache.invalidate(actual);
       return actual;
     });
   }
@@ -348,6 +375,7 @@ export class Resources {
     await this.derived?.close();
     await this.images?.close();
     await this.office?.close();
+    await this.postscript?.cache.close();
   }
   /** The file behind a previewed PDF; entries inside archives are not files to print. */
   async printableFile(id: string): Promise<string> {
@@ -641,6 +669,54 @@ export class Resources {
       );
     return this.derivedRendition(id, 'office', request.requestID, request.sheet);
   }
+  postscriptStatus() {
+    return this.postscript?.renderer.status() ?? Promise.resolve({ kind: 'missing' } as const);
+  }
+  async renderPostscript(id: string, requestID: string): Promise<Resource> {
+    if (!postscriptFormats.some((extension) => extension === grantExtension(this.get(id))))
+      throw new Error('Choose a PostScript, EPS or Illustrator file.');
+    if (!this.postscript) throw new Error('PostScript rendering is unavailable here.');
+    const variant = await this.postscript.renderer.variant();
+    return this.derivedRendition(id, 'postscript', requestID, variant);
+  }
+  inspectPostscript(id: string, requestID: string): Promise<PostScriptInspection> {
+    let child: Resource | undefined;
+    return this.documentRead(id, requestID, (file, signal, format) =>
+      this.coordinated(id, async () => {
+        const input = await open(fileCoordination.path(file), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        try {
+          const info = await input.stat();
+          if (!info.isFile()) throw new Error('Choose a regular PostScript file.');
+          const inspected = await readPostScript({ file, handle: input, info }, format, signal);
+          if (fileVersion(info) !== fileVersion(await input.stat()) ||
+            fileVersion(info) !== fileVersion(await lstat(file)))
+            throw new Error('This PostScript file changed while opening.');
+          await this.access([file]);
+          signal.throwIfAborted();
+          this.get(id);
+          if (inspected.bitmap) {
+            child = this.dataChild(id, 'embedded-preview.bmp', file, inspected.bitmap);
+          } else if (inspected.header?.tiff && this.images) {
+            const lease = await this.images.read(file, 'image', signal, 4096, 'eps-tiff', format);
+            try {
+              signal.throwIfAborted();
+              child = this.dataChild(id, 'embedded-preview.png', file, lease.value.data);
+              this.get(child.id).dispose = lease.release;
+            } catch (error) {
+              lease.release();
+              throw error;
+            }
+          }
+          return { ...inspected.document, preview: child };
+        } finally {
+          await input.close();
+        }
+      }),
+    ).catch((error: unknown) => {
+      if (child) this.release(child.id);
+      throw error;
+    });
+  }
   private derivedRendition(
     id: string,
     mode: DerivedMode,
@@ -648,7 +724,8 @@ export class Resources {
     variant?: string,
   ): Promise<Resource> {
     const grant = this.get(id);
-    const decoder = mode === 'office' ? this.office : mode === 'image' ? this.images : this.derived;
+    const decoder = mode === 'office' ? this.office : mode === 'image' ? this.images
+      : mode === 'postscript' ? this.postscript?.cache : this.derived;
     if (!decoder) return Promise.reject(new Error('The local preview decoder is unavailable.'));
     return this.documentRead(id, requestID, async (file, signal, format) => {
       const lease = await decoder.read(file, mode, signal, 4096, variant, format);

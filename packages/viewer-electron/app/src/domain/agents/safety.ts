@@ -337,6 +337,9 @@ function agentSettingCommand(command: string): void {
     throw new Error(`“${definition.label}” is changed in Settings. Ask the person to change it.`);
 }
 export function agentConfigurationPath(keys: readonly string[]): void {
+  if (keys[0] === 'settings' && keys[1] === 'previews' &&
+    (keys.length === 2 || keys[2] === 'ghostscriptPath'))
+    throw new Error('Ghostscript executable settings change only in Settings, never through agents.');
   if (
     !agentConfigurable.some(
       (allowed) =>

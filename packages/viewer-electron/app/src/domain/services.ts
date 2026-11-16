@@ -109,6 +109,7 @@ export interface ApplicationSettings {
     textFontSize: number;
     textLineHeight: number;
     textWordWrap: boolean;
+    ghostscriptPath: string;
     /** When PDF and Office previews draw pages dark; domain/previews/documents/dark-pages.ts. */
     darkPages: DarkPageMode;
     /** When night begins, `HH:MM` local time. */
@@ -451,6 +452,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       textFontSize: 16,
       textLineHeight: 20,
       textWordWrap: false,
+      ghostscriptPath: '',
       ...darkPageDefaults,
     },
     editor: {

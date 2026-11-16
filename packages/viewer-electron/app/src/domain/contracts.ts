@@ -30,6 +30,7 @@ import type { SQLiteReply, SQLiteRequest } from './previews/data/sqlite';
 import type { ImageRenditionRequest } from './previews/images/rendered';
 import type { PreviewDerivationKind } from './previews/derivations';
 import type { OfficeLayoutMetadata, OfficeLayoutRequest } from './previews/documents/layout';
+import type { GhostscriptStatus, PostScriptInspection } from './previews/documents/postscript';
 import type { PreviewHistory } from './previews/history';
 import type { MediaRequest, MediaReply } from './media/documents';
 import type { LayoutMode } from './layout/modes';
@@ -946,6 +947,9 @@ export interface ViewerAPI {
   imageRendition(id: string, request?: ImageRenditionRequest): Promise<Resource>;
   videoRendition(id: string, requestID: string): Promise<Resource>;
   officeLayout(id: string, request: OfficeLayoutRequest): Promise<Resource>;
+  inspectPostscript(id: string, requestID: string): Promise<PostScriptInspection>;
+  postscriptStatus(): Promise<GhostscriptStatus>;
+  renderPostscript(id: string, requestID: string): Promise<Resource>;
   /** Starts the Office engine for a document about to be previewed; its layout then waits less. */
   officeWarm(): Promise<void>;
   officeImage(id: string, part: string, requestID: string): Promise<Resource>;

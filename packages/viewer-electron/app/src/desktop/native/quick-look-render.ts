@@ -2,6 +2,10 @@ import { gunzipSync } from 'node:zlib';
 import { runProcessor } from '../transforms/process';
 import { imageDimensions } from '../previews/image-dimensions';
 import type { Decoder } from '../previews/derived';
+import type { PreviewCopyOptions } from '../previews/input-copy';
+import { open } from 'node:fs/promises';
+import { binaryEPS, epsHeader } from '../../domain/previews/documents/postscript';
+import { withPreviewCopy } from '../previews/input-copy';
 
 /** The longest edge of a rendered preview. */
 const renditionSize = 4096;
@@ -11,14 +15,21 @@ export function imageDecoder(
   helper: string,
   ffmpeg?: string,
   svg?: (bytes: Buffer, size: number, signal: AbortSignal) => Promise<Buffer>,
+  copies: PreviewCopyOptions = {},
 ): Decoder {
-  return async (source, mode, signal, size = renditionSize) => {
+  return async (source, mode, signal, size = renditionSize, variant) => {
     if (mode !== 'image') throw new Error('Use the camera or video decoder for this preview.');
     if (!Number.isInteger(size) || size < 1 || size > renditionSize)
       throw new Error('Choose an image preview size between 1 and 4096 pixels.');
-    const signature = Buffer.alloc(4);
-    await source.handle.read(signature, 0, 4, 0);
-    const exr = signature.toString('hex') === '762f3101';
+    const signature = Buffer.alloc(Math.min(30, source.info.size));
+    await source.handle.read(signature, 0, signature.length, 0);
+    const eps = binaryEPS(signature);
+    const embedded = variant === 'eps-tiff' ? epsHeader(signature, source.info.size)?.tiff : undefined;
+    if ((eps || signature.subarray(0, 4).toString() === '%!PS') && !embedded)
+      throw new Error('Only an embedded TIFF picture can be decoded from PostScript.');
+    if (variant === 'eps-tiff' && (!embedded || embedded.length > 32 * 1024 * 1024))
+      throw new Error('The embedded TIFF exceeds its preview limit.');
+    const exr = signature.subarray(0, 4).toString('hex') === '762f3101';
     const compressed = source.file.toLowerCase().endsWith('.svgz');
     const vector = compressed || source.file.toLowerCase().endsWith('.svg');
     if (vector && !svg) throw new Error('The private SVG decoder is unavailable.');
@@ -58,6 +69,23 @@ export function imageDecoder(
         ]
       : ['image', String(size)];
     const render = async () => {
+      if (embedded) {
+        const magic = Buffer.alloc(4);
+        await source.handle.read(magic, 0, 4, embedded.offset);
+        if (!['49492a00', '4d4d002a'].includes(magic.toString('hex')))
+          throw new Error('The embedded TIFF header is malformed.');
+        return withPreviewCopy(source, embedded, signal, copies, async (file) => {
+          const input = await open(file, 'r');
+          try {
+            return await runProcessor(helper, ['image', String(size)], [input.fd], signal, {
+              timeout: 10000,
+              outputLimit: 32 * 1024 * 1024,
+            });
+          } finally {
+            await input.close();
+          }
+        });
+      }
       if (!vector)
         return runProcessor(exr ? ffmpeg! : helper, args, [source.handle.fd], signal, {
           timeout: 10000,

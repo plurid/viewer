@@ -1,0 +1,33 @@
+.postscript-viewer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.postscript-description {
+  padding: var(--gap-content);
+  flex: 0 1 auto;
+  max-height: 55%;
+  overflow: auto;
+}
+.postscript-description p {
+  margin: var(--gap-small) 0 0;
+}
+.postscript-description details {
+  margin: var(--gap-small) 0;
+}
+.postscript-description .inspection-facts {
+  margin: var(--gap-small) 0;
+}
+.postscript-caption {
+  padding: var(--gap-small) var(--gap-content);
+  margin: 0;
+  color: var(--muted);
+}
+.postscript-viewer > .text-viewer,
+.postscript-viewer > .image-viewer,
+.postscript-viewer > .pdf-viewer,
+.postscript-viewer > .hex-viewer {
+  flex: 1;
+  min-height: 0;
+}

@@ -140,6 +140,14 @@ Moving to the Trash, Undo and the Trash browser are under
 
 ## Previews
 
+PostScript, EPS and Illustrator previews show document comments, **Source** and a labelled
+**Embedded preview** when present. An Illustrator file with a PDF inside opens in the PDF preview.
+**Render pages with Ghostscript** is a preview button only, outside command, custom-action, CLI
+and MCP execution routes. It checks the installed program and renders only after the person clicks;
+the resulting PDF names Ghostscript and its version. The button is absent in the Store edition.
+See [reading documents](../guides/previews.md#read-postscript-eps-and-illustrator-files) and the
+[format limits](formats.md).
+
 | Feature                                       | Key                                            | ⌘K command                                                                                                | Menu                                                                        | Learn                                                   |
 | --------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------- |
 | Look inside a file without leaving the folder | **Space**; **Escape** closes; **←** **→** step | **Quick preview** `quick-preview`                                                                         | **File → Quick Preview**; right-click                                       | [Read](../guides/previews.md) · [Formats](formats.md)   |
@@ -163,6 +171,7 @@ actions** in the plane's header and in **⌘K**. Their ids start with `preview.`
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | PDF                     | **Next PDF page** `preview.pdf-next`, **Previous PDF page** `preview.pdf-previous`, **Search PDF text…** `preview.pdf-search`, **Fit PDF page** `preview.pdf-fit-page`, **Fit PDF width** `preview.pdf-fit-width`, **Show PDF pages** `preview.pdf-pages`, **Show PDF outline** `preview.pdf-outline`, **Print PDF…** `preview.pdf-print`, **Zoom in** `preview.zoom-in`, **Zoom out** `preview.zoom-out` | [Read](../guides/previews.md) · [PDF](pdf.md)           |
 | DjVu                    | **Next DjVu page** `preview.djvu-next`, **Previous DjVu page** `preview.djvu-previous`, **Search DjVu text…** `preview.djvu-search`, **Fit DjVu page** `preview.djvu-fit-page`, **Fit DjVu width** `preview.djvu-fit-width`, **Zoom in**, **Zoom out**                                                                                                                                                    | [Formats](formats.md)                                   |
+| PostScript, EPS, Illustrator | **Source**, **Embedded preview**, **Render pages with Ghostscript** and **Cancel rendering** in the preview; rendering has no command ID | [Read](../guides/previews.md#read-postscript-eps-and-illustrator-files) |
 | EPUB and FictionBook    | **Find in book** `preview.epub-find`, **Show bookmarks** `preview.epub-bookmarks`, **Show / hide contents** `preview.epub-contents`, **Next chapter** `preview.epub-next`, **Previous chapter** `preview.epub-previous`                                                                                                                                                                                   | [Read](../guides/previews.md) · [Formats](formats.md)   |
 | Image                   | **Fit image** `preview.image-fit`, **Zoom in**, **Zoom out**; **Image tools…** in the toolbar                                                                                                                                                                                                                                                                                                             | [Quick change](../guides/create.md) · [Media](media.md) |
 | Audio and video         | **Play** `preview.media-playback`, **Restart playback** `preview.media-restart`                                                                                                                                                                                                                                                                                                                           | [Read](../guides/previews.md) · [Media](media.md)       |
@@ -391,6 +400,12 @@ Viewer has no command that empties the Trash or deletes a file for good. On a vo
 Trash, **Move to Trash** fails and the item stays where it is.
 
 ## Settings and updates
+
+**Settings → Previews → Ghostscript path** (`settings.previews.ghostscriptPath`, default empty)
+accepts one custom absolute executable path. Empty uses the fixed installation locations listed in
+[formats](formats.md). Discovery never executes it; version verification waits for **Render pages
+with Ghostscript**. Agents cannot change this executable setting, including by replacing the whole
+Previews section. No setting enables automatic rendering.
 
 | Feature                                       | Key    | ⌘K command                                                                                                | Menu                                                                                                                                          | Learn                                                           |
 | --------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |

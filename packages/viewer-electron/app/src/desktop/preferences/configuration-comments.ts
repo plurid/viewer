@@ -157,6 +157,10 @@ const descriptions: Record<string, string[]> = {
     'Decoded image pixel limit, not bytes. Larger images offer a bounded preview.',
   ],
   'settings.previews.maxModelMB': ['3D preview file-size limit in megabytes.'],
+  'settings.previews.ghostscriptPath': [
+    'Optional absolute Ghostscript executable path; empty checks known installation locations.',
+    'Only Render pages with Ghostscript starts it. Unavailable in the Store edition and to agents.',
+  ],
   'settings.previews.darkPages': [
     'PDF and Office previews draw pages dark with light ink; photos keep their colours.',
     'night is dark from darkPagesFrom until darkPagesUntil; system follows macOS dark mode.',

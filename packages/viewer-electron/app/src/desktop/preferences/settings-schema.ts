@@ -219,6 +219,7 @@ export const settingsSchema = z
         textFontSize: z.number().int().min(8).max(32).default(16),
         textLineHeight: z.number().int().min(12).max(64).default(20),
         textWordWrap: z.boolean().default(false),
+        ghostscriptPath: z.union([z.literal(''), localPath]).default(''),
         darkPages: z.enum(darkPageModes).default(darkPageDefaults.darkPages),
         darkPagesFrom: z
           .string()
