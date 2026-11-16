@@ -150,7 +150,7 @@ export function sameIdentity(a: string, b: string): boolean {
   if (!/^-?\d+:/.test(a) && !/^-?\d+:/.test(b)) return a !== '' && a === b;
   if (a !== b) return false;
   // The common APFS form fits well below MAX_SAFE_INTEGER; avoid BigInt parsing per selection.
-  if (/^\d{1,15}:\d{1,15}$/.test(a)) return true;
+  if (/^(?:0|[1-9]\d{0,14}):(?:0|[1-9]\d{0,14})$/.test(a)) return true;
   return readItemIdentity(a) !== undefined;
 }
 

@@ -8,6 +8,7 @@ import {
   matchesVersionIdentity,
   syntheticInode,
   readTemporalIdentity,
+  sameIdentity,
 } from '../src/domain/files/item-identity';
 import type { TemporalIdentity } from '../src/domain/files/item-identity';
 import { sameItem } from '../src/desktop/files/item-identity';
@@ -85,6 +86,9 @@ describe('exact unsigned file identity', () => {
   });
 
   it('reads safe older identities and rejects rounded older identities', () => {
+    expect(sameIdentity('01:2', '01:2')).toBe(false);
+    expect(sameIdentity('1:02', '1:02')).toBe(false);
+    expect(sameIdentity('0:0', '0:0')).toBe(true);
     expect(readItemIdentity('12:42')).toBe(itemIdentity({ dev: 12n, ino: 42n }));
     expect(readItemIdentity('12:18446744073709552000')).toBeUndefined();
     expect(readItemIdentity('12:18446744073709551614:u64')).toBe(
