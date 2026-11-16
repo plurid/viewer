@@ -66,6 +66,7 @@ export function useFolderSuggestions(
     paths: readonly string[];
     checking: boolean;
     incomplete: boolean;
+    unchecked: readonly string[];
   }>();
   const key = `${cache.generation}:${mode}:${query}`;
   useEffect(
@@ -78,6 +79,7 @@ export function useFolderSuggestions(
               ...previous,
               order: previous.order.map(map),
               paths: previous.paths.map(map),
+              unchecked: previous.unchecked.map(map),
             },
         );
       }),
@@ -94,17 +96,24 @@ export function useFolderSuggestions(
     const timer = setTimeout(
       () => {
         let incomplete = false;
+        const observed = new Map<string, boolean>();
         const publish = (paths: string[], checking: boolean) => {
           if (!controller.signal.aborted)
             setResult((previous) => {
               const kept = previous?.key === key ? previous : undefined;
               const order = [...new Set([...(kept?.order ?? []), ...candidates])];
               const present = new Set([...(kept?.paths ?? initial), ...paths]);
+              const unchecked = new Set(kept?.unchecked);
+              for (const [path, deferred] of observed) {
+                if (deferred) unchecked.add(path);
+                else unchecked.delete(path);
+              }
               return {
                 key,
                 order,
                 checking,
                 incomplete,
+                unchecked: [...unchecked],
                 paths: order.filter((path) => present.has(path)).slice(0, limit),
               };
             });
@@ -122,7 +131,10 @@ export function useFolderSuggestions(
             onIncomplete: () => {
               incomplete = true;
             },
-            onResult: (path, value) => knowFolder(path, value.directory, value.path),
+            onResult: (path, value) => {
+              observed.set(path, !!value.unchecked);
+              if (!value.unchecked) knowFolder(path, value.directory, value.path);
+            },
             onUpdate: (paths) => publish(paths, true),
           },
         ).then((paths) => {
@@ -155,6 +167,7 @@ export function useFolderSuggestions(
   return {
     paths: visible,
     incomplete: current && result.incomplete,
+    checkOnOpen: current && result.unchecked.some((path) => visible.includes(path)),
     checking:
       enabled &&
       candidates.length > 0 &&

@@ -12,6 +12,10 @@ import {
 import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
 import { lstat } from '../files/stats';
 export type GuestACLState = 'write' | 'none' | 'unknown' | 'unreadable' | 'unavailable';
+export interface NativeSharingMount {
+  path: string;
+  local: boolean;
+}
 export interface NativeVolume {
   path: string;
   name: string;
@@ -75,6 +79,7 @@ export interface MacFiles {
   hiddenEntries?(folder: string): Promise<string[]>;
   fileHidden?(file: string): Promise<boolean>;
   guestACL?(folder: string): Promise<GuestACLState>;
+  sharingMounts?(): NativeSharingMount[];
   information(file: string): Promise<string>;
   updateInformation(file: string, revision: string, json: string): Promise<string>;
   alias(source: string, destination: string): Promise<void>;

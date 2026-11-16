@@ -34,7 +34,9 @@ export function GoToFolderDialog({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
-  const { paths, checking, hasHistory, incomplete } = useFolderSuggestions(edited ? query : '');
+  const { paths, checking, hasHistory, incomplete, checkOnOpen } = useFolderSuggestions(
+    edited ? query : '',
+  );
   const canClear = useViewer(
     (state) => state.saved.recents.length > 0 || Object.keys(state.saved.visits ?? {}).length > 0,
   );
@@ -71,6 +73,7 @@ export function GoToFolderDialog({
       return;
     }
     setPending(false);
+    if (suggestion) setSelected(suggestion);
     setBusy(true);
     setError('');
     try {
@@ -109,7 +112,7 @@ export function GoToFolderDialog({
     }
   };
   useEffect(() => {
-    if (pending && !checking) void open();
+    if (pending && !checking) void open(paths[0]);
   });
 
   return (
@@ -156,6 +159,7 @@ export function GoToFolderDialog({
             } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && paths.length) {
               event.preventDefault();
               event.stopPropagation();
+              setPending(false);
               setSelected(
                 paths[
                   index < 0
@@ -172,7 +176,7 @@ export function GoToFolderDialog({
           {checking
             ? 'Checking folders…'
             : paths.length
-              ? `${paths.length} suggested ${paths.length === 1 ? 'folder' : 'folders'}. ${incomplete ? 'Some folders could not be checked. ' : ''}Use ↑ and ↓ to choose.`
+              ? `${paths.length} suggested ${paths.length === 1 ? 'folder' : 'folders'}. ${incomplete ? 'Some folders could not be checked. ' : checkOnOpen ? 'Folders are checked when opened. ' : ''}Use ↑ and ↓ to choose.`
               : incomplete
                 ? 'Some folders could not be checked. Enter a folder path or try again.'
                 : edited && query

@@ -45,6 +45,7 @@ export class WorkspaceSessions {
   private writes: Promise<unknown> = Promise.resolve();
   private historyRevision = 0;
   private clearRevision = 0;
+  private clearID?: string;
   private historyChanges = new FolderHistoryRemaps();
   private aliases: Record<string, string> = {};
   private historyFiles = new Set<string>();
@@ -59,6 +60,7 @@ export class WorkspaceSessions {
       visits: structuredClone(this.current?.visits ?? {}),
       revision: this.historyRevision,
       clearRevision: this.clearRevision,
+      ...(this.clearID ? { clearID: this.clearID } : {}),
       aliases: { ...this.aliases },
     };
   }
@@ -315,6 +317,7 @@ export class WorkspaceSessions {
     session.historyRevision = this.historyRevision;
     if (visitSave?.clear) {
       this.clearRevision++;
+      this.clearID = visitSave.id;
       this.aliases = {};
       this.aliasTargets = {};
       this.historyFiles.clear();

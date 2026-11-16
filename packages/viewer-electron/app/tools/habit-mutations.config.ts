@@ -3,6 +3,32 @@ import base from '../vitest.config.ts';
 
 /** Transform copies in memory so regression probes never overwrite the shared working tree. */
 const probes: Record<string, { file: string; before: string; after: string }> = {
+  commandFolder: {
+    file: '/src/renderer/commands/folders.ts',
+    before: 'rows: parent.length ? rows.filter((row) => scoped.includes(row)) : rows,',
+    after: 'rows,',
+  },
+  resultOrder: {
+    file: '/src/renderer/commands/CommandResults.tsx',
+    before: 'const rows = ids.map((id) => current.get(id)!);',
+    after: 'const rows = [...incoming];',
+  },
+  defaultActive: {
+    file: '/src/renderer/commands/CommandResults.tsx',
+    before: 'const input = useRef<HTMLInputElement>(null);',
+    after:
+      'useEffect(() => { if (rows[0] && !rows.some((row) => row.id === activeID)) setActiveID(rows[0].id); }, [rows, activeID]);\n  const input = useRef<HTMLInputElement>(null);',
+  },
+  pendingReturn: {
+    file: '/src/renderer/explorer/GoToFolderDialog.tsx',
+    before: 'void open(paths[0]);',
+    after: 'void open();',
+  },
+  storeDeferred: {
+    file: '/src/desktop/windows/folder-history-checks.ts',
+    before: 'unchecked: true',
+    after: 'unavailable: true',
+  },
   nativeCase: {
     file: '/src/desktop/files/folder-history.ts',
     before: 'realpathSync.native(path)',

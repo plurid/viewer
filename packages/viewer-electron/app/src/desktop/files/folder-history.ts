@@ -6,21 +6,30 @@ import { checkFolderCandidates, FolderCheckPool } from '../../domain/files/folde
 
 /** History alone resolves filesystem spelling; a dangling link is unknown, never a file. */
 export function checkHistoryFolder(path: string): CheckedFolder {
-  const item = lstatSync(path);
-  let directory = item.isDirectory();
-  if (item.isSymbolicLink()) {
-    try {
-      directory = statSync(path).isDirectory();
-    } catch {
-      return { directory: false, unavailable: true };
+  try {
+    const item = lstatSync(path);
+    let directory = item.isDirectory();
+    if (item.isSymbolicLink()) {
+      try {
+        directory = statSync(path).isDirectory();
+      } catch {
+        return { directory: false, unavailable: true };
+      }
     }
+    return { directory, path: realpathSync.native(path) };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return {
+      directory: false,
+      unavailable: true,
+      missing: code === 'ENOENT' || code === 'ENOTDIR',
+    };
   }
-  return { directory, path: realpathSync.native(path) };
 }
 
 export async function prepareFolderHistory(
   history: FolderVisits,
-  check: (path: string) => Promise<{ path?: string; directory: boolean; unavailable?: boolean }>,
+  check: (path: string) => Promise<CheckedFolder>,
   now: number,
   delegated = false,
 ) {
@@ -33,7 +42,7 @@ export async function prepareFolderHistory(
       last: Math.max(normalized[key]?.last ?? 0, visit.last),
     };
   }
-  const observed = new Map<string, { path?: string; directory: boolean; unavailable?: boolean }>();
+  const observed = new Map<string, CheckedFolder>();
   await checkFolderCandidates(Object.keys(normalized), check, new AbortController().signal, {
     limit: 500,
     checks: 1000,
@@ -44,14 +53,14 @@ export async function prepareFolderHistory(
   const checked = new Set<string>();
   for (const [old, visit] of Object.entries(normalized)) {
     const known = observed.get(old);
-    if (known && !known.directory && !known.unavailable) continue;
+    if (known && !known.directory && !known.unavailable && !known.unchecked) continue;
     const key = folderPath(known?.path ?? old);
     if (!remembersFolder(key)) continue;
     visits[key] = {
       count: Math.min(1e9, (visits[key]?.count ?? 0) + visit.count),
       last: Math.max(visits[key]?.last ?? 0, visit.last),
     };
-    if (known?.directory) checked.add(key);
+    if (known?.directory && !known.unchecked) checked.add(key);
   }
   return {
     visits: boundFolderVisits(visits, now),
@@ -62,7 +71,7 @@ export async function prepareFolderHistory(
         .map(([old, value]) => [old, value.path!]),
     ),
     files: [...observed]
-      .filter(([, value]) => !value.directory && !value.unavailable)
+      .filter(([, value]) => !value.directory && !value.unavailable && !value.unchecked)
       .map(([old]) => old),
   };
 }

@@ -394,3 +394,18 @@ it('uses session anchors when the only relevant rename has fallen out of the bou
     '/fixtures/renamed-once': { count: 6, last: now },
   });
 });
+
+it('keeps the latest clearing operation distinct from subsequent save acknowledgements', () => {
+  const { sessions, a, b, clear, begin, finish } = setup();
+  clear(a);
+  const first = begin(a);
+  finish(a, first);
+  expect(sessions.folderHistory().clearID).toBe(first.metadata.id);
+  clear(b);
+  const second = begin(b);
+  finish(b, second);
+  expect(sessions.folderHistory().clearID).toBe(second.metadata.id);
+  finish(a, begin(a));
+  expect(sessions.folderHistory().clearID).toBe(second.metadata.id);
+  expect(sessions.snapshot()).not.toHaveProperty('clearID');
+});

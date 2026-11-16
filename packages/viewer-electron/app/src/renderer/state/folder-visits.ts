@@ -28,6 +28,7 @@ export class FolderVisitSync {
   private pendingRestored: FolderVisits = {};
   private revision = 0;
   private clearRevision = 0;
+  private localClearRevision = 0;
   private remappings = new FolderHistoryRemaps();
 
   reset(base: FolderVisits, revision = 0, clearRevision = 0): void {
@@ -39,6 +40,7 @@ export class FolderVisitSync {
     this.pendingRestored = {};
     this.revision = revision;
     this.clearRevision = clearRevision;
+    this.localClearRevision = clearRevision;
     this.remappings = new FolderHistoryRemaps();
   }
 
@@ -63,11 +65,25 @@ export class FolderVisitSync {
     return !!id && id === this.clearSaveID;
   }
 
+  clearedElsewhere(revision?: number, acknowledgement?: string, clearID?: string): boolean {
+    if (
+      revision === undefined ||
+      revision < this.clearRevision ||
+      revision <= this.localClearRevision
+    )
+      return false;
+    // A save reply can carry a peer's later Clear, even when it acknowledges our own write.
+    return (
+      !this.isOwnClear(clearID ?? acknowledgement) && (revision > this.clearRevision || !!clearID)
+    );
+  }
+
   forget(paths: string[]): void {
     this.forgotten = [...new Set([...this.forgotten, ...paths])].slice(0, 1000);
   }
 
   clear(paths: string[] = []): void {
+    this.localClearRevision = this.clearRevision;
     this.forget(paths);
     this.pendingClear = true;
     this.pendingRestored = {};

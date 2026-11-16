@@ -13,11 +13,15 @@ import { stat } from './stats';
 import { macFiles } from '../native/macos-files';
 import type { GuestACLState } from '../native/macos-files';
 import { parseSharePoints } from './sharing-parser';
+import type { SharePoint } from './sharing-parser';
 import { containsPath } from './containment';
 import { SharingMetadata } from './sharing-metadata';
+import { SharingVolumes, sharingVolume } from './sharing-volumes';
+import type { SharingVolumeSnapshot } from './sharing-volumes';
 
 export const networkSharingAvailable = process.platform === 'darwin' && !process.mas;
-type SharingRead = 'shares' | 'sharepoints' | 'service' | 'host' | 'interfaces' | 'guest';
+type SharingRead =
+  'shares' | 'sharepoints' | 'service' | 'host' | 'interfaces' | 'guest' | 'mounts';
 export interface SharingOutput {
   stdout: string;
   stderr: string;
@@ -30,6 +34,7 @@ const reads: Record<SharingRead, { file: string; args: string[] }> = {
   host: { file: '/usr/sbin/scutil', args: ['--get', 'LocalHostName'] },
   interfaces: { file: '/usr/sbin/networksetup', args: ['-listallhardwareports'] },
   sharepoints: { file: '/usr/bin/dscl', args: ['.', '-list', '/SharePoints'] },
+  mounts: { file: '/sbin/mount', args: [] },
   guest: {
     file: '/usr/bin/plutil',
     args: [
@@ -76,6 +81,7 @@ export const runSharingRead: SharingRunner = (read) =>
       finish({ stdout: '', stderr: '', ok: false });
     }
   });
+const systemSharingVolumes = new SharingVolumes(runSharingRead);
 
 export function localIPv4(interfaces: ReturnType<typeof os.networkInterfaces>): string[] {
   return [
@@ -125,8 +131,13 @@ export interface SharingFolder {
   identity: string;
   canonical: string;
 }
-export async function sharingFolder(file: string): Promise<SharingFolder> {
+type CanonicalFolder = (canonical: string) => void;
+export async function sharingFolder(
+  file: string,
+  resolved?: CanonicalFolder,
+): Promise<SharingFolder> {
   const canonical = await realpath(file);
+  resolved?.(canonical);
   try {
     const info = await stat(canonical);
     return {
@@ -151,12 +162,13 @@ function comparableSharingPath(file: string): string {
 interface SharingPorts {
   available: boolean;
   run: SharingRunner;
-  folder: (file: string) => Promise<SharingFolder>;
+  folder: (file: string, resolved?: CanonicalFolder) => Promise<SharingFolder>;
   addresses: () => string[];
   acl?: (file: string) => Promise<GuestACL>;
   network?: () => ReturnType<typeof os.networkInterfaces>;
   now?: () => number;
   timeoutMs?: number;
+  volumes?: (force?: boolean) => Promise<SharingVolumeSnapshot>;
 }
 const empty = (status: NetworkSharingSnapshot['status']): NetworkSharingSnapshot => ({
   status,
@@ -166,6 +178,10 @@ const empty = (status: NetworkSharingSnapshot['status']): NetworkSharingSnapshot
   ipv4: [],
   interfaces: [],
 });
+interface MissingShare {
+  point: SharePoint;
+  checked: number;
+}
 export class NetworkSharing {
   private value = empty('unknown');
   private pending?: Promise<NetworkSharingSnapshot>;
@@ -174,7 +190,8 @@ export class NetworkSharing {
   private metadata: SharingMetadata;
   private folders = new WeakMap<NetworkSharingSnapshot, Map<string, Promise<SharingFolder>>>();
   private unchecked = new WeakMap<NetworkSharingSnapshot, string[]>();
-  private missing = new WeakSet<NetworkSharingSnapshot>();
+  private missing = new WeakMap<NetworkSharingSnapshot, MissingShare[]>();
+  private canonical = new Map<string, string>();
   constructor(
     private readonly ports: SharingPorts = {
       available: networkSharingAvailable,
@@ -182,6 +199,7 @@ export class NetworkSharing {
       folder: sharingFolder,
       addresses: () => [],
       network: () => os.networkInterfaces(),
+      volumes: (force) => systemSharingVolumes.read(force),
       acl: async (file) => {
         try {
           const read = macFiles().guestACL;
@@ -214,17 +232,39 @@ export class NetworkSharing {
       return this.queuedForce;
     }
     const now = (this.ports.now ?? Date.now)();
-    if (!force && !this.missing.has(this.value) && now - this.refreshed < 5000)
-      return Promise.resolve(this.value);
+    if (!force && now - this.refreshed < 5000) {
+      if (!this.missing.get(this.value)?.some((share) => now - share.checked >= 1000))
+        return Promise.resolve(this.value);
+      return (this.pending = this.retryMissing(this.value, now).finally(() => {
+        this.pending = undefined;
+      }));
+    }
     this.refreshed = now;
     return (this.pending = this.read().finally(() => {
       this.pending = undefined;
     }));
   }
   private folder(file: string): Promise<SharingFolder> {
-    return this.metadata.read('folder', file, () => this.ports.folder(file));
+    const key = path.resolve(file);
+    return this.metadata
+      .read('folder', file, async () => {
+        this.canonical.delete(key);
+        try {
+          return await this.ports.folder(file, (canonical) => this.canonical.set(key, canonical));
+        } catch (error) {
+          const failure = error as NodeJS.ErrnoException & { canonical?: string };
+          if (!failure.canonical) failure.canonical = this.canonical.get(key);
+          throw failure;
+        } finally {
+          this.canonical.delete(key);
+        }
+      })
+      .catch((error: NodeJS.ErrnoException & { canonical?: string }) => {
+        if (!error.canonical && this.canonical.has(key)) error.canonical = this.canonical.get(key);
+        throw error;
+      });
   }
-  private async access(file: string, share: NetworkShare): Promise<NetworkShare> {
+  private async access(file: string, mode: number, share: NetworkShare): Promise<NetworkShare> {
     if (!share.guests || share.readOnly)
       return {
         ...share,
@@ -243,20 +283,62 @@ export class NetworkSharing {
     } catch {
       /* Unknown permissions must never reassure a guest share. */
     }
+    const writable = acl === 'write' || (acl === 'unavailable' && (mode & 0o002) !== 0);
     return {
       ...share,
       accessPath: file,
-      guestWritable: acl === 'write',
-      guestWriteUnknown: acl !== 'write' && acl !== 'none',
+      guestWritable: writable,
+      guestWriteUnknown: !writable && acl !== 'none',
       guestWriteReason:
-        acl === 'unavailable'
-          ? 'build'
-          : acl === 'unreadable'
-            ? 'access-list'
-            : acl === 'unknown'
-              ? 'permissions'
-              : undefined,
+        writable || acl === 'none'
+          ? undefined
+          : acl === 'unavailable'
+            ? 'build'
+            : acl === 'unreadable'
+              ? 'access-list'
+              : acl === 'unknown'
+                ? 'permissions'
+                : undefined,
     };
+  }
+  private async retryMissing(
+    snapshot: NetworkSharingSnapshot,
+    now: number,
+  ): Promise<NetworkSharingSnapshot> {
+    const missing: MissingShare[] = [];
+    const shares = [...snapshot.shares];
+    const unchecked = [...(this.unchecked.get(snapshot) ?? [])];
+    const folders = new Map<string, Promise<SharingFolder>>();
+    for (const entry of this.missing.get(snapshot) ?? []) {
+      if (now - entry.checked < 1000) {
+        missing.push(entry);
+        continue;
+      }
+      try {
+        const info = await this.folder(entry.point.path);
+        if (!info.directory) continue;
+        shares.push(
+          await this.access(info.canonical, info.mode, {
+            ...entry.point,
+            path: info.canonical,
+            identity: info.identity,
+            guestWritable: false,
+          }),
+        );
+        folders.set(entry.point.path, Promise.resolve(info));
+        folders.set(info.canonical, Promise.resolve(info));
+      } catch (error) {
+        const failure = error as NodeJS.ErrnoException & { canonical?: string };
+        if (failure.code === 'ENOENT') missing.push({ point: entry.point, checked: now });
+        else if (failure.canonical) unchecked.push(failure.canonical);
+        else return (this.value = empty('unknown'));
+      }
+    }
+    const value = { ...snapshot, shares };
+    this.missing.set(value, missing);
+    this.unchecked.set(value, unchecked);
+    this.folders.set(value, folders);
+    return (this.value = value);
   }
   private async read(): Promise<NetworkSharingSnapshot> {
     try {
@@ -278,17 +360,19 @@ export class NetworkSharing {
         if (!directory.ok || directory.stdout.trim()) return (this.value = empty('unknown'));
       }
       const shares: NetworkShare[] = [];
+      const volumes = await this.ports.volumes?.();
       const folders = new Map<string, Promise<SharingFolder>>();
       const unchecked: string[] = [];
-      let missing = false;
+      const missing: MissingShare[] = [];
       for (const point of points) {
+        if (volumes && sharingVolume(point.path, volumes) === 'network') continue;
         try {
           const info = await this.folder(point.path);
           folders.set(point.path, Promise.resolve(info));
           folders.set(info.canonical, Promise.resolve(info));
           if (!info.directory) continue;
           shares.push(
-            await this.access(info.canonical, {
+            await this.access(info.canonical, info.mode, {
               ...point,
               path: info.canonical,
               identity: info.identity,
@@ -297,8 +381,10 @@ export class NetworkSharing {
           );
         } catch (error) {
           const failure = error as NodeJS.ErrnoException & { canonical?: string };
-          if (failure.code === 'ENOENT') missing = true;
-          else unchecked.push(failure.canonical ?? point.path);
+          if (failure.code === 'ENOENT')
+            missing.push({ point, checked: (this.ports.now ?? Date.now)() });
+          else if (failure.canonical) unchecked.push(failure.canonical);
+          else throw error;
         }
       }
       const name = host.ok ? host.stdout.trim() : '';
@@ -318,18 +404,7 @@ export class NetworkSharing {
           ? interfaces.filter((item) => item.family === 'IPv4').map((item) => item.address)
           : this.ports.addresses(),
         interfaces,
-        network: network
-          ? Object.values(network).some((addresses) =>
-              addresses?.some(
-                (address) =>
-                  !address.internal &&
-                  !/^(?:0|127)\./.test(address.address) &&
-                  address.address !== '::1',
-              ),
-            )
-            ? 'connected'
-            : 'offline'
-          : 'unknown',
+        network: interfaces ? (interfaces.length ? 'connected' : 'offline') : 'unknown',
         guestAccess:
           guest.ok && guest.stdout.trim() === 'false'
             ? 'off'
@@ -339,7 +414,7 @@ export class NetworkSharing {
       };
       this.folders.set(snapshot, folders);
       this.unchecked.set(snapshot, unchecked);
-      if (missing) this.missing.add(snapshot);
+      this.missing.set(snapshot, missing);
       return (this.value = snapshot);
     } catch {
       return (this.value = empty('unknown'));
@@ -350,6 +425,8 @@ export class NetworkSharing {
     force = false,
     rechecked = false,
   ): Promise<NetworkSharingSnapshot> {
+    if (!this.ports.available) return this.refresh(force);
+    const volumes = await this.ports.volumes?.(force);
     const previous = this.value;
     const snapshot = await this.refresh(force);
     if (snapshot.status !== 'ready') return snapshot;
@@ -377,8 +454,26 @@ export class NetworkSharing {
     };
     const folders: NetworkFolderSharing[] = [];
     for (const requested of paths) {
+      const volume = volumes ? sharingVolume(requested, volumes) : 'local';
+      if (volume !== 'local') {
+        folders.push({
+          path: requested,
+          status: volume === 'network' ? 'ready' : 'unknown',
+          shares: [],
+        });
+        continue;
+      }
       try {
         const target = await folder(requested);
+        const targetVolume = volumes ? sharingVolume(target.canonical, volumes) : 'local';
+        if (targetVolume !== 'local') {
+          folders.push({
+            path: requested,
+            status: targetVolume === 'network' ? 'ready' : 'unknown',
+            shares: [],
+          });
+          continue;
+        }
         if (!target.directory) throw new Error('Choose one folder.');
         let current = target;
         let ancestor = target.canonical;
@@ -387,7 +482,7 @@ export class NetworkSharing {
         for (;;) {
           for (const share of snapshot.shares)
             if (share.identity === current.identity) {
-              const access = await this.access(target.canonical, share);
+              const access = await this.access(target.canonical, target.mode, share);
               shares.push({
                 ...access,
                 inside: relative.length > 0,
@@ -396,6 +491,9 @@ export class NetworkSharing {
             }
           const parent = path.dirname(ancestor);
           if (parent === ancestor) break;
+          const parentVolume = volumes ? sharingVolume(parent, volumes) : 'local';
+          if (parentVolume === 'network') break;
+          if (parentVolume === 'unknown') throw new Error('Could not check sharing volume.');
           relative.push(path.basename(ancestor));
           ancestor = parent;
           current = await folder(parent);

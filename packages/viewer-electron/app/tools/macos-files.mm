@@ -238,99 +238,7 @@ static NSArray<NSString *> *hiddenNames(NSString *folder, int *failure) {
   } else close(descriptor);
   return *failure ? nil : names;
 }
-struct GuestPrincipal {
-  uid_t user;
-  gid_t primary;
-  std::vector<int> groups;
-  bool knownGroups;
-  // Each right is undecided, denied, granted or uncertain. An earlier decision wins.
-  std::array<int, 8> decisions{};
-  int member(gid_t group) const {
-    if (group == 12 || group == primary) return 1;
-    for (int value : groups) if ((gid_t)value == group) return 1;
-    return knownGroups ? 0 : -1;
-  }
-};
-static GuestPrincipal guestPrincipal(const char *name, uid_t user, gid_t primary) {
-  struct passwd record{}, *found = nullptr; char buffer[16384];
-  int status = user == 201
-    ? getpwuid_r(user, &record, buffer, sizeof(buffer), &found)
-    : getpwnam_r(name, &record, buffer, sizeof(buffer), &found);
-  GuestPrincipal result{found ? record.pw_uid : user, found ? record.pw_gid : primary, {}, status == 0};
-  if (!found) return result;
-  int count = 32; result.groups.resize(count);
-  if (getgrouplist(record.pw_name, (int)record.pw_gid, result.groups.data(), &count) < 0) {
-    if (count > 0 && count <= 1024) {
-      result.groups.resize(count);
-      result.knownGroups = getgrouplist(record.pw_name, (int)record.pw_gid, result.groups.data(), &count) == 0;
-    } else result.knownGroups = false;
-  }
-  if (result.knownGroups) result.groups.resize(count); else result.groups.clear();
-  return result;
-}
-static NSString *guestACLState(NSString *file) {
-  struct stat info{};
-  if (stat(file.fileSystemRepresentation, &info) != 0) return @"unreadable";
-  // Both SMB guest identities count, including the reserved Guest identity when its account is off.
-  std::array<GuestPrincipal, 2> guests = {
-    guestPrincipal("nobody", (uid_t)-2, (gid_t)-2), guestPrincipal("Guest", 201, 201)
-  };
-  bool unknown = false;
-  acl_t acl = acl_get_file(file.fileSystemRepresentation, ACL_TYPE_EXTENDED);
-  if (!acl) {
-    if (errno != ENOENT) return @"unreadable";
-  }
-  if (acl && acl_valid(acl) != 0) { acl_free(acl); return @"unknown"; }
-  acl_entry_t entry;
-  int state = acl ? acl_get_entry(acl, ACL_FIRST_ENTRY, &entry) : -1;
-  while (state == 0) {
-    acl_tag_t tag;
-    acl_permset_t permissions;
-    acl_flagset_t flags;
-    if (acl_get_tag_type(entry, &tag) != 0 || acl_get_permset(entry, &permissions) != 0 || acl_get_flagset_np(entry, &flags) != 0) { unknown = true; break; }
-    int inheritOnly = acl_get_flag_np(flags, ACL_ENTRY_ONLY_INHERIT);
-    if (inheritOnly < 0) { unknown = true; break; }
-    if (!inheritOnly && (tag == ACL_EXTENDED_ALLOW || tag == ACL_EXTENDED_DENY)) {
-      const acl_perm_t modifying[] = { ACL_ADD_FILE, ACL_ADD_SUBDIRECTORY, ACL_DELETE_CHILD, ACL_DELETE,
-        ACL_WRITE_ATTRIBUTES, ACL_WRITE_EXTATTRIBUTES, ACL_WRITE_SECURITY, ACL_CHANGE_OWNER };
-      void *qualifier = acl_get_qualifier(entry);
-      id_t identifier = 0; int type = 0;
-      bool known = qualifier && mbr_uuid_to_id((const unsigned char *)qualifier, &identifier, &type) == 0;
-      if (qualifier) acl_free(qualifier);
-      for (auto &guest : guests) {
-        int applies = -1;
-        if (known) {
-          if (type == ID_TYPE_UID) applies = (uid_t)identifier == guest.user ? 1 : 0;
-          else if (type == ID_TYPE_GID) applies = guest.member((gid_t)identifier);
-        }
-        if (!applies) continue;
-        for (size_t index = 0; index < 8; ++index) {
-          int allowed = acl_get_perm_np(permissions, modifying[index]);
-          if (allowed < 0) { unknown = true; continue; }
-          if (!allowed || guest.decisions[index]) continue;
-          guest.decisions[index] = applies < 0 ? 3 : tag == ACL_EXTENDED_ALLOW ? 2 : 1;
-        }
-      }
-    } else if (!inheritOnly) unknown = true;
-    state = acl_get_entry(acl, ACL_NEXT_ENTRY, &entry);
-  }
-  if (acl) acl_free(acl);
-  for (auto &guest : guests) {
-    bool writable = (info.st_mode & S_IWOTH) || (info.st_uid == guest.user && (info.st_mode & S_IWUSR));
-    int group = guest.member(info.st_gid);
-    if (info.st_mode & S_IWGRP) {
-      if (group > 0) writable = true;
-      else if (group < 0) unknown = true;
-    }
-    for (size_t index = 0; index < guest.decisions.size(); ++index) {
-      int decision = guest.decisions[index];
-      if (decision == 2) return @"write";
-      if (decision == 3) unknown = true;
-      if (!decision && !unknown && index < 3 && writable) return @"write";
-    }
-  }
-  return unknown ? @"unknown" : @"none";
-}
+#include "guest-access.h"
 static void execute(napi_env, void *data) {
   Work *task = static_cast<Work *>(data);
   @autoreleasepool { @try {
@@ -649,6 +557,32 @@ static napi_value datesAdded(napi_env env, napi_callback_info info) {
     Work *task = new Work{}; task->kind = Kind::DatesAdded; task->files = files; return queue(env, task);
   }
 }
+static napi_value sharingMounts(napi_env env, napi_callback_info) {
+  @autoreleasepool {
+  struct statfs *mounts = nullptr;
+  // Cached kernel mount data must not ask a sleeping or disconnected filesystem for metadata.
+  int count = getmntinfo(&mounts, MNT_NOWAIT);
+  if (count <= 0 || count > 2048) {
+    napi_throw_error(env, nullptr, "Could not read mounted filesystems.");
+    return nullptr;
+  }
+  napi_value result;
+  napi_create_array_with_length(env, count, &result);
+  for (int index = 0; index < count; ++index) {
+    napi_value item;
+    napi_create_object(env, &item);
+    NSString *mount = [NSFileManager.defaultManager stringWithFileSystemRepresentation:mounts[index].f_mntonname length:strlen(mounts[index].f_mntonname)];
+    if (!mount.isAbsolutePath) {
+      napi_throw_error(env, nullptr, "Could not decode a mounted filesystem path.");
+      return nullptr;
+    }
+    property(env, item, "path", text(env, mount));
+    property(env, item, "local", boolean(env, (mounts[index].f_flags & MNT_LOCAL) != 0));
+    napi_set_element(env, result, index, item);
+  }
+  return result;
+  }
+}
 static napi_value volumes(napi_env env, napi_callback_info) { Work *task = new Work{}; task->kind = Kind::Volumes; return queue(env, task); }
 #include "file-information.h"
 #include "file-panels.h"
@@ -679,6 +613,7 @@ static napi_value init(napi_env env, napi_value exports) {
     {"hiddenEntries", nullptr, hiddenEntries, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"fileHidden", nullptr, fileHidden, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"guestACL", nullptr, guestACL, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"sharingMounts", nullptr, sharingMounts, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"eject", nullptr, eject, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(methods)/sizeof(methods[0]), methods); return exports;

@@ -69,6 +69,13 @@ Tools receive SIGTERM after two seconds and SIGKILL after a further 250 ms if th
 Opening the fixed Settings pane requires no folder metadata or access grant. The Store edition runs
 none of these tools and offers no sharing mark, section or command.
 
+The current helper reads cached kernel mount data with `getmntinfo(MNT_NOWAIT)` before sharing
+metadata walks. Network-volume rows and their ancestors are excluded without contacting those
+filesystems. Older or absent helpers use a bounded `/sbin/mount` fallback, cached for five seconds.
+Its unescaped network records yield unknown sharing state for those paths, never a definite
+negative. A share point whose canonical path cannot be resolved makes the whole sharing state
+unknown. Known missing points are retried at most once a second without rerunning the share tools.
+
 Both macOS editions can read the native hidden flag when built with the current file helper. The
 helper reads directory flags in bulk and falls back to native per-entry flags on filesystems that do
 not support bulk attributes. After changing `tools/macos-files.mm`, rebuild the helper before

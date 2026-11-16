@@ -3,11 +3,17 @@ import { Icon } from '../ui/Icon';
 import { FolderPath } from '../ui/FolderPath';
 import type { DiscoverableCommand, ResolvedCommand } from './registry';
 
+interface ResultOrder {
+  query: string;
+  label: string;
+  ids: readonly string[];
+}
+
 /** Search retains focus while arrows move the active descendant through results. */
 export function CommandResults({
   query,
   onQuery,
-  rows,
+  rows: incoming,
   unavailable = [],
   onSelect,
   onClose,
@@ -49,6 +55,21 @@ export function CommandResults({
   onClearRecent?(): void;
   clearRecentLabel?: string;
 }) {
+  const [order, setOrder] = useState<ResultOrder>(() => ({ query, label, ids: [] }));
+  const current = new Map(incoming.map((row) => [row.id, row]));
+  const retained =
+    order.query === query && order.label === label ? order.ids.filter((id) => current.has(id)) : [];
+  const seen = new Set(retained);
+  const ids = [...retained, ...[...current.keys()].filter((id) => !seen.has(id))];
+  // Late completions must not move a row under the person's pointer or Return key.
+  if (
+    order.query !== query ||
+    order.label !== label ||
+    order.ids.length !== ids.length ||
+    order.ids.some((id, index) => id !== ids[index])
+  )
+    setOrder({ query, label, ids });
+  const rows = ids.map((id) => current.get(id)!);
   const [activeID, setActiveID] = useState('');
   const [keyboardScroll, setKeyboardScroll] = useState(0);
   const previousQuery = useRef(query);
@@ -56,9 +77,6 @@ export function CommandResults({
     0,
     rows.findIndex((row) => row.id === activeID),
   );
-  useEffect(() => {
-    if (rows[0] && !rows.some((row) => row.id === activeID)) setActiveID(rows[0].id);
-  }, [rows, activeID]);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const id = useId();

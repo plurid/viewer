@@ -710,6 +710,7 @@ export type DesktopEvent =
       visitSaveID?: string;
       folderHistoryRevision?: number;
       folderClearRevision?: number;
+      folderClearID?: string;
       folderAliases?: Record<string, string>;
       checkedFolders?: string[];
     }

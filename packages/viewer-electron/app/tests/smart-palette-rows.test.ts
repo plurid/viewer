@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
-/**
- * The smart palette in use: its rows come first, and choosing one does what it says:
- * copies a calculation, opens a typed path, creates a folder by name, jumps to a frecent folder.
- */
+/** Late smart results must not move the command the person is about to choose. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { CommandPalette } from '../src/renderer/commands/CommandPalette';
 import { CommandsContext } from '../src/renderer/commands/context';
-import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
+import type { CommandContext, CommandDefinition } from '../src/renderer/commands/registry';
+import { CommandRegistry } from '../src/renderer/commands/registry';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
 import { activeWorkspace, initialize } from '../src/renderer/state/store';
 import { savePatch } from '../src/renderer/state/core';
@@ -48,7 +46,7 @@ beforeEach(() => {
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
 });
 afterEach(cleanup);
-const show = () => {
+const show = (definitions: CommandDefinition[] = []) => {
   const registry = new CommandRegistry();
   const context = {
     scope: 'window',
@@ -60,7 +58,7 @@ const show = () => {
     clipboard: null,
   } as unknown as CommandContext;
   // a fresh object each time, as the app's sources give: the rows must still settle
-  registry.register('window', { context: () => ({ ...context }), definitions: () => [] });
+  registry.register('window', { context: () => ({ ...context }), definitions: () => definitions });
   const view = render(
     createElement(
       CommandsContext.Provider,
@@ -84,7 +82,7 @@ const show = () => {
     });
     fireEvent.click(row);
   };
-  return { type, choose };
+  return { type, choose, view, search };
 };
 
 it('copies a calculation', async () => {
@@ -128,4 +126,35 @@ it('jumps to a frecent folder with z', async () => {
   await waitFor(() =>
     expect(openPath).toHaveBeenCalledWith('/Users/me/Downloads', expect.objectContaining({})),
   );
+});
+
+it('appends a late ~/Doc completion below the command and Return runs the visible top row', async () => {
+  let finish!: (listing: { path: string; parent: string; entries: FileEntry[] }) => void;
+  viewer.list.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const run = vi.fn();
+  const label = '~/Doc command';
+  const { type, view, search } = show([
+    { id: 'document-command', label, group: 'Actions', when: () => true, run },
+  ]);
+  type('~/Doc');
+  await waitFor(() => expect(viewer.list).toHaveBeenCalledWith('/fixtures'));
+  expect(view.getAllByRole('option')).toHaveLength(1);
+  expect(view.getAllByRole('option')[0]?.textContent).toContain(label);
+  await act(async () => {
+    finish({ path: '/fixtures', parent: '/', entries: [entry('Documents')] });
+  });
+  const rows = view.getAllByRole('option');
+  expect(rows).toHaveLength(2);
+  expect(rows[0]?.textContent).toContain(label);
+  expect(rows[1]?.textContent).toContain('Documents');
+  expect(rows[1]?.textContent).toContain('/fixtures');
+  expect(rows[0]?.getAttribute('aria-selected')).toBe('true');
+  fireEvent.keyDown(search, { key: 'Enter' });
+  await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+  expect(openPath).not.toHaveBeenCalled();
 });

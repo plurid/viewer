@@ -1,3 +1,5 @@
+import type { FileChange } from '../../domain/files/changes';
+import { pathMapper } from '../../domain/files/changes';
 import type { ActiveFolderScope, FileAccess } from '../files/file-access';
 import { launchWorker } from '../workers/utility-client';
 import type { OwnedWorker } from '../workers/utility-client';
@@ -49,13 +51,26 @@ export class FolderHistoryChecks {
     this.pool.clear();
   }
 
+  remap(changes: FileChange[]): void {
+    this.epoch++;
+    this.pool.clear();
+    const map = pathMapper(changes);
+    this.checked = new Map(
+      [...this.checked].map(([path, value]) => [
+        map(path),
+        value.path ? { ...value, path: map(value.path) } : value,
+      ]),
+    );
+  }
+
   check = async (path: string): Promise<CheckedFolder> => {
     const epoch = this.epoch;
     const volume = folderVolume(path);
     if (volume && (this.blocked.get(volume) ?? 0) > Date.now())
       return { directory: false, unavailable: true, timedOut: true };
     const scope = this.access?.(path);
-    if (this.access && !scope) return { directory: false, unavailable: true };
+    if (this.access && !scope)
+      return this.checked.get(path) ?? { directory: false, unchecked: true };
     let value: CheckedFolder;
     try {
       value = await this.metadata(path);
@@ -65,7 +80,9 @@ export class FolderHistoryChecks {
       if (volume) this.blocked.set(volume, Date.now() + 30_000);
       return { directory: false, unavailable: true, timedOut: true };
     }
-    if (epoch !== this.epoch || (scope && (!value.path || !scope.allows(value.path))))
+    // Completed absence must stay hidden when Store access later becomes dormant.
+    const missing = value.missing && !value.directory;
+    if (epoch !== this.epoch || (scope && !missing && (!value.path || !scope.allows(value.path))))
       return { directory: false, unavailable: true };
     if (epoch === this.epoch) {
       this.checked.set(path, value);

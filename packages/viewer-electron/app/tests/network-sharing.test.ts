@@ -178,7 +178,7 @@ describe('identity and permissions', () => {
       },
       addresses: () => [],
     });
-    expect((await unreadable.inspect([share.path])).folders?.[0]?.status).toBe('unknown');
+    expect((await unreadable.inspect([share.path])).status).toBe('unknown');
   });
   it('bounds a hung share stat and permits a later refresh', async () => {
     const folder = vi.fn(async () => new Promise<never>(() => {}));
@@ -189,8 +189,8 @@ describe('identity and permissions', () => {
       timeoutMs: 10,
       addresses: () => [],
     });
-    expect((await service.refresh()).status).toBe('ready');
-    expect((await service.refresh(true)).status).toBe('ready');
+    expect((await service.refresh()).status).toBe('unknown');
+    expect((await service.refresh(true)).status).toBe('unknown');
     expect(folder).toHaveBeenCalledTimes(1);
   });
   it('throttles navigation but permits a requested refresh and runs no tool in Store builds', async () => {
@@ -211,14 +211,18 @@ describe('identity and permissions', () => {
     expect(execute).toHaveBeenCalledTimes(12);
     await service.refresh(true);
     expect(execute).toHaveBeenCalledTimes(18);
+    const volumes = vi.fn(async () => ({ precise: true, mounts: [] }));
     const store = new NetworkSharing({
       available: false,
       run: execute,
       folder: sharingFolder,
       addresses: () => [],
+      volumes,
     });
     expect((await store.refresh()).status).toBe('unavailable');
+    expect((await store.inspect(['/Shared/Backup'], true)).status).toBe('unavailable');
     expect(execute).toHaveBeenCalledTimes(18);
+    expect(volumes).not.toHaveBeenCalled();
   });
 });
 describe('addresses, warnings and authority', () => {
@@ -312,7 +316,15 @@ describe('addresses, warnings and authority', () => {
       (callback as (error: null, stdout: string, stderr: string) => void)(null, '{}', '');
       return {} as ReturnType<typeof execFile>;
     });
-    for (const read of ['shares', 'service', 'host', 'interfaces', 'sharepoints', 'guest'] as const)
+    for (const read of [
+      'shares',
+      'service',
+      'host',
+      'interfaces',
+      'sharepoints',
+      'guest',
+      'mounts',
+    ] as const)
       await runSharingRead(read);
     expect(vi.mocked(execFile).mock.calls.map((call) => call.slice(0, 2))).toEqual([
       ['/usr/sbin/sharing', ['-l', '-f', 'json']],
@@ -333,6 +345,7 @@ describe('addresses, warnings and authority', () => {
           '/Library/Preferences/SystemConfiguration/com.apple.smb.server.plist',
         ],
       ],
+      ['/sbin/mount', []],
     ]);
     for (const call of vi.mocked(execFile).mock.calls)
       expect(call[2]).toMatchObject({ timeout: 2000, shell: false, maxBuffer: 1048576 });

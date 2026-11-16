@@ -552,6 +552,7 @@ function AppWindow() {
           event.folderClearRevision,
           event.folderAliases,
           event.checkedFolders,
+          event.folderClearID,
         );
       else if (event.type === 'launch') void handleLaunch(event.request).catch(report);
       else if (event.type === 'file-changes') {

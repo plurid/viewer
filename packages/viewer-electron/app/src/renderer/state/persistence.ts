@@ -125,11 +125,12 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
       shared = await window.viewer.folderHistory();
     learnFolderAliases(shared?.aliases);
     const current = getState();
-    const peerClear =
-      shared?.clearRevision !== undefined &&
-      shared.clearRevision > folderVisitSync.clearVersion &&
-      !folderVisitSync.isOwnClear(visitSave.id);
-    if (peerClear)
+    const peerClear = folderVisitSync.clearedElsewhere(
+      shared?.clearRevision,
+      visitSave.id,
+      shared?.clearID,
+    );
+    if (peerClear && (shared?.clearRevision ?? 0) > folderVisitSync.clearVersion)
       forgetKnownFolders([...current.saved.recents, ...Object.keys(current.saved.visits ?? {})]);
     const visits = folderVisitSync.complete(
       visitSave.id,

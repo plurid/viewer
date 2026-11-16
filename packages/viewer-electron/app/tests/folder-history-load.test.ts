@@ -66,10 +66,10 @@ it('uses actual filesystem case spelling without folding distinct case-sensitive
   );
   if (!insensitive) await mkdir(lower);
   if (insensitive) expect(checkHistoryFolder(lower).path).toBe(actual);
-  const history = { [upper]: { count: 3, last: 1 }, [lower]: { count: 4, last: 2 } };
+  const history = { [upper]: { count: 8, last: 1 }, [lower]: { count: 2, last: 2 } };
   const result = await prepareFolderHistory(history, async (file) => checkHistoryFolder(file), 3);
   expect(Object.keys(result.visits)).toHaveLength(insensitive ? 1 : 2);
-  if (insensitive) expect(result.visits[actual]?.count).toBe(7);
+  if (insensitive) expect(result.visits[actual]?.count).toBe(10);
   else expect(result.visits).toEqual(history);
 });
 
@@ -82,5 +82,26 @@ it('resolves a folder link to its native filesystem spelling', async () => {
   expect(checkHistoryFolder(link)).toEqual({
     directory: true,
     path: path.join(realpathSync.native(root), 'Real'),
+  });
+});
+
+it('retains unchecked Store records without treating them as confirmed files or checked folders', async () => {
+  const visits = { '/fixtures/Projects': { count: 40, last: 10 } };
+  const prepared = await prepareFolderHistory(
+    visits,
+    async () => ({ directory: false, unchecked: true }),
+    20,
+  );
+  expect(prepared.visits).toEqual(visits);
+  expect(prepared.checked).toEqual([]);
+  expect(prepared.files).toEqual([]);
+});
+
+it('distinguishes a completed missing-folder read from an unchecked Store folder', async () => {
+  const root = await temporaryRoot('viewer-history-absent-');
+  expect(checkHistoryFolder(path.join(root, 'Gone'))).toMatchObject({
+    directory: false,
+    unavailable: true,
+    missing: true,
   });
 });

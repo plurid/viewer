@@ -3,6 +3,9 @@ export interface CheckedFolder {
   path?: string;
   unavailable?: boolean;
   timedOut?: boolean;
+  /** Store history defers access to ordinary navigation without acquiring a grant. */
+  unchecked?: boolean;
+  missing?: boolean;
 }
 
 export const folderCheckLimit = 40;
@@ -143,7 +146,7 @@ export async function checkFolderCandidates(
     checks++;
     try {
       const value = await pool.run(path, check, signal);
-      if (value.unavailable) options.onIncomplete?.();
+      if (value.unavailable && !value.unchecked && !value.missing) options.onIncomplete?.();
       return value;
     } catch (error) {
       const volume = folderVolume(path);
@@ -185,7 +188,8 @@ export async function checkFolderCandidates(
             mounted = inspect(volume);
             volumes.set(volume, mounted);
           }
-          if (!(await mounted)?.directory || skipped.has(volume)) {
+          const root = await mounted;
+          if (!(root?.directory || root?.unchecked) || skipped.has(volume)) {
             settled.add(path);
             publish();
             continue;
@@ -195,9 +199,9 @@ export async function checkFolderCandidates(
         if (signal.aborted) break;
         if (value) {
           options.onResult?.(path, value);
-          if (value.unavailable) options.onIncomplete?.();
+          if (value.unavailable && !value.unchecked && !value.missing) options.onIncomplete?.();
           if (value.timedOut && volume) skipped.add(volume);
-          if (value.directory) {
+          if (value.directory || value.unchecked) {
             present.add(path);
             settled.add(path);
             publish();

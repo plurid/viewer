@@ -158,3 +158,33 @@ it('places commands inside nested palette folders while keeping search direct', 
   expect(commandFolders([row], [row], ['Development', 'Checks'], '').rows).toEqual([row]);
   expect(commandFolders([row], [row], [], 'test').rows).toEqual([row]);
 });
+
+it.each(['smart:path', 'smart:calc', 'smart:folder:jump'])(
+  'filters an arriving %s row out of a typed command-folder search',
+  (id) => {
+    const own: ResolvedCommand = {
+      id: 'custom.own',
+      label: 'Owned action',
+      group: 'Actions',
+      paletteFolder: ['Tools'],
+      aliases: [],
+      primary: false,
+      source: 'window',
+      context: {
+        scope: 'window',
+        workspaceID: activeWorkspace().id,
+        selection: [],
+        clipboard: null,
+        jobs: [],
+      },
+    };
+    const outside = { ...own, id: 'outside', paletteFolder: undefined };
+    const smart = { ...own, id, paletteFolder: undefined };
+    expect(
+      commandFolders([own, outside], [smart, own, outside], ['Tools'], 'fragment').rows,
+    ).toEqual([own]);
+    expect(commandFolders([own, outside], [smart, own, outside], [], 'fragment').rows).toContain(
+      smart,
+    );
+  },
+);

@@ -10,6 +10,7 @@ import { entryWithVisibility as entry, list } from '../../src/desktop/files/file
 import { temporaryRoot } from '../../tools/temporary';
 import { needsFolderAccess } from '../../src/domain/files/access';
 import type { GuestACL } from '../../src/desktop/files/network-sharing';
+import type { NativeSharingMount } from '../../src/desktop/native/macos-files';
 import { NetworkSharing, sharingFolder } from '../../src/desktop/files/network-sharing';
 import { fileVisibility } from '../../src/desktop/files/visibility';
 import { entry as singleEntry, entryForScan } from '../../src/desktop/files/filesystem';
@@ -44,7 +45,9 @@ execFileSync('/usr/bin/xcrun', [
 ]);
 const visibility = createRequire(import.meta.url)(helper) as FileVisibility & {
   guestACL(file: string): Promise<GuestACL>;
+  sharingMounts(): NativeSharingMount[];
 };
+assert.ok(visibility.sharingMounts().some((mount) => mount.path === '/' && mount.local));
 const folder = path.join(root, 'Files');
 await mkdir(folder);
 for (const name of ['hidden by flag.txt', '.dot-file', 'Thumbs.db', 'visible 日本.txt'])
@@ -185,12 +188,57 @@ for (const [label, principal] of [
   const target = path.join(root, 'Principal ' + label);
   await mkdir(target, { mode: 0o755 });
   execFileSync('/bin/chmod', ['+a', principal + ' allow add_file', target]);
-  assert.equal(
-    await visibility.guestACL(target),
-    label.startsWith('guest') ? 'write' : 'none',
-    label,
-  );
+  const access = await visibility.guestACL(target);
+  if (label === 'staff') {
+    // Directory services can leave the absent Guest account's nested membership unresolved.
+    assert.ok(access === 'none' || access === 'unknown', label);
+  } else assert.equal(access, label.startsWith('guest') ? 'write' : 'none', label);
 }
+const permissionsSource = path.join(root, 'guest-permissions.mm');
+const permissionsExecutable = path.join(root, 'guest-permissions');
+await writeFile(
+  permissionsSource,
+  String.raw`
+#include "guest-access.h"
+#include <cerrno>
+static int nested(uid_t, gid_t, int *member) { *member = 1; return 0; }
+static int unrelated(uid_t, gid_t, int *member) { *member = 0; return 0; }
+static int unavailable(uid_t, gid_t, int *) { return ENOENT; }
+int main(int count, char **args) {
+  @autoreleasepool {
+    if (count != 2) return 1;
+    NSString *file = [NSString stringWithUTF8String:args[1]];
+    struct stat info{};
+    if (stat(args[1], &info)) return 2;
+    info.st_mode = S_IFDIR | 0555;
+    uid_t owner = info.st_uid;
+    info.st_uid = (uid_t)-2;
+    if (![guestACLState(file, &info, unrelated) isEqualToString:@"write"]) return 3;
+    info.st_uid = 201;
+    if (![guestACLState(file, &info, unrelated) isEqualToString:@"write"]) return 4;
+    info.st_uid = owner;
+    if (![guestACLState(file, &info, nested) isEqualToString:@"write"]) return 5;
+    if (![guestACLState(file, &info, unrelated) isEqualToString:@"none"]) return 6;
+    if (![guestACLState(file, &info, unavailable) isEqualToString:@"unknown"]) return 7;
+    return 0;
+  }
+}
+`,
+  { flag: 'wx' },
+);
+execFileSync('/usr/bin/xcrun', [
+  'clang++',
+  '-std=c++17',
+  '-fobjc-arc',
+  '-framework',
+  'Foundation',
+  '-I',
+  path.join(app, 'tools'),
+  permissionsSource,
+  '-o',
+  permissionsExecutable,
+]);
+execFileSync(permissionsExecutable, [path.join(root, 'Principal staff')]);
 // chmod requires a live account name, so create the reserved Guest ACL with the native API.
 const guestFixtureSource = path.join(root, 'guest-acl-fixture.cc');
 const guestFixture = path.join(root, 'guest-acl-fixture');
@@ -256,7 +304,7 @@ console.log(
       root,
       helper,
       checks:
-        'UF_HIDDEN, dot rule, literal Thumbs.db, flag removal, readable system folders, mode 444, mode 000, protected permission codes, nobody and Guest UID 201 grants, guest groups, ordered ACL allow and deny, inherit-only entries, mode overridden by ACL and unreadable ACL state passed',
+        'Hidden flags, permission codes, kernel mount snapshot, nobody and Guest ownership without write bits, nested and unresolved group membership, guest ACL grants, ordered ACLs and inherit-only checks passed',
     },
     null,
     2,

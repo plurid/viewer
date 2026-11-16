@@ -48,6 +48,7 @@ it('rechecks a cached identity mismatch during ordinary navigation without any f
   expect(run.mock.calls.filter(([kind]) => kind === 'shares')).toHaveLength(2);
 });
 it('does not cache the absence of a listed share path when its folder comes back', async () => {
+  let now = 0;
   const root = await temporaryRoot('viewer-sharing-returned-');
   const file = path.join(root, 'Shared');
   const moved = path.join(root, 'Moved');
@@ -59,9 +60,11 @@ it('does not cache the absence of a listed share path when its folder comes back
     folder: sharingFolder,
     acl: async () => 'none',
     addresses: () => [],
+    now: () => now,
   });
   expect((await sharing.refresh()).shares).toEqual([]);
   await rename(moved, file);
+  now = 1000;
   expect((await sharing.inspect([file])).folders?.[0]?.shares).toHaveLength(1);
 });
 it.each(['EACCES', 'ETIMEDOUT'])(
@@ -75,10 +78,11 @@ it.each(['EACCES', 'ETIMEDOUT'])(
       addresses: () => [],
       acl: async () => 'none',
       timeoutMs: 10,
-      folder: async (file) => {
+      folder: async (file, resolved) => {
         if (file === blocked) {
+          resolved?.(file);
           if (code === 'ETIMEDOUT') return new Promise<never>(() => {});
-          throw Object.assign(new Error('Access unavailable'), { code });
+          throw Object.assign(new Error('Access unavailable'), { code, canonical: file });
         }
         return { directory: true, mode: 0o755, identity: file, canonical: file };
       },

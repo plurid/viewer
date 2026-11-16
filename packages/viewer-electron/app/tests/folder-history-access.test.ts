@@ -85,8 +85,25 @@ it('cannot poison ordinary access by starting a history check on a slow saved gr
 it('skips dormant saved grants without starting or stopping them', async () => {
   const { sub, access, checks, start, stop } = await fixture();
   try {
-    expect(await checks.check(sub)).toMatchObject({ directory: false, unavailable: true });
+    expect(await checks.check(sub)).toMatchObject({ directory: false, unchecked: true });
     expect(start).not.toHaveBeenCalled();
+    expect(stop).not.toHaveBeenCalled();
+  } finally {
+    checks.close();
+    await access.close();
+  }
+});
+
+it('keeps a live grant usable when its own history read reaches the deadline', async () => {
+  const { sub, access, checks, stop, start } = await fixture();
+  try {
+    await access.require([sub]);
+    sleeping.add(sub);
+    const history = checks.check(sub);
+    await expect(access.require([sub])).resolves.toBeUndefined();
+    expect(await history).toMatchObject({ timedOut: true, unavailable: true });
+    await expect(access.require([sub])).resolves.toBeUndefined();
+    expect(start).toHaveBeenCalledTimes(1);
     expect(stop).not.toHaveBeenCalled();
   } finally {
     checks.close();

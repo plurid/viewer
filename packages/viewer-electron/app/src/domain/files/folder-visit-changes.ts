@@ -12,6 +12,7 @@ export interface FolderVisitSave {
 }
 
 export interface FolderVisitReply {
+  clearID?: string;
   aliases?: Record<string, string>;
   visits: FolderVisits;
   revision: number;

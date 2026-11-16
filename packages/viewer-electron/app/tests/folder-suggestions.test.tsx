@@ -1241,3 +1241,125 @@ it('returns focus to the field when the focused Undo offer expires', async () =>
     vi.useRealTimers();
   }
 });
+
+it('withdraws Undo when its own save reply already includes a later peer Clear', async () => {
+  remember('/fixtures/A');
+  clearRecentFolders();
+  Object.assign(window.viewer, {
+    save: async () => ({ visits: {}, revision: 0, clearRevision: 2, clearID: 'peer-clear' }),
+  });
+  await flushState(false);
+  expect(getState().folderRecovery).toBeUndefined();
+  undoClearRecentFolders();
+  expect(getState().saved.visits).toEqual({});
+});
+
+it('keeps its Undo after a peer save that carries the same clearing operation', async () => {
+  let id = '';
+  remember('/fixtures/A');
+  clearRecentFolders();
+  Object.assign(window.viewer, {
+    save: async (_state: SavedState, metadata: FolderVisitSave) => {
+      id = metadata.id;
+      return { visits: {}, revision: 0, clearRevision: 1, clearID: id };
+    },
+  });
+  await flushState(false);
+  receiveWorkspaces(getState().saved, 'peer-save', 0, 1, {}, [], id);
+  expect(getState().folderRecovery).toBeDefined();
+  dismissFolderRecovery();
+});
+
+it('withdraws Undo on a later Clear event even if an acknowledgement has already advanced its revision', async () => {
+  remember('/fixtures/A');
+  clearRecentFolders();
+  Object.assign(window.viewer, {
+    save: async () => ({ visits: {}, revision: 0, clearRevision: 2 }),
+  });
+  await flushState(false);
+  expect(getState().folderRecovery).toBeDefined();
+  receiveWorkspaces(getState().saved, 'peer-save', 0, 2, {}, [], 'peer-clear');
+  expect(getState().folderRecovery).toBeUndefined();
+});
+
+it('keeps folders checked after a peer Clear through later saves of the same revision', () => {
+  receiveWorkspaces(
+    { ...getState().saved, visits: {}, recents: [] },
+    'peer-clear',
+    0,
+    1,
+    {},
+    [],
+    'peer-clear',
+  );
+  remember('/fixtures/New');
+  receiveWorkspaces(getState().saved, 'peer-save', 0, 1, {}, [], 'peer-clear');
+  expect(knownFolderPaths().has('/fixtures/New')).toBe(true);
+});
+
+it('a Return before any suggestion waits and opens the current top after the publication bound', async () => {
+  vi.useFakeTimers();
+  try {
+    const best = '/fixtures/Projects';
+    const weak = '/fixtures/Old/Projects-archive';
+    available.add(best);
+    available.add(weak);
+    savePatch({ visits: { [best]: { count: 30, last: now }, [weak]: { count: 2, last: now } } });
+    Object.assign(window.viewer, {
+      folderCheck: vi.fn(async (path: string) => {
+        if (path === best) await new Promise((resolve) => setTimeout(resolve, 220));
+        return entry(path);
+      }),
+    });
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.change(field(), { target: { value: 'proj' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(231);
+    });
+    expect(options()).toHaveLength(1);
+    expect(open).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(70);
+    });
+    expect(options()[0]?.textContent).toContain(best);
+    expect(open).toHaveBeenCalledWith(best);
+    expect(open).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('lets an arrowed choice cancel a blind pending Return before the best match arrives', async () => {
+  vi.useFakeTimers();
+  try {
+    const best = '/fixtures/Projects';
+    const weak = '/fixtures/Old/Projects-archive';
+    available.add(best);
+    available.add(weak);
+    savePatch({ visits: { [best]: { count: 30, last: now }, [weak]: { count: 2, last: now } } });
+    Object.assign(window.viewer, {
+      folderCheck: vi.fn(async (path: string) => {
+        if (path === best) await new Promise((resolve) => setTimeout(resolve, 220));
+        return entry(path);
+      }),
+    });
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.change(field(), { target: { value: 'proj' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(231);
+    });
+    fireEvent.keyDown(field(), { key: 'ArrowDown' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(70);
+    });
+    expect(open).not.toHaveBeenCalled();
+    expect(options()[1]?.getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await act(async () => {});
+    expect(open).toHaveBeenCalledWith(weak);
+  } finally {
+    vi.useRealTimers();
+  }
+});

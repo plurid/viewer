@@ -168,13 +168,11 @@ export function receiveWorkspaces(
   clearRevision?: number,
   aliases?: Record<string, string>,
   checkedFolders?: string[],
+  clearID?: string,
 ): void {
   const current = getState();
-  const peerClear =
-    clearRevision !== undefined &&
-    clearRevision > folderVisitSync.clearVersion &&
-    !folderVisitSync.isOwnClear(visitSaveID);
-  if (peerClear)
+  const peerClear = folderVisitSync.clearedElsewhere(clearRevision, visitSaveID, clearID);
+  if (peerClear && clearRevision !== undefined && clearRevision > folderVisitSync.clearVersion)
     forgetKnownFolders([...current.saved.recents, ...Object.keys(current.saved.visits ?? {})]);
   const recents = folderVisitSync.recentFolders(
     saved.recents,

@@ -1720,6 +1720,7 @@ export class Desktop {
   emit(event: DesktopEvent, except?: number): void {
     if (event.type === 'file-changes') {
       this.workspaceSessions.remapFolderHistory(event.changes);
+      this.folderChecks.remap(event.changes);
       event = { ...event, folderHistoryRevision: this.workspaceSessions.folderHistoryRevision };
     }
     if (event.type === 'job') this.activity.job(event.job);
@@ -2041,6 +2042,7 @@ export class Desktop {
             checkedFolders: prepared.checked,
             folderHistoryRevision: history.revision,
             folderClearRevision: history.clearRevision,
+            folderClearID: history.clearID,
           });
         }
       },
@@ -2123,6 +2125,7 @@ export class Desktop {
         visitSaveID: visitSave?.id,
         folderHistoryRevision: history.revision,
         folderClearRevision: history.clearRevision,
+        folderClearID: history.clearID,
         folderAliases: history.aliases,
       },
       mergeChanged(input, state) ? undefined : sender,
