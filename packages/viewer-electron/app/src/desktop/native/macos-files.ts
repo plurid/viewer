@@ -71,6 +71,8 @@ export interface MacFiles {
   /** Displays native confirmation only. No callable erasure/approval endpoint. */
   trashConfirmation(review: string): void;
   datesAdded(files: string[]): Promise<NativeAddedDate[]>;
+  hiddenEntries?(folder: string): Promise<string[]>;
+  fileHidden?(file: string): Promise<boolean>;
   information(file: string): Promise<string>;
   updateInformation(file: string, revision: string, json: string): Promise<string>;
   alias(source: string, destination: string): Promise<void>;

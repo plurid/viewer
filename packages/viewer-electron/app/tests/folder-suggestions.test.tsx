@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { FileEntry, SavedState } from '../src/domain/contracts';
+import type { FolderVisitSave } from '../src/domain/files/folder-visit-changes';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { WorkspaceContext } from '../src/renderer/workspace/context';
@@ -36,7 +37,7 @@ const now = Date.UTC(2026, 10, 1, 12);
 const day = 86_400_000;
 const available = new Set<string>();
 const stat = vi.fn<(path: string) => Promise<FileEntry>>();
-const save = vi.fn<(state: SavedState) => Promise<void>>();
+const save = vi.fn<(state: SavedState, visitSave?: FolderVisitSave) => Promise<void>>();
 const open = vi.fn(async (_path: string) => true);
 const close = vi.fn();
 const entry = (path: string, directory = true): FileEntry => ({
@@ -157,6 +158,27 @@ describe('recording folder views', () => {
     expect(getState().saved.visits?.['/fixtures/Renamed']?.count).toBe(1);
     expect(getState().saved.recents).toEqual(['/fixtures/Renamed', '/fixtures/Backup']);
   });
+
+  it('preserves recents and visits added while a save acknowledgement is pending', async () => {
+    remember('/fixtures/First');
+    let complete!: () => void;
+    save.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const flushing = flushState(false);
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    const [sent, metadata] = save.mock.calls[0]!;
+    remember('/fixtures/Second');
+    receiveWorkspaces(sent, metadata!.id);
+    expect(getState().saved.recents).toEqual(['/fixtures/Second', '/fixtures/First']);
+    expect(getState().saved.visits?.['/fixtures/Second']?.count).toBe(1);
+    complete();
+    await flushing;
+    expect(save.mock.calls.at(-1)?.[0].recents).toEqual(['/fixtures/Second', '/fixtures/First']);
+  });
 });
 
 describe('Go to folder suggestions', () => {
@@ -215,6 +237,8 @@ describe('Go to folder suggestions', () => {
     available.delete('/fixtures/Design/Drafts');
     fireEvent.keyDown(field(), { key: 'Enter' });
     expect((await screen.findByRole('alert')).textContent).toBe('Folder unavailable.');
+    expect(document.activeElement).toBe(field());
+    expect((field() as HTMLInputElement).readOnly).toBe(false);
     expect(open).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
   });
@@ -359,5 +383,16 @@ describe('palette folder results', () => {
     await waitFor(() => expect(options()).toHaveLength(8));
     expect(options()[0]?.textContent).toContain('Documents 1');
     expect(getState().saved.visits?.['/fixtures/Documents 0']).toBeDefined();
+  });
+  it('rechecks that a selected frequent destination is still a folder', async () => {
+    manyFolders();
+    palette(false);
+    const search = screen.getByRole('combobox', { name: 'Search commands' });
+    fireEvent.change(search, { target: { value: 'documents' } });
+    await waitFor(() => expect(options()).toHaveLength(8));
+    stat.mockResolvedValueOnce(entry('/fixtures/Documents 0', false));
+    fireEvent.keyDown(search, { key: 'Enter' });
+    await waitFor(() => expect(getState().notice).toBe('This folder is no longer available.'));
+    expect(open).not.toHaveBeenCalled();
   });
 });

@@ -6,7 +6,8 @@ import { flushCanvasWrites } from '../canvases/writes';
 import { flushNotes, trimNoteSessions } from '../notes/sessions';
 import { CURRENT_STATE_VERSION, type Pane, type SavedState } from '../../domain/contracts';
 import { previewValuesSchema, type JSONValue } from '../../domain/workspaces/project';
-import { activeWorkspace, getState, replaceState, report } from './core';
+import { activeWorkspace, getState, replaceState, report, update } from './core';
+import { folderVisitSync } from './folder-visits';
 import { flushPreferences } from './preferences';
 import { installPersistenceScheduler } from './persistence-request';
 import {
@@ -116,7 +117,22 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
     ),
   };
   replaceState({ ...getState(), saved });
-  await window.viewer.save(saved);
+  const visitSave = folderVisitSync.begin(saved.visits ?? {}, saved.recents);
+  try {
+    const shared = await window.viewer.save(saved, visitSave);
+    const current = getState();
+    const visits = folderVisitSync.complete(
+      visitSave.id,
+      shared?.visits ?? saved.visits ?? {},
+      current.saved.visits ?? {},
+      shared?.revision ?? visitSave.revision,
+    );
+    if (visits !== current.saved.visits)
+      update({ ...current, saved: { ...current.saved, visits } });
+  } catch (error) {
+    folderVisitSync.failed(visitSave.id);
+    throw error;
+  }
   for (const [id, revision] of arrangementRevisions)
     if (dirtyArrangements.get(id) === revision) dirtyArrangements.delete(id);
 }

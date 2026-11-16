@@ -35,7 +35,8 @@ own window. Locations, Favorites and recent folders appear on the left.
 1. Choose a location, double-click a folder, or enter a **Folder path** and press **Enter**. **⌘⇧G**
    (**Ctrl+Shift+G** on Windows/Linux) focuses the path. `~` opens Home.
 2. Type in **Filter by name…** to narrow the current folder. Press **↓** to move into the list.
-   **Show hidden files** includes names starting with a dot. **File type** limits eligible files.
+   **Show hidden files** includes names starting with a dot and, on macOS, items with the hidden
+   flag. **File type** limits eligible files.
 3. Select a file and choose **Open**. When multiple selection is available, use **Shift** for a
    range or **⌘** (**Ctrl**) to add an item. **⌘A** (**Ctrl+A**) selects eligible files only.
 4. When saving, enter **File name** and press **Enter** or choose **Save**. **New folder** creates a
@@ -61,6 +62,9 @@ empty space and choose **View → Group by**, then **Group by kind** or **Group 
 **⌘⇧.** shows or hides hidden files. Links have kind **Alias**, including links to folders, and
 **Group by kind** places them in **Aliases** before **Folders**. They still open their targets;
 ordinary name, date and size sorting keep their existing order.
+
+On macOS, hidden files include items carrying the hidden flag, such as files a Windows PC marked
+hidden on an SMB share. Viewer uses the flag and dot-prefixed names, never a filename pattern.
 
 **Columns** shows the path from the filesystem root to the current folder and scrolls that folder
 into view. Scroll left to reach its ancestors, or use the left and right arrow keys to follow the
@@ -199,6 +203,41 @@ To get a file back, choose **Trash** in the sidebar, select the item and choose 
 **Restore to…** when Viewer does not know where the file came from, which is the case for files
 trashed by other apps. Browsing the Trash needs Full Disk Access for Viewer in **System Settings →
 Privacy & Security**.
+
+## Share a folder with a Windows PC
+
+1. Select one folder. Right-click and choose **Share on the Network…**, or find it with **⌘K**. An
+   already shared folder offers **Network Sharing…**.
+2. Copy the folder path if needed. Choose **Open File Sharing Settings**. In System Settings, open
+   **General → Sharing**, turn **File Sharing** on, and open its information button.
+3. Under **Shared Folders**, click **+** and choose the folder. Choose the users and their read or
+   write permissions. Turn **Allow guest users** off unless you mean to share with everyone on the
+   network.
+4. Return to Viewer. The window refreshes and shows whether the folder is shared. Choose **Copy**
+   beside a Windows address, then paste it into File Explorer's address bar on the PC. Keep spaces
+   in a Windows address as shown. On another Mac, use Finder's **Go → Connect to Server…** with the
+   Mac address. Both computers must be on the same local network.
+
+Shared folders have a **Shared** mark in file views and the sidebar. **Get info…** (**⌘I**) shows
+the share name, registered or guest access, read-only status, the File Sharing service and copyable
+addresses under **Network sharing**. If File Sharing is off, the share still exists but nobody can
+connect. **Refresh sharing** reads its state again. Viewer also refreshes when a folder view opens
+and when you return to the app.
+
+The warning **Anyone on the same network can open this folder without a password.** means guest
+access is on. When the share also allows writes and the folder's Everyone permission allows writes,
+Viewer adds **They can also add, change and delete files in this folder.** These warnings stay
+visible. Choose **Network Sharing…** and turn guest access off in System Settings if that is not
+what you intended.
+
+To stop, choose **Network Sharing… → Open File Sharing Settings**, select the folder under **Shared
+Folders**, then click the remove button. Return to Viewer to see the result. Viewer reads sharing
+state and opens Settings; it never changes share points or asks for an administrator password.
+**Share…** remains the macOS share sheet for AirDrop and other destinations.
+
+Network sharing marks, details and commands are available in the direct macOS edition only. Agents,
+custom actions, the terminal CLI and MCP cannot open this flow, enumerate the share points or open
+Sharing settings. See [platform differences](../reference/platforms.md).
 
 ## On a network share without a Trash
 

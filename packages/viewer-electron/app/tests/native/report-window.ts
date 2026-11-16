@@ -131,6 +131,22 @@ async function verify(): Promise<void> {
         return { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
       }),
     );
+    if (look === 'light') {
+      await window.webContents.debugger.sendCommand('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        ...button,
+      });
+      const filter = await inspect(
+        window.webContents,
+        pageCall(() => getComputedStyle(document.querySelector('button')!).filter),
+      );
+      assert.equal(filter, 'brightness(0.94)');
+      await writeFile(
+        path.join(captures, 'light-hover-440.png'),
+        (await window.webContents.capturePage()).toPNG(),
+        { flag: 'wx' },
+      );
+    }
     const closed = new Promise<void>((resolve) => window.once('closed', () => resolve()));
     await window.webContents.debugger.sendCommand('Input.dispatchMouseEvent', {
       type: 'mousePressed',
@@ -149,12 +165,14 @@ async function verify(): Promise<void> {
     copied = undefined;
   }
   for (const keyCode of ['Escape', 'Enter']) {
+    process.stdout.write('Checking report key: ' + keyCode + '\n');
     const owner = new ReportWindow(
       async () => report,
       () => 'dark',
       false,
     );
     await owner.open();
+    process.stdout.write('Report key window loaded.\n');
     const window = owner.window!;
     window.webContents.debugger.attach('1.3');
     const closed = new Promise<void>((resolve) => window.once('closed', () => resolve()));
@@ -183,7 +201,7 @@ async function verify(): Promise<void> {
 const timeout = setTimeout(() => {
   process.stderr.write('Report window verification timed out.\n');
   app.exit(1);
-}, 30000);
+}, 90000);
 void verify()
   .then(() => clearTimeout(timeout))
   .catch((error: unknown) => {

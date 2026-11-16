@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import type { BrowserWindowConstructorOptions, Input, MenuItemConstructorOptions } from 'electron';
+import type { BrowserWindowConstructorOptions, MenuItemConstructorOptions } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReportWindow, reportDisclosure, reportPage } from '../src/desktop/windows/report-window';
-import { reportCopyChannel } from '../src/domain/diagnostics/report-window';
+import { reportCloseChannel, reportCopyChannel } from '../src/domain/diagnostics/report-window';
 import { installApplicationMenu } from '../src/desktop/windows/application-menu';
 import { dispatchApplicationCommand } from '../src/desktop/windows/application-dispatch';
 
@@ -80,6 +80,16 @@ describe('report review window', () => {
     window.dispatchEvent(new Event('DOMContentLoaded'));
     document.querySelector('button')!.click();
     expect(native.ipcSend).toHaveBeenCalledExactlyOnceWith(reportCopyChannel);
+    for (const [key, channel] of [
+      ['Enter', reportCopyChannel],
+      ['Escape', reportCloseChannel],
+    ]) {
+      const event = new KeyboardEvent('keydown', { key, cancelable: true });
+      document.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(native.ipcSend).toHaveBeenLastCalledWith(channel);
+    }
+    expect(native.ipcSend).toHaveBeenCalledTimes(3);
     expect(Reflect.get(window, 'viewer')).toBeUndefined();
   });
 
@@ -130,30 +140,20 @@ describe('report review window', () => {
     );
   });
 
-  it('copies the immutable reviewed report by button navigation or default Enter, then closes', async () => {
-    for (const method of ['button', 'Enter'] as const) {
-      const make = vi.fn(async () => report);
-      const owner = new ReportWindow(make, () => 'dark');
-      await owner.open();
-      const window = native.windows.at(-1)!;
-      const event = { preventDefault: vi.fn() };
-      if (method === 'button')
-        window.webContents.ipc.emit(reportCopyChannel, {
-          sender: window.webContents,
-          senderFrame: window.webContents.mainFrame,
-        });
-      else
-        window.webContents.emit('before-input-event', event, {
-          type: 'keyDown',
-          key: 'Enter',
-        } satisfies Partial<Input>);
-      if (method === 'Enter') expect(event.preventDefault).toHaveBeenCalledOnce();
-      await vi.waitFor(() => expect(window.close).toHaveBeenCalledOnce());
-      expect(native.writeText).toHaveBeenLastCalledWith(report);
-      expect(window.close).toHaveBeenCalledOnce();
-      expect(owner.window).toBeUndefined();
-      expect(make).toHaveBeenCalledOnce();
-    }
+  it('copies the immutable reviewed report from its private control, then closes', async () => {
+    const make = vi.fn(async () => report);
+    const owner = new ReportWindow(make, () => 'dark');
+    await owner.open();
+    const window = native.windows.at(-1)!;
+    window.webContents.ipc.emit(reportCopyChannel, {
+      sender: window.webContents,
+      senderFrame: window.webContents.mainFrame,
+    });
+    await vi.waitFor(() => expect(window.close).toHaveBeenCalledOnce());
+    expect(native.writeText).toHaveBeenLastCalledWith(report);
+    expect(window.close).toHaveBeenCalledOnce();
+    expect(owner.window).toBeUndefined();
+    expect(make).toHaveBeenCalledOnce();
   });
 
   it('Escape closes without reading or writing the clipboard', async () => {
@@ -163,11 +163,10 @@ describe('report review window', () => {
     );
     await owner.open();
     const window = native.windows.at(-1)!;
-    window.webContents.emit(
-      'before-input-event',
-      { preventDefault: vi.fn() },
-      { type: 'keyDown', key: 'Escape' },
-    );
+    window.webContents.ipc.emit(reportCloseChannel, {
+      sender: window.webContents,
+      senderFrame: window.webContents.mainFrame,
+    });
     expect(window.close).toHaveBeenCalledOnce();
     expect(native.writeText).not.toHaveBeenCalled();
   });

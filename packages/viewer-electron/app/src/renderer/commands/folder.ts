@@ -99,12 +99,20 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'network-sharing',
-      label: (context) => sharedFolder(context.selection[0]?.path ?? '') ? 'Network Sharing…' : 'Share on the Network…',
+      label: (context) =>
+        sharedFolder(context.selection[0]?.path ?? '')
+          ? 'Network Sharing…'
+          : 'Share on the Network…',
       group: 'Files',
       icon: 'network',
       aliases: ['smb', 'windows file sharing', 'stop sharing folder'],
       humanOnly: true,
-      when: (context) => networkSharingEnabled() && !!actions.networkSharing && selected(context) && context.selection.length === 1 && context.selection[0]!.directory,
+      when: (context) =>
+        networkSharingEnabled() &&
+        !!actions.networkSharing &&
+        selected(context) &&
+        context.selection.length === 1 &&
+        context.selection[0]!.directory,
       run: (context) => actions.networkSharing?.(context),
     },
     {

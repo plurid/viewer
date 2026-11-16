@@ -11,6 +11,9 @@ import type { FileInformationPatch } from '../src/domain/files/information';
 import type { AgentClientRequest } from '../src/domain/agents/clients';
 import type { ReadableStream } from 'node:stream/web';
 import { createServer } from 'vite';
+import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
+import type { FileVisibility } from '../src/desktop/files/visibility';
 import { rename, mkdir, realpath, writeFile } from 'node:fs/promises';
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import { License } from '../src/desktop/license/license';
@@ -87,6 +90,20 @@ const worktrees = new GitWorktrees({
 });
 const permissionScenario = process.env.VIEWER_TEST_SCENARIO === 'folder-access';
 const settingsPreviewScenario = process.env.VIEWER_TEST_SCENARIO === 'settings-previews';
+const networkSharingScenario = process.env.VIEWER_TEST_SCENARIO === 'network-sharing';
+const networkFolder = path.join(fixture.files, 'Network Drop');
+const networkHelper = process.env.VIEWER_TEST_NETWORK_HELPER;
+const networkVisibility =
+  networkSharingScenario && networkHelper
+    ? (createRequire(import.meta.url)(networkHelper) as FileVisibility)
+    : undefined;
+if (networkSharingScenario) {
+  await mkdir(networkFolder);
+  await writeFile(path.join(networkFolder, 'desktop.ini'), 'fixture');
+  await writeFile(path.join(networkFolder, '.dot-file'), 'fixture');
+  await writeFile(path.join(networkFolder, 'Arriving photo.txt'), 'fixture');
+  execFileSync('/usr/bin/chflags', ['hidden', path.join(networkFolder, 'desktop.ini')]);
+}
 const settingsSnapshot = (snapshot: SettingsSnapshot) =>
   settingsPreviewScenario ? { ...snapshot, credentials: ['fixture-gemini'] } : snapshot;
 const restrictedFolder = path.join(fixture.files, 'Models');
@@ -468,6 +485,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     }
     case 'bootstrap':
       return {
+        networkSharingAvailable: networkSharingScenario,
         license: await license?.status(),
         home: fixture.files,
         platform: 'darwin',
@@ -498,6 +516,25 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
           return license?.status();
       }
     }
+    case 'networkSharing':
+      schemas.networkSharing.parse(args);
+      return {
+        status: networkSharingScenario ? 'ready' : 'unavailable',
+        shares: networkSharingScenario
+          ? [
+              {
+                path: networkFolder,
+                name: 'Network Drop 日本',
+                guests: true,
+                readOnly: false,
+                guestWritable: true,
+              },
+            ]
+          : [],
+        service: 'running',
+        host: 'Studio-Mac',
+        ipv4: ['192.168.1.12', '10.0.0.3'],
+      };
     case 'fileInformation':
       return information.get(scoped(args[0] as string));
     case 'fileInformationUpdate':
@@ -722,7 +759,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
         throw Object.assign(new Error('Choose this folder to allow access.'), {
           code: 'FILE_ACCESS_REQUIRED',
         });
-      return list(scoped(args[0] as string));
+      return list(scoped(args[0] as string), networkVisibility);
     case 'stat':
       if (permissionScenario && args[0] === restrictedFolder && !permissionGranted)
         throw Object.assign(new Error('Choose this folder to allow access.'), {

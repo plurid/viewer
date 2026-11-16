@@ -59,6 +59,13 @@ import { executionCapabilities } from '../../domain/agents/requests';
 import { requestActors } from '../../domain/services';
 import { reviewModes } from '../../domain/comparison/review';
 
+const folderVisitsSchema = z
+  .record(
+    localPath,
+    z.object({ count: z.number().int().min(0).max(1e9), last: z.number().min(0) }).strict(),
+  )
+  .refine((visits) => Object.keys(visits).length <= 500);
+
 /** A `>` prompt: the words, and where they were typed (domain/command-line/prompt.ts). */
 const promptRequestSchema = z
   .object({
@@ -724,10 +731,12 @@ export const schemas = {
   list: z.tuple([localPath]),
   stat: z.tuple([localPath]),
   fileInformation: z.tuple([localPath]),
-  networkSharing: z.tuple([z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('refresh') }).strict(),
-    z.object({ kind: z.literal('settings'), path: localPath }).strict(),
-  ])]),
+  networkSharing: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('refresh') }).strict(),
+      z.object({ kind: z.literal('settings'), path: localPath }).strict(),
+    ]),
+  ]),
   fileInformationUpdate: z.tuple([localPath, z.string().min(1).max(200), informationPatchSchema]),
   chooseFolder: z.tuple([localPath.optional()]),
   reveal: z.tuple([localPath]),
@@ -805,7 +814,19 @@ export const schemas = {
     id,
   ]),
   printPDF: z.tuple([id, z.string().min(1).max(1024).optional()]),
-  save: z.tuple([stateSchema]),
+  save: z.tuple([
+    stateSchema,
+    z
+      .object({
+        id,
+        base: folderVisitsSchema,
+        clear: z.boolean(),
+        revision: z.number().int().nonnegative().optional(),
+        restored: folderVisitsSchema.optional(),
+      })
+      .strict()
+      .optional(),
+  ]),
   flushed: z.tuple([id, flushResultSchema.optional()]),
   clipboardWrite: z.tuple([z.array(localPath).max(10000), z.boolean()]),
   clipboardWriteText: z.tuple([z.string().max(16 * 1024 * 1024)]),

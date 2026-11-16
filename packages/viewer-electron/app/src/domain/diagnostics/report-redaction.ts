@@ -88,15 +88,29 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
         '<private>',
       );
 
+    const homes = values
+      .filter((item) => item.kind === 'home')
+      .flatMap((item) => pathVariants(item.value))
+      .toSorted((a, b) => b.length - a.length);
     const roots = values
       .filter((item) => ['application bundle', 'application data'].includes(item.kind))
-      .flatMap((item) => pathVariants(item.value));
+      .flatMap((item) => pathVariants(item.value))
+      .flatMap((root) => {
+        const home = homes.find((home) => root.toLowerCase().startsWith(home.toLowerCase() + '/'));
+        return home ? [root, '~' + root.slice(home.length)] : [root];
+      });
+    if (homes.length) homes.push('~');
     const protectedRoots = roots.length
       ? [
           ...source.matchAll(
             new RegExp('(?:' + alternatives(roots) + ')(?=/|$|[\\s"\'<>),:])', 'giu'),
           ),
-        ]
+        ].filter(
+          (root) =>
+            !/(?:^|\/)\.\.(?:\/|$|[\s"'<>),:])/.test(
+              source.slice(root.index + root[0].length).split('\n', 1)[0] ?? '',
+            ),
+        )
       : [];
     const protectedPaths = protectedRoots.map((root) => ({
       start: root.index,
@@ -110,9 +124,6 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
         if (!protectedPaths.some((range) => range.start <= match.index && match.index < range.end))
           spans.push({ start: match.index, end: match.index + match[0].length, replacement });
     };
-    const homes = values
-      .filter((item) => item.kind === 'home')
-      .flatMap((item) => pathVariants(item.value));
     if (homes.length) {
       const pattern = new RegExp('(?:' + alternatives(homes) + ')(?=/|$|[\\s"\'<>),:])', 'giu');
       for (const match of source.matchAll(pattern)) {
@@ -150,7 +161,11 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
     mask(/^.*%[\da-f]{2}.*$/gim, '[Encoded text omitted]');
     mask(/\bviewer-license-1[.\w+/=-]*/gi, '<license>');
     mask(/\b(?:sk|pk|rk|gh[pousr]|xox[abprs])[-_][\w-]{8,}/gi, '<token>');
+    mask(/\b(?:AKIA|ASIA)[A-Z\d]{16}\b/g, '<token>');
+    mask(/\beyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]{5,}/g, '<token>');
     mask(/\bBearer\s+[^\s"',;]+/gi, '<token>');
+    mask(/\bBasic\s+[a-z\d+/=]{4,}/gi, '<token>');
+    mask(/\bauthorization["']?\s*[:=][^\r\n]*/gi, '<token>');
     mask(
       /\b(?:api[-_]?key|access[-_]?token|token|password|secret|authorization)["']?\s*[:=]\s*["']?[^\s"',;&]+/gi,
       '<token>',
@@ -203,6 +218,7 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
         });
     }
 
+    if (!spans.length) return text;
     const ordered = spans.toSorted((a, b) => a.start - b.start || b.end - a.end);
     const merged: RedactionSpan[] = [];
     for (const span of ordered) {

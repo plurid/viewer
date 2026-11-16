@@ -126,6 +126,14 @@ describe('report contents', () => {
     expect(report).not.toMatch(/Failure 9\b|partial|ignored|must-not-be-copied|settings/);
   });
 
+  it('puts the last recorded failure first when timestamps are equal', () => {
+    const report = diagnosticReport({
+      ...fixture(),
+      log: [entry(1, 'Earlier failure'), entry(1, 'Latest failure')].join('\n'),
+    });
+    expect(report.indexOf('Latest failure')).toBeLessThan(report.indexOf('Earlier failure'));
+  });
+
   it('redacts before truncating messages and quotes Markdown content as text', () => {
     const input = fixture();
     input.log = entry(

@@ -43,19 +43,31 @@ platform; its real-engine macOS smoke passes, and Windows and Linux runs are pen
 
 ## Direct and App Store builds
 
-| Feature                                                    | Direct build                                     | App Store build                                    |
-| ---------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------- |
-| Folder access                                              | Folder grants and macOS privacy prompts          | Security-scoped bookmarks                          |
-| Git review, worktrees, Git actions and branch tasks        | Yes                                              | No                                                 |
-| Spotlight name search                                      | Yes                                              | No: the sandbox has no `mdfind`                    |
-| The `viewer` shell command                                 | Yes                                              | No                                                 |
-| **Open With** from Finder (document types)                 | Yes                                              | No: the sandbox would receive only the opened file |
-| **Viewer → Check for Updates…** and the signed update feed | Yes                                              | No: the App Store updates it                       |
-| 30-day trial and pay-once offline key                      | When both publisher configuration fields are set | No UI or license record                            |
-| File and terminal workers                                  | Processes                                        | Threads                                            |
+| Feature                                                    | Direct build                                     | App Store build                                                        |
+| ---------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| Folder access                                              | Folder grants and macOS privacy prompts          | Security-scoped bookmarks                                              |
+| Git review, worktrees, Git actions and branch tasks        | Yes                                              | No                                                                     |
+| Spotlight name search                                      | Yes                                              | No: the sandbox has no `mdfind`                                        |
+| Local network sharing marks, Get Info and setup guidance   | Yes, on macOS                                    | No: system share-point tools are outside this edition's sandbox policy |
+| The `viewer` shell command                                 | Yes                                              | No                                                                     |
+| **Open With** from Finder (document types)                 | Yes                                              | No: the sandbox would receive only the opened file                     |
+| **Viewer → Check for Updates…** and the signed update feed | Yes                                              | No: the App Store updates it                                           |
+| 30-day trial and pay-once offline key                      | When both publisher configuration fields are set | No UI or license record                                                |
+| File and terminal workers                                  | Processes                                        | Threads                                                                |
 
 Store folder bookmarks do not grant Full Disk Access, and direct-build access does not establish
 sandbox acceptance.
+
+Network sharing follows the direct-only system-tool rule used for Spotlight. It reads
+`/usr/sbin/sharing -l`, the `com.apple.smbd` launch job and the local host name with bounded,
+shell-free calls. It opens the installed macOS Sharing settings for the person to make changes. The
+Store edition runs none of these tools and offers no sharing mark, section or command.
+
+Both macOS editions can read the native hidden flag when built with the current file helper. The
+helper reads directory flags in bulk and falls back to native per-entry flags on filesystems that do
+not support bulk attributes. After changing `tools/macos-files.mm`, rebuild the helper before
+shipping: an older development helper only supplies the existing dot-name rule. Source tests with a
+separately compiled helper do not qualify a signed Store build.
 
 The shipped source leaves license configuration empty. Such a direct build has no trial, license
 menu, Settings page or reminder, and writes no license record. Configured direct builds keep all

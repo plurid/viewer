@@ -21,9 +21,7 @@ export interface NetworkSharingSnapshot {
   ipv4: string[];
 }
 
-export type NetworkSharingRequest =
-  | { kind: 'refresh' }
-  | { kind: 'settings'; path: string };
+export type NetworkSharingRequest = { kind: 'refresh' } | { kind: 'settings'; path: string };
 
 export function guestWarning(share: NetworkShare): string | undefined {
   if (!share.guests) return undefined;

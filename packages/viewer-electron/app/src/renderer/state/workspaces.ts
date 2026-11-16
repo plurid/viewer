@@ -1,5 +1,6 @@
 import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
 import { mergeFolderVisits, recordVisit } from '../../domain/files/folder-visits';
+import { folderVisitSync } from './folder-visits';
 import { presentationValue } from '../../domain/preferences/presentation/profile-fields';
 // Workspace lifecycle: startup, switching, creation, deletion and restoring.
 import { overridable, type WorkspaceOverrides } from '../../domain/preferences/overrides';
@@ -108,6 +109,7 @@ export function initialize(bootstrap: Bootstrap): void {
     }
   }
   const active = activeWorkspace({ saved } as ViewerState);
+  folderVisitSync.reset(original.visits ?? {}, bootstrap.folderHistoryRevision);
   const now = Date.now();
   for (const pane of active.panes) {
     if (pane.type === 'folder') saved.visits = recordVisit(saved.visits ?? {}, pane.path, now);
@@ -153,8 +155,19 @@ export async function switchWorkspace(id: string): Promise<void> {
 }
 
 /** Refresh shared workspaces without replacing this window's unsaved active workspace. */
-export function receiveWorkspaces(saved: SavedState): void {
+export function receiveWorkspaces(
+  saved: SavedState,
+  visitSaveID?: string,
+  historyRevision?: number,
+): void {
   const current = getState();
+  const recents = folderVisitSync.recentFolders(saved.recents, current.saved.recents, visitSaveID);
+  const visits = folderVisitSync.receive(
+    saved.visits ?? {},
+    current.saved.visits ?? {},
+    visitSaveID,
+    historyRevision,
+  );
   const active = activeWorkspace();
   const workspaces = saved.workspaces.map((space) => (space.id === active.id ? active : space));
   if (!workspaces.some((space) => space.id === active.id)) workspaces.push(active);
@@ -168,8 +181,8 @@ export function receiveWorkspaces(saved: SavedState): void {
     JSON.stringify([
       workspaces,
       saved.favorites,
-      saved.recents,
-      saved.visits,
+      recents,
+      visits,
       saved.lineHistory,
       workspaceVisits,
       saved.openWindows,
@@ -195,8 +208,8 @@ export function receiveWorkspaces(saved: SavedState): void {
       workspaceVisits,
       openWindows: saved.openWindows,
       favorites: saved.favorites,
-      recents: saved.recents,
-      visits: saved.visits,
+      recents,
+      visits,
       lineHistory: saved.lineHistory,
     },
   });
@@ -244,6 +257,7 @@ export async function appendRestoredWorkspaces(imported: SavedState): Promise<vo
   const favorites = [...current.favorites];
   for (const item of imported.favorites)
     if (!favorites.some((existing) => existing.path === item.path)) favorites.push(item);
+  folderVisitSync.restore(imported.visits ?? {});
   savePatch({
     workspaces: [...current.workspaces, ...imported.workspaces],
     workspaceVisits: { ...current.workspaceVisits, ...imported.workspaceVisits },

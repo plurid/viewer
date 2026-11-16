@@ -10,6 +10,7 @@ import {
   type QueryEntry,
 } from '../../domain/search/query';
 import { absolute, entry } from '../files/filesystem';
+import { fileVisibility } from '../files/visibility';
 import { searchExclusions } from './exclusions';
 import { commonSearchExclusions } from '../../domain/search/exclusions';
 
@@ -114,6 +115,7 @@ export class Search {
           try {
             await this.authorize(file);
             const item = await entry(file);
+            if (!request.showHidden && item.hidden) continue;
             if (!matchesQuery(query, item, facts)) continue;
             entries.push(item);
             shown.add(file);
@@ -134,10 +136,14 @@ export class Search {
         if (excluded(folder)) continue;
         try {
           await this.authorize(folder);
+          const hidden = request.showHidden
+            ? new Set<string>()
+            : new Set(await fileVisibility.hiddenEntries(folder));
           const directory = await opendir(folder);
           for await (const child of directory) {
             if (abort.signal.aborted) break;
-            if (!request.showHidden && child.name.startsWith('.')) continue;
+            if (!request.showHidden && (child.name.startsWith('.') || hidden.has(child.name)))
+              continue;
             visited++;
             const file = path.join(folder, child.name);
             if (excluded(file)) continue;

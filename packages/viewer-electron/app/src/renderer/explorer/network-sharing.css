@@ -31,6 +31,16 @@
 .network-sharing-details dt {
   color: var(--muted);
 }
+.file-information .network-sharing-details dt,
+.file-information .network-sharing-details dt:first-child {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-compact);
+  font-weight: normal;
+}
+.file-information .network-sharing-details dd {
+  margin: 0;
+}
 .network-sharing-warning {
   color: var(--danger);
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import type { FileEntry } from '../src/domain/contracts';
 import { pathAncestry } from '../src/domain/files/paths';
@@ -31,13 +31,13 @@ const models = entry('/Projects/Models'),
 const entries = [entry('/Projects/Models/Parts')];
 beforeEach(clearSessions);
 afterEach(cleanup);
-function mount() {
+function mount(onVisit?: (path: string) => void) {
   const session = browseSession('folder', models.path);
   const selecting = new FileSelection(session, (selection) =>
     updateBrowseSession('folder', models.path, { selection }),
   );
   const hook = renderHook(() =>
-    useColumnNavigation('folder', models.path, entries, true, selecting),
+    useColumnNavigation('folder', models.path, entries, true, selecting, onVisit),
   );
   act(() => {
     hook.result.current.register('/', [entry('/Projects')]);
@@ -80,4 +80,16 @@ it('does not prune an accessible descendant when an ancestor listing is filtered
   act(() => result.current.register('/Projects', [other]));
   expect(result.current.trail).toEqual(['/', '/Projects']);
   expect(result.current.directory()).toBe('/Projects');
+});
+it('records changed column destinations, including keyboard traversal, once per change', () => {
+  const visit = vi.fn();
+  const { result } = mount(visit);
+  expect(visit).not.toHaveBeenCalled();
+  act(() => result.current.choose(other, plain, [models, other]));
+  act(() => result.current.choose(other, plain, [models, other]));
+  expect(visit.mock.calls).toEqual([[other.path]]);
+  act(() => result.current.activate('/Projects'));
+  act(() => result.current.choose(models, plain, [models, other]));
+  act(() => result.current.right());
+  expect(visit.mock.calls).toEqual([[other.path], ['/Projects'], [models.path], [entries[0].path]]);
 });

@@ -5,9 +5,11 @@ import { getState, replaceState, update } from './core';
 import { pendingPreferences, schedulePreferences } from './preferences';
 import type { DiffSource } from '../../domain/comparison/diff';
 import { requestRefresh } from './refresh';
-import { boundFolderVisits } from '../../domain/files/folder-visits';
+import { remapFolderVisits } from '../../domain/files/folder-visits';
+import { folderVisitSync } from './folder-visits';
 
-export function receiveFileChanges(changes: FileChange[]): void {
+export function receiveFileChanges(changes: FileChange[], historyRevision?: number): void {
+  folderVisitSync.remap(changes, historyRevision);
   const map = pathMapper(changes);
   const mapSource = (source: DiffSource): DiffSource => {
     if (source.kind === 'file') {
@@ -66,14 +68,7 @@ export function receiveFileChanges(changes: FileChange[]): void {
         })),
         favorites: saved.favorites.map((item) => ({ ...item, path: map(item.path) })),
         recents: saved.recents.map(map),
-        visits:
-          saved.visits &&
-          boundFolderVisits(
-            Object.fromEntries(
-              Object.entries(saved.visits).map(([path, visit]) => [map(path), visit]),
-            ),
-            Date.now(),
-          ),
+        visits: saved.visits && remapFolderVisits(saved.visits, changes),
         ui: {
           ...saved.ui,
           sidebar: {

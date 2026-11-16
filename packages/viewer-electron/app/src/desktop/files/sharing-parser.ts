@@ -21,11 +21,19 @@ export function parseSharePoints(output: string): SharePoint[] | undefined {
     const name = smb.get('name');
     const path = record.get('path');
     if (
-      !record.get('name') || !name || !path?.startsWith('/') ||
+      !record.get('name') ||
+      !name ||
+      !path?.startsWith('/') ||
       !['shared', 'guest access', 'read-only'].every((key) => /^[01]$/.test(smb!.get(key) ?? ''))
-    ) return false;
+    )
+      return false;
     if (smb.get('shared') === '1')
-      shares.push({ path, name, guests: smb.get('guest access') === '1', readOnly: smb.get('read-only') === '1' });
+      shares.push({
+        path,
+        name,
+        guests: smb.get('guest access') === '1',
+        readOnly: smb.get('read-only') === '1',
+      });
     return true;
   };
   for (const line of lines) {

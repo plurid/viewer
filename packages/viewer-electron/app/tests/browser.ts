@@ -20,6 +20,7 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  networkSharing: (request) => invoke('networkSharing', request),
   license: (request) => invoke('license', request),
   dialog: async () => ({ prompt: null }),
   canvas: (request) => invoke('canvas', request),

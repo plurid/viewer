@@ -12,6 +12,9 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <algorithm>
+#include <sys/attr.h>
+#include <dirent.h>
+#include <unistd.h>
 
 // A small in-process bridge: dynamic PowerBox grants belong to this process.
 // Filesystem work runs on N-API's bounded pool, never the Cocoa/renderer thread.
@@ -133,7 +136,7 @@ static napi_value clipboardWrite(napi_env env, napi_callback_info info) {
   }
 }
 
-enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject, Alias, DatesAdded, Clone };
+enum class Kind { Metadata, LinkMetadata, Rename, Trash, Volumes, Eject, Alias, DatesAdded, Clone, HiddenFolder, HiddenFile };
 struct Work {
   napi_async_work work; napi_deferred deferred; Kind kind;
   int source = -1, target = -1;
@@ -145,6 +148,7 @@ struct Work {
   NSString *result = nil;
   NSString *bookmark = nil;
   bool directory = false;
+  bool hidden = false;
   bool allowReservation = false;
   viewer_rename::Result renameResult;
   NSArray<NSDictionary *> *volumes = nil;
@@ -152,11 +156,97 @@ struct Work {
   NSArray<NSDictionary *> *dates = nil;
   std::optional<ReviewedFileVersion> reviewed;
 };
+// One bulk walk avoids a second per-item syscall from JavaScript during a large listing.
+static NSArray<NSString *> *hiddenNames(NSString *folder, int *failure) {
+  NSMutableArray<NSString *> *names = [NSMutableArray array];
+  int descriptor = open(folder.fileSystemRepresentation, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  if (descriptor < 0) { *failure = errno; return nil; }
+  struct attrlist attributes{};
+  attributes.bitmapcount = ATTR_BIT_MAP_COUNT;
+  attributes.commonattr = ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_NAME | ATTR_CMN_FLAGS;
+  struct __attribute__((packed, aligned(4))) Record {
+    uint32_t length;
+    attribute_set_t returned;
+    attrreference_t name;
+    uint32_t flags;
+  };
+  alignas(8) char buffer[64 * 1024];
+  bool fallback = false;
+  for (;;) {
+    int count = getattrlistbulk(descriptor, &attributes, buffer, sizeof(buffer), FSOPT_PACK_INVAL_ATTRS);
+    if (count < 0) {
+      if (errno == ENOTSUP || errno == EINVAL || errno == ENOSYS) fallback = true;
+      else *failure = errno;
+      break;
+    }
+    if (!count) break;
+    size_t offset = 0;
+    for (int index = 0; index < count; ++index) {
+      if (offset + sizeof(Record) > sizeof(buffer)) { *failure = EIO; break; }
+      const Record *record = reinterpret_cast<const Record *>(buffer + offset);
+      if (record->length < sizeof(Record) || record->length > sizeof(buffer) - offset ||
+          !(record->returned.commonattr & ATTR_CMN_NAME)) { *failure = EIO; break; }
+      int64_t nameOffset = offsetof(Record, name) + (int64_t)record->name.attr_dataoffset;
+      size_t nameLength = record->name.attr_length;
+      if (nameOffset < (int64_t)sizeof(Record) || !nameLength ||
+          (uint64_t)nameOffset + nameLength > record->length) { *failure = EIO; break; }
+      const char *name = buffer + offset + nameOffset;
+      if (name[nameLength - 1] != '\0' || strnlen(name, nameLength) != nameLength - 1 || strchr(name, '/')) { *failure = EIO; break; }
+      uint32_t flags = record->flags;
+      if (!(record->returned.commonattr & ATTR_CMN_FLAGS)) {
+        struct stat info{};
+        if (fstatat(descriptor, name, &info, AT_SYMLINK_NOFOLLOW) != 0) {
+          if (errno == ENOENT) { offset += record->length; continue; }
+          *failure = errno; break;
+        }
+        flags = info.st_flags;
+      }
+      if (flags & UF_HIDDEN) {
+        NSString *value = [NSFileManager.defaultManager stringWithFileSystemRepresentation:name length:nameLength - 1];
+        if (value) [names addObject:value];
+      }
+      offset += record->length;
+    }
+    if (*failure) break;
+  }
+  if (fallback) {
+    // Filesystems without bulk attributes still use the flag, never a filename guess.
+    close(descriptor);
+    DIR *directory = opendir(folder.fileSystemRepresentation);
+    if (!directory) { *failure = errno; return nil; }
+    [names removeAllObjects];
+    for (;;) {
+      errno = 0;
+      struct dirent *item = readdir(directory);
+      if (!item) { if (errno) *failure = errno; break; }
+      if (!strcmp(item->d_name, ".") || !strcmp(item->d_name, "..")) continue;
+      struct stat info{};
+      if (fstatat(dirfd(directory), item->d_name, &info, AT_SYMLINK_NOFOLLOW) != 0) {
+        if (errno == ENOENT) continue;
+        *failure = errno; break;
+      }
+      if (info.st_flags & UF_HIDDEN) {
+        NSString *value = [NSFileManager.defaultManager stringWithFileSystemRepresentation:item->d_name length:strlen(item->d_name)];
+        if (value) [names addObject:value];
+      }
+    }
+    closedir(directory);
+  } else close(descriptor);
+  return *failure ? nil : names;
+}
 static void execute(napi_env, void *data) {
   Work *task = static_cast<Work *>(data);
   @autoreleasepool { @try {
     NSError *error = nil;
-    if (task->kind == Kind::DatesAdded) {
+    if (task->kind == Kind::HiddenFolder) {
+      task->files = hiddenNames(task->file, &task->errorNumber);
+      if (!task->files) task->error = @"Could not read hidden file flags.";
+    } else if (task->kind == Kind::HiddenFile) {
+      struct stat info{};
+      if (lstat(task->file.fileSystemRepresentation, &info) != 0) {
+        task->errorNumber = errno; task->error = @"Could not read the hidden file flag.";
+      } else task->hidden = (info.st_flags & UF_HIDDEN) != 0;
+    } else if (task->kind == Kind::DatesAdded) {
       NSMutableArray *dates = [NSMutableArray array];
       for (NSString *file in task->files) {
         @autoreleasepool {
@@ -369,6 +459,11 @@ static void complete(napi_env env, napi_status status, void *data) {
         napi_set_element(env, result, index++, item);
       }
     }
+    if (task->kind == Kind::HiddenFile) result = boolean(env, task->hidden);
+    if (task->kind == Kind::HiddenFolder) {
+      napi_create_array(env, &result); uint32_t index = 0;
+      for (NSString *name in task->files) napi_set_element(env, result, index++, text(env, name));
+    }
     napi_resolve_deferred(env, task->deferred, result);
   }
   napi_delete_async_work(env, task->work); delete task;
@@ -435,6 +530,8 @@ static napi_value linkMetadata(napi_env env, napi_callback_info info) { return p
 static napi_value renameExclusive(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::Rename); }
 static napi_value alias(napi_env env, napi_callback_info info) { return pairWork(env, info, Kind::Alias); }
 static napi_value eject(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::Eject); }
+static napi_value hiddenEntries(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::HiddenFolder); }
+static napi_value fileHidden(napi_env env, napi_callback_info info) { return fileWork(env, info, Kind::HiddenFile); }
 static napi_value datesAdded(napi_env env, napi_callback_info info) {
   @autoreleasepool {
     size_t count = 1; napi_value args[1]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
@@ -478,6 +575,8 @@ static napi_value init(napi_env env, napi_value exports) {
     {"trash", nullptr, trash, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"volumes", nullptr, volumes, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"datesAdded", nullptr, datesAdded, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"hiddenEntries", nullptr, hiddenEntries, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"fileHidden", nullptr, fileHidden, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"eject", nullptr, eject, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
   napi_define_properties(env, exports, sizeof(methods)/sizeof(methods[0]), methods); return exports;

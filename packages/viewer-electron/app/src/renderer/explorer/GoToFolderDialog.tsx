@@ -96,7 +96,8 @@ export function GoToFolderDialog({
           maxLength={32768}
           placeholder="Folder name or ~/Documents"
           value={query}
-          disabled={busy}
+          readOnly={busy}
+          aria-busy={busy}
           onChange={(event) => {
             setQuery(event.target.value);
             setSelected('');

@@ -322,7 +322,10 @@ export class CommandRegistry {
     const command = this.list({ ...request, ids: [id] }).find((item) => item.id === id);
     return command ? this.run(command, request.remember !== false) : false;
   }
-  private async runDefinition(definition: CommandDefinition, context: CommandContext): Promise<void> {
+  private async runDefinition(
+    definition: CommandDefinition,
+    context: CommandContext,
+  ): Promise<void> {
     if (definition.humanOnly && this.customDepth)
       throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
     const custom = definition.id.startsWith('custom.');

@@ -2,22 +2,33 @@ import { useSyncExternalStore } from 'react';
 import type { NetworkSharingSnapshot } from '../../domain/files/network-sharing';
 import { getState } from '../state/store';
 
-let snapshot: NetworkSharingSnapshot = { status: 'unknown', shares: [], service: 'unknown', host: '', ipv4: [] };
+let snapshot: NetworkSharingSnapshot = {
+  status: 'unknown',
+  shares: [],
+  service: 'unknown',
+  host: '',
+  ipv4: [],
+};
 let pending: Promise<NetworkSharingSnapshot> | undefined;
 const listeners = new Set<() => void>();
 let observers = 0;
 
 export function networkSharingEnabled(): boolean {
-  return getState().bootstrap.networkSharingAvailable === true;
+  return getState()?.bootstrap?.networkSharingAvailable === true;
 }
 
 export function readNetworkSharing(): Promise<NetworkSharingSnapshot> {
   if (!networkSharingEnabled()) return Promise.resolve(snapshot);
-  return pending ??= window.viewer.networkSharing({ kind: 'refresh' }).then((value) => {
-    snapshot = value;
-    listeners.forEach((listener) => listener());
-    return value;
-  }).finally(() => { pending = undefined; });
+  return (pending ??= window.viewer
+    .networkSharing({ kind: 'refresh' })
+    .then((value) => {
+      snapshot = value;
+      listeners.forEach((listener) => listener());
+      return value;
+    })
+    .finally(() => {
+      pending = undefined;
+    }));
 }
 
 export function refreshNetworkSharing(): void {
@@ -35,7 +46,9 @@ export function followNetworkSharing(): () => void {
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function useNetworkSharing(): NetworkSharingSnapshot {
@@ -43,7 +56,10 @@ export function useNetworkSharing(): NetworkSharingSnapshot {
 }
 
 export function sharedFolder(file: string) {
-  return networkSharingEnabled() && snapshot.status === 'ready'
-    ? snapshot.shares.find((share) => share.path === file)
-    : undefined;
+  if (!networkSharingEnabled() || snapshot.status !== 'ready') return undefined;
+  const shares = snapshot.shares.filter((share) => share.path === file);
+  // A stricter share name must not conceal another name that lets guests into the same folder.
+  return (
+    shares.find((share) => share.guestWritable) ?? shares.find((share) => share.guests) ?? shares[0]
+  );
 }

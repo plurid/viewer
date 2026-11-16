@@ -541,10 +541,11 @@ function AppWindow() {
         requestRefresh();
       } else if (event.type === 'settings') receiveSettings(event.snapshot);
       else if (event.type === 'session-keys') receiveSessionKeys(event.session);
-      else if (event.type === 'workspaces') receiveWorkspaces(event.state);
+      else if (event.type === 'workspaces')
+        receiveWorkspaces(event.state, event.visitSaveID, event.folderHistoryRevision);
       else if (event.type === 'launch') void handleLaunch(event.request).catch(report);
       else if (event.type === 'file-changes') {
-        receiveFileChanges(event.changes);
+        receiveFileChanges(event.changes, event.folderHistoryRevision);
         for (const change of event.changes) {
           invalidateFolderSizes(change.source);
           invalidateFolderSizes(change.destination);

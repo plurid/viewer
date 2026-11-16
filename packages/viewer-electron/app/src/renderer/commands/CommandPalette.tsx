@@ -377,8 +377,8 @@ function PalettePath({ directory, selected }: { directory: string; selected: num
 }
 
 /**
- * THE SMART PALETTE'S ROWS, above the commands: a typed path's folder contents, a
- * calculation, frecent folders for `z`, or a command with its argument (smart-palette.ts).
+ * Typed paths, calculations and command arguments take priority. Frequent folders follow
+ * commands so learned destinations cannot push a matching action out of reach.
  */
 function useSmartRows(
   query: string,
@@ -411,14 +411,17 @@ function useSmartRows(
       clearTimeout(timer);
     };
   }, [listed]);
-  const open = (path: string) => async () => {
-    const entry = await window.viewer.stat(path);
-    if (activeWorkspace().id !== context.workspaceID) return;
-    await workspace.openPath(entry.path, {
-      paneID: context.paneID,
-      workspaceID: context.workspaceID,
-    });
-  };
+  const open =
+    (path: string, folderOnly = false) =>
+    async () => {
+      const entry = await window.viewer.stat(path);
+      if (folderOnly && !entry.directory) throw new Error('This folder is no longer available.');
+      if (activeWorkspace().id !== context.workspaceID) return;
+      await workspace.openPath(entry.path, {
+        paneID: context.paneID,
+        workspaceID: context.workspaceID,
+      });
+    };
   const sourceID = useMemo(() => `smart:${crypto.randomUUID()}`, []);
   const row = (
     id: string,
@@ -438,7 +441,7 @@ function useSmartRows(
           detail: path,
           group: 'Frequent folders',
           icon: 'folder',
-          run: open(path),
+          run: open(path, true),
         }),
       );
     if (intent.kind === 'calc') {

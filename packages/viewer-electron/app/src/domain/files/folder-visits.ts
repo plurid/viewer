@@ -1,4 +1,6 @@
 import { portablePath } from '../schemas';
+import type { FileChange } from './changes';
+import { pathMapper } from './changes';
 import { normalize, scoreLabel } from '../search/name-score';
 
 export interface Visit {
@@ -8,6 +10,24 @@ export interface Visit {
 export type FolderVisits = Readonly<Record<string, Visit>>;
 export const maximumFolderVisits = 500;
 const day = 86_400_000;
+
+/** Multiple formerly distinct destinations can become one folder after a move. */
+export function remapFolderVisits(
+  visits: FolderVisits,
+  changes: readonly FileChange[],
+): FolderVisits {
+  const map = pathMapper(changes);
+  const next: Record<string, Visit> = {};
+  for (const [path, visit] of Object.entries(visits)) {
+    const destination = map(path);
+    if (!remembersFolder(destination)) continue;
+    next[destination] = {
+      count: Math.min(1e9, (next[destination]?.count ?? 0) + visit.count),
+      last: Math.max(next[destination]?.last ?? 0, visit.last),
+    };
+  }
+  return next;
+}
 
 /** log2(1 + count) * 2^(-ageDays / 30): frequency grows gently, with a 30-day half-life.
  * Clamp future visits to age zero so a clock correction cannot boost them. */

@@ -146,7 +146,10 @@ function TrashConfirmation({ context, onClose }: { context: CommandContext; onCl
 }
 /** Physical folders and virtual results share the same file-operation dialogs. */
 export function useFileDialogs(): {
-  actions: Pick<FolderActions, 'dialog' | 'destination' | 'info' | 'trash' | 'openWith' | 'networkSharing'>;
+  actions: Pick<
+    FolderActions,
+    'dialog' | 'destination' | 'info' | 'trash' | 'openWith' | 'networkSharing'
+  >;
   content: React.ReactNode;
 } {
   const workspace = useWorkspace();

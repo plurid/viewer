@@ -21,7 +21,11 @@ import { createCommandLineHandlers } from './ipc/command-line-handlers';
 import { createComparisonHandlers } from './ipc/comparison-handlers';
 import { createFileHandlers } from './ipc/file-handlers';
 import { createNetworkSharingHandlers } from './ipc/network-sharing-handlers';
-import { NetworkSharing, networkSharingAvailable, openSharingSettings } from './files/network-sharing';
+import {
+  NetworkSharing,
+  networkSharingAvailable,
+  openSharingSettings,
+} from './files/network-sharing';
 import { createMediaHandlers } from './ipc/media-handlers';
 import { createNoteHandlers } from './ipc/note-handlers';
 import { createOperationHandlers } from './ipc/operation-handlers';
@@ -34,6 +38,7 @@ import { createTerminalHandlers } from './ipc/terminal-handlers';
 import { createWindowHandlers } from './ipc/window-handlers';
 import { createLicenseHandlers } from './ipc/license-handlers';
 import type { License } from './license/license';
+import type { FolderVisitReply, FolderVisitSave } from '../domain/files/folder-visit-changes';
 import { PersonalBackups } from './persistence/backup';
 import { sendEvent } from './ipc/events';
 import { assetPath, processorFolder } from './native/assets';
@@ -1699,6 +1704,10 @@ export class Desktop {
   }
   /** Sends an event to every window that takes it, except the window `except`. */
   emit(event: DesktopEvent, except?: number): void {
+    if (event.type === 'file-changes') {
+      this.workspaceSessions.remapFolderHistory(event.changes);
+      event = { ...event, folderHistoryRevision: this.workspaceSessions.folderHistory().revision };
+    }
     if (event.type === 'job') this.activity.job(event.job);
     if (event.type === 'service-error') this.options.serviceError?.(event.service, event.message);
     for (const [id, { window, role }] of this.windows)
@@ -2002,6 +2011,7 @@ export class Desktop {
     return {
       ...stored,
       launches,
+      folderHistoryRevision: this.workspaceSessions.folderHistory().revision,
       home,
       freshSession,
       gitActionsAvailable: !process.mas,
@@ -2018,7 +2028,11 @@ export class Desktop {
       openPaths: paths,
     };
   }
-  private async saveWorkspaces(input: SavedState, sender: number): Promise<void> {
+  private async saveWorkspaces(
+    input: SavedState,
+    sender: number,
+    visitSave?: FolderVisitSave,
+  ): Promise<FolderVisitReply> {
     this.chats.retain(
       sender,
       new Set(
@@ -2032,15 +2046,29 @@ export class Desktop {
       { workspaceID: input.activeWorkspace, planeID: active?.activePane },
       () =>
         this.activity.run('workspace', 'save', () =>
-          this.workspaceSessions.persist(sender, input, (state) =>
-            this.storage.save(this.withPreferences(state)),
+          this.workspaceSessions.persist(
+            sender,
+            input,
+            (state) => this.storage.save(this.withPreferences(state)),
+            visitSave,
           ),
         ),
     );
-    // the saving window already holds what it sent; it hears back only what the merge changed
-    this.emit({ type: 'workspaces', state }, mergeChanged(input, state) ? undefined : sender);
+    // The response acknowledges visits; shared events only refresh a sender when the merge changed.
+    const history = this.workspaceSessions.folderHistory();
+    state.visits = history.visits;
+    this.emit(
+      {
+        type: 'workspaces',
+        state,
+        visitSaveID: visitSave?.id,
+        folderHistoryRevision: history.revision,
+      },
+      mergeChanged(input, state) ? undefined : sender,
+    );
     this.assignWorkspace(sender, input.activeWorkspace);
     this.options.settingsChanged?.();
+    return history;
   }
   /** One handler per IPC method; the `ApiHandlers` type makes a missing one a compile error. */
   private createHandlers(): ApiHandlers {
@@ -2107,10 +2135,10 @@ export class Desktop {
           await this.fileAccess.require([file]);
           if (!(await entry(file)).directory) throw new Error('Choose one folder.');
         },
-        openSettings: () => openSharingSettings(
-          Number(process.getSystemVersion().split('.')[0]),
-          (url) => shell.openExternal(url),
-        ),
+        openSettings: () =>
+          openSharingSettings(Number(process.getSystemVersion().split('.')[0]), (url) =>
+            shell.openExternal(url),
+          ),
       }),
       ...createApplicationHandlers({
         applications: this.applications,
@@ -2433,7 +2461,7 @@ export class Desktop {
         return request.kind === 'send' ? this.activity.send(request.id, work) : work();
       },
       bootstrap: (_args, sender) => this.bootstrap(sender),
-      save: ([input], sender) => this.saveWorkspaces(input, sender),
+      save: ([input, visitSave], sender) => this.saveWorkspaces(input, sender, visitSave),
       commandsPublish: (args, sender) => {
         const record = this.requireRecord(sender);
         record.catalog = {

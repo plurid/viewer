@@ -13,10 +13,19 @@ export function useColumnNavigation(
   entries: FileEntry[],
   ready: boolean,
   selecting: FileSelection,
+  onVisit?: (path: string) => void,
 ) {
   const session = browseSession(id, path);
   const [trail, setTrail] = useBrowseField(id, path, 'columnTrail');
   const [, setDirectory] = useBrowseField(id, path, 'columnDirectory');
+  const visitDirectory = useCallback(
+    (directory: string) => {
+      if (session.columnDirectory === directory) return;
+      setDirectory(directory);
+      onVisit?.(directory);
+    },
+    [session, setDirectory, onVisit],
+  );
   // Fresh per plane and folder: the keys reset these mutable holders on navigation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const scopes = useMemo(() => new Map<string, FileEntry[]>(), [id, path]);
@@ -34,9 +43,9 @@ export function useColumnNavigation(
           : next;
       });
       session.columnScope = entry.parent;
-      setDirectory(browsable(entry) ? entry.path : entry.parent);
+      visitDirectory(browsable(entry) ? entry.path : entry.parent);
     },
-    [session, setTrail, setDirectory],
+    [session, setTrail, visitDirectory],
   );
   const choose = useCallback(
     (entry: FileEntry, modifiers: FileModifiers, scope: FileEntry[]) => {
@@ -57,7 +66,7 @@ export function useColumnNavigation(
         setTrail((value) => value.slice(0, depth + 1));
         if (!scopes.has(session.columnScope) || pathContains(child, session.columnScope))
           session.columnScope = directory;
-        setDirectory(directory);
+        visitDirectory(directory);
         pending.current = undefined;
       }
       for (const selected of session.selection) {
@@ -68,11 +77,11 @@ export function useColumnNavigation(
       if (pending.current === directory) {
         pending.current = undefined;
         session.columnScope = directory;
-        setDirectory(directory);
+        visitDirectory(directory);
         if (scope[0]) choose(scope[0], plain, scope);
       }
     },
-    [session, selecting, setTrail, setDirectory, choose, scopes, pending],
+    [session, selecting, setTrail, visitDirectory, choose, scopes, pending],
   );
   useEffect(() => {
     if (ready) register(path, entries);
@@ -95,7 +104,7 @@ export function useColumnNavigation(
     scope,
     activate(directory: string) {
       session.columnScope = directory;
-      setDirectory(directory);
+      visitDirectory(directory);
     },
     move(key: string, shift: boolean) {
       const entries = scope();

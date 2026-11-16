@@ -102,7 +102,10 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
       };
     }
     if (depth && name.id === 'network-sharing')
-      throw new LineError('Network sharing cannot run from a named command. Choose it directly.', step.at);
+      throw new LineError(
+        'Network sharing cannot run from a named command. Choose it directly.',
+        step.at,
+      );
     const label = host.registry.label(name.id, context);
     if (label === undefined) {
       const meant = didYouMean(name.id, [...verbNames(), ...host.registry.ids()]);

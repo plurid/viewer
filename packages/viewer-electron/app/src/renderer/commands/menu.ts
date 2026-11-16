@@ -18,7 +18,7 @@ const direct = [
   // a package's contents next to Open, as Finder's menu has it (shown only for a package)
   ['open-selection', 'show-package-contents', 'quick-preview', 'open-with', 'extract'],
   ['rename', 'copy', 'copy-path', 'paste', 'new-folder', 'select-all'],
-  ['info', 'trash'],
+  ['network-sharing', 'info', 'trash'],
 ];
 const icons: Record<string, IconName> = {
   Files: 'file',

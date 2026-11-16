@@ -1,5 +1,12 @@
 import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
-import { boundFolderVisits } from '../../domain/files/folder-visits';
+import type { FolderVisitSave } from '../../domain/files/folder-visit-changes';
+import type { FileChange } from '../../domain/files/changes';
+import type { FolderVisits } from '../../domain/files/folder-visits';
+import { remapFolderVisits } from '../../domain/files/folder-visits';
+import {
+  applyFolderVisitChanges,
+  folderVisitChanges,
+} from '../../domain/files/folder-visit-changes';
 import { randomUUID } from 'node:crypto';
 import { boundPreviewHistory } from '../../domain/previews/history';
 import { CURRENT_STATE_VERSION, type SavedState, type Workspace } from '../../domain/contracts';
@@ -8,6 +15,7 @@ import { sameJSON } from '../../domain/json';
 interface Session {
   workspaceID: string;
   baseline: SavedState;
+  historyRevision: number;
 }
 
 /** The parts of a saved state shared between windows: what a merge can change for the sender. */
@@ -31,6 +39,23 @@ export class WorkspaceSessions {
   private sessions = new Map<number, Session>();
   private reservations = new Map<number, string>();
   private writes: Promise<unknown> = Promise.resolve();
+  private historyRevision = 0;
+  private historyChanges: { revision: number; changes: FileChange[] }[] = [];
+
+  folderHistory() {
+    return { visits: structuredClone(this.current?.visits ?? {}), revision: this.historyRevision };
+  }
+
+  remapFolderHistory(changes: FileChange[]): void {
+    this.historyChanges.push({ revision: ++this.historyRevision, changes });
+    if (this.current?.visits) this.current.visits = remapFolderVisits(this.current.visits, changes);
+  }
+
+  private remapHistory(visits: FolderVisits, revision: number): FolderVisits {
+    for (const batch of this.historyChanges)
+      if (batch.revision > revision) visits = remapFolderVisits(visits, batch.changes);
+    return visits;
+  }
 
   seed(state: SavedState | null): void {
     if (!this.current && state) {
@@ -132,7 +157,11 @@ export class WorkspaceSessions {
       activeWorkspace: workspaceID,
       profile: this.current!.windowProfiles?.[workspaceID],
     };
-    this.sessions.set(owner, { workspaceID, baseline: structuredClone(snapshot) });
+    this.sessions.set(owner, {
+      workspaceID,
+      baseline: structuredClone(snapshot),
+      historyRevision: this.historyRevision,
+    });
     this.reservations.delete(owner);
     this.current!.openWindows = [...this.sessions.values()].map((session) => session.workspaceID);
     return snapshot;
@@ -174,34 +203,50 @@ export class WorkspaceSessions {
     owner: number,
     input: SavedState,
     write: (state: SavedState) => Promise<void>,
+    visitSave?: FolderVisitSave,
   ): Promise<SavedState> {
     const work = this.writes
       .catch(() => {})
       .then(async () => {
-        const merged = this.merge(owner, input);
-        await write(structuredClone(merged));
-        this.commit(owner, input, merged);
+        const merged = this.merge(owner, input, visitSave);
+        let revision = this.historyRevision;
+        // A rename during the write must reach disk before this snapshot is acknowledged.
+        for (;;) {
+          await write(structuredClone(merged));
+          if (revision === this.historyRevision) break;
+          merged.visits = this.remapHistory(merged.visits ?? {}, revision);
+          revision = this.historyRevision;
+        }
+        this.commit(owner, input, merged, visitSave);
         return structuredClone(merged);
       });
     this.writes = work;
     return work;
   }
 
-  save(owner: number, input: SavedState): SavedState {
-    const merged = this.merge(owner, input);
-    this.commit(owner, input, merged);
+  save(owner: number, input: SavedState, visitSave?: FolderVisitSave): SavedState {
+    const merged = this.merge(owner, input, visitSave);
+    this.commit(owner, input, merged, visitSave);
     return structuredClone(merged);
   }
 
-  private commit(owner: number, input: SavedState, merged: SavedState): void {
+  private commit(
+    owner: number,
+    input: SavedState,
+    merged: SavedState,
+    visitSave?: FolderVisitSave,
+  ): void {
     const session = this.sessions.get(owner);
     if (!session) return;
     session.workspaceID = input.activeWorkspace;
     session.baseline = structuredClone(input);
+    session.historyRevision = visitSave?.revision ?? session.historyRevision;
     this.current = merged;
+    const oldest = Math.min(...[...this.sessions.values()].map((item) => item.historyRevision));
+    this.historyChanges = this.historyChanges.filter((batch) => batch.revision > oldest);
   }
 
-  private merge(owner: number, input: SavedState): SavedState {
+  private merge(owner: number, input: SavedState, visitSave?: FolderVisitSave): SavedState {
     const session = this.sessions.get(owner);
     if (!session || !this.current) throw new Error('This workspace window has closed.');
     const baseline = session.baseline;
@@ -238,6 +283,10 @@ export class WorkspaceSessions {
     );
     // Shared lists merge only this window's changes, retaining unrelated additions and removals.
     for (const key of ['favorites', 'recents', 'lineHistory'] as const) {
+      if (key === 'recents' && visitSave?.clear) {
+        merged.recents = input.recents.slice(0, 50);
+        continue;
+      }
       if (sameJSON(input[key], baseline[key])) continue;
       const identity = (value: unknown) =>
         typeof value === 'string' ? value : (value as { path: string }).path;
@@ -255,22 +304,22 @@ export class WorkspaceSessions {
       const maximum = key === 'lineHistory' ? 200 : key === 'recents' ? 50 : 200;
       Object.assign(merged, { [key]: values.slice(0, maximum) });
     }
-    const visits = { ...merged.visits };
-    for (const path of Object.keys(baseline.visits ?? {})) {
-      if (!Object.hasOwn(input.visits ?? {}, path)) delete visits[path];
-    }
-    for (const [path, visit] of Object.entries(input.visits ?? {})) {
-      const previous = baseline.visits?.[path];
-      if (sameJSON(previous, visit)) continue;
-      visits[path] = {
-        count: Math.min(
-          1e9,
-          (visits[path]?.count ?? 0) + Math.max(0, visit.count - (previous?.count ?? 0)),
+    merged.visits = applyFolderVisitChanges(
+      merged.visits ?? {},
+      folderVisitChanges(
+        this.remapHistory(
+          visitSave?.base ?? baseline.visits ?? {},
+          visitSave?.revision ?? session.historyRevision,
         ),
-        last: Math.max(visits[path]?.last ?? 0, visit.last),
-      };
-    }
-    merged.visits = boundFolderVisits(visits, Date.now());
+        this.remapHistory(input.visits ?? {}, visitSave?.revision ?? session.historyRevision),
+        visitSave?.clear,
+        this.remapHistory(
+          visitSave?.restored ?? {},
+          visitSave?.revision ?? session.historyRevision,
+        ),
+      ),
+      Date.now(),
+    );
     const previewStates = { ...merged.previewStates };
     for (const [key, value] of Object.entries(input.previewStates ?? {})) {
       const workspace = key.slice(0, key.indexOf(':'));

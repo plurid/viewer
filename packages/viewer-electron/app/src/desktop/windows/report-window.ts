@@ -1,7 +1,7 @@
 import { BrowserWindow, clipboard, dialog, session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { reportCopyChannel } from '../../domain/diagnostics/report-window';
+import { reportCloseChannel, reportCopyChannel } from '../../domain/diagnostics/report-window';
 import { isolatedContent } from './web-content-policy';
 
 export type ReportLook = 'light' | 'dark';
@@ -65,6 +65,8 @@ export function reportPage(report: string, look: ReportLook): string {
     }
     :root[data-look='light'] button { color: #ffffff; }
     button:hover, button:focus-visible { filter: brightness(1.12); }
+    :root[data-look='light'] button:hover,
+    :root[data-look='light'] button:focus-visible { filter: brightness(0.94); }
     button:active { filter: brightness(0.95); }
   </style>
 </head>
@@ -154,30 +156,17 @@ export class ReportWindow {
     window.webContents.on('will-navigate', (event) => {
       event.preventDefault();
     });
-    window.webContents.ipc.on(reportCopyChannel, (event, ...args: unknown[]) => {
-      if (
-        !args.length &&
-        event.sender === window.webContents &&
-        event.senderFrame === window.webContents.mainFrame
-      )
-        void copy();
-    });
-    window.webContents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown' || input.isAutoRepeat) return;
-      if (input.key === 'Escape') {
-        event.preventDefault();
-        window.close();
-      } else if (
-        input.key === 'Enter' &&
-        !input.control &&
-        !input.meta &&
-        !input.alt &&
-        !input.shift
-      ) {
-        event.preventDefault();
-        void copy();
-      }
-    });
+    for (const channel of [reportCopyChannel, reportCloseChannel])
+      window.webContents.ipc.on(channel, (event, ...args: unknown[]) => {
+        if (
+          args.length ||
+          event.sender !== window.webContents ||
+          event.senderFrame !== window.webContents.mainFrame
+        )
+          return;
+        if (channel === reportCopyChannel) void copy();
+        else window.close();
+      });
     try {
       await window.loadURL(page);
       if (this.present && !window.isDestroyed()) window.show();

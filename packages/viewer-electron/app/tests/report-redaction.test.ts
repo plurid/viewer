@@ -66,6 +66,17 @@ describe('shareable report redaction', () => {
     );
   });
 
+  it('handles Home shorthand and refuses application-path traversal as an exemption', () => {
+    expect(redactReport('~/Private/Report.pdf', privateValues)).toBe('~/…/….pdf');
+    const data = '~/Library/Application Support/Viewer';
+    expect(redactReport(data + '/Logs/diagnostics.log', privateValues)).toBe(
+      data + '/Logs/diagnostics.log',
+    );
+    expect(redactReport(data + '/../../Private/Report.pdf', privateValues)).not.toMatch(
+      /Private|Report/,
+    );
+  });
+
   it('replaces overlapping private values longest first, including apostrophes and .local', () => {
     const values: ReportPrivateValue[] = [
       { kind: 'short name', value: 'art' },
@@ -122,6 +133,7 @@ describe('shareable report redaction', () => {
     const text = 'Renderer failed to load.\nRetry with 2 displays at 2×.\n';
     expect(redactReport(text, [])).toBe(text);
     expect(redactReport(text, privateValues)).toBe(text);
+    expect(redactReport('Résumé cafe\u0301', privateValues)).toBe('Résumé cafe\u0301');
   });
 
   it('handles quoted email addresses, bare servers and base64 tokens without damaging app paths', () => {
@@ -134,6 +146,19 @@ describe('shareable report redaction', () => {
       '/Applications/Viewer.app/Contents/Resources/renderer-functions-with-a-long-name.js';
     expect(redactReport(file, privateValues)).toBe(file);
     expect(redactReport(home + '/secret.art', privateValues)).toBe('~/….<private>');
+  });
+
+  it('removes recognizable short credentials and every segment of a signed token', () => {
+    const result = redactReport(
+      [
+        'AKIAIOSFODNN7EXAMPLE',
+        'eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImFiYyJ9.abcdefghijklmno',
+        'Authorization: Basic ZXhhbXBsZTpwYXNz',
+        'authorization=custom-scheme short-credential',
+      ].join('\n'),
+      privateValues,
+    );
+    expect(result).toBe('<token>\n<token>\n<token>\n<token>');
   });
 
   it('fails closed for missing identities and still-concealed encodings', () => {

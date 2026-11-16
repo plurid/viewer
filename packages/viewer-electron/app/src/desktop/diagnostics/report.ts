@@ -100,6 +100,7 @@ export function diagnosticReport(input: ReportInput): string {
       }
     }
     const recent = entries
+      .toReversed()
       .toSorted((a, b) => b.at.localeCompare(a.at))
       .slice(0, reportLimits.failures);
     for (const entry of recent) {

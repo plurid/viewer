@@ -3,6 +3,7 @@ import { recordVisit, remembersFolder } from '../../domain/files/folder-visits';
 import { reorder } from '../../domain/preferences/ui';
 import { getState, savePatch } from './core';
 import { changePreferences } from './preferences';
+import { folderVisitSync } from './folder-visits';
 
 export function addFavorite(path: string, name: string, before?: string): void {
   if (
@@ -43,6 +44,7 @@ export function rememberFolderVisit(path: string): void {
   savePatch({ visits: recordVisit(getState().saved.visits ?? {}, path, Date.now()) });
 }
 export function clearRecentFolders(): void {
+  folderVisitSync.clear();
   savePatch({ recents: [], visits: {} });
 }
 export function favorite(path: string, name: string): void {
