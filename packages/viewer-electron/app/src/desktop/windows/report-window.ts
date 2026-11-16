@@ -1,22 +1,33 @@
 import { BrowserWindow, clipboard, dialog, session } from 'electron';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { reportCopyChannel } from '../../domain/diagnostics/report-window';
 import { isolatedContent } from './web-content-policy';
 
 export type ReportLook = 'light' | 'dark';
 
-export const reportDisclosure = 'Names, personal paths, network addresses and credentials were removed; still read the report before sharing.';
-export const reportCopyURL = 'about:blank?copy-report=1';
+export const reportDisclosure =
+  'Names, personal paths, network addresses and credentials were removed; still read the report before sharing.';
 
-/** No script, preload or renderer API can turn this local review into an agent-readable resource. */
+/** The page has no scripts, links or report-reading API. The isolated preload only binds Copy. */
 export function reportPage(report: string, look: ReportLook): string {
-  const escape = (value: string) => value.replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  })[character]!);
+  const escape = (value: string) =>
+    value.replace(
+      /[&<>"']/g,
+      (character) =>
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        })[character]!,
+    );
   return `<!doctype html>
 <html lang="en" data-look="${look}">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; connect-src 'none'; form-action about:; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Copy Report</title>
   <style>
@@ -63,9 +74,7 @@ export function reportPage(report: string, look: ReportLook): string {
     <pre role="document" aria-label="Report" tabindex="0">${escape(report)}</pre>
     <footer>
       <p>Paste this report into Help → Report an Issue… after copying.</p>
-      <form action="about:blank" method="get">
-        <button type="submit" name="copy-report" value="1">Copy</button>
-      </form>
+      <button type="button">Copy</button>
     </footer>
   </main>
 </body>
@@ -92,49 +101,85 @@ export class ReportWindow {
       }
       return;
     }
-    this.opening = this.create().finally(() => { this.opening = undefined; });
+    this.opening = this.create().finally(() => {
+      this.opening = undefined;
+    });
     return this.opening;
   }
 
   private async create(): Promise<void> {
     const report = await this.makeReport();
+    const look = this.look();
+    const page = 'data:text/html,' + encodeURIComponent(reportPage(report, look));
     const isolated = session.fromPartition('viewer-report-' + randomUUID(), { cache: false });
     isolated.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     isolated.setPermissionCheckHandler(() => false);
-    isolated.webRequest.onBeforeRequest((details, callback) => callback({ cancel: !details.url.startsWith('data:text/html,') }));
+    isolated.webRequest.onBeforeRequest((details, callback) =>
+      callback({ cancel: details.url !== page }),
+    );
     const window = new BrowserWindow({
-      title: 'Copy Report', width: 600, height: 560, minWidth: 440, minHeight: 360,
-      backgroundColor: this.look() === 'light' ? '#ffffff' : '#31353d',
-      show: false, minimizable: false, maximizable: false,
-      webPreferences: { ...isolatedContent, javascript: false, devTools: false, session: isolated },
+      title: 'Copy Report',
+      width: 600,
+      height: 560,
+      minWidth: 440,
+      minHeight: 360,
+      backgroundColor: look === 'light' ? '#ffffff' : '#31353d',
+      show: false,
+      minimizable: false,
+      maximizable: false,
+      webPreferences: {
+        ...isolatedContent,
+        preload: path.join(__dirname, 'report-preload.cjs'),
+        devTools: false,
+        session: isolated,
+      },
     });
     this.window = window;
-    window.on('closed', () => { if (this.window === window) this.window = undefined; });
-    const copy = () => {
+    window.on('closed', () => {
+      if (this.window === window) this.window = undefined;
+    });
+    let copying = false;
+    const copy = async () => {
+      if (copying) return;
+      copying = true;
       try {
-        clipboard.writeText(report);
-        window.close();
+        await clipboard.writeText(report);
+        if (!window.isDestroyed()) window.close();
       } catch {
+        copying = false;
         dialog.showErrorBox('Report not copied', 'Try Copy again.');
       }
     };
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    window.webContents.on('will-navigate', (event, url) => {
+    window.webContents.on('will-navigate', (event) => {
       event.preventDefault();
-      if (url === reportCopyURL) copy();
+    });
+    window.webContents.ipc.on(reportCopyChannel, (event, ...args: unknown[]) => {
+      if (
+        !args.length &&
+        event.sender === window.webContents &&
+        event.senderFrame === window.webContents.mainFrame
+      )
+        void copy();
     });
     window.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown' || input.isAutoRepeat) return;
       if (input.key === 'Escape') {
         event.preventDefault();
         window.close();
-      } else if (input.key === 'Enter' && !input.control && !input.meta && !input.alt && !input.shift) {
+      } else if (
+        input.key === 'Enter' &&
+        !input.control &&
+        !input.meta &&
+        !input.alt &&
+        !input.shift
+      ) {
         event.preventDefault();
-        copy();
+        void copy();
       }
     });
     try {
-      await window.loadURL('data:text/html,' + encodeURIComponent(reportPage(report, this.look())));
+      await window.loadURL(page);
       if (this.present && !window.isDestroyed()) window.show();
     } catch (error) {
       if (!window.isDestroyed()) window.close();

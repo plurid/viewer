@@ -20,7 +20,12 @@ describe('shareable report redaction', () => {
     'hides Home and all descendant names under %s, retaining only depth and extension',
     (prefix) => {
       const file = prefix + home + '/Medical Records/Diagnosis.pdf';
-      for (const spelling of [file, encodeURI(file), encodeURIComponent(file), file.normalize('NFD')]) {
+      for (const spelling of [
+        file,
+        encodeURI(file),
+        encodeURIComponent(file),
+        file.normalize('NFD'),
+      ]) {
         expect(redactReport('Failed: ' + spelling, privateValues)).toBe('Failed: ~/…/….pdf');
         expect(redactReport('Failed: file://' + spelling, privateValues)).toBe('Failed: ~/…/….pdf');
       }
@@ -32,21 +37,33 @@ describe('shareable report redaction', () => {
   it('does not guess where a path with spaces, quotes or punctuation ends', () => {
     const file = home + '/Parent (sample)/A "sensitive" child/Part of name.pdf';
     expect(redactReport(file, privateValues)).toBe('~/…/…/….pdf');
-    expect(redactReport(file + ' failed with a private description', privateValues)).toBe('~/…/…/….pdf');
+    expect(redactReport(file + ' failed with a private description', privateValues)).toBe(
+      '~/…/…/….pdf',
+    );
   });
 
   it('keeps names within Viewer bundle and data paths, including their alternate roots', () => {
-    expect(redactReport('/Applications/Viewer.app/Contents/Resources/app.asar', privateValues)).toBe('/Applications/Viewer.app/Contents/Resources/app.asar');
+    expect(
+      redactReport('/Applications/Viewer.app/Contents/Resources/app.asar', privateValues),
+    ).toBe('/Applications/Viewer.app/Contents/Resources/app.asar');
     for (const prefix of ['', '/private', '/System/Volumes/Data']) {
       const file = prefix + home + '/Library/Application Support/Viewer/Logs/diagnostics.log';
-      expect(redactReport('Read ' + encodeURI(file), privateValues)).toBe('Read ~/Library/Application Support/Viewer/Logs/diagnostics.log');
+      expect(redactReport('Read ' + encodeURI(file), privateValues)).toBe(
+        'Read ~/Library/Application Support/Viewer/Logs/diagnostics.log',
+      );
     }
-    expect(redactReport(home + '/Library/Application Support/Viewer-other/private.txt', privateValues)).toBe('~/…/…/…/….txt');
+    expect(
+      redactReport(home + '/Library/Application Support/Viewer-other/private.txt', privateValues),
+    ).toBe('~/…/…/…/….txt');
   });
 
   it('removes whole names in all cases and path parts, preserving longer words', () => {
-    expect(redactReport('art ART Art /art/file artist cart earth smart', privateValues)).toBe('<private> <private> <private> /<private>/file artist cart earth smart');
-    expect(redactReport('ZOË SAMPLE and zoë sample', privateValues)).toBe('<private> and <private>');
+    expect(redactReport('art ART Art /art/file artist cart earth smart', privateValues)).toBe(
+      '<private> <private> <private> /<private>/file artist cart earth smart',
+    );
+    expect(redactReport('ZOË SAMPLE and zoë sample', privateValues)).toBe(
+      '<private> and <private>',
+    );
   });
 
   it('replaces overlapping private values longest first, including apostrophes and .local', () => {
@@ -55,8 +72,12 @@ describe('shareable report redaction', () => {
       { kind: 'computer name', value: "Art's Mac" },
       { kind: 'full name', value: "Art's Mac Studio" },
     ];
-    expect(redactReport("ART'S MAC STUDIO; Art's Mac.local; Art", values)).toBe('<private>; <private>; <private>');
-    expect(redactReport("Zoë's Art Mac Zoes-Art-Mac.local", privateValues)).toBe('<private> <private>');
+    expect(redactReport("ART'S MAC STUDIO; Art's Mac.local; Art", values)).toBe(
+      '<private>; <private>; <private>',
+    );
+    expect(redactReport("Zoë's Art Mac Zoes-Art-Mac.local", privateValues)).toBe(
+      '<private> <private>',
+    );
   });
 
   it.each([
@@ -68,7 +89,9 @@ describe('shareable report redaction', () => {
     '\\\\office-server\\secret-share\\plan.pdf',
     '/Network/Servers/office-server/secret-share/plan.pdf',
   ])('hides volume and network locations: %s', (text) => {
-    expect(redactReport(text, privateValues)).not.toMatch(/Sample|Confidential|person|password|server|Share|plan|192\.168/i);
+    expect(redactReport(text, privateValues)).not.toMatch(
+      /Sample|Confidential|person|password|server|Share|plan|192\.168/i,
+    );
   });
 
   it('redacts IPv4, IPv6, mapped addresses, zone identifiers and local host names', () => {
@@ -89,7 +112,9 @@ describe('shareable report redaction', () => {
       'https://server.example.invalid/help?email=hidden%40example.invalid&secret=another#fragment',
     ].join('\n');
     const result = redactReport(text, privateValues);
-    expect(result).not.toMatch(/generated|example\.invalid|viewer-license|eyJ|signature|abcdefghijklmnop|AbCd|short-secret|hidden|another|fragment|\?/);
+    expect(result).not.toMatch(
+      /generated|example\.invalid|viewer-license|eyJ|signature|abcdefghijklmnop|AbCd|short-secret|hidden|another|fragment|\?/,
+    );
     expect(result).toContain('https://<host>/help');
   });
 
@@ -99,22 +124,51 @@ describe('shareable report redaction', () => {
     expect(redactReport(text, privateValues)).toBe(text);
   });
 
+  it('handles quoted email addresses, bare servers and base64 tokens without damaging app paths', () => {
+    const text =
+      '"Example Person"@example.invalid server.office.invalid AbCd1234/AbCd1234/AbCd1234/AbCd1234/AbCd1234=';
+    expect(redactReport(text, privateValues)).not.toMatch(
+      /Example|example\.invalid|server\.office|AbCd1234/,
+    );
+    const file =
+      '/Applications/Viewer.app/Contents/Resources/renderer-functions-with-a-long-name.js';
+    expect(redactReport(file, privateValues)).toBe(file);
+    expect(redactReport(home + '/secret.art', privateValues)).toBe('~/….<private>');
+  });
+
   it('fails closed for missing identities and still-concealed encodings', () => {
-    const result = redactReport('Some unknown host might occur anywhere here.', [{ kind: 'computer name', value: undefined }]);
+    const result = redactReport('Some unknown host might occur anywhere here.', [
+      { kind: 'computer name', value: undefined },
+    ]);
     expect(result).toBe('[Text omitted: computer name could not be checked.]');
-    expect(redactReport('private %252525252541 value', privateValues)).toBe('[Encoded text omitted]');
+    expect(redactReport('private %252525252541 value', privateValues)).toBe(
+      '[Encoded text omitted]',
+    );
   });
 
   it('never leaves any known identity in deterministic random mixtures', () => {
-    const identities = privateValues.filter((item) => !['application bundle', 'application data'].includes(item.kind));
+    const identities = privateValues.filter(
+      (item) => !['application bundle', 'application data'].includes(item.kind),
+    );
     let seed = 0x5eed;
-    const next = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed; };
+    const next = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed;
+    };
     for (let trial = 0; trial < 300; trial++) {
       const pieces: string[] = [];
       for (let count = 0; count < 12; count++) {
         const value = identities[next() % identities.length]!.value!;
         const variant = next() % 4;
-        pieces.push(variant === 0 ? value.toUpperCase() : variant === 1 ? encodeURIComponent(value) : variant === 2 ? value.normalize('NFD') : value);
+        pieces.push(
+          variant === 0
+            ? value.toUpperCase()
+            : variant === 1
+              ? encodeURIComponent(value)
+              : variant === 2
+                ? value.normalize('NFD')
+                : value,
+        );
         pieces.push([' filler ', '\n', ' (noise) ', ' / '][next() % 4]!);
       }
       const result = redactReport(pieces.join(''), privateValues).toLocaleLowerCase();

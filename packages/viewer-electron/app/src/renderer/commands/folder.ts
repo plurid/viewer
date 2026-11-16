@@ -27,6 +27,7 @@ import type { CommandContext, CommandDefinition } from './registry';
 import { choosePreview } from '../previews/registry';
 import { isOfficeFormat } from '../../domain/previews/documents/layout';
 import { previewsAsFile } from '../../domain/previews/documents/embedded';
+import { networkSharingEnabled, sharedFolder } from '../explorer/network-sharing-state';
 export { parentPath } from '../../domain/workspaces/planes';
 
 export interface FolderActions {
@@ -38,6 +39,7 @@ export interface FolderActions {
   dialog(kind: 'rename' | 'mkdir' | 'mkfile' | 'group' | 'go-to', context: CommandContext): void;
   trash(context: CommandContext): void | Promise<void>;
   info(context: CommandContext): void;
+  networkSharing?(context: CommandContext): Promise<void>;
   openWith(context: CommandContext): void;
   destination(kind: 'copy' | 'move', context: CommandContext): void;
   search(context: CommandContext): void;
@@ -94,6 +96,16 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
         context.selection.length <= 100 &&
         getState().bootstrap.platform === 'darwin',
       run: (context) => window.viewer.nativeFilePanel('preview', paths(context)),
+    },
+    {
+      id: 'network-sharing',
+      label: (context) => sharedFolder(context.selection[0]?.path ?? '') ? 'Network Sharing…' : 'Share on the Network…',
+      group: 'Files',
+      icon: 'network',
+      aliases: ['smb', 'windows file sharing', 'stop sharing folder'],
+      humanOnly: true,
+      when: (context) => networkSharingEnabled() && !!actions.networkSharing && selected(context) && context.selection.length === 1 && context.selection[0]!.directory,
+      run: (context) => actions.networkSharing?.(context),
     },
     {
       id: 'share',

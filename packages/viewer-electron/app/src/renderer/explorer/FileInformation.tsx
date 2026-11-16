@@ -14,6 +14,7 @@ import { Disclosure } from '../ui/Disclosure';
 import { SelectionSize, calculateSize } from './sizes';
 import { getState, report } from '../state/store';
 import { errorMessage } from '../../domain/errors';
+import { NetworkSharingSection } from './NetworkSharing';
 
 function InformationEditor({ entry }: { entry: FileEntry }) {
   const [original, setOriginal] = useState<Information>();
@@ -350,6 +351,7 @@ export function FileInformation({ entries, onClose }: { entries: FileEntry[]; on
               )}
               {entry.error && <dd className="error">{entry.error}</dd>}
             </dl>
+            {entry.directory && <NetworkSharingSection path={entry.path} />}
             {getState().bootstrap.platform === 'darwin' &&
               ['file', 'directory'].includes(entry.kind) &&
               (entries.length === 1 ? (

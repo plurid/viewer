@@ -52,6 +52,7 @@ import {
 } from './sections';
 import { useLensGrouping } from './folder-sections';
 import { GitBadge, GitColumn } from '../git/status';
+import { SharedMark } from './NetworkSharing';
 import { cachedThumbnail, thumbnail } from './thumbnail-cache';
 
 export interface FileViewProps {
@@ -89,6 +90,7 @@ export function FileIcon({ entry, size = 18 }: { entry: FileEntry; size?: number
       {hasBundleIcon(entry) ? <AppIcon entry={entry} size={size} fallback={symbol} /> : symbol}
       {entry.kind === 'symlink' && <Icon name="alias" size={11} className="symlink-mark" />}
       <GitBadge entry={entry} />
+      {entry.directory && <SharedMark path={entry.path} />}
     </span>
   );
 }

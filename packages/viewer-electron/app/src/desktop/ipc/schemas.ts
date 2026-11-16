@@ -724,6 +724,10 @@ export const schemas = {
   list: z.tuple([localPath]),
   stat: z.tuple([localPath]),
   fileInformation: z.tuple([localPath]),
+  networkSharing: z.tuple([z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('refresh') }).strict(),
+    z.object({ kind: z.literal('settings'), path: localPath }).strict(),
+  ])]),
   fileInformationUpdate: z.tuple([localPath, z.string().min(1).max(200), informationPatchSchema]),
   chooseFolder: z.tuple([localPath.optional()]),
   reveal: z.tuple([localPath]),
@@ -989,6 +993,7 @@ export const methodWindows = {
   list: 'viewer',
   stat: 'viewer',
   fileInformation: 'viewer',
+  networkSharing: 'viewer',
   fileInformationUpdate: 'viewer',
   chooseFolder: 'both',
   reveal: 'viewer',

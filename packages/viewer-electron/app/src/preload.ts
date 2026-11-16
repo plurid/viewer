@@ -157,6 +157,7 @@ const api: ViewerAPI = {
   bootstrap: () => invoke('bootstrap'),
   list: (file) => invoke('list', file),
   stat: (file) => invoke('stat', file),
+  networkSharing: (request) => invoke('networkSharing', request),
   fileInformation: (file) => invoke('fileInformation', file),
   fileInformationUpdate: (file, revision, patch) =>
     invoke('fileInformationUpdate', file, revision, patch),

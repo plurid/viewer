@@ -25,6 +25,7 @@ import { baseName } from '../../../domain/workspaces/planes';
 import { effectiveWindowUI } from '../../state/effective-ui';
 import { changeSetting } from '../../commands/window-commands/settings';
 import { sendWindowEvent } from '../../app/window-events';
+import { SharedMark } from '../../explorer/NetworkSharing';
 
 const titles = { locations: 'Locations', favorites: 'Favorites', recents: 'Recent' };
 export const SIDEBAR_DRAG = 'application/x-viewer-sidebar';
@@ -347,6 +348,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                       size={16}
                     />
                     <span>{sidebar.labels[item.path] || item.name}</span>
+                    <SharedMark path={item.path} />
                   </button>
                 ))}
                 {section === 'favorites' && !favorites.length && (

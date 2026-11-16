@@ -152,6 +152,7 @@ const modelMutationVerbs = new Set([
 ]);
 
 function modelBuiltinCommandProblem(id: string): string | undefined {
+  if (id === 'network-sharing') return 'network sharing is available only to the person';
   if (humanGitCommand(id)) return 'Git program actions are available only to the person';
   if (terminalCommands.has(id)) return 'it uses a terminal';
   if (externalCommands.has(id)) return 'it opens another application';

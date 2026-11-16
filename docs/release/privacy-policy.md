@@ -21,7 +21,8 @@ When something fails, Viewer writes a local diagnostic log (error messages and s
 can include file paths) and macOS crash dumps on your Mac. They are never sent anywhere. Help → Show
 Diagnostic Log reveals the log so you can choose to attach it to a support request.
 
-**Help → Copy Report…** makes a redacted report on your Mac that goes nowhere unless you paste it somewhere.
+**Help → Copy Report…** makes a redacted report on your Mac that goes nowhere unless you paste it
+somewhere.
 
 The Mac App Store edition uses macOS folder/file authorization. Permissions chosen in a native
 picker are saved privately and can survive relaunch. Clipboard and drag permissions last until Quit

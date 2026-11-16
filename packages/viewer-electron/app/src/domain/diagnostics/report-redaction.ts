@@ -24,7 +24,11 @@ interface RedactionSpan {
 export function redactReport(text: string, privateValues: readonly ReportPrivateValue[]): string {
   const unchecked = privateValues.filter((item) => !item.value?.trim());
   if (unchecked.length)
-    return "[Text omitted: " + [...new Set(unchecked.map((item) => item.kind))].join(', ') + " could not be checked.]";
+    return (
+      '[Text omitted: ' +
+      [...new Set(unchecked.map((item) => item.kind))].join(', ') +
+      ' could not be checked.]'
+    );
 
   try {
     const escape = (value: string) => value.replace(/[.*+?^\x24{}()|[\]\\]/g, '\\$&');
@@ -44,15 +48,22 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
       return result.normalize('NFC');
     };
     const pathVariants = (value: string) => {
-      const base = value.replace(/^\/(?:private\/)?System\/Volumes\/Data(?=\/)/i, '')
-        .replace(/^\/private(?=\/)/i, '').replace(/\/+$/, '');
+      const base = value
+        .replace(/^\/(?:private\/)?System\/Volumes\/Data(?=\/)/i, '')
+        .replace(/^\/private(?=\/)/i, '')
+        .replace(/\/+$/, '');
       return ['', '/private', '/System/Volumes/Data', '/private/System/Volumes/Data'].map(
         (prefix) => prefix + base,
       );
     };
-    const alternatives = (values: string[]) => [...new Set(values)]
-      .toSorted((a, b) => b.length - a.length).map(escape).join('|');
-    const source = decode(text).replace(/\u001b\[[\d;]*[A-Za-z]/g, '').replace(/\\(?=[ '"])/g, '');
+    const alternatives = (values: string[]) =>
+      [...new Set(values)]
+        .toSorted((a, b) => b.length - a.length)
+        .map(escape)
+        .join('|');
+    const source = decode(text)
+      .replace(/\u001b\[[\d;]*[A-Za-z]/g, '')
+      .replace(/\\(?=[ '"])/g, '');
     const values = privateValues.map((item) => ({ ...item, value: decode(item.value!) }));
     const spans: RedactionSpan[] = [];
     const mask = (pattern: RegExp, replacement: string) => {
@@ -61,24 +72,55 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
     };
 
     // Collect spans against the original text. A short name must not break a larger secret.
-    const identities = values.filter((item) => !['home', 'application bundle', 'application data'].includes(item.kind))
-      .flatMap((item) => ['computer name', 'local host name', 'Bonjour name'].includes(item.kind)
-        ? [item.value, item.value.replace(/\.local\.?$/i, '') + '.local'] : [item.value]);
+    const identities = values
+      .filter((item) => !['home', 'application bundle', 'application data'].includes(item.kind))
+      .flatMap((item) =>
+        ['computer name', 'local host name', 'Bonjour name'].includes(item.kind)
+          ? [item.value, item.value.replace(/\.local\.?$/i, '') + '.local']
+          : [item.value],
+      );
     if (identities.length)
-      mask(new RegExp('(?<![\\p{L}\\p{N}\\p{M}_])(?:' + alternatives(identities) + ')(?![\\p{L}\\p{N}\\p{M}_])', 'giu'), '<private>');
+      mask(
+        new RegExp(
+          '(?<![\\p{L}\\p{N}\\p{M}_])(?:' + alternatives(identities) + ')(?![\\p{L}\\p{N}\\p{M}_])',
+          'giu',
+        ),
+        '<private>',
+      );
 
-    const roots = values.filter((item) => ['application bundle', 'application data'].includes(item.kind))
+    const roots = values
+      .filter((item) => ['application bundle', 'application data'].includes(item.kind))
       .flatMap((item) => pathVariants(item.value));
     const protectedRoots = roots.length
-      ? [...source.matchAll(new RegExp('(?:' + alternatives(roots) + ')(?=/|$|[\\s"\'<>),:])', 'giu'))]
+      ? [
+          ...source.matchAll(
+            new RegExp('(?:' + alternatives(roots) + ')(?=/|$|[\\s"\'<>),:])', 'giu'),
+          ),
+        ]
       : [];
-    const homes = values.filter((item) => item.kind === 'home').flatMap((item) => pathVariants(item.value));
+    const protectedPaths = protectedRoots.map((root) => ({
+      start: root.index,
+      end:
+        root.index +
+        root[0].length +
+        (/^(?:\/[^\s"'<>)]*)?/.exec(source.slice(root.index + root[0].length))?.[0].length ?? 0),
+    }));
+    const maskOutsideApplication = (pattern: RegExp, replacement: string) => {
+      for (const match of source.matchAll(pattern))
+        if (!protectedPaths.some((range) => range.start <= match.index && match.index < range.end))
+          spans.push({ start: match.index, end: match.index + match[0].length, replacement });
+    };
+    const homes = values
+      .filter((item) => item.kind === 'home')
+      .flatMap((item) => pathVariants(item.value));
     if (homes.length) {
       const pattern = new RegExp('(?:' + alternatives(homes) + ')(?=/|$|[\\s"\'<>),:])', 'giu');
       for (const match of source.matchAll(pattern)) {
         const start = match.index;
         const rootEnd = start + match[0].length;
-        const protectedRoot = protectedRoots.some((root) => root.index <= start && root.index + root[0].length >= rootEnd);
+        const protectedRoot = protectedRoots.some(
+          (root) => root.index <= start && root.index + root[0].length >= rootEnd,
+        );
         if (protectedRoot || source[rootEnd] !== '/') {
           spans.push({ start, end: rootEnd, replacement: '~' });
           continue;
@@ -89,8 +131,18 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
         const nextRoot = protectedRoots.find((root) => root.index > start && root.index < end);
         if (nextRoot) end = nextRoot.index;
         const parts = source.slice(rootEnd, end).split('/').filter(Boolean);
-        const suffix = [...(parts.at(-1) ?? '').matchAll(/\.([a-z\d]{1,10})(?=$|[\s"'<>),:;!?])/gi)].at(-1)?.[1];
-        const replacement = '~' + parts.map((_, index) => '/…' + (index === parts.length - 1 && suffix ? '.' + suffix : '')).join('');
+        const extension = [
+          ...(parts.at(-1) ?? '').matchAll(/\.([a-z\d]{1,10})(?=$|[\s"'<>),:;!?])/gi),
+        ].at(-1)?.[1];
+        const suffix =
+          extension && identities.some((value) => value.toLowerCase() === extension.toLowerCase())
+            ? '<private>'
+            : extension;
+        const replacement =
+          '~' +
+          parts
+            .map((_, index) => '/…' + (index === parts.length - 1 && suffix ? '.' + suffix : ''))
+            .join('');
         spans.push({ start, end, replacement });
       }
     }
@@ -99,23 +151,38 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
     mask(/\bviewer-license-1[.\w+/=-]*/gi, '<license>');
     mask(/\b(?:sk|pk|rk|gh[pousr]|xox[abprs])[-_][\w-]{8,}/gi, '<token>');
     mask(/\bBearer\s+[^\s"',;]+/gi, '<token>');
-    mask(/\b(?:api[-_]?key|access[-_]?token|token|password|secret|authorization)["']?\s*[:=]\s*["']?[^\s"',;&]+/gi, '<token>');
+    mask(
+      /\b(?:api[-_]?key|access[-_]?token|token|password|secret|authorization)["']?\s*[:=]\s*["']?[^\s"',;&]+/gi,
+      '<token>',
+    );
     mask(/[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu, '<email>');
-    mask(/(?<![\w])[a-z\d_+=-]{32,}(?![\w])/gi, '<token>');
+    mask(/"(?:[^"\\\r\n]|\\.)+"@[\p{L}\p{N}.-]+\.[\p{L}]{2,}/gu, '<email>');
+    maskOutsideApplication(/\b[a-z\d_+/-]{32,}={0,2}(?![\w])/gi, '<token>');
+    maskOutsideApplication(/\b(?:[\p{L}\p{N}][\p{L}\p{N}-]*\.)+[\p{L}]{2,63}\b/giu, '<host>');
     mask(/\b(?:smb|afp|nfs|cifs|ftp|sftp):\/\/[^\r\n]*/gi, '<network address>');
     mask(/\\\\[^\r\n]*/g, '<network address>');
     mask(/\/Network\/Servers\/[^\r\n]*/gi, '<network address>');
-    for (const match of source.matchAll(/(?<!\/System)\/(?:(?:private\/)?System\/Volumes\/Data\/|private\/)?Volumes\/[^\r\n]*/gi)) {
+    for (const match of source.matchAll(
+      /(?<!\/System)\/(?:(?:private\/)?System\/Volumes\/Data\/|private\/)?Volumes\/[^\r\n]*/gi,
+    )) {
       const protectedRoot = protectedRoots.find((root) => root.index === match.index);
-      const end = protectedRoot ? protectedRoot.index + protectedRoot[0].length : match.index + match[0].length;
+      const end = protectedRoot
+        ? protectedRoot.index + protectedRoot[0].length
+        : match.index + match[0].length;
       spans.push({ start: match.index, end, replacement: '/Volumes/<volume>' });
     }
     mask(/\b[\p{L}\p{N}][\p{L}\p{N}._-]*\.local\.?\b/giu, '<host>');
     mask(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '<address>');
-    for (const match of source.matchAll(/(?<![\w:])(?:[a-f\d]{0,4}:){2,}[a-f\d:.]*(?:%[\w.-]+)?(?![\w:])/gi)) {
+    for (const match of source.matchAll(
+      /(?<![\w:])(?:[a-f\d]{0,4}:){2,}[a-f\d:.]*(?:%[\w.-]+)?(?![\w:])/gi,
+    )) {
       try {
         new URL('http://[' + match[0].replace(/%.*/, '') + ']');
-        spans.push({ start: match.index, end: match.index + match[0].length, replacement: '<address>' });
+        spans.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          replacement: '<address>',
+        });
       } catch {
         // Clock times and stack coordinates are not IP addresses.
       }
@@ -129,7 +196,11 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
       }
       const query = match[0].search(/[?#]/);
       if (query >= 0)
-        spans.push({ start: match.index + query, end: match.index + match[0].length, replacement: '' });
+        spans.push({
+          start: match.index + query,
+          end: match.index + match[0].length,
+          replacement: '',
+        });
     }
 
     const ordered = spans.toSorted((a, b) => a.start - b.start || b.end - a.end);

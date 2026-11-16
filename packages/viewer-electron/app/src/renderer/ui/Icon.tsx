@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 const paths = {
+  network: 'M9 3h6v5H9V3Zm-6 13h6v5H3v-5Zm12 0h6v5h-6v-5ZM12 8v4M6 16v-4h12v4',
   'parent-plane': 'm9 4-5 5 5 5M4 9h10a6 6 0 0 1 6 6v5',
   tag: 'M3 3h7l11 11-7 7L3 10V3Zm4 4h.01',
   map: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Zm0 0v14m6-12v14',

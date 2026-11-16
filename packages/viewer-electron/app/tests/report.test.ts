@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { diagnosticReport, makeDiagnosticReport, reportLimits } from '../src/desktop/diagnostics/report';
+import {
+  diagnosticReport,
+  makeDiagnosticReport,
+  reportLimits,
+} from '../src/desktop/diagnostics/report';
 import type { ReportInput } from '../src/desktop/diagnostics/report';
 
 const local = vi.hoisted(() => ({
@@ -22,10 +26,12 @@ const local = vi.hoisted(() => ({
 }));
 vi.mock('electron', () => ({
   app: {
-    getVersion: () => '1.0.0', isPackaged: false,
+    getVersion: () => '1.0.0',
+    isPackaged: false,
     getAppPath: () => '/Applications/Viewer.app',
     getPath: () => '/Home/Example/Library/Application Support/Viewer',
-    getLocale: () => 'en-GB', getLocaleCountryCode: () => 'GB',
+    getLocale: () => 'en-GB',
+    getLocaleCountryCode: () => 'GB',
   },
   screen: { getAllDisplays: () => [{ scaleFactor: 2 }, { scaleFactor: 1 }] },
 }));
@@ -36,7 +42,8 @@ vi.mock('node:child_process', async () => {
 vi.mock('node:os', () => ({
   default: {
     userInfo: () => ({ username: 'example', homedir: '/Home/Example' }),
-    homedir: () => '/Home/Example', hostname: () => 'Example-Mac.local',
+    homedir: () => '/Home/Example',
+    hostname: () => 'Example-Mac.local',
     totalmem: () => 16 * 1024 ** 3,
   },
 }));
@@ -65,15 +72,25 @@ vi.mock('node:fs/promises', () => ({
   },
 }));
 
-const entry = (index: number, detail = `Failure ${index}`) => JSON.stringify({
-  at: new Date(Date.UTC(2026, 10, 1, 12, index)).toISOString(),
-  kind: 'renderer-error', detail, settings: 'must-not-be-copied',
-});
+const entry = (index: number, detail = `Failure ${index}`) =>
+  JSON.stringify({
+    at: new Date(Date.UTC(2026, 10, 1, 12, index)).toISOString(),
+    kind: 'renderer-error',
+    detail,
+    settings: 'must-not-be-copied',
+  });
 const fixture = (): ReportInput => ({
   facts: {
-    release: { version: '1.0.0', build: 123 }, edition: 'direct', license: 'trial',
-    macOS: '15.1', model: 'Mac16,1', chip: 'Apple M4', memory: 16 * 1024 ** 3,
-    scales: [2, 1], language: 'en-GB', region: 'GB',
+    release: { version: '1.0.0', build: 123 },
+    edition: 'direct',
+    license: 'trial',
+    macOS: '15.1',
+    model: 'Mac16,1',
+    chip: 'Apple M4',
+    memory: 16 * 1024 ** 3,
+    scales: [2, 1],
+    language: 'en-GB',
+    region: 'GB',
   },
   privateValues: [{ kind: 'home', value: '/Home/Example' }],
   log: [entry(1), entry(2)].join('\n'),
@@ -88,11 +105,18 @@ afterEach(() => vi.restoreAllMocks());
 describe('report contents', () => {
   it('includes only the requested facts and the newest twenty validated failures', () => {
     const input = fixture();
-    input.log = Array.from({ length: 30 }, (_, index) => entry(index)).join('\n') + '\n' + [
-      'partial private JSON',
-      JSON.stringify({ at: 'a private date', kind: 'renderer-error', detail: 'ignored one' }),
-      JSON.stringify({ at: '2026-11-01T12:01:00.000Z', kind: 'a private kind', detail: 'ignored two' }),
-    ].join('\n');
+    input.log =
+      Array.from({ length: 30 }, (_, index) => entry(index)).join('\n') +
+      '\n' +
+      [
+        'partial private JSON',
+        JSON.stringify({ at: 'a private date', kind: 'renderer-error', detail: 'ignored one' }),
+        JSON.stringify({
+          at: '2026-11-01T12:01:00.000Z',
+          kind: 'a private kind',
+          detail: 'ignored two',
+        }),
+      ].join('\n');
     const report = diagnosticReport(input);
     expect(report).toContain('- Build: 123\n- Edition: direct\n- License: trial');
     expect(report).toContain('- Memory: 16 GiB\n- Displays: 2 (2×, 1×)');
@@ -104,12 +128,20 @@ describe('report contents', () => {
 
   it('redacts before truncating messages and quotes Markdown content as text', () => {
     const input = fixture();
-    input.log = entry(1, 'Start ' + 'A'.repeat(2100) + '\n<img src="https://private.invalid/file?secret=value">\n' + '/Home/Example/Private/Report.pdf');
+    input.log = entry(
+      1,
+      'Start ' +
+        'A'.repeat(2100) +
+        '\n<img src="https://private.invalid/file?secret=value">\n' +
+        '/Home/Example/Private/Report.pdf',
+    );
     const report = diagnosticReport(input);
     expect(report).not.toMatch(/A{20}|private\.invalid|secret=value|Private\/Report/);
     expect(report).toContain('> Start <token>');
     expect(report).toContain('> ~/…/….pdf');
-    expect(diagnosticReport({ ...input, log: entry(1, 'safe '.repeat(1000)) }).length).toBeLessThan(2600);
+    expect(diagnosticReport({ ...input, log: entry(1, 'safe '.repeat(1000)) }).length).toBeLessThan(
+      2600,
+    );
   });
 
   it('keeps safe facts and omits all failures when a privacy check is unavailable', () => {
@@ -129,8 +161,15 @@ describe('report contents', () => {
 
 describe('local report collection', () => {
   it('reads a bounded tail and uses only fixed local metadata commands', async () => {
-    local.log = 'x'.repeat(reportLimits.bytes) + '\n' + entry(1, 'Failed /Home/Example/Private/Report.pdf') + '\n';
-    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', { kind: 'licensed', email: 'never-copy@buyer.invalid' });
+    local.log =
+      'x'.repeat(reportLimits.bytes) +
+      '\n' +
+      entry(1, 'Failed /Home/Example/Private/Report.pdf') +
+      '\n';
+    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', {
+      kind: 'licensed',
+      email: 'never-copy@buyer.invalid',
+    });
     expect(local.capacity).toBe(reportLimits.bytes);
     expect(local.offset).toBeGreaterThan(0);
     expect(local.close).toHaveBeenCalledOnce();
@@ -144,20 +183,26 @@ describe('local report collection', () => {
       '/usr/sbin/sysctl -n hw.model',
       '/usr/sbin/sysctl -n machdep.cpu.brand_string',
     ]);
-    for (const [, , options] of local.commands.mock.calls) expect(options).toEqual({ timeout: 2000, maxBuffer: 4096 });
+    for (const [, , options] of local.commands.mock.calls)
+      expect(options).toEqual({ timeout: 2000, maxBuffer: 4096 });
   });
 
   it('never exposes failed identity lookups or their error messages', async () => {
     local.log = entry(1, 'This might contain an unknown host');
     local.commands.mockRejectedValueOnce(new Error('private lookup details'));
-    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', { kind: 'trial', daysLeft: 5 });
+    const report = await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', {
+      kind: 'trial',
+      daysLeft: 5,
+    });
     expect(report).toContain('Could not check: full name. Failure excerpts omitted.');
     expect(report).not.toMatch(/unknown host|private lookup details|daysLeft/);
   });
 
   it('fails closed when volumes cannot be checked', async () => {
     local.volumes.mockRejectedValueOnce(new Error('private mount names'));
-    expect(await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', undefined)).toContain('volume name. Failure excerpts omitted.');
+    expect(await makeDiagnosticReport('/Private/Viewer/Logs/diagnostics.log', undefined)).toContain(
+      'volume name. Failure excerpts omitted.',
+    );
   });
 
   it('uses the same report for the Store edition, with licensed as the status word', async () => {

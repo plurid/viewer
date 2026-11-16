@@ -20,6 +20,8 @@ import { createAutomationHandlers } from './ipc/automation-handlers';
 import { createCommandLineHandlers } from './ipc/command-line-handlers';
 import { createComparisonHandlers } from './ipc/comparison-handlers';
 import { createFileHandlers } from './ipc/file-handlers';
+import { createNetworkSharingHandlers } from './ipc/network-sharing-handlers';
+import { NetworkSharing, networkSharingAvailable, openSharingSettings } from './files/network-sharing';
 import { createMediaHandlers } from './ipc/media-handlers';
 import { createNoteHandlers } from './ipc/note-handlers';
 import { createOperationHandlers } from './ipc/operation-handlers';
@@ -105,7 +107,7 @@ import type {
   DesktopEvent,
   SavedState,
 } from '../domain/contracts';
-import { absolute } from './files/filesystem';
+import { absolute, entry } from './files/filesystem';
 import { nativeImageConverter } from './native/native-image-convert';
 import { imageDecoder } from './native/quick-look-render';
 import { Operations } from './operations/operations';
@@ -202,6 +204,7 @@ const encryptSecret = (value: string) => safeStorage.encryptStringAsync(value);
 const decryptSecret = async (value: Buffer) => (await safeStorage.decryptStringAsync(value)).result;
 
 export class Desktop {
+  private readonly networkSharing = new NetworkSharing();
   readonly journal: JournalStore;
   private readonly activity: JournalActivity;
   readonly chats: Chats;
@@ -2002,6 +2005,7 @@ export class Desktop {
       home,
       freshSession,
       gitActionsAvailable: !process.mas,
+      networkSharingAvailable,
       license: await this.options.license?.status(),
       settings: this.settings.snapshot(this.credentials.ids()),
       platform: process.platform as DesktopPlatform,
@@ -2094,6 +2098,19 @@ export class Desktop {
         files: this.files,
         information: this.information,
         watchers: this.watchers,
+      }),
+      ...createNetworkSharingHandlers({
+        available: networkSharingAvailable,
+        sharing: this.networkSharing,
+        isAgent,
+        requireFolder: async (file) => {
+          await this.fileAccess.require([file]);
+          if (!(await entry(file)).directory) throw new Error('Choose one folder.');
+        },
+        openSettings: () => openSharingSettings(
+          Number(process.getSystemVersion().split('.')[0]),
+          (url) => shell.openExternal(url),
+        ),
       }),
       ...createApplicationHandlers({
         applications: this.applications,

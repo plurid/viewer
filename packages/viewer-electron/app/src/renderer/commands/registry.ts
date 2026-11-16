@@ -37,6 +37,8 @@ export interface CommandDefinition {
   detail?: string | ((context: CommandContext) => string);
   primary?: boolean | ((context: CommandContext) => boolean);
   remember?: boolean;
+  /** Custom actions cannot enter a flow reserved for a direct choice by the person. */
+  humanOnly?: boolean;
   /** A setting's command: the palette lists it apart, by the setting's name, with its
    * value (on or off, or the current value) and whether it is a workspace's own. */
   setting?: CommandSetting;
@@ -123,6 +125,7 @@ function commandLabel(
 
 /** One action path for menus, shortcuts, toolbars and preview extensions. */
 export class CommandRegistry {
+  private customDepth = 0;
   private sources = new Map<string, CommandSource>();
   private listeners = new Set<() => void>();
   private revision = 0;
@@ -289,7 +292,7 @@ export class CommandRegistry {
     const runnable = this.runnable(command);
     if (!runnable) return false;
     const { definition, context } = runnable;
-    await definition.run(context);
+    await this.runDefinition(definition, context);
     if (remember && definition.remember !== false) this.chosen(definition.id, context);
     this.touch(command.source);
     return true;
@@ -309,7 +312,7 @@ export class CommandRegistry {
     const { definition, context } = runnable;
     const done = definition.spoken?.run
       ? await definition.spoken.run(context, progress, signal)
-      : await definition.run(context);
+      : await this.runDefinition(definition, context);
     this.touch(command.source);
     return typeof done === 'string' ? { done } : {};
   }
@@ -318,6 +321,17 @@ export class CommandRegistry {
     // evaluate only this command: a shortcut runs on every key press
     const command = this.list({ ...request, ids: [id] }).find((item) => item.id === id);
     return command ? this.run(command, request.remember !== false) : false;
+  }
+  private async runDefinition(definition: CommandDefinition, context: CommandContext): Promise<void> {
+    if (definition.humanOnly && this.customDepth)
+      throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
+    const custom = definition.id.startsWith('custom.');
+    if (custom) this.customDepth++;
+    try {
+      await definition.run(context);
+    } finally {
+      if (custom) this.customDepth--;
+    }
   }
 }
 

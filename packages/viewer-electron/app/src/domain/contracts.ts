@@ -1,4 +1,5 @@
 import type { ObservedIdentity } from './files/item-identity';
+import type { NetworkSharingRequest, NetworkSharingSnapshot } from './files/network-sharing';
 import type { ReconstructionRequest, ReconstructionReply } from './canvases/reconstruction';
 import type { LicenseRequest, LicenseStatus } from './license/license';
 import type { DialogPrompt, DialogRequest, DialogReply } from './dialogs';
@@ -506,6 +507,7 @@ export interface UIPreferences {
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
+  networkSharingAvailable?: boolean;
   license?: LicenseStatus;
   gitActionsAvailable?: boolean;
   launches?: LaunchRequest[];
@@ -897,6 +899,7 @@ export interface ViewerAPI {
   resourceFormat(id: string, extension: string): Promise<Resource>;
   list(path: string): Promise<FolderListing>;
   stat(path: string): Promise<FileEntry>;
+  networkSharing(request: NetworkSharingRequest): Promise<NetworkSharingSnapshot>;
   fileInformation(path: string): Promise<FileInformation>;
   fileInformationUpdate(
     path: string,

@@ -4,6 +4,8 @@ import type { CommandContext } from '../commands/registry';
 import type { FolderActions } from '../commands/folder';
 import { DestinationDialog } from '../commands/DestinationDialog';
 import { FileInformation } from './FileInformation';
+import { NetworkSharingDialog } from './NetworkSharing';
+import { readNetworkSharing } from './network-sharing-state';
 import { Dialog, NameDialog } from '../ui/primitives';
 import { GoToFolderDialog } from './GoToFolderDialog';
 import { getState, report, settledJob } from '../state/store';
@@ -144,7 +146,7 @@ function TrashConfirmation({ context, onClose }: { context: CommandContext; onCl
 }
 /** Physical folders and virtual results share the same file-operation dialogs. */
 export function useFileDialogs(): {
-  actions: Pick<FolderActions, 'dialog' | 'destination' | 'info' | 'trash' | 'openWith'>;
+  actions: Pick<FolderActions, 'dialog' | 'destination' | 'info' | 'trash' | 'openWith' | 'networkSharing'>;
   content: React.ReactNode;
 } {
   const workspace = useWorkspace();
@@ -157,6 +159,7 @@ export function useFileDialogs(): {
     context: CommandContext;
   }>();
   const [info, setInfo] = useState<CommandContext>();
+  const [sharing, setSharing] = useState<string>();
   const [applications, setApplications] = useState<CommandContext>();
   const applicationPaths = useMemo(
     () => applications?.selection.map((file) => file.path) || [],
@@ -168,6 +171,12 @@ export function useFileDialogs(): {
       dialog: (kind, context) => setName({ kind, context }),
       destination: (kind, context) => setDestination({ kind, context }),
       info: setInfo,
+      networkSharing: async (context) => {
+        const file = context.selection[0];
+        if (!file?.directory || context.selection.length !== 1) return;
+        const value = await readNetworkSharing();
+        if (value.status !== 'unavailable') setSharing(file.path);
+      },
       openWith: setApplications,
       trash: (context) => {
         if (effectiveWindowSettings(getState()).browsing.confirmTrash) setTrash(context);
@@ -176,6 +185,7 @@ export function useFileDialogs(): {
     },
     content: (
       <>
+        {sharing && <NetworkSharingDialog path={sharing} onClose={() => setSharing(undefined)} />}
         {applications && (
           <OpenWithDialog paths={applicationPaths} onClose={() => setApplications(undefined)} />
         )}

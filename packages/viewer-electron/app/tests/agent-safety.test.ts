@@ -244,10 +244,17 @@ describe('agent removal safety', () => {
     for (const commandID of ['copy-report', 'show-diagnostic-log', 'custom.cleanup']) {
       await expect(f.call('propose_command', { commandID })).rejects.toThrow();
     }
-    for (const name of ['copy_report', 'diagnostic_report', 'diagnosticReport', 'read_diagnostic_log']) {
+    for (const name of [
+      'copy_report',
+      'diagnostic_report',
+      'diagnosticReport',
+      'read_diagnostic_log',
+    ]) {
       await expect(f.call(name)).rejects.toThrow('Unknown agent tool');
     }
-    await expect(f.broker.authorize('/Memory/Viewer/Logs/diagnostics.log')).rejects.toThrow('Private Viewer');
+    await expect(f.broker.authorize('/Memory/Viewer/Logs/diagnostics.log')).rejects.toThrow(
+      'Private Viewer',
+    );
     memory.aliases.set('/Granted/log-alias', '/Memory/Viewer/Logs/diagnostics.log');
     await expect(f.broker.authorize('/Granted/log-alias')).rejects.toThrow('Private Viewer');
     let output = '';
@@ -258,9 +265,15 @@ describe('agent removal safety', () => {
       },
     });
     const code = await runCLI(['tools', 'call', 'copy_report', '--args', '{}'], {
-      dataPath: '/Memory/Viewer', version: 'test', cwd: '/Granted', home: '/Home',
-      input: Readable.from([]), output: sink, error: sink,
-      call: (method, params, signal) => f.broker.handle(f.created.token, { method, params }, signal),
+      dataPath: '/Memory/Viewer',
+      version: 'test',
+      cwd: '/Granted',
+      home: '/Home',
+      input: Readable.from([]),
+      output: sink,
+      error: sink,
+      call: (method, params, signal) =>
+        f.broker.handle(f.created.token, { method, params }, signal),
     });
     expect(code).not.toBe(0);
     expect(output).toContain('Unknown agent tool');

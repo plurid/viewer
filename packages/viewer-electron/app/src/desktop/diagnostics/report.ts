@@ -14,14 +14,21 @@ import { installedRelease } from '../windows/about';
 const exec = promisify(execFile);
 export const reportLimits = { bytes: 1024 * 1024, failures: 20, message: 2000 } as const;
 const failureKinds = new Set([
-  'main-exception', 'main-rejection', 'main-error', 'service-error', 'renderer-error',
-  'renderer-gone', 'renderer-unresponsive', 'process-gone', 'worker-output',
+  'main-exception',
+  'main-rejection',
+  'main-error',
+  'service-error',
+  'renderer-error',
+  'renderer-gone',
+  'renderer-unresponsive',
+  'process-gone',
+  'worker-output',
 ]);
 
 export interface ReportFacts {
   release: InstalledRelease;
   edition: 'direct' | 'Mac App Store';
-  license: 'trial' | 'licensed' | 'unavailable';
+  license: 'trial' | 'licensed';
   macOS: string | undefined;
   model: string | undefined;
   chip: string | undefined;
@@ -40,8 +47,18 @@ export interface ReportInput {
 /** Only these fields leave the desktop, after the failure text passes all privacy checks. */
 export function diagnosticReport(input: ReportInput): string {
   const { facts, privateValues } = input;
-  const unchecked = [...new Set(privateValues.filter((item) => !item.value?.trim()).map((item) => item.kind))];
-  const fact = (value: string | undefined) => value?.replace(/[\r\n\u0000-\u001f]/g, ' ').trim() || 'unavailable';
+  const unchecked = [
+    ...new Set(privateValues.filter((item) => !item.value?.trim()).map((item) => item.kind)),
+  ];
+  const fact = (value: string | undefined) =>
+    value
+      ? redactReport(
+          value,
+          privateValues.filter((item) => item.value?.trim()),
+        )
+          .replace(/[\u0000-\u001f]/g, ' ')
+          .trim()
+      : 'unavailable';
   const lines = [
     '# Viewer report',
     '',
@@ -73,20 +90,29 @@ export function diagnosticReport(input: ReportInput): string {
           typeof entry.at === 'string' &&
           /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(entry.at) &&
           Number.isFinite(Date.parse(entry.at)) &&
-          typeof entry.kind === 'string' && failureKinds.has(entry.kind) &&
+          typeof entry.kind === 'string' &&
+          failureKinds.has(entry.kind) &&
           typeof entry.detail === 'string'
-        ) entries.push({ at: entry.at, kind: entry.kind, detail: entry.detail });
+        )
+          entries.push({ at: entry.at, kind: entry.kind, detail: entry.detail });
       } catch {
         // Partial or malformed entries cannot contribute arbitrary unverified fields.
       }
     }
-    const recent = entries.toSorted((a, b) => b.at.localeCompare(a.at)).slice(0, reportLimits.failures);
+    const recent = entries
+      .toSorted((a, b) => b.at.localeCompare(a.at))
+      .slice(0, reportLimits.failures);
     for (const entry of recent) {
       // Redact before bounding: truncation must not turn a complete secret into a visible prefix.
       const message = redactReport(entry.detail, privateValues)
         .replace(/[\u0000-\u0008\u000b-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '')
         .slice(0, reportLimits.message);
-      lines.push(`### ${entry.at} (${entry.kind})`, '', ...message.split('\n').map((line) => '> ' + line), '');
+      lines.push(
+        `### ${entry.at} (${entry.kind})`,
+        '',
+        ...message.split('\n').map((line) => '> ' + line),
+        '',
+      );
     }
     if (!recent.length) lines.push('No failures recorded.');
   }
@@ -130,7 +156,10 @@ async function logTail(file: string): Promise<string | undefined> {
   }
 }
 
-export async function makeDiagnosticReport(file: string, license: LicenseStatus | undefined): Promise<string> {
+export async function makeDiagnosticReport(
+  file: string,
+  license: LicenseStatus | undefined,
+): Promise<string> {
   const [fullName, computer, localHost, model, chip, volumes, log] = await Promise.all([
     localValue('/usr/bin/id', ['-F']),
     localValue('/usr/sbin/scutil', ['--get', 'ComputerName']),
@@ -144,6 +173,7 @@ export async function makeDiagnosticReport(file: string, license: LicenseStatus 
   const home = localFact(realHome);
   const privateValues: ReportPrivateValue[] = [
     { kind: 'home', value: home },
+    { kind: 'home', value: user?.homedir },
     { kind: 'home', value: localFact(() => os.homedir()) },
     { kind: 'short name', value: user?.username },
     { kind: 'full name', value: fullName },
@@ -151,9 +181,16 @@ export async function makeDiagnosticReport(file: string, license: LicenseStatus 
     { kind: 'local host name', value: localHost },
     { kind: 'Bonjour name', value: localFact(() => os.hostname()) },
     { kind: 'Bonjour name', value: localHost ? localHost + '.local' : undefined },
-    { kind: 'application bundle', value: localFact(() => app.isPackaged ? path.resolve(process.execPath, '../../..') : app.getAppPath()) },
+    {
+      kind: 'application bundle',
+      value: localFact(() =>
+        app.isPackaged ? path.resolve(process.execPath, '../../..') : app.getAppPath(),
+      ),
+    },
     { kind: 'application data', value: localFact(() => app.getPath('userData')) },
-    ...(volumes?.map((value) => ({ kind: 'volume name' as const, value })) ?? [{ kind: 'volume name' as const, value: undefined }]),
+    ...(volumes?.map((value) => ({ kind: 'volume name' as const, value })) ?? [
+      { kind: 'volume name' as const, value: undefined },
+    ]),
   ];
   return diagnosticReport({
     privateValues,
@@ -161,9 +198,10 @@ export async function makeDiagnosticReport(file: string, license: LicenseStatus 
     facts: {
       release: installedRelease(),
       edition: process.mas ? 'Mac App Store' : 'direct',
-      license: process.mas || license?.kind === 'licensed' ? 'licensed' : license ? 'trial' : 'unavailable',
+      license: process.mas || license?.kind === 'licensed' ? 'licensed' : 'trial',
       macOS: localFact(() => process.getSystemVersion()),
-      model, chip,
+      model,
+      chip,
       memory: localFact(() => os.totalmem()),
       scales: localFact(() => screen.getAllDisplays().map((display) => display.scaleFactor)) ?? [],
       language: localFact(() => app.getLocale()),

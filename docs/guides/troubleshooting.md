@@ -4,8 +4,8 @@ Use this guide when something in Viewer is not working: a folder that shows noth
 stopped, a failed copy, a model that asks for permission, or Viewer that will not quit. Each section
 names what you see and what to choose.
 
-**Find it:** **Help → Copy Report…** · **Help → Show Diagnostic Log** · **Help → Show Crash Reports** · **Help → Report an
-Issue…** · the **File operations** button in the title bar
+**Find it:** **Help → Copy Report…** · **Help → Show Diagnostic Log** · **Help → Show Crash
+Reports** · **Help → Report an Issue…** · the **File operations** button in the title bar
 
 ## A folder shows nothing, or the Trash is empty
 
@@ -147,8 +147,8 @@ until you fix it. Keep API keys in the model settings, never in the settings fil
 
 ## Report a problem
 
-1. Choose **Help → Copy Report…**. Read the Markdown report, then choose **Copy** (Return).
-   Escape closes without copying. The report is made on your Mac and sends nothing.
+1. Choose **Help → Copy Report…**. Read the Markdown report, then choose **Copy** (Return). Escape
+   closes without copying. The report is made on your Mac and sends nothing.
 2. Choose **Help → Report an Issue…** and paste the report. Describe the steps, what you expected
    and what happened. Attach a small generated sample if you can.
 

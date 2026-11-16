@@ -84,11 +84,12 @@ These executables and external apps have their own permissions.
 Choose **Help → Copy Report…**, read the report and choose **Copy** (Return). Escape closes it.
 Paste it into **Help → Report an Issue…** if you choose to share it. Both editions make the report
 on the Mac and send nothing. It contains version/build, edition, trial or licensed status, macOS,
-model, chip, memory, display count/scales, language/region and up to 20 recent failures, newest first.
-Names, personal paths, network addresses, emails, keys, tokens and address queries are redacted.
-Home paths retain depth and extension; Viewer's bundle and data paths keep their diagnostic names.
-Failed privacy checks are named and failure excerpts are omitted. Settings, file listings,
-clipboard contents, environment variables and license buyer details are excluded. Read before sharing.
+model, chip, memory, display count/scales, language/region and up to 20 recent failures, newest
+first. Names, personal paths, network addresses, emails, keys, tokens and address queries are
+redacted. Home paths retain depth and extension; Viewer's bundle and data paths keep their
+diagnostic names. Failed privacy checks are named and failure excerpts are omitted. Settings, file
+listings, clipboard contents, environment variables and license buyer details are excluded. Read
+before sharing.
 
 Include the Viewer version/build, macOS version, Apple Silicon model, direct/App Store edition,
 exact steps and expected result. A small generated example is preferable to a confidential file.

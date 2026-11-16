@@ -3,6 +3,7 @@ import type { FileEntry } from '../../domain/contracts';
 import { needsFolderAccess } from '../../domain/files/access';
 import { refreshConcerns } from '../state/refresh';
 import { onWindowEvent } from '../app/window-events';
+import { followNetworkSharing, refreshNetworkSharing } from './network-sharing-state';
 interface Dataset {
   entries: FileEntry[];
   loading: boolean;
@@ -110,6 +111,7 @@ export function useFolder(path: string) {
       const value = dataset(path);
       value.listeners.add(listener);
       if (!value.stop) {
+        const stopSharing = followNetworkSharing();
         const subscriber = crypto.randomUUID();
         let timer: ReturnType<typeof setTimeout> | undefined;
         let watchFailed = false;
@@ -186,9 +188,11 @@ export function useFolder(path: string) {
         );
         value.refresh = refresh;
         const stopRefresh = onWindowEvent('viewer:refresh', (request) => {
+          refreshNetworkSharing();
           if (refreshConcerns(request, path)) refresh();
         });
         value.stop = () => {
+          stopSharing();
           stopped = true;
           value.refresh = undefined;
           off();

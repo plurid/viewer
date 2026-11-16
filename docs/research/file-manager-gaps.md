@@ -9,11 +9,11 @@ behavior is in the [capability reference](../reference/capabilities.md).
 
 Each is about a day of work, and each is something a person meets in the first hour.
 
-| Feature                        | Viewer today                                                                                                                              | Proposal                                                                                                                                                          |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Recent files                   | Only folders are remembered.                                                                                                              | A **Recent files** list of what was opened or saved in Viewer, kept on this Mac.                                                                                  |
-| Change the default app         | **Open With…** marks the default app and cannot change it.                                                                                | **Always open with** for the file's kind, where macOS allows it.                                                                                                  |
-| Timed lyrics                   | A video reads the subtitle file beside it. A song ignores the `.lrc` file beside it.                                                      | Read `.lrc` as timed lines and show the current line while the song plays.                                                                                        |
+| Feature                | Viewer today                                                                         | Proposal                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Recent files           | Only folders are remembered.                                                         | A **Recent files** list of what was opened or saved in Viewer, kept on this Mac. |
+| Change the default app | **Open With…** marks the default app and cannot change it.                           | **Always open with** for the file's kind, where macOS allows it.                 |
+| Timed lyrics           | A video reads the subtitle file beside it. A song ignores the `.lrc` file beside it. | Read `.lrc` as timed lines and show the current line while the song plays.       |
 
 ## Larger additions
 
