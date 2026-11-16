@@ -138,3 +138,13 @@ export function calculate(expression: string): number | undefined {
 }
 
 export { frecencyScore, rankFrecent, recordVisit } from '../../domain/files/folder-visits';
+
+/** Paths can exceed the command catalog's ID bound; labels and detail retain the full path. */
+export function smartRowID(value: string): string {
+  if (!value.startsWith('folder:') && !value.startsWith('path:')) return `smart:${value}`;
+  let hash = 14695981039346656037n;
+  for (const character of value) {
+    hash = BigInt.asUintN(64, (hash ^ BigInt(character.codePointAt(0)!)) * 1099511628211n);
+  }
+  return `smart:${value.slice(0, value.indexOf(':'))}:${hash.toString(16)}`;
+}

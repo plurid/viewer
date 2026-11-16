@@ -18,6 +18,8 @@ for (const size of [8000, 64000]) {
     ['wrapped licenses', 'viewer-license-1. '],
     ['quoted assignments', 'DB_PASSWORD="private words" '],
     ['newlines', '\n'],
+    ['punctuated words', 'a|'],
+    ['colons', ':'],
   ]) {
     const input = seed!.repeat(Math.ceil(size / seed!.length)).slice(0, size);
     for (let warmup = 0; warmup < 5; warmup++) {

@@ -766,6 +766,8 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
           code: 'FILE_ACCESS_REQUIRED',
         });
       return list(scoped(args[0] as string), networkVisibility);
+    case 'folderCheck':
+      return entry(scoped(args[0] as string));
     case 'stat':
       if (permissionScenario && args[0] === restrictedFolder && !permissionGranted)
         throw Object.assign(new Error('Choose this folder to allow access.'), {

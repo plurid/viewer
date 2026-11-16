@@ -12,6 +12,8 @@ import {
 import type { HTMLAttributes } from 'react';
 import { Icon, type IconName } from './Icon';
 import { errorMessage } from '../../domain/errors';
+import { diagnosticFailure } from '../../domain/diagnostics/failure';
+import { boundedText } from '../../domain/diagnostics/text';
 import { getState, report } from '../state/core';
 import { copyPaths, copyText } from '../state/ui';
 
@@ -272,8 +274,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: s
     return { error: error.message };
   }
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
-    const detail = `${error.stack ?? error.message}\n${info.componentStack ?? ''}`.slice(0, 8000);
-    void window.viewer?.diagnosticReport?.(detail).catch(() => {});
+    const failure = diagnosticFailure(error);
+    failure.detail = boundedText(`${failure.detail}\n${info.componentStack ?? ''}`);
+    void window.viewer?.diagnosticReport?.(failure).catch(() => {});
   }
   render() {
     return this.state.error ? (

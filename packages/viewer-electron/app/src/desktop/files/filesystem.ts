@@ -76,7 +76,9 @@ export async function entryWithVisibility(
     size: info.size,
     modified: info.mtimeMs,
     created: info.birthtimeMs,
-    hidden: name.startsWith('.') || (knownHidden ?? (await visibility.fileHidden(normalized).catch(() => false))),
+    hidden:
+      name.startsWith('.') ||
+      (knownHidden ?? (await visibility.fileHidden(normalized).catch(() => false))),
     mime: lookup(name) || 'application/octet-stream',
     identity: itemIdentity(info),
     linkTarget,

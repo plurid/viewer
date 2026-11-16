@@ -1,10 +1,16 @@
 // Sidebar favorites, shortcut labels and recent folders.
-import { folderPath, recordVisit, remembersFolder } from '../../domain/files/folder-visits';
+import {
+  folderPath,
+  recordVisit,
+  remembersFolder,
+  remapFolderVisits,
+  boundFolderVisits,
+} from '../../domain/files/folder-visits';
 import { reorder } from '../../domain/preferences/ui';
-import { getState, savePatch } from './core';
+import { getState, savePatch, report, update } from './core';
 import { changePreferences } from './preferences';
 import { folderVisitSync } from './folder-visits';
-import { knowFolder, retainKnownFolders } from '../explorer/folder-availability';
+import { knowFolder, forgetKnownFolders } from '../explorer/folder-availability';
 
 export function addFavorite(path: string, name: string, before?: string): void {
   if (
@@ -38,8 +44,22 @@ export function remember(path: string, options: { visit?: boolean } = {}): void 
       ? recordVisit(getState().saved.visits ?? {}, path, Date.now())
       : undefined;
   if (visits) {
-    retainKnownFolders(Object.keys(visits));
     knowFolder(folderPath(path));
+    const before = getState().bootstrap;
+    if (window.viewer.folderCheck)
+      void window.viewer
+        .folderCheck(folderPath(path))
+        .then((folder) => {
+          if (getState().bootstrap !== before || !folder.directory || !folder.path) return;
+          const visits = getState().saved.visits ?? {};
+          if (!visits[folderPath(path)]) return;
+          knowFolder(folderPath(path), true, folder.path);
+          const normalized = remapFolderVisits(visits, (key) =>
+            key === folderPath(path) ? folder.path! : key,
+          );
+          if (normalized !== visits) savePatch({ visits: normalized });
+        })
+        .catch(() => {});
   }
   savePatch({
     recents: [path, ...getState().saved.recents.filter((item) => item !== path)].slice(0, 50),
@@ -50,11 +70,65 @@ export function rememberFolderVisit(path: string): void {
   if (!remembersFolder(path)) return;
   savePatch({ visits: recordVisit(getState().saved.visits ?? {}, path, Date.now()) });
 }
+let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
+export function dismissFolderRecovery(): void {
+  clearTimeout(recoveryTimer);
+  update({ ...getState(), folderRecovery: undefined });
+}
 export function clearRecentFolders(): void {
-  folderVisitSync.clear();
+  const { recents, visits } = getState().saved;
+  folderVisitSync.clear([...recents, ...Object.keys(visits ?? {})]);
+  forgetKnownFolders([...recents, ...Object.keys(visits ?? {})]);
   savePatch({ recents: [], visits: {} });
+  const id = crypto.randomUUID();
+  clearTimeout(recoveryTimer);
+  update({
+    ...getState(),
+    folderRecovery: { id, expires: Date.now() + 8000, recents, visits: visits ?? {} },
+  });
+  recoveryTimer = setTimeout(() => {
+    if (getState().folderRecovery?.id === id) dismissFolderRecovery();
+  }, 8000);
 }
 export function favorite(path: string, name: string): void {
   if (getState().saved.favorites.some((item) => item.path === path)) removeFavorite(path);
   else addFavorite(path, name);
+}
+
+export function undoClearRecentFolders(): void {
+  const recovery = getState().folderRecovery;
+  if (!recovery) return;
+  if (Date.now() >= recovery.expires) {
+    dismissFolderRecovery();
+    return;
+  }
+  const current = getState().saved.visits ?? {};
+  const restored = { ...current };
+  for (const [path, visit] of Object.entries(recovery.visits)) {
+    restored[path] = {
+      count: Math.min(1e9, visit.count + (current[path]?.count ?? 0)),
+      last: Math.max(visit.last, current[path]?.last ?? 0),
+    };
+  }
+  savePatch({
+    recents: [...new Set([...getState().saved.recents, ...recovery.recents])].slice(0, 50),
+    visits: boundFolderVisits(restored, Date.now(), Object.keys(current)),
+  });
+  dismissFolderRecovery();
+}
+
+export function offerToForgetFolder(path: string): void {
+  report(new Error('This folder is no longer available. You can forget it from folder history.'));
+  update({ ...getState(), unavailableFolder: path });
+}
+
+export function forgetUnavailableFolder(): void {
+  const path = getState().unavailableFolder;
+  if (!path) return;
+  const visits = { ...getState().saved.visits };
+  delete visits[path];
+  folderVisitSync.forget([path]);
+  forgetKnownFolders([path]);
+  savePatch({ visits, recents: getState().saved.recents.filter((item) => item !== path) });
+  update({ ...getState(), unavailableFolder: undefined, notice: null });
 }

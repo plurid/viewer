@@ -180,6 +180,48 @@ Each run's folder holds:
 The receipt points to the retained notarized app in that run's staging directory, so a later build
 cannot change which app the receipt identifies.
 
+### Keep source maps for report locations
+
+Archive the source maps for every published version and build, for both editions and each
+architecture. This is a release-owner step; release tooling does not make a separate map archive.
+The main and renderer Vite configurations already generate maps. Keep the generated JavaScript and
+its matching `.map` files from that exact release run, preserving their relative directories under
+`.vite/build/` and `.vite/renderer/main_window/`. Do this before another build replaces `.vite`.
+
+Keep this archive outside the mutable build output, alongside the exact source commit, version,
+build, edition, architecture and SHA-256 checksums of the JavaScript and maps. For a direct release,
+keep `notarization.json` and its source hash with it; compare the JavaScript with the retained app
+identified by that receipt. For the Store, keep the matching submitted app, its version/build and
+source commit with the maps. Preserve embedded `sourcesContent`, or retain that exact source tree
+when a map has none. These retention steps do not alter the app or the files it ships.
+
+To investigate a location from **Copy Report…**:
+
+1. Select the archive matching the report's version, build and edition. Verify its recorded
+   checksums. A rebuild from the same source is not evidence of matching generated code.
+2. Find the map beside the reported generated file. A renderer location such as
+   `assets/index-B3.js:12:76` uses `.vite/renderer/main_window/assets/index-B3.js.map`. A
+   main-process location under `Contents/Resources/app.asar/.vite/build/main.cjs` uses
+   `.vite/build/main.cjs.map`.
+3. Resolve its line and column with Node's built-in source-map reader, using the archived map:
+
+   ```sh
+   node --input-type=module - /absolute/path/index-B3.js.map 12 76 <<'JS'
+   import { readFileSync } from 'node:fs';
+   import { SourceMap } from 'node:module';
+   const [file, line, column] = process.argv.slice(2);
+   const map = new SourceMap(JSON.parse(readFileSync(file, 'utf8')));
+   const entry = map.findEntry(Number(line) - 1, Number(column) - 1);
+   if (!entry.originalSource) throw new Error('No mapping at this location.');
+   console.log(`${entry.originalSource}:${entry.originalLine + 1}:${entry.originalColumn + 1}`);
+   JS
+   ```
+
+   Reported locations are one-based. `findEntry` takes zero-based offsets; the printed source
+   location is one-based again. Inspect that source in the retained commit, including adjacent
+   mappings when a minified frame spans several expressions. Default reports omit function names, so
+   the matching map and source are needed to identify the failing code.
+
 ### Publish
 
 1. Qualify the installer (below) before anyone can download it.

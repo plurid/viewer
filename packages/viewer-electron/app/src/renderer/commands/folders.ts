@@ -11,7 +11,10 @@ export function commandFolders(
   const folders = new Map<string, string[]>();
   const scoped = commands.filter((command) => below(command.paletteFolder ?? [], parent));
   if (query.trim())
-    return { rows: parent.length ? rows.filter((row) => scoped.includes(row)) : rows, folders };
+    return {
+      rows: parent.length ? rows.filter((row) => scoped.includes(row)) : rows,
+      folders,
+    };
   for (const command of scoped) {
     const next = command.paletteFolder?.[parent.length];
     if (!next) continue;

@@ -16,8 +16,15 @@ import {
 /** Keep unsaved navigation across peer broadcasts, without replaying our acknowledged visits. */
 export class FolderVisitSync {
   private base: FolderVisits = {};
-  private inFlight?: { id: string; changes: FolderVisitChanges; recents: readonly string[] };
+  private inFlight?: {
+    id: string;
+    changes: FolderVisitChanges;
+    recents: readonly string[];
+    forgotten: string[];
+  };
   private pendingClear = false;
+  private forgotten: string[] = [];
+  private clearSaveID?: string;
   private pendingRestored: FolderVisits = {};
   private revision = 0;
   private clearRevision = 0;
@@ -27,6 +34,8 @@ export class FolderVisitSync {
     this.base = base;
     this.inFlight = undefined;
     this.pendingClear = false;
+    this.forgotten = [];
+    this.clearSaveID = undefined;
     this.pendingRestored = {};
     this.revision = revision;
     this.clearRevision = clearRevision;
@@ -47,7 +56,19 @@ export class FolderVisitSync {
     this.remappings.add(changes, revision);
   }
 
-  clear(): void {
+  get clearVersion(): number {
+    return this.clearRevision;
+  }
+  isOwnClear(id?: string): boolean {
+    return !!id && id === this.clearSaveID;
+  }
+
+  forget(paths: string[]): void {
+    this.forgotten = [...new Set([...this.forgotten, ...paths])].slice(0, 1000);
+  }
+
+  clear(paths: string[] = []): void {
+    this.forget(paths);
     this.pendingClear = true;
     this.pendingRestored = {};
   }
@@ -66,6 +87,7 @@ export class FolderVisitSync {
       id,
       changes: folderVisitChanges(this.base, current, this.pendingClear, this.pendingRestored),
       recents,
+      forgotten: this.forgotten,
     };
     const save = {
       id,
@@ -74,8 +96,11 @@ export class FolderVisitSync {
       revision: this.revision,
       restored: this.pendingRestored,
       clearRevision: this.clearRevision,
+      forgotten: this.forgotten,
     };
+    if (this.pendingClear) this.clearSaveID = id;
     this.pendingClear = false;
+    this.forgotten = [];
     this.pendingRestored = {};
     return save;
   }
@@ -108,6 +133,7 @@ export class FolderVisitSync {
     acknowledgement?: string,
     revision = this.revision,
     clearRevision = this.clearRevision,
+    aliases: Record<string, string> = {},
   ): FolderVisits {
     if (clearRevision < this.clearRevision) return current;
     if (clearRevision > this.clearRevision && !this.clearing) {
@@ -119,6 +145,16 @@ export class FolderVisitSync {
       return incoming;
     }
     this.clearRevision = clearRevision;
+    const map = (path: string) => aliases[path] ?? path;
+    this.base = remapFolderVisits(this.base, map);
+    current = remapFolderVisits(current, map);
+    this.pendingRestored = remapFolderVisits(this.pendingRestored, map);
+    if (this.inFlight) {
+      const changes = this.inFlight.changes;
+      changes.added = remapFolderVisits(changes.added, map);
+      changes.restored = remapFolderVisits(changes.restored, map);
+      changes.removed = changes.removed.map(map);
+    }
     if (this.remappings.needsRefresh(revision)) return current;
     incoming = this.remappings.apply(incoming, revision);
     const now = Date.now();
@@ -142,10 +178,11 @@ export class FolderVisitSync {
     current: FolderVisits,
     revision = this.revision,
     clearRevision = this.clearRevision,
+    aliases: Record<string, string> = {},
   ): FolderVisits {
     // The event can acknowledge the write before the IPC response reaches this window.
     return this.inFlight?.id === id
-      ? this.receive(incoming, current, id, revision, clearRevision)
+      ? this.receive(incoming, current, id, revision, clearRevision, aliases)
       : current;
   }
 
@@ -158,6 +195,7 @@ export class FolderVisitSync {
         Date.now(),
       );
     this.pendingClear ||= this.inFlight.changes.clear;
+    this.forgotten = [...new Set([...this.forgotten, ...this.inFlight.forgotten])].slice(0, 1000);
     this.inFlight = undefined;
     this.remappings = new FolderHistoryRemaps();
   }

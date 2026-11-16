@@ -6,7 +6,7 @@ import { remapFolderVisits } from './folder-visits';
 export const folderHistoryBatchLimit = 64;
 export const folderHistoryChangeLimit = 1024;
 
-/** An old renderer retries from its updated state instead of blocking on unbounded replay. */
+/** Recent renames have bounded replay; session anchors cover older remembered paths. */
 export class FolderHistoryRemaps {
   private batches: { revision: number; size: number; map(path: string): string }[] = [];
   private floor = 0;
@@ -30,15 +30,12 @@ export class FolderHistoryRemaps {
     return revision < this.floor;
   }
 
+  path(path: string, revision: number): string {
+    for (const batch of this.batches) if (batch.revision > revision) path = batch.map(path);
+    return path;
+  }
+
   apply(visits: FolderVisits, revision: number): FolderVisits {
-    if (this.needsRefresh(revision)) {
-      throw Object.assign(
-        new Error('Folder history changed while saving. Retry with the current folders.'),
-        {
-          code: 'FOLDER_HISTORY_REFRESH',
-        },
-      );
-    }
     for (const batch of this.batches)
       if (batch.revision > revision) visits = remapFolderVisits(visits, batch.map);
     return visits;

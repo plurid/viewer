@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import type { FileEntry, SavedState } from '../src/domain/contracts';
 import type { FolderVisitSave } from '../src/domain/files/folder-visit-changes';
 import type { CommandContext, CommandDefinition } from '../src/renderer/commands/registry';
@@ -11,10 +19,11 @@ import { CommandRegistry } from '../src/renderer/commands/registry';
 import { CommandPalette } from '../src/renderer/commands/CommandPalette';
 import { GoToFolderDialog } from '../src/renderer/explorer/GoToFolderDialog';
 import {
+  useFolderSuggestions,
   existingFolders,
   folderSuggestionChecks,
 } from '../src/renderer/explorer/useFolderSuggestions';
-import { getState, savePatch, activeWorkspace } from '../src/renderer/state/core';
+import { getState, savePatch, activeWorkspace, update } from '../src/renderer/state/core';
 import {
   initialize,
   receiveWorkspaces,
@@ -26,17 +35,26 @@ import {
   historyNavigate,
   navigate,
   updatePane,
+  pairPanes,
+  setPairSync,
 } from '../src/renderer/state/panes';
 import { newWorkspace } from '../src/renderer/state/workspaces';
-import { resetKnownFolders } from '../src/renderer/explorer/folder-availability';
-import { remember, clearRecentFolders } from '../src/renderer/state/places';
+import {
+  resetKnownFolders,
+  knownFolderPaths,
+  knowFolder,
+  learnFolderAliases,
+} from '../src/renderer/explorer/folder-availability';
+import {
+  remember,
+  clearRecentFolders,
+  undoClearRecentFolders,
+  forgetUnavailableFolder,
+  dismissFolderRecovery,
+} from '../src/renderer/state/places';
 import { receiveFileChanges } from '../src/renderer/state/file-changes';
 import { flushState } from '../src/renderer/state/persistence';
-import {
-  folderCheckTimeout,
-  checkFolderCandidates,
-  FolderCheckPool,
-} from '../src/domain/files/folder-checks';
+import { folderCheckTimeout, checkFolderCandidates } from '../src/domain/files/folder-checks';
 import { catalogCommands } from '../src/renderer/commands/window-commands/catalog';
 import { navigationCommands } from '../src/renderer/commands/window-commands/navigation';
 import { windowScopes } from '../src/renderer/commands/window-commands/scope';
@@ -249,6 +267,7 @@ describe('recording folder views', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
     expect(getState().saved.recents).toEqual([]);
     expect(getState().saved.visits).toEqual({});
+    expect(document.activeElement?.textContent).toContain('Recent');
     remember('/fixtures/Documents');
     clearing.run(context);
     expect(getState().saved.visits).toEqual({});
@@ -288,13 +307,13 @@ describe('Go to folder suggestions', () => {
     expect(options()[0]?.textContent).toContain('Documents');
   });
 
-  it('describes unavailable remembered history without asking for a first visit', async () => {
+  it('describes failed history checks without asking for a first visit', async () => {
     history();
     available.clear();
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toBe(
-        'No remembered folders are available. Enter a folder path.',
+        'Some folders could not be checked. Enter a folder path or try again.',
       ),
     );
     expect(options()).toHaveLength(0);
@@ -419,48 +438,7 @@ describe('Go to folder suggestions', () => {
 });
 
 describe('bounded existence checks', () => {
-  it('shares four outstanding reads across a cancelled query and the next query', async () => {
-    vi.useFakeTimers();
-    try {
-      const pool = new FolderCheckPool();
-      const pending = new Map<string, () => void>();
-      let active = 0;
-      let maximum = 0;
-      const check = vi.fn(async (path: string) => {
-        maximum = Math.max(maximum, ++active);
-        if (path.startsWith('/slow/'))
-          await new Promise<void>((resolve) => pending.set(path, resolve));
-        active--;
-        return { directory: true };
-      });
-      const first = new AbortController();
-      const old = checkFolderCandidates(
-        ['/slow/a', '/slow/b', '/slow/c', '/slow/d'],
-        (path) => pool.run(path, check, first.signal),
-        first.signal,
-      );
-      await vi.advanceTimersByTimeAsync(0);
-      first.abort();
-      const next = new AbortController();
-      const fresh = checkFolderCandidates(
-        ['/fresh/a', '/fresh/b', '/fresh/c'],
-        (path) => pool.run(path, check, next.signal),
-        next.signal,
-      );
-      await vi.advanceTimersByTimeAsync(10);
-      expect(check).toHaveBeenCalledTimes(4);
-      pending.get('/slow/a')!();
-      await vi.advanceTimersByTimeAsync(0);
-      expect(await fresh).toEqual(['/fresh/a', '/fresh/b', '/fresh/c']);
-      expect(maximum).toBe(4);
-      for (const resolve of pending.values()) resolve();
-      await vi.advanceTimersByTimeAsync(folderCheckTimeout);
-      expect(await old).toEqual([]);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-  it('publishes available folders before a slow check times out, keeping outstanding checks bounded', async () => {
+  it('holds lower ranks briefly, then publishes available folders within the check bound', async () => {
     vi.useFakeTimers();
     try {
       const updates: string[][] = [];
@@ -479,9 +457,10 @@ describe('bounded existence checks', () => {
         { onUpdate: (paths) => updates.push(paths) },
       );
       await vi.advanceTimersByTimeAsync(folderCheckTimeout - 1);
+      expect(updates.at(-1)).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
       expect(updates.at(-1)).toHaveLength(8);
       expect(updates.at(-1)).not.toContain('/fixtures/slow');
-      await vi.advanceTimersByTimeAsync(1);
       expect(await done).toHaveLength(8);
       expect(maximum).toBeLessThanOrEqual(4);
       expect(check.mock.calls.length).toBeLessThanOrEqual(folderSuggestionChecks);
@@ -508,6 +487,18 @@ describe('bounded existence checks', () => {
     expect(check.mock.calls.length).toBeLessThanOrEqual(folderSuggestionChecks);
   });
 
+  it('does not recheck an equal history object delivered independently of the save merge', async () => {
+    history();
+    const hook = renderHook(() => useFolderSuggestions(''));
+    await waitFor(() => expect(hook.result.current.checking).toBe(false));
+    const paths = hook.result.current.paths;
+    const calls = stat.mock.calls.length;
+    act(() => savePatch({ visits: structuredClone(getState().saved.visits) }));
+    expect(hook.result.current.paths).toBe(paths);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(stat).toHaveBeenCalledTimes(calls);
+  });
+
   it('keeps an open list and its checks stable across an equal saved history snapshot', async () => {
     history();
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
@@ -521,7 +512,7 @@ describe('bounded existence checks', () => {
     await new Promise((resolve) => setTimeout(resolve, 120));
     expect(stat).toHaveBeenCalledTimes(calls);
   });
-  it('checks at most 40 paths, four at a time, and rejects files', async () => {
+  it('checks at most 40 paths, two at a time, and rejects files', async () => {
     let running = 0;
     let maximum = 0;
     const check = vi.fn(async (path: string) => {
@@ -534,7 +525,7 @@ describe('bounded existence checks', () => {
     const paths = Array.from({ length: 100 }, (_, index) => `/fixtures/${index}`);
     const result = await existingFolders(paths, check, new AbortController().signal);
     expect(check.mock.calls.length).toBeLessThanOrEqual(folderSuggestionChecks);
-    expect(maximum).toBe(4);
+    expect(maximum).toBe(2);
     expect(result).toEqual(paths.slice(1, 9));
   });
 
@@ -687,7 +678,11 @@ describe('palette folder results', () => {
     await waitFor(() => expect(options()).toHaveLength(8));
     stat.mockResolvedValueOnce(entry('/fixtures/Documents 0', false));
     fireEvent.keyDown(search, { key: 'Enter' });
-    await waitFor(() => expect(getState().notice).toBe('This folder is no longer available.'));
+    await waitFor(() =>
+      expect(getState().notice).toBe(
+        'This folder is no longer available. You can forget it from folder history.',
+      ),
+    );
     expect(open).not.toHaveBeenCalled();
   });
   it('does not check history for an ordinary command query with no meaningful folder matches', async () => {
@@ -712,4 +707,537 @@ describe('palette folder results', () => {
     fireEvent.change(search, { target: { value: 'z documetns' } });
     expect(options()).toHaveLength(0);
   });
+  it('deduplicates a Recent link against its frequent target using verified folder identity', async () => {
+    manyFolders();
+    const link = '/fixtures/Documents shortcut';
+    const target = '/fixtures/Documents 0';
+    learnFolderAliases({ [link]: target });
+    knowFolder(link);
+    palette(false, [
+      {
+        id: `location:${link}`,
+        label: 'Documents shortcut',
+        detail: link,
+        group: 'Places',
+        when: () => true,
+        run: vi.fn(),
+      },
+    ]);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search commands' }), {
+      target: { value: 'documents' },
+    });
+    await waitFor(() => expect(options()).toHaveLength(5));
+    expect(options().some((option) => option.textContent?.includes(target))).toBe(false);
+  });
+
+  it('keeps an open plane once, ahead of duplicate habit results', async () => {
+    manyFolders();
+    const path = '/fixtures/Documents 0';
+    palette(false, [
+      {
+        id: 'plane:documents',
+        label: 'Documents 0',
+        detail: path,
+        group: 'Open planes',
+        when: () => true,
+        run: vi.fn(),
+      },
+    ]);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search commands' }), {
+      target: { value: 'documents' },
+    });
+    await waitFor(() => expect(options()).toHaveLength(5));
+    expect(options().filter((option) => option.textContent?.includes(path))).toHaveLength(1);
+    expect(options()[0]?.textContent).toContain('Documents 0');
+  });
+
+  it.each(['= 6 * 7', 'z documents', '/fixtures/'])(
+    'keeps smart rows outside a command folder: %s',
+    async (query) => {
+      manyFolders();
+      resetKnownFolders([...available]);
+      palette(false, [
+        {
+          id: 'nested',
+          label: 'Nested action',
+          group: 'Actions',
+          paletteFolder: ['Tools'],
+          when: () => true,
+          run: vi.fn(),
+        },
+      ]);
+      fireEvent.click(await screen.findByRole('option', { name: /Tools/ }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Search Tools' }), {
+        target: { value: query },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      expect(options()).toHaveLength(0);
+    },
+  );
+
+  it('retains permission recovery when a checked z folder needs access', async () => {
+    manyFolders();
+    resetKnownFolders([...available]);
+    palette(false);
+    const search = screen.getByRole('combobox', { name: 'Search commands' });
+    fireEvent.change(search, { target: { value: 'z documents' } });
+    stat.mockRejectedValueOnce(
+      new Error('Allow access to this folder using the folder picker, then try again.'),
+    );
+    fireEvent.keyDown(search, { key: 'Enter' });
+    await waitFor(() =>
+      expect(getState().notice).toBe(
+        'Allow access to this folder using the folder picker, then try again.',
+      ),
+    );
+    expect(getState().unavailableFolder).toBeUndefined();
+    expect(getState().saved.visits?.['/fixtures/Documents 0']).toBeDefined();
+  });
+
+  it('gives a sentence and a forget action when a checked z destination disappears', async () => {
+    manyFolders();
+    resetKnownFolders([...available]);
+    palette(false);
+    const search = screen.getByRole('combobox', { name: 'Search commands' });
+    fireEvent.change(search, { target: { value: 'z documents' } });
+    stat.mockRejectedValueOnce(
+      new Error('ENOENT: no such file or directory, lstat /fixtures/Documents 0'),
+    );
+    fireEvent.keyDown(search, { key: 'Enter' });
+    await waitFor(() => expect(getState().unavailableFolder).toBe('/fixtures/Documents 0'));
+    expect(getState().notice).toBe(
+      'This folder is no longer available. You can forget it from folder history.',
+    );
+    act(() => forgetUnavailableFolder());
+    expect(getState().saved.visits?.['/fixtures/Documents 0']).toBeUndefined();
+    expect(open).not.toHaveBeenCalled();
+  });
+});
+
+describe('second review interaction regressions', () => {
+  it.each(['doc', '.config', 'proj/2026', ''])(
+    'announces the first fragment result that Return opens: %s',
+    async (query) => {
+      const path = !query || query === 'doc' ? '/fixtures/Documents' : `/fixtures/${query}`;
+      savePatch({ visits: { [path]: { count: 1, last: now } } });
+      available.add(path);
+      render(<GoToFolderDialog onOpen={open} onClose={close} />);
+      fireEvent.change(field(), { target: { value: query } });
+      await waitFor(() => expect(options()).toHaveLength(1));
+      expect(options()[0]?.getAttribute('aria-selected')).toBe('true');
+      expect(field().getAttribute('aria-activedescendant')).toBe(options()[0]?.id);
+      fireEvent.keyDown(field(), { key: 'Enter' });
+      await waitFor(() => expect(open).toHaveBeenCalledWith(path));
+    },
+  );
+
+  it('reports incomplete coverage when a remembered volume root could not be checked', async () => {
+    savePatch({ visits: { '/Volumes/Unknown/Documents': { count: 10, last: now } } });
+    Object.assign(window.viewer, {
+      folderCheck: vi.fn(async () => ({ directory: false, unavailable: true })),
+    });
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toContain(
+        'Some folders could not be checked.',
+      ),
+    );
+    expect(options()).toHaveLength(0);
+    expect(getState().saved.visits?.['/Volumes/Unknown/Documents']?.count).toBe(10);
+  });
+
+  it('describes incomplete checks without claiming that every remembered folder is absent', async () => {
+    savePatch({ visits: { '/fixtures/Downloads': { count: 10, last: now } } });
+    Object.assign(window.viewer, {
+      folderCheck: vi.fn(async () => ({ directory: false, unavailable: true, timedOut: true })),
+    });
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.change(field(), { target: { value: 'downl' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toContain(
+        'Some folders could not be checked.',
+      ),
+    );
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Some folders could not be checked. Enter a folder path or try again.',
+    );
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('retains the visible rows and arrowed choice across a peer visit and re-rank', async () => {
+    history();
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    await waitFor(() => expect(options()).toHaveLength(2));
+    fireEvent.keyDown(field(), { key: 'ArrowDown' });
+    fireEvent.keyDown(field(), { key: 'ArrowDown' });
+    const active = field().getAttribute('aria-activedescendant');
+    act(() =>
+      savePatch({
+        visits: { ...getState().saved.visits, '/fixtures/New': { count: 100, last: now } },
+      }),
+    );
+    available.add('/fixtures/New');
+    expect(options()).toHaveLength(2);
+    expect(field().getAttribute('aria-activedescendant')).toBe(active);
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(field().getAttribute('aria-activedescendant')).toBe(active);
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await waitFor(() => expect(open).toHaveBeenCalledWith('/fixtures/Documents'));
+  });
+
+  it('keeps a valid arrowed path while its visit record is canonicalized or evicted', async () => {
+    history();
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    await waitFor(() => expect(options()).toHaveLength(2));
+    fireEvent.keyDown(field(), { key: 'ArrowDown' });
+    fireEvent.keyDown(field(), { key: 'ArrowDown' });
+    const selected = field().getAttribute('aria-activedescendant');
+    const visits = { ...getState().saved.visits };
+    delete visits['/fixtures/Documents'];
+    act(() => savePatch({ visits }));
+    expect(field().getAttribute('aria-activedescendant')).toBe(selected);
+    expect(options()[1]?.textContent).toContain('Documents');
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await waitFor(() => expect(open).toHaveBeenCalledWith('/fixtures/Documents'));
+  });
+
+  it('does not resurrect shown folders after clearing and recording a different folder', async () => {
+    history();
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    await waitFor(() => expect(options()).toHaveLength(2));
+    act(() => clearRecentFolders());
+    expect(options()).toHaveLength(0);
+    available.add('/fixtures/New');
+    act(() => remember('/fixtures/New'));
+    await waitFor(() => expect(options()).toHaveLength(1));
+    expect(options()[0]?.textContent).toContain('/fixtures/New');
+  });
+
+  it('offers Undo after clearing and restores both lists with sensible focus', async () => {
+    history();
+    const visits = getState().saved.visits;
+    savePatch({ recents: ['/fixtures/Documents'] });
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+    expect(document.activeElement).toBe(field());
+    fireEvent.click(screen.getByRole('button', { name: 'Undo clear recent folders' }));
+    expect(getState().saved.visits).toEqual(visits);
+    expect(getState().saved.recents).toEqual(['/fixtures/Documents']);
+    expect(document.activeElement).toBe(field());
+  });
+
+  it('clears the existence cache when a peer window clears history', () => {
+    remember('/fixtures/Documents');
+    expect(knownFolderPaths().has('/fixtures/Documents')).toBe(true);
+    receiveWorkspaces({ ...getState().saved, visits: {}, recents: [] }, undefined, undefined, 1);
+    expect(knownFolderPaths().size).toBe(0);
+  });
+
+  it('Undo adds the cleared visits to navigation performed after clearing, exactly once', async () => {
+    remember('/fixtures/Documents');
+    remember('/fixtures/Documents');
+    clearRecentFolders();
+    await flushState(false);
+    remember('/fixtures/Documents');
+    undoClearRecentFolders();
+    undoClearRecentFolders();
+    expect(getState().saved.visits?.['/fixtures/Documents']?.count).toBe(3);
+  });
+
+  it('does not count pair following or pair swaps', async () => {
+    const first = activeWorkspace().panes[0]!;
+    const other = addPane('/fixtures/Other', 'folder', true);
+    pairPanes(first.id, other.id);
+    setPairSync(first.id, true);
+    available.add('/fixtures/Other/child');
+    navigate(first.id, '/fixtures/child');
+    await waitFor(() =>
+      expect(activeWorkspace().panes.find((pane) => pane.id === other.id)?.path).toBe(
+        '/fixtures/Other/child',
+      ),
+    );
+    expect(getState().saved.visits?.['/fixtures/Other/child']).toBeUndefined();
+    const visits = getState().saved.visits;
+    navigate(first.id, '/fixtures/Other/child', true);
+    navigate(other.id, '/fixtures/child', true);
+    expect(getState().saved.visits).toEqual(visits);
+  });
+
+  it.each([true, false])(
+    'merges case aliases at record time only when filesystem resolution agrees: %s',
+    async (insensitive) => {
+      Object.assign(window.viewer, {
+        folderCheck: vi.fn(async (path: string) => ({
+          directory: true,
+          path: insensitive ? path.replace('/documents', '/Documents') : path,
+        })),
+      });
+      const pane = getState().activePane;
+      navigate(pane, '/fixtures/Documents');
+      navigate(pane, '/fixtures/documents');
+      await waitFor(() =>
+        expect(Object.keys(getState().saved.visits ?? {})).toHaveLength(insensitive ? 1 : 2),
+      );
+      if (insensitive) expect(getState().saved.visits?.['/fixtures/Documents']?.count).toBe(2);
+      else expect(getState().saved.visits?.['/fixtures/documents']?.count).toBe(1);
+      expect(activeWorkspace().panes.find((item) => item.id === pane)?.path).toBe(
+        '/fixtures/documents',
+      );
+    },
+  );
+
+  it('shares check capacity between two real hooks and uses the history endpoint', async () => {
+    savePatch({
+      visits: Object.fromEntries(
+        Array.from({ length: 8 }, (_, i) => [
+          `/fixtures/${i < 4 ? 'alpha' : 'beta'}${i}`,
+          { count: 8 - i, last: now },
+        ]),
+      ),
+    });
+    const pending: (() => void)[] = [];
+    let active = 0;
+    let maximum = 0;
+    const check = vi.fn(async () => {
+      maximum = Math.max(maximum, ++active);
+      await new Promise<void>((resolve) => pending.push(resolve));
+      active--;
+      return { directory: true };
+    });
+    Object.assign(window.viewer, { folderCheck: check });
+    const hooks = renderHook(() => [useFolderSuggestions('alpha'), useFolderSuggestions('beta')]);
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
+    expect(maximum).toBe(2);
+    expect(stat).not.toHaveBeenCalled();
+    hooks.unmount();
+    await act(async () => {
+      for (const resolve of pending) resolve();
+    });
+  });
+});
+
+it('continues past four slow folders on a mounted disk with a separate abandoned-read bound', async () => {
+  const release: (() => void)[] = [];
+  let outstanding = 0;
+  let maximum = 0;
+  const paths = [
+    ...Array.from({ length: 45 }, (_, i) => `/Volumes/Sleeping/${i}`),
+    ...Array.from({ length: 455 }, (_, i) => `/fixtures/${i}`),
+  ];
+  const incomplete = vi.fn();
+  const check = vi.fn(async (path: string) => {
+    maximum = Math.max(maximum, ++outstanding);
+    if (path.startsWith('/Volumes/Sleeping/'))
+      await new Promise<void>((resolve) => release.push(resolve));
+    outstanding--;
+    return { directory: true };
+  });
+  try {
+    const result = await checkFolderCandidates(paths, check, new AbortController().signal, {
+      onIncomplete: incomplete,
+    });
+    expect(result).toEqual(paths.slice(45, 53));
+    expect(incomplete).toHaveBeenCalled();
+    expect(check.mock.calls.filter(([path]) => path.startsWith('/Volumes/Sleeping/'))).toHaveLength(
+      2,
+    );
+    expect(maximum).toBeLessThanOrEqual(4);
+  } finally {
+    for (const resolve of release) resolve();
+  }
+});
+
+it('waits for the best ranked folder instead of activating a faster weak match', async () => {
+  vi.useFakeTimers();
+  try {
+    const best = '/fixtures/Projects';
+    const weak = '/fixtures/Old/Projects-archive';
+    available.add(best);
+    available.add(weak);
+    savePatch({ visits: { [best]: { count: 30, last: now }, [weak]: { count: 2, last: now } } });
+    Object.assign(window.viewer, {
+      folderCheck: vi.fn(async (path: string) => {
+        if (path === best) await new Promise((resolve) => setTimeout(resolve, 40));
+        return entry(path);
+      }),
+    });
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.change(field(), { target: { value: 'proj' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(81);
+    });
+    expect(options()).toHaveLength(0);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    expect(options()[0]?.textContent).toContain(best);
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await act(async () => {});
+    expect(open).toHaveBeenCalledWith(best);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('inserts a late higher rank without stealing the folder already active after the wait bound', async () => {
+  vi.useFakeTimers();
+  try {
+    const best = '/fixtures/Projects';
+    const weak = '/fixtures/Old/Projects-archive';
+    available.add(best);
+    available.add(weak);
+    savePatch({ visits: { [best]: { count: 30, last: now }, [weak]: { count: 2, last: now } } });
+    Object.assign(window.viewer, {
+      folderCheck: vi.fn(async (path: string) => {
+        if (path === best) await new Promise((resolve) => setTimeout(resolve, 220));
+        return entry(path);
+      }),
+    });
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.change(field(), { target: { value: 'proj' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(231);
+    });
+    expect(options()).toHaveLength(1);
+    expect(options()[0]?.getAttribute('aria-selected')).toBe('true');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(70);
+    });
+    expect(options()[0]?.textContent).toContain(best);
+    expect(options()[1]?.getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await act(async () => {});
+    expect(open).toHaveBeenCalledWith(weak);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('remaps a shown and arrowed folder when it is renamed', async () => {
+  history();
+  render(<GoToFolderDialog onOpen={open} onClose={close} />);
+  await waitFor(() => expect(options()).toHaveLength(2));
+  fireEvent.keyDown(field(), { key: 'ArrowDown' });
+  available.add('/fixtures/Renamed/Drafts');
+  act(() => receiveFileChanges([{ source: '/fixtures/Design', destination: '/fixtures/Renamed' }]));
+  expect(options()[0]?.textContent).toContain('/fixtures/Renamed/Drafts');
+  expect(options()[0]?.getAttribute('aria-selected')).toBe('true');
+  fireEvent.keyDown(field(), { key: 'Enter' });
+  await waitFor(() => expect(open).toHaveBeenCalledWith('/fixtures/Renamed/Drafts'));
+});
+
+it('expires the clear recovery and releases its paths after eight seconds', async () => {
+  vi.useFakeTimers();
+  try {
+    remember('/fixtures/Documents');
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+    expect(getState().folderRecovery).toBeDefined();
+    expect(
+      (screen.getByRole('button', { name: 'Clear recent folders' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8000);
+    });
+    expect(getState().folderRecovery).toBeUndefined();
+    expect(screen.queryByRole('button', { name: 'Undo clear recent folders' })).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('dismisses clear recovery without restoring it and keeps dialog focus', () => {
+  remember('/fixtures/Documents');
+  render(<GoToFolderDialog onOpen={open} onClose={close} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss recent folder Undo' }));
+  expect(getState().folderRecovery).toBeUndefined();
+  expect(getState().saved.visits).toEqual({});
+  expect(document.activeElement).toBe(field());
+});
+
+it('remaps cleared visits and recents before Undo', () => {
+  remember('/fixtures/A');
+  clearRecentFolders();
+  receiveFileChanges([{ source: '/fixtures/A', destination: '/fixtures/A2' }]);
+  undoClearRecentFolders();
+  expect(getState().saved.recents).toEqual(['/fixtures/A2']);
+  expect(getState().saved.visits?.['/fixtures/A2']?.count).toBe(1);
+  expect(getState().saved.visits?.['/fixtures/A']).toBeUndefined();
+});
+
+it('withdraws an Undo offer when another window clears again', async () => {
+  remember('/fixtures/A');
+  clearRecentFolders();
+  await flushState(false);
+  receiveWorkspaces({ ...getState().saved, visits: {}, recents: [] }, 'peer-clear', undefined, 1);
+  expect(getState().folderRecovery).toBeUndefined();
+  undoClearRecentFolders();
+  expect(getState().saved.visits).toEqual({});
+});
+
+it('keeps checked folders unrelated to Forget and Clear immediate for z', () => {
+  knowFolder('/fixtures/Unrelated');
+  remember('/fixtures/A');
+  remember('/fixtures/B');
+  act(() => {
+    clearRecentFolders();
+  });
+  expect(knownFolderPaths().has('/fixtures/Unrelated')).toBe(true);
+  expect(knownFolderPaths().has('/fixtures/A')).toBe(false);
+  remember('/fixtures/A');
+  remember('/fixtures/B');
+  act(() => {
+    const state = getState();
+    receiveWorkspaces(state.saved);
+  });
+  // Forget is an explicit removal of one record, not a cache flush.
+  const state = getState();
+  update({ ...state, unavailableFolder: '/fixtures/A' });
+  forgetUnavailableFolder();
+  expect(knownFolderPaths().has('/fixtures/B')).toBe(true);
+  expect(knownFolderPaths().has('/fixtures/Unrelated')).toBe(true);
+  expect(knownFolderPaths().has('/fixtures/A')).toBe(false);
+  dismissFolderRecovery();
+});
+
+it('accepts launch check results in an already open window so z has no first-query wait', () => {
+  const saved = { ...getState().saved, visits: { '/fixtures/Downloads': { count: 4, last: now } } };
+  initialize({ ...getState().bootstrap, state: saved });
+  receiveWorkspaces(saved, undefined, 0, 0, { '/fixtures/Downloads': '/fixtures/Downloads' }, [
+    '/fixtures/Downloads',
+  ]);
+  const hook = renderHook(() => useFolderSuggestions('down', true, 'jump'));
+  expect(hook.result.current.paths).toEqual(['/fixtures/Downloads']);
+  expect(stat).not.toHaveBeenCalled();
+});
+
+it('updates an already queried z list as background launch checks arrive', async () => {
+  const path = '/fixtures/Downloads';
+  const saved = { ...getState().saved, visits: { [path]: { count: 4, last: now } } };
+  initialize({ ...getState().bootstrap, state: saved });
+  const hook = renderHook(() => useFolderSuggestions('down', true, 'jump'));
+  await waitFor(() => expect(hook.result.current.checking).toBe(false));
+  expect(hook.result.current.paths).toEqual([]);
+  act(() => receiveWorkspaces(saved, undefined, 0, 0, { [path]: path }, [path]));
+  expect(hook.result.current.paths).toEqual([path]);
+});
+
+it('returns focus to the field when the focused Undo offer expires', async () => {
+  vi.useFakeTimers();
+  try {
+    remember('/fixtures/Documents');
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+    const undo = screen.getByRole('button', { name: 'Undo clear recent folders' });
+    act(() => undo.focus());
+    expect(document.activeElement).toBe(undo);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8000);
+    });
+    expect(document.activeElement).toBe(field());
+  } finally {
+    vi.useRealTimers();
+  }
 });

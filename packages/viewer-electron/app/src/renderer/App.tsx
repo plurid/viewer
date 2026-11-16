@@ -1,3 +1,5 @@
+import { FolderHistoryRecovery } from './ui/FolderHistoryRecovery';
+import { forgetUnavailableFolder } from './state/places';
 import { WindowDialogs, type WindowDialog } from './app/WindowDialogs';
 import { SpeechControls } from './speech/SpeechControls';
 import { routeFileKeyboard } from './explorer/selection';
@@ -28,7 +30,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { type PluridApplicationHandle } from '@plurid/plurid-react';
 import type { FolderPane } from '../domain/contracts';
 import { agentDispatchRefusal } from '../domain/agents/safety';
-import { selectedFiles } from './workspace/sessions';
+import { selectedFiles, focusPlane } from './workspace/sessions';
 import {
   activeWorkspace,
   announce,
@@ -204,6 +206,7 @@ function AppWindow() {
   const [overview, setOverview] = useState<SpatialOverviewHandle>();
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
+  const unavailableFolder = useViewer((state) => state.unavailableFolder);
   const noticeKind = useViewer((state) => state.noticeKind);
   // information goes by itself after a moment; a problem stays until it is dismissed
   useEffect(() => {
@@ -547,6 +550,8 @@ function AppWindow() {
           event.visitSaveID,
           event.folderHistoryRevision,
           event.folderClearRevision,
+          event.folderAliases,
+          event.checkedFolders,
         );
       else if (event.type === 'launch') void handleLaunch(event.request).catch(report);
       else if (event.type === 'file-changes') {
@@ -944,8 +949,12 @@ function AppWindow() {
           >
             <Icon name={noticeKind === 'info' ? 'info' : 'warning'} />
             <span>{notice}</span>
+            {unavailableFolder && <button onClick={forgetUnavailableFolder}>Forget folder</button>}
             <IconButton icon="close" label="Dismiss message" onClick={dismissNotice} />
           </div>
+        )}
+        {windowDialog?.type !== 'go-to' && (
+          <FolderHistoryRecovery onEnd={() => focusPlane(getState().activePane)} />
         )}
         {deleted && showWorkspaceUndo && (
           <div className="bar bar-floating workspace-recovery" role="status">

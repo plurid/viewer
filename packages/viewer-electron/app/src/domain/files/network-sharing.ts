@@ -4,6 +4,7 @@ export type NetworkFolderStatus = 'ready' | 'unknown';
 export type NetworkAddressFamily = 'IPv4' | 'IPv6';
 export type GuestWriteReason = 'build' | 'access-list' | 'permissions';
 export type GlobalGuestAccess = 'on' | 'off' | 'unknown';
+export type NetworkConnectionState = 'connected' | 'offline' | 'unknown';
 export function modelCommandLabel(command: { id: string; label: string }): string {
   return command.id === 'network-sharing' ? 'Network sharing' : command.label;
 }
@@ -51,6 +52,7 @@ export interface NetworkSharingSnapshot {
   interfaces?: SharingInterface[];
   folders?: NetworkFolderSharing[];
   guestAccess?: GlobalGuestAccess;
+  network?: NetworkConnectionState;
 }
 
 export type NetworkSharingRequest =
@@ -62,20 +64,33 @@ export function guestWarning(
   guestAccess: GlobalGuestAccess = 'unknown',
 ): string | undefined {
   if (!share.guests || guestAccess === 'off') return undefined;
-  const warning = service === 'off'
-    ? 'File Sharing is off, so nobody can connect now. If it is turned on, anyone on the same network will be able to open this folder without a password.'
-    : service === 'unknown'
-      ? 'If File Sharing is running, anyone on the same network can open this folder without a password.'
-      : 'Anyone on the same network can open this folder without a password.';
-  const reason = share.guestWriteReason === 'build'
-    ? "Viewer could not check this folder's access list with this build."
-    : share.guestWriteReason === 'access-list'
-      ? "Viewer could not read this folder's access list."
-      : 'Viewer could not fully determine guest permissions for this folder.';
+  const warning =
+    service === 'off'
+      ? 'File Sharing is off, so nobody can connect now. If it is turned on, anyone on the same network will be able to open this folder without a password.'
+      : service === 'unknown'
+        ? 'If File Sharing is running, anyone on the same network can open this folder without a password.'
+        : 'Anyone on the same network can open this folder without a password.';
+  const reason =
+    share.guestWriteReason === 'build'
+      ? "Viewer could not check this folder's access list with this build."
+      : share.guestWriteReason === 'access-list'
+        ? "Viewer could not read this folder's access list."
+        : 'Viewer could not fully determine guest permissions for this folder.';
   return share.guestWritable
-    ? warning + (service === 'off' ? ' Guests will also be able to modify this folder or its contents.' : ' Guests can also modify this folder or its contents.')
+    ? warning +
+        (service === 'off'
+          ? ' Guests will also be able to modify this folder or its contents.'
+          : service === 'unknown'
+            ? ' If File Sharing is running, guests can also modify this folder or its contents.'
+            : ' Guests can also modify this folder or its contents.')
     : share.guestWriteUnknown
-      ? warning + ' Guests may also be able to modify this folder or its contents. ' + reason
+      ? warning +
+        (service === 'off'
+          ? ' If File Sharing is turned on, guests may also be able to modify this folder or its contents. '
+          : service === 'unknown'
+            ? ' If File Sharing is running, guests may also be able to modify this folder or its contents. '
+            : ' Guests may also be able to modify this folder or its contents. ') +
+        reason
       : warning;
 }
 
@@ -83,6 +98,8 @@ function sharingSegments(share: NetworkShare): string[] {
   return [share.name, ...(share.relative ? share.relative.split('/') : [])];
 }
 export function windowsSharingAddressProblem(share: NetworkShare): string | undefined {
+  if (sharingSegments(share).some((segment) => /[. ]$/.test(segment)))
+    return 'Windows addresses are unavailable because a folder or share name ends with a dot or space.';
   if (sharingSegments(share).some((segment) => /[\\/\u0000-\u001f\u007f:*?"<>|]/.test(segment)))
     return 'Windows addresses are unavailable because a folder or share name contains a character Windows cannot use.';
 }

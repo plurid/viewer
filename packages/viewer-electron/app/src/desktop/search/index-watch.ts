@@ -56,10 +56,11 @@ export class IndexWatcher {
             parents.push(file);
           }
           if (this.batch) await this.batch(parents);
-          else for (const file of parents) {
-            if (this.closed) return;
-            await this.changed(file);
-          }
+          else
+            for (const file of parents) {
+              if (this.closed) return;
+              await this.changed(file);
+            }
         }
       })()
         .catch(() => {})

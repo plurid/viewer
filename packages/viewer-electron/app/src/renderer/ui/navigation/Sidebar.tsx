@@ -61,6 +61,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
   // what this sidebar shows, rather than all saved state: each folder plane has one
   const favorites = useViewer((state) => state.saved.favorites);
   const recents = useViewer((state) => state.saved.recents);
+  const recovery = useViewer((state) => state.folderRecovery);
   const hasFolderHistory = useViewer((state) => Object.keys(state.saved.visits ?? {}).length > 0);
   const bootstrap = useViewer((state) => state.bootstrap);
   const workspaceID = useViewer((state) => activeWorkspace(state).id);
@@ -293,12 +294,20 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                 <Icon name={sidebar.collapsed.includes(section) ? 'right' : 'down'} size={12} />
                 <span>{titles[section]}</span>
               </button>
-              {section === 'recents' && (recents.length > 0 || hasFolderHistory) && (
+              {section === 'recents' && (recents.length > 0 || hasFolderHistory || recovery) && (
                 <button
                   type="button"
                   className="sidebar-clear-recent"
                   aria-label="Clear recent folders"
-                  onClick={clearRecentFolders}
+                  disabled={!recents.length && !hasFolderHistory}
+                  onClick={(event) => {
+                    const heading =
+                      event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(
+                        '.sidebar-section-title',
+                      );
+                    clearRecentFolders();
+                    heading?.focus();
+                  }}
                 >
                   Clear
                 </button>

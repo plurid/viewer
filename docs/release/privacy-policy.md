@@ -25,14 +25,13 @@ Diagnostic Log reveals the log so you can choose to attach it to a support reque
 default: version/build, edition and license status, macOS, available hardware details, display
 count/scales, language/region and bounded failure times, kinds, known classes, allowed structured
 codes and recorded code locations inside Viewer, without function names. The Mac App Store edition
-uses the same default without user, host or
-volume lookups. **Include message text** is optional and off by default; excerpts can contain
-private text, Viewer removes what it recognises, and you must read them before sharing. In the Store
-edition those excerpts require account,
-Home, computer/host and mounted-volume checks, including `id`, `scutil`, the Home realpath and
-`/Volumes`; a refused check is named and excerpts are omitted. Viewer sends
-neither version to its developer. **Copy** puts the displayed text on the general clipboard, which
-other apps can read and macOS may carry to your other devices through Universal Clipboard.
+uses the same default without user, host or volume lookups. **Include message text** is optional and
+off by default; excerpts can contain private text, Viewer removes what it recognises, and you must
+read them before sharing. In the Store edition those excerpts require account, Home, computer/host
+and mounted-volume checks, including `id`, `scutil`, the Home realpath and `/Volumes`; a refused
+check is named and excerpts are omitted. Viewer sends neither version to its developer. **Copy**
+puts the displayed text on the general clipboard, which other apps can read and macOS may carry to
+your other devices through Universal Clipboard.
 
 The Mac App Store edition uses macOS folder/file authorization. Permissions chosen in a native
 picker are saved privately and can survive relaunch. Clipboard and drag permissions last until Quit

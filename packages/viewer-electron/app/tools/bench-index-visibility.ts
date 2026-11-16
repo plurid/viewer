@@ -25,11 +25,17 @@ const folder = path.join(root, 'Files');
 await mkdir(folder);
 const count = 20000;
 for (let start = 0; start < count; start += 64)
-  await Promise.all(Array.from({ length: Math.min(64, count - start) }, (_, offset) =>
-    writeFile(path.join(folder, `File ${start + offset}.txt`), 'fixture', { flag: 'wx' }),
-  ));
+  await Promise.all(
+    Array.from({ length: Math.min(64, count - start) }, (_, offset) =>
+      writeFile(path.join(folder, `File ${start + offset}.txt`), 'fixture', { flag: 'wx' }),
+    ),
+  );
 const index = new FileIndex(':memory:');
-const update = index.update.bind(index) as (file: string, removed?: boolean, visibility?: HiddenPaths) => Promise<void>;
+const update = index.update.bind(index) as (
+  file: string,
+  removed?: boolean,
+  visibility?: HiddenPaths,
+) => Promise<void>;
 try {
   index.configure(defaultSettings(folder).search);
   await index.settled();
@@ -42,10 +48,22 @@ try {
   const visibility = new HiddenPaths();
   reads = 0;
   const start = performance.now();
-  for (let offset = 0; offset < 511; offset++) await update(path.join(folder, `File ${offset}.txt`), false, visibility);
+  for (let offset = 0; offset < 511; offset++)
+    await update(path.join(folder, `File ${offset}.txt`), false, visibility);
   const batchMilliseconds = performance.now() - start;
-  const result = { label, count, singleMilliseconds: single.toSorted((a, b) => a - b)[1], singleSamples: single, batchSize: 511, batchMilliseconds, millisecondsPerEvent: batchMilliseconds / 511, folderFlagReads: reads };
-  await writeFile(path.join(root, 'performance.json'), JSON.stringify(result, null, 2) + '\n', { flag: 'wx' });
+  const result = {
+    label,
+    count,
+    singleMilliseconds: single.toSorted((a, b) => a - b)[1],
+    singleSamples: single,
+    batchSize: 511,
+    batchMilliseconds,
+    millisecondsPerEvent: batchMilliseconds / 511,
+    folderFlagReads: reads,
+  };
+  await writeFile(path.join(root, 'performance.json'), JSON.stringify(result, null, 2) + '\n', {
+    flag: 'wx',
+  });
   console.log(JSON.stringify({ root, ...result }, null, 2));
 } finally {
   await index.close();

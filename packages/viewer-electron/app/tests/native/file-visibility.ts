@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { chmod, mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { userInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { FileVisibility } from '../../src/desktop/files/visibility';
 import { entryWithVisibility as entry, list } from '../../src/desktop/files/filesystem';
@@ -157,32 +158,105 @@ sharePath = path.join(root, 'Unreadable ACL');
 await mkdir(sharePath, { mode: 0o755 });
 execFileSync('/bin/chmod', ['+a', 'everyone deny readsecurity', sharePath]);
 assert.equal(await visibility.guestACL(sharePath), 'unreadable');
-// Denying readsecurity also blocks stat on macOS, so the whole share read must stay unknown.
-assert.equal((await sharing.refresh(true)).status, 'unknown');
-for (const right of ['add_file', 'add_subdirectory', 'delete_child', 'delete', 'writeattr', 'writeextattr', 'writesecurity', 'chown']) {
+// A blocked share does not obscure other folders, but this folder must remain unknown.
+assert.equal((await sharing.inspect([sharePath], true)).folders?.[0]?.status, 'unknown');
+for (const right of [
+  'add_file',
+  'add_subdirectory',
+  'delete_child',
+  'delete',
+  'writeattr',
+  'writeextattr',
+  'writesecurity',
+  'chown',
+]) {
   const target = path.join(root, 'Everyone ' + right);
   await mkdir(target, { mode: 0o755 });
   execFileSync('/bin/chmod', ['+a', 'everyone allow ' + right, target]);
   assert.equal(await visibility.guestACL(target), 'write', right);
 }
-for (const principal of ['group:staff', 'user:' + process.getuid!(), 'user:nobody']) {
-  const target = path.join(root, 'Principal ' + principal.replace(':', '-'));
+for (const [label, principal] of [
+  ['staff', 'group:staff'],
+  ['specific-user', 'user:' + userInfo().username],
+  ['guest', 'user:nobody'],
+  ['guest-group', 'group:nobody'],
+  ['guest-account-group', 'group:_guest'],
+]) {
+  const target = path.join(root, 'Principal ' + label);
   await mkdir(target, { mode: 0o755 });
   execFileSync('/bin/chmod', ['+a', principal + ' allow add_file', target]);
-  assert.equal(await visibility.guestACL(target), principal === 'user:nobody' ? 'write' : 'none', principal);
+  assert.equal(
+    await visibility.guestACL(target),
+    label.startsWith('guest') ? 'write' : 'none',
+    label,
+  );
 }
+// chmod requires a live account name, so create the reserved Guest ACL with the native API.
+const guestFixtureSource = path.join(root, 'guest-acl-fixture.cc');
+const guestFixture = path.join(root, 'guest-acl-fixture');
+await writeFile(
+  guestFixtureSource,
+  String.raw`
+#include <sys/acl.h>
+#include <uuid/uuid.h>
+#include <membership.h>
+int main(int count, char **args) {
+  if (count != 2) return 1;
+  uuid_t user;
+  if (mbr_uid_to_uuid(201, user) != 0 && uuid_parse("FFFFEEEE-DDDD-CCCC-BBBB-AAAA000000C9", user) != 0) return 2;
+  acl_t acl = acl_init(1);
+  acl_entry_t entry;
+  acl_permset_t permissions;
+  if (acl_create_entry(&acl, &entry) || acl_set_tag_type(entry, ACL_EXTENDED_ALLOW) ||
+      acl_set_qualifier(entry, user) || acl_get_permset(entry, &permissions) ||
+      acl_add_perm(permissions, ACL_ADD_FILE) || acl_set_permset(entry, permissions)) return 3;
+  int result = acl_set_file(args[1], ACL_TYPE_EXTENDED, acl);
+  acl_free(acl);
+  return result ? 4 : 0;
+}
+`,
+  { flag: 'wx' },
+);
+execFileSync('/usr/bin/xcrun', ['clang++', guestFixtureSource, '-o', guestFixture]);
+const accountFolder = path.join(root, 'Guest account');
+await mkdir(accountFolder, { mode: 0o755 });
+execFileSync(guestFixture, [accountFolder]);
+assert.equal(await visibility.guestACL(accountFolder), 'write');
 const groupFolder = path.join(root, 'Guest group');
 await mkdir(groupFolder, { mode: 0o775 });
 execFileSync('/usr/bin/chgrp', ['everyone', groupFolder]);
 await chmod(groupFolder, 0o775);
 assert.equal(await visibility.guestACL(groupFolder), 'write');
+for (const [name, entries, expected] of [
+  ['Deny before allow', ['everyone deny add_file', 'everyone allow add_file'], 'none'],
+  ['Allow before deny', ['everyone allow add_file', 'everyone deny add_file'], 'write'],
+  ['Inherit only', ['everyone allow add_file,file_inherit,directory_inherit,only_inherit'], 'none'],
+  ['Different right', ['everyone deny add_file', 'everyone allow writeattr'], 'write'],
+] as const) {
+  const target = path.join(root, name);
+  await mkdir(target, { mode: 0o755 });
+  entries.forEach((entry, index) =>
+    execFileSync('/bin/chmod', ['+a#', String(index), entry, target]),
+  );
+  assert.equal(await visibility.guestACL(target), expected, name);
+}
+sharePath = path.join(root, 'Mode denied by ACL');
+await mkdir(sharePath, { mode: 0o777 });
+await chmod(sharePath, 0o777);
+execFileSync('/bin/chmod', [
+  '+a',
+  'everyone deny add_file,add_subdirectory,delete_child,delete,writeattr,writeextattr,writesecurity,chown',
+  sharePath,
+]);
+assert.equal(await visibility.guestACL(sharePath), 'none');
+assert.equal((await sharing.refresh(true)).shares[0]?.guestWritable, false);
 console.log(
   JSON.stringify(
     {
       root,
       helper,
       checks:
-        'UF_HIDDEN, dot rule, literal Thumbs.db, flag removal, readable system folders, mode 444, mode 000, protected folder permission codes, ACL grants and unreadable ACL state passed',
+        'UF_HIDDEN, dot rule, literal Thumbs.db, flag removal, readable system folders, mode 444, mode 000, protected permission codes, nobody and Guest UID 201 grants, guest groups, ordered ACL allow and deny, inherit-only entries, mode overridden by ACL and unreadable ACL state passed',
     },
     null,
     2,

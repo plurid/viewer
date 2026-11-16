@@ -3,7 +3,11 @@ import { appendFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/pr
 import path from 'node:path';
 import os from 'node:os';
 import { boundedText } from '../../domain/diagnostics/text';
-import { diagnosticFailure, knownErrorCode, knownErrorName } from '../../domain/diagnostics/failure';
+import {
+  diagnosticFailure,
+  knownErrorCode,
+  knownErrorName,
+} from '../../domain/diagnostics/failure';
 import type { DiagnosticErrorFields } from '../../domain/diagnostics/failure';
 import { redactSecrets } from './failures';
 
@@ -30,12 +34,15 @@ export class DiagnosticLog {
     private limit = 1024 * 1024,
   ) {}
   record(kind: DiagnosticKind, value: unknown, fields?: DiagnosticErrorFields): Promise<void> {
-    const failure = value instanceof Error ? diagnosticFailure(value) : {
-      detail: String(value),
-      errorClass: fields?.errorClass,
-      code: fields?.code,
-      stack: fields?.stack,
-    };
+    const failure =
+      value instanceof Error
+        ? diagnosticFailure(value)
+        : {
+            detail: String(value),
+            errorClass: fields?.errorClass,
+            code: fields?.code,
+            stack: fields?.stack,
+          };
     const errno = new Set(Object.keys(os.constants?.errno ?? {}));
     const line =
       JSON.stringify({

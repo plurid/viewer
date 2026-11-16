@@ -21,6 +21,7 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
 }
 const api: ViewerAPI = {
   folderHistory: () => invoke('folderHistory'),
+  folderCheck: (path) => invoke('folderCheck', path),
   networkSharing: (request) => invoke('networkSharing', request),
   license: (request) => invoke('license', request),
   dialog: async () => ({ prompt: null }),

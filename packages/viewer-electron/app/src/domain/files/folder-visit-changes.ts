@@ -2,6 +2,7 @@ import type { FolderVisits, Visit } from './folder-visits';
 import { boundFolderVisits } from './folder-visits';
 
 export interface FolderVisitSave {
+  forgotten?: string[];
   id: string;
   base: FolderVisits;
   clear: boolean;
@@ -11,6 +12,7 @@ export interface FolderVisitSave {
 }
 
 export interface FolderVisitReply {
+  aliases?: Record<string, string>;
   visits: FolderVisits;
   revision: number;
   clearRevision?: number;

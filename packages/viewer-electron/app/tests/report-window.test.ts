@@ -2,6 +2,7 @@
 import type { BrowserWindowConstructorOptions, MenuItemConstructorOptions } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReportWindow, reportDisclosure, reportPage } from '../src/desktop/windows/report-window';
+import type { ReportLook } from '../src/desktop/windows/report-window';
 import {
   reportCloseChannel,
   reportCopyChannel,
@@ -89,13 +90,17 @@ beforeEach(() => {
 });
 function reviewWindow(
   make: (include: boolean) => Promise<string>,
-  look: () => 'dark' | 'light',
+  look: () => ReportLook,
   present = true,
 ): ReportWindow {
-  return new ReportWindow(async () => ({
-    report: await make(false),
-    withMessageText: () => make(true),
-  }), look, present);
+  return new ReportWindow(
+    async () => ({
+      report: await make(false),
+      withMessageText: () => make(true),
+    }),
+    look,
+    present,
+  );
 }
 
 const report = '# Viewer report\n\n- Edition: direct\n\n> Failed ~/…/….pdf\n';
@@ -129,6 +134,8 @@ describe('report review window', () => {
     checkbox.dispatchEvent(new Event('change'));
     expect(warning.hidden).toBe(false);
     expect(button.disabled).toBe(true);
+    expect(document.getElementById('report-status')!.hidden).toBe(false);
+    expect(document.getElementById('report-status')!.textContent).toBe('Preparing report…');
     expect(native.ipcSend).toHaveBeenLastCalledWith(reportOptionsChannel, 1, true);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
     expect(native.ipcSend).toHaveBeenCalledTimes(4);
@@ -149,6 +156,16 @@ describe('report review window', () => {
     update({}, { revision: 3, report: 'Unrequested excerpt', includeMessageText: true });
     expect(checkbox.checked).toBe(false);
     expect(document.querySelector('pre')!.textContent).toBe(report);
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+    update({}, { revision: 3, report: 'Reply in flight when unchecked', includeMessageText: true });
+    expect(checkbox.checked).toBe(false);
+    expect(document.querySelector('pre')!.textContent).toBe(report);
+    expect(button.disabled).toBe(true);
+    update({}, { revision: 4, report, includeMessageText: false });
+    expect(button.disabled).toBe(false);
   });
 
   it('accepts copy only from this window main frame with no arguments', async () => {
@@ -234,7 +251,10 @@ describe('report review window', () => {
   });
 
   it('resets Copy to the default on every page load and waits for the new document', async () => {
-    const owner = reviewWindow(async (include) => include ? 'Optional private excerpt' : report, () => 'dark');
+    const owner = reviewWindow(
+      async (include) => (include ? 'Optional private excerpt' : report),
+      () => 'dark',
+    );
     await owner.open();
     const contents = native.windows[0]!.webContents;
     const event = { sender: contents, senderFrame: contents.mainFrame };
@@ -251,14 +271,22 @@ describe('report review window', () => {
 
   it('cuts long reports at a whole line and discloses shortening in the copied text', async () => {
     const line = '- assets/renderer.js:123:45\n';
-    const owner = reviewWindow(async () => '# Viewer report\n\n' + line.repeat(5000), () => 'dark');
+    const owner = reviewWindow(
+      async () => '# Viewer report\n\n' + line.repeat(5000),
+      () => 'dark',
+    );
     await owner.open();
     const window = native.windows[0]!;
-    document.documentElement.innerHTML = decodeURIComponent(window.loadURL.mock.calls[0]![0].slice('data:text/html,'.length));
+    document.documentElement.innerHTML = decodeURIComponent(
+      window.loadURL.mock.calls[0]![0].slice('data:text/html,'.length),
+    );
     const shown = document.querySelector('pre')!.textContent!;
     expect(new TextEncoder().encode(shown).length).toBeLessThanOrEqual(65536);
     expect(shown).toMatch(/:123:45\n\nReport shortened to fit this window\.\n$/);
-    window.webContents.ipc.emit(reportCopyChannel, { sender: window.webContents, senderFrame: window.webContents.mainFrame });
+    window.webContents.ipc.emit(reportCopyChannel, {
+      sender: window.webContents,
+      senderFrame: window.webContents.mainFrame,
+    });
     expect(native.writeText).toHaveBeenCalledExactlyOnceWith(shown);
   });
 

@@ -40,7 +40,9 @@ describe('default report privacy', () => {
     const detail = 'open /Users/z\u0000oe/Medical Records/Diagnosis.mp4';
     expect(diagnosticReport(reportFixture([detail]))).not.toContain('Medical');
     expect(redactReport(detail, [{ kind: 'home', value: '/Users/zoe' }])).not.toContain('Medical');
-    expect(redactReport('Hello Zo\u0000ë', [{ kind: 'full name', value: 'Zoë' }])).toBe('Hello <private>');
+    expect(redactReport('Hello Zo\u0000ë', [{ kind: 'full name', value: 'Zoë' }])).toBe(
+      'Hello <private>',
+    );
   });
 
   it('allows only known structured error names and codes', () => {
@@ -78,14 +80,18 @@ describe('default report privacy', () => {
     ]);
     input.bundleRoot = '/Applications/Viewer.app';
     const entry = JSON.parse(input.log!);
-    entry.stack = diagnosticFailure(Object.assign(new TypeError('private Patient content'), { stack: entry.detail })).stack;
+    entry.stack = diagnosticFailure(
+      Object.assign(new TypeError('private Patient content'), { stack: entry.detail }),
+    ).stack;
     entry.errorClass = 'TypeError';
     input.log = JSON.stringify(entry);
     const report = diagnosticReport(input);
     expect(report).toContain('Contents/Resources/main.cjs:12:3');
     expect(report).toContain('Contents/Resources/renderer.cjs:2:1');
     expect(report).toContain('3 frames outside Viewer');
-    expect(report).not.toMatch(/Patient|FolderService|private label|Users|Acme|PrivateClient|node:internal/);
+    expect(report).not.toMatch(
+      /Patient|FolderService|private label|Users|Acme|PrivateClient|node:internal/,
+    );
   });
 
   it('uses the source folder as the containment root in development', () => {
@@ -94,7 +100,9 @@ describe('default report privacy', () => {
     ]);
     input.bundleRoot = '/Source/Viewer/src';
     const entry = JSON.parse(input.log!);
-    entry.stack = diagnosticFailure(Object.assign(new Error('ignored'), { stack: entry.detail })).stack;
+    entry.stack = diagnosticFailure(
+      Object.assign(new Error('ignored'), { stack: entry.detail }),
+    ).stack;
     input.log = JSON.stringify(entry);
     expect(diagnosticReport(input)).toContain('desktop/folders.ts:8:2');
     expect(diagnosticReport(input)).not.toContain('/Source');

@@ -393,7 +393,8 @@ export class ActionPlanner {
           throw new Error(
             'The selected tree exceeds the action scan limit. Select a smaller folder.',
           );
-        if (child.name.startsWith('.') || hidden.has(child.name) || child.isSymbolicLink()) continue;
+        if (child.name.startsWith('.') || hidden.has(child.name) || child.isSymbolicLink())
+          continue;
         const item = await entryForScan(path.join(current, child.name));
         if (item.directory) {
           if (request.context.recursive ?? recipe.recursive) folders.push(item.path);

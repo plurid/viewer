@@ -1,3 +1,5 @@
+import { knownFolderIdentity } from '../explorer/folder-availability';
+import { errorMessage } from '../../domain/errors';
 import { matchesQuery, topWords, withoutTopWords } from '../../domain/search/query';
 import { savedSearchProblem, searchName, searchNameLength } from '../../domain/search/saved';
 import { useFileQuery } from '../explorer/useFileQuery';
@@ -28,7 +30,7 @@ import { useIndexedSearch } from '../explorer/useIndexedSearch';
 import { useWorkspace } from '../workspace/context';
 import { focusPlane } from '../workspace/sessions';
 import type { FileEntry } from '../../domain/contracts';
-import { calculate, paletteIntent } from './smart-palette';
+import { calculate, paletteIntent, smartRowID } from './smart-palette';
 import { useFolderSuggestions } from '../explorer/useFolderSuggestions';
 import { LineFinder } from '../command-line/LineFinder';
 import { PromptFinder } from '../command-line/PromptFinder';
@@ -50,6 +52,7 @@ import { palettePrefixes, type PaletteMode } from './palette-modes';
 import { clearRecentCommands } from './history';
 import { commandFolders } from './folders';
 import { suggestionsFor } from './suggestions';
+import { offerToForgetFolder } from '../state/places';
 
 /**
  * A command chosen in the palette acts on the workspace, so focus returns there, not to the title
@@ -235,6 +238,7 @@ function CommandFinder({
   const view = withFrequentFolders(
     commandView,
     smart.filter((row) => row.group === 'Frequent folders'),
+    knownFolderIdentity,
   );
   const folderView = commandFolders(
     commands,
@@ -418,8 +422,19 @@ function useSmartRows(
   const open =
     (path: string, folderOnly = false) =>
     async () => {
-      const entry = await window.viewer.stat(path);
-      if (folderOnly && !entry.directory) throw new Error('This folder is no longer available.');
+      let entry: FileEntry;
+      try {
+        entry = await window.viewer.stat(path);
+        if (folderOnly && !entry.directory) throw new Error('This folder is no longer available.');
+      } catch (error) {
+        const missing =
+          /^(?:ENOENT|ENOTDIR|ENODEV|ENXIO)|^This folder is no longer available\./.test(
+            errorMessage(error),
+          );
+        if (!folderOnly || !missing) throw error;
+        offerToForgetFolder(path);
+        return;
+      }
       if (activeWorkspace().id !== context.workspaceID) return;
       await workspace.openPath(entry.path, {
         paneID: context.paneID,
@@ -432,7 +447,7 @@ function useSmartRows(
     definition: Omit<CommandDefinition, 'id' | 'when' | 'remember' | 'primary'>,
   ): CommandDefinition => ({
     ...definition,
-    id: `smart:${id}`,
+    id: smartRowID(id),
     primary: true,
     remember: false,
     when: () => true,

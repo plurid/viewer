@@ -1,6 +1,7 @@
 import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
 import type { FolderVisitSave } from '../../domain/files/folder-visit-changes';
 import type { FileChange } from '../../domain/files/changes';
+import { pathMapper } from '../../domain/files/changes';
 import type { FolderVisits } from '../../domain/files/folder-visits';
 import { remapFolderVisits } from '../../domain/files/folder-visits';
 import { FolderHistoryRemaps } from '../../domain/files/folder-history-remaps';
@@ -17,6 +18,8 @@ interface Session {
   workspaceID: string;
   baseline: SavedState;
   historyRevision: number;
+  origins: Map<string, string>;
+  historyKeys: FolderVisits;
 }
 
 /** The parts of a saved state shared between windows: what a merge can change for the sender. */
@@ -43,6 +46,9 @@ export class WorkspaceSessions {
   private historyRevision = 0;
   private clearRevision = 0;
   private historyChanges = new FolderHistoryRemaps();
+  private aliases: Record<string, string> = {};
+  private historyFiles = new Set<string>();
+  private aliasTargets: FolderVisits = {};
 
   get folderHistoryRevision(): number {
     return this.historyRevision;
@@ -53,16 +59,56 @@ export class WorkspaceSessions {
       visits: structuredClone(this.current?.visits ?? {}),
       revision: this.historyRevision,
       clearRevision: this.clearRevision,
+      aliases: { ...this.aliases },
     };
+  }
+
+  normalizeFolderHistory(aliases: Record<string, string>, files: string[]): void {
+    Object.assign(this.aliases, aliases);
+    for (const path of Object.keys(aliases)) this.historyFiles.delete(path);
+    for (const path of files) this.historyFiles.add(path);
+    if (this.current?.visits) this.current.visits = this.normalizeHistory(this.current.visits);
+    const keep = Object.keys(this.aliases).slice(-1000);
+    this.aliases = Object.fromEntries(keep.map((key) => [key, this.aliases[key]!]));
+    this.historyFiles = new Set([...this.historyFiles].slice(-500));
+    this.aliasTargets = Object.fromEntries(
+      Object.values(this.aliases).map((path) => [path, { count: 1, last: 0 }]),
+    );
+  }
+
+  private normalizeHistory(visits: FolderVisits): FolderVisits {
+    return remapFolderVisits(visits, (path) =>
+      this.historyFiles.has(path) ? 'viewer://forgotten' : (this.aliases[path] ?? path),
+    );
   }
 
   remapFolderHistory(changes: FileChange[]): void {
     this.historyChanges.add(changes, ++this.historyRevision);
+    const targets = remapFolderVisits(this.aliasTargets, changes);
+    if (targets !== this.aliasTargets) {
+      const map = pathMapper(changes);
+      this.aliases = Object.fromEntries(
+        Object.entries(this.aliases).map(([old, path]) => [old, map(path)]),
+      );
+      this.aliasTargets = targets;
+    }
+    for (const session of this.sessions.values()) {
+      const next = remapFolderVisits(session.historyKeys, changes);
+      if (next === session.historyKeys) continue;
+      const map = pathMapper(changes);
+      for (const [original, path] of session.origins) session.origins.set(original, map(path));
+      session.historyKeys = next;
+    }
     if (this.current?.visits) this.current.visits = remapFolderVisits(this.current.visits, changes);
   }
 
-  private remapHistory(visits: FolderVisits, revision: number): FolderVisits {
-    return this.historyChanges.apply(visits, revision);
+  private remapHistory(visits: FolderVisits, revision: number, session?: Session): FolderVisits {
+    if (session && this.historyChanges.needsRefresh(revision)) {
+      return this.normalizeHistory(
+        remapFolderVisits(visits, (path) => session.origins.get(path) ?? path),
+      );
+    }
+    return this.normalizeHistory(this.historyChanges.apply(visits, revision));
   }
 
   seed(state: SavedState | null): void {
@@ -173,6 +219,8 @@ export class WorkspaceSessions {
       workspaceID,
       baseline: structuredClone(snapshot),
       historyRevision: this.historyRevision,
+      origins: new Map(Object.keys(snapshot.visits ?? {}).map((path) => [path, path])),
+      historyKeys: snapshot.visits ?? {},
     });
     this.reservations.delete(owner);
     this.current!.openWindows = [...this.sessions.values()].map((session) => session.workspaceID);
@@ -252,8 +300,25 @@ export class WorkspaceSessions {
     if (!session) return;
     session.workspaceID = input.activeWorkspace;
     session.baseline = structuredClone(input);
-    session.historyRevision = visitSave?.revision ?? session.historyRevision;
-    if (visitSave?.clear) this.clearRevision++;
+    const revision = visitSave?.revision ?? session.historyRevision;
+    session.origins = new Map(
+      Object.keys(input.visits ?? {}).map((path) => {
+        const mapped = this.historyChanges.needsRefresh(revision)
+          ? (session.origins.get(path) ?? path)
+          : this.historyChanges.path(path, revision);
+        return [path, this.aliases[mapped] ?? mapped];
+      }),
+    );
+    session.historyKeys = Object.fromEntries(
+      [...session.origins.values()].map((path) => [path, { count: 1, last: 0 }]),
+    );
+    session.historyRevision = this.historyRevision;
+    if (visitSave?.clear) {
+      this.clearRevision++;
+      this.aliases = {};
+      this.aliasTargets = {};
+      this.historyFiles.clear();
+    }
     this.current = merged;
   }
 
@@ -324,12 +389,18 @@ export class WorkspaceSessions {
           this.remapHistory(
             visitSave?.base ?? baseline.visits ?? {},
             visitSave?.revision ?? session.historyRevision,
+            session,
           ),
-          this.remapHistory(input.visits ?? {}, visitSave?.revision ?? session.historyRevision),
+          this.remapHistory(
+            input.visits ?? {},
+            visitSave?.revision ?? session.historyRevision,
+            session,
+          ),
           visitSave?.clear,
           this.remapHistory(
             visitSave?.restored ?? {},
             visitSave?.revision ?? session.historyRevision,
+            session,
           ),
         ),
         Date.now(),

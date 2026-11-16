@@ -1,6 +1,10 @@
 import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
 import { mergeFolderVisits } from '../../domain/files/folder-visits';
-import { resetKnownFolders } from '../explorer/folder-availability';
+import {
+  resetKnownFolders,
+  acceptKnownFolders,
+  forgetKnownFolders,
+} from '../explorer/folder-availability';
 import { folderVisitSync } from './folder-visits';
 import { presentationValue } from '../../domain/preferences/presentation/profile-fields';
 // Workspace lifecycle: startup, switching, creation, deletion and restoring.
@@ -162,8 +166,16 @@ export function receiveWorkspaces(
   visitSaveID?: string,
   historyRevision?: number,
   clearRevision?: number,
+  aliases?: Record<string, string>,
+  checkedFolders?: string[],
 ): void {
   const current = getState();
+  const peerClear =
+    clearRevision !== undefined &&
+    clearRevision > folderVisitSync.clearVersion &&
+    !folderVisitSync.isOwnClear(visitSaveID);
+  if (peerClear)
+    forgetKnownFolders([...current.saved.recents, ...Object.keys(current.saved.visits ?? {})]);
   const recents = folderVisitSync.recentFolders(
     saved.recents,
     current.saved.recents,
@@ -176,7 +188,9 @@ export function receiveWorkspaces(
     visitSaveID,
     historyRevision,
     clearRevision,
+    aliases,
   );
+  acceptKnownFolders(checkedFolders ?? [], aliases);
   const active = activeWorkspace();
   const workspaces = saved.workspaces.map((space) => (space.id === active.id ? active : space));
   if (!workspaces.some((space) => space.id === active.id)) workspaces.push(active);
@@ -205,12 +219,13 @@ export function receiveWorkspaces(
       current.saved.workspaceVisits,
       current.saved.openWindows,
     ]);
-  if (unchanged) return;
+  if (unchanged && !(peerClear && current.folderRecovery)) return;
   for (const space of workspaces) {
     if (space.id !== active.id) adapters.set(space.id, new Map(Object.entries(space.arrangement)));
   }
   update({
     ...current,
+    folderRecovery: peerClear ? undefined : current.folderRecovery,
     saved: {
       ...current.saved,
       workspaces,

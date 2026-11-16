@@ -207,12 +207,14 @@ describe('explicit, bounded Ghostscript rendering', () => {
     'diagnoses unexpected discovery failures with code %s',
     async (code) => {
       const f = await fixture();
-      f.resolveExecutable.mockRejectedValue(
-        Object.assign(new Error('Generated discovery failure.'), { code }),
-      );
+      const error = Object.assign(new TypeError('Generated discovery failure.'), { code });
+      const stack = '    at Ghostscript.find (/Applications/Viewer.app/Contents/main.js:12:76)';
+      error.stack = 'TypeError: Generated discovery failure.\n' + stack;
+      f.resolveExecutable.mockRejectedValue(error);
       expect(await f.service.postscriptStatus()).toEqual({ kind: 'failed' });
       expect(f.diagnose).toHaveBeenCalledWith(
         'Ghostscript discovery failed: Generated discovery failure.',
+        expect.objectContaining({ errorClass: 'TypeError', code, stack }),
       );
       await expect(f.renderer.variant()).rejects.toThrow('Ghostscript could not be checked.');
       expect(await f.calls()).toEqual([]);

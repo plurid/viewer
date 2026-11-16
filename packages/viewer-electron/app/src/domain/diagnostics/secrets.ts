@@ -1,4 +1,4 @@
-import { boundedText } from './text';
+import { boundedText, withoutTerminalSequences } from './text';
 
 function valueEnd(text: string, start: number): number {
   const quote = text[start];
@@ -17,15 +17,14 @@ function valueEnd(text: string, start: number): number {
 
 /** Key and value scanning is bounded and never retries a long value at each character. */
 export function redactCredentials(input: string): string {
-  const original = boundedText(input).replace(/[\p{Cc}\p{Cf}]/gu, (character) =>
-    /[\n\r\t\u200c\u200d]/u.test(character) ? character : '',
-  );
+  const original = withoutTerminalSequences(boundedText(input));
   let text = '';
   const offsets: number[] = [];
+  // Line boundaries separate values; joining characters only disguise their spelling.
   for (let index = 0; index < original.length; index++) {
     const character = original[index]!;
-    if (/[\p{Cc}\p{Cf}]/u.test(character)) continue;
-    text += character;
+    if (/\p{Cf}/u.test(character)) continue;
+    text += /\p{Cc}/u.test(character) && !/[\n\r]/.test(character) ? ' ' : character;
     offsets.push(index);
   }
   const spans: { start: number; end: number }[] = [];
@@ -42,7 +41,11 @@ export function redactCredentials(input: string): string {
     )
       continue;
     const start = match.index + match[0].length;
-    const end = /(?:cookie|authorization)$/.test(key) ? text.length : valueEnd(text, start);
+    let end = valueEnd(text, start);
+    if (/(?:cookie|authorization)$/.test(key)) {
+      const lineEnd = text.slice(start).search(/[\r\n]/);
+      end = lineEnd < 0 ? text.length : start + lineEnd;
+    }
     spans.push({ start, end });
     assignments.lastIndex = Math.max(assignments.lastIndex, end);
   }
@@ -75,12 +78,19 @@ export function redactCredentials(input: string): string {
     /\b(?:sk|pk|rk|gh[pousr]|xox[abprs]|glpat|github_pat)[-_][A-Za-z0-9_-]{8,}|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|\b[a-fA-F0-9]{20,}\b|\b[A-Za-z0-9+/]{12,}={1,2}(?![A-Za-z0-9=])/g,
   ))
     spans.push({ start: match.index, end: match.index + match[0].length });
-  for (const match of text.matchAll(/-----BEGIN [A-Z ]{1,32}PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]{1,32}PRIVATE KEY-----|$)/g))
+  for (const match of text.matchAll(
+    /-----BEGIN [A-Z ]{1,32}PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]{1,32}PRIVATE KEY-----|$)/g,
+  ))
     spans.push({ start: match.index, end: match.index + match[0].length });
-  const ordered = spans.map((span) => ({
-    start: offsets[span.start] ?? original.length,
-    end: span.end > span.start ? (offsets[span.end - 1] ?? original.length - 1) + 1 : original.length,
-  })).toSorted((a, b) => a.start - b.start || b.end - a.end);
+  const ordered = spans
+    .map((span) => ({
+      start: offsets[span.start] ?? original.length,
+      end:
+        span.end > span.start
+          ? (offsets[span.end - 1] ?? original.length - 1) + 1
+          : original.length,
+    }))
+    .toSorted((a, b) => a.start - b.start || b.end - a.end);
   let output = '';
   let end = 0;
   for (const span of ordered) {

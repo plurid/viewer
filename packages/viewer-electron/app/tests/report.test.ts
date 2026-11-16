@@ -185,7 +185,10 @@ describe('report contents', () => {
 describe('local report collection', () => {
   it('builds both views from one snapshot even if the log changes before opt-in', async () => {
     local.log = entry(1, 'First snapshot failure', 'ENOENT');
-    const snapshot = await makeDiagnosticReportSnapshot('/Private/Viewer/Logs/diagnostics.log', undefined);
+    const snapshot = await makeDiagnosticReportSnapshot(
+      '/Private/Viewer/Logs/diagnostics.log',
+      undefined,
+    );
     local.log = entry(2, 'Later failure must not appear', 'EACCES');
     expect(snapshot.report).toContain('12:01:00');
     expect(snapshot.report).not.toContain('12:02:00');
@@ -269,6 +272,27 @@ describe('local report collection', () => {
       expect(report).toContain('No failures recorded.');
       expect(local.volumes).not.toHaveBeenCalled();
       expect(local.commands.mock.calls.every(([file]) => file === '/usr/sbin/sysctl')).toBe(true);
+    } finally {
+      if (previous) Object.defineProperty(process, 'mas', previous);
+      else Reflect.deleteProperty(process, 'mas');
+    }
+  });
+
+  it('names refused Store privacy checks and keeps the safe snapshot without excerpts', async () => {
+    const previous = Object.getOwnPropertyDescriptor(process, 'mas');
+    Object.defineProperty(process, 'mas', { configurable: true, value: true });
+    try {
+      local.log = entry(1, 'Private patient text', 'ENOENT');
+      const snapshot = await makeDiagnosticReportSnapshot(
+        '/Private/Viewer/Logs/diagnostics.log',
+        undefined,
+      );
+      local.failCommand = '/usr/bin/id -F';
+      const messages = await snapshot.withMessageText();
+      expect(messages).toContain('Message text omitted: could not check full name.');
+      expect(messages).toContain('- Edition: Mac App Store\n- License: licensed');
+      expect(messages).toContain('- Code: ENOENT');
+      expect(messages).not.toContain('Private patient text');
     } finally {
       if (previous) Object.defineProperty(process, 'mas', previous);
       else Reflect.deleteProperty(process, 'mas');

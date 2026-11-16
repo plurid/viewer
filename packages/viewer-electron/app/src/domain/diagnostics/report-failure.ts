@@ -46,7 +46,8 @@ export function bundleRelativePath(file: string, bundle: string | undefined): st
     const parts = match[1]!.split('/');
     if (parts.some((part) => !part || part === '.' || part === '..')) return undefined;
     return match[1]!.length <= 512 && /^[A-Za-z0-9_./@()+ -]+$/.test(match[1]!)
-      ? match[1] : undefined;
+      ? match[1]
+      : undefined;
   }
   const root = bundle ? reportPath(bundle) : undefined;
   const actual = reportPath(file);

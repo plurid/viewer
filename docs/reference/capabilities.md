@@ -35,27 +35,49 @@ for the selection, says why one is unavailable, and pins up to eight to the plan
 **Go to folder…** opens with the current folder path selected, or Home without a folder. Untouched
 or empty, it suggests up to eight existing folders by visit count and age of last visit. Fragments
 match names and paths, including near misses. Match quality comes before visit score, with the
-folder's own name preferred to its parents. **↑** and **↓** explicitly choose a suggestion;
-**Return** opens it. Without that choice, an existing typed path wins and an unavailable typed path
-shows an error. Submitting a fragment during checking waits for a result.
+folder's own name preferred to its parents. A name fragment activates the first suggestion;
+**Return** opens the active row. **↑** and **↓** choose another row. A typed path starting with `/`,
+`~`, `./` or `../` wins without an arrowed choice; an unavailable typed path shows an error.
+Dot-prefixed names and fragments containing slashes can search history. Submitting a fragment before
+results arrive waits for checking. Visit updates preserve the shown rows and active choice.
 
 **⌘K** appends habit matches below existing rows: at most four with other results, eight alone.
-Favorites and recent folders retain their command ranking. `z` followed by a fragment immediately
-lists up to ten previously checked folders. Its words match literally, in order through the path,
+Favorites and recent folders retain their command ranking; an open plane or Places row excludes its
+duplicate habit row, including a checked link and its target. Inside a command folder, only that
+folder's commands appear. `z` followed by a fragment immediately lists up to ten previously checked
+folders. Other matches appear after checking. Its words match literally, in order through the path,
 with the last word in the folder's own name.
 
 Viewer keeps at most 500 visit records beside the last 50 recents. The sidebar still shows the
 latest eight recents. A deliberate folder open counts; session restoration, new-workspace Home,
 templates, Back/Forward and Columns selection do not. A new visit stays when the record bound is
-reached. On load, filesystem spelling merges duplicate folders and confirmed file entries are
-removed from visit records. Unavailable folders stay remembered.
+reached. Successful history checks use the filesystem's native canonical path for records, including
+links into their targets. Recording and background checks after launch apply this same rule.
+Navigation retains the chosen path. Case aliases merge on case-insensitive volumes; distinct
+case-sensitive folders stay separate. Confirmed file entries are dropped. Failed or timed-out
+checks, dangling links and unavailable volumes retain their records and spelling until a later
+successful check.
 
-Suggestions scan at most 500 records, making at most 40 asynchronous metadata checks, four at a
-time, with 150 ms per check. An unavailable volume is checked once per query; checking continues
-past its folders. Results appear as checks finish. **Clear recent folders** in the palette, dialog
-or Recent section clears both lists, including older saves arriving from another window. Counts
-follow recents through local saves, personal backups and folder renames. They are excluded from
-settings exports and are not exposed to agents.
+Suggestions scan at most 500 records, making at most 40 metadata checks, two active at a time, with
+150 ms for each read. Waiting for a lane does not consume that deadline or quarantine a volume.
+Launch checks run in the background and send checked folders to every open window. All windows and
+launch share two active lanes and at most six outstanding reads in dedicated threads, including
+abandoned reads. Four abandoned reads leave both active lanes available. These synchronous worker
+reads consume none of libuv's default four filesystem threads. In the App Store edition, history
+uses only already-active folder access; it never starts or stops a permission grant. Other folders
+are reported as not checked. An unavailable volume is checked once per query. Only a read that
+itself times out skips its identified volume for 30 seconds; queued reads do not block a healthy
+volume on later queries. Incomplete checks are reported separately from an empty history.
+
+Results keep rank order. Lower-ranked results wait up to 150 ms for higher-ranked checks; later
+results keep their rank without stealing the active choice. Renames update shown paths. **Clear
+recent folders** in the palette, dialog or Recent section clears both lists and removes their
+checked entries, including older saves arriving from another window. Forget removes only that
+folder's checked entries. Unrelated checked folders remain ready for `z`. **Undo clear recent
+folders** restores the cleared history from an offer in the clearing window for eight seconds.
+Dismissal, quitting or a later Clear in any window ends the offer and releases its saved paths. Undo
+applies folder renames received since the clear. Counts follow recents through local saves, personal
+backups and folder renames. They are excluded from settings exports and are not exposed to agents.
 
 | Feature                                      | Key                              | ⌘K command                                                         | Menu                                                             | Learn                                        |
 | -------------------------------------------- | -------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------- |

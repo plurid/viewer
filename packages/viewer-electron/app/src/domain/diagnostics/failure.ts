@@ -63,13 +63,44 @@ export const nodeErrorCodes = [
 
 const knownCodes = new Set<string>([...viewerErrorCodes, ...nodeErrorCodes]);
 const errorNames = new Set([
-  'Error', 'EvalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError',
-  'AggregateError', 'InternalError', 'SystemError', 'AssertionError', 'AbortError', 'DOMException',
-  'TimeoutError', 'CompileError', 'LinkError', 'RuntimeError', 'LineError', 'QueryError', 'FontError',
-  'CLIUsageError', 'EPSIPreviewLimitError', 'OperationCancelled', 'NotEditable', 'WebPreviewError',
-  'Stopped', 'CheckHTTPError', 'ReceiptFailure', 'NoTrash', 'UpdateError', 'LicenseError',
-  'CLIOperationError', 'CLIConnectionError', 'CLIServiceError', 'ProviderResponseError', 'SamMaskError',
-  'ModelPermissionRequired', 'FileAccessRequired',
+  'Error',
+  'EvalError',
+  'RangeError',
+  'ReferenceError',
+  'SyntaxError',
+  'TypeError',
+  'URIError',
+  'AggregateError',
+  'InternalError',
+  'SystemError',
+  'AssertionError',
+  'AbortError',
+  'DOMException',
+  'TimeoutError',
+  'CompileError',
+  'LinkError',
+  'RuntimeError',
+  'LineError',
+  'QueryError',
+  'FontError',
+  'CLIUsageError',
+  'EPSIPreviewLimitError',
+  'OperationCancelled',
+  'NotEditable',
+  'WebPreviewError',
+  'Stopped',
+  'CheckHTTPError',
+  'ReceiptFailure',
+  'NoTrash',
+  'UpdateError',
+  'LicenseError',
+  'CLIOperationError',
+  'CLIConnectionError',
+  'CLIServiceError',
+  'ProviderResponseError',
+  'SamMaskError',
+  'ModelPermissionRequired',
+  'FileAccessRequired',
 ]);
 
 export interface DiagnosticErrorFields {
@@ -83,12 +114,16 @@ export interface DiagnosticFailure extends DiagnosticErrorFields {
   detail: string;
 }
 
+export type DiagnosticInput = string | DiagnosticFailure;
+
 export function knownErrorName(value: unknown): string | undefined {
   return typeof value === 'string' && errorNames.has(value) ? value : undefined;
 }
 
 export function knownErrorCode(value: unknown, errno: ReadonlySet<string>): string | undefined {
-  return typeof value === 'string' && (errno.has(value) || knownCodes.has(value)) ? value : undefined;
+  return typeof value === 'string' && (errno.has(value) || knownCodes.has(value))
+    ? value
+    : undefined;
 }
 
 /** Capture before string conversion: a message can contain counterfeit frames and identifiers. */
@@ -97,13 +132,18 @@ export function diagnosticFailure(value: unknown): DiagnosticFailure {
     if (!(value instanceof Error)) return { detail: boundedText(String(value)) };
     const message = value.message;
     const stack = typeof value.stack === 'string' ? value.stack : undefined;
-    const header = value.name + (message ? ': ' + message : '');
-    const suffix = stack?.startsWith(header + '\n') ? stack.slice(header.length + 1) : undefined;
     const candidate = (value as Error & { code?: unknown }).code;
+    const code = typeof candidate === 'string' && candidate.length <= 64 ? candidate : undefined;
+    const description = message ? ': ' + message : '';
+    const header = value.name + description;
+    const headers = code ? [header, value.name + ' [' + code + ']' + description] : [header];
+    const complete = headers.find((header) => stack?.startsWith(header + '\n'));
+    const suffix = complete ? stack!.slice(complete.length + 1) : undefined;
     return {
       detail: boundedText(stack ?? header),
-      errorClass: knownErrorName(value.name === 'Error' ? value.constructor.name : value.name) ?? 'Error',
-      code: typeof candidate === 'string' ? boundedText(candidate, 64) : undefined,
+      errorClass:
+        knownErrorName(value.name === 'Error' ? value.constructor.name : value.name) ?? 'Error',
+      code,
       stack: suffix ? boundedText(suffix) : undefined,
     };
   } catch {

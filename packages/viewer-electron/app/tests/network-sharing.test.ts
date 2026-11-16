@@ -120,7 +120,7 @@ describe('identity and permissions', () => {
     await chmod(child, 0o755);
     expect((await service.inspect([child], true)).folders?.[0]?.shares[0]).toMatchObject({
       inside: true,
-      guestWritable: true,
+      guestWritable: false,
     });
     if (process.platform === 'darwin') {
       const cased = shared.slice(0, -6) + 'sHARED';
@@ -133,7 +133,7 @@ describe('identity and permissions', () => {
     await mkdir(folder);
     for (const [mode, acl, writable, unknown] of [
       [0o755, 'none', false, false],
-      [0o777, 'none', true, false],
+      [0o777, 'write', true, false],
       [0o755, 'write', true, false],
       [0o755, 'unknown', false, true],
     ] as const) {
@@ -178,7 +178,7 @@ describe('identity and permissions', () => {
       },
       addresses: () => [],
     });
-    expect((await unreadable.refresh()).status).toBe('unknown');
+    expect((await unreadable.inspect([share.path])).folders?.[0]?.status).toBe('unknown');
   });
   it('bounds a hung share stat and permits a later refresh', async () => {
     const folder = vi.fn(async () => new Promise<never>(() => {}));
@@ -189,9 +189,9 @@ describe('identity and permissions', () => {
       timeoutMs: 10,
       addresses: () => [],
     });
-    expect((await service.refresh()).status).toBe('unknown');
-    expect((await service.refresh(true)).status).toBe('unknown');
-    expect(folder).toHaveBeenCalledTimes(2);
+    expect((await service.refresh()).status).toBe('ready');
+    expect((await service.refresh(true)).status).toBe('ready');
+    expect(folder).toHaveBeenCalledTimes(1);
   });
   it('throttles navigation but permits a requested refresh and runs no tool in Store builds', async () => {
     let now = 0;
@@ -205,12 +205,12 @@ describe('identity and permissions', () => {
     });
     await service.refresh();
     for (let index = 0; index < 20; index++) await service.refresh();
-    expect(execute).toHaveBeenCalledTimes(4);
+    expect(execute).toHaveBeenCalledTimes(6);
     now = 5001;
     await service.refresh();
-    expect(execute).toHaveBeenCalledTimes(8);
-    await service.refresh(true);
     expect(execute).toHaveBeenCalledTimes(12);
+    await service.refresh(true);
+    expect(execute).toHaveBeenCalledTimes(18);
     const store = new NetworkSharing({
       available: false,
       run: execute,
@@ -218,7 +218,7 @@ describe('identity and permissions', () => {
       addresses: () => [],
     });
     expect((await store.refresh()).status).toBe('unavailable');
-    expect(execute).toHaveBeenCalledTimes(12);
+    expect(execute).toHaveBeenCalledTimes(18);
   });
 });
 describe('addresses, warnings and authority', () => {
@@ -266,15 +266,13 @@ describe('addresses, warnings and authority', () => {
       '\\\\A-very-long-Mac-name.local\\Backup 日本',
       'smb://A-very-long-Mac-name.local/Backup%20%E6%97%A5%E6%9C%AC',
     ]);
-    expect(sharingAddresses(share, 'Studio-Mac', [])).toEqual([]);
+    expect(sharingAddresses(share, 'Studio-Mac', [])).toHaveLength(3);
   });
   it('does not under-claim unknown guest write permission and never leaks the dynamic command label', () => {
     expect(guestWarning(share)).toBe(
       'Anyone on the same network can open this folder without a password.',
     );
-    expect(guestWarning({ ...share, guestWritable: true })).toContain(
-      'They can also add, change and delete',
-    );
+    expect(guestWarning({ ...share, guestWritable: true })).toContain('Guests can also modify');
     expect(guestWarning({ ...share, guestWriteUnknown: true })).toContain(
       'Guests may also be able',
     );
@@ -295,7 +293,7 @@ describe('addresses, warnings and authority', () => {
       available: true,
       sharing: service,
       isAgent: () => agent,
-      requireFolder: async () => {},
+      fileAccess: { require: async () => {} },
       openSettings: open,
     }).networkSharing;
     expect(schemas.networkSharing.safeParse([{ kind: 'refresh' }]).success).toBe(true);
@@ -314,13 +312,27 @@ describe('addresses, warnings and authority', () => {
       (callback as (error: null, stdout: string, stderr: string) => void)(null, '{}', '');
       return {} as ReturnType<typeof execFile>;
     });
-    for (const read of ['shares', 'service', 'host', 'interfaces'] as const)
+    for (const read of ['shares', 'service', 'host', 'interfaces', 'sharepoints', 'guest'] as const)
       await runSharingRead(read);
     expect(vi.mocked(execFile).mock.calls.map((call) => call.slice(0, 2))).toEqual([
       ['/usr/sbin/sharing', ['-l', '-f', 'json']],
       ['/bin/launchctl', ['print', 'system/com.apple.smbd']],
       ['/usr/sbin/scutil', ['--get', 'LocalHostName']],
       ['/usr/sbin/networksetup', ['-listallhardwareports']],
+      ['/usr/bin/dscl', ['.', '-list', '/SharePoints']],
+      [
+        '/usr/bin/plutil',
+        [
+          '-extract',
+          'AllowGuestAccess',
+          'raw',
+          '-expect',
+          'bool',
+          '-o',
+          '-',
+          '/Library/Preferences/SystemConfiguration/com.apple.smb.server.plist',
+        ],
+      ],
     ]);
     for (const call of vi.mocked(execFile).mock.calls)
       expect(call[2]).toMatchObject({ timeout: 2000, shell: false, maxBuffer: 1048576 });

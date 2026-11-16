@@ -9,6 +9,7 @@ import {
   reportMessageWarning,
 } from '../../src/desktop/windows/report-window';
 import { diagnosticReport } from '../../src/desktop/diagnostics/report';
+import { diagnosticFailure } from '../../src/domain/diagnostics/failure';
 import { hostileMessages, reportFixture } from '../support/report-fixtures';
 import { pageCall } from './runtime/page-function';
 import type { PageExpression } from './runtime/page-function';
@@ -42,6 +43,19 @@ async function inspect<R>(contents: WebContents, expression: PageExpression<R>):
   });
   assert(!result.exceptionDetails, JSON.stringify(result.exceptionDetails));
   return result.result.value as R;
+}
+
+async function painted(contents: WebContents): Promise<void> {
+  // DOM state can precede the compositor, so each labeled capture waits for its painted frame.
+  await contents.debugger.sendCommand('Runtime.evaluate', {
+    expression: pageCall(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    ),
+    awaitPromise: true,
+  });
 }
 async function click(contents: WebContents, selector: string): Promise<void> {
   const point = await inspect(
@@ -84,13 +98,21 @@ async function verify(): Promise<void> {
   const evidence: unknown[] = [];
   for (const look of ['dark', 'light'] as const) {
     const requests: boolean[] = [];
+    let finish = () => {};
+    const preparation = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
     const owner = new ReportWindow(
       async () => {
         requests.push(false);
-        return { report, withMessageText: async () => {
-          requests.push(true);
-          return optional;
-        } };
+        return {
+          report,
+          withMessageText: async () => {
+            requests.push(true);
+            await preparation;
+            return optional;
+          },
+        };
       },
       () => look,
       false,
@@ -99,6 +121,7 @@ async function verify(): Promise<void> {
     assert.deepEqual(requests, [false]);
     const window = owner.window!;
     const contents = window.webContents;
+    contents.setBackgroundThrottling(false);
     contents.debugger.attach('1.3');
     await contents.debugger.sendCommand('Accessibility.enable');
     const accessibility = await contents.debugger.sendCommand('Accessibility.getFullAXTree');
@@ -137,6 +160,7 @@ async function verify(): Promise<void> {
       assert.equal(state.viewer, 'undefined');
       assert.equal(state.scripts, 0);
       assert(state.fits && state.scrolls);
+      await painted(contents);
       await writeFile(
         path.join(captures, look + '-' + width + '.png'),
         (await contents.capturePage()).toPNG(),
@@ -145,6 +169,29 @@ async function verify(): Promise<void> {
       evidence.push({ look, width, height, ...state });
     }
     await click(contents, 'input');
+    const pending = await inspect(
+      contents,
+      pageCall(() => {
+        const button = document.querySelector('button')!;
+        const status = document.getElementById('report-status')!;
+        return {
+          disabled: button.disabled,
+          opacity: getComputedStyle(button).opacity,
+          visible: !status.hidden,
+          text: status.textContent,
+        };
+      }),
+    );
+    assert(pending.disabled && pending.visible);
+    assert.equal(pending.text, 'Preparing report…');
+    assert.equal(pending.opacity, '0.55');
+    await painted(contents);
+    await writeFile(
+      path.join(captures, look + '-pending-440.png'),
+      (await contents.capturePage()).toPNG(),
+      { flag: 'wx' },
+    );
+    finish();
     await shown(contents, optional);
     assert.deepEqual(requests, [false, true]);
     const warning = await inspect(
@@ -161,6 +208,7 @@ async function verify(): Promise<void> {
     );
     assert.equal(warning.text, reportMessageWarning);
     assert(warning.visible);
+    await painted(contents);
     await writeFile(
       path.join(captures, look + '-messages-440.png'),
       (await contents.capturePage()).toPNG(),
@@ -171,11 +219,19 @@ async function verify(): Promise<void> {
       await shown(contents, report);
       assert.deepEqual(requests, [false, true]);
     } else {
-      const loaded = new Promise<void>((resolve) => contents.once('did-finish-load', () => resolve()));
+      const loaded = new Promise<void>((resolve) =>
+        contents.once('did-finish-load', () => resolve()),
+      );
       contents.reload();
       await loaded;
       await shown(contents, report);
-      assert.equal(await inspect(contents, pageCall(() => document.querySelector<HTMLInputElement>('input')!.checked)), false);
+      assert.equal(
+        await inspect(
+          contents,
+          pageCall(() => document.querySelector<HTMLInputElement>('input')!.checked),
+        ),
+        false,
+      );
       assert.deepEqual(requests, [false, true]);
     }
     const expected = await inspect(
@@ -188,6 +244,40 @@ async function verify(): Promise<void> {
     assert.equal(copied, expected);
     copied = undefined;
   }
+  const failed = new ReportWindow(
+    async () => ({
+      report,
+      withMessageText: async () => {
+        throw new Error('Private lookup details');
+      },
+    }),
+    () => 'light',
+    false,
+  );
+  await failed.open();
+  const failedWindow = failed.window!;
+  failedWindow.setSize(440, 480);
+  const failedContents = failedWindow.webContents;
+  failedContents.setBackgroundThrottling(false);
+  failedContents.debugger.attach('1.3');
+  await click(failedContents, 'input');
+  await shown(failedContents, report);
+  const failure = await inspect(
+    failedContents,
+    pageCall(() => ({
+      checked: document.querySelector<HTMLInputElement>('input')!.checked,
+      status: document.getElementById('report-status')!.textContent,
+    })),
+  );
+  assert(!failure.checked);
+  assert.equal(failure.status, 'Message text could not be prepared. The default report is shown.');
+  await painted(failedContents);
+  await writeFile(
+    path.join(captures, 'light-error-440.png'),
+    (await failedContents.capturePage()).toPNG(),
+    { flag: 'wx' },
+  );
+  failedWindow.close();
   for (const [keyCode, include] of [
     ['Escape', true],
     ['Enter', false],
@@ -224,6 +314,27 @@ async function verify(): Promise<void> {
     diagnosticReport(reportFixture()),
     { flag: 'wx' },
   );
+  const rendererError = new TypeError('SECRET_CLIENT is not a function');
+  rendererError.stack =
+    'TypeError: ' +
+    rendererError.message +
+    '\n    at Object.Payroll_Acme_2026 (viewer-app://app/assets/renderer.js:42:7)';
+  for (const [name, error] of [
+    ['code', new Error('ZOE_PASSPORT is not an image this Mac can read.')],
+    ['renderer', rendererError],
+  ] as const) {
+    const example = reportFixture([]);
+    example.log = JSON.stringify({
+      at: '2026-11-01T12:00:00.000Z',
+      kind: 'renderer-error',
+      ...diagnosticFailure(error),
+    });
+    await writeFile(
+      path.join(output!, 'example-' + name + '-report.txt'),
+      diagnosticReport(example),
+      { flag: 'wx' },
+    );
+  }
   await writeFile(
     path.join(output!, 'result.json'),
     JSON.stringify({ passed: true, clipboard: 'intercepted', evidence }, null, 2),

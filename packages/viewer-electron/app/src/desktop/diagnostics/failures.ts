@@ -25,7 +25,9 @@ export class DiagnosticBudget {
 
 /** Credentials a message may quote, replaced before it is kept. */
 export function redactSecrets(text: string): string {
-  return redactCredentials(text);
+  return redactCredentials(text)
+    .replace(/\p{Cc}/gu, (character) => (/[\r\n]/.test(character) ? character : ' '))
+    .replace(/\p{Cf}/gu, (character) => (/[\u200c\u200d]/.test(character) ? character : ''));
 }
 
 /** A value as a log line names it: strings, numbers and errors as they read; any other object by
@@ -133,6 +135,9 @@ export class MainFailures {
 
   rejection(reason: unknown): void {
     if (this.budget.take('rejection'))
-      this.host.record(diagnosticText([reason]), reason instanceof Error ? diagnosticFailure(reason) : undefined);
+      this.host.record(
+        diagnosticText([reason]),
+        reason instanceof Error ? diagnosticFailure(reason) : undefined,
+      );
   }
 }

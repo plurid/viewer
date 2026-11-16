@@ -89,9 +89,9 @@ By default, the report contains no personal file names or message text. Both edi
 version/build, edition, trial or licensed status, macOS, display count/scales, language/region and
 up to 20 recent failures, newest first. Model, chip and memory are optional. Each failure contains
 time, kind and a known error class. An allowed code appears only from a recorded error field.
-Recorded Viewer stack locations keep the code path, line and column, with no function names.
-Outside stack frames are counted without paths. The Mac App Store default needs no identity or
-volume lookup.
+Recorded Viewer stack locations keep the code path, line and column, with no function names. Outside
+stack frames are counted without paths. The Mac App Store default needs no identity or volume
+lookup.
 
 **Include message text** is off by default. Excerpts can contain file names, addresses and other
 private text. Viewer removes what it can recognise; read them before sharing. Recognised paths are
@@ -100,11 +100,15 @@ Failed privacy checks are named and excerpts are omitted. Turning the checkbox o
 default report. Viewer sends neither version to its developer and adds no settings, file listings,
 clipboard contents, environment variables or license buyer details.
 
-Store message excerpts need local account and Home information, a Home realpath check, `id` for
-the full name, `scutil` for computer and host names, and mounted names from `/Volumes`. If the
-sandbox refuses a check, the report names it and omits excerpts while keeping the default failure
-details. Both views use one log snapshot. Oversized reports end at a whole line and say they were
-shortened.
+Store message excerpts need local account and Home information, a Home realpath check, `id` for the
+full name, `scutil` for computer and host names, and mounted names from `/Volumes`. If the sandbox
+refuses a check, the report names it and omits excerpts while keeping the default failure details.
+Both views use one log snapshot. Oversized reports end at a whole line and say they were shortened.
+
+Developers read reported code locations against the
+[source maps kept for that exact release](../development/releases.md#keep-source-maps-for-report-locations).
+The version, build and edition select the maps; a location in a minified bundle needs its matching
+map to identify the source. People reporting a problem do not need to find or include these maps.
 
 Include the Viewer version/build, macOS version, Apple Silicon model, direct/App Store edition,
 exact steps and expected result. A small generated example is preferable to a confidential file.

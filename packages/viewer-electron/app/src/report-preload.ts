@@ -26,6 +26,8 @@ window.addEventListener(
       revision++;
       warning.hidden = !checkbox.checked;
       button.disabled = true;
+      status.hidden = false;
+      status.textContent = 'Preparing report…';
       report.setAttribute('aria-busy', 'true');
       ipcRenderer.send(reportOptionsChannel, revision, checkbox.checked);
     });

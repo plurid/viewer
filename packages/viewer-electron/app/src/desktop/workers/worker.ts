@@ -54,7 +54,7 @@ async function configureNow(value: ApplicationSettings['search'], rebuild = fals
       port.postMessage({ event: 'index', value: watchedStatus(index!.status()) });
     },
     async (files) => {
-      const visibility = new HiddenPaths();
+      const visibility = files.length > 1 ? new HiddenPaths() : undefined;
       for (const file of files) {
         if (config !== value) return;
         extracted.invalidate(file);

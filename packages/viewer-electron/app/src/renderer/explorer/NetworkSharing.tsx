@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { NetworkShare, NetworkSharingSnapshot } from '../../domain/files/network-sharing';
 import {
   guestWarning,
@@ -10,9 +10,7 @@ import { errorMessage } from '../../domain/errors';
 import { Button, CopyButton, Dialog, PathField } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import {
-  followNetworkSharing,
   networkSharingEnabled,
-  refreshSharingOnRequest,
   sharedFolder,
   useFreshSharingFolder,
   useSharingFolder,
@@ -25,10 +23,11 @@ export function SharedMark({ path }: { path: string }) {
   useSharingFolder(path);
   const share = sharedFolder(path);
   if (!share) return null;
+  const warning = guestWarning(share, snapshot.service, snapshot.guestAccess);
   const description = [
     share.inside ? `Inside the shared folder ${share.name}.` : `Shared as ${share.name}.`,
-    sharingServiceText(snapshot.service),
-    guestWarning(share, snapshot.service, snapshot.guestAccess),
+    warning && snapshot.service === 'off' ? undefined : sharingServiceText(snapshot.service),
+    warning,
   ]
     .filter(Boolean)
     .join(' ');
@@ -48,32 +47,51 @@ export function SharedMark({ path }: { path: string }) {
 function ShareDetails({
   share,
   snapshot,
+  folderPath,
 }: {
   share: NetworkShare;
   snapshot: NetworkSharingSnapshot;
+  folderPath: string;
 }) {
   const warning = guestWarning(share, snapshot.service, snapshot.guestAccess);
   const addresses = sharingAddresses(share, snapshot.host, snapshot.ipv4, snapshot.interfaces);
   const windowsProblem = windowsSharingAddressProblem(share);
+  const permissionPath = share.accessPath ?? folderPath;
   return (
     <>
       {warning && <p className="network-sharing-warning">{warning}</p>}
       {share.inside && <p>Inside the shared folder {share.name}</p>}
-      <p className="muted">Guest permissions refer to the folder shown below.</p>
-      <PathField path={share.accessPath ?? share.path} label="Copy permissions folder path" />
+      {warning && permissionPath !== folderPath && (
+        <>
+          <p className="muted">Guest permissions refer to the folder shown below.</p>
+          <PathField path={permissionPath} label="Copy permissions folder path" />
+        </>
+      )}
       <div>
         <dl className="network-sharing-details">
           <dt>Share name</dt>
           <dd>{share.name}</dd>
           <dt>Who can connect</dt>
-          <dd>{share.guests && snapshot.guestAccess !== 'off' ? 'Registered users and guests' : 'Registered users only'}</dd>
+          <dd>
+            {share.guests && snapshot.guestAccess !== 'off'
+              ? 'Registered users and guests'
+              : 'Registered users only'}
+          </dd>
           <dt>Access</dt>
           <dd>{share.readOnly ? 'Read-only' : 'Read and write, subject to folder permissions'}</dd>
         </dl>
       </div>
-      <p>{sharingServiceText(snapshot.service)}</p>
-      {share.guests && snapshot.guestAccess === 'off' && <p>Guest access is enabled for this share but disabled for this Mac.</p>}
+      {(!warning || snapshot.service !== 'off') && <p>{sharingServiceText(snapshot.service)}</p>}
+      {share.guests && snapshot.guestAccess === 'off' && (
+        <p>Guest access is enabled for this share but disabled for this Mac.</p>
+      )}
       {windowsProblem && <p className="muted">{windowsProblem}</p>}
+      {snapshot.network === 'offline' && (
+        <p>
+          This Mac is not on a network. Connect it to the same network as the other computer to use
+          these addresses.
+        </p>
+      )}
       {addresses.length ? (
         <ul className="network-sharing-addresses">
           {addresses.map(({ system, address, label }) => (
@@ -90,29 +108,31 @@ function ShareDetails({
           ))}
         </ul>
       ) : (
-        <p className="muted">
-          Viewer could not determine an address for this Mac.
-        </p>
+        <p className="muted">Viewer could not determine an address for this Mac.</p>
       )}
     </>
   );
 }
 
 export function NetworkSharingSection({ path }: { path: string }) {
-  const { snapshot, folder, checking } = useFreshSharingFolder(path);
-  useEffect(() => followNetworkSharing(), []);
+  const { snapshot, folder, checking, refresh } = useFreshSharingFolder(path);
   const shares =
     networkSharingEnabled() && snapshot.status === 'ready' ? (folder?.shares ?? []) : [];
   if (!networkSharingEnabled()) return null;
-  if (!checking && snapshot.status === 'ready' && folder?.status === 'ready' && !shares.length) return null;
+  if (!checking && snapshot.status === 'ready' && folder?.status === 'ready' && !shares.length)
+    return null;
   return (
     <section className="network-sharing-section" aria-label="Network sharing">
       <h3>Network sharing</h3>
-      {checking ? <p role="status">Checking network sharing…</p> : snapshot.status !== 'ready' || folder?.status !== 'ready' ? <p>Viewer could not check whether this folder is shared.</p> : null}
+      {checking ? (
+        <p role="status">Checking network sharing…</p>
+      ) : snapshot.status !== 'ready' || folder?.status !== 'ready' ? (
+        <p>Viewer could not check whether this folder is shared.</p>
+      ) : null}
       {shares.map((share) => (
-        <ShareDetails key={share.name} share={share} snapshot={snapshot} />
+        <ShareDetails key={share.name} share={share} snapshot={snapshot} folderPath={path} />
       ))}
-      <Button variant="secondary" onClick={refreshSharingOnRequest}>
+      <Button variant="secondary" onClick={refresh}>
         Refresh sharing
       </Button>
     </section>
@@ -120,9 +140,8 @@ export function NetworkSharingSection({ path }: { path: string }) {
 }
 
 export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(): void }) {
-  const { snapshot, folder, checking } = useFreshSharingFolder(path);
+  const { snapshot, folder, checking, refresh } = useFreshSharingFolder(path);
   const [error, setError] = useState('');
-  useEffect(() => followNetworkSharing(), []);
   const shares = snapshot.status === 'ready' ? (folder?.shares ?? []) : [];
   return (
     <Dialog title="Network sharing" onClose={onClose} className="network-sharing-dialog">
@@ -133,7 +152,9 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
         </p>
         <PathField path={path} label="Copy folder path" />
         <div role="status" aria-live="polite">
-          {checking ? <p>Checking network sharing…</p> : snapshot.status === 'ready' && folder?.status === 'ready' ? (
+          {checking ? (
+            <p>Checking network sharing…</p>
+          ) : snapshot.status === 'ready' && folder?.status === 'ready' ? (
             shares.length ? (
               <>
                 <p>
@@ -142,13 +163,20 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
                     : 'This folder is shared.'}
                 </p>
                 {shares.map((share) => (
-                  <ShareDetails key={share.name} share={share} snapshot={snapshot} />
+                  <ShareDetails
+                    key={share.name}
+                    share={share}
+                    snapshot={snapshot}
+                    folderPath={path}
+                  />
                 ))}
               </>
             ) : (
               <p>This folder is not shared.</p>
             )
-          ) : <p>Viewer could not check whether this folder is shared.</p>}
+          ) : (
+            <p>Viewer could not check whether this folder is shared.</p>
+          )}
         </div>
         <ol>
           <li>
@@ -173,7 +201,7 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
         )}
       </div>
       <footer>
-        <Button variant="secondary" onClick={refreshSharingOnRequest}>
+        <Button variant="secondary" onClick={refresh}>
           Refresh
         </Button>
         <Button variant="quiet" onClick={onClose}>

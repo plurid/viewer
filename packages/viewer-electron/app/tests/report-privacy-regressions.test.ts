@@ -29,8 +29,10 @@ const values: ReportPrivateValue[] = [
 
 describe('report privacy regressions', () => {
   it('never infers a code from a message, including uppercase private values at its start', () => {
+    let seed = 0x5eed;
     for (let index = 0; index < 250; index++) {
-      const privateValue = 'PRIVATE_CLIENT_' + index;
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      const privateValue = 'PRIVATE_CLIENT_' + seed.toString(36).toUpperCase();
       for (const prefix of ['', 'Error: ', 'TypeError: ']) {
         const input = reportFixture([prefix + privateValue + ' is not supported']);
         const baseline = diagnosticReport(reportFixture(['Error: ignored']));
@@ -40,36 +42,97 @@ describe('report privacy regressions', () => {
         const entry = JSON.parse(input.log!);
         input.log = JSON.stringify({ ...entry, code: privateValue, errorClass: privateValue });
         expect(diagnosticReport(input)).toBe(baseline);
-        input.log = JSON.stringify({ ...entry, code: 'ERR_' + privateValue, errorClass: privateValue });
+        input.log = JSON.stringify({
+          ...entry,
+          code: 'ERR_' + privateValue,
+          errorClass: privateValue,
+        });
         expect(diagnosticReport(input)).toBe(baseline);
       }
     }
-    expect(diagnosticReport(reportFixture(['Error: ZOE_PASSPORT is not an image.']))).not.toContain('ZOE_PASSPORT');
+    expect(diagnosticReport(reportFixture(['Error: ZOE_PASSPORT is not an image.']))).not.toContain(
+      'ZOE_PASSPORT',
+    );
+  });
+
+  it('ignores frame-shaped message lines when no structured stack was recorded', () => {
+    const input = reportFixture([
+      'Error: private\n    at Medical.Diagnosis.Zoe (/Applications/Viewer.app/Contents/private-patient.js:1:2)',
+    ]);
+    input.bundleRoot = '/Applications/Viewer.app';
+    expect(diagnosticReport(input)).toBe(diagnosticReport(reportFixture(['Error: ignored'])));
   });
 
   it('accepts only real structured errno, known Node codes and exported Viewer codes', async () => {
     const root = await temporaryRoot('viewer-report-codes-');
     const log = new DiagnosticLog(path.join(root, 'diagnostics.log'));
-    for (const code of ['ENOENT', 'ERR_INVALID_ARG_TYPE', 'VIEWER_NO_TRASH', 'ZOE_PASSPORT', 'ERR_ZOE_PASSPORT'])
+    for (const code of [
+      'ENOENT',
+      'ERR_INVALID_ARG_TYPE',
+      'VIEWER_NO_TRASH',
+      'ZOE_PASSPORT',
+      'ERR_ZOE_PASSPORT',
+    ])
       await log.record('main-rejection', Object.assign(new Error('private'), { code }));
-    const codes = (await readFile(log.file, 'utf8')).trim().split('\n').map((line) => JSON.parse(line).code);
-    expect(codes).toEqual(['ENOENT', 'ERR_INVALID_ARG_TYPE', 'VIEWER_NO_TRASH', undefined, undefined]);
+    const codes = (await readFile(log.file, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line).code);
+    expect(codes).toEqual([
+      'ENOENT',
+      'ERR_INVALID_ARG_TYPE',
+      'VIEWER_NO_TRASH',
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it('captures real Node ERR_* stacks after their complete bracketed header', () => {
+    let failure: unknown;
+    try {
+      Buffer.alloc(-1);
+    } catch (error) {
+      failure = error;
+    }
+    const native = failure as NodeJS.ErrnoException;
+    // Vitest replaces Node's stack formatter, including its bracketed code header.
+    native.stack =
+      native.name +
+      ' [' +
+      native.code +
+      ']: ' +
+      native.message +
+      '\n    at Buffer.alloc (/Applications/Viewer.app/Contents/main.cjs:12:3)';
+    const captured = diagnosticFailure(failure);
+    expect(captured.errorClass).toBe('RangeError');
+    expect(captured.code).toBe('ERR_OUT_OF_RANGE');
+    expect(captured.stack).toMatch(/^\s*at /);
+    expect(captured.stack).not.toContain('The value of "size"');
   });
 
   it('keeps renderer locations without names and rejects alternate hosts and encoded traversal', async () => {
     const root = await temporaryRoot('viewer-report-renderer-');
     const log = new DiagnosticLog(path.join(root, 'diagnostics.log'));
     const error = new TypeError('SECRET_CLIENT is not a function');
-    error.stack = error.name + ': ' + error.message + '\n' + [
-      '    at Medical.Diagnosis.Zoe (viewer-app://app/assets/renderer.js:120:8)',
-      '    at outside (viewer-app://other/assets/private.js:1:2)',
-      '    at outside (viewer-app://app/../private.js:1:2)',
-      '    at outside (viewer-app://app/%2e%2e/private.js:1:2)',
-      '    at outside (viewer-app://app/assets/%2E/private.js:1:2)',
-    ].join('\n');
+    error.stack =
+      error.name +
+      ': ' +
+      error.message +
+      '\n' +
+      [
+        '    at Medical.Diagnosis.Zoe (viewer-app://app/assets/renderer.js:120:8)',
+        '    at outside (viewer-app://other/assets/private.js:1:2)',
+        '    at outside (viewer-app://app/../private.js:1:2)',
+        '    at outside (viewer-app://app/%2e%2e/private.js:1:2)',
+        '    at outside (viewer-app://app/assets/%2E/private.js:1:2)',
+      ].join('\n');
     const captured = diagnosticFailure(error);
     await log.record('renderer-error', captured.detail, captured);
-    const report = diagnosticReport({ ...reportFixture(), log: await readFile(log.file, 'utf8'), bundleRoot: '/Applications/Viewer.app' });
+    const report = diagnosticReport({
+      ...reportFixture(),
+      log: await readFile(log.file, 'utf8'),
+      bundleRoot: '/Applications/Viewer.app',
+    });
     expect(report).toContain('- assets/renderer.js:120:8');
     expect(report).toContain('4 frames outside Viewer');
     expect(report).not.toMatch(/Medical|Diagnosis|Zoe|SECRET_CLIENT|viewer-app|private\.js/);
@@ -80,7 +143,11 @@ describe('report privacy regressions', () => {
     const diagnose = vi.fn();
     const handler = createWindowHandlers({
       host: { openSettings: async () => {}, diagnose },
-      shellCommand: { status: async () => status, install: async () => status, uninstall: async () => status },
+      shellCommand: {
+        status: async () => status,
+        install: async () => status,
+        uninstall: async () => status,
+      },
       sessions: { owner: () => undefined, claim: () => false },
       flushes: { acknowledge: () => {} },
       window: () => undefined,
@@ -88,8 +155,14 @@ describe('report privacy regressions', () => {
       assignWorkspace: () => {},
       createWorkspace: () => 'fixture',
     }).diagnosticReport;
-    const error = Object.assign(new TypeError('PRIVATE_CLIENT is not a function'), { code: 'ERR_INVALID_ARG_TYPE' });
-    error.stack = error.name + ': ' + error.message + '\n    at Object.Private (viewer-app://app/assets/renderer.js:12:3)';
+    const error = Object.assign(new TypeError('PRIVATE_CLIENT is not a function'), {
+      code: 'ERR_INVALID_ARG_TYPE',
+    });
+    error.stack =
+      error.name +
+      ': ' +
+      error.message +
+      '\n    at Object.Private (viewer-app://app/assets/renderer.js:12:3)';
     const captured = diagnosticFailure(error);
     const result = await handler(schemas.diagnosticReport.parse([captured]), 10);
     expect(diagnose).toHaveBeenCalledExactlyOnceWith(captured.detail, captured);
@@ -98,27 +171,61 @@ describe('report privacy regressions', () => {
       { ...captured, stack: 'x'.repeat(8001) },
       { ...captured, code: 'x'.repeat(65) },
       { ...captured, read: '/private/diagnostics.log' },
-    ]) expect(schemas.diagnosticReport.safeParse([invalid]).success).toBe(false);
+    ])
+      expect(schemas.diagnosticReport.safeParse([invalid]).success).toBe(false);
   });
 
   it('retains extensions only when they are recognized path extensions', () => {
     expect(redactReport('/Users/zoe/Documents/Diagnosis.hunter2', values)).toBe('~/…/…');
     expect(redactReport('/Users/zoe/Documents/Diagnosis.pdf', values)).toBe('~/…/….pdf');
-    expect(redactReport('/Volumes/Sample Disk/Confidential/Payroll.xlsx', values)).toBe('/Volumes/<volume>/…/….xlsx');
+    expect(redactReport('/Volumes/Sample Disk/Confidential/Payroll.xlsx', values)).toBe(
+      '/Volumes/<volume>/…/….xlsx',
+    );
+  });
+
+  it('retains bundle and development code names while masking hosts and tokens inside them', () => {
+    expect(redactReport('/Applications/Viewer.app/Contents/report.ts', values)).toBe(
+      '<Viewer>/Contents/report.ts',
+    );
+    expect(redactReport('/Applications/Viewer.app/Contents/settings.jsonc', values)).toBe(
+      '<Viewer>/Contents/settings.jsonc',
+    );
+    const development: ReportPrivateValue[] = [
+      { kind: 'application bundle', value: '/Source/Viewer/src' },
+    ];
+    expect(redactReport('/Source/Viewer/src/renderer/Report.tsx', development)).toBe(
+      '<Viewer>/renderer/Report.tsx',
+    );
+    expect(
+      redactReport('/Applications/Viewer.app/x/intranet.corp.example.com', values),
+    ).not.toContain('intranet');
   });
 
   it('records real error metadata and excludes message-injected frames and computed function names', async () => {
     const root = await temporaryRoot('viewer-report-structured-');
     const log = new DiagnosticLog(path.join(root, 'diagnostics.log'));
-    const error = Object.assign(new TypeError('Private patient\n    at Medical.Diagnosis.Zoe (/Applications/Viewer.app/private.ts:1:2)'), { code: 'ENOENT' });
-    error.stack = error.name + ': ' + error.message + '\n    at Object.Payroll_Acme_2026 (/Applications/Viewer.app/Contents/main.cjs:10:20)';
+    const error = Object.assign(
+      new TypeError(
+        'Private patient\n    at Medical.Diagnosis.Zoe (/Applications/Viewer.app/private.ts:1:2)',
+      ),
+      { code: 'ENOENT' },
+    );
+    error.stack =
+      error.name +
+      ': ' +
+      error.message +
+      '\n    at Object.Payroll_Acme_2026 (/Applications/Viewer.app/Contents/main.cjs:10:20)';
     await log.record('main-exception', error);
     const stored = await readFile(log.file, 'utf8');
     const entry = JSON.parse(stored);
     expect(entry.errorClass).toBe('TypeError');
     expect(entry.code).toBe('ENOENT');
     expect(entry.stack).not.toContain('private.ts');
-    const report = diagnosticReport({ ...reportFixture(), log: stored, bundleRoot: '/Applications/Viewer.app' });
+    const report = diagnosticReport({
+      ...reportFixture(),
+      log: stored,
+      bundleRoot: '/Applications/Viewer.app',
+    });
     expect(report).toContain('- Class: TypeError\n- Code: ENOENT');
     expect(report).toContain('Contents/main.cjs:10:20');
     expect(report).not.toMatch(/Medical|Diagnosis|Zoe|Payroll|Acme|private\.ts/);
@@ -142,6 +249,7 @@ describe('report privacy regressions', () => {
     ['connect [fe80::1c2d:3e4f:5a6b:7c8d%25en0]:445', /fe80|7c8d|en0/],
     ['mount smb:/nas/Finance', /nas|Finance/],
     ['connect intranet:8080 ip-10-0-12-7', /intranet|10-0-12-7/],
+    ['Error: getaddrinfo ENOTFOUND buildhost', /buildhost/],
     ['ether A4-83-E7-12-34-56', /A4-83-E7/],
     ['to smith(at)example.com', /smith|example/],
     ['key glpat-AbCdEfGhIjKlMnOpQrSt', /AbCdEfGh/],
@@ -155,11 +263,15 @@ describe('report privacy regressions', () => {
   });
 
   it.each(['=', ':', '[', '{', ',', '|', '<', '«'])('recognizes a path after %s', (separator) => {
-    expect(redactReport('source' + separator + '/Users/Shared/Acme/Payroll.xlsx', values)).not.toMatch(/Acme|Payroll|Shared/);
+    expect(
+      redactReport('source' + separator + '/Users/Shared/Acme/Payroll.xlsx', values),
+    ).not.toMatch(/Acme|Payroll|Shared/);
   });
 
   it.each([',', ';', ')', '@', '#'])('does not end a path at %s', (punctuation) => {
-    expect(redactReport('open /Users/Shared/Smith' + punctuation + 'Jones/Payroll.xlsx', values)).not.toMatch(/Smith|Jones|Payroll/);
+    expect(
+      redactReport('open /Users/Shared/Smith' + punctuation + 'Jones/Payroll.xlsx', values),
+    ).not.toMatch(/Smith|Jones|Payroll/);
   });
 
   it.each([

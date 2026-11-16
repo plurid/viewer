@@ -158,9 +158,8 @@ version, build, edition and trial or licensed status, macOS, display count and s
 region. Model, chip and memory appear when available. Up to 20 recent failures appear newest first,
 with their time, kind and known error class. Codes come only from recorded error fields and a fixed
 list of known codes. Recorded stack locations inside Viewer keep the code path, line and column;
-function names are omitted. Other stack frames are counted without their paths. Both the direct
-and Mac App Store editions use this report; the default needs no user, computer-name or volume
-lookup.
+function names are omitted. Other stack frames are counted without their paths. Both the direct and
+Mac App Store editions use this report; the default needs no user, computer-name or volume lookup.
 
 Turn on **Include message text** only if you want excerpts. Message text can contain file names,
 addresses and other private text. Viewer removes what it can recognise. Read it before you share it.

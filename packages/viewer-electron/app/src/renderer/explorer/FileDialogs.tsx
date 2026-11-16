@@ -174,7 +174,7 @@ export function useFileDialogs(): {
       dialog: (kind, context) => setName({ kind, context }),
       destination: (kind, context) => setDestination({ kind, context }),
       info: setInfo,
-      networkSharing: (context) => {
+      networkSharing: async (context) => {
         const file = context.selection[0];
         if (!file?.directory || context.selection.length !== 1) return;
         if (networkSharingEnabled()) setSharing(file.path);

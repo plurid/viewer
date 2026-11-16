@@ -12,7 +12,14 @@ for (const batches of [1000, 5000]) {
   const second = sessions.create('/fixtures');
   const seed = sessions.open(1, '/fixtures', first);
   seed.visits = structuredClone(visits);
-  sessions.save(1, seed, { id: 'seed', base: {}, clear: false, revision: 0 });
+  sessions.save(1, seed, {
+    id: 'seed',
+    base: {},
+    clear: false,
+    revision: 0,
+    clearRevision: 0,
+    restored: {},
+  });
   const late = sessions.open(2, '/fixtures', second);
   late.visits!['/fixtures/a/0']!.count++;
   for (let index = 0; index < batches; index++)
@@ -23,38 +30,19 @@ for (const batches of [1000, 5000]) {
       },
     ]);
   const start = performance.now();
-  let refreshed = false;
-  try {
-    sessions.save(2, late, { id: 'late', base: visits, clear: false, revision: 0 });
-  } catch (error) {
-    if ((error as { code?: string }).code !== 'FOLDER_HISTORY_REFRESH') throw error;
-    refreshed = true;
-  }
+  const merged = sessions.save(2, late, {
+    id: 'late',
+    base: visits,
+    clear: false,
+    revision: 0,
+    clearRevision: 0,
+    restored: {},
+  });
+  if (merged.visits?.['/fixtures/a/0']?.count !== 11)
+    throw new Error('The merged save lost a visit.');
   console.log(
-    JSON.stringify({
-      batches,
-      saveMilliseconds: Number((performance.now() - start).toFixed(3)),
-      refreshed,
-    }),
+    JSON.stringify({ batches, saveMilliseconds: Number((performance.now() - start).toFixed(3)) }),
   );
-  if (refreshed) {
-    const history = sessions.folderHistory();
-    const retry = performance.now();
-    const merged = sessions.save(2, late, {
-      id: 'retry',
-      base: history.visits,
-      clear: false,
-      revision: history.revision,
-    });
-    if (merged.visits?.['/fixtures/a/0']?.count !== 11)
-      throw new Error('The refreshed save lost a visit.');
-    console.log(
-      JSON.stringify({
-        batches,
-        retryMilliseconds: Number((performance.now() - retry).toFixed(3)),
-      }),
-    );
-  }
 }
 for (const windows of [1, 8]) {
   const readers = Array.from({ length: windows }, () => {

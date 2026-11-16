@@ -26,6 +26,66 @@ export function withoutControls(text: string): string {
   return text.replace(/[\p{Cc}\p{Cf}]/gu, '');
 }
 
+function terminalCSIEnd(text: string, start: number): number {
+  let end = start;
+  while (end < text.length) {
+    const code = text.charCodeAt(end);
+    if (code === 0x18 || code === 0x1a) return end + 1;
+    if (
+      (code < 0x20 && code !== 0x1b) ||
+      code === 0x7f ||
+      /\p{Cf}/u.test(text[end]!) ||
+      (code >= 0x20 && code <= 0x3f)
+    )
+      end++;
+    else return code >= 0x40 && code <= 0x7e ? end + 1 : end;
+  }
+  return end;
+}
+
+function terminalStringEnd(text: string, start: number, bell: boolean): number {
+  for (let index = start; index < text.length; index++) {
+    if (text[index] === '\u009c' || (bell && text[index] === '\u0007')) return index + 1;
+    if (text[index] === '\u001b' && text[index + 1] === '\\') return index + 2;
+  }
+  return text.length;
+}
+
+/** Removing only ESC leaves terminal parameters next to names and hides their boundaries. */
+export function withoutTerminalSequences(text: string): string {
+  let output = '';
+  let kept = 0;
+  for (let index = 0; index < text.length;) {
+    const character = text[index]!;
+    let end = index;
+    if (character === '\u001b') {
+      const next = text[index + 1] ?? '';
+      if (next === '[') end = terminalCSIEnd(text, index + 2);
+      else if (next === ']' || /^[PX^_]$/.test(next))
+        end = terminalStringEnd(text, index + 2, next === ']');
+      else {
+        end = index + 1;
+        while (text.charCodeAt(end) >= 0x20 && text.charCodeAt(end) <= 0x2f) end++;
+        if (text.charCodeAt(end) >= 0x30 && text.charCodeAt(end) <= 0x7e) end++;
+      }
+    } else if (character === '\u009b') end = terminalCSIEnd(text, index + 1);
+    else if (/^[\u0090\u0098\u009d-\u009f]$/.test(character))
+      end = terminalStringEnd(text, index + 1, character === '\u009d');
+    else if (character === '\u009c') end = index + 1;
+    else if (character === '[' && /[\d;:]/.test(text[index + 1] ?? '')) {
+      // Older log entries lost ESC but retained their SGR color parameters.
+      const candidate = terminalCSIEnd(text, index + 1);
+      if (text[candidate - 1] === 'm') end = candidate;
+    }
+    if (end > index) {
+      output += text.slice(kept, index);
+      index = end;
+      kept = end;
+    } else index++;
+  }
+  return output + text.slice(kept);
+}
+
 /** The review and clipboard must share a complete, visibly bounded Markdown document. */
 export function boundedReport(text: string, limit = 64 * 1024): string {
   const encoder = new TextEncoder();

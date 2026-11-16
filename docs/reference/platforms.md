@@ -60,10 +60,14 @@ sandbox acceptance.
 
 Network sharing follows the direct-only system-tool rule used for Spotlight. It reads
 `/usr/sbin/sharing -l -f json`, the `com.apple.smbd` launch job, the local host name and physical
-network interfaces with bounded, shell-free calls. Empty, malformed or unsupported output means
-unknown sharing state. Unescaped text records cannot safely identify sharing permissions. It opens
-the installed macOS Sharing settings for the person to make changes. The Store edition runs none of
-these tools and offers no sharing mark, section or command.
+network interfaces with bounded, shell-free calls. Empty share lists are confirmed with
+`/usr/bin/dscl . -list /SharePoints`. The explicit `AllowGuestAccess` SMB preference is read with
+`/usr/bin/plutil` when available. Missing preferences remain unknown. Empty, malformed, inconsistent
+or unsupported output means unknown sharing state. Unescaped text records cannot safely identify
+sharing permissions. It opens the installed macOS Sharing settings for the person to make changes.
+Tools receive SIGTERM after two seconds and SIGKILL after a further 250 ms if they do not exit.
+Opening the fixed Settings pane requires no folder metadata or access grant. The Store edition runs
+none of these tools and offers no sharing mark, section or command.
 
 Both macOS editions can read the native hidden flag when built with the current file helper. The
 helper reads directory flags in bulk and falls back to native per-entry flags on filesystems that do

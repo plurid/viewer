@@ -17,19 +17,26 @@ keeps its own selection.
 2. Type part of a folder's name or path to narrow the suggestions. Near-miss spellings match too.
    Matches in the folder's own name come first; frequency and recency break equal matches.
 3. Use **↑** and **↓** to choose, then **Return** to open that suggestion. You can also click it.
-   Without an arrowed choice, an existing typed path opens. A mistyped path shows an error and stays
-   in the field. `~` and `~/Documents` start at Home.
+   For a name fragment, the first suggestion is active and **Return** opens it. Without an arrowed
+   choice, a typed path opens; a mistyped path shows an error and stays in the field. Paths start
+   with `/`, `~`, `./` or `../`. Names such as `.config` and fragments such as `proj/2026` search
+   history. `~` and `~/Documents` start at Home.
 
 You can also type a fragment in **⌘K**. Matching **Frequent folders** arrive below the existing
-results. Favorites and recent folders keep their place. Type `z` and a fragment for immediate
-matches with literal words in order, ending in the folder's name. Unavailable folders stay hidden
-until they are available again; disconnecting a disk does not forget its folders. The sidebar's
-**Recent** list keeps its newest-first order.
+results. Favorites, recent folders and open planes keep their place. Type `z` and a fragment for up
+to ten matches with literal words in order, ending in the folder's name. Already checked folders
+appear immediately, including folders checked in the background after launch. Other matches wait
+briefly for higher-ranked checks. A later result keeps its rank without changing your active choice.
+Unavailable folders stay hidden until they are available again; disconnecting a disk does not forget
+its folders. The sidebar's **Recent** list keeps its newest-first order.
 
 Choose **Clear recent folders** in **⌘K** or **Go to folder…**, or **Clear** beside the sidebar's
-**Recent** heading, to clear both the Recent list and visit counts across windows. This history
-stays on this Mac and is included with recents in a personal backup. Trash and archive contents are
-never learned. See the [navigation limits](../reference/capabilities.md#open-and-move-around).
+**Recent** heading, to clear both the Recent list and visit counts across windows. **Undo clear
+recent folders** restores them from the offer in the clearing window. The offer lasts eight seconds;
+dismissing it, quitting or clearing again in another window ends it. Renamed folders return under
+their new paths. This history stays on this Mac and is included with recents in a personal backup.
+Trash and archive contents are never learned. See the
+[navigation limits](../reference/capabilities.md#open-and-move-around).
 
 ## Open and save in Viewer
 
@@ -226,7 +233,8 @@ Privacy & Security**.
    in a Windows address as shown. On another Mac, use Finder's **Go → Connect to Server…** with the
    Mac address. Wi-Fi and Ethernet addresses are labelled; VPN and virtual interfaces are omitted.
    With IPv6 only, use the local host name address. Both computers must be on the same local
-   network.
+   network. If this Mac is offline, Viewer says so beside the addresses. Windows addresses are
+   omitted for names Windows cannot use, including names ending in a dot or space.
 
 Shared folders and the folders inside them have a **Shared** mark in file views and the sidebar.
 Inside a share, the details say **Inside the shared folder** and its name. **Get info…** (**⌘I**)
@@ -234,15 +242,27 @@ shows the share name, registered or guest access, read-only status, the File Sha
 copyable addresses under **Network sharing**. If File Sharing is off, the share still exists but
 nobody can connect. **Refresh sharing** reads its state again. Viewer also refreshes when a folder
 view opens and when you return to the app. Navigation reuses sharing state for at least five
-seconds; **Refresh sharing** and returning to the app request a fresh read. If Viewer cannot read
-the state, it shows no mark or sharing details and does not say that the folder is not shared.
+seconds. A listed share whose folder is missing is checked again on the next read. Opening **Get
+info…** or **Network Sharing…** and choosing **Refresh** checks that folder without waiting for
+other rows. Returning to the app also requests a fresh read. While checking, the window says so. If
+Viewer cannot read the state, it says **Viewer could not check whether this folder is shared.** It
+does not say that the folder is not shared. An unreadable share makes its possible contents unknown;
+other folders keep their state.
 
 The warning **Anyone on the same network can open this folder without a password.** means guest
-access is on. When the share also allows writes and the folder's Everyone permissions or access
-control list allow writes, Viewer adds **They can also add, change and delete files in this
-folder.** If those permissions cannot be read or understood, it warns that guests may also be able
-to write. These warnings stay visible. Choose **Network Sharing…** and clear **Allow guest users**
-in **Advanced Options**, as described above, if that is not what you intended.
+access is on. When File Sharing is off, the warning says that nobody can connect now and describes
+what guests will be able to do if it is turned on. An explicit global guest restriction, when macOS
+lets Viewer read it, takes precedence over the share's guest setting.
+
+When the share allows writes and the folder's permissions or access list grant guests a modifying
+right, Viewer adds **Guests can also modify this folder or its contents.** This refers to the folder
+whose details are open. If an alias resolves to a different path, the warning identifies that path.
+A subfolder uses its own permissions. Access list order and deny entries apply; an entry marked only
+for inheritance does not grant access to the folder itself. If an access list cannot be checked, the
+warning says guests may be able to modify the folder and explains why. Older helpers say that this
+build could not check the access list. These warnings stay visible. Choose **Network Sharing…** and
+clear **Allow guest users** in **Advanced Options**, as described above, if that is not what you
+intended.
 
 To stop, choose **Network Sharing… → Open File Sharing Settings**, select the folder under **Shared
 Folders**, then click the remove button. Return to Viewer to see the result. Viewer reads sharing

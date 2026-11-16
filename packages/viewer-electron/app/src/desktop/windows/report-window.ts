@@ -16,7 +16,7 @@ import { isolatedContent } from './web-content-policy';
 export type ReportLook = 'light' | 'dark';
 
 export const reportDisclosure =
-  "By default, the report holds Viewer version and build, edition, license status, macOS version, available hardware, display count and scales, language, region, and each failure's time, kind, class, code and location in Viewer, with no personal file names or message text.";
+  "By default, the report holds Viewer version and build, edition, license status, macOS version, Mac model, chip and memory when available, display count and scales, language, region, and each failure's time, kind, class, code and location in Viewer, with no personal file names or message text.";
 
 export const reportMessageWarning =
   'Message text can contain file names, addresses and other private text. Viewer removes what it can recognise. Read it before you share it.';
@@ -86,6 +86,9 @@ export function reportPage(report: string, look: ReportLook): string {
     :root[data-look='light'] button:hover,
     :root[data-look='light'] button:focus-visible { filter: brightness(0.94); }
     button:active { filter: brightness(0.95); }
+    button:disabled, :root[data-look='light'] button:disabled {
+      opacity: 0.55; cursor: default; filter: none;
+    }
   </style>
 </head>
 <body>
@@ -238,7 +241,12 @@ export class ReportWindow {
             pending = false;
           }
         } else if (channel === reportOptionsChannel) {
-          if (args.length === 2 && Number.isSafeInteger(args[0]) && Number(args[0]) > 0 && typeof args[1] === 'boolean')
+          if (
+            args.length === 2 &&
+            Number.isSafeInteger(args[0]) &&
+            Number(args[0]) > 0 &&
+            typeof args[1] === 'boolean'
+          )
             void update(Number(args[0]), args[1]);
         } else if (channel === reportShownChannel) {
           if (

@@ -259,7 +259,10 @@ describe('agent removal safety', () => {
       isDestroyed = () => false;
       loadURL = vi.fn(async () => {
         contents.emit('did-start-loading');
-        contents.ipc.emit(reportReadyChannel, { sender: contents, senderFrame: contents.mainFrame });
+        contents.ipc.emit(reportReadyChannel, {
+          sender: contents,
+          senderFrame: contents.mainFrame,
+        });
       });
       show = vi.fn();
       close = vi.fn();
@@ -281,13 +284,22 @@ describe('agent removal safety', () => {
       const makeReport = vi.fn(async (include: boolean) =>
         include ? 'Explicit excerpt' : 'Structured report',
       );
-      const review = new ReportWindow(async () => ({
-        report: await makeReport(false),
-        withMessageText: () => makeReport(true),
-      }), () => 'dark', false);
+      const review = new ReportWindow(
+        async () => ({
+          report: await makeReport(false),
+          withMessageText: () => makeReport(true),
+        }),
+        () => 'dark',
+        false,
+      );
       await review.open();
       const agentContents = { id: 900, mainFrame: {} };
-      for (const channel of [reportOptionsChannel, reportCopyChannel, reportShownChannel, reportReadyChannel]) {
+      for (const channel of [
+        reportOptionsChannel,
+        reportCopyChannel,
+        reportShownChannel,
+        reportReadyChannel,
+      ]) {
         const args =
           channel === reportOptionsChannel ? [1, true] : channel === reportShownChannel ? [1] : [];
         contents.ipc.emit(

@@ -106,7 +106,11 @@ export function diagnosticReport(input: ReportInput): string {
       .toSorted((a, b) => String(b.at).localeCompare(String(a.at)))
       .slice(0, reportLimits.failures);
     for (const entry of recent) {
-      const failure = reportFailure(entry, input.bundleRoot, new Set(Object.keys(os.constants?.errno ?? {})));
+      const failure = reportFailure(
+        entry,
+        input.bundleRoot,
+        new Set(Object.keys(os.constants?.errno ?? {})),
+      );
       lines.push(
         '### ' + String(entry.at) + ' (' + String(entry.kind) + ')',
         '',
@@ -246,8 +250,9 @@ export async function makeDiagnosticReportSnapshot(
   let messages: Promise<string> | undefined;
   return {
     report: diagnosticReport(input),
-    withMessageText: () => messages ??= reportPrivateValues(bundleRoot).then((privateValues) =>
-      diagnosticReport({ ...input, privateValues, includeMessageText: true }),
-    ),
+    withMessageText: () =>
+      (messages ??= reportPrivateValues(bundleRoot).then((privateValues) =>
+        diagnosticReport({ ...input, privateValues, includeMessageText: true }),
+      )),
   };
 }

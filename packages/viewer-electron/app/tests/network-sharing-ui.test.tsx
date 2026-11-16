@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { FileEntry, ViewerAPI } from '../src/domain/contracts';
 import type { NetworkSharingSnapshot } from '../src/domain/files/network-sharing';
+import { guestWarning } from '../src/domain/files/network-sharing';
 import type { CustomAction } from '../src/domain/automation/actions';
 import type { CommandContext } from '../src/renderer/commands/registry';
 import type { FolderActions } from '../src/renderer/commands/folder';
@@ -81,6 +82,8 @@ const context = {
 let snapshot: NetworkSharingSnapshot;
 const api = vi.fn<ViewerAPI['networkSharing']>();
 const copyText = vi.fn(async (_text: string) => {});
+const offWarning =
+  'File Sharing is off, so nobody can connect now. If it is turned on, anyone on the same network will be able to open this folder without a password.';
 function reply(paths = [file.path]): NetworkSharingSnapshot {
   return {
     ...snapshot,
@@ -120,7 +123,7 @@ beforeEach(async () => {
         guestWritable: true,
       },
     ],
-    service: 'off',
+    service: 'running',
     host: 'Studio-Mac',
     ipv4: ['10.0.0.3', '192.168.1.12'],
   };
@@ -184,10 +187,10 @@ it('marks folders with an accessible name and the strongest guest warning across
   await readNetworkSharing([file.path]);
   const { unmount } = render(<FileIcon entry={file} />);
   expect(screen.getByRole('img', { name: 'Shared' }).getAttribute('aria-description')).toContain(
-    'Anyone on the same network can open this folder without a password. They can also add, change and delete files in this folder.',
+    'Anyone on the same network can open this folder without a password. Guests can also modify this folder or its contents.',
   );
   expect(screen.getByRole('img', { name: 'Shared' }).getAttribute('title')).toContain(
-    'Nobody can connect',
+    'File Sharing is on',
   );
   unmount();
   const props: FileViewProps = {
@@ -223,13 +226,14 @@ it('marks folders with an accessible name and the strongest guest warning across
 
 it('shows Get Info sharing details and copies literal Windows and encoded Mac addresses', async () => {
   render(<FileInformation entries={[file]} onClose={() => {}} />);
+  await screen.findByText('Drop folder 日本');
   const section = within(await screen.findByRole('region', { name: 'Network sharing' }));
   expect(section.getByText('Drop folder 日本')).toBeTruthy();
   expect(section.getByText('Registered users and guests')).toBeTruthy();
-  expect(section.getByText('File Sharing is off. Nobody can connect to this share.')).toBeTruthy();
+  expect(section.getByText('File Sharing is on.')).toBeTruthy();
   expect(
     section.getByText(
-      'Anyone on the same network can open this folder without a password. They can also add, change and delete files in this folder.',
+      'Anyone on the same network can open this folder without a password. Guests can also modify this folder or its contents.',
     ),
   ).toBeTruthy();
   const address = 'smb://Studio-Mac.local/Drop%20folder%20%E6%97%A5%E6%9C%AC';
@@ -245,7 +249,7 @@ it('keeps the read-only guest warning visible and omits it for registered users'
   };
   await readNetworkSharing([file.path]);
   const { unmount } = render(<NetworkSharingSection path={file.path} />);
-  expect(screen.getByText('Read-only')).toBeTruthy();
+  expect(await screen.findByText('Read-only')).toBeTruthy();
   expect(
     screen.getByText('Anyone on the same network can open this folder without a password.'),
   ).toBeTruthy();
@@ -258,10 +262,10 @@ it('keeps the read-only guest warning visible and omits it for registered users'
   await readNetworkSharing([file.path]);
   render(<NetworkSharingSection path={file.path} />);
   expect(screen.queryByText(/Anyone on the same network/)).toBeNull();
-  expect(screen.getByText('Registered users only')).toBeTruthy();
+  expect(await screen.findByText('Registered users only')).toBeTruthy();
 });
 
-it('has no sharing UI or command in the Store edition or for unknown share points', async () => {
+it('states unknown sharing plainly and has no sharing UI or command in the Store edition', async () => {
   snapshot = { ...snapshot, status: 'unknown', shares: [] };
   await readNetworkSharing([file.path]);
   const { unmount } = render(
@@ -271,10 +275,14 @@ it('has no sharing UI or command in the Store edition or for unknown share point
     </>,
   );
   expect(screen.queryByRole('img', { name: 'Shared' })).toBeNull();
-  expect(screen.queryByRole('region', { name: 'Network sharing' })).toBeNull();
+  expect(
+    await screen.findByText('Viewer could not check whether this folder is shared.'),
+  ).toBeTruthy();
   unmount();
   const guidance = render(<NetworkSharingDialog path={file.path} onClose={() => {}} />);
-  expect(screen.queryByText(/Sharing status is unknown/)).toBeNull();
+  expect(
+    await screen.findByText('Viewer could not check whether this folder is shared.'),
+  ).toBeTruthy();
   expect(screen.queryByText('This folder is not shared.')).toBeNull();
   guidance.unmount();
   initialize({
@@ -343,7 +351,9 @@ it('keeps the dialog usable with no local network and an unavailable Settings pa
     return reply(request.kind === 'refresh' ? request.paths : undefined);
   });
   render(<NetworkSharingDialog path={file.path} onClose={() => {}} />);
-  expect(screen.getByText(/No local network address/)).toBeTruthy();
+  expect(
+    await screen.findByText('smb://Studio-Mac.local/Drop%20folder%20%E6%97%A5%E6%9C%AC'),
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Open File Sharing Settings' }));
   expect(await screen.findByText('Settings unavailable')).toBeTruthy();
   expect(screen.queryByLabelText(/password/i)).toBeNull();
@@ -414,7 +424,7 @@ it('shows inherited sharing and its guest warning, and never calls an unknown fo
   );
   mark.unmount();
   const info = render(<NetworkSharingSection path={file.path} />);
-  expect(screen.getByText('Inside the shared folder Drop folder 日本')).toBeTruthy();
+  expect(await screen.findByText('Inside the shared folder Drop folder 日本')).toBeTruthy();
   expect(
     screen.getByText(/Anyone on the same network can open this folder without a password/),
   ).toBeTruthy();
@@ -496,4 +506,67 @@ it('refuses sharing in actual builtin, plain sequence and command-line custom ex
   }
   expect(invoke).not.toHaveBeenCalled();
   expect(line).not.toHaveBeenCalled();
+});
+
+it('uses conditional guest warnings in the mark, Get Info and dialog while File Sharing is off', async () => {
+  snapshot = {
+    ...snapshot,
+    service: 'off',
+    shares: [{ ...snapshot.shares[0]!, guestWritable: false }],
+  };
+  await readNetworkSharing([file.path]);
+  const mark = render(<FileIcon entry={file} />);
+  expect(screen.getByRole('img', { name: 'Shared' }).getAttribute('aria-description')).toContain(
+    offWarning,
+  );
+  mark.unmount();
+  const info = render(<NetworkSharingSection path={file.path} />);
+  expect(await screen.findByText(offWarning)).toBeTruthy();
+  info.unmount();
+  render(<NetworkSharingDialog path={file.path} onClose={() => {}} />);
+  expect(await screen.findByText(offWarning)).toBeTruthy();
+  snapshot = { ...snapshot, service: 'running' };
+  act(() => window.dispatchEvent(new Event('focus')));
+  expect(
+    await screen.findByText('Anyone on the same network can open this folder without a password.'),
+  ).toBeTruthy();
+});
+
+it('explains an unavailable build access list and suppresses impossible Windows addresses', async () => {
+  snapshot = {
+    ...snapshot,
+    shares: [
+      {
+        ...snapshot.shares[0]!,
+        relative: 'a\\b',
+        guestWritable: false,
+        guestWriteUnknown: true,
+        guestWriteReason: 'build',
+      },
+    ],
+  };
+  await readNetworkSharing([file.path]);
+  render(<NetworkSharingSection path={file.path} />);
+  expect(await screen.findByText(guestWarning(snapshot.shares[0]!)!)).toBeTruthy();
+  expect(screen.getByText(/Windows addresses are unavailable/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /^Copy Windows address/ })).toBeNull();
+  expect(screen.getByRole('button', { name: /Copy Mac address/ })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Copy permissions folder path' })).toBeNull();
+});
+
+it('shows offline host addresses with a network hint and only adds a distinct guest permission path', async () => {
+  snapshot = { ...snapshot, network: 'offline', ipv4: [], interfaces: [] };
+  const { unmount } = render(<NetworkSharingDialog path={file.path} onClose={() => {}} />);
+  expect(await screen.findByText(/This Mac is not on a network/)).toBeTruthy();
+  expect(
+    screen.getByText('smb://Studio-Mac.local/Drop%20folder%20%E6%97%A5%E6%9C%AC'),
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Copy permissions folder path' })).toBeNull();
+  unmount();
+  snapshot = {
+    ...snapshot,
+    shares: [{ ...snapshot.shares[0]!, accessPath: '/fixtures/Canonical folder' }],
+  };
+  render(<NetworkSharingSection path={file.path} />);
+  expect(await screen.findByRole('button', { name: 'Copy permissions folder path' })).toBeTruthy();
 });

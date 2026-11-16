@@ -21,12 +21,15 @@ export interface PaletteView {
 export function withFrequentFolders(
   view: PaletteView,
   folders: readonly ResolvedCommand[],
+  identity: (path: string) => string = (path) => path,
 ): PaletteView {
   const places = new Set(
-    view.rows.filter((row) => row.group === 'Places').map((row) => row.detail),
+    view.rows
+      .filter((row) => row.group === 'Places' || row.group === 'Open planes')
+      .map((row) => row.detail && identity(row.detail)),
   );
   const shown = folders
-    .filter((folder) => !places.has(folder.detail))
+    .filter((folder) => !(folder.detail && places.has(identity(folder.detail))))
     .slice(0, view.rows.length ? 4 : 8);
   const headings = new Map(view.headings);
   if (shown[0]) headings.set(shown[0].id, 'Frequent folders');

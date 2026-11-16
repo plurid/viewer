@@ -86,7 +86,23 @@ function decoded(value: string): string {
     if (next === result) break;
     result = next;
   }
-  return withoutControls(result).normalize('NFC').replace(/[’‘]/g, "'");
+  return result.normalize('NFC').replace(/[’‘]/g, "'");
+}
+
+function messageControls(value: string): string {
+  // Names must be checked after normalization, while ordinary lines stay separate.
+  return value
+    .replace(/\r\n?/g, '\n')
+    .replace(/\p{Cc}/gu, (character) => (character === '\n' ? character : ' '))
+    .replace(/\p{Cf}/gu, '');
+}
+
+function internalApostrophe(value: string, index: number): boolean {
+  return (
+    value[index] === "'" &&
+    /\p{L}$/u.test(value.slice(Math.max(0, index - 2), index)) &&
+    /^\p{L}/u.test(value.slice(index + 1, index + 3))
+  );
 }
 
 function pathRoot(value: string): string {
@@ -129,6 +145,11 @@ function folded(value: string): string {
 
 function addressWord(word: string): boolean {
   const value = word.replace(/^[([{<]+|[)\]}>.,!]+$/g, '');
+  if (
+    /^\d{1,7}:\d{1,7}$/.test(value) ||
+    /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?$/.test(value)
+  )
+    return false;
   const withoutZone = value.replace(/%[^\]]*/, '');
   return (
     /@|\(at\)|&#64;|[?#]/i.test(value) ||
@@ -137,39 +158,64 @@ function addressWord(word: string): boolean {
     /^[\p{L}\p{N}_-]+:\d{1,5}$/u.test(value) ||
     /^ip-\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3}$/i.test(value) ||
     /^[a-f0-9]{2}(?:[:-][a-f0-9]{2}){5}$/i.test(value) ||
-    (withoutZone.length <= 128 && (withoutZone.match(/:/g)?.length ?? 0) >= 2 &&
+    (withoutZone.length <= 128 &&
+      (withoutZone.match(/:/g)?.length ?? 0) >= 2 &&
       /^[a-f0-9:.[\]]+$/i.test(withoutZone))
   );
 }
 
 function opaqueWord(word: string): boolean {
-  return /^[a-f\d]{20,}$/i.test(word) ||
+  return (
+    /^[a-f\d]{20,}$/i.test(word) ||
     /^[A-Za-z\d+/]{12,}={1,2}$/.test(word) ||
-    (word.length >= 32 && /^[A-Za-z\d_+/=.-]+$/.test(word));
+    (word.length >= 32 && /^[A-Za-z\d_+/=.-]+$/.test(word))
+  );
 }
 
 /** Best-effort excerpts are explicitly optional. Bound input before normalization or scanning. */
 export function redactReport(text: string, privateValues: readonly ReportPrivateValue[]): string {
   const unchecked = privateValues.filter((item) => !item.value?.trim());
   if (unchecked.length)
-    return '[Text omitted: ' + [...new Set(unchecked.map((item) => item.kind))].join(', ') +
-      ' could not be checked.]';
+    return (
+      '[Text omitted: ' +
+      [...new Set(unchecked.map((item) => item.kind))].join(', ') +
+      ' could not be checked.]'
+    );
   if (privateValues.length > 256 || privateValues.some((item) => item.value!.length > 4096))
     return '[Text omitted: privacy checks exceeded their limits.]';
   try {
-    const values = privateValues.map((item) => ({ ...item, value: decoded(item.value!) }));
-    const roots = (kind: ReportPrivateKind) => values.filter((item) => item.kind === kind)
-      .map((item) => pathRoot(item.value)).toSorted((a, b) => b.length - a.length);
-    const homes = roots('home').flatMap((home) => [home, home.replace(/ /g, '+'), home.replace(/ /g, '-'), home.replace(/ /g, '_')])
+    const values = privateValues.map((item) => ({
+      ...item,
+      value: withoutControls(decoded(item.value!)),
+    }));
+    const roots = (kind: ReportPrivateKind) =>
+      values
+        .filter((item) => item.kind === kind)
+        .map((item) => pathRoot(item.value))
+        .toSorted((a, b) => b.length - a.length);
+    const homes = roots('home')
+      .flatMap((home) => [
+        home,
+        home.replace(/ /g, '+'),
+        home.replace(/ /g, '-'),
+        home.replace(/ /g, '_'),
+      ])
       .toSorted((a, b) => b.length - a.length);
     const bundles = roots('application bundle');
     const dataRoots = roots('application data');
     const volumeRoots = roots('volume name').map((name) => '/Volumes/' + name);
-    const knownRoots = [...bundles, ...dataRoots, ...homes, ...volumeRoots].flatMap((root) => [
-      root, '/private' + root, '/System/Volumes/Data' + root, '/private/System/Volumes/Data' + root,
-    ]).toSorted((a, b) => b.length - a.length);
+    const knownRoots = [...bundles, ...dataRoots, ...homes, ...volumeRoots]
+      .flatMap((root) => [
+        root,
+        '/private' + root,
+        '/System/Volumes/Data' + root,
+        '/private/System/Volumes/Data' + root,
+      ])
+      .toSorted((a, b) => b.length - a.length);
     const aliases: string[] = [];
-    const shortNames = values.filter((item) => item.kind === 'short name').map((item) => item.value);
+    const shortNames = values
+      .filter((item) => item.kind === 'short name')
+      .map((item) => item.value);
     for (const item of values) {
       if (['home', 'application bundle', 'application data'].includes(item.kind)) continue;
       aliases.push(item.value);
@@ -180,7 +226,11 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
           const parts = plain.split(/[\s_-]+/);
           aliases.push(parts.join(' '), parts.join('-'), parts.join('_'), parts.join(''));
           if (item.kind !== 'full name')
-            aliases.push(plain.slice(0, 15), parts.join('').slice(0, 15), parts.join('-').slice(0, 15));
+            aliases.push(
+              plain.slice(0, 15),
+              parts.join('').slice(0, 15),
+              parts.join('-').slice(0, 15),
+            );
         }
       }
     }
@@ -188,10 +238,25 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
       for (const suffix of ['mac', 'macbook', 'macbookpro', 'macbookair', 'imac', 'computer', 'pc'])
         aliases.push(name + suffix, name + 's' + suffix);
     const escape = (value: string) => value.replace(/[.*+?^\x24{}()|[\]\\]/g, '\\$&');
-    const names = [...new Set(aliases.map(folded).filter(Boolean))].toSorted((a, b) => b.length - a.length);
-    const namePattern = names.length ? new RegExp(
-      '(?<![\\p{L}\\p{M}])(?:' + names.map(escape).join('|') + ')(?![\\p{L}\\p{M}])', 'gu',
-    ) : undefined;
+    const names = [...new Set(aliases.map(folded).filter(Boolean))].toSorted(
+      (a, b) => b.length - a.length,
+    );
+    // Separators inserted inside a known spelling must not expose it after normalization.
+    const namePattern = names.length
+      ? new RegExp(
+          '(?<![\\p{L}\\p{M}])(?:' +
+            names
+              .map((name) =>
+                name
+                  .split(/ +/)
+                  .map((part) => [...part].map(escape).join(' *'))
+                  .join(' +'),
+              )
+              .join('|') +
+            ')(?![\\p{L}\\p{M}])',
+          'gu',
+        )
+      : undefined;
     const redactNames = (source: string) => {
       if (!namePattern) return source;
       let view = '';
@@ -222,18 +287,35 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
     });
     const mangled = (word: string) => {
       const value = folded(word).replace(/^[-_]/, '');
-      return mangledRoots.some((root) => value === root || value.startsWith(root + '-') || value.startsWith(root + '_'));
+      return mangledRoots.some(
+        (root) => value === root || value.startsWith(root + '-') || value.startsWith(root + '_'),
+      );
     };
-    const bundlePath = (relative: string) => '<Viewer>/' + relative.split('/').map((part) => {
-      if (opaqueWord(part) || part.includes('[redacted]')) return '<token>';
-      if (addressWord(part) && !/\.(?:asar|cjs|js|mjs|css|map|html|node|wasm|png|svg|json)$/i.test(part)) return '<address>';
-      return redactNames(part);
-    }).join('/');
+    const bundlePath = (relative: string) =>
+      '<Viewer>/' +
+      relative
+        .split('/')
+        .map((part) => {
+          if (opaqueWord(part) || part.includes('[redacted]')) return '<token>';
+          if (
+            addressWord(part) &&
+            !/\.(?:asar|cjs|js|mjs|ts|tsx|jsx|css|map|html|node|wasm|png|svg|json|jsonc)$/i.test(
+              part,
+            )
+          )
+            return '<address>';
+          return redactNames(part);
+        })
+        .join('/');
     const summarizePath = (raw: string) => {
       const normalized = pathRoot(raw).replace(/^~[^/]*/, '~');
-      const candidates = normalized.startsWith('~/') ? homes.map((home) => home + normalized.slice(1)) : [normalized];
+      const candidates = normalized.startsWith('~/')
+        ? homes.map((home) => home + normalized.slice(1))
+        : [normalized];
       for (const bundle of bundles) {
-        const relative = candidates.map((candidate) => bundleRelativePath(candidate, bundle)).find(Boolean);
+        const relative = candidates
+          .map((candidate) => bundleRelativePath(candidate, bundle))
+          .find(Boolean);
         if (relative) return bundlePath(relative);
       }
       for (const root of dataRoots) {
@@ -242,105 +324,157 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
         const relative = canonical.slice(root.length + 1).split('/');
         const first = relative[0]!;
         const summary = pathSummary('/' + relative.join('/'), []);
-        return '<Viewer data>/' + (relative.length > 1 && fixedDataFolders.has(first) ? first : '…') +
-          (relative.length > 1 ? summary.slice('<path>'.length).split('/').slice(1).slice(1).map((part) => '/' + part).join('') : '');
+        return (
+          '<Viewer data>/' +
+          (relative.length > 1 && fixedDataFolders.has(first) ? first : '…') +
+          (relative.length > 1
+            ? summary
+                .slice('<path>'.length)
+                .split('/')
+                .slice(1)
+                .slice(1)
+                .map((part) => '/' + part)
+                .join('')
+            : '')
+        );
       }
-      if (homes.some((home) => normalized.toLowerCase() === home.toLowerCase() || normalized.toLowerCase().startsWith(home.toLowerCase() + '/')))
+      if (
+        homes.some(
+          (home) =>
+            normalized.toLowerCase() === home.toLowerCase() ||
+            normalized.toLowerCase().startsWith(home.toLowerCase() + '/'),
+        )
+      )
         return pathSummary(normalized, homes);
       if (normalized.startsWith('/Volumes/')) {
-        const mounted = volumeRoots.find((root) => normalized === root || normalized.startsWith(root + '/'));
-        const suffix = normalized.slice(mounted?.length ?? normalized.indexOf('/', '/Volumes/'.length));
-        return '/Volumes/<volume>' + (suffix.startsWith('/') ? pathSummary(suffix, []).slice('<path>'.length) : '');
+        const mounted = volumeRoots.find(
+          (root) => normalized === root || normalized.startsWith(root + '/'),
+        );
+        const suffix = normalized.slice(
+          mounted?.length ?? normalized.indexOf('/', '/Volumes/'.length),
+        );
+        return (
+          '/Volumes/<volume>' +
+          (suffix.startsWith('/') ? pathSummary(suffix, []).slice('<path>'.length) : '')
+        );
       }
       return pathSummary(normalized, homes);
     };
 
-    return boundedText(text).split(/\n(?=[ \t]{0,16}at )/).map((part) => {
-      let source = decoded(part).replace(/\\(?= )/g, '').replace(/\\/g, '/')
-        .replace(/\x24(?:HOME\b|\{HOME\})/g, '~')
-        .replace(/\/\.(?=\/)/g, '')
-        .replace(/\bfile:\/{1,3}(?:localhost\/)?/gi, '/')
-        .replace(/\/{2,}/g, '/');
-      if (/:Users:/i.test(source)) return '~/<path>';
-      source = redactCredentials(source);
-      let result = '';
-      for (let index = 0; index < source.length;) {
-        const tail = source.slice(index);
-        if (/^data:/i.test(tail)) {
-          result += '<data>';
-          break;
-        }
-        if (/^[A-Za-z][A-Za-z0-9+.-]{0,24}:\//.test(tail)) {
-          result += '<address>';
-          break;
-        }
-        if (tail.startsWith('<Viewer>/')) {
-          const end = source.indexOf(' ', index);
-          const stop = end < 0 ? source.length : end;
-          result += bundlePath(source.slice(index + '<Viewer>/'.length, stop));
-          index = stop;
-          continue;
-        }
-        const character = source[index]!;
-        if (/['"\x60«“‘]/.test(character) && (index === 0 || !/[\p{L}\p{N}]/u.test(source[index - 1]!))) {
-          const closing = character === '«' ? '»' : character === '“' ? '”' : character === '‘' ? '’' : character;
-          let end = index + 1;
-          while (end < source.length) {
-            if (source[end] === closing && !(/[\p{L}]/u.test(source[end - 1]!) && /[\p{L}]/u.test(source[end + 1] ?? ''))) break;
-            end++;
+    return boundedText(text)
+      .replace(/\r\n?/g, '\n')
+      .split(/\n(?=[ \t]{0,16}at )/)
+      .map((part) => {
+        let source = messageControls(redactCredentials(decoded(part)))
+          .replace(/\\(?= )/g, '')
+          .replace(/\\/g, '/')
+          .replace(/\x24(?:HOME\b|\{HOME\})/g, '~')
+          .replace(/\/\.(?=\/)/g, '')
+          .replace(/\bfile:\/{1,3}(?:localhost\/)?/gi, '/')
+          .replace(/\/{2,}/g, '/');
+        if (/:Users:/i.test(source)) return '~/<path>';
+        source = source.replace(
+          /\b((?:getaddrinfo[ \t]{1,16})?(?:ENOTFOUND|EAI_AGAIN))[ \t]{1,16}[^\s]+/g,
+          '$1 <address>',
+        );
+        let result = '';
+        for (let index = 0; index < source.length;) {
+          const tail = source.slice(index);
+          if (/^data:/i.test(tail)) {
+            result += '<data>';
+            break;
           }
-          const quoted = source.slice(index + 1, end);
-          result += /[/~]/.test(quoted) ? summarizePath(quoted) : '<quoted text>';
-          index = Math.min(source.length, end + 1);
-          continue;
+          if (/^[A-Za-z][A-Za-z0-9+.-]{0,24}:\//.test(tail)) {
+            result += '<address>';
+            break;
+          }
+          if (tail.startsWith('<Viewer>/')) {
+            const end = source.indexOf(' ', index);
+            const stop = end < 0 ? source.length : end;
+            result += bundlePath(source.slice(index + '<Viewer>/'.length, stop));
+            index = stop;
+            continue;
+          }
+          const character = source[index]!;
+          if (
+            /['"\x60«“‘]/.test(character) &&
+            (index === 0 || !/[\p{L}\p{N}]/u.test(source[index - 1]!))
+          ) {
+            const closing =
+              character === '«'
+                ? '»'
+                : character === '“'
+                  ? '”'
+                  : character === '‘'
+                    ? '’'
+                    : character;
+            let end = index + 1;
+            while (end < source.length) {
+              if (source[end] === closing && !internalApostrophe(source, end)) break;
+              end++;
+            }
+            const quoted = source.slice(index + 1, end);
+            result += /[/~]/.test(quoted) ? summarizePath(quoted) : '<quoted text>';
+            index = Math.min(source.length, end + 1);
+            continue;
+          }
+          const drive = /^[A-Za-z]:\//.test(tail.slice(0, 3));
+          if (character === '/' || character === '~' || drive) {
+            const known = knownRoots.find(
+              (root) =>
+                tail.toLowerCase().startsWith(root.toLowerCase()) &&
+                !/[\p{L}\p{M}]/u.test(tail[root.length] ?? ''),
+            );
+            let end = index + (known?.length ?? 0);
+            while (end < source.length) {
+              if (/\s|['"\x60«»“”‘’]/.test(source[end]!) && !internalApostrophe(source, end)) break;
+              end++;
+            }
+            let raw = source.slice(index, end);
+            const location = /(:\d{1,7}:\d{1,7}\)?)$/.exec(raw);
+            if (location) raw = raw.slice(0, -location[0].length);
+            if (drive) raw = raw.slice(2);
+            const summary = summarizePath(raw);
+            result += summary + (summary.startsWith('<Viewer>/') ? (location?.[0] ?? '') : '');
+            // A space may be part of an unquoted name. Its ambiguous suffix cannot be shared.
+            index = end < source.length && /\s/.test(source[end]!) ? source.length : end;
+            continue;
+          }
+          if (/\s/.test(character)) {
+            result += character;
+            index++;
+            continue;
+          }
+          // Consume each whitespace-delimited word once, including its address punctuation.
+          const nonspace = /^\S+/.exec(tail)![0];
+          const whole = nonspace.replace(/["'»”’]+$/, '');
+          if (/%[a-f\d]{2}/i.test(whole)) {
+            result += '[Encoded text omitted]';
+            index += nonspace.length;
+            continue;
+          }
+          if (addressWord(whole) || opaqueWord(whole) || mangled(whole)) {
+            result += addressWord(whole) ? '<address>' : '<token>';
+            index += nonspace.length;
+            continue;
+          }
+          const embedded = nonspace.search(/[/~]/);
+          if (embedded > 0 && !/[\p{L}\p{N}]/u.test(nonspace[embedded - 1]!)) {
+            result += nonspace.slice(0, embedded);
+            index += embedded;
+            continue;
+          }
+          if (embedded >= 0) {
+            result += summarizePath(nonspace);
+            index = source.length;
+          } else {
+            result += nonspace;
+            index += nonspace.length;
+          }
         }
-        const drive = /^[A-Za-z]:\//.test(tail.slice(0, 3));
-        if (character === '/' || character === '~' || drive) {
-          const known = knownRoots.find((root) => tail.toLowerCase().startsWith(root.toLowerCase()) &&
-            !/[\p{L}\p{M}]/u.test(tail[root.length] ?? ''));
-          let end = index + (known?.length ?? 0);
-          while (end < source.length && !/\s|['"\x60«»“”‘’]/.test(source[end]!)) end++;
-          let raw = source.slice(index, end).replace(/:\d+(?::\d+)?\)?$/, '');
-          if (drive) raw = raw.slice(2);
-          result += summarizePath(raw);
-          // A space may be part of an unquoted name. Its ambiguous suffix cannot be shared.
-          index = end < source.length && /\s/.test(source[end]!) ? source.length : end;
-          continue;
-        }
-        if (/\s/.test(character)) {
-          result += character;
-          index++;
-          continue;
-        }
-        // Consume each whitespace-delimited word once, including its address punctuation.
-        const nonspace = /^\S+/.exec(tail)![0];
-        const whole = nonspace.replace(/["'»”’]+$/, '');
-        if (/%[a-f\d]{2}/i.test(whole)) {
-          result += '[Encoded text omitted]';
-          index += nonspace.length;
-          continue;
-        }
-        if (addressWord(whole) || opaqueWord(whole) || mangled(whole)) {
-          result += addressWord(whole) ? '<address>' : '<token>';
-          index += nonspace.length;
-          continue;
-        }
-        const embedded = nonspace.search(/[/~]/);
-        if (embedded > 0 && !/[\p{L}\p{N}]/u.test(nonspace[embedded - 1]!)) {
-          result += nonspace.slice(0, embedded);
-          index += embedded;
-          continue;
-        }
-        if (embedded >= 0) {
-          result += summarizePath(nonspace);
-          index = source.length;
-        } else {
-          result += nonspace;
-          index += nonspace.length;
-        }
-      }
-      return redactNames(result);
-    }).join('\n');
+        return redactNames(result);
+      })
+      .join('\n');
   } catch {
     return '[Text omitted: privacy checks could not be completed.]';
   }

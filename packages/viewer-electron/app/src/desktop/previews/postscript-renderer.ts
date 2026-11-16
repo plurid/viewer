@@ -9,6 +9,8 @@ import type { PostScriptStageOptions } from './postscript-stage';
 import type { GhostscriptStatus } from '../../domain/previews/documents/postscript';
 import { binaryEPS, epsHeader, postscriptOffset } from '../../domain/previews/documents/postscript';
 import { errorMessage } from '../../domain/errors';
+import { diagnosticFailure } from '../../domain/diagnostics/failure';
+import type { DiagnosticErrorFields } from '../../domain/diagnostics/failure';
 import { previewInput } from './input-copy';
 import { withPostScriptStage } from './postscript-stage';
 import { runProcessor } from '../transforms/process';
@@ -29,7 +31,7 @@ interface GhostscriptOptions extends PostScriptStageOptions {
   outputLimit?: number;
   scratchLimit?: number;
   resolveExecutable?(file: string): Promise<string>;
-  diagnose?(detail: string): void;
+  diagnose?(detail: string, fields?: DiagnosticErrorFields): void;
 }
 interface Executable {
   file: string;
@@ -47,7 +49,10 @@ export class Ghostscript {
       const found = await this.executable(candidate).catch((error: unknown) => {
         if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException)?.code ?? ''))
           return undefined;
-        this.options.diagnose?.(`Ghostscript discovery failed: ${errorMessage(error)}`);
+        this.options.diagnose?.(
+          `Ghostscript discovery failed: ${errorMessage(error)}`,
+          diagnosticFailure(error),
+        );
         throw new Error('Ghostscript could not be checked.');
       });
       if (found) return found;

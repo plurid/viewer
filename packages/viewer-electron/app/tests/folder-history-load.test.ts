@@ -1,5 +1,9 @@
+import { access, mkdir, symlink } from 'node:fs/promises';
+import path from 'node:path';
+import { realpathSync } from 'node:fs';
+import { temporaryRoot } from '../tools/temporary';
 import { expect, it } from 'vitest';
-import { prepareFolderHistory } from '../src/desktop/files/folder-history';
+import { prepareFolderHistory, checkHistoryFolder } from '../src/desktop/files/folder-history';
 import { stateSchema } from '../src/desktop/persistence/storage';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 
@@ -35,4 +39,48 @@ it('merges slash and filesystem case aliases, drops legacy file visits and keeps
   prepared.seed(loaded);
   prepared.seedFolderHistory(result.visits);
   expect(prepared.open(1, '/fixtures').visits).toEqual(result.visits);
+});
+
+it('keeps a dangling folder link to an unplugged volume', async () => {
+  const root = await temporaryRoot('viewer-offline-link-');
+  const link = path.join(root, 'Offline');
+  await symlink('/Volumes/Unplugged/Work', link);
+  const result = await prepareFolderHistory(
+    { [link]: { count: 40, last: 10 } },
+    async (file) => checkHistoryFolder(file),
+    20,
+  );
+  expect(result.visits[link]).toEqual({ count: 40, last: 10 });
+  expect(result.checked).toEqual([]);
+});
+
+it('uses actual filesystem case spelling without folding distinct case-sensitive folders', async () => {
+  const root = await temporaryRoot('viewer-history-case-');
+  const upper = path.join(root, 'Docs');
+  const lower = path.join(root, 'docs');
+  await mkdir(upper);
+  const actual = path.join(realpathSync.native(root), 'Docs');
+  const insensitive = await access(lower).then(
+    () => true,
+    () => false,
+  );
+  if (!insensitive) await mkdir(lower);
+  if (insensitive) expect(checkHistoryFolder(lower).path).toBe(actual);
+  const history = { [upper]: { count: 3, last: 1 }, [lower]: { count: 4, last: 2 } };
+  const result = await prepareFolderHistory(history, async (file) => checkHistoryFolder(file), 3);
+  expect(Object.keys(result.visits)).toHaveLength(insensitive ? 1 : 2);
+  if (insensitive) expect(result.visits[actual]?.count).toBe(7);
+  else expect(result.visits).toEqual(history);
+});
+
+it('resolves a folder link to its native filesystem spelling', async () => {
+  const root = await temporaryRoot('viewer-history-native-');
+  const real = path.join(root, 'Real');
+  const link = path.join(root, 'Link');
+  await mkdir(real);
+  await symlink(real, link);
+  expect(checkHistoryFolder(link)).toEqual({
+    directory: true,
+    path: path.join(realpathSync.native(root), 'Real'),
+  });
 });

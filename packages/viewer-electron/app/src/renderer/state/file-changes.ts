@@ -1,3 +1,4 @@
+import { remapKnownFolders } from '../explorer/folder-availability';
 // Path changes from file operations applied to saved state, sessions and preferences.
 import { remapSessions } from '../workspace/sessions';
 import { pathMapper, type FileChange } from '../../domain/files/changes';
@@ -10,6 +11,7 @@ import { folderVisitSync } from './folder-visits';
 
 export function receiveFileChanges(changes: FileChange[], historyRevision?: number): void {
   folderVisitSync.remap(changes, historyRevision);
+  remapKnownFolders(changes);
   const map = pathMapper(changes);
   const mapSource = (source: DiffSource): DiffSource => {
     if (source.kind === 'file') {
@@ -24,9 +26,15 @@ export function receiveFileChanges(changes: FileChange[], historyRevision?: numb
   };
   const saved = getState().saved;
   const quick = getState().quickPreview;
+  const recovery = getState().folderRecovery;
   update(
     {
       ...getState(),
+      folderRecovery: recovery && {
+        ...recovery,
+        recents: recovery.recents.map(map),
+        visits: remapFolderVisits(recovery.visits, changes),
+      },
       saved: {
         ...saved,
         workspaces: saved.workspaces.map((space) => ({

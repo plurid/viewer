@@ -755,7 +755,8 @@ export class FileIndex {
     root.status = 'ready';
     this.emit(this.status());
   }
-  update(file: string, removed = false, visibility = new HiddenPaths()): Promise<void> {
+  update(file: string, removed = false, visibility?: HiddenPaths): Promise<void> {
+    const flags = visibility ?? new HiddenPaths(undefined, 'item');
     const task = this.updates
       .catch(() => {})
       .then(async () => {
@@ -770,7 +771,7 @@ export class FileIndex {
         try {
           const generation = this.generation;
           const item: IndexedEntry = await entry(file);
-          item.hiddenRoot = await visibility.hiddenRoot(file, root);
+          item.hiddenRoot = await flags.hiddenRoot(file, root);
           item.hidden ||= item.hiddenRoot !== undefined;
           item.hidden ||= path
             .relative(root, file)
@@ -791,7 +792,7 @@ export class FileIndex {
               { path: file, status: 'indexing', count: 0, errors: 0 },
               this.generation,
               root,
-              visibility,
+              visibility ?? new HiddenPaths(),
             );
         } catch {
           this.remove(file);

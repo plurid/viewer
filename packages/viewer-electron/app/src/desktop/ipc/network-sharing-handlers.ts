@@ -5,19 +5,8 @@ interface SharingHandlerPorts {
   available: boolean;
   sharing: Pick<NetworkSharing, 'refresh' | 'snapshot' | 'inspect'>;
   isAgent(owner: number): boolean;
-  requireFolder(file: string): Promise<void>;
-  access?(file: string): Promise<void>;
+  fileAccess: { require(files: readonly string[]): Promise<void> };
   openSettings(): Promise<void>;
-}
-
-export function networkSharingFolderGuard(
-  access: { require(files: readonly string[]): Promise<void> },
-  sharing: Pick<NetworkSharing, 'requireFolder'>,
-): (file: string) => Promise<void> {
-  return async (file) => {
-    await access.require([file]);
-    await sharing.requireFolder(file);
-  };
 }
 
 export function createNetworkSharingHandlers(
@@ -33,7 +22,7 @@ export function createNetworkSharingHandlers(
         const unknown: string[] = [];
         for (const file of request.paths ?? []) {
           try {
-            await (ports.access ?? ports.requireFolder)(file);
+            await ports.fileAccess.require([file]);
             allowed.push(file);
           } catch {
             unknown.push(file);
@@ -54,7 +43,7 @@ export function createNetworkSharingHandlers(
             }
           : snapshot;
       }
-      await ports.requireFolder(request.path);
+      // This opens a fixed pane. Folder access and metadata are not needed for that address.
       if (ports.isAgent(owner)) throw new Error('Network sharing is available only to the person.');
       await ports.openSettings();
       return ports.sharing.snapshot();

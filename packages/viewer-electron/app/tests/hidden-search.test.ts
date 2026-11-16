@@ -16,6 +16,7 @@ it('shares folder flags across an index event batch and reads them anew for the 
   const files = Array.from({ length: 8 }, (_, index) => path.join(root, `File ${index}.txt`));
   for (const file of files) await writeFile(file, 'fixture', { flag: 'wx' });
   const flags = vi.spyOn(fileVisibility, 'hiddenEntries').mockResolvedValue(['File 0.txt']);
+  const single = vi.spyOn(fileVisibility, 'fileHidden').mockResolvedValue(true);
   const index = new FileIndex(':memory:');
   try {
     index.configure(defaultSettings(root).search);
@@ -26,10 +27,13 @@ it('shares folder flags across an index event batch and reads them anew for the 
     expect(flags).toHaveBeenCalledExactlyOnceWith(root);
     expect(index.query({ root, query: 'File', showHidden: false }).entries).toHaveLength(7);
     await index.update(files[0]!);
-    expect(flags).toHaveBeenCalledTimes(2);
+    expect(flags).toHaveBeenCalledTimes(1);
+    expect(single).toHaveBeenCalledExactlyOnceWith(files[0]);
+    expect(index.query({ root, query: 'File', showHidden: false }).entries).toHaveLength(7);
   } finally {
     await index.close();
     flags.mockRestore();
+    single.mockRestore();
   }
 });
 

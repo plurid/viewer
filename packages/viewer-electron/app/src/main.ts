@@ -842,9 +842,7 @@ app
         windowFrames.set(window, next);
         rememberWindow(window);
         applyBackdrop();
-        void previous
-          ?.flush()
-          .catch((error) => diagnostics.record('main-rejection', error));
+        void previous?.flush().catch((error) => diagnostics.record('main-rejection', error));
       },
       quitting: () => quit.closingWindows(),
       hotkeyStatus: () => hotkey?.snapshot() ?? { registered: false, shortcut: 'Alt+Space' },

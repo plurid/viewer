@@ -1,6 +1,9 @@
 import { realpath } from 'node:fs/promises';
 import type { DiagnosticErrorFields } from '../domain/diagnostics/failure';
-import { folderEntry, prepareFolderHistory } from './files/folder-history';
+import { diagnosticFailure } from '../domain/diagnostics/failure';
+import { BackgroundFolderHistory } from './files/folder-history';
+import { createFolderHistoryChecks } from './windows/folder-history-checks';
+import type { FolderHistoryChecks } from './windows/folder-history-checks';
 import { containsPath } from './files/containment';
 import { Reconstructions } from './canvases/reconstruction';
 import { reconstructionCredentialID } from '../domain/canvases/reconstruction';
@@ -22,7 +25,7 @@ import { createAutomationHandlers } from './ipc/automation-handlers';
 import { createCommandLineHandlers } from './ipc/command-line-handlers';
 import { createComparisonHandlers } from './ipc/comparison-handlers';
 import { createFileHandlers } from './ipc/file-handlers';
-import { createNetworkSharingHandlers, networkSharingFolderGuard } from './ipc/network-sharing-handlers';
+import { createNetworkSharingHandlers } from './ipc/network-sharing-handlers';
 import {
   NetworkSharing,
   networkSharingAvailable,
@@ -114,7 +117,7 @@ import type {
   DesktopEvent,
   SavedState,
 } from '../domain/contracts';
-import { absolute, entry } from './files/filesystem';
+import { absolute } from './files/filesystem';
 import { nativeImageConverter } from './native/native-image-convert';
 import { imageDecoder } from './native/quick-look-render';
 import { Operations } from './operations/operations';
@@ -304,7 +307,8 @@ export class Desktop {
    * reading it moves a damaged file aside, and a second read would lose that notice. */
   private storedEarly?: ReturnType<Storage['load']>;
   private settingsPrepared?: Promise<void>;
-  private folderHistoryPrepared?: Promise<{ checked: string[] }>;
+  private folderHistoryPrepared = new BackgroundFolderHistory();
+  private folderChecks: FolderHistoryChecks;
   /** Settings loaded as bootstrap loads them (seeded from saved state on a first configuration), so
    * the window is made with its backdrop (backdrop.ts). */
   prepareSettings(): Promise<void> {
@@ -323,13 +327,17 @@ export class Desktop {
           restoration.warnings.push(
             'Earlier profile preferences were retained because their restoration could not be saved.',
           );
-          this.options.diagnose?.(String(error));
+          this.diagnoseFailure(error);
         }
         if (restoration.warnings.length)
           stored.recovery = [stored.recovery, ...restoration.warnings].filter(Boolean).join('\n');
       }
       this.workspaceSessions.seed(stored.state);
     })());
+  }
+  private diagnoseFailure(error: unknown): void {
+    const failure = diagnosticFailure(error);
+    this.options.diagnose?.(failure.detail, failure);
   }
   /** Native chrome uses the same canonical preferences and local overlay as its renderer. */
   windowPreferences(workspaceID?: string) {
@@ -426,6 +434,10 @@ export class Desktop {
           }
         : undefined,
     );
+    this.folderChecks = createFolderHistoryChecks(
+      path.join(path.dirname(options.worker), 'folder-history-worker.cjs'),
+      this.fileAccess,
+    );
     this.pasteboard = new Pasteboard(this.fileAccess, this.nativeSelections);
     this.trash = new Trash(this.home, this.fileAccess, {
       origins: () => this.operations.trashOrigins(),
@@ -501,7 +513,7 @@ export class Desktop {
     const ghostscript = new Ghostscript({
       store: () => !!process.mas,
       trash: guardTestTrash((file: string) => shell.trashItem(file)),
-      diagnose: (detail) => this.options.diagnose?.(detail),
+      diagnose: (detail, fields) => this.options.diagnose?.(detail, fields),
     });
     const postscript = new DerivedPreviews(access, ghostscript.decode);
     this.resources = new Resources(
@@ -598,7 +610,7 @@ export class Desktop {
       () => this.settings.snapshot().settings,
       (task, owner) => {
         if (task.command)
-          void this.receipts.record(task).catch((error) => this.options.diagnose?.(String(error)));
+          void this.receipts.record(task).catch((error) => this.diagnoseFailure(error));
         if (owner === undefined) emit({ type: 'execution', task });
         else {
           const window = this.windows.get(owner)?.window;
@@ -750,7 +762,7 @@ export class Desktop {
         process.platform === 'darwin'
           ? macFiles().trash(file, fileCoordination.purpose())
           : fallbackTrash(file),
-      (message) => options.diagnose?.(message),
+      (message, fields) => options.diagnose?.(message, fields),
     );
     const officePDF = officePDFCopy(assetPath(officeRuntimeName));
     this.operations = new Operations(
@@ -1392,7 +1404,10 @@ export class Desktop {
     try {
       await this.configureIndex(search);
     } catch (error) {
-      this.options.diagnose?.(`Index configuration failed: ${errorMessage(error)}`);
+      this.options.diagnose?.(
+        `Index configuration failed: ${errorMessage(error)}`,
+        diagnosticFailure(error),
+      );
       this.emit({
         type: 'index',
         status: {
@@ -1630,9 +1645,7 @@ export class Desktop {
       this.backups.stopOwner(sender);
       this.browsers.stopOwner(sender);
       this.mediaDocuments.stopOwner(sender);
-      void this.optimizationReviews
-        .stopOwner(sender)
-        .catch((error) => this.options.diagnose?.(String(error)));
+      void this.optimizationReviews.stopOwner(sender).catch((error) => this.diagnoseFailure(error));
       this.flushes.disconnected(sender);
       this.chats.retain(sender, new Set());
       this.canvases.release(sender);
@@ -1644,9 +1657,7 @@ export class Desktop {
       this.gitReviews.stopOwner(sender);
       this.terminals.stopOwner(sender);
       this.executions.stopOwner(sender);
-      void this.webPreviews
-        .stopOwner(sender)
-        .catch((error) => this.options.diagnose?.(String(error)));
+      void this.webPreviews.stopOwner(sender).catch((error) => this.diagnoseFailure(error));
       for (const request of this.agentCommands.values())
         if (request.owner === sender)
           request.finish('The workspace closed before completing the action.');
@@ -1657,7 +1668,7 @@ export class Desktop {
         if (state)
           void this.storage
             .save(this.withPreferences(state))
-            .catch((error) => this.options.diagnose?.(String(error)));
+            .catch((error) => this.diagnoseFailure(error));
       }
       if (this.window === window) {
         this.window = undefined;
@@ -1824,6 +1835,7 @@ export class Desktop {
       this.terminals.close(),
       this.externalTerminals.close(),
       this.files.close(),
+      Promise.resolve(this.folderChecks?.close()),
       this.actions.close(),
       this.watchers.close(),
       this.operations.close(),
@@ -1896,7 +1908,10 @@ export class Desktop {
     void this.agents.clients
       .audit('review:' + proposal.kind, status, detail, proposal.clientID ?? sharedClientID)
       .catch((error) =>
-        this.options.diagnose?.(`An agent review record was not saved: ${errorMessage(error)}`),
+        this.options.diagnose?.(
+          `An agent review record was not saved: ${errorMessage(error)}`,
+          diagnosticFailure(error),
+        ),
       );
   }
   private async sendAgentCommand(
@@ -1987,20 +2002,6 @@ export class Desktop {
     }
     await this.credentials.load();
     performanceMeter.mark('bootstrap:settings');
-    const history = await (this.folderHistoryPrepared ??= (async () => {
-      const prepared = await prepareFolderHistory(
-        stored.state?.visits ?? {},
-        async (path) => {
-          await this.fileAccess.require([path]);
-          return folderEntry(path);
-        },
-        Date.now(),
-      );
-      if (stored.state) stored.state.visits = prepared.visits;
-      this.workspaceSessions.seed(stored.state);
-      this.workspaceSessions.seedFolderHistory(prepared.visits);
-      return prepared;
-    })());
     this.workspaceSessions.seed(stored.state);
     stored.state = this.workspaceSessions.open(
       sender,
@@ -2025,11 +2026,32 @@ export class Desktop {
       !this.bootstrapped && !this.settings.snapshot().settings.browsing.restoreSession;
     this.bootstrapped = true;
     performanceMeter.mark('bootstrap:done');
+    this.folderHistoryPrepared.start(
+      stored.state?.visits ?? {},
+      (path) => this.checkFolderHistory(path),
+      (prepared) => {
+        this.workspaceSessions.normalizeFolderHistory(prepared.aliases, prepared.files);
+        const state = this.workspaceSessions.snapshot();
+        if (state) {
+          const history = this.workspaceSessions.folderHistory();
+          this.emit({
+            type: 'workspaces',
+            state,
+            folderAliases: prepared.aliases,
+            checkedFolders: prepared.checked,
+            folderHistoryRevision: history.revision,
+            folderClearRevision: history.clearRevision,
+          });
+        }
+      },
+    );
     return {
       ...stored,
       launches,
       folderHistoryRevision: this.workspaceSessions.folderHistory().revision,
-      checkedFolders: history.checked,
+      checkedFolders: this.folderChecks.paths.filter((path) =>
+        Object.hasOwn(stored.state?.visits ?? {}, path),
+      ),
       folderClearRevision: this.workspaceSessions.folderHistory().clearRevision,
       home,
       freshSession,
@@ -2047,11 +2069,25 @@ export class Desktop {
       openPaths: paths,
     };
   }
+  private async checkFolderHistory(path: string) {
+    const value = await this.folderChecks.check(path);
+    if (value.directory && value.path)
+      this.workspaceSessions.normalizeFolderHistory({ [path]: value.path }, []);
+    return value;
+  }
   private async saveWorkspaces(
     input: SavedState,
     sender: number,
     visitSave?: FolderVisitSave,
   ): Promise<FolderVisitReply> {
+    const forgotten = visitSave?.clear
+      ? [
+          ...new Set([
+            ...(visitSave.forgotten ?? []),
+            ...Object.keys(this.workspaceSessions.folderHistory().visits),
+          ]),
+        ]
+      : (visitSave?.forgotten ?? []);
     this.chats.retain(
       sender,
       new Set(
@@ -2075,6 +2111,10 @@ export class Desktop {
     );
     // The response acknowledges visits; shared events only refresh a sender when the merge changed.
     const history = this.workspaceSessions.folderHistory();
+    if (visitSave?.clear || forgotten.length) {
+      this.folderHistoryPrepared.clear();
+      this.folderChecks.clear(forgotten);
+    }
     state.visits = history.visits;
     this.emit(
       {
@@ -2083,6 +2123,7 @@ export class Desktop {
         visitSaveID: visitSave?.id,
         folderHistoryRevision: history.revision,
         folderClearRevision: history.clearRevision,
+        folderAliases: history.aliases,
       },
       mergeChanged(input, state) ? undefined : sender,
     );
@@ -2151,8 +2192,7 @@ export class Desktop {
         available: networkSharingAvailable,
         sharing: this.networkSharing,
         isAgent,
-        access: (file) => this.fileAccess.require([file]),
-        requireFolder: networkSharingFolderGuard(this.fileAccess, this.networkSharing),
+        fileAccess: this.fileAccess,
         openSettings: () =>
           openSharingSettings(Number(process.getSystemVersion().split('.')[0]), (url) =>
             shell.openExternal(url),
@@ -2480,6 +2520,7 @@ export class Desktop {
       },
       bootstrap: (_args, sender) => this.bootstrap(sender),
       folderHistory: () => this.workspaceSessions.folderHistory(),
+      folderCheck: ([path]) => this.checkFolderHistory(path),
       save: ([input, visitSave], sender) => this.saveWorkspaces(input, sender, visitSave),
       commandsPublish: (args, sender) => {
         const record = this.requireRecord(sender);

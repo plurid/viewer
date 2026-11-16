@@ -1,3 +1,4 @@
+import { learnFolderAliases, forgetKnownFolders } from '../explorer/folder-availability';
 // Saving workspace state: engine arrangements, retained preview values and the debounced save.
 import { flushBuffers } from '../editing/buffers';
 import { flushMediaDrafts } from '../media/drafts';
@@ -21,7 +22,6 @@ let pendingEngineFlush = false;
 let flushRequested = false;
 let flushing: Promise<void> | undefined;
 let nextArrangementRevision = 0;
-let historyRetries = 0;
 /** Saves after a quiet period; a later request replaces an earlier one. */
 function schedulePersist(flushEngine: boolean): void {
   pendingEngineFlush ||= flushEngine;
@@ -49,7 +49,6 @@ export function resetPersistence(): void {
   clearTimeout(persistTimer);
   pendingEngineFlush = false;
   flushRequested = false;
-  historyRetries = 0;
   adapters.clear();
   dirtyArrangements.clear();
   closedPanes.clear();
@@ -124,24 +123,30 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
     let shared = await window.viewer.save(saved, visitSave);
     if (shared && folderVisitSync.needsRefresh(shared.revision))
       shared = await window.viewer.folderHistory();
+    learnFolderAliases(shared?.aliases);
     const current = getState();
+    const peerClear =
+      shared?.clearRevision !== undefined &&
+      shared.clearRevision > folderVisitSync.clearVersion &&
+      !folderVisitSync.isOwnClear(visitSave.id);
+    if (peerClear)
+      forgetKnownFolders([...current.saved.recents, ...Object.keys(current.saved.visits ?? {})]);
     const visits = folderVisitSync.complete(
       visitSave.id,
       shared?.visits ?? saved.visits ?? {},
       current.saved.visits ?? {},
       shared?.revision ?? visitSave.revision,
       shared?.clearRevision ?? visitSave.clearRevision,
+      shared?.aliases,
     );
-    if (visits !== current.saved.visits)
-      update({ ...current, saved: { ...current.saved, visits } });
-    historyRetries = 0;
+    if (visits !== current.saved.visits || (peerClear && current.folderRecovery))
+      update({
+        ...current,
+        folderRecovery: peerClear ? undefined : current.folderRecovery,
+        saved: { ...current.saved, visits },
+      });
   } catch (error) {
     folderVisitSync.failed(visitSave.id);
-    if ((error as { code?: string }).code === 'FOLDER_HISTORY_REFRESH' && historyRetries++ < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      flushRequested = true;
-      return;
-    }
     throw error;
   }
   for (const [id, revision] of arrangementRevisions)

@@ -1,3 +1,5 @@
+import { schemas } from '../src/desktop/ipc/schemas';
+import { smartRowID } from '../src/renderer/commands/smart-palette';
 import { describe, expect, it } from 'vitest';
 import type { FolderVisits } from '../src/domain/files/folder-visits';
 import {
@@ -183,4 +185,27 @@ describe('shared private folder history', () => {
     expect(() => agentCommandID('smart:folder:/fixtures/private', [])).toThrow();
     expect(agentCommandID('go-to', [])).toBe('go-to');
   });
+});
+
+it('keeps deep smart folder and path IDs within the agent catalog limit', () => {
+  const path = '/fixtures/' + 'deep/'.repeat(100) + 'Documents';
+  for (const kind of ['folder', 'path']) {
+    const id = smartRowID(`${kind}:${path}`);
+    expect(id.length).toBeLessThan(200);
+    expect(
+      schemas.commandsPublish.safeParse([
+        {
+          workspaceID: 'workspace',
+          rootID: 'root',
+          paneID: 'pane',
+          directory: '/fixtures',
+          selection: [],
+        },
+        [{ id, label: 'Documents', group: 'Go', aliases: [] }],
+      ]).success,
+    ).toBe(true);
+    expect(id).toBe(smartRowID(`${kind}:${path}`));
+    expect(id).not.toBe(smartRowID(`${kind}:${path}/Other`));
+    expect(() => agentCommandID(id, [])).toThrow();
+  }
 });

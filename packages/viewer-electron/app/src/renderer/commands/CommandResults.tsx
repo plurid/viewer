@@ -56,6 +56,9 @@ export function CommandResults({
     0,
     rows.findIndex((row) => row.id === activeID),
   );
+  useEffect(() => {
+    if (rows[0] && !rows.some((row) => row.id === activeID)) setActiveID(rows[0].id);
+  }, [rows, activeID]);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const id = useId();

@@ -20,6 +20,7 @@
 #include <grp.h>
 #include <pwd.h>
 #include <vector>
+#include <array>
 
 // A small in-process bridge: dynamic PowerBox grants belong to this process.
 // Filesystem work runs on N-API's bounded pool, never the Cocoa/renderer thread.
@@ -237,72 +238,98 @@ static NSArray<NSString *> *hiddenNames(NSString *folder, int *failure) {
   } else close(descriptor);
   return *failure ? nil : names;
 }
+struct GuestPrincipal {
+  uid_t user;
+  gid_t primary;
+  std::vector<int> groups;
+  bool knownGroups;
+  // Each right is undecided, denied, granted or uncertain. An earlier decision wins.
+  std::array<int, 8> decisions{};
+  int member(gid_t group) const {
+    if (group == 12 || group == primary) return 1;
+    for (int value : groups) if ((gid_t)value == group) return 1;
+    return knownGroups ? 0 : -1;
+  }
+};
+static GuestPrincipal guestPrincipal(const char *name, uid_t user, gid_t primary) {
+  struct passwd record{}, *found = nullptr; char buffer[16384];
+  int status = user == 201
+    ? getpwuid_r(user, &record, buffer, sizeof(buffer), &found)
+    : getpwnam_r(name, &record, buffer, sizeof(buffer), &found);
+  GuestPrincipal result{found ? record.pw_uid : user, found ? record.pw_gid : primary, {}, status == 0};
+  if (!found) return result;
+  int count = 32; result.groups.resize(count);
+  if (getgrouplist(record.pw_name, (int)record.pw_gid, result.groups.data(), &count) < 0) {
+    if (count > 0 && count <= 1024) {
+      result.groups.resize(count);
+      result.knownGroups = getgrouplist(record.pw_name, (int)record.pw_gid, result.groups.data(), &count) == 0;
+    } else result.knownGroups = false;
+  }
+  if (result.knownGroups) result.groups.resize(count); else result.groups.clear();
+  return result;
+}
 static NSString *guestACLState(NSString *file) {
   struct stat info{};
   if (stat(file.fileSystemRepresentation, &info) != 0) return @"unreadable";
-  struct passwd guest{}, *foundGuest = nullptr; char guestBuffer[16384];
-  bool knownGuest = getpwnam_r("nobody", &guest, guestBuffer, sizeof(guestBuffer), &foundGuest) == 0 && foundGuest;
-  struct group everyone{}, *foundEveryone = nullptr; char groupBuffer[16384];
-  bool knownEveryone = getgrnam_r("everyone", &everyone, groupBuffer, sizeof(groupBuffer), &foundEveryone) == 0 && foundEveryone;
-  int groupCount = 32; std::vector<int> groups(groupCount);
-  bool knownGroups = knownGuest;
-  if (knownGuest && getgrouplist(guest.pw_name, (int)guest.pw_gid, groups.data(), &groupCount) < 0) {
-    if (groupCount > 0 && groupCount <= 1024) {
-      groups.resize(groupCount);
-      knownGroups = getgrouplist(guest.pw_name, (int)guest.pw_gid, groups.data(), &groupCount) == 0;
-    } else knownGroups = false;
-  }
-  auto member = [&](gid_t group) -> int {
-    if (knownEveryone && group == everyone.gr_gid) return 1;
-    if (knownGuest && group == guest.pw_gid) return 1;
-    if (!knownGroups) return -1;
-    for (int index = 0; index < groupCount; ++index) if ((gid_t)groups[index] == group) return 1;
-    return 0;
+  // Both SMB guest identities count, including the reserved Guest identity when its account is off.
+  std::array<GuestPrincipal, 2> guests = {
+    guestPrincipal("nobody", (uid_t)-2, (gid_t)-2), guestPrincipal("Guest", 201, 201)
   };
   bool unknown = false;
-  bool writable = (info.st_mode & S_IWOTH) || (knownGuest && info.st_uid == guest.pw_uid && (info.st_mode & S_IWUSR));
-  if (info.st_mode & S_IWGRP) {
-    int membership = member(info.st_gid);
-    if (membership > 0) writable = true; else if (membership < 0) unknown = true;
-  }
   acl_t acl = acl_get_file(file.fileSystemRepresentation, ACL_TYPE_EXTENDED);
   if (!acl) {
-    if (writable) return @"write";
-    if (errno == ENOENT) return unknown ? @"unknown" : @"none";
-    return @"unreadable";
+    if (errno != ENOENT) return @"unreadable";
   }
-  if (acl_valid(acl) != 0) { acl_free(acl); return @"unknown"; }
+  if (acl && acl_valid(acl) != 0) { acl_free(acl); return @"unknown"; }
   acl_entry_t entry;
-  int state = acl_get_entry(acl, ACL_FIRST_ENTRY, &entry);
+  int state = acl ? acl_get_entry(acl, ACL_FIRST_ENTRY, &entry) : -1;
   while (state == 0) {
     acl_tag_t tag;
     acl_permset_t permissions;
-    if (acl_get_tag_type(entry, &tag) != 0 || acl_get_permset(entry, &permissions) != 0) { unknown = true; break; }
-    if (tag == ACL_EXTENDED_ALLOW) {
+    acl_flagset_t flags;
+    if (acl_get_tag_type(entry, &tag) != 0 || acl_get_permset(entry, &permissions) != 0 || acl_get_flagset_np(entry, &flags) != 0) { unknown = true; break; }
+    int inheritOnly = acl_get_flag_np(flags, ACL_ENTRY_ONLY_INHERIT);
+    if (inheritOnly < 0) { unknown = true; break; }
+    if (!inheritOnly && (tag == ACL_EXTENDED_ALLOW || tag == ACL_EXTENDED_DENY)) {
       const acl_perm_t modifying[] = { ACL_ADD_FILE, ACL_ADD_SUBDIRECTORY, ACL_DELETE_CHILD, ACL_DELETE,
         ACL_WRITE_ATTRIBUTES, ACL_WRITE_EXTATTRIBUTES, ACL_WRITE_SECURITY, ACL_CHANGE_OWNER };
-      bool modifies = false;
-      for (acl_perm_t right : modifying) {
-        int allowed = acl_get_perm_np(permissions, right);
-        if (allowed < 0) unknown = true;
-        if (allowed > 0) modifies = true;
-      }
-      if (modifies) {
-        void *qualifier = acl_get_qualifier(entry);
-        id_t identifier = 0; int type = 0;
+      void *qualifier = acl_get_qualifier(entry);
+      id_t identifier = 0; int type = 0;
+      bool known = qualifier && mbr_uuid_to_id((const unsigned char *)qualifier, &identifier, &type) == 0;
+      if (qualifier) acl_free(qualifier);
+      for (auto &guest : guests) {
         int applies = -1;
-        if (qualifier && mbr_uuid_to_id((const unsigned char *)qualifier, &identifier, &type) == 0) {
-          if (type == ID_TYPE_UID && knownGuest) applies = (uid_t)identifier == guest.pw_uid ? 1 : 0;
-          else if (type == ID_TYPE_GID) applies = member((gid_t)identifier);
+        if (known) {
+          if (type == ID_TYPE_UID) applies = (uid_t)identifier == guest.user ? 1 : 0;
+          else if (type == ID_TYPE_GID) applies = guest.member((gid_t)identifier);
         }
-        if (qualifier) acl_free(qualifier);
-        if (applies > 0) writable = true; else if (applies < 0) unknown = true;
+        if (!applies) continue;
+        for (size_t index = 0; index < 8; ++index) {
+          int allowed = acl_get_perm_np(permissions, modifying[index]);
+          if (allowed < 0) { unknown = true; continue; }
+          if (!allowed || guest.decisions[index]) continue;
+          guest.decisions[index] = applies < 0 ? 3 : tag == ACL_EXTENDED_ALLOW ? 2 : 1;
+        }
       }
-    } else if (tag != ACL_EXTENDED_DENY) unknown = true;
+    } else if (!inheritOnly) unknown = true;
     state = acl_get_entry(acl, ACL_NEXT_ENTRY, &entry);
   }
-  acl_free(acl);
-  return writable ? @"write" : unknown ? @"unknown" : @"none";
+  if (acl) acl_free(acl);
+  for (auto &guest : guests) {
+    bool writable = (info.st_mode & S_IWOTH) || (info.st_uid == guest.user && (info.st_mode & S_IWUSR));
+    int group = guest.member(info.st_gid);
+    if (info.st_mode & S_IWGRP) {
+      if (group > 0) writable = true;
+      else if (group < 0) unknown = true;
+    }
+    for (size_t index = 0; index < guest.decisions.size(); ++index) {
+      int decision = guest.decisions[index];
+      if (decision == 2) return @"write";
+      if (decision == 3) unknown = true;
+      if (!decision && !unknown && index < 3 && writable) return @"write";
+    }
+  }
+  return unknown ? @"unknown" : @"none";
 }
 static void execute(napi_env, void *data) {
   Work *task = static_cast<Work *>(data);

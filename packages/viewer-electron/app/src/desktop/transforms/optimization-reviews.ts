@@ -10,6 +10,8 @@ import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection'
 import type { SourceVersion } from '../../domain/files/inspection';
 import { optimizationPlan } from '../../domain/operations/optimization';
 import { errorMessage } from '../../domain/errors';
+import { diagnosticFailure } from '../../domain/diagnostics/failure';
+import type { DiagnosticErrorFields } from '../../domain/diagnostics/failure';
 import { optimizationRequestSchema } from '../../domain/operations/optimization-review';
 import type {
   OptimizationCandidate,
@@ -63,7 +65,7 @@ export class OptimizationReviews implements TransformExecutor {
     private access: (files: readonly string[]) => Promise<void>,
     private enqueue: (request: OperationRequest) => string,
     private trash: (file: string) => Promise<unknown>,
-    private diagnose: (message: string) => void = () => {},
+    private diagnose: (message: string, fields?: DiagnosticErrorFields) => void = () => {},
   ) {}
 
   private async current(source: FileEntry): Promise<void> {
@@ -309,7 +311,10 @@ export class OptimizationReviews implements TransformExecutor {
       const candidate = this.candidates.get(id);
       if (!candidate) continue;
       candidate.jobs.delete(job.id);
-      void this.discard(candidate).catch((error) => this.diagnose(String(error)));
+      void this.discard(candidate).catch((error) => {
+        const failure = diagnosticFailure(error);
+        this.diagnose(failure.detail, failure);
+      });
     }
     this.jobs.delete(job.id);
   }

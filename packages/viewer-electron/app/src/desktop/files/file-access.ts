@@ -22,6 +22,15 @@ const document = z
       .max(128),
   })
   .strict();
+export interface ActiveFolderScope {
+  allows(actual: string): boolean;
+}
+interface LiveAccess {
+  stop(): void;
+  root: Promise<string>;
+  directory: boolean;
+  resolved?: string;
+}
 type Grant = z.infer<typeof document>['grants'][number];
 
 export class FileAccessRequired extends Error {
@@ -52,7 +61,8 @@ export class FileAccess {
   private temporary = new Map<string, Grant>();
   private loading?: Promise<void>;
   private mutations: Promise<void> = Promise.resolve();
-  private active = new Map<string, { stop(): void; root: Promise<string> }>();
+  private active = new Map<string, LiveAccess>();
+  private internalCanonical: string[] = [];
   private closed = false;
   private denied = new Set<string>();
   private revocations = new Map<string, number>();
@@ -178,6 +188,7 @@ export class FileAccess {
       if (this.internalRoots.some((root) => containsPath(root, file))) {
         const actual = await existingParent(file);
         const roots = await Promise.all(this.internalRoots.map((root) => existingParent(root)));
+        this.internalCanonical = roots;
         if (roots.some((root) => containsPath(root, actual))) continue;
         throw new FileAccessRequired(file);
       }
@@ -196,7 +207,18 @@ export class FileAccess {
         try {
           if (!active) {
             const stop = this.native!.start(grant.bookmark);
-            active = { stop, root: realpath(grant.path) };
+            const scope: LiveAccess = {
+              stop,
+              root: realpath(grant.path),
+              directory: grant.directory,
+            };
+            active = scope;
+            void scope.root.then(
+              (root) => {
+                scope.resolved = root;
+              },
+              () => {},
+            );
             // Observe rejection even if another caller is interrupted before await.
             void active.root.catch(() => {});
             this.active.set(grant.path, active);
@@ -221,6 +243,33 @@ export class FileAccess {
       if (!allowed) throw new FileAccessRequired(file);
     }
   }
+  /** History can borrow an established scope, but cannot acquire or retire ordinary access. */
+  historyScope(file: string): ActiveFolderScope | undefined {
+    const requested = path.resolve(localPath.parse(file));
+    if (this.closed || this.blocked(requested)) return;
+    if (!this.scoped) return { allows: () => !this.closed && !this.blocked(requested) };
+    const internal = this.internalRoots.some((root) => containsPath(root, requested))
+      ? [...this.internalCanonical]
+      : [];
+    const scopes = [...this.active].filter(
+      ([root, scope]) =>
+        scope.resolved && (scope.directory ? containsPath(root, requested) : root === requested),
+    );
+    if (!internal.length && !scopes.length) return;
+    return {
+      allows: (actual) => {
+        if (this.closed || this.blocked(requested) || this.blocked(actual)) return false;
+        if (internal.some((root) => containsPath(root, actual))) return true;
+        return scopes.some(
+          ([root, scope]) =>
+            this.active.get(root) === scope &&
+            !!scope.resolved &&
+            (scope.directory ? containsPath(scope.resolved, actual) : scope.resolved === actual),
+        );
+      },
+    };
+  }
+
   async list(): Promise<
     // Temporary Undo leases are intentionally absent from this list.
     {

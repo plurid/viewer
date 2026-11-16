@@ -130,7 +130,7 @@ export function navigate(id: string, path: string, fromPair = false): void {
     historyIndex: history.length - 1,
     ...panePresentation(folderPresentation(path)),
   });
-  remember(path);
+  remember(path, { visit: !fromPair });
   if (!fromPair) followPair(id, previous, path);
 }
 /**

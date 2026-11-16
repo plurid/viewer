@@ -222,24 +222,21 @@ it('keeps a clear ahead of a peer snapshot already in flight, including recents'
   expect(sessions.snapshot()?.visits?.['/fixtures/new-peer']?.count).toBe(1);
 });
 
-it('refreshes a very old snapshot with bounded replay, then saves its remapped visits exactly', () => {
-  const { sessions, a, visit, begin, remap } = setup();
+it('merges an old snapshot without refusing the workspace save', () => {
+  const { sessions, a, visit, begin, finish, remap } = setup();
+  visit(a);
+  finish(a, begin(a));
   visit(a);
   const sent = begin(a);
-  for (let index = 0; index < 1000; index++)
+  for (let index = 0; index < 1001; index++)
     remap([
       {
         source: index % 2 ? '/fixtures/renamed' : path,
         destination: index % 2 ? path : '/fixtures/renamed',
       },
     ]);
-  expect(() => sessions.save(a.owner, sent.state, sent.metadata)).toThrow(
-    'Retry with the current folders.',
-  );
-  a.sync.failed(sent.metadata.id);
-  const fresh = begin(a);
-  const merged = sessions.save(a.owner, fresh.state, fresh.metadata);
-  expect(merged.visits).toEqual({ [path]: { count: 1, last: now } });
+  const merged = sessions.save(a.owner, sent.state, sent.metadata);
+  expect(merged.visits).toEqual({ '/fixtures/renamed': { count: 2, last: now } });
 });
 
 it('keeps navigation after a response-only acknowledgement and retries unacknowledged failures', () => {
@@ -339,4 +336,61 @@ it('merges restored history by maximum while retaining new visits after the rest
   visit(b);
   finish(b, begin(b));
   expect(sessions.snapshot()?.visits?.[path]?.count).toBe(11);
+});
+
+it('retains the visit object identity on an equal save reply independently of suggestion memoization', () => {
+  const sync = new FolderVisitSync();
+  const visits = { [path]: { count: 3, last: now } };
+  sync.reset(visits);
+  const metadata = sync.begin(visits);
+  expect(sync.complete(metadata.id, structuredClone(visits), visits)).toBe(visits);
+  expect(sync.receive(structuredClone(visits), visits)).toBe(visits);
+});
+
+it('merges filesystem aliases in replies while retaining an in-flight visit exactly', () => {
+  const { sessions, a, visit, begin } = setup();
+  visit(a, '/fixtures/documents');
+  const sent = begin(a);
+  sessions.normalizeFolderHistory({ '/fixtures/documents': '/fixtures/Documents' }, []);
+  visit(a, '/fixtures/documents');
+  const merged = sessions.save(a.owner, sent.state, sent.metadata);
+  const history = sessions.folderHistory();
+  a.saved.visits = a.sync.complete(
+    sent.metadata.id,
+    merged.visits ?? {},
+    a.saved.visits ?? {},
+    history.revision,
+    history.clearRevision,
+    history.aliases,
+  );
+  expect(a.saved.visits).toEqual({ '/fixtures/Documents': { count: 2, last: now } });
+});
+
+it('retains a pending case alias through a folder rename', () => {
+  const { sessions, a, visit, begin } = setup();
+  sessions.normalizeFolderHistory({ '/fixtures/documents': '/fixtures/Documents' }, []);
+  visit(a, '/fixtures/documents');
+  const sent = begin(a);
+  sessions.remapFolderHistory([
+    { source: '/fixtures/Documents', destination: '/fixtures/Renamed' },
+  ]);
+  expect(sessions.save(a.owner, sent.state, sent.metadata).visits).toEqual({
+    '/fixtures/Renamed': { count: 1, last: now },
+  });
+});
+
+it('uses session anchors when the only relevant rename has fallen out of the bounded log', () => {
+  const { sessions, a, visit, begin, finish } = setup();
+  for (let i = 0; i < 5; i++) visit(a);
+  finish(a, begin(a));
+  visit(a);
+  const sent = begin(a);
+  sessions.remapFolderHistory([{ source: path, destination: '/fixtures/renamed-once' }]);
+  for (let i = 0; i < 1000; i++)
+    sessions.remapFolderHistory([
+      { source: `/fixtures/unrelated/${i}`, destination: `/fixtures/moved/${i}` },
+    ]);
+  expect(sessions.save(a.owner, sent.state, sent.metadata).visits).toEqual({
+    '/fixtures/renamed-once': { count: 6, last: now },
+  });
 });

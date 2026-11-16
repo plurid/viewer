@@ -21,8 +21,13 @@ export function createFileVisibility(
       }
     },
     fileHidden: async (file) => {
-      try { return process.platform === 'darwin' ? ((await binding().fileHidden?.(file)) ?? false) : false; }
-      catch { return false; }
+      try {
+        return process.platform === 'darwin'
+          ? ((await binding().fileHidden?.(file)) ?? false)
+          : false;
+      } catch {
+        return false;
+      }
     },
   };
 }

@@ -1,3 +1,4 @@
+import type { FolderVisits } from '../../domain/files/folder-visits';
 // The renderer state container: one immutable snapshot, change notification and saved-state patches.
 import { useSyncExternalStore } from 'react';
 import type { ClipboardContent } from '../../domain/files/clipboard';
@@ -13,6 +14,13 @@ import type { SettingsSnapshot } from '../../domain/services';
 import { errorMessage } from '../../domain/errors';
 import { requestPersistence } from './persistence-request';
 
+export interface FolderRecovery {
+  id: string;
+  expires: number;
+  recents: string[];
+  visits: FolderVisits;
+}
+
 export interface ViewerState {
   settings: SettingsSnapshot;
   saved: SavedState & { ui: UIPreferences };
@@ -21,6 +29,8 @@ export interface ViewerState {
   activePane: string;
   quickPreview: { paths: string[]; index: number; paneID?: string; workspaceID: string } | null;
   notice: string | null;
+  folderRecovery?: FolderRecovery;
+  unavailableFolder?: string;
   /** Whether the notice is information or a problem: it shows and stays as such. */
   noticeKind?: 'info' | 'error';
   operationsOpen: boolean;
@@ -58,14 +68,19 @@ export function useViewer<T>(selector: (state: ViewerState) => T): T {
   return useSyncExternalStore(subscribe, () => selector(current));
 }
 export function report(error: unknown): void {
-  update({ ...current, notice: errorMessage(error), noticeKind: 'error' });
+  update({
+    ...current,
+    notice: errorMessage(error),
+    noticeKind: 'error',
+    unavailableFolder: undefined,
+  });
 }
 /** A notice that is information, not an error. */
 export function announce(message: string): void {
-  update({ ...current, notice: message, noticeKind: 'info' });
+  update({ ...current, notice: message, noticeKind: 'info', unavailableFolder: undefined });
 }
 export function dismissNotice(): void {
-  update({ ...current, notice: null });
+  update({ ...current, notice: null, unavailableFolder: undefined });
 }
 export function savePatch(patch: Partial<SavedState>): void {
   update(

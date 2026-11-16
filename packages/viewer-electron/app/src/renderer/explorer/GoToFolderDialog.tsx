@@ -1,3 +1,6 @@
+import { FolderHistoryRecovery } from '../ui/FolderHistoryRecovery';
+import { subscribeFolderRemaps } from './folder-availability';
+import { pathMapper } from '../../domain/files/changes';
 import { useEffect, useId, useRef, useState } from 'react';
 import { errorMessage } from '../../domain/errors';
 import { baseName } from '../../domain/workspaces/planes';
@@ -31,16 +34,25 @@ export function GoToFolderDialog({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
-  const { paths, checking, hasHistory } = useFolderSuggestions(edited ? query : '');
+  const { paths, checking, hasHistory, incomplete } = useFolderSuggestions(edited ? query : '');
   const canClear = useViewer(
     (state) => state.saved.recents.length > 0 || Object.keys(state.saved.visits ?? {}).length > 0,
   );
+  const recovery = useViewer((state) => state.folderRecovery);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const live = useRef(true);
   const id = useId();
-  const index = paths.indexOf(selected);
+  useEffect(
+    () => subscribeFolderRemaps((changes) => setSelected((path) => pathMapper(changes)(path))),
+    [],
+  );
+  const typedPath = /^(?:[/~]|\.{1,2}\/|[a-z]:[\\/])/i.test(query);
+  const index = selected ? paths.indexOf(selected) : edited && !typedPath && paths.length ? 0 : -1;
   const choice = paths[index];
+  useEffect(() => {
+    if (edited && !typedPath && !selected && paths[0]) setSelected(paths[0]);
+  }, [edited, typedPath, selected, paths]);
   useEffect(() => {
     live.current = true;
     input.current?.select();
@@ -50,11 +62,10 @@ export function GoToFolderDialog({
   }, []);
   useEffect(() => {
     list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
-  }, [selected]);
+  }, [choice]);
 
   const open = async (suggestion = choice) => {
     if (busy) return;
-    const typedPath = /^(?:[~./\\]|[a-z]:[\\/])/i.test(query) || query.includes('/');
     if (!suggestion && !typedPath && checking) {
       setPending(true);
       return;
@@ -70,7 +81,12 @@ export function GoToFolderDialog({
             ? getState().bootstrap.home + query.slice(1)
             : query
           : paths[0]);
-      if (!path) throw new Error('No matching folder is available. Enter a folder path.');
+      if (!path)
+        throw new Error(
+          incomplete
+            ? 'Some folders could not be checked. Enter a folder path or try again.'
+            : 'No matching folder is available. Enter a folder path.',
+        );
       // Recheck on selection: a volume may have disappeared after the suggestions arrived.
       const entry = await window.viewer.stat(path);
       if (!entry?.directory) throw new Error('Choose a folder path.');
@@ -156,12 +172,14 @@ export function GoToFolderDialog({
           {checking
             ? 'Checking folders…'
             : paths.length
-              ? `${paths.length} suggested ${paths.length === 1 ? 'folder' : 'folders'}. Use ↑ and ↓ to choose.`
-              : edited && query
-                ? 'No matching folders. Enter a folder path.'
-                : hasHistory
-                  ? 'No remembered folders are available. Enter a folder path.'
-                  : 'Visit a folder to see suggestions here.'}
+              ? `${paths.length} suggested ${paths.length === 1 ? 'folder' : 'folders'}. ${incomplete ? 'Some folders could not be checked. ' : ''}Use ↑ and ↓ to choose.`
+              : incomplete
+                ? 'Some folders could not be checked. Enter a folder path or try again.'
+                : edited && query
+                  ? 'No matching folders. Enter a folder path.'
+                  : hasHistory
+                    ? 'No remembered folders are available. Enter a folder path.'
+                    : 'Visit a folder to see suggestions here.'}
         </p>
         <div
           ref={list}
@@ -197,13 +215,14 @@ export function GoToFolderDialog({
             {error}
           </p>
         )}
+        <FolderHistoryRecovery onEnd={() => input.current?.focus()} />
         <footer>
-          {canClear && (
+          {(canClear || recovery) && (
             <Button
               type="button"
               variant="secondary"
               className="dialog-secondary-action"
-              disabled={busy}
+              disabled={busy || !canClear}
               onClick={() => {
                 clearRecentFolders();
                 input.current?.focus();
