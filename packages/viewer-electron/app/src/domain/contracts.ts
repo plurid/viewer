@@ -458,6 +458,13 @@ export interface SavedState {
   ui?: UIPreferences;
 }
 export type SidebarSection = 'locations' | 'favorites' | 'recents';
+export type MinimapCorner =
+  | 'automatic'
+  | 'bottom-right'
+  | 'bottom-left'
+  | 'top-right'
+  | 'top-left';
+
 export interface UIPreferences {
   /** preferences/ui.ts `uiPreferencesVersion`. */
   version: 4;
@@ -485,6 +492,7 @@ export interface UIPreferences {
     minimap: boolean;
     /** With `minimap`, it shows only once the space holds 3 or more planes. */
     minimapAuto: boolean;
+    minimapCorner: MinimapCorner;
     viewcube: boolean;
     origin: boolean;
     planeHeaders: boolean;

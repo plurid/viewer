@@ -3,7 +3,7 @@ import { portablePath as localPath } from '../../schemas';
 import type { HeaderControl } from '../header';
 import { headerControlKeys, headerPresets } from '../header';
 import { firstRunSteps } from '../first-run';
-import { uiPreferencesVersion } from '../ui';
+import { minimapCorners, uiPreferencesVersion } from '../ui';
 const sections = z.enum(['locations', 'favorites', 'recents']);
 const fields = z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size', 'git']);
 const boolean = z.boolean();
@@ -44,6 +44,7 @@ export const preferencesSchema = z
         minimap: boolean,
         // a file written before it shows the minimap as it did, always
         minimapAuto: boolean.default(false),
+        minimapCorner: z.enum(minimapCorners).default('automatic'),
         viewcube: boolean,
         origin: boolean,
         planeHeaders: boolean,

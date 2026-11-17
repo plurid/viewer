@@ -24,6 +24,7 @@ export const profilePaths = [
   'ui.sidebar.visible',
   'ui.space.toolbar',
   'ui.space.minimap',
+  'ui.space.minimapCorner',
   'ui.space.viewcube',
   'ui.space.grid',
   'ui.space.planeHeaders',

@@ -1,4 +1,4 @@
-import type { PaneSidebar, SidebarSection, UIPreferences, ListColumn } from '../contracts';
+import type { PaneSidebar, SidebarSection, UIPreferences, ListColumn, MinimapCorner } from '../contracts';
 import { columnWidth, listColumns } from './list-columns';
 import type { HeaderControls } from './header';
 import { headerControlKeys, headerPresets } from './header';
@@ -9,6 +9,14 @@ import { normalizeFirstRunHint } from './first-run';
  * plane header from Essential (header.ts), once.
  */
 export const uiPreferencesVersion = 4;
+
+export const minimapCorners = [
+  'automatic',
+  'bottom-right',
+  'bottom-left',
+  'top-right',
+  'top-left',
+] as const satisfies readonly MinimapCorner[];
 
 export const sidebarSections: SidebarSection[] = ['locations', 'favorites', 'recents'];
 const object = (value: unknown): Record<string, unknown> =>
@@ -158,6 +166,9 @@ export function normalizePreferences(value?: unknown): UIPreferences {
       toolbar: fresh ? false : aidsChosen ? boolean(space.toolbar, true) : true,
       minimap: aidsChosen ? boolean(space.minimap, true) : true,
       minimapAuto: boolean(space.minimapAuto, fresh),
+      minimapCorner: minimapCorners.includes(space.minimapCorner as MinimapCorner)
+        ? (space.minimapCorner as MinimapCorner)
+        : 'automatic',
       viewcube: fresh ? false : aidsChosen ? boolean(space.viewcube, true) : true,
       origin: boolean(space.origin, false),
       planeHeaders: boolean(space.planeHeaders, true),

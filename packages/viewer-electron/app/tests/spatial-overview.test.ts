@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { solveOverviewPlacement } from '../src/renderer/workspace/overlays/placement';
+import type { MinimapCorner } from '../src/domain/contracts';
 import { SpatialOverview } from '../src/renderer/workspace/overlays/SpatialOverview';
 import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
 import { arrangementCommands } from '../src/renderer/commands/window-commands/arrangement';
@@ -12,6 +13,25 @@ const viewport = { x: 0, y: 0, width: 1000, height: 600 };
 const size = { width: 172, height: 120 };
 
 describe('spatial overview placement', () => {
+  it.each([
+    ['bottom-right', 812, 464],
+    ['bottom-left', 16, 464],
+    ['top-right', 812, 16],
+    ['top-left', 16, 16],
+  ] as const)('keeps %s despite obstacles and a different current corner', (corner, x, y) => {
+    expect(
+      solveOverviewPlacement({ viewport, size, obstacles: [viewport], current: 'top-left', corner }),
+    ).toEqual({ kind: 'corner', corner, bounds: { x, y, ...size } });
+    expect(
+      solveOverviewPlacement({
+        viewport: { ...viewport, width: 200, height: 140 },
+        size,
+        obstacles: [],
+        corner,
+      }),
+    ).toEqual({ kind: 'fallback' });
+  });
+
   it('moves out of a complete plane header and retains a safe corner without reserving canvas width', () => {
     const blocked = solveOverviewPlacement({
       viewport,
@@ -77,7 +97,7 @@ function frame() {
   frames.clear();
   for (const callback of pending) callback(0);
 }
-function fixture() {
+function fixture(options: { minimapShown?: boolean; corner?: MinimapCorner } = {}) {
   const root = document.createElement('div');
   const map = document.createElement('div');
   map.dataset.pluridOverlay = 'minimap';
@@ -105,12 +125,18 @@ function fixture() {
   const changed = vi.fn();
   const navigate = vi.fn();
   const docked = vi.fn(() => false);
+  const minimapShown = vi.fn(() => options.minimapShown ?? true);
+  const corner = vi.fn(() => options.corner ?? 'automatic');
+  const requestMinimap = vi.fn();
   const adapter = new SpatialOverview(root, {
     subscribeEngine: (listener) => {
       engineChanged = listener;
       return unsubscribe;
     },
     isDocked: docked,
+    minimapShown,
+    corner,
+    requestMinimap,
     labelForPlane: () => ({ label: 'Projects', path: '/fixtures/Projects' }),
     onNavigate: navigate,
     changed,
@@ -124,6 +150,9 @@ function fixture() {
     hide,
     adapter,
     docked,
+    minimapShown,
+    corner,
+    requestMinimap,
     changed,
     unsubscribe,
     navigate,
@@ -132,6 +161,62 @@ function fixture() {
 }
 
 describe('engine overlay adapter', () => {
+  it.each(['Escape', 'outside', 'plane', 'command'] as const)(
+    'opens a hidden minimap on demand and returns to hidden after %s',
+    async (dismissal) => {
+      const view = fixture({ minimapShown: false });
+      view.map.remove();
+      frame();
+      expect(view.adapter.snapshot().available).toBe(true);
+      const opener = document.createElement('button');
+      document.body.append(opener);
+      opener.focus();
+      view.adapter.open();
+      expect(view.requestMinimap).toHaveBeenLastCalledWith(true);
+      expect(view.show).not.toHaveBeenCalled();
+      view.root.append(view.map);
+      await Promise.resolve();
+      frame();
+      expect(view.show).toHaveBeenCalledTimes(1);
+      expect(view.adapter.snapshot().expanded).toBe(true);
+      expect(document.activeElement).toBe(view.button);
+
+      if (dismissal === 'Escape')
+        view.button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      else if (dismissal === 'outside')
+        view.map.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed' }));
+      else if (dismissal === 'plane') view.button.click();
+      else view.adapter.open();
+
+      expect(view.adapter.snapshot().expanded).toBe(false);
+      expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
+      if (dismissal === 'plane') expect(view.navigate).toHaveBeenCalledWith('engine-plane');
+      else expect(document.activeElement).toBe(opener);
+      frame();
+      expect(view.map.getAttribute('popover')).toBe('auto');
+      expect(view.adapter.snapshot().available).toBe(true);
+    },
+  );
+
+  it('keeps a fixed corner when controls appear over it, including expanded Overview', async () => {
+    const view = fixture({ corner: 'bottom-right' });
+    frame();
+    expect(view.map.style.left).toBe('812px');
+    expect(view.map.style.top).toBe('464px');
+    const header = document.createElement('div');
+    header.className = 'plane-controls';
+    vi.spyOn(header, 'getBoundingClientRect').mockReturnValue(new DOMRect(700, 400, 300, 200));
+    view.root.append(header);
+    await Promise.resolve();
+    frame();
+    expect(view.map.style.left).toBe('812px');
+    expect(view.map.style.top).toBe('464px');
+    expect(view.adapter.snapshot().collapsed).toBe(false);
+    view.adapter.open();
+    expect(view.map.style.left).toBe('812px');
+    expect(view.map.style.top).toBe('464px');
+  });
+
   function cube(view: ReturnType<typeof fixture>) {
     const element = document.createElement('div');
     element.dataset.pluridOverlay = 'viewcube';

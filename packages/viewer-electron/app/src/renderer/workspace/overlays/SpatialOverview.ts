@@ -1,9 +1,6 @@
-import {
-  solveOverviewPlacement,
-  validOverlayRect,
-  type OverlayRect,
-  type OverviewCorner,
-} from './placement';
+import type { MinimapCorner } from '../../../domain/contracts';
+import type { OverlayRect, OverviewCorner } from './placement';
+import { solveOverviewPlacement, validOverlayRect } from './placement';
 import { SpatialViewcube } from './SpatialViewcube';
 
 export interface SpatialOverviewState {
@@ -15,6 +12,9 @@ export interface SpatialOverviewState {
 export interface SpatialOverviewPorts {
   subscribeEngine(listener: () => void): () => void;
   isDocked(): boolean;
+  minimapShown(): boolean;
+  corner(): MinimapCorner;
+  requestMinimap(shown: boolean): void;
   labelForPlane(id: string): { label: string; path?: string } | undefined;
   onNavigate?(id: string): void;
   changed(state: SpatialOverviewState): void;
@@ -70,6 +70,7 @@ export class SpatialOverview {
   private applied = '';
   private pressed = false;
   private opener?: HTMLElement;
+  private opening = false;
   private restoreFocus = false;
   private styles = new Map<string, string>();
   private originalRole: string | null = null;
@@ -173,17 +174,25 @@ export class SpatialOverview {
   };
 
   open(opener?: HTMLElement): void {
-    const map = this.map;
-    if (!map || !this.state.available || this.disposed) return;
-    if (this.state.expanded) {
+    if (this.disposed || this.ports.isDocked()) return;
+    if (this.state.expanded || this.opening) {
       this.close();
       return;
     }
-    if (typeof map.showPopover !== 'function')
-      throw new Error('This browser cannot show the workspace overview.');
     this.opener =
       opener ??
       (document.activeElement instanceof HTMLElement ? document.activeElement : undefined);
+    this.restoreFocus = true;
+    this.opening = true;
+    this.ports.requestMinimap(true);
+    this.measure();
+  }
+
+  private expand(): void {
+    const map = this.map;
+    if (!map) return;
+    if (typeof map.showPopover !== 'function')
+      throw new Error('This browser cannot show the workspace overview.');
     map.setAttribute('popover', 'auto');
     map.setAttribute('role', 'dialog');
     map.setAttribute('aria-label', 'Overview');
@@ -200,15 +209,32 @@ export class SpatialOverview {
       borderColor: 'var(--plurid-surface-strong)',
     });
     map.showPopover();
+    const corner = this.ports.corner();
+    if (corner !== 'automatic') {
+      const { width, height } = rectangle(map);
+      const placement = solveOverviewPlacement({
+        viewport: rectangle(this.root),
+        size: { width, height },
+        obstacles: [],
+        corner,
+      });
+      if (placement.kind === 'corner')
+        Object.assign(map.style, {
+          left: `${placement.bounds.x}px`,
+          top: `${placement.bounds.y}px`,
+          transform: 'none',
+        });
+    }
+    this.opening = false;
     this.publish({ available: true, collapsed: this.state.collapsed, expanded: true });
     map.querySelector<HTMLElement>('button:not([disabled])')?.focus({ preventScroll: true });
   }
 
   close(restoreFocus = true): void {
-    if (!this.state.expanded) return;
+    if (!this.state.expanded && !this.opening) return;
     this.restoreFocus = restoreFocus;
     try {
-      if (this.map?.isConnected) this.map.hidePopover();
+      if (this.state.expanded && this.map?.isConnected) this.map.hidePopover();
     } catch (error) {
       // Native light-dismiss or engine detachment may have closed it before this callback.
       if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') throw error;
@@ -217,12 +243,14 @@ export class SpatialOverview {
   }
 
   private finishClose(): void {
+    this.opening = false;
     this.publish({ ...this.state, expanded: false });
     if (this.restoreFocus && this.opener?.isConnected) this.opener.focus({ preventScroll: true });
     this.restoreFocus = false;
     this.restoreAttributes();
     // Keep a closed popup out of hit-testing until its safe corner is remeasured.
     this.map?.setAttribute('popover', 'auto');
+    this.ports.requestMinimap(false);
     this.awaitingPlacement = true;
     this.applied = '';
     this.invalidate();
@@ -291,11 +319,21 @@ export class SpatialOverview {
       this.ports.isDocked(),
     );
     this.bind(map);
-    if (!map || this.ports.isDocked()) {
+    if (this.ports.isDocked()) {
+      if (this.opening) this.close();
       this.publish({ available: false, collapsed: false, expanded: false });
       return;
     }
-    if (!this.state.collapsed && !this.awaitingPlacement && !visible(map)) {
+    if (!map) {
+      this.publish({ available: !this.ports.minimapShown(), collapsed: false, expanded: false });
+      return;
+    }
+    if (!this.ports.minimapShown() && !this.opening) {
+      map.setAttribute('popover', 'auto');
+      this.publish({ available: true, collapsed: false, expanded: false });
+      return;
+    }
+    if (!this.opening && !this.state.collapsed && !this.awaitingPlacement && !visible(map)) {
       this.publish({ available: false, collapsed: false, expanded: false });
       return;
     }
@@ -307,6 +345,7 @@ export class SpatialOverview {
       size: this.size,
       obstacles,
       current: this.corner,
+      corner: this.ports.corner(),
     });
     const parent = map.offsetParent instanceof HTMLElement ? rectangle(map.offsetParent) : viewport;
     const signature = JSON.stringify([placement, parent.x, parent.y]);
@@ -350,6 +389,7 @@ export class SpatialOverview {
           button.setAttribute('title', title.path ?? title.label);
       }
     }
+    if (this.opening) this.expand();
   }
 
   private observe(elements: Set<Element>): void {
@@ -362,6 +402,7 @@ export class SpatialOverview {
   destroy(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.opening) this.close(false);
     if (this.frame !== undefined) cancelAnimationFrame(this.frame);
     this.resize?.disconnect();
     this.mutation.disconnect();

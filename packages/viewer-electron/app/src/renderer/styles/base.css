@@ -632,6 +632,10 @@ select {
 .workspace-surface [data-plurid-minimap] button {
   pointer-events: auto;
 }
+.workspace-surface[data-viewer-overview-only] [data-plurid-overlay='minimap']:not(:popover-open) {
+  /* Engine mounting and popup expansion can span frames when the minimap is hidden. */
+  visibility: hidden;
+}
 .workspace-surface > div {
   height: 100%;
 }

@@ -333,6 +333,9 @@ const descriptions: Record<string, string[]> = {
   'ui.space.opening': [
     'face-on faces the new plane; pair shows its linked parent; dock brings it into the docked view.',
   ],
+  'ui.space.minimapCorner': [
+    'automatic avoids controls; bottom-right, bottom-left, top-right or top-left keeps that corner even over controls. Default: automatic.',
+  ],
   'ui.space.headerControls': [
     'Show/hide individual plane toolbar icons. false hides an icon, not the underlying command.',
     'Essential: every one true except layout, discover and formatTools. Full: all true.',

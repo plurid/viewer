@@ -105,6 +105,38 @@ describe('workspace palette sections', () => {
       workspaceRows(rows, rankWorkspaceChoices([], [definition], 'site'), 'site', 1).rows,
     ).toHaveLength(1);
   });
+  it('lists in the main palette only definitions whose words the typing starts', () => {
+    const speech = sampleDefinition('sample/technologies/experiments/transview/transview-speech', {
+      name: 'transview-speech',
+    });
+    const cli = sampleDefinition('sample/technologies/tools/sample-cli', { name: 'sample-cli' });
+    const viewer = sampleDefinition('sample/technologies/tools/viewer', { name: 'viewer' });
+    const all = [speech, cli, viewer];
+    const rows = [
+      row('file-overview', 'File overview'),
+      ...all.map((definition) => row('defined:' + definition.key, definition.name)),
+    ];
+    const listed = (query: string) =>
+      paletteRows(rows, query, [], rankWorkspaceChoices([], all, query))
+        .rows.filter((item) => item.id.startsWith('defined:'))
+        .map((item) => item.label);
+    // scattered letters across "technologies/…/transview" are not a name
+    expect(rankWorkspaceChoices([], all, 'overview').map((choice) => choice.key)).toContain(
+      speech.key,
+    );
+    expect(listed('overview')).toEqual([]);
+    expect(listed('view')).toEqual(['viewer']);
+    expect(listed('sacli')).toEqual(['sample-cli']);
+    expect(listed('tools/sample-cli')).toEqual(['sample-cli']);
+    expect(listed('trans speech')).toEqual(['transview-speech']);
+    // Change workspace… keeps the loose search
+    expect(
+      workspaceRows(rows, rankWorkspaceChoices([], all, 'overview'), 'overview', 3).rows.map(
+        (item) => item.label,
+      ),
+    ).toContain('transview-speech');
+  });
+
   it('requires two characters, then shows four definitions after commands or eight alone', () => {
     const choices = rankWorkspaceChoices([], definitions, 'project');
     expect(paletteRows(commands, 'p', [], choices).rows).toHaveLength(0);

@@ -37,11 +37,13 @@ export function solveOverviewPlacement({
   size,
   obstacles,
   current,
+  corner = 'automatic',
 }: {
   viewport: OverlayRect;
   size: { width: number; height: number };
   obstacles: readonly OverlayRect[];
   current?: OverviewCorner;
+  corner?: MinimapCorner;
 }): OverviewPlacement {
   if (
     !validOverlayRect(viewport) ||
@@ -50,25 +52,31 @@ export function solveOverviewPlacement({
     size.height + overviewInset * 2 > viewport.height
   )
     return { kind: 'fallback' };
-  const candidates = current
-    ? [current, ...overviewCorners.filter((corner) => corner !== current)]
-    : overviewCorners;
-  for (const corner of candidates) {
+  const candidates =
+    corner !== 'automatic'
+      ? [corner]
+      : current
+        ? [current, ...overviewCorners.filter((candidate) => candidate !== current)]
+        : overviewCorners;
+  for (const candidate of candidates) {
     const bounds = {
-      x: corner.endsWith('right')
+      x: candidate.endsWith('right')
         ? viewport.x + viewport.width - overviewInset - size.width
         : viewport.x + overviewInset,
-      y: corner.startsWith('bottom')
+      y: candidate.startsWith('bottom')
         ? viewport.y + viewport.height - overviewInset - size.height
         : viewport.y + overviewInset,
       ...size,
     };
     if (
+      corner !== 'automatic' ||
       !obstacles.some(
         (obstacle) => validOverlayRect(obstacle) && overlaysIntersect(bounds, obstacle),
       )
     )
-      return { kind: 'corner', corner, bounds };
+      return { kind: 'corner', corner: candidate, bounds };
   }
   return { kind: 'fallback' };
 }
+import type { MinimapCorner } from '../../../domain/contracts';
+

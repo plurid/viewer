@@ -673,6 +673,28 @@ export const settingCatalog: SettingDefinition[] = [
       // plurid's toolbar along the space's bottom: rotate, scale, translate
       ['toolbar', 'Show space toolbar'],
       ['minimap', 'Show minimap'],
+    ] as const
+  ).map(([key, label]) => ({
+    path: 'ui.space.' + key,
+    category: 'Space',
+    label,
+    kind: 'boolean' as const,
+  })),
+  {
+    path: 'ui.space.minimapCorner',
+    category: 'Space',
+    label: 'Minimap corner',
+    kind: 'choice',
+    choices: [
+      ['automatic', 'Automatic'],
+      ['bottom-right', 'Bottom right'],
+      ['bottom-left', 'Bottom left'],
+      ['top-right', 'Top right'],
+      ['top-left', 'Top left'],
+    ],
+  },
+  ...(
+    [
       ['minimapAuto', 'Minimap only with 3 or more planes'],
       ['viewcube', 'Show viewcube'],
       ['planeHeaders', 'Show plane headers'],

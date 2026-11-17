@@ -221,6 +221,50 @@ const choiceScore = (
     new Map(),
   );
 
+const wordBreak = /[\s….\/_-]+/;
+/** The term is the starts of some of the text's words, in order: "plcli" is "pl" + "cli". */
+function anchoredIn(text: string, term: string): boolean {
+  const words = text.split(wordBreak).filter(Boolean);
+  const failed = new Set<number>();
+  const from = (offset: number, word: number): boolean => {
+    if (offset === term.length) return true;
+    const memo = offset * (words.length + 1) + word;
+    if (failed.has(memo)) return false;
+    for (let index = word; index < words.length; index++) {
+      const candidate = words[index]!;
+      let shared = 0;
+      while (shared < candidate.length && candidate[shared] === term[offset + shared]) shared++;
+      for (let length = shared; length > 0; length--)
+        if (from(offset + length, index + 1)) return true;
+    }
+    failed.add(memo);
+    return false;
+  };
+  return from(0, 0);
+}
+/**
+ * Whether every typed word is made of the starts of words of the definition's name, key, project
+ * name or an alias, in order, as "plcli" is in "plurid/…/plurid-cli". The ⌘K palette, where
+ * definitions sit beside commands, lists only these: the scattered letters of "overview" inside
+ * "technologies/…/transview" match loosely but name nothing the person meant.
+ */
+export function anchoredDefinitionMatch(definition: WorkspaceDefinition, query: string): boolean {
+  const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
+  const texts = [
+    definition.name,
+    definition.key,
+    definition.projectName ?? '',
+    ...definition.aliases,
+  ]
+    .map(normalize)
+    .filter(Boolean);
+  return terms.every((typed) => {
+    // "tools/sample-cli" names the same word starts as "toolssamplecli"
+    const term = typed.replace(new RegExp(wordBreak.source, 'g'), '');
+    return !term || texts.some((text) => anchoredIn(text, term));
+  });
+}
+
 export function rankWorkspaceChoices(
   open: readonly Workspace[],
   defined: readonly WorkspaceDefinition[],

@@ -3,6 +3,7 @@ import type { DiscoverableCommand } from './registry';
 import { commandScore, normalize, rankCommands, type ResolvedCommand } from './registry';
 import type { Suggestion } from './suggestions';
 import type { WorkspaceChoice } from '../../domain/workspaces/definitions/query';
+import { anchoredDefinitionMatch } from '../../domain/workspaces/definitions/query';
 
 /**
  * Settings apart in the palette. Every setting is a command (window-commands/
@@ -88,7 +89,9 @@ export function paletteRows(
   }
   const byID = new Map(commands.map((command) => [command.id, command]));
   const matching = choices.filter(
-    (choice) => byID.has(choice.id) && (choice.kind === 'open' || query.trim().length >= 2),
+    (choice) =>
+      byID.has(choice.id) &&
+      (choice.kind === 'open' || anchoredDefinitionMatch(choice.definition, query)),
   );
   const hasCommands = view.rows.some((row) => !row.setting && row.id !== moreSettingsID);
   const limit = hasCommands ? 4 : 8;

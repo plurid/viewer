@@ -3,6 +3,11 @@ import { closePlanes, otherPlanes, rootPlanes } from '../closing';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
+/** Why Overview is missing here, in words that name the way back. */
+export function overviewUnavailable(docked: boolean): string | undefined {
+  if (docked) return 'A docked plane fills the window. Reveal space (⌘↵) first.';
+}
+
 /** Framing, docking, closing and arranging planes in space. */
 export function arrangementCommands({
   actions,
@@ -17,7 +22,8 @@ export function arrangementCommands({
       group: 'Space',
       icon: 'map',
       aliases: ['minimap', 'navigate space'],
-      when: (context) => windowScope(context) && !!actions.overviewAvailable,
+      when: (context) => windowScope(context) && !actions.workspace.isDocked(),
+      unavailable: () => overviewUnavailable(actions.workspace.isDocked()),
       run: () => actions.overview?.(),
     },
     {

@@ -6,7 +6,9 @@ import {
   effectiveWindowSettings,
   effectiveWindowUI,
 } from '../state/effective-ui';
-import { useSpatialOverview, type SpatialOverviewHandle } from './overlays/useSpatialOverview';
+import type { SpatialOverviewHandle } from './overlays/useSpatialOverview';
+import { useSpatialOverview } from './overlays/useSpatialOverview';
+import type { RefObject } from 'react';
 import {
   lazy,
   Suspense,
@@ -17,15 +19,15 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type RefObject,
 } from 'react';
+import type { PluridApplicationHandle } from '@plurid/plurid-react';
 import {
   PluridApplication,
   usePluridApi,
   usePluridPlane,
-  type PluridApplicationHandle,
 } from '@plurid/plurid-react';
-import { PLURID_PUBSUB_TOPIC, type PluridApi, type PluridPlane } from '@plurid/plurid-data';
+import type { PluridApi, PluridPlane } from '@plurid/plurid-data';
+import { PLURID_PUBSUB_TOPIC } from '@plurid/plurid-data';
 import { activeWorkspace, report, setActivePane, storageAdapter, useViewer } from '../state/store';
 import { SearchExplorer } from '../explorer/SearchExplorer';
 import { CollectionExplorer } from '../explorer/CollectionExplorer';
@@ -451,16 +453,18 @@ export function WorkspaceSurface({
   );
   const preferences = useMemo(() => general.space, [general]);
   // automatic, the minimap comes with the third plane and goes with it
-  const minimap = minimapShown(preferences, space.panes.length);
+  const minimapVisible = minimapShown(preferences, space.panes.length);
   const [size, setSize] = useState({ width: 992, height: 692 });
   const [api, setApi] = useState<PluridApi | null>(null);
   const overview = useSpatialOverview({
     root: surface,
-    enabled: (minimap || preferences.viewcube) && !!api,
+    enabled: !!api,
     epoch: space.id + ':' + (space.epoch ?? 0),
     labelsVersion: space.panes,
     subscribeEngine: (listener) => workspace.subscribeEngine(listener),
     isDocked: () => workspace.isDocked(),
+    minimapShown: () => minimapVisible,
+    corner: () => preferences.minimapCorner,
     labelForPlane: (engineID) => {
       const node = engine.current
         ? flattenTree(engine.current.tree.get()).find((item) => item.planeID === engineID)
@@ -481,6 +485,7 @@ export function WorkspaceSurface({
       focusFiles(hostID(node));
     },
   });
+  const minimap = minimapVisible || overview.requested;
   useEffect(() => onOverviewChange?.(overview), [overview, onOverviewChange]);
   useEffect(() => () => onOverviewChange?.(undefined), [onOverviewChange]);
   // each engine, once ready: new roots open beside the plane in use, and no root moves
@@ -649,6 +654,7 @@ export function WorkspaceSurface({
   return (
     <div
       className="workspace-surface"
+      data-viewer-overview-only={!minimapVisible || undefined}
       tabIndex={-1}
       ref={surface}
       onKeyDownCapture={(event) => {
