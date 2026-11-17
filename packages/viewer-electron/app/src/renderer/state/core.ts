@@ -33,6 +33,7 @@ export interface ViewerState {
   unavailableFolder?: string;
   /** Whether the notice is information or a problem: it shows and stays as such. */
   noticeKind?: 'info' | 'error';
+  definitionNotice?: string;
   operationsOpen: boolean;
   operationsHistory: boolean;
   acknowledgedJobs: string[];
@@ -72,15 +73,22 @@ export function report(error: unknown): void {
     ...current,
     notice: errorMessage(error),
     noticeKind: 'error',
+    definitionNotice: undefined,
     unavailableFolder: undefined,
   });
 }
 /** A notice that is information, not an error. */
 export function announce(message: string): void {
-  update({ ...current, notice: message, noticeKind: 'info', unavailableFolder: undefined });
+  update({
+    ...current,
+    notice: message,
+    noticeKind: 'info',
+    unavailableFolder: undefined,
+    definitionNotice: undefined,
+  });
 }
 export function dismissNotice(): void {
-  update({ ...current, notice: null, unavailableFolder: undefined });
+  update({ ...current, notice: null, unavailableFolder: undefined, definitionNotice: undefined });
 }
 export function savePatch(patch: Partial<SavedState>): void {
   update(

@@ -128,6 +128,7 @@ export function restoreBackupState(
       case 'terminal':
         return {
           ...base,
+          definitionPlane: undefined,
           startOnOpen: false,
           gitAction: undefined,
           taskSessionID: optionalID(base.taskSessionID),
@@ -234,6 +235,7 @@ export function restoreBackupState(
       id: id(space.id),
       name: space.name.slice(0, 89) + ' (restored)',
       project: undefined,
+      definition: undefined,
       epoch: undefined,
       panes: space.panes.map(pane),
       roots: space.roots.map(id),

@@ -25,7 +25,8 @@ deeper guides.
 - **Use space for context.** Linked views express relationships. Docking and tiling support focused
   work. Spatial navigation is optional for basic use.
 - **Keep views separate from work.** Closing a note view keeps its document; closing a server view
-  can keep its listener. Restoration never replays commands.
+  can keep its listener. Restoration never replays commands. Opening a defined workspace asks before
+  each named command; restored command planes return to their Start panel.
 - **Show real outcomes.** Report saved files, measured optimization savings, process exits and
   explicitly reported agent status. Missing signals stay unknown.
 - **Keep consequential changes reviewable.** Exports preserve originals; file proposals expose their

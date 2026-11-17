@@ -1,4 +1,5 @@
 import type { CommandContext, CommandRegistry, ResolvedCommand } from './registry';
+import { humanDefinitionCommand } from '../../domain/agents/safety';
 
 /** Window actions keep their own scope; publishing a file selection must not hide them. */
 export function agentCatalog(
@@ -16,5 +17,5 @@ export function agentCatalog(
     seen.add(command.id);
     commands.push(command);
   }
-  return commands;
+  return commands.filter((command) => !humanDefinitionCommand(command.id));
 }

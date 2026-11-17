@@ -1,4 +1,5 @@
 import { sameCapturedItem } from '../../domain/files/entries';
+import { agentPlaneCopy, agentWorkspaceCopy } from '../../domain/agents/requests';
 import type { CapturedTarget } from '../../domain/automation/actions';
 import { isTourFile } from '../../domain/tours/tour';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -755,7 +756,7 @@ export class AgentBroker {
           .find((space) => space.id === target.workspaceID)
           ?.panes.find((pane) => pane.id === input.paneID);
         if (!pane) throw new Error('Choose a plane in the active workspace from list_planes.');
-        request = { kind: 'focus-plane', pane: structuredClone(pane) };
+        request = { kind: 'focus-plane', pane: agentPlaneCopy(pane) };
       } else {
         const input = parseToolInput('propose_workspace_switch', args);
         const state = await extension.workspaceState?.();
@@ -773,7 +774,7 @@ export class AgentBroker {
             throw new Error('This workspace searches outside the agent folder scope.');
           await this.authorize(pane.path);
         }
-        request = { kind: 'switch-workspace', workspace: structuredClone(match) };
+        request = { kind: 'switch-workspace', workspace: agentWorkspaceCopy(match) };
       }
       await this.authorizeNavigation(request, target);
       value = extension.requests.navigation(request, target);

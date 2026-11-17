@@ -1,4 +1,5 @@
-import { maximumWorkspaces } from '../../../domain/workspaces/catalog';
+import { definitionWasRemoved, maximumWorkspaces } from '../../../domain/workspaces/catalog';
+import { canCaptureDefinition } from '../../../domain/workspaces/definitions/capture';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
@@ -9,6 +10,7 @@ export function workspacesCommands({
   space,
   workspaceScope,
 }: WindowScopes): CommandDefinition[] {
+  const linked = !!space.definition && !definitionWasRemoved(space, state.bootstrap.definitions);
   const commands: CommandDefinition[] = [
     {
       id: 'manage-workspaces',
@@ -64,7 +66,10 @@ export function workspacesCommands({
       icon: 'trash',
       aliases: ['dw'],
       detail: `${space.panes.length} open ${space.panes.length === 1 ? 'plane' : 'planes'} · layout only`,
-      when: workspaceScope,
+      when: (context) => workspaceScope(context) && !linked,
+      unavailable: linked
+        ? 'Close it: its definition stays in workspaces.jsonc.'
+        : undefined,
       run: () => actions.workspaceDialog('delete'),
     },
     {
@@ -77,5 +82,29 @@ export function workspacesCommands({
       run: actions.restoreWorkspace,
     },
   ];
+  for (const [id, label, kind] of [
+    ['close-workspace', 'Close workspace', 'close'],
+    ['reset-workspace', 'Reset to definition…', 'reset'],
+    ['save-workspace-definition', 'Save to definition', 'save'],
+    ['save-workspace-as-definition', 'Save as definition…', 'save-as'],
+  ] as const)
+    commands.push({
+      id,
+      label,
+      group: 'Workspaces',
+      icon: kind === 'close' ? 'close' : 'dock',
+      aliases: kind === 'save' ? ['sync'] : undefined,
+      humanOnly: true,
+      when: (context) =>
+        workspaceScope(context) &&
+        (kind === 'save-as'
+          ? !linked && canCaptureDefinition(space)
+          : linked),
+      unavailable:
+        kind === 'save-as' && !canCaptureDefinition(space)
+          ? 'Open a folder, file, terminal, scratch or search plane first.'
+          : undefined,
+      run: () => actions.workspaceDialog(kind),
+    });
   return commands;
 }

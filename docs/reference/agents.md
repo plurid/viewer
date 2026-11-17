@@ -5,6 +5,12 @@ each needs, what it can never do, its limits and errors, and the model settings 
 
 Agents and models are optional. Browsing, previews and the built-in tools work without either.
 
+Agents can discover and switch only open workspaces. They cannot open a workspace definition or
+start its commands. Definition keys, catalog entries and command-plane references are not exposed by
+workspace tools. Navigation and task opening leave new terminals stopped for the person; the Start
+panel's **Run** stays disabled in an agent-driven or deferred view. See
+[workspace commands](terminals.md#commands-a-workspace-starts).
+
 ## What an agent can do
 
 An agent works inside the folders the person gives it. It can look around the workspace, read what

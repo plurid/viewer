@@ -170,14 +170,83 @@ exact format.
 
 Choose the workspace's name at the top left of the window. Up to five recent workspaces appear above
 the full action menu, with a check beside the current workspace. **Manage workspaces…** opens the
-complete list: search by name, sort by recent use or name, and browse 25 at a time. Open, rename or
-delete a workspace from its row, or choose **New workspace…**. A workspace open in another window is
+complete list. **Open** lists your open workspaces; **Defined** searches definitions, sorts by
+recently opened or key, and shows 25 per page. Open, rename or close a defined workspace from its
+row; delete an ad-hoc workspace or choose **New workspace…**. A workspace open in another window is
 managed from that window. Viewer remembers recent use across restarts.
 
 **Workspace → New Workspace…** in the menu bar also creates a workspace. Give each kind of work its
 own: a writing workspace with a folder, a PDF and notes; a project workspace with an editor, a
 terminal and a browser. Choose where new folder planes open in **Settings → Browsing → New folder
 planes start in**.
+
+## Open a defined workspace
+
+1. Choose **⌘K** → **Change workspace…**.
+2. Type a name, alias or definition key, such as `sample/tools/sample-cli`.
+3. Choose the workspace. Viewer opens its planes, or focuses its window if it is already open.
+
+Matches keep their ranked order. Open workspaces lead within the same match band. With no search,
+the picker shows open workspaces, up to eight recently opened definitions and the total available to
+search. A search shows up to 50 defined matches, with **N more · keep typing** when more match. In
+the main **⌘K** palette, open workspaces match from one character; definitions need at least two.
+**All N matching workspaces** opens the workspace search.
+
+Viewer reads VS Code Project Manager's local projects as plain definitions. They do not fill the
+open workspace list until you open them. Definitions marked hidden and definitions whose root folder
+is missing stay out of search. Missing and unknown roots among search candidates are checked again
+when you search and when mounted volumes change. Catalog loading does not wait for folder checks. In
+the Store edition, **Settings → Configuration → Workspace definitions → Allow access…** grants
+access to the Project Manager folder.
+
+To customize a definition, choose **⌘K** → **Edit workspace definitions**. This creates a commented
+`workspaces.jsonc` only if it is absent, then opens it in your editor. Add an entry with the
+project's key to override its name or planes.
+[Workspace definitions](../reference/configuration.md#workspace-definitions) lists the fields,
+tokens and limits. **Settings → Configuration → Workspace definitions → Validate** shows problems
+with line numbers. A broken document keeps the last valid copy in effect.
+
+Definitions accept terminal `command` fields. Those terminals open stopped in this version. Command
+execution will arrive with native approvals. Plain terminal planes keep their normal behavior.
+Changes to a definition apply on its next fresh open; they do not rearrange an open workspace.
+
+| Term                             | What opening it does                                                                                                                                     |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Layout template                  | Adds its planes to the workspace you are in.                                                                                                             |
+| Workspace definition             | Opens a whole workspace by name and root. It stays out of the open list until opened. Command fields are accepted; execution will arrive with approvals. |
+| Project (`viewer.project.jsonc`) | Opens an arrangement shared with a folder. It never starts commands.                                                                                     |
+
+## Close and remember a workspace
+
+Choose **Workspace → Close Workspace** for a workspace opened from a definition. Viewer remembers
+its planes, tiling, focus and preview positions. Running terminals ask before closing; their shells
+stop. Open it again by name to restore those planes. Terminals reopen stopped.
+
+The workspace menu shows up to three **Recently closed** definitions below the recent open
+workspaces. In **Manage workspaces… → Defined**, **Remembers** marks a saved snapshot. **Forget
+remembered planes** removes that snapshot; the next open builds from the definition. Viewer keeps up
+to 100 snapshots, dropping the oldest if they exceed 16 MB. Snapshots stay on this computer and are
+excluded from personal backups and agent discovery.
+
+## Reset or save a definition
+
+- **Reset to definition…** replaces the open planes with the definition's planes. The confirmation
+  counts what closes and opens. Unsaved editors ask before anything closes; Cancel keeps the
+  workspace open. Command terminals remain stopped and ask before running.
+- **Save to definition** (also found as **sync**) writes the supported planes, their order, tiling
+  and focus to this workspace's entry. A curated definition or a save that removes a command asks
+  once: **Save over definition**. Comments on unchanged planes stay with them.
+- **Save as definition…** links an ad-hoc workspace to a new definition. Review the proposed **Key**
+  and **Name**. A project owning most planes supplies the proposed key; otherwise Viewer uses the
+  workspace's name and common folder. An existing entry must use **Save to definition**.
+
+Manage's **Open** tab offers **Close** for defined workspaces and **Delete** for ad-hoc workspaces.
+The **Defined** tab shows **Remembers**, **Rich**, **Curated**, **Hidden** and **Folder missing**
+badges. Its problem disclosure shows diagnostics without covering the list.
+
+Editing a definition never changes an open workspace. **Definition changed** in Manage and the
+switcher offers **Reset to definition…**. Remembered planes still open when their definition
+changed; a notice offers Reset.
 
 ## Share a project folder
 
@@ -194,9 +263,10 @@ it again with **File → Open Project…**; **File → Save Project** records la
    **Restore copies**.
 
 The backup holds your notes, drafts, conversations, canvases, attached canvas assets, file paths and
-command history, so keep it private. It does not hold other source files, keys, folder permissions
-or browser sessions. Restored terminals, servers and conversations stay stopped until you start
-them. [Personal backups](../reference/configuration.md#personal-backups) lists the exact contents.
+command history, so keep it private. Restored copies have no definition link. It does not hold other
+source files, keys, folder permissions or browser sessions. Restored terminals, servers and
+conversations stay stopped until you start them.
+[Personal backups](../reference/configuration.md#personal-backups) lists the exact contents.
 
 ## What closing a plane does
 
@@ -209,4 +279,4 @@ them. [Personal backups](../reference/configuration.md#personal-backups) lists t
 | A local server | Keeps the server running; reopen its controls from **Local servers…** |
 
 When Viewer restarts, it reopens your planes but never reruns terminal input, commands, agents or
-servers.
+servers. Opening a defined workspace asks before each command its definition names.

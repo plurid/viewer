@@ -28,16 +28,31 @@ viewer -- ./-draft.txt
 viewer -- search
 ```
 
-| Argument                 | Behavior                                                                                                                    |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Paths                    | Up to 100 paths, resolved against the terminal's current folder. `~` and `~/` expand to your home folder.                   |
-| `--new-window`           | Open the paths in a new independent window.                                                                                 |
-| `--workspace ID_OR_NAME` | Open in that workspace's window, or a new window for it. Wins over `--new-window`. Zero or several matches fail.            |
-| `--terminal`             | Open a terminal plane in each folder (a file's own folder) instead of opening the paths; with no path, the window's folder. |
-| `--`                     | Treat every later argument as a literal path.                                                                               |
+| Argument            | Behavior                                                                                                                                |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Paths               | Up to 100 paths, resolved against the terminal's current folder. `~` and `~/` expand to your home folder.                               |
+| `--new-window`      | Open the paths in a new independent window.                                                                                             |
+| `--workspace QUERY` | Resolve an open or defined workspace. Open definitions in a new window; focus an existing workspace's window. Wins over `--new-window`. |
+| `--workspace`       | Focus the front window and open **Change workspace…**.                                                                                  |
+| `--terminal`        | Open a terminal plane in each folder (a file's own folder) instead of opening the paths; with no path, the window's folder.             |
+| `--`                | Treat every later argument as a literal path.                                                                                           |
 
 Viewer starts if it is not running; otherwise the running app receives the request. Any other
 argument starting with `-` fails with `Unknown Viewer option`.
+
+Workspace queries resolve in this order: exact open ID, unique exact open name, exact definition key
+(then a unique case-insensitive key), unique exact definition display name ignoring case, exact
+Project Manager name, unique alias, then a unique fuzzy match. An open workspace linked to a
+matching definition wins. Hidden and missing-root definitions are excluded. Ambiguous and unmatched
+queries open **Change workspace…** with the query filled in. An unmatched query shows a sentence
+naming it, including on the first launch. Definition terminals with `command` fields open stopped.
+Command execution will arrive with approvals.
+
+`viewer --workspace` never starts a definition's commands, from any shell. Each terminal asks with
+**Run** or **Shell only**; **Run all** offers a single review for the waiting commands.
+
+The token CLI commands below continue to discover and switch only open workspaces. They expose no
+definition catalog or definition-opening verb.
 
 A first argument that is a command name or a global option starts a [command](#commands), not an
 opening. The reserved names are `action`, `ask`, `command`, `completion`, `config`, `export`, `git`,

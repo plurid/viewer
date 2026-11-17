@@ -28,7 +28,11 @@ import { normalizePreferences } from '../../domain/preferences/ui';
 import { trimSessions } from '../workspace/sessions';
 import { parentPath } from '../../domain/workspaces/planes';
 import { languageFor } from '../../domain/editing/languages';
-import { searchName } from '../../domain/search/saved';
+import {
+  scratchPaneRecord,
+  searchPaneRecord,
+  terminalPaneRecord,
+} from '../../domain/workspaces/pane-records';
 import { defaultSettings, newPlaneFolder } from '../../domain/services';
 import {
   panePresentation,
@@ -331,10 +335,7 @@ export function addScratchPane(
 ): ScratchPane {
   if (activeWorkspace().panes.length >= 200)
     throw new Error('This workspace has 200 planes. Close a plane or create another workspace.');
-  const pane: ScratchPane = {
-    id: uuid(),
-    type: 'scratch',
-    path: desktopFolder(),
+  const pane = scratchPaneRecord(uuid(), desktopFolder(), {
     bufferID: options.bufferID ?? uuid(),
     title: options.title ?? untitledName(),
     // the language of the configured new-file extension: Markdown by default
@@ -345,7 +346,7 @@ export function addScratchPane(
         extension: effectiveWindowSettings(getState()).browsing.newFileExtension,
       })?.id ??
       'plaintext',
-  };
+  });
   changeWorkspace((space) => ({
     ...space,
     panes: [...space.panes, pane],
@@ -419,16 +420,15 @@ export function addSearchPane(
 ): string {
   if (activeWorkspace().panes.length >= 200)
     throw new Error('Close a plane before adding another.');
-  const pane: Pane = {
-    id: uuid(),
-    type: 'search',
+  const pane = searchPaneRecord(
+    uuid(),
+    getState().bootstrap.home,
+    query,
+    name,
+    root,
     recursive,
     content,
-    path: root || getState().bootstrap.home,
-    query,
-    name: searchName(name),
-    allLocations: !root,
-  };
+  );
   changeWorkspace((space) => ({
     ...space,
     roots: [...space.roots, pane.id],
@@ -448,13 +448,7 @@ export function addTerminalPane(
 ): TerminalPane {
   if (activeWorkspace().panes.length >= 200)
     throw new Error('Close a plane before opening another.');
-  const pane: TerminalPane = {
-    id: task?.id ?? uuid(),
-    type: 'terminal',
-    path,
-    profileID,
-    ...(task?.gitAction ? { gitAction: task.gitAction } : {}),
-  };
+  const pane = terminalPaneRecord(task?.id ?? uuid(), path, profileID, task?.gitAction);
   changeWorkspace((space) => ({
     ...space,
     panes: [...space.panes, pane],

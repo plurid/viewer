@@ -1,4 +1,8 @@
-import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
+import {
+  maximumWorkspaces,
+  mergeWorkspaceVisits,
+  uniqueDefinitionLinks,
+} from '../../domain/workspaces/catalog';
 import type { FolderVisitSave } from '../../domain/files/folder-visit-changes';
 import type { FileChange } from '../../domain/files/changes';
 import { pathMapper } from '../../domain/files/changes';
@@ -42,6 +46,7 @@ export class WorkspaceSessions {
   private current?: SavedState;
   private sessions = new Map<number, Session>();
   private reservations = new Map<number, string>();
+  private definitionReservations = new Map<string, { owner: number; expires: number }>();
   private writes: Promise<unknown> = Promise.resolve();
   private historyRevision = 0;
   private clearRevision = 0;
@@ -116,6 +121,7 @@ export class WorkspaceSessions {
   seed(state: SavedState | null): void {
     if (!this.current && state) {
       this.current = structuredClone(state);
+      this.current.workspaces = uniqueDefinitionLinks(this.current.workspaces);
       this.current.windowProfiles ??= state.profile
         ? { [state.activeWorkspace]: state.profile }
         : {};
@@ -150,6 +156,28 @@ export class WorkspaceSessions {
       if (session.workspaceID === workspaceID) return owner;
     for (const [owner, reserved] of this.reservations) if (reserved === workspaceID) return owner;
     return undefined;
+  }
+
+  findByDefinition(key: string): Workspace | undefined {
+    const workspace = this.current?.workspaces.find((space) => space.definition?.key === key);
+    return workspace && structuredClone(workspace);
+  }
+
+  definitionOwner(key: string): number | undefined {
+    const reservation = this.definitionReservations.get(key);
+    if (reservation && reservation.expires <= Date.now()) {
+      this.definitionReservations.delete(key);
+      return;
+    }
+    return reservation?.owner;
+  }
+
+  reserveDefinition(owner: number, key: string): number {
+    if (!this.sessions.has(owner)) throw new Error('This workspace window has closed.');
+    const existing = this.definitionOwner(key);
+    if (existing !== undefined && existing !== owner) return existing;
+    this.definitionReservations.set(key, { owner, expires: Date.now() + 30000 });
+    return owner;
   }
 
   /** Reserve an attached native window before its renderer can finish bootstrap. */
@@ -254,6 +282,8 @@ export class WorkspaceSessions {
   }
 
   close(owner: number): void {
+    for (const [key, reservation] of this.definitionReservations)
+      if (reservation.owner === owner) this.definitionReservations.delete(key);
     this.reservations.delete(owner);
     this.sessions.delete(owner);
     if (this.current)
@@ -300,8 +330,22 @@ export class WorkspaceSessions {
   ): void {
     const session = this.sessions.get(owner);
     if (!session) return;
+    for (const space of session.baseline.workspaces) {
+      const key = space.definition?.key;
+      if (
+        key &&
+        !merged.workspaces.some((item) => item.definition?.key === key) &&
+        this.definitionOwner(key) === owner
+      )
+        this.definitionReservations.delete(key);
+    }
     session.workspaceID = input.activeWorkspace;
     session.baseline = structuredClone(input);
+    // The old workspace is flushed before building, so only a committed key releases its reservation.
+    for (const space of input.workspaces) {
+      const key = space.definition?.key;
+      if (key && this.definitionOwner(key) === owner) this.definitionReservations.delete(key);
+    }
     const revision = visitSave?.revision ?? session.historyRevision;
     session.origins = new Map(
       Object.keys(input.visits ?? {}).map((path) => {
@@ -349,6 +393,28 @@ export class WorkspaceSessions {
       next.delete(id);
     }
     if (!next.has(input.activeWorkspace)) throw new Error('The active workspace is unavailable.');
+    const existing = new Map<string, Set<string>>();
+    for (const space of this.current.workspaces) {
+      const key = space.definition?.key;
+      if (!key) continue;
+      if (!existing.has(key)) existing.set(key, new Set());
+      existing.get(key)!.add(space.id);
+    }
+    const definitions = new Map<string, Set<string>>();
+    for (const space of next.values()) {
+      const key = space.definition?.key;
+      if (!key) continue;
+      const reserved = this.definitionOwner(key);
+      const earlier = definitions.get(key);
+      const prior = existing.get(key);
+      if (
+        (earlier?.size && (!prior?.has(space.id) || [...earlier].some((id) => !prior.has(id)))) ||
+        (reserved !== undefined && reserved !== owner && !prior?.has(space.id))
+      )
+        throw new Error(`“${space.name}” is already open in another window.`);
+      if (!earlier) definitions.set(key, new Set([space.id]));
+      else earlier.add(space.id);
+    }
     const merged = {
       ...this.current,
       version: CURRENT_STATE_VERSION,

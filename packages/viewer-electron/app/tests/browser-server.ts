@@ -5,6 +5,9 @@ import { GitWorktrees } from '../src/desktop/comparison/worktrees';
 import { JournalStore } from '../src/desktop/journal/store';
 import { JournalActivity } from '../src/desktop/journal/activity';
 import { createJournalHandlers } from '../src/desktop/journal/handlers';
+import { DefinitionCommands } from '../src/desktop/workspaces/definition-commands';
+import { definitionCommandLookup } from '../src/desktop/workspaces/definition-command-lookup';
+import { ExecutionConfirmations } from '../src/desktop/actions/execution-confirmations';
 import { schemas } from '../src/desktop/ipc/schemas';
 import type { OperationPlanRequest } from '../src/domain/operations/operation-plan';
 import type { FileInformationPatch } from '../src/domain/files/information';
@@ -52,6 +55,9 @@ import type { ProjectRequest } from '../src/domain/workspaces/project';
 import type { TourRequest } from '../src/domain/tours/tour';
 import { entry, list } from '../src/desktop/files/filesystem';
 import { SettingsService } from '../src/desktop/preferences/settings';
+import { WorkspaceDefinitions } from '../src/desktop/workspaces/definitions';
+import { checkHistoryFolder } from '../src/desktop/files/folder-history';
+import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 import { FileInformationService } from '../src/desktop/files/file-information';
 import { FileIndex } from '../src/desktop/search/index-core';
 import { ActionPlanner } from '../src/desktop/actions/planner';
@@ -91,6 +97,7 @@ const worktrees = new GitWorktrees({
 const permissionScenario = process.env.VIEWER_TEST_SCENARIO === 'folder-access';
 const settingsPreviewScenario = process.env.VIEWER_TEST_SCENARIO === 'settings-previews';
 const networkSharingScenario = process.env.VIEWER_TEST_SCENARIO === 'network-sharing';
+const workspaceDefinitionsScenario = process.env.VIEWER_TEST_SCENARIO === 'workspace-definitions';
 const networkFolder = path.join(fixture.files, 'Network Drop');
 const networkHelper = process.env.VIEWER_TEST_NETWORK_HELPER;
 const networkVisibility =
@@ -251,6 +258,97 @@ const settings = new SettingsService(
   },
 );
 await settings.load(fixture.state);
+const definitionSessions = new WorkspaceSessions();
+if (workspaceDefinitionsScenario) {
+  const source = path.join(fixture.root, 'projects.json');
+  await writeFile(
+    source,
+    JSON.stringify(
+      [
+        {
+          name: 'Sample > technologies > tools > sample-cli',
+          rootPath: path.join(fixture.files, 'Source'),
+        },
+        ...Array.from({ length: 323 }, (_, index) => ({
+          name: `Studio > group-${index} > project-${index}`,
+          rootPath: path.join(fixture.files, 'Documents'),
+        })),
+      ],
+      null,
+      2,
+    ),
+    { flag: 'wx' },
+  );
+  await writeFile(
+    path.join(fixture.root, 'workspaces.jsonc'),
+    JSON.stringify(
+      {
+        version: 1,
+        sources: { projectManager: { path: source } },
+        workspaces: {
+          'Sample/technologies/tools/sample-cli': {
+            name: 'Sample CLI',
+            aliases: ['plcli'],
+            planes: [
+              { kind: 'folder', path: '{{ROOT}}' },
+              { kind: 'terminal', path: '{{ROOT}}', command: 'echo sample' },
+            ],
+            tiling: { layout: 'main-vertical', main: 0.4 },
+          },
+          'Studio/group-0/project-0': { hidden: true },
+          missing: { root: path.join(fixture.root, 'missing'), name: 'Missing sample' },
+        },
+      },
+      null,
+      2,
+    ),
+    { flag: 'wx' },
+  );
+}
+const definitions = new WorkspaceDefinitions(fixture.root, fixture.files, {
+  access: async (files) => {
+    files.forEach(scoped);
+  },
+  checkRoot: async (root) => {
+    scoped(root);
+    return checkHistoryFolder(root);
+  },
+  settings: () => settings.snapshot().settings,
+  emit: (catalog) => emit({ type: 'workspace-definitions', catalog }),
+});
+await definitions.load();
+// Browser fixtures show the handoff without running programs or presenting native dialogs.
+const definitionCommandFixtures = new DefinitionCommands({
+  lookup: definitionCommandLookup({
+    window: () => ({
+      workspaceID: definitionSessions.snapshot()?.activeWorkspace,
+      workspaces: definitionSessions.snapshot()?.workspaces ?? [],
+    }),
+    definition: (key) => definitions.entry(key),
+    defaultProfile: () => settings.snapshot().settings.terminals.profileID,
+  }),
+  terminals: {
+    profile: (id) =>
+      settings.snapshot().settings.terminals.profiles.find((profile) => profile.id === id),
+    running: async () => false,
+    start: async (request, _owner, options) => {
+      options?.validate?.();
+      emit({
+        type: 'terminal',
+        event: {
+          type: 'data',
+          id: request.id,
+          data: 'Browser fixture received Run: ' + options?.initialInput + '\r\n',
+        },
+      });
+    },
+  },
+  confirmations: new ExecutionConfirmations(fixture.root, async () => true),
+  ownsWorkspace: () => true,
+  isAgentDriven: () => false,
+  window: () => undefined,
+});
+
 if (settingsPreviewScenario) {
   // UI-only provider fixtures: no real credentials, grants or external requests.
   await settings.patch(
@@ -427,8 +525,44 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
         path: '~/.local/bin/viewer',
         problem: 'Shell installation requires the desktop build.',
       };
+    case 'terminalStart': {
+      const [request, reference] = schemas.terminalStart.parse(args);
+      if (reference) return definitionCommandFixtures.start(1, request, reference);
+      emit({
+        type: 'terminal',
+        event: { type: 'data', id: request.id, data: 'Browser fixture received Shell only.\r\n' },
+      });
+      return;
+    }
+    case 'terminalStartAll':
+      return definitionCommandFixtures.startAll(1, schemas.terminalStartAll.parse(args)[0]);
+    case 'terminalAck':
+    case 'terminalWrite':
+    case 'terminalResize':
+    case 'terminalClose':
+      return;
     case 'workspaceClaim':
-      return true;
+      return workspaceDefinitionsScenario ? definitionSessions.claim(1, args[0] as string) : true;
+    case 'workspaceDefinitions': {
+      const [request] = schemas.workspaceDefinitions.parse(args);
+      if (request.kind !== 'open')
+        throw new Error('This workspace action needs the desktop service.');
+      const definition = definitions.entry(request.key);
+      if (!definition || definition.hidden || definition.rootState === 'missing')
+        throw new Error('This workspace definition is unavailable.');
+      const open = definitionSessions.findByDefinition(request.key);
+      if (open) return { kind: 'active', workspaceID: open.id };
+      definitionSessions.reserveDefinition(1, request.key);
+      definitions.opened(request.key);
+      return { kind: 'build', definition };
+    }
+    case 'workspaceDefinitionFile': {
+      const [request] = schemas.workspaceDefinitionFile.parse(args);
+      if (request.kind === 'edit') await definitions.edit();
+      else if (request.kind === 'validate') await definitions.reload();
+      else if (request.kind === 'catalog') definitions.refreshRoots();
+      return definitions.snapshot();
+    }
     case 'watchRules':
       return watchRules.request(args[0] as WatchRuleRequest);
     case 'relationships':
@@ -483,8 +617,11 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
         return tours.stat(scoped(request.root), request.path, request.hash);
       return tours.save(scoped(request.file), request.revision, request.definition);
     }
-    case 'bootstrap':
+    case 'bootstrap': {
+      const stored = await storage.load();
+      if (workspaceDefinitionsScenario) definitionSessions.seed(stored.state);
       return {
+        definitions: definitions.snapshot(),
         networkSharingAvailable: networkSharingScenario,
         license: await license?.status(),
         home: fixture.files,
@@ -498,10 +635,14 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
             path: path.join(fixture.files, name),
           })),
         ],
-        ...(await storage.load()),
+        ...stored,
+        ...(workspaceDefinitionsScenario
+          ? { state: definitionSessions.open(1, fixture.files) }
+          : {}),
         settings: settingsSnapshot(settings.snapshot()),
         openPaths: [],
       };
+    }
     case 'license': {
       const [request] = schemas.license.parse(args);
       switch (request.kind) {
@@ -813,6 +954,10 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'sqlite':
       return resources.sqlite(...schemas.sqlite.parse(args));
     case 'save':
+      if (workspaceDefinitionsScenario) {
+        await definitionSessions.persist(1, args[0] as SavedState, (state) => storage.save(state));
+        return;
+      }
       return storage.save(args[0] as SavedState);
     case 'flushed':
     case 'textEdit':
@@ -955,6 +1100,7 @@ async function close() {
   search.close();
   await actions.close();
   await watchRules.close();
+  await definitions.close();
   await Promise.all([watchers.close(), operations.close(), index.close(), settings.flush()]);
   await journal.close();
   for (const client of clients) client.end();

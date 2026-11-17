@@ -29,6 +29,7 @@ import { createNetworkSharingHandlers } from './ipc/network-sharing-handlers';
 import {
   NetworkSharing,
   networkSharingAvailable,
+  watchSharingVolumes,
   openSharingSettings,
 } from './files/network-sharing';
 import { createMediaHandlers } from './ipc/media-handlers';
@@ -41,6 +42,11 @@ import { createSearchHandlers } from './ipc/search-handlers';
 import { createSettingHandlers } from './ipc/setting-handlers';
 import { createTerminalHandlers } from './ipc/terminal-handlers';
 import { createWindowHandlers } from './ipc/window-handlers';
+import { createDefinitionHandlers } from './ipc/definition-handlers';
+import { DefinitionCommands } from './workspaces/definition-commands';
+import { definitionCommandLookup } from './workspaces/definition-command-lookup';
+import { WorkspaceDefinitions } from './workspaces/definitions';
+import { DefinedWorkspaces } from './workspaces/defined-workspaces';
 import { createLicenseHandlers } from './ipc/license-handlers';
 import type { License } from './license/license';
 import type { FolderVisitReply, FolderVisitSave } from '../domain/files/folder-visit-changes';
@@ -65,7 +71,7 @@ import { namedLines } from '../domain/command-line/prompt';
 import { emptySessionKeys, type SessionKeys } from '../domain/preferences/session-keys';
 import type { FileChange } from '../domain/files/changes';
 import { AgentRequests } from './agents/agent-requests';
-import { agentCommandID } from '../domain/agents/safety';
+import { agentCommandID, humanDefinitionCommand } from '../domain/agents/safety';
 import type { CapturedTarget } from '../domain/automation/actions';
 import type {
   AgentNavigation,
@@ -275,6 +281,9 @@ export class Desktop {
   private window?: BrowserWindow;
   private bootstrapped = false;
   readonly settings: SettingsService;
+  readonly definitions: WorkspaceDefinitions;
+  readonly definitionCommands: DefinitionCommands;
+  readonly definedWorkspaces: DefinedWorkspaces;
   readonly files: FileServices;
   readonly applications: Applications;
   readonly credentials: Credentials;
@@ -309,6 +318,7 @@ export class Desktop {
   private settingsPrepared?: Promise<void>;
   private folderHistoryPrepared = new BackgroundFolderHistory();
   private folderChecks: FolderHistoryChecks;
+  private definitionRootChecks: FolderHistoryChecks;
   /** Settings loaded as bootstrap loads them (seeded from saved state on a first configuration), so
    * the window is made with its backdrop (backdrop.ts). */
   prepareSettings(): Promise<void> {
@@ -316,6 +326,7 @@ export class Desktop {
       this.storedEarly = this.storage.load();
       const stored = await this.storedEarly;
       await this.settings.load(stored.state || undefined);
+      await this.definitions.load();
       if (stored.state) {
         const snapshot = this.settings.snapshot();
         const restoration = planLegacyProfileRestoration(stored.state, snapshot);
@@ -435,6 +446,10 @@ export class Desktop {
         : undefined,
     );
     this.folderChecks = createFolderHistoryChecks(
+      path.join(path.dirname(options.worker), 'folder-history-worker.cjs'),
+      this.fileAccess,
+    );
+    this.definitionRootChecks = createFolderHistoryChecks(
       path.join(path.dirname(options.worker), 'folder-history-worker.cjs'),
       this.fileAccess,
     );
@@ -570,8 +585,17 @@ export class Desktop {
         void this.reconfigureIndex();
       },
     );
-    const confirmations = new ExecutionConfirmations(dataPath, (summary) =>
-      confirmNatively(this.window, summary.title, summary.detail, 'Run'),
+    this.definedWorkspaces = new DefinedWorkspaces(dataPath);
+    this.definitions = new WorkspaceDefinitions(dataPath, this.home, {
+      memory: this.definedWorkspaces,
+      access,
+      checkRoot: this.definitionRootChecks.check,
+      watchVolumes: watchSharingVolumes,
+      settings: () => this.settings.snapshot().settings,
+      emit: (catalog) => emit({ type: 'workspace-definitions', catalog }),
+    });
+    const confirmations = new ExecutionConfirmations(dataPath, (summary, window) =>
+      this.confirmExecution(summary, window),
     );
     this.terminals = new Terminals(
       options.terminalWorker,
@@ -585,6 +609,41 @@ export class Desktop {
       access,
       (profile) => confirmations.requireTerminal(profile),
     );
+    this.definitionCommands = new DefinitionCommands({
+      lookup: definitionCommandLookup({
+        window: (owner) => {
+          const record = this.windows.get(owner);
+          if (
+            !record ||
+            record.role !== 'viewer' ||
+            record.window.isDestroyed() ||
+            !record.workspaceID ||
+            this.workspaceSessions.owner(record.workspaceID) !== owner
+          )
+            return;
+          return {
+            workspaceID: record.workspaceID,
+            workspaces: this.workspaceSessions.snapshot()?.workspaces ?? [],
+          };
+        },
+        definition: (key) => this.definitions.entry(key),
+        defaultProfile: () => this.settings.snapshot().settings.terminals.profileID,
+      }),
+      terminals: this.terminals,
+      confirmations,
+      isAgentDriven: (owner) => this.isAgentDriven(owner),
+      ownsWorkspace: (owner, workspaceID) => {
+        const record = this.windows.get(owner);
+        return (
+          !!record &&
+          record.role === 'viewer' &&
+          !record.window.isDestroyed() &&
+          record.workspaceID === workspaceID &&
+          this.workspaceSessions.owner(workspaceID) === owner
+        );
+      },
+      window: (owner) => this.windows.get(owner)?.window,
+    });
     this.gitActions = new GitActions({
       direct: !process.mas,
       access,
@@ -1324,6 +1383,9 @@ export class Desktop {
       throw new Error('The window closed before Viewer could finish.');
     return record;
   }
+  private confirmExecution(summary: { title: string; detail: string }, window?: BrowserWindow): Promise<boolean> {
+    return confirmNatively(window ?? this.window, summary.title, summary.detail, 'Run');
+  }
   private requireWindow(owner: number): BrowserWindow {
     return this.requireRecord(owner).window;
   }
@@ -1664,6 +1726,7 @@ export class Desktop {
       this.windows.delete(sender);
       if (!this.options.quitting?.()) {
         this.workspaceSessions.close(sender);
+        this.definitions.clearRootSearch(sender);
         const state = this.workspaceSessions.snapshot();
         if (state)
           void this.storage
@@ -1820,6 +1883,8 @@ export class Desktop {
     this.trash.close();
     if (process.platform === 'darwin') macFiles().dismissFilePanels();
     this.settings.close();
+    await this.definitions.close();
+    await this.definedWorkspaces.close();
     await this.resources.clear();
     this.comparisons.close();
     this.duplicates.close();
@@ -1837,6 +1902,7 @@ export class Desktop {
       this.externalTerminals.close(),
       this.files.close(),
       Promise.resolve(this.folderChecks?.close()),
+      Promise.resolve(this.definitionRootChecks?.close()),
       this.actions.close(),
       this.watchers.close(),
       this.operations.close(),
@@ -1950,6 +2016,7 @@ export class Desktop {
       const id = randomUUID();
       const timer = setTimeout(() => {
         this.agentCommands.delete(id);
+        this.publishTerminalAuthority(owner);
         // The window may still run it later; say so rather than implying it did not happen.
         reject(
           new Error(
@@ -1964,10 +2031,12 @@ export class Desktop {
         finish: (error) => {
           clearTimeout(timer);
           this.agentCommands.delete(id);
+          this.publishTerminalAuthority(owner);
           if (error) reject(new Error(error));
           else resolve();
         },
       });
+      this.publishTerminalAuthority(owner);
       sendEvent(window.webContents, {
         ...payload,
         id,
@@ -1975,6 +2044,14 @@ export class Desktop {
         deadline: Date.now() + 24000,
       });
     });
+  }
+  private publishTerminalAuthority(owner: number): void {
+    const window = this.windows.get(owner)?.window;
+    if (window && !window.isDestroyed())
+      sendEvent(window.webContents, {
+        type: 'terminal-authority',
+        agentDriven: this.isAgentDriven(owner),
+      });
   }
   /** A workspace window's start: its saved state, settings and the paths it opens with. */
   private async bootstrap(sender: number): Promise<Bootstrap> {
@@ -1986,6 +2063,7 @@ export class Desktop {
     const stored = await (early ?? this.storage.load());
     performanceMeter.mark('bootstrap:state');
     await this.settings.load(stored.state || undefined);
+    await this.definitions.load();
     this.settingsPrepared ??= Promise.resolve();
     if (stored.state) {
       const spaces = [...stored.state.workspaces].sort(
@@ -2050,6 +2128,8 @@ export class Desktop {
     return {
       ...stored,
       launches,
+      definitions: this.definitions.snapshot(),
+      agentDriven: this.isAgentDriven(sender),
       folderHistoryRevision: this.workspaceSessions.folderHistory().revision,
       checkedFolders: this.folderChecks.paths.filter((path) =>
         Object.hasOwn(stored.state?.visits ?? {}, path),
@@ -2148,6 +2228,14 @@ export class Desktop {
         return dialogs.request(request);
       },
       ...createLicenseHandlers({ license: this.options?.license, isSettings }),
+      ...createDefinitionHandlers({
+        definitions: this.definitions,
+        memory: this.definedWorkspaces,
+        sessions: this.workspaceSessions,
+        isAgent,
+        window: windowOf,
+        fileAccess: this.fileAccess,
+      }),
       ...createWindowHandlers({
         host: this.options,
         shellCommand: this.shellCommand,
@@ -2268,6 +2356,10 @@ export class Desktop {
         fileAccess: this.fileAccess,
         texts: this.texts,
         buffers: this.buffers,
+        rememberedBuffers: async () => {
+          await this.definedWorkspaces.load();
+          return this.definedWorkspaces.bufferIDs();
+        },
         window: windowOf,
         emit,
       }),
@@ -2347,6 +2439,7 @@ export class Desktop {
       ...createTerminalHandlers({
         home: this.home,
         terminals: this.terminals,
+        definitionCommands: this.definitionCommands,
         external: this.externalTerminals,
         executions: this.executions,
         gitActions: this.gitActions,
@@ -2529,7 +2622,7 @@ export class Desktop {
         const record = this.requireRecord(sender);
         record.catalog = {
           target: { ...args[0], originID: record.originID },
-          commands: args[1],
+          commands: args[1].filter((command) => !humanDefinitionCommand(command.id)),
         };
         record.workspaceCatalog = args[2];
         record.planeOwners = args[3];

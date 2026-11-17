@@ -8,6 +8,7 @@ import { BackgroundFolderHistory } from '../src/desktop/files/folder-history';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 import { defaultSettings } from '../src/domain/services';
 import type { Bootstrap, DesktopEvent } from '../src/domain/contracts';
+import type { DefinitionCatalog } from '../src/domain/workspaces/definitions/schema';
 
 vi.mock('electron', () => ({ app: { getPath: () => '/fixtures' } }));
 afterEach(() => vi.useRealTimers());
@@ -31,6 +32,24 @@ export function launchFixture(
     storage: { load: async () => ({ state }) },
     fileAccess: { load: async () => {}, require: async () => {} },
     settings: { load: async () => {}, seedFolders: async () => {}, snapshot: () => settings },
+    definitions: {
+      load: async () => {},
+      snapshot: (): DefinitionCatalog => ({
+        revision: 0,
+        file: { path: '/fixtures/workspaces.jsonc', state: 'absent' },
+        projectManager: {
+          path: '/fixtures/projects.json',
+          state: 'absent',
+          projects: 0,
+          missing: 0,
+          disabled: 0,
+          remote: 0,
+          duplicateKeys: 0,
+        },
+        definitions: [],
+        diagnostics: [],
+      }),
+    },
     credentials: { load: async () => {}, ids: () => [] },
     folderHistoryPrepared: preparation,
     folderChecks: { check, paths: cached },

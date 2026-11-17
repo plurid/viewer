@@ -151,7 +151,24 @@ const modelMutationVerbs = new Set([
   'xit',
 ]);
 
+export function humanDefinitionCommand(id: string): boolean {
+  return (
+    id.startsWith('defined:') ||
+    [
+      'edit-workspace-definitions',
+      'run-workspace-commands',
+      'close-workspace',
+      'reset-workspace',
+      'save-workspace-definition',
+      'save-workspace-as-definition',
+    ].includes(id)
+  );
+}
+
 function modelBuiltinCommandProblem(id: string): string | undefined {
+  if (id.startsWith('defined:') || id === 'run-workspace-commands')
+    return "it can start a workspace's commands";
+  if (humanDefinitionCommand(id)) return 'it manages workspaces or their commands';
   if (id === 'network-sharing') return 'network sharing is available only to the person';
   if (humanGitCommand(id)) return 'Git program actions are available only to the person';
   if (terminalCommands.has(id)) return 'it uses a terminal';
@@ -234,6 +251,8 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
 }
 
 function agentBuiltinCommandID(command: string): string {
+  if (humanDefinitionCommand(command))
+    throw new Error('Workspace definition actions are available only to the person.');
   if (humanGitCommand(command))
     throw new Error('Git program actions are available only to the person, never to agents.');
   if (terminalCommands.has(command))
@@ -308,6 +327,8 @@ export function agentDispatchRefusal(
 ): string | undefined {
   if (now > event.deadline)
     return 'The request expired before the workspace could run it. Request it again.';
+  if (humanDefinitionCommand(event.command))
+    return 'Workspace definition actions are available only to the person.';
   if (humanGitCommand(event.command))
     return 'Git program actions are available only to the person.';
   if (!event.command.startsWith('custom.')) return undefined;

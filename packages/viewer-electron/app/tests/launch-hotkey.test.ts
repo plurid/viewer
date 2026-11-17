@@ -87,7 +87,8 @@ describe('Viewer shell arguments', () => {
       workspace: 'Research',
     });
     expect(parse('--', '--file').paths).toEqual(['/caller/--file']);
-    expect(() => parse('--workspace')).toThrow('needs a workspace');
+    expect(parse('--workspace').workspace).toBe('');
+    expect(parse('--workspace', '--new-window')).toMatchObject({ workspace: '', newWindow: true });
     expect(() => parse('--unknown')).toThrow('Unknown');
   });
 });

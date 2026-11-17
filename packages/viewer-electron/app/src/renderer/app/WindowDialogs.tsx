@@ -27,6 +27,8 @@ import {
   useViewer,
 } from '../state/store';
 import { slugID } from '../../domain/ids';
+import { DefinitionDialog } from '../ui/workspace/DefinitionDialog';
+import type { DefinitionDialogKind } from '../ui/workspace/DefinitionDialog';
 
 // each dialog's code loads the first time it opens
 const BackupDialog = lazyComponent(() =>
@@ -94,7 +96,7 @@ export type WindowDialog =
   | { type: 'pdf-tools'; files: FileEntry[]; paneID?: string }
   | {
       type: 'workspace';
-      kind: 'new' | 'rename' | 'delete' | 'background' | 'manage';
+      kind: 'new' | 'rename' | 'delete' | 'background' | 'manage' | DefinitionDialogKind;
       id: string;
       returnToManager?: boolean;
     }
@@ -227,12 +229,29 @@ export function WindowDialogs({
           <WorkspacesDialog
             onClose={onClose}
             onOpen={(id) => transitionWorkspace(() => switchWorkspace(id))}
-            onAction={(kind, id) =>
-              onChange({ type: 'workspace', kind, id, returnToManager: true })
-            }
+            onAction={(kind, id) => {
+              const show = () => onChange({ type: 'workspace', kind, id, returnToManager: true });
+              if (kind === 'reset' && id !== getState().saved.activeWorkspace)
+                void transitionWorkspace(() => switchWorkspace(id))
+                  .then(show)
+                  .catch(report);
+              else show();
+            }}
           />
         )}
         {workspaceDialog &&
+          targetWorkspace &&
+          ['close', 'reset', 'save', 'save-as'].includes(workspaceDialog.kind) && (
+            <DefinitionDialog
+              key={workspaceDialog.kind + ':' + workspaceDialog.id}
+              kind={workspaceDialog.kind as DefinitionDialogKind}
+              workspace={targetWorkspace}
+              controller={controller}
+              onClose={() => onClose()}
+            />
+          )}
+        {workspaceDialog &&
+          !['close', 'reset', 'save', 'save-as'].includes(workspaceDialog.kind) &&
           workspaceDialog.kind !== 'delete' &&
           workspaceDialog.kind !== 'manage' &&
           workspaceDialog.kind !== 'background' && (

@@ -1,5 +1,7 @@
 import type { TerminalEvent, TerminalStart } from '../../domain/automation/actions';
 
+export { validTerminalCommand as validInitialInput } from '../../domain/terminals/command-text';
+
 /** Private main-to-worker messages. Public terminal IPC never accepts a program or environment. */
 export type TerminalWorkerRequest =
   | (TerminalStart & {
@@ -11,6 +13,7 @@ export type TerminalWorkerRequest =
       timeoutMs?: number;
       readOnly?: boolean;
       input?: boolean;
+      initialInput?: string;
     })
   | { kind: 'write'; id: string; data: string }
   | { kind: 'resize'; id: string; cols: number; rows: number }

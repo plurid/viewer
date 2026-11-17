@@ -373,7 +373,13 @@ export function installApplicationMenu(
       {
         label: 'Workspace',
         submenu: [
+          { label: 'Change Workspace…', click: command('change-workspace') },
           { label: 'New Workspace…', click: command('new-workspace') },
+          { label: 'Close Workspace', click: command('close-workspace') },
+          { label: 'Reset to Definition…', click: command('reset-workspace') },
+          { label: 'Save to Definition', click: command('save-workspace-definition') },
+          { label: 'Save as Definition…', click: command('save-workspace-as-definition') },
+          { label: 'Edit Workspace Definitions', click: command('edit-workspace-definitions') },
           { label: 'Rename Workspace…', click: command('rename-workspace') },
           { label: 'Delete Workspace…', click: command('delete-workspace') },
           { label: 'Undo Workspace Deletion', click: command('restore-workspace') },

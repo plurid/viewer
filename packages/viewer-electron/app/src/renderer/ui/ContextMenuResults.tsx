@@ -16,6 +16,7 @@ export function ContextMenuResults({
   suggested,
   lead,
   workspaceIDs,
+  closedDefinitionIDs,
   onSelect,
   onClose,
   searchLabel = 'actions',
@@ -29,6 +30,7 @@ export function ContextMenuResults({
   /** What the plane header could not show, before everything else. */
   lead?: HeaderLead;
   workspaceIDs?: readonly string[];
+  closedDefinitionIDs?: readonly string[];
   onSelect(command: ResolvedCommand): void;
   onClose(): void;
   /** What the search finds, in its label: “Search actions”, or a choice's name. */
@@ -45,8 +47,17 @@ export function ContextMenuResults({
   const id = useId();
   const searching = !!query.trim();
   const sections = useMemo(
-    () => contextMenuSections(commands, recent, focused, suggested, lead, workspaceIDs),
-    [commands, recent, focused, suggested, lead, workspaceIDs],
+    () =>
+      contextMenuSections(
+        commands,
+        recent,
+        focused,
+        suggested,
+        lead,
+        workspaceIDs,
+        closedDefinitionIDs,
+      ),
+    [commands, recent, focused, suggested, lead, workspaceIDs, closedDefinitionIDs],
   );
   const levels = [sections];
   for (const branchID of opened) {

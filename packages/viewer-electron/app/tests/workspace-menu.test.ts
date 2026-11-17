@@ -31,6 +31,34 @@ const catalog: SavedState = {
     'workspace-1': 10,
   },
 };
+it('shows only three recently closed definitions below the five recent open workspaces', () => {
+  const commands = [
+    ...Array.from({ length: 6 }, (_, index) => ({
+      id: 'defined:sample-' + index,
+      label: 'Sample ' + index,
+      group: 'Workspaces',
+    })),
+    { id: 'workspace:open', label: 'Open', group: 'Workspaces' },
+    { id: 'manage-workspaces', label: 'Manage', group: 'Workspaces' },
+  ] as ResolvedCommand[];
+  const sections = contextMenuSections(
+    commands,
+    [],
+    false,
+    [],
+    [],
+    ['workspace:open'],
+    Array.from({ length: 6 }, (_, index) => 'defined:sample-' + index),
+  );
+  expect(sections[0]!.entries.map((row) => row.id)).toEqual(['workspace:open']);
+  expect(sections[1]!.label).toBe('Recently closed');
+  expect(sections[1]!.entries.map((row) => row.id)).toEqual([
+    'defined:sample-0',
+    'defined:sample-1',
+    'defined:sample-2',
+  ]);
+  expect(JSON.stringify(sections)).not.toContain('defined:sample-3');
+});
 it('keeps a large workspace catalog out of flyouts while retaining the full command menu', () => {
   const commands = [
     ...['new-workspace', 'rename-workspace', 'manage-workspaces', 'delete-workspace'].map((id) => ({

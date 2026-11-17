@@ -27,8 +27,26 @@ const plain = (value: unknown): value is Record<string, unknown> =>
 const primitive = (value: unknown) =>
   value === null || ['string', 'number', 'boolean'].includes(typeof value);
 
+export interface ConfigEditOptions {
+  objectValues?: boolean;
+}
+function canonicalValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalValue);
+  if (plain(value))
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalValue(value[key])]),
+    );
+  return value;
+}
+
 /** How two lists' items are told apart: by a unique `id`, or by value for plain values. */
-function itemKey(before: unknown[], after: unknown[]): ((item: unknown) => string) | undefined {
+function itemKey(
+  before: unknown[],
+  after: unknown[],
+  options: ConfigEditOptions,
+): ((item: unknown) => string) | undefined {
   const ids = (items: unknown[]) =>
     items.map((item) => (plain(item) && typeof item.id === 'string' ? item.id : undefined));
   const unique = (keys: (string | undefined)[]) =>
@@ -36,6 +54,11 @@ function itemKey(before: unknown[], after: unknown[]): ((item: unknown) => strin
   if (unique(ids(before)) && unique(ids(after)))
     return (item) => 'id:' + (item as { id: string }).id;
   if ([...before, ...after].every(primitive)) return (item) => JSON.stringify(item);
+  if (
+    options.objectValues &&
+    [...before, ...after].every((item) => plain(item) && !Object.hasOwn(item, 'id'))
+  )
+    return (item) => JSON.stringify(canonicalValue(item));
   return undefined;
 }
 
@@ -65,7 +88,12 @@ function matched(before: string[], after: string[]): [number, number][] {
  * removals and insertions the list is in `after`'s order and every index below is valid when applied
  * one by one.
  */
-export function configEdits(before: unknown, after: unknown, path: JSONPath = []): ConfigEdit[] {
+export function configEdits(
+  before: unknown,
+  after: unknown,
+  path: JSONPath = [],
+  options: ConfigEditOptions = {},
+): ConfigEdit[] {
   if (JSON.stringify(before) === JSON.stringify(after)) return [];
   if (plain(before) && plain(after))
     return [...new Set([...Object.keys(before), ...Object.keys(after)])].flatMap(
@@ -76,10 +104,10 @@ export function configEdits(before: unknown, after: unknown, path: JSONPath = []
             : [{ kind: 'remove', path: [...path, key] }]
           : before[key] === undefined
             ? [{ kind: 'set', path: [...path, key], value: after[key] }]
-            : configEdits(before[key], after[key], [...path, key]),
+            : configEdits(before[key], after[key], [...path, key], options),
     );
   if (!Array.isArray(before) || !Array.isArray(after)) return [{ kind: 'set', path, value: after }];
-  const key = itemKey(before, after);
+  const key = itemKey(before, after, options);
   if (!key) return [{ kind: 'set', path, value: after }];
   const pairs = matched(before.map(key), after.map(key));
   const kept = new Set(pairs.map(([index]) => index));
@@ -98,7 +126,7 @@ export function configEdits(before: unknown, after: unknown, path: JSONPath = []
         path: [...path, index],
         value: after[index],
       })),
-    ...pairs.flatMap(([from, to]) => configEdits(before[from], after[to], [...path, to])),
+    ...pairs.flatMap(([from, to]) => configEdits(before[from], after[to], [...path, to], options)),
   ];
 }
 

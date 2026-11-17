@@ -42,8 +42,6 @@ async function unsaved(pane: Pane): Promise<boolean> {
   if (pane.type !== 'scratch') return false;
   const buffer = await readBuffer(pane.bufferID);
   if (buffer?.text) return true;
-  // nothing to lose: an empty scratch plane takes its empty buffer with it
-  if (buffer) await discardBuffer(pane.bufferID);
   return false;
 }
 /** Saves a plane's unsaved text, through its editor when it is open. */
@@ -109,19 +107,38 @@ async function discard(pane: Pane): Promise<void> {
  * when the person cancelled or a save did not happen, and nothing closes. Planes closed another
  * way (an arrangement Undo, a project reload) keep their text in the profile, recovered at launch.
  */
-export async function confirmClose(ids: readonly string[]): Promise<boolean> {
-  for (const pane of activeWorkspace().panes.filter((item) => ids.includes(item.id))) {
+export type PreparedClose = () => Promise<void>;
+
+export async function prepareClose(
+  ids: readonly string[],
+  panes: readonly Pane[] = activeWorkspace().panes,
+): Promise<PreparedClose | undefined> {
+  const discards: Pane[] = [];
+  for (const pane of panes.filter((item) => ids.includes(item.id))) {
     if (pane.type === 'note') {
       await flushNote(pane.id);
       continue;
     }
-    if (!(await unsaved(pane))) continue;
+    if (!(await unsaved(pane))) {
+      if (pane.type === 'scratch') discards.push(pane);
+      continue;
+    }
     const answer = await window.viewer.textPrompt('close', unsavedName(pane));
-    if (answer === 'cancel') return false;
+    if (answer === 'cancel') return undefined;
     if (answer === 'save') {
-      if (!(await save(pane))) return false;
-    } else await discard(pane);
+      if (!(await save(pane))) return undefined;
+    } else discards.push(pane);
   }
+  // Desktop acceptance can still fail after the prompts. Keep the text until it succeeds.
+  return async () => {
+    for (const pane of discards) await discard(pane);
+  };
+}
+
+export async function confirmClose(ids: readonly string[]): Promise<boolean> {
+  const commit = await prepareClose(ids);
+  if (!commit) return false;
+  await commit();
   return true;
 }
 
@@ -168,7 +185,7 @@ export async function saveAll(): Promise<{ saved: number; failed: number; unname
  * closed plane forgotten can all leave one. Empty scratch text has nothing to keep.
  */
 export async function recoverBuffers(): Promise<number> {
-  const { buffers, problems } = await window.viewer.bufferList();
+  const { buffers, problems, remembered = [] } = await window.viewer.bufferList();
   for (const problem of problems) report(new Error(problem));
   const held = new Set(
     getState().saved.workspaces.flatMap((space) =>
@@ -180,6 +197,7 @@ export async function recoverBuffers(): Promise<number> {
       ),
     ),
   );
+  for (const id of remembered) held.add(id);
   let recovered = 0;
   for (const buffer of buffers) {
     if (held.has(buffer.id)) continue;

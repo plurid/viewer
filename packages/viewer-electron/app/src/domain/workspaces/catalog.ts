@@ -1,7 +1,51 @@
 import type { SavedState, Workspace } from '../contracts';
+import type { DefinitionCatalog } from './definitions/schema';
+
+export function definitionWasRemoved(space: Workspace, catalog?: DefinitionCatalog): boolean {
+  return !!space.definition && !!catalog &&
+    (catalog.file.state === 'read' || catalog.file.state === 'absent') &&
+    catalog.projectManager.state !== 'unreadable' && catalog.projectManager.state !== 'needs-access' &&
+    !catalog.definitions.some((item) => item.key === space.definition!.key);
+}
 
 export const maximumWorkspaces = 1000;
 export const recentWorkspaceLimit = 5;
+
+export function isPristineWorkspace(space: Workspace, home: string, emptyLocation = home): boolean {
+  const [only] = space.panes;
+  return (
+    space.name === 'Workspace' &&
+    !space.project &&
+    !space.definition &&
+    space.panes.length === 1 &&
+    only?.type === 'folder' &&
+    (only.path === home || only.path === emptyLocation) &&
+    space.roots.length === 1 &&
+    space.roots[0] === only.id
+  );
+}
+
+/** Keep the first recipe association while preserving later workspaces as ad-hoc workspaces. */
+export function uniqueDefinitionLinks(workspaces: readonly Workspace[]): Workspace[] {
+  const keys = new Set<string>();
+  return workspaces.map((space) => {
+    if (!space.definition) return space;
+    const key = space.definition.key;
+    if (!keys.has(key)) {
+      keys.add(key);
+      return space;
+    }
+    const { definition: _definition, ...independent } = space;
+    return {
+      ...independent,
+      panes: independent.panes.map((pane) => {
+        if (pane.type !== 'terminal') return pane;
+        const { definitionPlane: _plane, ...terminal } = pane;
+        return terminal;
+      }),
+    };
+  });
+}
 
 /** Usage is shared across windows without replacing a newer visit with a stale snapshot. */
 export function mergeWorkspaceVisits(

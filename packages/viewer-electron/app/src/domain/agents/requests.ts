@@ -37,6 +37,27 @@ export interface AgentWorkspaceSnapshot {
   activeWorkspace: string;
   workspaces: AgentWorkspace[];
 }
+
+export function agentPlaneCopy(pane: AgentPlane): AgentPlane {
+  return {
+    id: pane.id,
+    type: pane.type,
+    path: pane.path,
+    ...(pane.mode === undefined ? {} : { mode: pane.mode }),
+    ...(pane.allLocations === undefined ? {} : { allLocations: pane.allLocations }),
+  };
+}
+
+/** Proposals contain only discoverable fields, including when a caller supplies a live record. */
+export function agentWorkspaceCopy(workspace: AgentWorkspace): AgentWorkspace {
+  return {
+    id: workspace.id,
+    name: workspace.name,
+    roots: [...workspace.roots],
+    panes: workspace.panes.map(agentPlaneCopy),
+    ...(workspace.tasks ? { tasks: structuredClone(workspace.tasks) } : {}),
+  };
+}
 export type AgentNavigation =
   | { kind: 'open-path'; path: string; placement: 'current' | 'root' | 'linked' }
   | { kind: 'select-files'; files: FileEntry[] }

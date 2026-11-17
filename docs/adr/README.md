@@ -25,3 +25,4 @@ These records explain decisions that still shape the application. Feature usage 
 - [Publication without exclusive rename](0017-publication-without-exclusive-rename.md)
 - [Explicit PostScript rendering](0018-explicit-postscript-rendering.md)
 - [Alpha versioning](0019-alpha-versioning.md)
+- [Defined workspaces and explicit command starts](0020-defined-workspaces.md)

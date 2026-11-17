@@ -16,6 +16,38 @@ const mounts = {
     { path: '/Volumes/Local', local: true },
   ],
 };
+
+it('uses native mount notifications without polling or spawning a mount process', async () => {
+  vi.useFakeTimers();
+  const changed = vi.fn();
+  const run = vi.fn(runner([]));
+  let notify!: () => void;
+  const release = vi.fn();
+  const volumes = new SharingVolumes(
+    run,
+    () => mounts.mounts,
+    Date.now,
+    (listener) => {
+      notify = listener;
+      return release;
+    },
+  );
+  const stop = volumes.watch(changed);
+  try {
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(changed).not.toHaveBeenCalled();
+    notify();
+    expect(changed).toHaveBeenCalledOnce();
+    expect(run).not.toHaveBeenCalled();
+    stop();
+    expect(release).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(changed).toHaveBeenCalledOnce();
+  } finally {
+    stop();
+    vi.useRealTimers();
+  }
+});
 const runner =
   (points: string[]): SharingRunner =>
   async (kind) => ({

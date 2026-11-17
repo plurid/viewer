@@ -5,27 +5,35 @@ import { z } from 'zod';
 import { maxQueryLength } from '../search/query';
 
 export function templatePlaneSchema<Extra extends z.ZodRawShape = Record<never, never>>(
-  pathSchema = z.string().max(4096).refine((value) => !value.includes('\0')),
+  pathSchema = z
+    .string()
+    .max(4096)
+    .refine((value) => !value.includes('\0')),
   terminalFields?: Extra,
 ) {
-  return z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('folder'), path: pathSchema }).strict(),
-    z.object({ kind: z.literal('file'), path: pathSchema }).strict(),
-    z.object({
+  const terminal = z
+    .object({
       kind: z.literal('terminal'),
       path: pathSchema,
       profileID: z.string().max(200).optional(),
-      ...terminalFields,
-    }).strict(),
+    })
+    .extend(terminalFields ?? ({} as Extra))
+    .strict();
+  return z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('folder'), path: pathSchema }).strict(),
+    z.object({ kind: z.literal('file'), path: pathSchema }).strict(),
+    terminal,
     z.object({ kind: z.literal('scratch') }).strict(),
-    z.object({
-      kind: z.literal('search'),
-      query: z.string().max(maxQueryLength),
-      name: z.string().min(1).max(100),
-      root: pathSchema.optional(),
-      recursive: z.boolean().optional(),
-      content: z.boolean().optional(),
-    }).strict(),
+    z
+      .object({
+        kind: z.literal('search'),
+        query: z.string().max(maxQueryLength),
+        name: z.string().min(1).max(100),
+        root: pathSchema.optional(),
+        recursive: z.boolean().optional(),
+        content: z.boolean().optional(),
+      })
+      .strict(),
   ]);
 }
 

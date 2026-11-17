@@ -8,6 +8,8 @@ import {
   isFinalProposalStatus,
   executionCapabilities,
   needsNativeConfirmation,
+  agentPlaneCopy,
+  agentWorkspaceCopy,
 } from '../../domain/agents/requests';
 import type { CapturedTarget, ExecutionTask } from '../../domain/automation/actions';
 import type { SettingsPatch } from '../../domain/services';
@@ -395,6 +397,10 @@ export class AgentRequests {
     target: CapturedTarget,
   ): { id: string; requiresUserReview: true } {
     if (!this.navigate) throw new Error('Workspace navigation is unavailable.');
+    if (request.kind === 'switch-workspace')
+      request = { ...request, workspace: agentWorkspaceCopy(request.workspace) };
+    else if (request.kind === 'focus-plane')
+      request = { ...request, pane: agentPlaneCopy(request.pane) };
     const title =
       request.kind === 'open-path'
         ? 'Open path'

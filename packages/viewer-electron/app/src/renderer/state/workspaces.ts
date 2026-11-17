@@ -1,4 +1,9 @@
-import { maximumWorkspaces, mergeWorkspaceVisits } from '../../domain/workspaces/catalog';
+import {
+  definitionWasRemoved,
+  isPristineWorkspace,
+  maximumWorkspaces,
+  mergeWorkspaceVisits,
+} from '../../domain/workspaces/catalog';
 import { mergeFolderVisits } from '../../domain/files/folder-visits';
 import {
   resetKnownFolders,
@@ -22,7 +27,7 @@ import {
   spaceColor,
 } from '../../domain/preferences/ui';
 import { clearSessions } from '../workspace/sessions';
-import { defaultSettings } from '../../domain/services';
+import { defaultSettings, newPlaneFolder } from '../../domain/services';
 import {
   panePresentation,
   resolveFolderPresentation,
@@ -31,6 +36,7 @@ import {
   type ViewerState,
   activeWorkspace,
   changeWorkspace,
+  dismissNotice,
   emit,
   getState,
   replaceState,
@@ -55,9 +61,10 @@ export function initialize(bootstrap: Bootstrap): void {
     look: bootstrap.state?.look ?? 'dark',
     credentials: [],
   };
+  const initialFolder = newPlaneFolder(settings.settings.browsing, bootstrap.home, undefined, true);
   const pane = {
-    ...folderPane(bootstrap.home, { visible: settings.ui.sidebar.inNewPlanes, width: 210 }),
-    ...panePresentation(resolveFolderPresentation(bootstrap.home, settings.settings, settings.ui)),
+    ...folderPane(initialFolder, { visible: settings.ui.sidebar.inNewPlanes, width: 210 }),
+    ...panePresentation(resolveFolderPresentation(initialFolder, settings.settings, settings.ui)),
   };
   const workspace: Workspace = {
     id: uuid(),
@@ -95,18 +102,9 @@ export function initialize(bootstrap: Bootstrap): void {
   };
   if (bootstrap.freshSession) {
     // Reuse an untouched fresh-session workspace instead of adding one on every launch.
-    const pristine = saved.workspaces.findLast((space) => {
-      const [only] = space.panes;
-      return (
-        space.name === workspace.name &&
-        !space.project &&
-        space.panes.length === 1 &&
-        only?.type === 'folder' &&
-        only.path === bootstrap.home &&
-        space.roots.length === 1 &&
-        space.roots[0] === only.id
-      );
-    });
+    const pristine = saved.workspaces.findLast((space) =>
+      isPristineWorkspace(space, bootstrap.home, initialFolder),
+    );
     if (pristine) saved.activeWorkspace = pristine.id;
     else if (saved.workspaces.length < maximumWorkspaces) {
       saved.workspaces = [...saved.workspaces, workspace];
@@ -146,6 +144,7 @@ export async function switchWorkspace(id: string): Promise<void> {
   if (!getState().saved.workspaces.some((space) => space.id === id)) return;
   await flushState();
   if (window.viewer.workspaceClaim && !(await window.viewer.workspaceClaim(id))) return;
+  if (getState().definitionNotice) dismissNotice();
   stopTour();
   savePatch({
     activeWorkspace: id,
@@ -340,6 +339,9 @@ export function setWorkspaceSpaceColor(color: string): void {
 }
 /** Removes only saved Viewer layout. No filesystem service is involved. */
 export async function deleteWorkspace(id: string): Promise<void> {
+  const linked = getState().saved.workspaces.find((space) => space.id === id);
+  if (linked?.definition && !definitionWasRemoved(linked, getState().bootstrap.definitions))
+    throw new Error('Close it: its definition stays in workspaces.jsonc.');
   if (id !== activeWorkspace().id && getState().saved.openWindows?.includes(id))
     throw new Error('Switch to this workspace’s window to delete it.');
   const index = getState().saved.workspaces.findIndex((space) => space.id === id);

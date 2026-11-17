@@ -1,0 +1,50 @@
+.definition-start-panel {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+.definition-terminal {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.definition-terminal > .terminal-plane {
+  flex: 1;
+  min-height: 0;
+}
+.definition-command-error {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: var(--gap-inline) var(--gap-content);
+  color: var(--danger);
+  font-size: var(--text-body);
+  overflow-wrap: anywhere;
+}
+.definition-start-panel .empty-state {
+  height: auto;
+  min-height: 100%;
+}
+.definition-command-line {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.definition-start-panel .path-field {
+  max-width: 100%;
+}
+.definition-run-command {
+  min-width: 0;
+  max-width: 100%;
+}
+.definition-start-panel .empty-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+.definition-run-command > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -233,6 +233,135 @@ up to 100. `planes` holds 1 to 30 items: `{kind: "folder" | "file", path}`,
 an empty path is the folder in view when the template opens. `layout` is a tiling layout and `main`
 is 0.2 to 0.8.
 
+## Workspace definitions
+
+`<data>/workspaces.jsonc` defines whole workspaces separately from the open records in
+`viewer-state-v1.json`. **Edit workspace definitions** creates a commented starter only when the
+file is absent. A symbolic link is allowed. `workspaces.schema.json` beside it provides editor
+validation. The file is JSONC with comments and trailing commas:
+
+```jsonc
+{
+  "$schema": "workspaces.schema.json",
+  "version": 1,
+  "sources": { "projectManager": { "enabled": true } },
+  "workspaces": {
+    "sample/site": { "name": "Sample site", "aliases": ["ss"] },
+    "independent/notes": {
+      "root": "~/Projects/notes",
+      "planes": [
+        { "kind": "folder", "path": "{{ROOT}}" },
+        { "kind": "terminal", "path": "tools", "command": "npm run dev" },
+      ],
+      "tiling": { "layout": "main-vertical", "main": 0.4 },
+      "focus": 0,
+    },
+  },
+}
+```
+
+`sources.projectManager.enabled` defaults to `true`. `path`, when set, selects a local
+`projects.json`; otherwise Viewer reads
+`~/Library/Application Support/Code/User/globalStorage/alefragnani.project-manager/projects.json`.
+Viewer never writes that source. It expands `~` and `$home`, skips remote URIs, counts disabled
+entries and reads each project independently. Each enabled local project supplies a folder plane at
+`rootPath`, plus one per extra `paths` entry. Project `tags` become aliases. Both files reload
+within about one second after an editor saves them.
+
+In the Store edition, an ungranted source reports **needs-access** without prompting. **Allow
+access…** in **Settings → Configuration → Workspace definitions** asks for a folder grant so
+replacement source files remain readable. Ungranted roots have an unknown state, not a missing
+state; opening their folder planes uses the existing access recovery.
+
+| Entry field       | Meaning and limit                                                                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`            | Display name, 1 to 100 characters. Defaults to the project's name leaf or a standalone key's leaf; a generic leaf such as `site`, `server` or `cli` gains its parent.                  |
+| `root`            | Required for a standalone entry; optional on a project override. Must resolve to an absolute local folder. Viewer creates no folders.                                                  |
+| `planes`          | Zero to 30 layout-template plane kinds. Absent or empty uses the plain folder planes.                                                                                                  |
+| `tiling`          | `layout` from the tiling layouts, `main` from 0.2 to 0.8, optional `split` with numeric `{ "plane": index }` leaves. Branches have `axis` (`x` or `y`), `ratio`, `first` and `second`. |
+| `focus`           | Zero-based plane index to focus.                                                                                                                                                       |
+| `terminalProfile` | Default terminal profile ID. A plane's `profileID` takes precedence. Unknown profiles fall back to the general profile with a diagnostic.                                              |
+| `look`            | Optional `spaceColor` (`#rrggbb`), `profile` (setting profile ID) and `overrides` (the validated presentation fields).                                                                 |
+| `aliases`         | Up to 10 strings of 1 to 60 characters.                                                                                                                                                |
+| `curated`         | Requires **Save over definition** confirmation before Save to definition. A forced save keeps the marker. Opening does not write it.                                                   |
+| `hidden`          | Excludes the definition from palette and CLI matching.                                                                                                                                 |
+
+Planes use `{kind: "folder" | "file", path}`, `{kind: "terminal", path, profileID?, command?}`,
+`{kind: "scratch"}` or `{kind: "search", query, name, root?, recursive?, content?}`. A `command` is
+accepted as 1 to 1,000 characters on one line, with no control characters (including tabs),
+invisible formatting characters or unpaired Unicode surrogates. A terminal that names one opens
+stopped. Opening, reopening and resetting a workspace do not approve or start its commands.
+
+| Path spelling                  | Resolution                                                                              |
+| ------------------------------ | --------------------------------------------------------------------------------------- |
+| `""`, `"."`, `"{{ROOT}}"`      | This definition's root. A layout template's empty path instead uses the folder in view. |
+| `"src"`, `"{{ROOT}}/src"`      | Below this root.                                                                        |
+| `"{{ROOT:Sample > Site}}/src"` | Another definition's root by project name or a standalone key written with `>`.         |
+| `"{{ROOT:sample/site}}/src"`   | Another definition's root by key, including standalone entries.                         |
+| `"~"`, `"~/Documents"`         | Home or a path below Home.                                                              |
+| `"/absolute/path"`             | An absolute local path as written.                                                      |
+
+Parent (`..`) segments, backslashes, NUL, unknown or nested tokens, and tokens away from the start
+are refused, as are drive-letter paths and empty named-root references. A root cannot contain
+`{{ROOT}}`; named-root references cannot cycle and have a depth limit of four definitions.
+
+Keys split Project Manager names on `>`, fold diacritics, replace spaces with `-`, keep `A-Z`,
+`a-z`, digits, `.`, `_` and `-`, collapse repeated `-`, then join segments with `/`. Case is
+preserved. Empty arrow-separated parts are ignored; a segment with no safe characters becomes `x`.
+Colliding project keys receive `-2`, `-3` in source order, including projects with missing root
+folders. This numbering happens before root checks, so mounting a drive does not change keys. Keys
+have up to eight segments and 200 characters, with no `.` or `..` segments.
+
+`workspaces` is an object keyed by definition key. A same-key entry overrides a project's plain
+definition and inherits its name and root. An invalid override falls back to that plain definition.
+Other entries must name a root. Entries validate separately; one invalid entry does not hide its
+neighbors. A plane whose path cannot resolve is skipped with a notice. If all planes are skipped, a
+folder plane opens at the root. Definitions marked hidden and definitions whose root folder is
+missing stay out of search. Root checks run in the background; unknown roots remain searchable.
+Results are cached for up to 60 seconds. Opening workspace search and changes to mounted volumes
+recheck missing and unknown roots among the search candidates through the same bounded checker.
+Catalog loading never waits for a root check. Opening a definition with an unknown root checks that
+one root with a 150 ms bound. Overrides without roots wait quietly when the Project Manager source
+is unavailable or off; standalone entries keep working.
+
+Limits are 4 MiB and 2,000 entries for `workspaces.jsonc`, 8 MiB and 5,000 entries for
+`projects.json`, and 30 planes per definition. Diagnostics name the source, key and line where
+available, including duplicate properties and suggested keys. Duplicate properties use the later
+entry. A parse error keeps the last valid definitions; a broken Project Manager source retains its
+last good list for the current app session. A brief gap during source replacement also keeps that
+list, with a note; a source that stays absent drops its projects and counts. **Validate** in the
+configuration block reloads both sources and says whether errors remain. Opening a definition
+already owned by another window focuses that window.
+
+Open definition links use saved-state version 13. Viewer preserves a
+`.before-workspace-definitions-v13` backup when reading version 12 or earlier. Older Viewer versions
+refuse the newer saved-state file.
+
+### Saving and remembered planes
+
+**Save to definition** edits only the current key through the existing JSONC file, preserving
+comments on unchanged planes and bytes outside the entry. An outside edit causes one retry against
+the new document. A symbolic link is written through to its target. Invalid JSONC is never replaced
+by a save.
+
+Save records folder, file, terminal, scratch and search planes, their order, tiling and focus. Other
+kinds stay in the open workspace and are listed in the result. Paths use the longest matching
+catalog root, then Home, then a literal absolute fallback. An existing spelling is kept when it
+resolves to the same folder. Commands come only from the existing entry, matched by the terminal's
+written plane index. Removing one asks for **Save over definition**. Name, aliases, look, curated
+and hidden remain as written.
+
+**Save as definition…** creates one entry and links the open workspace to it. Its proposed key uses
+the project owning most panes, with ties going to the shorter root, or the workspace name's slug.
+The common folder supplies a standalone root. A key already written in the file is refused.
+
+Closed snapshots live in `<data>/defined-workspaces-v1.json`, mode 0600. The file holds up to 100
+most recently closed workspaces, then drops the oldest while above 16 MB. Per-key opened recency is
+kept separately in that file. Snapshots include preview positions and history; they do not count as
+open workspaces or enter backups or agent discovery. An unreadable file is moved aside before any
+new memory is written. **Forget remembered planes** removes a snapshot and keeps its recency.
+**Reset to definition…** forgets the snapshot after editor-close prompts succeed.
+
 ## Tour files
 
 A tour is a JSONC file whose name ends in `.viewer-tour.jsonc`; the part before it names the tour.

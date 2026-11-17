@@ -1,3 +1,4 @@
+import type { DefinitionCommands } from '../workspaces/definition-commands';
 import { randomUUID } from 'node:crypto';
 import type { CustomAction } from '../../domain/automation/actions';
 import type { ApiHandlers } from './schemas';
@@ -16,6 +17,9 @@ type TerminalHandlers = Pick<
   | 'terminalApplication'
   | 'terminalExternal'
   | 'terminalStart'
+  | 'terminalStartAll'
+  | 'terminalRunning'
+  | 'terminalCount'
   | 'terminalWrite'
   | 'terminalResize'
   | 'terminalAck'
@@ -28,7 +32,8 @@ type TerminalHandlers = Pick<
 >;
 interface TerminalPorts {
   home: string;
-  terminals: Pick<Terminals, 'start' | 'write' | 'resize' | 'ack' | 'stop'>;
+  definitionCommands: Pick<DefinitionCommands, 'start' | 'startAll'>;
+  terminals: Pick<Terminals, 'start' | 'write' | 'resize' | 'ack' | 'stop' | 'running' | 'count'>;
   external: Pick<ExternalTerminals, 'application' | 'open'>;
   executions: Pick<Executions, 'start' | 'startManual' | 'list' | 'cancel'>;
   gitActions: Pick<GitActions, 'stop'>;
@@ -53,7 +58,13 @@ export function createTerminalHandlers(ports: TerminalPorts): TerminalHandlers {
       await ports.fileAccess.require([cwd]);
       return ports.external.open(cwd, tmux);
     },
-    terminalStart: ([request], owner) => ports.terminals.start(request, owner),
+    terminalStart: ([request, reference], owner) =>
+      reference
+        ? ports.definitionCommands.start(owner, request, reference)
+        : ports.terminals.start(request, owner),
+    terminalStartAll: ([items], owner) => ports.definitionCommands.startAll(owner, items),
+    terminalRunning: ([request], owner) => ports.terminals.running(request, owner, false),
+    terminalCount: ([workspaceID], owner) => ports.terminals.count(workspaceID, owner),
     terminalWrite: ([id, data], owner) => ports.terminals.write(id, data, owner),
     terminalResize: ([id, cols, rows], owner) => ports.terminals.resize(id, cols, rows, owner),
     terminalAck: ([id, bytes], owner) => ports.terminals.ack(id, bytes, owner),

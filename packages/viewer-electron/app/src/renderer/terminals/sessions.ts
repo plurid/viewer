@@ -4,6 +4,10 @@ import type { SearchAddon } from '@xterm/addon-search';
 import type { TerminalStart } from '../../domain/automation/actions';
 import { copyText, report } from '../state/store';
 import { terminalTheme } from './theme';
+import { terminalWindowOptions } from '../../domain/terminals/window-options';
+import './terminal-parking.css';
+import { deferTerminal } from './start-authority';
+export { allowTerminalStart, terminalStartDeferred } from './start-authority';
 export interface TerminalSession {
   terminal: Terminal;
   fit: FitAddon;
@@ -17,8 +21,37 @@ export interface TerminalSession {
   readonly: boolean;
   processLabel: string;
   attach(container: HTMLElement): void;
+  park?(): void;
 }
 const sessions = new Map<string, Promise<TerminalSession>>();
+let parking: HTMLDivElement | undefined;
+function terminalParking(): HTMLDivElement {
+  if (!parking?.isConnected) {
+    parking = document.createElement('div');
+    parking.className = 'terminal-parking';
+    parking.inert = true;
+    document.body.append(parking);
+  }
+  return parking;
+}
+
+export function terminalStarted(id: string, session: TerminalSession): Promise<void> {
+  if (session.disposed) return Promise.resolve();
+  session.started = true;
+  const writes: Promise<void>[] = [];
+  if (session.input) {
+    const data = session.input;
+    session.input = '';
+    writes.push(window.viewer.terminalWrite(id, data));
+  }
+  writes.push(window.viewer.terminalResize(id, session.terminal.cols, session.terminal.rows));
+  return Promise.all(writes).then(() => {});
+}
+export async function runningTerminals(ids: readonly string[]): Promise<number> {
+  const values = await Promise.all(ids.map((id) => sessions.get(id)?.catch(() => undefined)));
+  return values.filter((session) => session?.started && !session.exited && !session.disposed)
+    .length;
+}
 const preparing = new Set<string>();
 /** A reviewed program can emit output before its result plane is added to the workspace. */
 export function retainTerminal(id: string): () => void {
@@ -38,13 +71,17 @@ export function closeTerminal(id: string): void {
   void window.viewer.terminalClose(id).catch(() => {});
 }
 /** Terminals revealed by an agent's navigation wait for the person to start a shell. */
-const deferred = new Set<string>();
 export function deferTerminalStart(ids: Iterable<string>): void {
-  for (const id of ids) if (!sessions.has(id)) deferred.add(id);
-}
-export const terminalStartDeferred = (id: string) => deferred.has(id);
-export function allowTerminalStart(id: string): void {
-  deferred.delete(id);
+  for (const id of ids) {
+    const pending = sessions.get(id);
+    if (!pending) deferTerminal(id);
+    else
+      void pending
+        .then((session) => {
+          if (!session.started) deferTerminal(id);
+        })
+        .catch(() => {});
+  }
 }
 let subscribed = false;
 function subscribe(): void {
@@ -62,11 +99,15 @@ function subscribe(): void {
     void pending
       .then((session) => {
         if (session.disposed) return;
-        if (value.type === 'data')
+        if (value.type === 'data') {
+          // First output proves the PTY exists while Run all may still await other planes.
+          // xterm's answers must reach it before the worker's startup deadline.
+          if (session.starting && !session.started)
+            void terminalStarted(value.id, session).catch(report);
           session.terminal.write(value.data, () => {
             void window.viewer.terminalAck(value.id, value.data.length).catch(() => {});
           });
-        else {
+        } else {
           session.exited = true;
           session.terminal.writeln(
             '\r\n' +
@@ -101,6 +142,7 @@ export function terminalSession(
         allowProposedApi: true,
         cursorBlink: true,
         convertEol: false,
+        windowOptions: terminalWindowOptions,
         theme: terminalTheme('dark'),
       });
       const fit = new FitAddon();
@@ -128,6 +170,9 @@ export function terminalSession(
             opened = true;
           }
           fit.fit();
+        },
+        park() {
+          session.attach(terminalParking());
         },
       };
       terminal.attachCustomKeyEventHandler((event) => {

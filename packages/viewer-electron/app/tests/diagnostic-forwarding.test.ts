@@ -59,6 +59,7 @@ describe('desktop failures keep their structured metadata', () => {
         snapshot: () => ({ revision: 1 }),
         patch: vi.fn().mockRejectedValue(failure()),
       },
+      definitions: { load: async () => {} },
       workspaceSessions: { seed: vi.fn() },
     });
     await desktop.prepareSettings();
@@ -90,6 +91,7 @@ describe('desktop failures keep their structured metadata', () => {
       Reflect.set(desktop, name, owner);
     Object.assign(desktop, {
       windows: new Map(),
+      definitions: { clearRootSearch: vi.fn() },
       agentCommands: new Map(),
       flushes: { disconnected: vi.fn() },
       chats: { retain: vi.fn() },

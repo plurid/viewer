@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { watch } from 'node:fs';
 import type { SharingRunner } from './network-sharing';
 import { macFiles } from '../native/macos-files';
 import type { NativeSharingMount } from '../native/macos-files';
@@ -75,6 +76,7 @@ export class SharingVolumes {
     private readonly run: SharingRunner,
     private readonly native = () => macFiles().sharingMounts?.(),
     private readonly now = Date.now,
+    private readonly changes = watchVolumeChanges,
   ) {}
   read(force = false): Promise<SharingVolumeSnapshot> {
     try {
@@ -110,5 +112,23 @@ export class SharingVolumes {
         this.pending = undefined;
       });
     return this.pending;
+  }
+  watch(changed: () => void): () => void {
+    return this.changes(() => {
+      this.cached = undefined;
+      changed();
+    });
+  }
+}
+
+/** Mount notifications need no periodic process, including without the native helper. */
+function watchVolumeChanges(changed: () => void): () => void {
+  if (process.platform !== 'darwin') return () => {};
+  try {
+    const watcher = watch('/Volumes', { persistent: false }, changed);
+    watcher.on('error', () => {});
+    return () => watcher.close();
+  } catch {
+    return () => {};
   }
 }

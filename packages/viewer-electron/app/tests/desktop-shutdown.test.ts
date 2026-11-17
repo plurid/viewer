@@ -32,6 +32,8 @@ function fixture() {
     'personTaskWorkflows',
     'trash',
     'settings',
+    'definitions',
+    'definedWorkspaces',
     'comparisons',
     'duplicates',
     'watchRules',
@@ -130,9 +132,11 @@ describe('desktop shutdown ownership', () => {
       expect(f.actions.all).toHaveBeenCalledOnce();
       expect(f.actions.close).toHaveBeenCalledOnce();
       expect(f.files.close).toHaveBeenCalledOnce();
+      expect(f.desktop.definitions.close).toHaveBeenCalledOnce();
       await expect(f.workflows.request({ kind: 'list' })).rejects.toThrow('Workflows have closed.');
       await f.desktop.dispose();
       expect(f.actions.close).toHaveBeenCalledOnce();
+      expect(f.desktop.definitions.close).toHaveBeenCalledOnce();
     } finally {
       quiesce.mockRestore();
     }

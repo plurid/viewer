@@ -5,6 +5,7 @@ import { dialogRequestSchema } from '../../domain/dialogs';
 import { canvasRequestSchema } from '../../domain/canvases/document';
 import { canvasLibraryRequestSchema } from '../../domain/canvases/library';
 import { maximumWorkspaces } from '../../domain/workspaces/catalog';
+import { definitionKeySchema, definitionLimits } from '../../domain/workspaces/definitions/schema';
 /** Argument schemas for every IPC method. The bridge validates each call against these
  * before it reaches a handler, and `ApiCall` carries the inferred argument types. */
 import { z } from 'zod';
@@ -58,6 +59,27 @@ import { MAX_TEXT_BYTES, textVersionSchema } from '../../domain/editing/document
 import { executionCapabilities } from '../../domain/agents/requests';
 import { requestActors } from '../../domain/services';
 import { reviewModes } from '../../domain/comparison/review';
+
+const terminalStartSchema = z.object({
+  id,
+  workspaceID: id,
+  rootID: id,
+  cwd: localPath,
+  profileID: id,
+  cols: z.number().int().min(2).max(1000),
+  rows: z.number().int().min(1).max(500),
+});
+const definitionCommandReferenceSchema = z
+  .object({
+    key: definitionKeySchema,
+    plane: z
+      .number()
+      .int()
+      .min(0)
+      .max(definitionLimits.planes - 1),
+    basis: z.string().min(1).max(200),
+  })
+  .strict();
 
 const folderVisitsSchema = z
   .record(
@@ -276,6 +298,42 @@ export const schemas = {
   hotkeyStatus: z.tuple([]),
   restoreWindow: z.tuple([]),
   workspaceClaim: z.tuple([id]),
+  workspaceDefinitions: z.tuple([
+    z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('open'), key: definitionKeySchema }).strict(),
+      z.object({ kind: z.literal('close'), workspaceID: id, withoutMemory: z.boolean().optional() }).strict(),
+      z.object({ kind: z.literal('close-info'), workspaceID: id }).strict(),
+      z.object({ kind: z.literal('reset'), workspaceID: id }).strict(),
+      z
+        .object({
+          kind: z.literal('save'),
+          workspaceID: id,
+          order: z.array(id).max(200),
+          confirmed: z.boolean().optional(),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('save-as'),
+          workspaceID: id,
+          order: z.array(id).max(200),
+          key: definitionKeySchema.optional(),
+          name: z.string().trim().min(1).max(100).optional(),
+        })
+        .strict(),
+      z.object({ kind: z.literal('forget'), key: definitionKeySchema }).strict(),
+    ]),
+  ]),
+  workspaceDefinitionFile: z.tuple([
+    z
+      .object({
+        kind: z.enum(['catalog', 'edit', 'validate', 'allow-source']),
+        query: z.string().max(200).optional(),
+        limit: z.number().int().min(0).max(50).optional(),
+        keys: z.array(definitionKeySchema).max(50).optional(),
+      })
+      .strict(),
+  ]),
   newWindow: z.tuple([]),
   git: z.tuple([
     z.discriminatedUnion('kind', [
@@ -575,16 +633,20 @@ export const schemas = {
   ]),
   terminalApplication: z.tuple([]),
   terminalExternal: z.tuple([localPath, z.boolean()]),
-  terminalStart: z.tuple([
-    z.object({
-      id,
-      workspaceID: id,
-      rootID: id,
-      cwd: localPath,
-      profileID: id,
-      cols: z.number().int().min(2).max(1000),
-      rows: z.number().int().min(1).max(500),
-    }),
+  terminalStart: z.tuple([terminalStartSchema, definitionCommandReferenceSchema.optional()]),
+  terminalRunning: z.tuple([terminalStartSchema.strict()]),
+  terminalCount: z.tuple([id]),
+  terminalStartAll: z.tuple([
+    z
+      .array(
+        definitionCommandReferenceSchema
+          .extend({
+            request: terminalStartSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(definitionLimits.planes),
   ]),
   terminalWrite: z.tuple([id, z.string().max(65536)]),
   terminalResize: z.tuple([
@@ -900,6 +962,7 @@ export const schemas = {
  * provider's model data permission and the ⌘Q hint. The workspace window receives every event.
  */
 export const settingsEvents: readonly DesktopEvent['type'][] = [
+  'workspace-definitions',
   'license',
   'dialog',
   'speech-changed',
@@ -948,6 +1011,8 @@ export const methodWindows = {
   hotkeyStatus: 'both',
   restoreWindow: 'viewer',
   workspaceClaim: 'viewer',
+  workspaceDefinitions: 'viewer',
+  workspaceDefinitionFile: 'both',
   newWindow: 'viewer',
   git: 'viewer',
   gitResource: 'viewer',
@@ -985,6 +1050,9 @@ export const methodWindows = {
   terminalApplication: 'both',
   terminalExternal: 'viewer',
   terminalStart: 'viewer',
+  terminalStartAll: 'viewer',
+  terminalRunning: 'viewer',
+  terminalCount: 'viewer',
   terminalWrite: 'viewer',
   terminalResize: 'viewer',
   terminalAck: 'viewer',

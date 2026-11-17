@@ -335,6 +335,16 @@ styles and **Save** are in the plane itself.
 
 ### Workspaces and projects
 
+**Change workspace…** also searches workspace definitions by name, alias and key. Type at least two
+characters in **⌘K** for definition matches; open workspaces match from one character. Choose a
+`defined:<key>` row in the workspace picker. **Edit workspace definitions**
+(`edit-workspace-definitions`) opens `workspaces.jsonc`. **Settings → Configuration → Workspace
+definitions** shows its path, **Open workspaces.jsonc**, **Validate**, source counts and line
+diagnostics, with **Allow access…** when the Store edition needs a source grant. Definitions with
+commands open those terminals stopped. See
+[Open a defined workspace](../guides/workspaces.md#open-a-defined-workspace) and the
+[definition reference](configuration.md#workspace-definitions).
+
 | Feature                                     | Key                        | ⌘K command                                                                                                                                                                       | Menu                                                                                 | Learn                                                                     |
 | ------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
 | Switch workspaces                           | Prefix **w**, **n**, **p** | **Change workspace…** `change-workspace`, **Next workspace** `next-workspace`, **Previous workspace** `previous-workspace`; or type its name: `workspace:<id>`                   | The workspace menu in the title bar                                                  | [Workspaces](../guides/workspaces.md)                                     |

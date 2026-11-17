@@ -44,6 +44,8 @@ import { debuggingAllowed } from './desktop/diagnostics/debugging';
 import { HotkeyWindow } from './desktop/windows/hotkey-window';
 import { macFiles } from './desktop/native/macos-files';
 import { launchRequestSchema, parseLaunch, type LaunchRequest } from './domain/workspaces/launch';
+import { resolveWorkspaceQuery } from './domain/workspaces/definitions/query';
+import { routeWorkspaceLaunch } from './desktop/windows/workspace-launch';
 import { askNatively } from './desktop/native/native-confirmation';
 import { saveBeforeClose, type SaveFailureChoice } from './desktop/windows/save-before-close';
 import { QuitSequence } from './desktop/windows/quit-sequence';
@@ -722,15 +724,30 @@ async function openSettingsWindow(focus?: string): Promise<void> {
 async function launch(request: LaunchRequest): Promise<void> {
   if (!desktop || !quit.accepting()) return;
   let target = window ?? undefined;
-  if (request.workspace) {
+  if (request.workspace !== undefined) {
+    await desktop.prepareSettings();
     const spaces = desktop.workspaceSessions.snapshot()?.workspaces ?? [];
-    const matches = spaces.filter(
-      (space) => space.id === request.workspace || space.name === request.workspace,
+    let result = resolveWorkspaceQuery(
+      spaces,
+      desktop.definitions.snapshot().definitions,
+      request.workspace,
     );
-    if (matches.length !== 1)
-      throw new Error('Name one existing workspace by ID or its unique name.');
-    const workspace = matches[0]!;
-    target = desktop.windowForWorkspace(workspace.id) ?? (await createWindow(workspace.id));
+    if (result.kind === 'defined') {
+      try {
+        if ((await desktop.definitions.checkRoot(result.key)) === 'missing')
+          result = { kind: 'none', query: request.workspace };
+      } catch {
+        result = { kind: 'none', query: request.workspace };
+      }
+    }
+    const routed = await routeWorkspaceLaunch(request, result, {
+      current: target,
+      forWorkspace: (id) => desktop!.windowForWorkspace(id),
+      create: createWindow,
+      independent: createIndependentViewerWindow,
+    });
+    target = routed.target;
+    request = routed.request;
   } else if (request.newWindow) {
     target = await createIndependentViewerWindow();
   } else if (!target) target = await createWindow();

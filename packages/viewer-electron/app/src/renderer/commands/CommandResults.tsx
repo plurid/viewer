@@ -9,6 +9,51 @@ interface ResultOrder {
   ids: readonly string[];
 }
 
+type ResultSectionKind = 'open-workspace' | 'defined-workspace' | 'summary' | 'ordinary';
+
+/** Live results retain pointer stability within sections while respecting their current priority. */
+function resultSections(
+  incoming: readonly ResolvedCommand[],
+  retained: readonly string[],
+  headings: ReadonlyMap<string, string> | undefined,
+  rankedWorkspaces: boolean,
+): { ids: string[]; headings: ReadonlyMap<string, string> } {
+  const sections = new Map<string, number>();
+  const names = new Map<number, string>();
+  let section = 0;
+  let previous: ResultSectionKind | undefined;
+  for (const row of incoming) {
+    const kind: ResultSectionKind = row.id.startsWith('workspace:')
+      ? 'open-workspace'
+      : row.id.startsWith('defined:')
+        ? 'defined-workspace'
+        : row.id.startsWith('palette:more-')
+          ? 'summary'
+          : 'ordinary';
+    const heading = headings?.get(row.id);
+    if (
+      heading !== undefined ||
+      kind !== previous ||
+      (rankedWorkspaces && (kind === 'open-workspace' || kind === 'defined-workspace'))
+    )
+      section++;
+    sections.set(row.id, section);
+    if (heading !== undefined) names.set(section, heading);
+    previous = kind;
+  }
+  const ids = retained.toSorted((a, b) => sections.get(a)! - sections.get(b)!);
+  const shown = new Map<string, string>();
+  const seen = new Set<number>();
+  for (const id of ids) {
+    const section = sections.get(id)!;
+    if (seen.has(section)) continue;
+    seen.add(section);
+    const name = names.get(section);
+    if (name !== undefined) shown.set(id, name);
+  }
+  return { ids, headings: shown };
+}
+
 /** Search retains focus while arrows move the active descendant through results. */
 export function CommandResults({
   query,
@@ -29,6 +74,7 @@ export function CommandResults({
   hint,
   onClearRecent,
   clearRecentLabel = 'Clear recent',
+  footer,
 }: {
   query: string;
   onQuery(query: string): void;
@@ -54,13 +100,20 @@ export function CommandResults({
   /** Clear the mode's existing history without changing its query or selected scope. */
   onClearRecent?(): void;
   clearRecentLabel?: string;
+  footer?: string;
 }) {
   const [order, setOrder] = useState<ResultOrder>(() => ({ query, label, ids: [] }));
   const current = new Map(incoming.map((row) => [row.id, row]));
   const retained =
     order.query === query && order.label === label ? order.ids.filter((id) => current.has(id)) : [];
   const seen = new Set(retained);
-  const ids = [...retained, ...[...current.keys()].filter((id) => !seen.has(id))];
+  const sections = resultSections(
+    incoming,
+    [...retained, ...[...current.keys()].filter((id) => !seen.has(id))],
+    headings,
+    !!query.trim(),
+  );
+  const ids = sections.ids;
   // Late completions must not move a row under the person's pointer or Return key.
   if (
     order.query !== query ||
@@ -191,7 +244,9 @@ export function CommandResults({
               rowIndex > 0 &&
               recent.includes(rows[rowIndex - 1]?.id ?? '') &&
               !recent.includes(row.id) && <div className="command-divider" />}
-            {headings?.get(row.id) && <div className="command-group">{headings.get(row.id)}</div>}
+            {sections.headings.get(row.id) && (
+              <div className="command-group">{sections.headings.get(row.id)}</div>
+            )}
             <button
               type="button"
               tabIndex={-1}
@@ -232,6 +287,11 @@ export function CommandResults({
             </button>
           </div>
         ))}
+        {footer && (
+          <p className="command-empty" role="status">
+            {footer}
+          </p>
+        )}
         {unavailable.length > 0 && (
           <>
             <div className="command-group">Not available here</div>

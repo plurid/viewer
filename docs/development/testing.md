@@ -71,6 +71,29 @@ a test pass. When a scenario's Quit takes more than five seconds, the harness re
 `quit-sample.txt`, a stack sample of the app, in the run's evidence folder before it terminates the
 app.
 
+## Command startup with real zsh
+
+From `packages/viewer-electron/app`, run:
+
+```sh
+VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 node ../../../node_modules/vitest/vitest.mjs run tests/terminal-initial-real-pty.test.ts --fsModuleCache=false
+```
+
+The test probes installed node-pty and `/bin/zsh`, then uses isolated ZDOTDIR fixtures. It skips
+with a reason when the current runtime cannot spawn a PTY. The packaged Electron smoke uses prepared
+native helpers; an unexecutable spawn-helper cannot be repaired by switching runtimes. To use a
+separately prepared, host-compatible module, prefix the command with
+`VIEWER_TEST_PTY_MODULE=/path/to/verified/node-pty`. The test changes no dependency or file mode. An
+rc startup question in shells other than zsh and fish can consume the pending command as its answer.
+For zsh and fish, tests require the latest bracketed paste mode to announce the line editor.
+
+Prove a guard is covered with
+`VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 VIEWER_DEFINITION_COMMAND_MUTATION=dcsDrop node ../../../node_modules/vitest/vitest.mjs run --config tools/definition-command-mutations.config.ts tests/terminal-initial-input.test.ts`:
+this in-memory mutation must fail; `pendingQuery` probes the unanswered-query guard. The same config
+covers paste-mode readiness, focus mode and desktop lookup ownership with `fsModuleCache: false`;
+select `lookupWindow`, `lookupKey`, `lookupTerminal` or `lookupPlane` and run
+`tests/definition-command-routing.test.ts` to check the four lookup guards.
+
 ## Focused native scenarios
 
 Run the report window against its current source:

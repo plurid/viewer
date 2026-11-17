@@ -1,18 +1,56 @@
 export const roleWords = new Set([
-  'site', 'server', 'web', 'app', 'api', 'meta', 'www', 'frontend', 'backend',
-  'landing', 'com', 'org', 'next', 'generator', 'db', 'data', 'scraper', 'agent',
-  'extension', 'cli', 'lib', 'sdk', 'assets', 'mobile', 'admin', 'dashboard',
-  'service', 'worker', 'bot', 'src', 'core', 'client',
+  'site',
+  'server',
+  'web',
+  'app',
+  'api',
+  'meta',
+  'www',
+  'frontend',
+  'backend',
+  'landing',
+  'com',
+  'org',
+  'next',
+  'generator',
+  'db',
+  'data',
+  'scraper',
+  'agent',
+  'extension',
+  'cli',
+  'lib',
+  'sdk',
+  'assets',
+  'mobile',
+  'admin',
+  'dashboard',
+  'service',
+  'worker',
+  'bot',
+  'src',
+  'core',
+  'client',
 ]);
 
 export function slug(segment: string): string {
-  return segment.trim().normalize('NFD').replace(/\p{M}/gu, '')
-    .replace(/\s+/g, '-').replace(/[^A-Za-z0-9._-]/g, '')
-    .replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '') || 'x';
+  return (
+    segment
+      .trim()
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .replace(/\s+/g, '-')
+      .replace(/[^A-Za-z0-9._-]/g, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-+|-+$/g, '') || 'x'
+  );
 }
 
 export function projectNameParts(name: string): string[] {
-  return name.split(/\s*>\s*/).map((part) => part.trim()).filter(Boolean);
+  return name
+    .split(/\s*>\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 export function keyFor(name: string): string {

@@ -1,3 +1,4 @@
+import { DefinitionTerminal } from '../terminals/DefinitionTerminal';
 import { useTheme } from '../ui/theme';
 import { gitTerminalProfileID } from '../../domain/comparison/git-actions';
 import {
@@ -328,12 +329,15 @@ function ComparisonContent() {
 const LazyTerminalPlane = lazy(() =>
   import('../terminals/TerminalPlane').then((module) => ({ default: module.TerminalPlane })),
 );
-function TerminalContent() {
+export function TerminalContent() {
   const plane = usePluridPlane();
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((pane) => pane.id === plane.parameters.id),
   );
   const [started, setStarted] = useState(false);
+  const definitionKey = useViewer((state) => activeWorkspace(state).definition?.key);
+  if (pane?.type === 'terminal' && pane.definitionPlane !== undefined && definitionKey)
+    return <DefinitionTerminal pane={pane} />;
   if (
     pane?.type === 'terminal' &&
     !pane.gitAction &&
@@ -645,6 +649,7 @@ export function WorkspaceSurface({
   return (
     <div
       className="workspace-surface"
+      tabIndex={-1}
       ref={surface}
       onKeyDownCapture={(event) => {
         if (!(event.target as Element).closest('.terminal-plane') && event.key !== undefined) {

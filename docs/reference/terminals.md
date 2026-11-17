@@ -102,6 +102,54 @@ plane ends its shell. After Viewer restarts, a saved terminal plane starts a fre
 replayed. Losing access to the folder stops its terminals. A working folder is not a sandbox: the
 shell can reach anything your account can.
 
+## Commands a workspace starts
+
+A [defined workspace](../guides/workspaces.md#open-a-defined-workspace) can name a command for a
+terminal plane. Each such plane shows **Command not started**, the literal command and its folder.
+Choose **Run `npm run dev`** or **Shell only**. Neither the shell nor the named command starts until
+you choose. **Shell only** starts the configured shell without typing the definition's command.
+
+A notice in normal flow offers **Run all N commands** for the planes still waiting for a choice.
+**Not now** hides that notice until the workspace next opens. Each plane keeps its own outcome; one
+unavailable plane does not prevent the others from starting. An already running plane is attached
+without typing its command again.
+
+The first Run of each new or changed command also asks for native approval. The dialog lists only
+unapproved commands, their folders and profiles, including a custom profile's full program,
+arguments and environment. Long batches use several bounded pages without cutting command text.
+Declining runs none of the listed commands. Approval remembers an exact fingerprint: the definition
+key, the real folder after resolving links, the profile's executable, arguments and environment, and
+the literal command. A change to any of these needs approval again. Moving a link to another folder
+also changes that fingerprint. The private approval file is `confirmed-actions-v1.json`.
+
+Approval never starts a command by itself. Opening, reopening, resetting, restoring on launch and
+reloading all show the Start panel again. Starting a fresh shell after a command does not replay its
+input. The desktop refuses a click if the definition changed since the panel displayed it; review
+the refreshed command before choosing Run again.
+
+Agents, model-authored lines, spoken plans, custom actions and macros cannot open definitions or
+start their commands. Agent navigation and task opening leave terminals deferred with **Run**
+disabled; **Shell only** remains available to the person. An agent-driven window cannot approve or
+start definition commands.
+
+Viewer types the approved line once after shell output and 120 ms of quiet, within three seconds.
+For zsh and fish, it also waits for the line editor to enable bracketed paste. It waits for tracked
+terminal queries to be answered; DECRQSS replies are discarded for safety, and its wait clears only
+when the shell enables bracketed paste after the query. Focus reporting does not delay startup.
+Offscreen planes keep an xterm attached to answer the shell. Only character-size window reporting is
+enabled.
+
+If readiness never arrives, Viewer keeps the shell open and displays the literal command for you to
+type manually. A shell cannot distinguish a command typed by Viewer from one typed by a person. For
+shells other than zsh and fish, a startup question in an rc file can receive the command as its
+answer. For zsh or fish with bracketed paste disabled, type the displayed command yourself after
+startup finishes. These checks do not sandbox a shell or its startup files.
+
+Viewer holds up to 65,536 input characters during startup, then sends them after the command in
+order. Control-C cancels the pending command. Overflow also cancels it, sends the held input to the
+ordinary shell and displays a notice. Requested terminal reports pass immediately; unsolicited
+report-shaped input and every DECRQSS reply are dropped while the command is pending.
+
 ## Shell profiles
 
 **Settings → Terminals** → **Shell profiles** defines what a terminal starts. **Default shell

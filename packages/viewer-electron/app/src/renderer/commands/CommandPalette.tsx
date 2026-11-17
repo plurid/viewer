@@ -1,4 +1,8 @@
 import { knownFolderIdentity } from '../explorer/folder-availability';
+import {
+  rankWorkspaceChoices,
+  searchableDefinition,
+} from '../../domain/workspaces/definitions/query';
 import { errorMessage } from '../../domain/errors';
 import { matchesQuery, topWords, withoutTopWords } from '../../domain/search/query';
 import { savedSearchProblem, searchName, searchNameLength } from '../../domain/search/saved';
@@ -7,7 +11,6 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { CommandResults } from './CommandResults';
 import { useCommands, useCommandRevision, useCommandSource } from './context';
 import {
-  rankCommands,
   rankFiles,
   type CommandContext,
   type CommandDefinition,
@@ -41,6 +44,8 @@ import type { LineHost } from '../command-line/host';
 import {
   choicesPrefix,
   moreSettingsID,
+  moreWorkspacesID,
+  workspaceRows,
   paletteRows,
   paletteSuggestions,
   settingRows,
@@ -195,7 +200,38 @@ function CommandFinder({
   const registry = useCommands();
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
+  const openWorkspaces = useViewer((state) => state.saved.workspaces);
+  const definitions = useViewer((state) => state.bootstrap.definitions);
+  const hasDefinitions = !!definitions;
+  const visits = useViewer((state) => state.saved.workspaceVisits);
   const [query, setQuery] = useState(initialQuery);
+  useEffect(() => {
+    if (!hasDefinitions || (mode !== 'workspaces' && mode !== 'commands')) return;
+    const timer = setTimeout(
+      () => {
+        void window.viewer
+          .workspaceDefinitionFile({
+            kind: 'catalog',
+            query,
+            limit: mode === 'commands' ? (query.trim().length >= 2 ? 8 : 0) : 50,
+          })
+          .catch(() => {});
+      },
+      query === initialQuery ? 0 : 150,
+    );
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [hasDefinitions, mode, query, initialQuery]);
+  useEffect(
+    () => () => {
+      if (hasDefinitions && (mode === 'workspaces' || mode === 'commands'))
+        void window.viewer
+          .workspaceDefinitionFile({ kind: 'catalog', query: '', limit: 0 })
+          .catch(() => {});
+    },
+    [hasDefinitions, mode],
+  );
   const [folder, setFolder] = useState<string[]>([]);
   const workspaces = mode === 'workspaces';
   const settings = mode === 'settings';
@@ -215,26 +251,27 @@ function CommandFinder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [registry, active, scoped],
   );
+  const workspaceChoices = useMemo(
+    () => rankWorkspaceChoices(openWorkspaces, definitions?.definitions ?? [], query, visits),
+    [openWorkspaces, definitions, query, visits],
+  );
   // settings apart (palette-sections.ts): their own section, or `,` for them alone
   const commandView = workspaces
-    ? {
-        rows: rankCommands(
-          commands.filter((command) => command.id.startsWith('workspace:')),
-          query,
-          recent,
-          'menu',
-        ),
-        headings: new Map<string, string>(),
-      }
+    ? workspaceRows(
+        commands,
+        workspaceChoices,
+        query,
+        definitions?.definitions.filter(searchableDefinition).length ?? 0,
+      )
     : settings
       ? settingRows(commands, query)
       : !query.trim()
         ? withSuggested(
-            paletteRows(commands, query, recent),
+            paletteRows(commands, query, recent, workspaceChoices),
             suggestionsFor(commands, context.selection),
             recent,
           )
-        : paletteRows(commands, query, recent);
+        : paletteRows(commands, query, recent, workspaceChoices);
   const view = withFrequentFolders(
     commandView,
     smart.filter((row) => row.group === 'Frequent folders'),
@@ -286,6 +323,7 @@ function CommandFinder({
           else setQuery(text);
         }}
         rows={rows}
+        footer={commandView.note}
         unavailable={unavailable}
         headings={view.headings}
         hint={workspaces ? undefined : lineHint}
@@ -307,7 +345,15 @@ function CommandFinder({
               ? 'Search settings…'
               : 'Search commands, workspaces and places…'
         }
-        empty={settings ? 'No matching settings' : undefined}
+        empty={
+          workspaces
+            ? query.trim()
+              ? `No workspace matches “${query.trim()}”. Try another name.`
+              : 'Type a workspace name to search definitions.'
+            : settings
+              ? 'No matching settings'
+              : undefined
+        }
         leading={
           nested || folder.length ? (
             <IconButton
@@ -331,6 +377,10 @@ function CommandFinder({
           }
           if (command.id === moreSettingsID) {
             onMode('settings', query);
+            return;
+          }
+          if (command.id === moreWorkspacesID) {
+            onMode('workspaces', query);
             return;
           }
           // a setting's choices, folded into one row: listed by its name and a colon

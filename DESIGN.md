@@ -577,6 +577,17 @@ hovering shows it whole. Keep search and Done stationary around the scrolling ac
 optional sections closed, the minimum window (760 × 540px) shows two complete action rows even with
 eight saved pins.
 
+**The Defined Workspaces Rule.** Open rows lead within the same search band and are never hidden.
+Definitions are searched by name, not listed as hundreds of open workspaces. A first run stays
+quiet: do not create a definition file or ask for source access until the person requests it.
+
+**The Definition Command Rule.** Every open, reopen, reset, launch restore and reload asks in each
+command plane: show the literal command and folder, primary **Run `npm run dev`**, secondary **Shell
+only**. Run has no autofocus. A normal-flow notice offers secondary **Run all N commands** and **Not
+now**. Nothing starts on open. A new or changed command also needs a native review of its folder and
+exact profile program. Disabled Run controls show their reason; Shell only stays available in
+agent-driven views. Keep each xterm attached from the Run choice, even offscreen.
+
 **The Discovery Space Rule.** Pinned tools and keyboard help start closed. Opening either closes the
 other; each expanded section has bounded scrolling while search and the footer stay reachable.
 Escape closes an open disclosure before dismissing the dialog.

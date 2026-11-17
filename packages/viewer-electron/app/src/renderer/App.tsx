@@ -1,3 +1,4 @@
+import { openDefinition, receiveDefinitions } from './state/definitions';
 import { FolderHistoryRecovery } from './ui/FolderHistoryRecovery';
 import { forgetUnavailableFolder } from './state/places';
 import { WindowDialogs, type WindowDialog } from './app/WindowDialogs';
@@ -23,6 +24,7 @@ import { useWorkspaceController } from './workspace/controller';
 import { executeAgentNavigation } from './workspace/agent-navigation';
 import { programCommands } from './commands/programs';
 import { ExecutionPanel } from './terminals/ExecutionPanel';
+import { agentTerminalWork, receiveTerminalAuthority } from './terminals/start-authority';
 import { trimTerminals, terminalEditing, deferTerminalStart } from './terminals/sessions';
 import { explorerCommandIDs, keyCommand } from './explorer/input';
 /** Native window chrome stays quiet; commands follow the active file, folder or preview. */
@@ -54,6 +56,7 @@ import {
   useViewer,
 } from './state/store';
 import { WorkspaceContext, type SpatialTool } from './workspace/context';
+import { WorkspaceDefinitionCommands } from './workspace/WorkspaceDefinitionCommands';
 import { WorkspaceSurface } from './workspace/WorkspaceSurface';
 import { Icon } from './ui/Icon';
 import { ErrorBoundary, IconButton } from './ui/primitives';
@@ -187,6 +190,7 @@ function AppWindow() {
   const initialOpenHandled = useRef(false);
   // command definitions read saved state, but not the active plane or the arrangement
   const savedKey = useViewer(savedDefinitionsKey);
+  const definitionsRevision = useViewer((state) => state.bootstrap.definitions?.revision ?? 0);
   // the terminal planes still open in any workspace, as one comparable string
   const terminalPanes = useViewer((state) =>
     state.saved.workspaces
@@ -208,14 +212,15 @@ function AppWindow() {
   const notice = useViewer((state) => state.notice);
   const unavailableFolder = useViewer((state) => state.unavailableFolder);
   const noticeKind = useViewer((state) => state.noticeKind);
+  const definitionNotice = useViewer((state) => state.definitionNotice);
   // information goes by itself after a moment; a problem stays until it is dismissed
   useEffect(() => {
-    if (!notice || noticeKind !== 'info') return;
+    if (!notice || noticeKind !== 'info' || definitionNotice) return;
     const timer = setTimeout(() => {
       if (getState().notice === notice) dismissNotice();
     }, 5000);
     return () => clearTimeout(timer);
-  }, [notice, noticeKind]);
+  }, [notice, noticeKind, definitionNotice]);
   const quick = useViewer((state) => state.quickPreview);
   const density = settings.browsing.density;
   // Progress replaces `jobs` many times a second; this window shows only what Undo can reach
@@ -366,7 +371,7 @@ function AppWindow() {
     },
     // Progress ticks replace `jobs` many times a second; commands only care whether
     // jobs exist and which can be undone, and read those from the live context.
-    [savedKey, ready, tool, jobsSignature, terminalName, overview],
+    [savedKey, definitionsRevision, ready, tool, jobsSignature, terminalName, overview],
   );
   useAgentCatalog({ registry, controller, context: windowContext });
   // a plane that starts or stops editing changes which text commands apply
@@ -483,7 +488,7 @@ function AppWindow() {
   };
   const handleLaunch = useCallback(
     async (request: LaunchRequest) => {
-      const origin = getState().saved.activeWorkspace;
+      let origin = getState().saved.activeWorkspace;
       const deadline = performance.now() + 5000;
       while (!readyRef.current) {
         if (performance.now() > deadline)
@@ -491,6 +496,14 @@ function AppWindow() {
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       }
       if (getState().saved.activeWorkspace !== origin) return;
+      if (request.workspacePicker !== undefined) {
+        openPalette('workspaces', request.workspacePicker);
+        return;
+      }
+      if (request.definition) {
+        await transitionWorkspace(() => openDefinition(request.definition!));
+        origin = getState().saved.activeWorkspace;
+      }
       if (request.terminal) {
         for (const requested of request.paths.length
           ? request.paths
@@ -509,7 +522,7 @@ function AppWindow() {
         for (const file of request.paths) await controller.openPath(file);
       }
     },
-    [controller, windowContext],
+    [controller, windowContext, openPalette, transitionWorkspace],
   );
   useEffect(() => {
     let syncing: Promise<void> | undefined;
@@ -554,6 +567,8 @@ function AppWindow() {
           event.checkedFolders,
           event.folderClearID,
         );
+      else if (event.type === 'workspace-definitions') receiveDefinitions(event.catalog);
+      else if (event.type === 'terminal-authority') receiveTerminalAuthority(event.agentDriven);
       else if (event.type === 'launch') void handleLaunch(event.request).catch(report);
       else if (event.type === 'file-changes') {
         receiveFileChanges(event.changes, event.folderHistoryRevision);
@@ -615,6 +630,7 @@ function AppWindow() {
           )
           .catch(report);
       else if (event.type === 'agent-task') {
+        agentTerminalWork(event.id, true);
         void (async () => {
           if (Date.now() > event.deadline)
             throw new Error(
@@ -639,9 +655,12 @@ function AppWindow() {
             (error: unknown) =>
               window.viewer.agentCommandResult(event.id, errorMessage(error).slice(0, 2000)),
           )
+          .finally(() => agentTerminalWork(event.id, false))
           .catch(report);
       } else if (event.type === 'agent-command') {
+        agentTerminalWork(event.id, true);
         const finish = (error?: string) => {
+          agentTerminalWork(event.id, false);
           void window.viewer.agentCommandResult(event.id, error?.slice(0, 2000)).catch(report);
         };
         const deadline = performance.now() + 3000;
@@ -898,6 +917,7 @@ function AppWindow() {
           <Sidebar />
           <main className="workspace-main">
             <ErrorBoundary>
+              <WorkspaceDefinitionCommands ready={ready} />
               <WorkspaceSurface
                 engine={engine}
                 surface={surface}
@@ -950,6 +970,15 @@ function AppWindow() {
           >
             <Icon name={noticeKind === 'info' ? 'info' : 'warning'} />
             <span>{notice}</span>
+            {definitionNotice && (
+              <button
+                onClick={() =>
+                  setWindowDialog({ type: 'workspace', kind: 'reset', id: definitionNotice })
+                }
+              >
+                Reset to definition…
+              </button>
+            )}
             {unavailableFolder && <button onClick={forgetUnavailableFolder}>Forget folder</button>}
             <IconButton icon="close" label="Dismiss message" onClick={dismissNotice} />
           </div>

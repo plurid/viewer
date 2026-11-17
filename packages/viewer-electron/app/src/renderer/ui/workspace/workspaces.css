@@ -7,7 +7,7 @@
   flex-direction: column;
 }
 .workspaces-dialog > header,
-.workspaces-dialog > footer,
+.workspace-catalog-panel > footer,
 .workspace-catalog-controls {
   flex-shrink: 0;
 }
@@ -71,14 +71,14 @@
 .workspace-catalog-open[aria-current='true'] > svg {
   color: var(--accent);
 }
-.workspaces-dialog > footer {
+.workspace-catalog-panel > footer {
   flex-wrap: wrap;
 }
 .workspace-catalog-count {
   flex: 1;
   text-align: right;
 }
-.workspaces-dialog > footer nav {
+.workspace-catalog-panel > footer nav {
   display: flex;
   align-items: center;
   gap: var(--gap-small);
@@ -89,4 +89,56 @@
   padding: var(--gap-panel);
   color: var(--muted);
   text-align: center;
+}
+.workspace-catalog-tabs {
+  display: flex;
+  gap: var(--gap-content);
+  padding: var(--gap-content);
+  border-bottom: 1px solid var(--line);
+}
+.workspace-catalog-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.workspace-catalog-panel > footer {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-content);
+  padding: var(--gap-content);
+  border-top: 1px solid var(--line);
+}
+.workspace-catalog-tabs [aria-selected='true'] {
+  color: var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
+}
+.workspace-catalog-definition {
+  flex: 1;
+  min-width: 0;
+  padding: var(--gap-inline);
+  overflow-wrap: anywhere;
+}
+.workspace-catalog-definition strong,
+.workspace-catalog-definition small {
+  display: block;
+}
+.workspace-catalog-definition small {
+  color: var(--muted);
+}
+.workspace-catalog-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-inline);
+  font-size: var(--text-compact);
+  color: var(--muted);
+}
+.workspace-catalog-problems {
+  padding: var(--gap-content);
+  max-height: 140px;
+  overflow: auto;
+}
+.definition-dialog label {
+  display: grid;
+  gap: var(--gap-small);
+  margin-bottom: var(--gap-content);
 }

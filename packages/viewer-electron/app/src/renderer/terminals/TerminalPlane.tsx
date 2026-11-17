@@ -1,12 +1,14 @@
 import { effectiveWindowSettings, effectiveWindowLook } from '../state/effective-ui';
 import { useTheme } from '../ui/theme';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import '@xterm/xterm/css/xterm.css';
 import type { TerminalPane as Pane } from '../../domain/contracts';
 import { activeWorkspace, getState, report, setActivePane, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
-import { terminalSession, type TerminalSession } from './sessions';
+import { terminalSession } from './sessions';
+import type { TerminalSession } from './sessions';
 import { FILE_DRAG } from '../explorer/file-drop';
 import { IconButton } from '../ui/primitives';
 import { usePreviewControlsSlot } from '../previews/controls';
@@ -106,7 +108,8 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
     return () => {
       attached = false;
       observer?.disconnect();
-      live.current?.element.remove();
+      if (live.current?.park) live.current.park();
+      else live.current?.element.remove();
       live.current = undefined;
     };
     // One PTY session per plane: its profile and folder are captured at creation.

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
+import { Readable, Writable } from 'node:stream';
+import { runCLI } from '../src/desktop/cli/run';
 import path from 'node:path';
 import type { CapturedTarget } from '../src/domain/automation/actions';
 import type {
@@ -118,6 +120,45 @@ afterEach(async () => {
 });
 
 describe('agent window command discovery', () => {
+  it('MCP and the token CLI see only open workspaces with definition metadata stripped', async () => {
+    workspaces.workspaces[0]!.panes.push({ id: 'terminal', type: 'terminal', path: allowed });
+    Reflect.set(workspaces.workspaces[0]!, 'definition', {
+      key: 'private/catalog',
+      basis: 'basis',
+    });
+    Reflect.set(workspaces.workspaces[0]!.panes[0]!, 'definitionPlane', 0);
+    const listed = await call<AgentWorkspaceSnapshot['workspaces']>('list_workspaces');
+    expect(listed).toHaveLength(1);
+    expect(JSON.stringify(listed)).not.toContain('definition');
+    expect(JSON.stringify(listed)).not.toContain('private/catalog');
+    await expect(call('list_workspaces', { key: 'private/catalog' })).rejects.toThrow();
+    await expect(call('propose_workspace_switch', { key: 'private/catalog' })).rejects.toThrow();
+    await expect(call('propose_workspace_switch', { name: 'private/catalog' })).rejects.toThrow();
+    let stdout = '';
+    const output = new Writable({
+      write(chunk, _encoding, done) {
+        stdout += String(chunk);
+        done();
+      },
+    });
+    const environment = {
+      dataPath: directory,
+      version: '0.1.0-0',
+      cwd: allowed,
+      home: allowed,
+      token,
+      input: Readable.from([]),
+      output,
+      error: output,
+      call: async (method: string, params: unknown) => broker.handle(token, { method, params }),
+    };
+    expect(await runCLI(['workspace', 'list', '--json'], environment)).toBe(0);
+    expect(stdout).not.toContain('definition');
+    expect(stdout).not.toContain('private/catalog');
+    expect(await runCLI(['workspace', 'switch', '--key', 'private/catalog'], environment)).toBe(2);
+    expect(await runCLI(['workspace', 'switch', 'private/catalog'], environment)).not.toBe(0);
+    expect(execute).not.toHaveBeenCalled();
+  });
   it('discovers and proposes allowed window commands from an empty workspace without granting Home', async () => {
     const catalog = await call<{ commands: CommandDescriptor[]; reviewByDefault: boolean }>(
       'list_commands',

@@ -299,9 +299,9 @@ export class SettingsService {
       .catch(() => {})
       .then(async () => {
         await this.load();
-        // the diagnostics of a file that could not be read are announced here; a change, once (it was
-        // announced by the read and again here, 2026-10-20)
-        if (!(await this.readChanges())) this.emit(this.snapshot());
+        const diagnostics = JSON.stringify(this.snapshot().config);
+        if (!(await this.readChanges()) && JSON.stringify(this.snapshot().config) !== diagnostics)
+          this.emit(this.snapshot());
         return this.snapshot();
       });
     this.queue = task.then(

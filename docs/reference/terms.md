@@ -8,23 +8,51 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 [Camera](#planes-and-the-space) · [Checklist](#text-notes-and-tasks) ·
 [Checkpoint](#changes-and-recovery) · [CLI](#commands-and-automation) ·
 [Columns preview](#looking-at-files) · [Command](#commands-and-automation) ·
-[Command language](#commands-and-automation) · [Docked](#planes-and-the-space) ·
-[File overview](#suggestions) · [Folder access](#three-separate-permissions) ·
-[Insight](#suggestions) · [Job](#changes-and-recovery) · [Journal](#changes-and-recovery) ·
-[Layout of planes](#planes-and-the-space) · [Lens](#looking-at-files) ·
-[Linked plane](#planes-and-the-space) · [Model](#models-and-agents) ·
+[Command language](#commands-and-automation) · [Curated definition](#workspace-definitions) ·
+[Defined workspace](#workspace-definitions) · [Definition key](#workspace-definitions) ·
+[Docked](#planes-and-the-space) · [File overview](#suggestions) ·
+[Folder access](#three-separate-permissions) · [Insight](#suggestions) ·
+[Job](#changes-and-recovery) · [Journal](#changes-and-recovery) ·
+[Layout of planes](#planes-and-the-space) · [Layout template](#workspace-definitions) ·
+[Lens](#looking-at-files) · [Linked plane](#planes-and-the-space) · [Model](#models-and-agents) ·
 [Model data](#three-separate-permissions) · [Model data levels](#models-and-agents) ·
-[Note](#text-notes-and-tasks) · [Plane](#planes-and-the-space) ·
-[Prefix key](#commands-and-automation) · [Project](#planes-and-the-space) ·
-[Proposal and review](#models-and-agents) · [Quick Preview](#looking-at-files) ·
-[Receipt](#changes-and-recovery) · [Recipe](#commands-and-automation) ·
+[Note](#text-notes-and-tasks) · [Open workspace](#workspace-definitions) ·
+[Plane](#planes-and-the-space) · [Prefix key](#commands-and-automation) ·
+[Project](#planes-and-the-space) · [Proposal and review](#models-and-agents) ·
+[Quick Preview](#looking-at-files) · [Receipt](#changes-and-recovery) ·
+[Recipe](#commands-and-automation) · [Remembered planes](#workspace-definitions) ·
 [Root plane](#planes-and-the-space) · [Scratch buffer](#text-notes-and-tasks) ·
 [Sequence](#commands-and-automation) · [Space](#planes-and-the-space) ·
 [Stop](#planes-and-the-space) · [Suggested](#suggestions) · [Task area](#text-notes-and-tasks) ·
 [Tiled](#planes-and-the-space) · [Tour](#planes-and-the-space) · [Trash rule](#changes-and-recovery)
 · [Undo and Redo](#changes-and-recovery) · [Watch rule](#commands-and-automation) ·
 [Workflow](#commands-and-automation) · [Workspace](#planes-and-the-space) ·
-[Worktree](#text-notes-and-tasks)
+[Workspace definition](#workspace-definitions) · [Worktree](#text-notes-and-tasks)
+
+## Workspace definitions
+
+- **Open workspace**: a workspace in the saved session, with live plane records. Only open
+  workspaces appear in agent discovery. _In Viewer:_ the workspace menu and **Change workspace…**.
+  _Learn:_ [Use several workspaces](../guides/workspaces.md#use-several-workspaces)
+- **Defined workspace**: available to search and open, with no live workspace record until opened.
+  _In Viewer:_ **Change workspace…** and the workspace matches in **⌘K**. _Learn:_
+  [Open a defined workspace](../guides/workspaces.md#open-a-defined-workspace)
+- **Workspace definition**: the recipe in `workspaces.jsonc` or derived live from a VS Code Project
+  Manager project. It names a root and planes. Command fields are accepted; their terminals open
+  stopped. _In Viewer:_ **Edit workspace definitions** and **Settings → Configuration**. _Learn:_
+  [Workspace definitions](configuration.md#workspace-definitions)
+- **Definition key**: the stable path-shaped identifier derived from a `>`-separated project name,
+  such as `sample/tools/sample-cli`. _In Viewer:_ the detail below a defined workspace's name.
+  _Learn:_ [Workspace definitions](configuration.md#workspace-definitions)
+- **Curated definition**: a definition marked `curated: true`. Saving asks for **Save over
+  definition** confirmation and keeps the marker. Opening it does not rewrite it. _Learn:_
+  [Workspace definitions](configuration.md#workspace-definitions)
+- **Layout template**: a saved set of plane kinds that adds planes to the current workspace. It is
+  distinct from a workspace definition and a folder's `viewer.project.jsonc` project. _Learn:_
+  [Space, tiling and tours](configuration.md#space-tiling-and-tours)
+- **Remembered planes**: the private snapshot kept by **Close workspace**. Reopening the definition
+  restores it; **Forget remembered planes** makes the next open use the definition. _Learn:_
+  [Close and remember a workspace](../guides/workspaces.md#close-and-remember-a-workspace)
 
 ## Planes and the space
 

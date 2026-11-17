@@ -129,12 +129,7 @@ export const layoutTemplateSchema = z
       .regex(/^[a-z0-9-]+$/)
       .max(100),
     name: z.string().min(1).max(100),
-    planes: z
-      .array(
-        templatePlaneSchema(templatePath),
-      )
-      .min(1)
-      .max(30),
+    planes: z.array(templatePlaneSchema(templatePath)).min(1).max(30),
     layout: z.enum(tileLayouts),
     main: z.number().min(0.2).max(0.8),
   })

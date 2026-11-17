@@ -49,6 +49,17 @@ async function invoke(
 }
 
 describe('terminal command contract', () => {
+  it('offers no token verb or option that starts a definition command', async () => {
+    const call = vi.fn<CLICall>(async () => wrap({}));
+    for (const args of [
+      ['workspace', 'run', 'sample/site'],
+      ['workspace', 'open', '--key', 'sample/site'],
+      ['workspace', 'switch', '--key', 'sample/site'],
+      ['terminal', 'start', '--key', 'sample/site', '--plane', '0'],
+    ])
+      expect((await invoke(args, { call, token: 'fixture-token' })).code).toBe(2);
+    expect(call).not.toHaveBeenCalled();
+  });
   it('returns the completed task workflow as JSON and preserves partial failures for recovery', async () => {
     const parameters = [
       'task',

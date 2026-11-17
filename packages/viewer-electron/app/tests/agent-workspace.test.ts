@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CapturedTarget } from '../src/domain/automation/actions';
 import type { FileEntry, FolderPane, Workspace } from '../src/domain/contracts';
 import { executeAgentNavigation } from '../src/renderer/workspace/agent-navigation';
+import { addContentPane } from '../src/renderer/state/panes';
+import { definitionRunReason } from '../src/renderer/terminals/start-authority';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { browseSession } from '../src/renderer/workspace/sessions';
 import {
@@ -69,6 +71,26 @@ afterEach(async () => {
 });
 
 describe('workspace agent navigation through existing host records', () => {
+  it('defers a command terminal reached by agent navigation instead of starting its definition', async () => {
+    const captured = target();
+    const terminal = {
+      id: 'agent-command-terminal',
+      type: 'terminal' as const,
+      path: '/shared',
+      profileID: 'login',
+      definitionPlane: 0,
+      startOnOpen: false,
+    };
+    addContentPane(terminal);
+    await executeAgentNavigation(
+      { kind: 'focus-plane', pane: { id: terminal.id, type: terminal.type, path: terminal.path } },
+      captured,
+      controller,
+      switchTo,
+    );
+    expect(definitionRunReason([terminal.id])).toContain('An agent opened this view');
+    expect(focusPane).toHaveBeenCalledWith(terminal.id);
+  });
   it('keeps renderer selection review across synthetic IDs and refuses changed creation time', async () => {
     const captured = target();
     const file = { ...entry('/shared/Empty.txt'), identity: itemIdentity({ dev: 1n, ino: -1n }) };

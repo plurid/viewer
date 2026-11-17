@@ -214,6 +214,7 @@ export function contextMenuSections(
   /** What the plane header could not show, which leads (workspace/header-overflow.ts). */
   lead: HeaderLead = [],
   workspaceIDs?: readonly string[],
+  closedDefinitionIDs?: readonly string[],
 ): MenuSection[] {
   const remaining = new Map(commands.map((item) => [item.id, item]));
   const take = (ids: readonly string[]) => {
@@ -232,12 +233,16 @@ export function contextMenuSections(
       sections.push(
         section(take(workspaceIDs.slice(0, recentWorkspaceLimit)), 'Recent workspaces'),
       );
+      if (closedDefinitionIDs?.length)
+        sections.push(section(take(closedDefinitionIDs.slice(0, 3)), 'Recently closed'));
       sections.push(section(take(['manage-workspaces'])));
     }
     // The complete catalog remains searchable without becoming an unbounded flyout.
     take(
       commands
-        .filter((command) => command.id.startsWith('workspace:'))
+        .filter(
+          (command) => command.id.startsWith('workspace:') || command.id.startsWith('defined:'),
+        )
         .map((command) => command.id),
     );
   }

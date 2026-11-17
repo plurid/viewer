@@ -29,6 +29,7 @@ interface EditingPorts {
   fileAccess: FileAccess;
   texts: TextFiles;
   buffers: TextBuffers;
+  rememberedBuffers?(): Promise<string[]>;
   window(sender: number): BrowserWindow | undefined;
   emit(event: DesktopEvent): void;
 }
@@ -108,6 +109,7 @@ export function createEditingHandlers(ports: EditingPorts): EditingHandlers {
     bufferList: async () => ({
       buffers: await ports.buffers.list(),
       problems: ports.buffers.problems(),
+      remembered: await ports.rememberedBuffers?.(),
     }),
     bufferRead: (args) => ports.buffers.read(args[0]),
     bufferWrite: (args) => ports.buffers.write(args[0]),

@@ -34,7 +34,7 @@ const state = (version: number, panes: unknown[]) => ({
 });
 
 it('uses the current plane format', () => {
-  expect(CURRENT_STATE_VERSION).toBe(12);
+  expect(CURRENT_STATE_VERSION).toBe(13);
 });
 it('loads a legacy rounded server pin without losing the workspace and omits that pin on save', async () => {
   const storage = new Storage(path.join(root, 'Legacy server state.json'));
@@ -84,7 +84,7 @@ it('preserves version 11 before adding check views, pins and stacks', async () =
   await writeFile(storage.file, original, { flag: 'wx' });
   const loaded = await storage.load();
   expect(loaded.recovery).toBeUndefined();
-  expect(loaded.state?.version).toBe(12);
+  expect(loaded.state?.version).toBe(CURRENT_STATE_VERSION);
   expect(loaded.state?.workspaces).toEqual(previous.workspaces);
   expect(await readFile(storage.file, 'utf8')).toBe(original);
   const backups = (await readdir(root)).filter((file) => file.includes('before-workshop-v12'));
@@ -93,15 +93,15 @@ it('preserves version 11 before adding check views, pins and stacks', async () =
   expect(await readFile(backup, 'utf8')).toBe(original);
   expect((await stat(backup)).mode & 0o777).toBe(0o600);
   await storage.save(loaded.state!);
-  expect(JSON.parse(await readFile(storage.file, 'utf8')).version).toBe(12);
+  expect(JSON.parse(await readFile(storage.file, 'utf8')).version).toBe(CURRENT_STATE_VERSION);
   expect(await readFile(backup, 'utf8')).toBe(original);
 });
 
-it('round trips check references, pinned rectangles and stack restoration positions in version 12', async () => {
+it('round trips check references, pinned rectangles and stack restoration positions in the current format', async () => {
   const storage = new Storage(path.join(root, 'state.json'));
   const checkID = '6f1c2c0a-6a43-4c51-9e3e-6f3f0d3b9a01';
   const next = stateSchema.parse(
-    state(12, [
+    state(CURRENT_STATE_VERSION, [
       {
         id: 'check',
         type: 'check',
@@ -160,7 +160,7 @@ it('round trips check references, pinned rectangles and stack restoration positi
   expect(restored.recovery).toBeUndefined();
   expect(restored.state?.workspaces).toEqual(next.workspaces);
   const bytes = JSON.parse(await readFile(storage.file, 'utf8'));
-  expect(bytes.version).toBe(12);
+  expect(bytes.version).toBe(CURRENT_STATE_VERSION);
   expect(bytes.workspaces[0].panes[0]).toMatchObject({ type: 'check', checkID });
   expect(await readdir(root)).toEqual(['state.json']);
 });

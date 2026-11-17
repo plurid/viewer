@@ -1,5 +1,5 @@
 import { activeWorkspace } from '../state/store';
-import { confirmClose, discardUnsaved } from '../editing/unsaved';
+import { prepareClose, discardUnsaved } from '../editing/unsaved';
 import type { WorkspaceController } from '../workspace/context';
 
 /**
@@ -11,10 +11,13 @@ export async function closePlanes(
   workspace: WorkspaceController,
   ids: readonly string[],
   discard = false,
+  beforeClose?: () => Promise<void>,
 ): Promise<boolean> {
   const all = ids.flatMap((id) => workspace.subtree(id));
-  if (discard) await discardUnsaved(all);
-  else if (!(await confirmClose(all))) return false;
+  const commit = discard ? () => discardUnsaved(all) : await prepareClose(all);
+  if (!commit) return false;
+  await beforeClose?.();
+  await commit();
   for (const id of ids) workspace.closePane(id);
   return true;
 }

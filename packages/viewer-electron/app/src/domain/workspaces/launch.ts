@@ -12,7 +12,9 @@ export const launchRequestSchema = z
     paths: z.array(z.string().min(1).max(32768)).max(100),
     newWindow: z.boolean(),
     terminal: z.boolean(),
-    workspace: z.string().min(1).max(200).optional(),
+    workspace: z.string().max(200).optional(),
+    definition: z.string().min(1).max(200).optional(),
+    workspacePicker: z.string().max(200).optional(),
   })
   .strict();
 
@@ -42,10 +44,8 @@ export function parseLaunch(
       continue;
     }
     if (!literal && argument === '--workspace') {
-      const workspace = argv[++index];
-      if (!workspace || workspace.startsWith('--'))
-        throw new Error('--workspace needs a workspace ID or unique name.');
-      request.workspace = workspace;
+      const workspace = argv[index + 1];
+      request.workspace = workspace && !workspace.startsWith('--') ? argv[++index] : '';
       continue;
     }
     if (!literal && argument.startsWith('-')) throw new Error(`Unknown Viewer option: ${argument}`);

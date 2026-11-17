@@ -2,6 +2,7 @@ import { categories } from '../../domain/preferences/catalog';
 import type { DiscoverableCommand } from './registry';
 import { commandScore, normalize, rankCommands, type ResolvedCommand } from './registry';
 import type { Suggestion } from './suggestions';
+import type { WorkspaceChoice } from '../../domain/workspaces/definitions/query';
 
 /**
  * Settings apart in the palette. Every setting is a command (window-commands/
@@ -13,8 +14,91 @@ import type { Suggestion } from './suggestions';
  */
 export interface PaletteView {
   rows: ResolvedCommand[];
+  note?: string;
   /** Section headings, by the id of the row each comes before. */
   headings: ReadonlyMap<string, string>;
+}
+
+export const moreWorkspacesID = 'palette:more-workspaces';
+
+export function workspaceRows(
+  commands: readonly ResolvedCommand[],
+  choices: readonly WorkspaceChoice[],
+  query: string,
+  total: number,
+): PaletteView {
+  const byID = new Map(commands.map((command) => [command.id, command]));
+  const searching = !!query.trim();
+  const matching = choices.filter(
+    (choice) => byID.has(choice.id) && (choice.kind === 'open' || searching || choice.recent > 0),
+  );
+  let remaining = searching ? 50 : 8;
+  const selected = matching.filter((choice) => choice.kind === 'open' || remaining-- > 0);
+  const rows = selected.flatMap((choice) => byID.get(choice.id) ?? []);
+  const firstDefined = rows.find((row) => row.id.startsWith('defined:'));
+  const headings = new Map<string, string>();
+  if (searching) {
+    if (rows[0]) headings.set(rows[0].id, 'Workspaces');
+  } else {
+    if (rows[0]?.id.startsWith('workspace:')) headings.set(rows[0].id, 'Open');
+    if (firstDefined) headings.set(firstDefined.id, 'Defined');
+  }
+  return {
+    rows,
+    headings,
+    note: searching
+      ? matching.length > selected.length
+        ? `${matching.length - selected.length} more · keep typing`
+        : undefined
+      : total
+        ? `${total} defined workspaces · type to search`
+        : undefined,
+  };
+}
+
+export function paletteRows(
+  commands: readonly ResolvedCommand[],
+  query: string,
+  recent: readonly string[],
+  choices?: readonly WorkspaceChoice[],
+): PaletteView {
+  const workspaceRow = (command: ResolvedCommand) =>
+    command.id.startsWith('defined:') || command.id.startsWith('workspace:');
+  const definitionSearch = query.trim().length >= 2;
+  const ordinary = commands.filter(
+    (command) =>
+      !command.id.startsWith('defined:') &&
+      (choices === undefined || !definitionSearch || !workspaceRow(command)),
+  );
+  const view = basePaletteRows(ordinary, query, recent);
+  if (!definitionSearch || !choices?.length) return view;
+  const byID = new Map(commands.map((command) => [command.id, command]));
+  const matching = choices.filter(
+    (choice) => byID.has(choice.id) && (choice.kind === 'open' || query.trim().length >= 2),
+  );
+  const hasCommands = view.rows.some((row) => !row.setting && row.id !== moreSettingsID);
+  const limit = hasCommands ? 4 : 8;
+  const selected = matching.filter((choice, index) => index < limit || choice.kind === 'open');
+  const rows = selected.flatMap((choice) => byID.get(choice.id) ?? []);
+  if (!rows.length) return view;
+  const more: ResolvedCommand[] =
+    matching.length > rows.length
+      ? [
+          {
+            id: moreWorkspacesID,
+            label: `All ${matching.length} matching workspaces`,
+            group: 'Workspaces',
+            icon: 'dock',
+            aliases: [],
+            primary: false,
+            source: '',
+            context: rows[0]!.context,
+          },
+        ]
+      : [];
+  const headings = new Map(view.headings);
+  headings.set(rows[0]!.id, 'Workspaces');
+  return { rows: [...view.rows, ...rows, ...more], headings };
 }
 
 /** History follows commands, with the same four/eight budget as matching settings. */
@@ -184,7 +268,7 @@ function ranked(commands: readonly ResolvedCommand[], needle: string, anchored: 
  * when one is the better match, the rest a row away. A workspace's own setting is listed when
  * "workspace" or "this" is typed.
  */
-export function paletteRows(
+function basePaletteRows(
   commands: readonly ResolvedCommand[],
   query: string,
   recent: readonly string[],
@@ -258,7 +342,11 @@ export function unavailableRows(
   };
   const candidates = commands.filter(
     (command) =>
-      !command.available && !!command.reason && !command.setting && !listed.has(command.id),
+      !command.available &&
+      !!command.reason &&
+      !command.setting &&
+      !command.id.startsWith('defined:') &&
+      !listed.has(command.id),
   );
   const byLabel = candidates.filter((command) => names(command.label));
   const byAlias = candidates.filter(

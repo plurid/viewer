@@ -1,5 +1,6 @@
 import { readItemIdentity } from '../../domain/files/item-identity';
-import { maximumWorkspaces } from '../../domain/workspaces/catalog';
+import { maximumWorkspaces, uniqueDefinitionLinks } from '../../domain/workspaces/catalog';
+import { definitionKeySchema } from '../../domain/workspaces/definitions/schema';
 import { syncParentDirectory } from './directory-sync';
 import {
   compilePresentationValues,
@@ -202,6 +203,7 @@ const pane = z.discriminatedUnion('type', [
     profileID: id,
     taskSessionID: id.optional(),
     startOnOpen: z.boolean().optional(),
+    definitionPlane: z.number().int().min(0).max(29).optional(),
     gitAction: z.enum(gitActionKinds).optional(),
   }),
   z.object({
@@ -255,6 +257,7 @@ const savedStateSchema = z
       z.literal(9),
       z.literal(10),
       z.literal(11),
+      z.literal(12),
       z.literal(CURRENT_STATE_VERSION),
     ]),
     previewStates: z.record(id, previewValuesSchema).optional(),
@@ -266,6 +269,14 @@ const savedStateSchema = z
         z.object({
           id,
           name: z.string().min(1).max(100),
+          definition: z
+            .object({
+              key: definitionKeySchema,
+              basis: z.string().regex(/^[0-9a-f]{64}$/),
+              planes: z.record(id, z.number().int().min(-1).max(29)).optional(),
+            })
+            .strict()
+            .optional(),
           panes: z.array(pane).max(200),
           roots: z.array(id).max(200),
           taskAreas: z.array(taskAreaSchema).max(50).optional(),
@@ -380,6 +391,18 @@ const savedStateSchema = z
     'Invalid folder navigation history.',
   );
 export const stateSchema = z.preprocess(migratePlaneNavigation, savedStateSchema);
+/** Closed snapshots need the same pane-reference validation as a full saved session. */
+export const workspaceSchema = savedStateSchema.shape.workspaces.element.refine(
+  (workspace) =>
+    stateSchema.safeParse({
+      version: CURRENT_STATE_VERSION,
+      workspaces: [workspace],
+      activeWorkspace: workspace.id,
+      favorites: [],
+      recents: [],
+      look: 'dark',
+    }).success,
+);
 /** Keeps every workspace that is valid on its own when another one is not, so one
  * damaged pane cannot discard all saved workspaces. */
 function salvageState(original: unknown): { state: SavedState; dropped: number } | undefined {
@@ -407,7 +430,11 @@ function salvageState(original: unknown): { state: SavedState; dropped: number }
   });
   if (!parsed.success) return;
   return {
-    state: { ...parsed.data, version: CURRENT_STATE_VERSION },
+    state: {
+      ...parsed.data,
+      version: CURRENT_STATE_VERSION,
+      workspaces: uniqueDefinitionLinks(parsed.data.workspaces),
+    },
     dropped: saved.workspaces.length - kept.length,
   };
 }
@@ -484,7 +511,9 @@ export class Storage {
     if (state.version < 10) await this.preserve(bytes, '.before-task-areas-v10');
     if (state.version < 11) await this.preserve(bytes, '.before-task-workflows-v11');
     if (state.version < 12) await this.preserve(bytes, '.before-workshop-v12');
+    if (state.version < 13) await this.preserve(bytes, '.before-workspace-definitions-v13');
     if (state.version < CURRENT_STATE_VERSION) state = { ...state, version: CURRENT_STATE_VERSION };
+    state.workspaces = uniqueDefinitionLinks(state.workspaces);
     return { state };
   }
   save(input: SavedState): Promise<void> {

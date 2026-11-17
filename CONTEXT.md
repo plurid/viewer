@@ -32,6 +32,13 @@ results keep their originating workspace. IPC dispatch lives in feature groups,
 `src/desktop/ipc/*-handlers.ts`, each given only the services it needs. The desktop bridge still
 validates the sender and window role, and owns window records and root quiescence.
 
+Workspace definitions are resolved by `domain/workspaces/definitions`; `capture.ts` owns portable
+capture and keeps command text desktop-owned. `desktop/workspaces/definitions.ts` owns live source
+reloads and comment-preserving edits. `defined-workspaces.ts` privately remembers closed planes
+outside session state, backups and agent discovery. `desktop/ipc/definition-handlers.ts` enforces
+human and window ownership before close, reset, save and reopen. `renderer/state/definitions.ts`
+owns the persisted renderer transitions; Manage is `ui/workspace/WorkspacesDialog.tsx`.
+
 A **tour** is a `.viewer-tour.jsonc` definition (`domain/tours`, read and saved by
 `desktop/workspaces/tours.ts`) of **stops**: files at an evidence anchor, with captions.
 `renderer/workspace/tour.ts` plays it through a `TourStage` (`workspace/tours/stage.ts`), which only

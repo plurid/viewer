@@ -1,8 +1,6 @@
 import fs from 'node:fs/promises';
-import { watchFile, unwatchFile } from 'node:fs';
-import type { BigIntStats } from 'node:fs';
-import { sameVersionItem } from '../files/item-identity';
-import { fileStats } from '../files/stats';
+import { stat } from '../files/stats';
+import { watchFileChanges } from '../persistence/watch-file';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
@@ -15,6 +13,14 @@ import { syncParentDirectory } from '../persistence/directory-sync';
 export interface ConfigChange {
   keys: string[];
   value: unknown;
+}
+export interface JsoncConfigurationOptions {
+  name: string;
+  schemaName: string;
+  document?: (text: string, added?: Set<string>) => string;
+  limit?: number;
+  watchCtime?: boolean;
+  objectValues?: boolean;
 }
 const plain = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
@@ -45,7 +51,7 @@ export function overlaps(a: string[], b: string[]): boolean {
 export class JsoncConfiguration<T> {
   readonly file: string;
   private text = '';
-  private listener?: (current: BigIntStats, previous: BigIntStats) => void;
+  private stopWatching?: () => void;
   diagnostics: string[] = [];
   changes: string[] = [];
   /** Read, then removed: the settings in effect stay, and the next write puts the file back. */
@@ -55,11 +61,27 @@ export class JsoncConfiguration<T> {
     private validate: (value: unknown) => T,
     /** An earlier format's value as this one's; `validate` applies it too. */
     private upgrade?: (value: unknown) => unknown,
+    private options: JsoncConfigurationOptions = {
+      name: 'config.jsonc',
+      schemaName: 'config.schema.json',
+      document: documentConfiguration,
+    },
   ) {
-    this.file = path.join(directory, 'config.jsonc');
+    this.file = path.join(directory, options.name);
+  }
+  get sourceText(): string {
+    return this.text;
+  }
+  private document(text: string, added?: Set<string>): string {
+    return this.options.document?.(text, added) ?? text;
   }
   private decode(text: string): T {
-    if (Buffer.byteLength(text) > 16_000_000) throw new Error('Configuration exceeds 16 MB.');
+    if (Buffer.byteLength(text) > (this.options.limit ?? 16_000_000))
+      throw new Error(
+        this.options.name === 'config.jsonc'
+          ? 'Configuration exceeds 16 MB.'
+          : `${this.options.name} exceeds its size limit.`,
+      );
     const errors: ParseError[] = [];
     const value = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
     const [error] = errors;
@@ -80,10 +102,10 @@ export class JsoncConfiguration<T> {
     if (!this.upgrade) return text;
     const before: unknown = parse(text, [], { allowTrailingComma: true, disallowComments: false });
     const after = this.upgrade(before);
-    const edits = configEdits(before, after);
+    const edits = configEdits(before, after, [], { objectValues: this.options.objectValues });
     if (!edits.length) return text;
     try {
-      const upgraded = documentConfiguration(
+      const upgraded = this.document(
         applyConfigEdits(text, edits, { insertSpaces: true, tabSize: 2 }),
         new Set(addedPaths(before, after)),
       );
@@ -150,13 +172,20 @@ export class JsoncConfiguration<T> {
   }
   async write(value: T): Promise<void> {
     if (this.diagnostics.length)
-      throw new Error('Fix config.jsonc before saving Settings: ' + this.diagnostics[0]);
+      throw new Error(
+        `Fix ${this.options.name} before saving${this.options.name === 'config.jsonc' ? ' Settings' : ''}: ` +
+          this.diagnostics[0],
+      );
     let text = this.text || JSON.stringify(value, null, 2) + '\n';
     const before = this.text ? this.decode(this.text) : undefined;
     // item by item, so the comments of what did not change stay
     if (before)
-      text = applyConfigEdits(text, configEdits(before, value), { insertSpaces: true, tabSize: 2 });
-    text = documentConfiguration(text, before ? new Set(addedPaths(before, value)) : undefined);
+      text = applyConfigEdits(
+        text,
+        configEdits(before, value, [], { objectValues: this.options.objectValues }),
+        { insertSpaces: true, tabSize: 2 },
+      );
+    text = this.document(text, before ? new Set(addedPaths(before, value)) : undefined);
     this.decode(text);
     // a removed file is written back only if no editor has recreated it in the meantime
     const expected = this.missing ? '' : this.text;
@@ -164,12 +193,28 @@ export class JsoncConfiguration<T> {
       if (error.code === 'ENOENT') return '';
       throw error;
     });
-    if (disk !== expected)
-      throw new Error('config.jsonc changed during this edit. Validate the file and retry.');
+    if (disk !== expected) throw this.conflict();
     await this.atomic(this.file, text, expected);
     await this.atomic(this.file + '.last-valid', JSON.stringify(value));
     this.text = text;
     this.missing = false;
+  }
+  private conflict(): Error {
+    return new Error(`${this.options.name} changed during this edit. Validate the file and retry.`);
+  }
+  async update(change: (current: T | undefined) => T): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      const current = await this.read();
+      if (this.diagnostics.length)
+        throw new Error(`Fix ${this.options.name} before saving: ${this.diagnostics[0]}`);
+      const next = this.validate(change(current));
+      try {
+        await this.write(next);
+        return next;
+      } catch (error) {
+        if (attempt || errorMessage(error) !== this.conflict().message) throw error;
+      }
+    }
   }
   /**
    * Replaces config.jsonc with another configuration, its comments and all (2026-10-20: an Import
@@ -179,7 +224,7 @@ export class JsoncConfiguration<T> {
   async replace(text: string): Promise<T> {
     const value = this.decode(text);
     // an imported guide is left as it is; an undocumented file is documented like a new one
-    text = documentConfiguration(text, new Set());
+    text = this.document(text, new Set());
     const disk = await fs.readFile(this.file, 'utf8').catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return '';
       throw error;
@@ -199,19 +244,36 @@ export class JsoncConfiguration<T> {
   }
   async schema(value: unknown): Promise<void> {
     await this.atomic(
-      path.join(path.dirname(this.file), 'config.schema.json'),
+      path.join(path.dirname(this.file), this.options.schemaName),
       JSON.stringify(value, null, 2) + '\n',
     );
   }
   private async atomic(link: string, text: string, expected?: string): Promise<void> {
     // A symbolic link, for example into a dotfiles repository, stays a link: replace its target.
-    const file = await fs.realpath(link).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return link;
-      throw error;
-    });
-    await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+    let file = link;
+    let linked = false;
+    for (let depth = 0; ; depth++) {
+      if (depth > 40) throw new Error(`Too many symbolic links for ${this.options.name}.`);
+      try {
+        file = await fs.realpath(file);
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      const target = await fs.readlink(file).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT' || error.code === 'EINVAL') return undefined;
+        throw error;
+      });
+      if (target === undefined) break;
+      linked = true;
+      file = path.resolve(path.dirname(file), target);
+    }
+    if (linked) {
+      if (!(await stat(path.dirname(file)).catch(() => null))?.isDirectory())
+        throw new Error(`The folder for ${this.options.name} is missing: ${path.dirname(file)}.`);
+    } else await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
     const temporary = file + '.' + randomUUID() + '.tmp';
-    const mode = ((await fs.stat(file).catch(() => null))?.mode ?? 0o600) & 0o777;
+    const mode = ((await stat(file).catch(() => null))?.mode ?? 0o600) & 0o777;
     try {
       const handle = await fs.open(temporary, 'wx', mode);
       try {
@@ -225,8 +287,7 @@ export class JsoncConfiguration<T> {
           if (error.code === 'ENOENT') return '';
           throw error;
         });
-        if (current !== expected)
-          throw new Error('config.jsonc changed during this edit. Validate the file and retry.');
+        if (current !== expected) throw this.conflict();
       }
       await fs.rename(temporary, file);
       await syncParentDirectory(file);
@@ -235,19 +296,12 @@ export class JsoncConfiguration<T> {
     }
   }
   watch(reload: () => void): void {
-    if (this.listener) return;
-    this.listener = (current, previous) => {
-      if (
-        current.mtimeMs !== previous.mtimeMs ||
-        !sameVersionItem(fileStats(previous), fileStats(current)) ||
-        current.size !== previous.size
-      )
-        reload();
-    };
-    watchFile(this.file, { bigint: true, persistent: false, interval: 500 }, this.listener);
+    this.stopWatching ??= watchFileChanges(this.file, reload, 500, {
+      ctime: this.options.watchCtime ?? this.options.name !== 'config.jsonc',
+    });
   }
   close(): void {
-    if (this.listener) unwatchFile(this.file, this.listener);
-    this.listener = undefined;
+    this.stopWatching?.();
+    this.stopWatching = undefined;
   }
 }

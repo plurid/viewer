@@ -19,8 +19,17 @@ import {
 } from '../../domain/comparison/git-actions';
 import type { GitTerminalLaunch } from '../comparison/git-actions';
 import type { TerminalWorkerReply, TerminalWorkerRequest } from './terminal-protocol';
+import { validInitialInput } from './terminal-protocol';
+import { terminalConfirmation } from '../actions/execution-confirmations';
 import { containsPath } from '../files/containment';
 import { TerminalCommands, type RunTerminalCommand } from './terminal-commands';
+
+export interface TerminalStartOptions {
+  initialInput?: string;
+  approvedProfile?: TerminalProfile;
+  approvedCwd?: string;
+  validate?(): void;
+}
 
 interface PendingTerminal {
   owner: number;
@@ -28,6 +37,7 @@ interface PendingTerminal {
   cancelled: boolean;
   git?: GitActionKind;
   promise: Promise<void>;
+  initialInput?: string;
 }
 
 interface TerminalSession {
@@ -36,6 +46,7 @@ interface TerminalSession {
   output: string;
   cwd: string;
   git?: GitActionKind;
+  initialInput?: string;
 }
 
 export class Terminals {
@@ -71,7 +82,67 @@ export class Terminals {
     /** Resolves once the person has confirmed this exact profile, or it needs no confirmation. */
     private confirm: (profile: TerminalProfile) => Promise<void> = async () => {},
   ) {}
-  start(request: TerminalStart, owner: number): Promise<void> {
+  profile(id: string): TerminalProfile | undefined {
+    const profile = this.settings().terminals.profiles.find((profile) => profile.id === id);
+    return profile ? structuredClone(profile) : undefined;
+  }
+  async running(request: TerminalStart, owner: number, includePending = true): Promise<boolean> {
+    const existing = this.sessions.get(request.id) ?? (includePending ? this.pending.get(request.id) : undefined);
+    if (!existing || this.stopping.has(request.id)) return false;
+    await this.match(request, owner, existing);
+    return true;
+  }
+
+  count(workspaceID: string, owner: number): number {
+    const terminals = new Map<string, PendingTerminal | TerminalSession>([
+      ...this.pending,
+      ...this.sessions,
+    ]);
+    return [...terminals].filter(([id, terminal]) =>
+      terminal.owner === owner && terminal.request.workspaceID === workspaceID &&
+      !this.stopping.has(id) && !('cancelled' in terminal && terminal.cancelled),
+    ).length;
+  }
+
+  private async match(
+    request: TerminalStart,
+    owner: number,
+    existing: TerminalSession | PendingTerminal,
+    options: TerminalStartOptions = {},
+  ): Promise<void> {
+    if (
+      existing.owner !== owner ||
+      existing.request.workspaceID !== request.workspaceID ||
+      existing.request.rootID !== request.rootID ||
+      existing.request.profileID !== request.profileID ||
+      (options.initialInput !== undefined && existing.initialInput !== options.initialInput)
+    )
+      throw new Error('Terminal belongs to another plane.');
+    // Reloads must still reach a running shell after its original folder moves.
+    if (options.initialInput === undefined && existing.request.cwd === request.cwd) return;
+    await this.access([request.cwd]);
+    const cwd = await fs.realpath(absolute(request.cwd));
+    const expected =
+      'cwd' in existing ? existing.cwd : await fs.realpath(absolute(existing.request.cwd));
+    if (cwd !== expected) throw new Error('Terminal belongs to another plane.');
+  }
+
+  start(request: TerminalStart, owner: number, options: TerminalStartOptions = {}): Promise<void> {
+    options = {
+      initialInput: options.initialInput,
+      approvedProfile: options.approvedProfile
+        ? structuredClone(options.approvedProfile)
+        : undefined,
+      approvedCwd: options.approvedCwd,
+      validate: options.validate,
+    };
+    request = { ...request };
+    if (options.initialInput !== undefined && !validInitialInput(options.initialInput))
+      return Promise.reject(new Error('The private terminal command is invalid.'));
+    if (options.initialInput !== undefined && (!options.approvedProfile || !options.approvedCwd))
+      return Promise.reject(
+        new Error('The private terminal command needs its approved profile and folder.'),
+      );
     if (this.commands.has(request.id))
       return Promise.reject(new Error('This ID belongs to command output.'));
     if (request.profileID === gitTerminalProfileID)
@@ -86,20 +157,16 @@ export class Terminals {
     if (this.stopping.has(request.id))
       return Promise.reject(new Error('This terminal is still stopping.'));
     const pending = this.pending.get(request.id);
-    if (pending) {
-      if (
-        pending.owner !== owner ||
-        pending.request.workspaceID !== request.workspaceID ||
-        pending.request.rootID !== request.rootID ||
-        pending.request.cwd !== request.cwd ||
-        pending.request.profileID !== request.profileID
-      )
-        return Promise.reject(new Error('Terminal belongs to another plane.'));
-      return pending.promise;
-    }
-    const ticket = { owner, request, cancelled: false, promise: Promise.resolve() };
+    if (pending) return this.match(request, owner, pending, options).then(() => pending.promise);
+    const ticket: PendingTerminal = {
+      owner,
+      request,
+      cancelled: false,
+      promise: Promise.resolve(),
+      initialInput: options.initialInput,
+    };
     this.pending.set(request.id, ticket);
-    ticket.promise = this.prepare(request, owner).finally(() => {
+    ticket.promise = this.prepare(request, owner, options).finally(() => {
       if (this.pending.get(request.id) === ticket) this.pending.delete(request.id);
     });
     return ticket.promise;
@@ -233,31 +300,29 @@ export class Terminals {
       throw error;
     }
   }
-  private async prepare(request: TerminalStart, owner: number): Promise<void> {
+  private async prepare(
+    request: TerminalStart,
+    owner: number,
+    options: TerminalStartOptions,
+  ): Promise<void> {
     const existing = this.sessions.get(request.id);
     if (existing) {
-      if (
-        existing.owner !== owner ||
-        existing.request.workspaceID !== request.workspaceID ||
-        existing.request.rootID !== request.rootID ||
-        existing.request.profileID !== request.profileID ||
-        existing.request.cwd !== request.cwd
-      )
-        throw new Error('Terminal belongs to another plane.');
+      await this.match(request, owner, existing, options);
       return;
     }
     if (this.full()) throw new Error('Close a terminal before opening another.');
     await this.access([request.cwd]);
     const cwd = await fs.realpath(absolute(request.cwd));
     if (!(await fs.stat(cwd)).isDirectory()) throw new Error('Terminal folder is unavailable.');
-    const profile = this.settings().terminals.profiles.find(
-      (profile) => profile.id === request.profileID,
-    );
+    const profile =
+      options.initialInput === undefined
+        ? this.profile(request.profileID)
+        : options.approvedProfile;
     if (!profile)
       throw new Error('Terminal profile no longer exists. Choose a profile in Settings.');
-    // A profile from imported or edited configuration starts only once confirmed natively,
-    // including a saved terminal plane that would otherwise start on restore.
-    await this.confirm(profile);
+    // Definition command approval already binds this exact profile. Ordinary shells,
+    // including restored planes, still require the profile's own native approval.
+    if (options.initialInput === undefined) await this.confirm(profile);
     if (this.closed || this.pending.get(request.id)?.cancelled) return;
     const executable = await executablePath(
       profile.executable ||
@@ -267,8 +332,28 @@ export class Terminals {
     if (this.closed || this.pending.get(request.id)?.cancelled) return;
     await this.access([request.cwd, cwd]);
     if (this.closed || this.pending.get(request.id)?.cancelled) return;
+    if (options.initialInput !== undefined) {
+      const currentCwd = await fs.realpath(request.cwd);
+      if (this.closed || this.pending.get(request.id)?.cancelled) return;
+      options.validate?.();
+      const current = this.profile(request.profileID);
+      if (
+        options.approvedCwd !== cwd ||
+        currentCwd !== cwd ||
+        profile.id !== request.profileID ||
+        !current ||
+        terminalConfirmation(current) !== terminalConfirmation(profile)
+      )
+        throw new Error('The command folder or terminal profile changed. Review it again.');
+    }
     const worker = this.ensureWorker();
-    this.sessions.set(request.id, { owner, request, cwd, output: '' });
+    this.sessions.set(request.id, {
+      owner,
+      request,
+      cwd,
+      output: '',
+      initialInput: options.initialInput,
+    });
     const env = childEnvironment({
       ...profile.env,
       TERM: 'xterm-256color',
@@ -281,6 +366,7 @@ export class Terminals {
       executable,
       args: profile.args,
       env,
+      initialInput: options.initialInput,
     });
   }
   private ensureWorker(): OwnedWorker<TerminalWorkerReply> {

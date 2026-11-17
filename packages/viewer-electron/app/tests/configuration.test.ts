@@ -894,7 +894,13 @@ describe('reloading config.jsonc (2026-10-20)', () => {
     expect(emit).toHaveBeenCalledOnce();
     emit.mockClear();
     await service.reload();
+    expect(emit).not.toHaveBeenCalled();
+    await fs.writeFile(file(), '{broken}');
+    await service.reload();
     expect(emit).toHaveBeenCalledOnce();
+    emit.mockClear();
+    await service.reload();
+    expect(emit).not.toHaveBeenCalled();
   });
 });
 

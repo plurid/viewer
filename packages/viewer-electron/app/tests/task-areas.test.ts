@@ -25,6 +25,7 @@ import { addContentPane } from '../src/renderer/state/panes';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { temporaryRoot } from '../tools/temporary';
 import { terminalStartDeferred } from '../src/renderer/terminals/sessions';
+import { definitionRunReason } from '../src/renderer/terminals/start-authority';
 import type { AgentTaskBundle } from '../src/domain/agents/task-workflow';
 import { loadNote, noteSession } from '../src/renderer/notes/sessions';
 afterEach(async () => {
@@ -219,6 +220,7 @@ it('installs an approved CLI task after canvas mounts, without starting a termin
     activeWorkspace().panes.filter((pane) => bundle.panes.some((item) => item.id === pane.id)),
   ).toHaveLength(5);
   expect(terminalStartDeferred(terminalID)).toBe(true);
+  expect(definitionRunReason([terminalID])).toContain('An agent opened this view');
   expect(f.api.notes).not.toHaveBeenCalled();
   expect(f.api.terminalStart).not.toHaveBeenCalled();
   await flushState();

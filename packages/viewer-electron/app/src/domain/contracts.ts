@@ -22,7 +22,18 @@ import type { BackupRequest, BackupReply } from './persistence/backup';
 import type { DiffSource } from './comparison/diff';
 import type { GitRequest, GitReply, GitSource } from './comparison/git';
 import type { GitActionKind, GitActionRequest, GitActionReply } from './comparison/git-actions';
+import type {
+  DefinitionCommandReference,
+  DefinitionCommandStart,
+  DefinitionCommandOutcome,
+} from './terminals/definition-commands';
 import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
+import type {
+  DefinitionCatalog,
+  WorkspaceDefinitionRequest,
+  WorkspaceDefinitionReply,
+  WorkspaceDefinitionFileRequest,
+} from './workspaces/definitions/schema';
 import type { ChatRequest, ChatReply, ChatDocument } from './models/chat';
 import type { WorktreeReply, WorktreeRequest } from './comparison/worktrees';
 import type { AgentTaskBundle, TaskWorkflowInput, TaskWorkflowReply } from './agents/task-workflow';
@@ -234,6 +245,7 @@ export interface TerminalPane {
   /** Stable logical task terminal; opening another view does not replay its prior input. */
   taskSessionID?: string;
   startOnOpen?: boolean;
+  definitionPlane?: number;
   /** Display metadata only. Git jobs are never replayed from saved state. */
   gitAction?: GitActionKind;
 }
@@ -391,6 +403,7 @@ export const paneTypes = {
 export interface Workspace {
   id: string;
   name: string;
+  definition?: { key: string; basis: string; planes?: Record<string, number> };
   panes: Pane[];
   roots: string[];
   /** Private task context persists independently of open views. Never exported in a project. */
@@ -413,11 +426,11 @@ export interface Workspace {
   tiling?: Tiling;
 }
 /** Current saved-state format. Increment with a compatible migration and preserved input. */
-export const CURRENT_STATE_VERSION = 12 as const;
+export const CURRENT_STATE_VERSION = 13 as const;
 /** The interface's colour scheme. */
 export type Look = 'dark' | 'light';
 export interface SavedState {
-  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | typeof CURRENT_STATE_VERSION;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | typeof CURRENT_STATE_VERSION;
   previewStates?: Record<string, Record<string, JSONValue>>;
   /** Bounded, private file view positions, independent of disposable plane IDs. */
   previewHistory?: PreviewHistory;
@@ -510,6 +523,8 @@ export interface UIPreferences {
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
+  definitions?: DefinitionCatalog;
+  agentDriven?: boolean;
   checkedFolders?: string[];
   folderHistoryRevision?: number;
   folderClearRevision?: number;
@@ -688,6 +703,8 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'terminal-authority'; agentDriven: boolean }
+  | { type: 'workspace-definitions'; catalog: DefinitionCatalog }
   | { type: 'license'; status: LicenseStatus }
   | { type: 'dialog'; prompt: DialogPrompt | null }
   | { type: 'speech-changed' }
@@ -791,6 +808,8 @@ export interface ViewerAPI {
   hotkeyStatus(): Promise<{ registered: boolean; shortcut: string; problem?: string }>;
   restoreWindow(): Promise<void>;
   workspaceClaim(id: string): Promise<boolean>;
+  workspaceDefinitions(request: WorkspaceDefinitionRequest): Promise<WorkspaceDefinitionReply>;
+  workspaceDefinitionFile(request: WorkspaceDefinitionFileRequest): Promise<DefinitionCatalog>;
   newWindow(): Promise<void>;
   git(request: GitRequest): Promise<GitReply>;
   gitWorktrees(request: WorktreeRequest): Promise<WorktreeReply>;
@@ -849,7 +868,13 @@ export interface ViewerAPI {
   agentAccess(request: AgentAccessRequest): Promise<AgentAccessState>;
   terminalApplication(): Promise<{ name: string; path: string; running: boolean }>;
   terminalExternal(cwd: string, tmux: boolean): Promise<void>;
-  terminalStart(request: TerminalStart): Promise<void>;
+  terminalStart(
+    request: TerminalStart,
+    definition?: DefinitionCommandReference,
+  ): Promise<void | DefinitionCommandOutcome>;
+  terminalStartAll(items: DefinitionCommandStart[]): Promise<DefinitionCommandOutcome[]>;
+  terminalRunning(request: TerminalStart): Promise<boolean>;
+  terminalCount(workspaceID: string): Promise<number>;
   terminalWrite(id: string, data: string): Promise<void>;
   terminalResize(id: string, cols: number, rows: number): Promise<void>;
   terminalAck(id: string, bytes: number): Promise<void>;
@@ -1025,7 +1050,7 @@ export interface ViewerAPI {
   /** Asks what to do with unsaved text: before closing it, or before Revert to Saved. */
   textPrompt(kind: 'close' | 'revert', name: string): Promise<'save' | 'discard' | 'cancel'>;
   /** Unsaved text kept in the profile, without the text, and what could not be read. */
-  bufferList(): Promise<{ buffers: TextBufferSummary[]; problems: string[] }>;
+  bufferList(): Promise<{ buffers: TextBufferSummary[]; problems: string[]; remembered?: string[] }>;
   bufferRead(id: string): Promise<TextBuffer | null>;
   bufferWrite(buffer: TextBuffer): Promise<void>;
   /** Removes unsaved text the person chose to discard. */

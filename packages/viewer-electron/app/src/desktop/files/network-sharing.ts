@@ -82,6 +82,8 @@ export const runSharingRead: SharingRunner = (read) =>
     }
   });
 const systemSharingVolumes = new SharingVolumes(runSharingRead);
+export const watchSharingVolumes = (changed: () => void): (() => void) =>
+  systemSharingVolumes.watch(changed);
 
 export function localIPv4(interfaces: ReturnType<typeof os.networkInterfaces>): string[] {
   return [

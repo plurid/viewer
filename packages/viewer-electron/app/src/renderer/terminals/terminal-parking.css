@@ -1,0 +1,10 @@
+/* Offscreen command planes still answer PTY queries while their shell starts. */
+.terminal-parking {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 800px;
+  height: 600px;
+  visibility: hidden;
+  pointer-events: none;
+}

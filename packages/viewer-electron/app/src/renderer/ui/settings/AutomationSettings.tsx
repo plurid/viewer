@@ -17,6 +17,7 @@ import { defaultSettings } from '../../../domain/services';
 import { errorMessage } from '../../../domain/errors';
 import { PathField } from '../primitives';
 import { Disclosure } from '../Disclosure';
+import { WorkspaceDefinitionsSettings } from './WorkspaceDefinitionsSettings';
 interface Props {
   snapshot: SettingsSnapshot;
   save(patches: SettingsPatch[]): void;
@@ -653,6 +654,7 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
           Import configuration
         </button>
       </div>
+      <WorkspaceDefinitionsSettings />
       <h2>Reset a section</h2>
       <p className="settings-note">
         This resets the selected configuration section. Your open planes, file operation history,

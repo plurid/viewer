@@ -33,6 +33,18 @@ export function ContextMenu({
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
   const saved = useViewer((state) => state.saved);
+  const catalog = useViewer((state) => state.bootstrap.definitions);
+  const closed = catalog?.definitions
+    .filter(
+      (item) =>
+        item.remembered &&
+        !item.hidden &&
+        item.rootState !== 'missing' &&
+        !saved.workspaces.some((space) => space.definition?.key === item.key),
+    )
+    .sort((a, b) => b.remembered!.at - a.remembered!.at)
+    .slice(0, 3)
+    .map((item) => 'defined:' + item.key);
   // The workspace menu has room for recent workspaces and the full action groups.
   const menu = useAnchoredLayer({
     anchor,
@@ -86,6 +98,7 @@ export function ContextMenu({
         suggested={suggested}
         lead={lead}
         workspaceIDs={workspaceSwitcher ? recentWorkspaceIDs(saved) : undefined}
+        closedDefinitionIDs={workspaceSwitcher ? closed : undefined}
       />
     </div>,
     container,
