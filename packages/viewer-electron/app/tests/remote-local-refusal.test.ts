@@ -19,6 +19,11 @@ import { Terminals } from '../src/desktop/terminals/terminals';
 import { Operations } from '../src/desktop/operations/operations';
 import { validateManualTarget } from '../src/desktop/actions/manual-target';
 import { validateGitTarget } from '../src/desktop/comparison/git-target';
+import { DefinitionCommands } from '../src/desktop/workspaces/definition-commands';
+import { createTerminalHandlers } from '../src/desktop/ipc/terminal-handlers';
+import { createPasteboardHandlers } from '../src/desktop/ipc/pasteboard-handlers';
+import * as filesystem from '../src/desktop/files/filesystem';
+import type { DefinitionCommandStart } from '../src/domain/terminals/definition-commands';
 import { GitReader } from '../src/desktop/comparison/git';
 
 const calls = vi.hoisted(() => ({
@@ -397,5 +402,205 @@ describe('restored operation and terminal internals', () => {
       await refused(() => match.call(service, request, 7, { owner: 7, request }));
     }
     await service.close();
+  });
+});
+
+describe('reviewed refusal before observable work', () => {
+  const file = remoteInputs[0]!;
+  it('validates absolute local paths even in the direct build', async () => {
+    const access = new FileAccess('/fixtures/private');
+    for (const invalid of [
+      ' ' + file,
+      '\t' + file,
+      '\ufeff' + file,
+      'viewer\u2011sftp://server01/srv/Project',
+      'relative/folder',
+      '/a\0b',
+    ])
+      await expect(access.require([invalid])).rejects.toThrow();
+    await access.require(['/fixtures/local']);
+    await access.close();
+  });
+  it('refuses a paste destination before reading the native clipboard', async () => {
+    const readForPaste = vi.fn(async () => null);
+    const handlers = createPasteboardHandlers({
+      pasteboard: { readForPaste },
+    } as unknown as Parameters<typeof createPasteboardHandlers>[0]);
+    await refused(() => handlers.clipboardPaste([file], 7));
+    for (const invalid of [
+      ' ' + file,
+      String.fromCharCode(9) + file,
+      String.fromCharCode(0xfeff) + file,
+      'viewer' + String.fromCodePoint(0x2011) + 'sftp://server01/path',
+      'relative/folder',
+    ])
+      await expect(
+        Promise.resolve().then(() => handlers.clipboardPaste([invalid], 7)),
+      ).rejects.toThrow();
+    expect(readForPaste).not.toHaveBeenCalled();
+  });
+  it('refuses watching before invoking the deeper absolute-path boundary', async () => {
+    const absolute = vi.spyOn(filesystem, 'absolute');
+    try {
+      const watchers = new Watchers(vi.fn());
+      await refused(() => watchers.add(file, 'plane'));
+      expect(absolute).not.toHaveBeenCalled();
+      expect(watchers.count).toBe(0);
+      await watchers.close();
+    } finally {
+      absolute.mockRestore();
+    }
+  });
+  it('keeps a running search and its ownership untouched', async () => {
+    const search = new Search(vi.fn(), null);
+    const requests = Reflect.get(search, 'requests') as Map<string, AbortController>;
+    const current = new AbortController();
+    requests.set('search', current);
+    const set = vi.spyOn(requests, 'set');
+    await refused(() => search.start({ id: 'search', root: file, query: '', showHidden: false }));
+    expect(current.signal.aborted).toBe(false);
+    expect(requests.get('search')).toBe(current);
+    expect(set).not.toHaveBeenCalled();
+    requests.clear();
+    await search.close();
+  });
+  it('refuses the local grant seam before scope checks or authorization', async () => {
+    const access = vi.fn(noop);
+    const resources = new Resources(access);
+    const scope = new PreviewScope([]);
+    const check = vi.spyOn(scope, 'check');
+    const grant = Reflect.get(resources, 'grantFile') as (
+      file: string,
+      scope: PreviewScope,
+    ) => Promise<unknown>;
+    await refused(() => grant.call(resources, file, scope));
+    expect(access).not.toHaveBeenCalled();
+    expect(check).not.toHaveBeenCalled();
+    await resources.close();
+  });
+  it('refuses thumbnails before lifecycle tracking and closed-service fallbacks', async () => {
+    const thumbnails = new Thumbnails();
+    const work = Reflect.get(thumbnails, 'work') as PreviewWork;
+    const track = vi.spyOn(work, 'track');
+    await refused(() => thumbnails.get(file, 128));
+    expect(track).not.toHaveBeenCalled();
+    Reflect.set(thumbnails, 'closed', true);
+    await refused(() => thumbnails.get(file, 128));
+  });
+  it('keeps terminal pending ownership untouched before local preparation', async () => {
+    const service = terminals();
+    const pending = Reflect.get(service, 'pending') as Map<string, unknown>;
+    const set = vi.spyOn(pending, 'set');
+    await refused(() => service.start(terminal(file), 7));
+    expect(set).not.toHaveBeenCalled();
+    expect(pending.size).toBe(0);
+    await service.close();
+  });
+  it('refuses local terminal preparation before acquiring access', async () => {
+    const access = vi.fn(noop);
+    const service = new Terminals(
+      '/fixtures/worker',
+      () => defaultSettings('/fixtures'),
+      vi.fn(),
+      access,
+    );
+    const prepare = Reflect.get(service, 'prepare') as (
+      request: TerminalStart,
+      owner: number,
+      options: object,
+    ) => Promise<void>;
+    await refused(() => prepare.call(service, terminal(file), 7, {}));
+    expect(access).not.toHaveBeenCalled();
+    await service.close();
+  });
+  it('refuses remote executables in a local command before dispatch', async () => {
+    const service = terminals();
+    for (const executable of remoteInputs)
+      await refused(() =>
+        service.runCommand(
+          {
+            id: 'command',
+            owner: 7,
+            workspaceID: 'workspace',
+            rootID: 'pane',
+            cwd: '/fixtures/local',
+            executable,
+            args: [],
+            env: {},
+          },
+          new AbortController().signal,
+          vi.fn(),
+        ),
+      );
+    expect(Reflect.get(service, 'commands').size).toBe(0);
+    await service.close();
+  });
+  it.each(['expectedSources', 'reviewedDestination'] as const)(
+    'preserves Redo before rejecting %s',
+    async (field) => {
+      const service = operations();
+      const owner = service as unknown as { endRedo(): void };
+      const endRedo = vi.spyOn(owner, 'endRedo');
+      const request: OperationRequest = {
+        kind: 'copy',
+        sources: ['/fixtures/local'],
+        destination: '/fixtures/output',
+      };
+      if (field === 'expectedSources')
+        request.expectedSources = [
+          { path: file, version: { identity: temporalIdentity('pin'), modified: 0, size: 0 } },
+        ];
+      else request.reviewedDestination = { path: file, identity: 'pin' };
+      await refused(() => service.start(request));
+      expect(endRedo).not.toHaveBeenCalled();
+      expect(service.all()).toEqual([]);
+      await service.close();
+    },
+  );
+  it('preserves index revision and configuration queue before refusal', async () => {
+    const files = new FileServices(
+      '/fixtures/private',
+      '/fixtures/worker',
+      '/fixtures/ocr',
+      vi.fn(),
+    );
+    const revision = Reflect.get(files, 'revision');
+    const queue = Reflect.get(files, 'configurations');
+    await refused(() => files.configure({ ...defaultSettings('/fixtures').search, roots: [file] }));
+    expect(Reflect.get(files, 'revision')).toBe(revision);
+    expect(Reflect.get(files, 'configurations')).toBe(queue);
+    await files.close();
+  });
+});
+
+describe('definition command remote refusal', () => {
+  it('guards every terminal definition route and every batch item before work', async () => {
+    const lookup = vi.fn();
+    const commands = new DefinitionCommands({
+      lookup,
+      terminals: { start: vi.fn(), running: vi.fn(), profile: vi.fn() },
+      confirmations: { requireDefinitionCommands: vi.fn() },
+      ownsWorkspace: () => true,
+      isAgentDriven: () => false,
+      window: () => undefined,
+    });
+    const handlers = createTerminalHandlers({
+      definitionCommands: commands,
+      terminals: { status: vi.fn() },
+    } as unknown as Parameters<typeof createTerminalHandlers>[0]);
+    const reference = { key: 'work', plane: 0, basis: 'basis' };
+    for (const cwd of remoteInputs) {
+      const request = terminal(cwd);
+      await refused(() => handlers.terminalStart([request, reference], 7));
+      await refused(() => handlers.terminalDefinitionCommand([request, reference], 7));
+      await refused(() => handlers.terminalStatus([request, false], 7));
+      const items: DefinitionCommandStart[] = [
+        { ...reference, request: { ...terminal('/fixtures/local'), id: 'local' } },
+        { ...reference, plane: 1, request },
+      ];
+      await refused(() => handlers.terminalStartAll([items], 7));
+      expect((Reflect.get(commands, 'starts') as Map<string, unknown>).size).toBe(0);
+    }
+    expect(lookup).not.toHaveBeenCalled();
   });
 });

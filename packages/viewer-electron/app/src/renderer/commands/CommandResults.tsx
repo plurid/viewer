@@ -267,9 +267,7 @@ export function CommandResults({
                 size={16}
               />
               <span className="command-result-text">
-                <span>
-                  {row.label}
-                </span>
+                <span>{row.label}</span>
                 {row.detail &&
                   (row.id.startsWith('smart:folder:') ? (
                     <FolderPath path={row.detail} />

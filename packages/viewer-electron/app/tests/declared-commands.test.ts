@@ -24,11 +24,29 @@ describe('declared command review regressions', () => {
         'prepublishOnly',
         'prepack',
         'postpack',
+        'start',
+        'test',
+        'stop',
+        'restart',
+        'pack',
+        'prestart',
+        'posttest',
       ].map((name) => [name, 'echo sample']),
     );
     expect(
       parseDeclaredCommands('package.json', JSON.stringify({ scripts })).map((item) => item.name),
-    ).toEqual(['preview', 'prettier', 'postcss', 'presentation', 'deploy']);
+    ).toEqual([
+      'preview',
+      'prettier',
+      'postcss',
+      'presentation',
+      'deploy',
+      'start',
+      'test',
+      'stop',
+      'restart',
+      'pack',
+    ]);
   });
 
   it('rejects malformed Deno JSONC even when its tasks parsed before the error', () => {

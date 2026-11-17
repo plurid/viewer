@@ -53,6 +53,21 @@ it('bounds evidence and excludes pristine and long-unused workspaces', () => {
   expect(large.filter((item) => item.folder.startsWith(home + '/r'))).toHaveLength(50);
 });
 it('sums visits under a root, requires recent evidence and includes open planes and retained roots', () => {
+  expect(
+    qualifyingRoots(
+      [home + '/two'],
+      [{ folder: home + '/two', count: 2, last: now, score: 2, plane: false }],
+      now,
+    ),
+  ).toEqual([]);
+  const ordinary = Array.from({ length: 250 }, (_, index) => home + '/ordinary-' + index);
+  expect(
+    qualifyingRoots(
+      ordinary,
+      ordinary.map((folder) => ({ folder, count: 3, last: now, score: 1, plane: false })),
+      now,
+    ),
+  ).toHaveLength(200);
   const roots = [
     home + '/code/sample',
     home + '/code/old',

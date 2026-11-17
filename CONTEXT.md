@@ -24,8 +24,9 @@ desktop services and can be revoked.
 The [remote-plane proposal](docs/adr/0023-remote-planes-over-system-openssh.md) defines a **remote
 location** as the raw internal string `viewer-sftp://<connectionID><absolute-path>`. It is not a
 local path or a typed server address. `domain/remote/*` owns pure location, address, identity and
-connection-record validation, limits and protected-path rules. Local filesystem entry points refuse
-the reserved scheme before path resolution.
+connection-record validation, limits and protected-path rules. Local access checks require absolute
+local paths in every edition. Raw location guards protect shared services and definition-command
+entry points before path resolution.
 
 A **server connection** is a private saved SSH endpoint and its connection lifetime, distinct from a
 local server listener. The proposed `desktop/remote/*` owner coordinates system OpenSSH, askpass,
@@ -34,7 +35,8 @@ Resources, Terminals and Trash retain their shared state and authority. SSH plan
 the direct build behind `VIEWER_REMOTE=1` until qualification; connections and secrets stay outside
 editable JSONC and agent authority.
 
-`desktop/remote/sftp` owns the bounded SFTP v3 codec, duplex client, stream windows and listing-name boundary.
+`desktop/remote/sftp` owns the bounded SFTP v3 codec, duplex client, stream windows and listing-name
+boundary.
 
 A **plane** is a view record. Its engine route, framing and geometry belong to
 `src/renderer/workspace/controller.ts`. A **root** is an independent spatial branch: preview reuse

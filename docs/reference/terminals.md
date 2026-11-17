@@ -82,6 +82,8 @@ rows appear; each is keyboard reachable. A pick fills and focuses the input. Rev
 | `Procfile`                            | Named entries: the literal command after `name:`.                                                                                                                                                                                                             |
 | `deno.json`, `deno.jsonc`             | String tasks or task objects with a `command`: `deno task dev`. JSON comments and trailing commas are accepted.                                                                                                                                               |
 
+Explicit `start`, `test`, `stop` and `restart` scripts remain visible; their pre/post hooks do not.
+
 The package manager comes from the nearest `package.json` with `packageManager` toward the root,
 then the nearest lockfile toward the root, then defaults to npm. At the same level, lockfile
 precedence is pnpm, yarn, bun, npm. Viewer reads from the captured folder toward the deepest

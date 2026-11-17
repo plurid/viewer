@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { sameSourceVersion, sourceVersion } from '../src/domain/files/inspection';
 import {
   readTemporalIdentity,
@@ -170,9 +170,15 @@ describe('raw server locations', () => {
 
   it('enforces the whole path byte limit independently of the child name limit', () => {
     const paths = [
-      '/' + 'a'.repeat(4095),
-      '/' + 'é'.repeat(2047) + 'a',
-      '/' + '🦋'.repeat(1023) + 'aaa',
+      '/' + ['a'.repeat(1023), 'a'.repeat(1023), 'a'.repeat(1023), 'a'.repeat(1023)].join('/'),
+      '/' +
+        Array<string>(4)
+          .fill('é'.repeat(511) + 'a')
+          .join('/'),
+      '/' +
+        Array<string>(4)
+          .fill('🦋'.repeat(255) + 'aaa')
+          .join('/'),
     ];
     for (const path of paths) {
       expect(remoteUTF8Bytes(path)).toBe(4096);
@@ -520,5 +526,91 @@ describe('server policy', () => {
     expect(remoteFeatureEnabled({ VIEWER_REMOTE: '1' })).toBe(true);
     for (const value of [undefined, '', '0', 'true', 'yes', '01', ' 1', '1 '])
       expect(remoteFeatureEnabled({ VIEWER_REMOTE: value }), String(value)).toBe(false);
+  });
+});
+
+describe('reviewed location bounds and errors', () => {
+  it('validates deep ancestry once before constructing every prefix', () => {
+    const parse = vi.spyOn(remotePath, 'safeParse');
+    try {
+      const location = 'viewer-sftp://abc123' + '/a'.repeat(2048);
+      const ancestry = remoteAncestry(location);
+      expect(ancestry).toHaveLength(2049);
+      expect(ancestry[0]).toBe('viewer-sftp://abc123/');
+      expect(ancestry.at(-1)).toBe(location);
+      expect(parse.mock.calls.length).toBe(1);
+    } finally {
+      parse.mockRestore();
+    }
+  });
+  it('rejects huge input before regex, Unicode walks or UTF-8 encoding', () => {
+    const encode = vi.spyOn(TextEncoder.prototype, 'encode');
+    try {
+      const path = '/a'.repeat(5_000_000);
+      expect(() => remotePath.safeParse(path)).not.toThrow();
+      expect(remotePath.safeParse(path).success).toBe(false);
+      expect(isRemoteLocation('viewer-sftp://abc123' + path)).toBe(false);
+      expect(remoteLocation.safeParse('viewer-sftp://abc123' + path).success).toBe(false);
+      expect(encode).not.toHaveBeenCalled();
+    } finally {
+      encode.mockRestore();
+    }
+  });
+  it('applies the same name byte limit to existing paths and joined children', () => {
+    for (const name of ['a'.repeat(1025), 'é'.repeat(513), '🦋'.repeat(257)]) {
+      expect(remotePath.safeParse('/' + name).success).toBe(false);
+      expect(isRemoteLocation('viewer-sftp://abc123/' + name)).toBe(false);
+      expect(() => remoteJoin('viewer-sftp://abc123/', name)).toThrow();
+    }
+  });
+  it.each(['.', '..', 'a..b', 'host\u202e', 'host\u200b'])('refuses invalid host %s', (host) => {
+    expect(remoteHost.safeParse(host).success).toBe(false);
+  });
+  it.each(['\u202e', '\u200b', '\u2066', '\u00ad', '\u034f', '\ufe0f'])(
+    'refuses invisible prompt label characters %s',
+    (invisible) => {
+      const base = { id: 'abc123', name: 'Build', host: 'host' };
+      expect(remoteConnection.safeParse({ ...base, name: 'Build' + invisible }).success).toBe(
+        false,
+      );
+      expect(remoteUser.safeParse('user' + invisible).success).toBe(false);
+      expect(remoteHost.safeParse('host' + invisible).success).toBe(false);
+    },
+  );
+  it('gives invalid-location helpers a typed plain error', () => {
+    for (const location of [
+      'viewer-sftp:notes.txt',
+      'viewer-sftp://bad/path',
+      'viewer-sftp://abc123/a/../b',
+    ]) {
+      for (const work of [
+        () => parseRemoteLocation(location),
+        () => remoteParent(location),
+        () => remoteBaseName(location),
+        () => remoteAncestry(location),
+        () => displayLocation(location, { host: 'host' }),
+      ]) {
+        let error: unknown;
+        try {
+          work();
+        } catch (caught) {
+          error = caught;
+        }
+        expect(error).toMatchObject({ code: 'VIEWER_REMOTE_INVALID_LOCATION' });
+        expect((error as Error).name).not.toBe('ZodError');
+        expect((error as Error).message).not.toMatch(/[\n\[\]{}]/);
+      }
+    }
+  });
+  it('centralizes codec, Trash, proof and resource bounds', () => {
+    expect(remoteLimits).toMatchObject({
+      codecStringBytes: 65536,
+      codecNameBytes: 4096,
+      codecExtensionPairs: 128,
+      trashInfoAttempts: 1000,
+      trashListItems: 4000,
+      proofEntries: 10000,
+      resourceGrants: 256,
+    });
   });
 });

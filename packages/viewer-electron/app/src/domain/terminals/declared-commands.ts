@@ -53,7 +53,6 @@ const lifecycleScripts = new Set([
   'prepublish',
   'prepublishOnly',
   'publish',
-  'pack',
   'prepack',
   'postpack',
   'version',

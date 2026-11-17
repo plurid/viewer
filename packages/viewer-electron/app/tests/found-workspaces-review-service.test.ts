@@ -55,22 +55,29 @@ async function fixture() {
   });
   let exhaustAfter = Infinity;
   let calls = 0;
-  const probe = vi.fn(async (folder: string, pass: { exhausted: boolean }): Promise<FolderProbeResult> => {
-    calls++;
-    if (calls >= exhaustAfter) pass.exhausted = true;
-    const value = folderFor(folder);
-    if (value.delay) await new Promise((resolve) => setTimeout(resolve, value.delay));
-    if (value.missing) return { ok: false, reason: 'missing' };
-    return {
-      ok: true,
-      path: folder,
-      identity: { dev: 1n, ino: value.ino },
-      markers: value.markers,
-      capped: false,
-      git: value.git,
-      package: value.markers.includes('package.json') ? { name: path.basename(folder) } : undefined,
-    };
-  });
+  const probe = vi.fn(
+    async (
+      folder: string,
+      pass: { exhausted: boolean } = { exhausted: false },
+    ): Promise<FolderProbeResult> => {
+      calls++;
+      if (calls >= exhaustAfter) pass.exhausted = true;
+      const value = folderFor(folder);
+      if (value.delay) await new Promise((resolve) => setTimeout(resolve, value.delay));
+      if (value.missing) return { ok: false, reason: 'missing' };
+      return {
+        ok: true,
+        path: folder,
+        identity: { dev: 1n, ino: value.ino },
+        markers: value.markers,
+        capped: false,
+        git: value.git,
+        package: value.markers.includes('package.json')
+          ? { name: path.basename(folder) }
+          : undefined,
+      };
+    },
+  );
   const ports = {
     facts: { pass: () => ({ relaunches: 0, exhausted: false }), probe },
     state: () => state,
@@ -220,7 +227,7 @@ it('S4 an unrelated rename wipes every probe, writes the file and forces a full 
   for (let index = 0; index < 20; index++) {
     const root = f.home + '/code/p' + index;
     f.folderFor(root).markers = ['package.json'];
-    f.state.visits[root + '/src'] = { count: 3, last: f.now };
+    f.state.visits![root + '/src'] = { count: 3, last: f.now };
   }
   await f.service.run();
   const firstCalls = f.probe.mock.calls.length;
@@ -229,6 +236,7 @@ it('S4 an unrelated rename wipes every probe, writes the file and forces a full 
     { source: f.home + '/Downloads/a.txt', destination: f.home + '/Downloads/b.txt' },
   ]);
   const stored = JSON.parse(await readFile(f.service.store.file, 'utf8'));
+  expect(stored.probes).toHaveLength(firstCalls);
 
   f.probe.mockClear();
   await f.service.run();
@@ -242,7 +250,7 @@ it('S4b with 200 roots, an unrelated rename (or the 7-day expiry) makes found wo
   for (let index = 0; index < 200; index++) {
     const root = f.home + '/code/p' + index;
     f.folderFor(root).markers = ['package.json'];
-    f.state.visits[root + '/src'] = { count: 3, last: f.now };
+    f.state.visits![root + '/src'] = { count: 3, last: f.now };
   }
   await f.service.run();
   const one = f.service.snapshot().definitions.length;
@@ -256,6 +264,9 @@ it('S4b with 200 roots, an unrelated rename (or the 7-day expiry) makes found wo
   const afterRename = f.service.snapshot().definitions.length;
   await f.service.run();
   const recovered = f.service.snapshot().definitions.length;
+  expect(one).toBeGreaterThan(0);
+  expect(one).toBeLessThanOrEqual(two);
+  expect(recovered).toBe(two);
   f.advance(8 * 86_400_000);
   await f.service.run();
   const afterExpiry = f.service.snapshot().definitions.length;
@@ -287,6 +298,7 @@ it('S5 passes and writes keep happening every five minutes without any new visit
   }
 
   expect(passes.mock.calls.length).toBe(0);
+  expect(save).not.toHaveBeenCalled();
 });
 
 class FakeWorker implements OwnedWorker<FolderFactsReply> {
@@ -294,7 +306,11 @@ class FakeWorker implements OwnedWorker<FolderFactsReply> {
   requests: FolderFactsRequest[] = [];
   terminate = vi.fn(async () => 0);
   thread = { terminate: this.terminate, on: vi.fn() } as unknown as Worker;
-  constructor(private answer: (request: FolderFactsRequest) => { delay: number; value: FolderProbeResult } | undefined) {}
+  constructor(
+    private answer: (
+      request: FolderFactsRequest,
+    ) => { delay: number; value: FolderProbeResult } | undefined,
+  ) {}
   postMessage(value: unknown) {
     const message = value as FolderFactsMessage;
     if (message.kind === 'allow') return;
@@ -312,7 +328,7 @@ class FakeWorker implements OwnedWorker<FolderFactsReply> {
 it('S6 one interactive read ahead in the queue makes a found probe time out and quarantines the boot volume', async () => {
   const f = await fixture();
   const roots = Array.from({ length: 5 }, (_, index) => f.home + '/code/p' + index);
-  for (const root of roots) f.state.visits[root + '/src'] = { count: 3, last: f.now };
+  for (const root of roots) f.state.visits![root + '/src'] = { count: 3, last: f.now };
   const workers: FakeWorker[] = [];
   const facts = new FolderFacts('unused', {
     worker: () => {
@@ -406,8 +422,7 @@ it('S8 load at launch moves an unreadable file aside (a write at launch)', async
   await f.service.load();
   expect(await readdir(f.directory)).toEqual(['found-workspaces-v1.json']);
   await f.service.run();
-  expect((await readdir(f.directory)).some(name => name.includes('.unreadable-'))).toBe(true);
-
+  expect((await readdir(f.directory)).some((name) => name.includes('.unreadable-'))).toBe(true);
 });
 
 it('S9 launch: reading a full file, and the setting-off rewrite, happen on the bootstrap path', async () => {
@@ -450,7 +465,6 @@ it('S9 launch: reading a full file, and the setting-off rewrite, happen on the b
   expect(elapsed).toBeGreaterThanOrEqual(0);
   await off.run();
   expect(JSON.parse(await readFile(off.store.file, 'utf8')).entries).toEqual([]);
-
 });
 
 it('S10 an unplugged local volume removes its found definitions outright (no missing state)', async () => {
@@ -467,10 +481,38 @@ it('S10 an unplugged local volume removes its found definitions outright (no mis
   const before = service.snapshot().definitions.map((item) => item.key);
   mounted = false;
   const after = service.snapshot();
-  expect(after.definitions.map(item => item.key)).toEqual(before);
+  expect(after.definitions.map((item) => item.key)).toEqual(before);
   expect(after.definitions[0]!.rootState).toBe('unknown');
   await service.run();
-  expect(service.snapshot().definitions.map(item => item.key)).toEqual(before);
-
+  expect(service.snapshot().definitions.map((item) => item.key)).toEqual(before);
 });
-
+it('S6c keeps the shared probe quarantine for thirty seconds rather than one', async () => {
+  vi.useFakeTimers();
+  const facts = new FolderFacts('unused', {
+    worker: () =>
+      new FakeWorker((request) =>
+        request.path.endsWith('/hung')
+          ? undefined
+          : {
+              delay: 1,
+              value: {
+                ok: true,
+                path: request.path,
+                identity: { dev: 1n, ino: 44n },
+                markers: [],
+                capped: false,
+              },
+            },
+      ),
+  });
+  const hung = facts.probe('/Volumes/Sleepy/hung');
+  await vi.advanceTimersByTimeAsync(151);
+  expect(await hung).toEqual({ ok: false, reason: 'timeout' });
+  await vi.advanceTimersByTimeAsync(1001);
+  expect(await facts.probe('/Volumes/Sleepy/other')).toEqual({ ok: false, reason: 'quarantined' });
+  await vi.advanceTimersByTimeAsync(30_001);
+  const available = facts.probe('/Volumes/Sleepy/other');
+  await vi.advanceTimersByTimeAsync(1);
+  expect(await available).toMatchObject({ ok: true });
+  facts.close();
+});

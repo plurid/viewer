@@ -22,8 +22,7 @@ export function catalogCommands({
   const commands: CommandDefinition[] = [];
   for (const entry of orderedWorkspaces(state.saved)) {
     const definition = linkedDefinition(entry, state.bootstrap.definitions);
-    const changed =
-      definition && definition.basis !== entry.definition!.basis;
+    const changed = definition && definition.basis !== entry.definition!.basis;
     const resetID = changed ? `reset-definition:${entry.id}` : undefined;
     commands.push({
       id: `workspace:${entry.id}`,
@@ -65,7 +64,9 @@ export function catalogCommands({
       });
   }
   const opened = new Set(
-    state.saved.workspaces.flatMap((entry) => (linkedDefinition(entry, state.bootstrap.definitions) ? [entry.definition!.key] : [])),
+    state.saved.workspaces.flatMap((entry) =>
+      linkedDefinition(entry, state.bootstrap.definitions) ? [entry.definition!.key] : [],
+    ),
   );
   for (const definition of state.bootstrap.definitions?.definitions ?? []) {
     if (!searchableDefinition(definition) || opened.has(definition.key)) continue;

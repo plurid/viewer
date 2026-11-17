@@ -1,6 +1,9 @@
 import { readItemIdentity } from '../../domain/files/item-identity';
 import { maximumWorkspaces, uniqueDefinitionLinks } from '../../domain/workspaces/catalog';
-import { definitionKeySchema, workspaceDefinitionSourceSchema } from '../../domain/workspaces/definitions/schema';
+import {
+  definitionKeySchema,
+  workspaceDefinitionSourceSchema,
+} from '../../domain/workspaces/definitions/schema';
 import { syncParentDirectory } from './directory-sync';
 import {
   compilePresentationValues,

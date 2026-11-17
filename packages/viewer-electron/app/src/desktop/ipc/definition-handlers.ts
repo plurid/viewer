@@ -26,7 +26,8 @@ interface DefinitionPorts {
     | 'proposal'
     | 'setProjectManager'
     | 'refreshSourceOffer'
-  > & Partial<Pick<WorkspaceDefinitions, 'prepareKeys'>>;
+  > &
+    Partial<Pick<WorkspaceDefinitions, 'prepareKeys'>>;
   memory: Pick<DefinedWorkspaces, 'get' | 'remember' | 'forget' | 'problem'>;
   sessions: Pick<
     WorkspaceSessions,
@@ -106,9 +107,11 @@ export function createDefinitionHandlers(
           );
         }
         if (!key) throw new Error('This workspace has no definition.');
-        if (workspace.definition?.source === 'found' &&
+        if (
+          workspace.definition?.source === 'found' &&
           ports.definitions.entry(key)?.source !== undefined &&
-          ports.definitions.entry(key)?.source !== 'found')
+          ports.definitions.entry(key)?.source !== 'found'
+        )
           throw new Error('Viewer no longer finds this folder. Save it as another definition.');
         if (request.kind === 'close-info')
           return { kind: 'close-info', problem: ports.memory.problem(workspace, state) };
@@ -179,8 +182,10 @@ export function createDefinitionHandlers(
       return {
         kind: 'build',
         definition: structuredClone(definition),
-        closed: closed?.workspace.definition?.source === 'found' && definition.source !== 'found'
-          ? undefined : closed,
+        closed:
+          closed?.workspace.definition?.source === 'found' && definition.source !== 'found'
+            ? undefined
+            : closed,
       };
     },
     workspaceDefinitionFile: async ([request], owner) => {

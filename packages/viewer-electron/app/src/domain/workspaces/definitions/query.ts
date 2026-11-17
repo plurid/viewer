@@ -5,6 +5,7 @@ import { boundedEditDistance } from '../../search/approximate';
 import type { PathScoreBuffers, PreparedPathScore } from '../../search/path-fuzzy';
 import { pathScoreBuffers, preparePathScore, scorePreparedPath } from '../../search/path-fuzzy';
 import { normalizedProjectName } from './paths';
+import { definitionLinkMatches } from '../catalog';
 
 export type WorkspaceChoice =
   | {
@@ -316,11 +317,16 @@ export function rankWorkspaceChoices(
   const buffers = pathScoreBuffers();
   const cache: TypoCache = new Map();
   const opened = new Set(
-    open.flatMap((workspace) => (workspace.definition ? [workspace.definition.key] : [])),
+    open.flatMap((workspace) =>
+      definitionLinkMatches(workspace, byKey.get(workspace.definition?.key ?? ''))
+        ? [workspace.definition!.key]
+        : [],
+    ),
   );
   const choices: WorkspaceChoice[] = [
     ...open.map((workspace): WorkspaceChoice => {
-      const definition = workspace.definition && byKey.get(workspace.definition.key);
+      const matched = workspace.definition && byKey.get(workspace.definition.key);
+      const definition = definitionLinkMatches(workspace, matched) ? matched : undefined;
       return {
         kind: 'open',
         workspace,
@@ -391,7 +397,7 @@ export function resolveWorkspaceQuery(
     if (!matches.length) return;
     if (matches.length > 1) return { kind: 'picker', query: typed };
     const key = matches[0]!.key;
-    const workspace = open.find((workspace) => workspace.definition?.key === key);
+    const workspace = open.find((workspace) => definitionLinkMatches(workspace, matches[0]));
     return workspace ? { kind: 'open', workspaceID: workspace.id } : { kind: 'defined', key };
   };
   const key =
@@ -418,13 +424,19 @@ export function resolveWorkspaceQuery(
   if (alias) return alias;
   const byKey = new Map(visible.map((definition) => [definition.key, definition]));
   const opened = new Set(
-    open.flatMap((workspace) => (workspace.definition ? [workspace.definition.key] : [])),
+    open.flatMap((workspace) =>
+      definitionLinkMatches(workspace, byKey.get(workspace.definition?.key ?? ''))
+        ? [workspace.definition!.key]
+        : [],
+    ),
   );
   const matchingOpen = open.filter(
     (workspace) =>
       choiceScore(
         workspace.name,
-        workspace.definition && byKey.get(workspace.definition.key),
+        definitionLinkMatches(workspace, byKey.get(workspace.definition?.key ?? ''))
+          ? byKey.get(workspace.definition!.key)
+          : undefined,
         typed,
       ) > 0,
   );

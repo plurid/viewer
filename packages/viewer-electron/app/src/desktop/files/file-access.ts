@@ -182,6 +182,7 @@ export class FileAccess {
   }
   async require(files: readonly string[]): Promise<void> {
     files.forEach(assertLocalPath);
+    files.forEach((file) => localPath.parse(file));
     for (const file of files)
       if (this.blocked(path.resolve(file))) throw new FileAccessRequired(file);
     if (!this.scoped) return;

@@ -8,7 +8,7 @@ const sshWord = /^(?!-)[A-Za-z0-9._-]+$(?![\s\S])/;
 export const remoteUser = z.string().regex(sshWord);
 
 function isRemoteHost(host: string): boolean {
-  if (sshWord.test(host)) return true;
+  if (sshWord.test(host)) return host !== '.' && host !== '..' && !host.includes('..');
   if (!/^\[[0-9a-f:.]+\]$(?![\s\S])/i.test(host)) return false;
   try {
     return new URL('http://' + host + '/').hostname.startsWith('[');
@@ -51,7 +51,11 @@ export const remoteConnectionName = z
   .string()
   .min(1)
   .max(remoteLimits.connectionNameCharacters)
-  .refine((name) => name.trim() === name && !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(name))
+  .refine(
+    (name) =>
+      name.trim() === name &&
+      !/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u.test(name),
+  )
   .refine(validRemoteUnicode);
 
 export const sshConfigConsent = z.enum(['not-asked', 'allowed', 'declined']);

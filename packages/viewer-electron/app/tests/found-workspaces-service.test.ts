@@ -41,12 +41,12 @@ async function fixture() {
     if (missing.has(folder)) return { ok: false, reason: 'missing' };
     if (!identities.has(folder)) identities.set(folder, serial++);
     return {
-    ok: true,
-    path: folder,
-    identity: { dev: 1n, ino: identities.get(folder)! },
-    markers: roots.has(folder) ? ['package.json'] : [],
-    capped: false,
-    package: roots.has(folder) ? { name: 'sample-site' } : undefined,
+      ok: true,
+      path: folder,
+      identity: { dev: 1n, ino: identities.get(folder)! },
+      markers: roots.has(folder) ? ['package.json'] : [],
+      capped: false,
+      package: roots.has(folder) ? { name: 'sample-site' } : undefined,
     };
   });
   const ports: FoundWorkspacePorts = {
@@ -146,7 +146,7 @@ it('waits thirty seconds after a new visit and at least five minutes after the l
   await vi.advanceTimersByTimeAsync(10_000);
   await f.service.run();
   const count = f.probe.mock.calls.length;
-  f.state.visits = { ...f.state.visits, [f.home + '/new/src']: { count: 3, last: f.now } };
+  f.state.visits = { ...f.state.visits, [f.home + '/new/src']: { count: 3, last: f.now + 1000 } };
   f.time(f.now + 1000);
   f.service.historyChanged();
   await vi.advanceTimersByTimeAsync(298_999);
@@ -160,7 +160,13 @@ it('bounds never-answering probes, quarantines their volume and shuts down witho
   const f = await fixture();
   const postMessage = vi.fn();
   const facts = new FolderFacts('unused', {
-    worker: () => ({ postMessage, message: vi.fn(), exit: vi.fn(), thread: { on: vi.fn(), terminate: vi.fn() } }) as unknown as OwnedWorker<FolderFactsReply>,
+    worker: () =>
+      ({
+        postMessage,
+        message: vi.fn(),
+        exit: vi.fn(),
+        thread: { on: vi.fn(), terminate: vi.fn(async () => 0) },
+      }) as unknown as OwnedWorker<FolderFactsReply>,
   });
   f.ports.facts = facts;
   await f.service.load();
@@ -200,13 +206,17 @@ it('keeps exact large identities through persisted probes and outside renames', 
   const original = f.probe.getMockImplementation()!;
   f.probe.mockImplementation(async (folder) => {
     const value = await original(folder);
-    return value.ok && f.roots.has(folder) ? { ...value, identity: { dev: 1n, ino: inode } } : value;
+    return value.ok && f.roots.has(folder)
+      ? { ...value, identity: { dev: 1n, ino: inode } }
+      : value;
   });
   await f.service.run();
   const key = f.service.snapshot().definitions[0]!.key;
   const written = JSON.parse(await readFile(f.service.store.file, 'utf8'));
   expect(written.entries[0].identity).toBe('1:18446744073709551600:u64');
-  expect(written.probes.find((item: { folder: string }) => item.folder === f.root).value.identity).toBe('1:18446744073709551600:u64');
+  expect(
+    written.probes.find((item: { folder: string }) => item.folder === f.root).value.identity,
+  ).toBe('1:18446744073709551600:u64');
   await f.service.close();
   const fresh = new FoundWorkspaces(f.directory, f.home, {
     facts: { pass: () => ({ relaunches: 0, exhausted: false }), probe: f.probe },
@@ -288,7 +298,11 @@ it('Store probes borrow only the existing scope and include its root', async () 
   const f = await fixture();
   f.scope(f.home + '/code');
   await f.service.run();
-  expect(f.probe.mock.calls.every(([folder]) => folder === f.home + '/code' || folder.startsWith(f.home + '/code/'))).toBe(true);
+  expect(
+    f.probe.mock.calls.every(
+      ([folder]) => folder === f.home + '/code' || folder.startsWith(f.home + '/code/'),
+    ),
+  ).toBe(true);
   expect(f.service.snapshot().definitions).toHaveLength(1);
 });
 

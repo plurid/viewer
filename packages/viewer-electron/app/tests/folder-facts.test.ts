@@ -86,6 +86,30 @@ describe('folder facts review regressions', () => {
     expect(await closed).toEqual({ ok: false, reason: 'closed' });
   });
 
+  it('quarantines a stalled read of a volume root without quarantining other mounted disks', async () => {
+    vi.useFakeTimers();
+    const workers: FakeWorker[] = [];
+    const service = new FolderFacts('worker.cjs', {
+      worker: () => {
+        const worker = new FakeWorker();
+        workers.push(worker);
+        return worker;
+      },
+    });
+    const slow = service.read('/Volumes/Sleeping', 100);
+    await vi.advanceTimersByTimeAsync(151);
+    expect(await slow).toEqual({ ok: false, reason: 'timeout' });
+    expect(await service.probe('/Volumes/Sleeping/project')).toEqual({
+      ok: false,
+      reason: 'quarantined',
+    });
+    const other = service.probe('/Volumes/Other');
+    expect(workers).toHaveLength(2);
+    workers.at(-1)!.answer();
+    expect(await other).toMatchObject({ ok: true });
+    service.close();
+  });
+
   it('bounds threads whose termination never returns, reports it, and resumes only after one stops', async () => {
     vi.useFakeTimers();
     const workers: FakeWorker[] = [];
@@ -127,7 +151,10 @@ describe('folder facts review regressions', () => {
   it('checks fixed markers beyond the enumerated prefix, approved paths and excluded metadata bodies', async () => {
     await writeFile(path.join(root, 'Makefile'), 'dev:');
     await writeFile(path.join(root, 'package.json'), '{"name":"private"}');
-    const readSync = vi.fn(() => ({ name: 'ordinary', isDirectory: () => false }));
+    let entries = 0;
+    const readSync = vi.fn(() =>
+      entries++ < 2001 ? { name: 'ordinary', isDirectory: () => false } : null,
+    );
     const closeSync = vi.fn();
     vi.mocked(opendirSync).mockReturnValueOnce({ readSync, closeSync } as never);
     expect(probeFolder(root)).toMatchObject({
@@ -209,7 +236,9 @@ describe('folder facts filesystem operations', () => {
     const fs = await vi.importActual<typeof NodeFs>('node:fs');
     const file = path.join(root, 'sample');
     await writeFile(file, 'sample');
-    vi.mocked(openSync).mockImplementationOnce((_file, flags, mode) => fs.openSync(root, flags, mode));
+    vi.mocked(openSync).mockImplementationOnce((_file, flags, mode) =>
+      fs.openSync(root, flags, mode),
+    );
     expect(readFolderFile(file, 6)).toEqual({ ok: false, reason: 'not-regular' });
     vi.mocked(openSync).mockImplementationOnce((file, flags, mode) => {
       appendFileSync(file, 'x');

@@ -137,7 +137,12 @@ export type FoundWorkspaceState = 'loading' | 'ready' | 'off';
 export type DefinitionProblemLevel = 'error' | 'warning' | 'note';
 export type DefinitionProblemSource =
   'workspaces.jsonc' | 'projects.json' | 'defined-workspaces-v1.json' | 'found-workspaces-v1.json';
-export const workspaceDefinitionSourceSchema = z.enum(['project-manager', 'override', 'standalone', 'found']);
+export const workspaceDefinitionSourceSchema = z.enum([
+  'project-manager',
+  'override',
+  'standalone',
+  'found',
+]);
 export type WorkspaceDefinitionSource = z.infer<typeof workspaceDefinitionSourceSchema>;
 export type ProjectManagerReadState =
   'undecided' | 'off' | 'absent' | 'read' | 'needs-access' | 'unreadable';

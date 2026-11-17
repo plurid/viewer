@@ -35,7 +35,9 @@ const day = 86_400_000;
 const fixedMarkers = new Set<string>(folderMarkerNames);
 
 export function foundProbeExpiry(record: FoundProbeRecord): number {
-  return record.expires ?? record.at + week - (Number.parseInt(foundPathHash(record.folder), 16) % day);
+  return (
+    record.expires ?? record.at + week - (Number.parseInt(foundPathHash(record.folder), 16) % day)
+  );
 }
 
 function interrupted(
@@ -46,7 +48,10 @@ function interrupted(
   return new Promise((resolve, reject) => {
     const cancel = () => resolve(undefined);
     signal.addEventListener('abort', cancel, { once: true });
-    request.then(resolve, reject).finally(() => signal.removeEventListener('abort', cancel)).catch(() => {});
+    request
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', cancel))
+      .catch(() => {});
   });
 }
 
@@ -61,7 +66,8 @@ export async function probeFoundFolders(input: ProbeInput): Promise<FoundProbePa
   const allowed = (folder: string) =>
     allowedFoundFolder(folder, input.context) && (!input.access || input.access(folder));
   for (const record of input.records)
-    if (allowed(record.folder) && allowed(record.value.path)) facts.set(record.folder, record.value);
+    if (allowed(record.folder) && allowed(record.value.path))
+      facts.set(record.folder, record.value);
 
   const read = async (folder: string, force = false): Promise<boolean> => {
     if (input.signal.aborted || !allowed(folder)) return false;
@@ -86,7 +92,10 @@ export async function probeFoundFolders(input: ProbeInput): Promise<FoundProbePa
       } else unknown.add(folder);
       return true;
     }
-    if (!allowedFoundFolder(result.path, input.context) || (input.access && !input.access(result.path))) {
+    if (
+      !allowedFoundFolder(result.path, input.context) ||
+      (input.access && !input.access(result.path))
+    ) {
       unknown.add(folder);
       cache.delete(folder);
       facts.delete(folder);
@@ -117,8 +126,8 @@ export async function probeFoundFolders(input: ProbeInput): Promise<FoundProbePa
     return true;
   };
   // Oldest stale observations get the next budget, rather than expiring as one catalog-wide batch.
-  const folders = [...new Set(input.folders)].sort((a, b) =>
-    (cache.get(a)?.at ?? -Infinity) - (cache.get(b)?.at ?? -Infinity),
+  const folders = [...new Set(input.folders)].sort(
+    (a, b) => (cache.get(a)?.at ?? -Infinity) - (cache.get(b)?.at ?? -Infinity),
   );
   for (const folder of folders) {
     if (input.signal.aborted || reads >= 300 || pass.exhausted) break;
@@ -126,4 +135,3 @@ export async function probeFoundFolders(input: ProbeInput): Promise<FoundProbePa
   }
   return { cache, facts, fresh, missing, unknown, read };
 }
-

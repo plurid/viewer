@@ -76,10 +76,9 @@ export class FolderFacts {
     if (this.active) return;
     const task = this.reads.shift() ?? this.probes.shift();
     if (!task) return;
-    const folder = path.resolve(
-      task.request.kind === 'read' ? path.dirname(task.request.path) : task.request.path,
-    );
-    const volume = folderVolume(folder) ?? folder;
+    const requested = path.resolve(task.request.path);
+    const folder = task.request.kind === 'read' ? path.dirname(requested) : requested;
+    const volume = folderVolume(requested) ?? folder;
     const now = this.options.now?.() ?? Date.now();
     const scope = this.options.access?.(task.request.path);
     const refuse = (reason: FolderFactsFailure['reason']) => {
@@ -90,7 +89,7 @@ export class FolderFacts {
     if (task.pass.exhausted) return refuse('budget');
     for (const [blocked, until] of this.blocked) {
       if (until <= now) this.blocked.delete(blocked);
-      else if (containsPath(blocked, folder)) return refuse('quarantined');
+      else if (containsPath(blocked, requested)) return refuse('quarantined');
     }
     if (this.options.access && !scope) return refuse('scope');
     if (!this.worker && this.retiring.size >= folderFactsLimits.stuckThreads) return refuse('busy');

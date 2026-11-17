@@ -156,17 +156,27 @@ describe('declared reader review regressions', () => {
     });
     await Promise.all([f.service.list('/one'), f.service.list('/two')]);
     let release!: () => void;
-    const save = vi.spyOn(DocumentStore.prototype, 'save').mockImplementationOnce(
-      () => new Promise<void>((resolve) => { release = resolve; }),
-    ).mockResolvedValue(undefined);
+    const save = vi
+      .spyOn(DocumentStore.prototype, 'save')
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
     const first = f.service.record('/one', 'one');
     await vi.waitFor(() => expect(release).toBeDefined());
     const second = f.service.record('/two', 'two');
-    await vi.waitFor(() => expect(f.reads.filter((file) => file === '/two/Procfile')).toHaveLength(2));
+    await vi.waitFor(() =>
+      expect(f.reads.filter((file) => file === '/two/Procfile')).toHaveLength(2),
+    );
     const clearing = f.service.clearHistory();
     release();
     await Promise.all([first, second, clearing]);
-    expect(save.mock.calls.some(([document]) => JSON.stringify(document).includes('/two'))).toBe(false);
+    expect(save.mock.calls.some(([document]) => JSON.stringify(document).includes('/two'))).toBe(
+      false,
+    );
   });
 
   it('does not derive again for an unrelated line or without a cached declaration', async () => {

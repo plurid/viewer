@@ -1,6 +1,5 @@
-import type { SFTPRequestOptions } from './client';
+import type { SFTPClient, SFTPRequestOptions } from './client';
 import { remoteLimits } from '../../../domain/remote/limits';
-import { SFTPClient } from './client';
 import { protocolAssert, sftpBounds } from './codec';
 import { sftpAbortError, SFTPError } from './errors';
 

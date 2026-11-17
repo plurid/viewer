@@ -1,9 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import type { Pane, Workspace } from '../src/domain/contracts';
+import type { Pane } from '../src/domain/contracts';
 import type { FoundWorkspacePorts } from '../src/desktop/workspaces/found-workspaces';
-import type { WorkspaceDefinition } from '../src/domain/workspaces/definitions/schema';
 import { FoundWorkspaces } from '../src/desktop/workspaces/found-workspaces';
 import { probeFoundFolders, foundProbeExpiry } from '../src/desktop/workspaces/found-probes';
 import { WorkspaceDefinitions } from '../src/desktop/workspaces/definitions';
@@ -16,9 +14,17 @@ import { definitionShares, mostlyIn, addsToDefinition } from '../src/domain/work
 import { candidateFolders, qualifyingRoots } from '../src/domain/workspaces/found/candidates';
 import { foundDefinitions } from '../src/domain/workspaces/found/catalog';
 import { rootFor, allowedFoundFolder, rootAncestors } from '../src/domain/workspaces/found/roots';
-import { definitionSourceNotice, definitionWasRemoved, withDefinitionOrigins } from '../src/domain/workspaces/catalog';
+import {
+  definitionSourceNotice,
+  definitionWasRemoved,
+  withDefinitionOrigins,
+} from '../src/domain/workspaces/catalog';
 import { temporaryRoot } from '../tools/temporary';
 import { sampleDefinition, sampleWorkspace, hashDefinition } from './workspace-definition-fixtures';
+import {
+  rankWorkspaceChoices,
+  resolveWorkspaceQuery,
+} from '../src/domain/workspaces/definitions/query';
 
 const services: { close(): Promise<void> }[] = [];
 afterEach(async () => {
@@ -26,13 +32,21 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 const folderPane = (id: string, path: string): Pane => ({
-  id, type: 'folder', path, history: [path], historyIndex: 0,
-  mode: 'list', sort: 'name', descending: false, showHidden: false,
+  id,
+  type: 'folder',
+  path,
+  history: [path],
+  historyIndex: 0,
+  mode: 'list',
+  sort: 'name',
+  descending: false,
+  showHidden: false,
 });
-const spaceAt = (...paths: string[]) => sampleWorkspace('open', {
-  panes: paths.map((folder, index) => folderPane('p' + index, folder)),
-  roots: paths.map((_, index) => 'p' + index),
-});
+const spaceAt = (...paths: string[]) =>
+  sampleWorkspace('open', {
+    panes: paths.map((folder, index) => folderPane('p' + index, folder)),
+    roots: paths.map((_, index) => 'p' + index),
+  });
 
 async function fixture() {
   const directory = await temporaryRoot('viewer-found-guards-');
@@ -44,20 +58,32 @@ async function fixture() {
   const roots = new Set<string>();
   const retained = new Set<string>();
   const state = stateSchema.parse({
-    version: 13, workspaces: [sampleWorkspace()], activeWorkspace: 'open',
-    favorites: [], recents: [], look: 'dark', visits: {},
+    version: 13,
+    workspaces: [sampleWorkspace()],
+    activeWorkspace: 'open',
+    favorites: [],
+    recents: [],
+    look: 'dark',
+    visits: {},
   });
   const probe = vi.fn(async (folder: string) => {
     if (!identities.has(folder)) identities.set(folder, serial++);
     return {
-      ok: true as const, path: folder, identity: { dev: 1n, ino: identities.get(folder)! },
-      markers: roots.has(folder) ? ['package.json'] : [], capped: false,
+      ok: true as const,
+      path: folder,
+      identity: { dev: 1n, ino: identities.get(folder)! },
+      markers: roots.has(folder) ? ['package.json'] : [],
+      capped: false,
     };
   });
   const pass = vi.fn(() => ({ relaunches: 0, exhausted: false }));
   const ports: FoundWorkspacePorts = {
-    facts: { pass, probe }, state: () => state, enabled: () => enabled,
-    explicit: () => [], retained: (key) => retained.has(key), localVolumes: () => [],
+    facts: { pass, probe },
+    state: () => state,
+    enabled: () => enabled,
+    explicit: () => [],
+    retained: (key) => retained.has(key),
+    localVolumes: () => [],
     now: () => now,
   };
   const create = (extra: Partial<FoundWorkspacePorts> = {}) => {
@@ -73,27 +99,56 @@ async function fixture() {
     state.visits![folder + '/src'] = { count: 3, last: now };
   };
   return {
-    directory, home, root, roots, retained, state, ports, probe, pass, service, create, add,
-    get now() { return now; },
-    advance: (ms: number) => { now += ms; },
-    enabled: (value: boolean) => { enabled = value; },
+    directory,
+    home,
+    root,
+    roots,
+    retained,
+    state,
+    ports,
+    probe,
+    pass,
+    service,
+    create,
+    add,
+    get now() {
+      return now;
+    },
+    advance: (ms: number) => {
+      now += ms;
+    },
+    enabled: (value: boolean) => {
+      enabled = value;
+    },
   };
 }
 const emptyDocument = () => ({ version: 1, entries: [], hidden: [], probes: [], lastRun: [] });
 
-it.each(['Library/secret', '.hidden/secret'])('refuses a probe whose realpath enters %s', async (suffix) => {
-  const f = await fixture();
-  const result = await probeFoundFolders({
-    facts: { pass: f.pass, probe: vi.fn(async () => ({
-      ok: true, path: f.home + '/' + suffix, identity: { dev: 1n, ino: 20n },
-      markers: ['package.json'], capped: false,
-    })) },
-    records: [], folders: [f.root], context: { home: f.home },
-    now: () => f.now, signal: new AbortController().signal,
-  });
-  expect(result.facts.has(f.root)).toBe(false);
-  expect(result.cache.has(f.root)).toBe(false);
-});
+it.each(['Library/secret', '.hidden/secret'])(
+  'refuses a probe whose realpath enters %s',
+  async (suffix) => {
+    const f = await fixture();
+    const result = await probeFoundFolders({
+      facts: {
+        pass: f.pass,
+        probe: vi.fn(async () => ({
+          ok: true as const,
+          path: f.home + '/' + suffix,
+          identity: { dev: 1n, ino: 20n },
+          markers: ['package.json'],
+          capped: false,
+        })),
+      },
+      records: [],
+      folders: [f.root],
+      context: { home: f.home },
+      now: () => f.now,
+      signal: new AbortController().signal,
+    });
+    expect(result.facts.has(f.root)).toBe(false);
+    expect(result.cache.has(f.root)).toBe(false);
+  },
+);
 
 it('hides cached rows at once when Store access is revoked', async () => {
   const f = await fixture();
@@ -136,13 +191,28 @@ it('keeps a retained entry when there are no probe facts or visits', async () =>
 it('ignores pristine planes and gives presence its ranking weight', () => {
   const home = '/Users/sample';
   const pristine = { ...spaceAt(home), name: 'Workspace' };
-  expect(candidateFolders({ home, now: 100, visits: {}, recents: [], workspaces: [pristine], openWindows: ['open'] })).toEqual([]);
+  expect(
+    candidateFolders({
+      home,
+      now: 100,
+      visits: {},
+      recents: [],
+      workspaces: [pristine],
+      openWindows: ['open'],
+    }),
+  ).toEqual([]);
   const a = home + '/code/a';
   const z = home + '/code/z';
-  expect(qualifyingRoots([a, z], [
-    { folder: a, count: 3, last: 100, score: 3, plane: false },
-    { folder: z, count: 3, last: 100, score: 3, plane: true },
-  ], 100)[0]).toBe(z);
+  expect(
+    qualifyingRoots(
+      [a, z],
+      [
+        { folder: a, count: 3, last: 100, score: 3, plane: false },
+        { folder: z, count: 3, last: 100, score: 3, plane: true },
+      ],
+      100,
+    )[0],
+  ).toBe(z);
 });
 
 it('retains all linked roots in addition to two hundred ordinary roots', () => {
@@ -176,8 +246,14 @@ it('waits thirty seconds for a new visit even after the five-minute interval ela
 it('bounds the growing probe cache and refreshes oldest observations first with spread expiry', async () => {
   const f = await fixture();
   const probes = Array.from({ length: 1000 }, (_, index) => ({
-    folder: f.home + '/cache/p' + index, at: f.now - 8 * 86_400_000,
-    value: { path: f.home + '/cache/p' + index, identity: '1:' + (index + 1000), markers: [], capped: false },
+    folder: f.home + '/cache/p' + index,
+    at: f.now - 8 * 86_400_000,
+    value: {
+      path: f.home + '/cache/p' + index,
+      identity: '1:' + (index + 1000),
+      markers: [],
+      capped: false,
+    },
   }));
   await writeFile(f.service.store.file, JSON.stringify({ ...emptyDocument(), probes }));
   for (let index = 0; index < 180; index++) f.add(f.home + '/code/p' + index);
@@ -191,8 +267,12 @@ it('bounds the growing probe cache and refreshes oldest observations first with 
   const facts = { pass: f.pass, probe: f.probe };
   f.probe.mockClear();
   await probeFoundFolders({
-    facts, records: oldest, folders: oldest.map(item => item.folder).reverse(),
-    context: { home: f.home }, now: () => f.now, signal: new AbortController().signal,
+    facts,
+    records: oldest,
+    folders: oldest.map((item) => item.folder).reverse(),
+    context: { home: f.home },
+    now: () => f.now,
+    signal: new AbortController().signal,
   });
   expect(f.probe.mock.calls[0]![0]).toBe(oldest[0]!.folder);
   expect(foundProbeExpiry(oldest[0]!)).toBeLessThanOrEqual(oldest[0]!.at + 7 * 86_400_000);
@@ -204,11 +284,20 @@ it('coalesces affected remaps and preserves unrelated cached probes', async () =
   f.add(f.home + '/code/other');
   await f.service.run();
   const before = JSON.parse(await readFile(f.service.store.file, 'utf8'));
-  const other = before.probes.find((item: { folder: string }) => item.folder === f.home + '/code/other');
+  const other = before.probes.find(
+    (item: { folder: string }) => item.folder === f.home + '/code/other',
+  );
   const save = vi.spyOn(f.service.store, 'save');
-  await Promise.all(Array.from({ length: 100 }, (_, index) => f.service.remap([{
-    source: f.root, destination: f.home + '/code/renamed-' + index,
-  }])));
+  await Promise.all(
+    Array.from({ length: 100 }, (_, index) =>
+      f.service.remap([
+        {
+          source: f.root,
+          destination: f.home + '/code/renamed-' + index,
+        },
+      ]),
+    ),
+  );
   await f.service.close();
   expect(save).toHaveBeenCalledTimes(1);
   const after = JSON.parse(await readFile(f.service.store.file, 'utf8'));
@@ -242,7 +331,10 @@ it('re-keys the stored entry, its live link and memory when an explicit key take
   const sessions = new WorkspaceSessions();
   sessions.seed(state);
   const stale = sessions.open(1, f.home);
+  sessions.reserveDefinition(1, definition.key);
   await memory.remember(workspace, state);
+  await memory.opened(definition.key);
+  const openedAt = memory.openedAt(definition.key);
   f.ports.state = () => sessions.snapshot();
   f.ports.retained = vi.fn((key) => !!sessions.findByDefinition(key) || !!memory.summary(key));
   f.ports.rekey = async (changes) => {
@@ -255,8 +347,12 @@ it('re-keys the stored entry, its live link and memory when an explicit key take
   expect(next.key).not.toBe(definition.key);
   expect(next.root).toBe(f.root);
   expect(sessions.findByDefinition(next.key)?.id).toBe(workspace.id);
+  expect(sessions.definitionOwner(next.key)).toBe(1);
+  expect(sessions.definitionOwner(definition.key)).toBeUndefined();
   expect(memory.get(next.key)?.workspace.definition?.key).toBe(next.key);
   expect(memory.get(definition.key)).toBeUndefined();
+  expect(memory.openedAt(next.key)).toBe(openedAt);
+  expect(memory.openedAt(definition.key)).toBeUndefined();
   expect(f.ports.retained).toHaveBeenCalledWith(definition.key);
   stale.workspaces[0]!.name = 'Renamed while re-keying';
   const saved = sessions.save(1, stale);
@@ -270,7 +366,9 @@ it('keeps a pending re-key on disk if carrying its owners fails and retries it',
   await f.service.run();
   const key = f.service.snapshot().definitions[0]!.key;
   f.ports.explicit = () => [sampleDefinition(key, { root: f.home + '/different' })];
-  f.ports.rekey = vi.fn(async () => { throw new Error('memory unavailable'); });
+  f.ports.rekey = vi.fn(async () => {
+    throw new Error('memory unavailable');
+  });
   await expect(f.service.run()).rejects.toThrow('memory unavailable');
   const document = JSON.parse(await readFile(f.service.store.file, 'utf8'));
   expect(document.rekeys).toHaveLength(1);
@@ -284,12 +382,20 @@ it('keeps a pending re-key on disk if carrying its owners fails and retries it',
 it('never uses found roots as capture tokens, and proposes a found root without projectName', () => {
   const home = '/Users/sample';
   const own = sampleDefinition('own', { root: home + '/code/own' });
-  const found = sampleDefinition('found-only', { root: home + '/code/foreign', source: 'found', projectName: undefined });
+  const found = sampleDefinition('found-only', {
+    root: home + '/code/foreign',
+    source: 'found',
+    projectName: undefined,
+  });
   const workspace = spaceAt(found.root + '/src');
   expect(proposeDefinition(workspace, [own, found], home).key).toBe('found-only');
   const captured = captureDefinition({
-    workspace, order: ['p0'], definition: own, entry: { root: '~/code/own' },
-    definitions: [own, found], home,
+    workspace,
+    order: ['p0'],
+    definition: own,
+    entry: { root: '~/code/own' },
+    definitions: [own, found],
+    home,
   });
   expect(captured.entry.planes).toEqual([{ kind: 'folder', path: '~/code/foreign/src' }]);
 });
@@ -303,8 +409,21 @@ it('deduplicates realpaths against explicit and earlier found entries, reserving
     { key: 'alias', root: alias, realpath: root, identity: '1:2', names: [], at: 1 },
   ];
   expect(foundDefinitions(entries, [], home, hashDefinition)).toHaveLength(1);
-  expect(foundDefinitions(entries, [sampleDefinition('explicit', { root: alias })], home, hashDefinition, () => root)).toEqual([]);
-  const result = foundDefinitions(entries, [sampleDefinition('code/a', { root: home + '/elsewhere' })], home, hashDefinition);
+  expect(
+    foundDefinitions(
+      entries,
+      [sampleDefinition('explicit', { root: alias })],
+      home,
+      hashDefinition,
+      () => root,
+    ),
+  ).toEqual([]);
+  const result = foundDefinitions(
+    entries,
+    [sampleDefinition('code/a', { root: home + '/elsewhere' })],
+    home,
+    hashDefinition,
+  );
   expect(result).toHaveLength(1);
   expect(result[0]!.key).not.toBe('code/a');
 });
@@ -330,10 +449,16 @@ it('keeps project names out and target, excludes their generated children and fo
     expect(rootFor(root, new Map([[root, { markers: ['package.json'] }]]), { home })).toBe(root);
     const project = home + '/code/sample';
     const generated = project + '/' + name + '/child';
-    expect(rootFor(generated, new Map([
-      [project, { markers: ['package.json'] }],
-      [generated, { markers: ['package.json'] }],
-    ]), { home })).toBeUndefined();
+    expect(
+      rootFor(
+        generated,
+        new Map([
+          [project, { markers: ['package.json'] }],
+          [generated, { markers: ['package.json'] }],
+        ]),
+        { home },
+      ),
+    ).toBeUndefined();
   }
   expect(allowedFoundFolder(home + '/library/x', { home })).toBe(false);
   expect(rootAncestors(home + '/documents/notes', { home })).toEqual([home + '/documents/notes']);
@@ -341,18 +466,39 @@ it('keeps project names out and target, excludes their generated children and fo
 
 it('keeps standalone origins and uses the found-off notice without unlocking deletion', () => {
   const found = sampleDefinition('shared', { source: 'standalone' });
-  const standalone = { ...spaceAt('/sample'), definition: { key: 'missing', basis: found.basis, source: 'standalone' as const } };
+  const standalone = {
+    ...spaceAt('/sample'),
+    definition: { key: 'missing', basis: found.basis, source: 'standalone' as const },
+  };
   const spaces = [standalone];
   const catalog = {
-    revision: 1, file: { path: '/data/workspaces.jsonc', state: 'read' as const },
-    projectManager: { path: '/source/projects.json', state: 'unreadable' as const, enabled: true, projects: 0, missing: 0, disabled: 0, remote: 0, duplicateKeys: 0 },
-    definitions: [sampleDefinition('missing')], diagnostics: [],
+    revision: 1,
+    file: { path: '/data/workspaces.jsonc', state: 'read' as const },
+    projectManager: {
+      path: '/source/projects.json',
+      state: 'unreadable' as const,
+      enabled: true,
+      projects: 0,
+      missing: 0,
+      disabled: 0,
+      remote: 0,
+      duplicateKeys: 0,
+    },
+    definitions: [sampleDefinition('missing')],
+    diagnostics: [],
   };
   expect(withDefinitionOrigins(spaces, catalog)).toBe(spaces);
   expect(withDefinitionOrigins(spaces, catalog)[0]!.definition!.source).toBe('standalone');
   expect(definitionWasRemoved(standalone, { ...catalog, definitions: [] })).toBe(true);
-  const linked = { ...standalone, definition: { ...standalone.definition, source: 'found' as const } };
-  const off = { ...catalog, definitions: [], found: { state: 'off' as const, count: 0, hidden: 0 } };
+  const linked = {
+    ...standalone,
+    definition: { ...standalone.definition, source: 'found' as const },
+  };
+  const off = {
+    ...catalog,
+    definitions: [],
+    found: { state: 'off' as const, count: 0, hidden: 0 },
+  };
   expect(definitionSourceNotice(linked, off)).toBe('Finding workspaces is off.');
   expect(definitionWasRemoved(linked, off)).toBe(false);
   expect(definitionWasRemoved(linked, catalog)).toBe(true);
@@ -360,16 +506,58 @@ it('keeps standalone origins and uses the found-off notice without unlocking del
 
 it('pins ownership ties, the sixty-percent threshold, global searches, tiling and inherited terminal profiles', () => {
   const home = '/Users/sample';
-  const found = sampleDefinition('found', { root: home + '/a', source: 'found', projectName: undefined });
+  const found = sampleDefinition('found', {
+    root: home + '/a',
+    source: 'found',
+    projectName: undefined,
+  });
   const explicit = sampleDefinition('explicit', { root: home + '/a/longer' });
-  expect(definitionShares(spaceAt(found.root, found.root + '/b', explicit.root, explicit.root + '/b'), [found, explicit])[0]!.definition).toBe(explicit);
-  expect(mostlyIn(spaceAt(found.root, found.root + '/b', home + '/other', home + '/elsewhere'), [found])).toBeUndefined();
-  const global = { id: 'search', type: 'search' as const, path: found.root, query: 'x', name: 'All', allLocations: true, recursive: true, content: false };
-  expect(mostlyIn({ ...spaceAt(found.root), panes: [folderPane('p0', found.root), global] }, [found])).toBeUndefined();
-  const simple = { ...found, planes: [{ index: 0, plane: { kind: 'folder' as const, path: found.root } }] };
-  expect(addsToDefinition({ ...spaceAt(found.root), tiling: { panes: ['p0'], layout: 'tiled', main: 0.5 } }, simple)).toBe(true);
-  const terminal = { ...found, terminalProfile: 'login', planes: [{ index: 0, plane: { kind: 'terminal' as const, path: found.root } }] };
-  expect(addsToDefinition({ ...spaceAt(found.root), panes: [{ id: 't', type: 'terminal', path: found.root, profileID: 'other' }] }, terminal)).toBe(true);
+  expect(
+    definitionShares(spaceAt(found.root, found.root + '/b', explicit.root, explicit.root + '/b'), [
+      found,
+      explicit,
+    ])[0]!.definition,
+  ).toBe(explicit);
+  expect(
+    mostlyIn(spaceAt(found.root, found.root + '/b', home + '/other', home + '/elsewhere'), [found]),
+  ).toBeUndefined();
+  const global = {
+    id: 'search',
+    type: 'search' as const,
+    path: found.root,
+    query: 'x',
+    name: 'All',
+    allLocations: true,
+    recursive: true,
+    content: false,
+  };
+  expect(
+    mostlyIn({ ...spaceAt(found.root), panes: [folderPane('p0', found.root), global] }, [found]),
+  ).toBeUndefined();
+  const simple = {
+    ...found,
+    planes: [{ index: 0, plane: { kind: 'folder' as const, path: found.root } }],
+  };
+  expect(
+    addsToDefinition(
+      { ...spaceAt(found.root), tiling: { panes: ['p0'], layout: 'tiled', main: 0.5 } },
+      simple,
+    ),
+  ).toBe(true);
+  const terminal = {
+    ...found,
+    terminalProfile: 'login',
+    planes: [{ index: 0, plane: { kind: 'terminal' as const, path: found.root } }],
+  };
+  expect(
+    addsToDefinition(
+      {
+        ...spaceAt(found.root),
+        panes: [{ id: 't', type: 'terminal', path: found.root, profileID: 'other' }],
+      },
+      terminal,
+    ),
+  ).toBe(true);
 });
 
 it('passes setting changes into the finder and leaves offline roots unknown without checking them', async () => {
@@ -379,8 +567,11 @@ it('passes setting changes into the finder and leaves offline roots unknown with
   const settings = defaultSettings(f.home);
   const checkRoot = vi.fn(async () => ({ directory: false, missing: true }));
   const definitions = new WorkspaceDefinitions(f.directory + '/configuration', f.home, {
-    found: f.service, settings: () => settings, access: async () => {},
-    checkRoot, emit: () => {},
+    found: f.service,
+    settings: () => settings,
+    access: async () => {},
+    checkRoot,
+    emit: () => {},
   });
   services.push(definitions);
   await definitions.load();
@@ -388,18 +579,101 @@ it('passes setting changes into the finder and leaves offline roots unknown with
   f.enabled(false);
   await definitions.reload();
   expect(JSON.parse(await readFile(f.service.store.file, 'utf8')).entries).toEqual([]);
-  const offline = sampleDefinition('offline', { source: 'found', root: '/Volumes/Work/sample', rootState: 'unknown' });
+  const offline = sampleDefinition('offline', {
+    source: 'found',
+    root: '/Volumes/Work/sample',
+    rootState: 'unknown',
+  });
   const port = {
-    load: async () => {}, configure: async () => {}, subscribe: () => () => {},
-    snapshot: () => ({ definitions: [offline], state: { state: 'ready' as const, count: 1, hidden: 0 } }),
+    load: async () => {},
+    configure: async () => {},
+    subscribe: () => () => {},
+    snapshot: () => ({
+      definitions: [offline],
+      state: { state: 'ready' as const, count: 1, hidden: 0 },
+    }),
     available: () => false,
   };
   const other = new WorkspaceDefinitions(f.directory + '/offline', f.home, {
-    found: port, settings: () => settings, access: async () => {}, checkRoot, emit: () => {},
+    found: port,
+    settings: () => settings,
+    access: async () => {},
+    checkRoot,
+    emit: () => {},
   });
   services.push(other);
   await other.load();
   expect(await other.checkRoot('offline')).toBe('unknown');
   expect(checkRoot).not.toHaveBeenCalled();
 });
+it('does not hide an explicit choice or resolve it to the found workspace that used its key', () => {
+  const definition = sampleDefinition('taken-key', { name: 'Explicit workspace' });
+  const workspace = {
+    ...spaceAt('/old'),
+    name: 'Original folder',
+    definition: { key: definition.key, basis: definition.basis, source: 'found' as const },
+  };
+  const choices = rankWorkspaceChoices([workspace], [definition], 'explicit');
+  expect(choices.some((item) => item.kind === 'defined' && item.key === definition.key)).toBe(true);
+  expect(resolveWorkspaceQuery([workspace], [definition], 'taken-key')).toEqual({
+    kind: 'defined',
+    key: definition.key,
+  });
+});
 
+it('does not put a found snapshot on an explicit definition while its key migration waits', async () => {
+  const f = await fixture();
+  const definition = sampleDefinition('taken-key');
+  const workspace = {
+    ...spaceAt(f.root),
+    definition: { key: definition.key, basis: definition.basis, source: 'found' as const },
+  };
+  const memory = new DefinedWorkspaces(f.directory + '/memory');
+  services.push(memory);
+  await memory.remember(workspace, f.state);
+  const catalog = new WorkspaceDefinitions(f.directory, f.home, {
+    memory,
+    access: async () => {},
+    checkRoot: async () => ({ directory: true }),
+    settings: () => defaultSettings(f.home),
+    emit: () => {},
+  });
+  services.push(catalog);
+  await writeFile(
+    catalog.configuration.file,
+    JSON.stringify({
+      version: 1,
+      workspaces: { [definition.key]: { root: '~/different' } },
+    }),
+  );
+  await catalog.load();
+  expect(catalog.entry(definition.key)?.remembered).toBeUndefined();
+});
+
+it('shares concurrent key repairs and carries a reservation only for its found owner', async () => {
+  const f = await fixture();
+  f.add();
+  await f.service.run();
+  const key = f.service.snapshot().definitions[0]!.key;
+  f.ports.explicit = () => [sampleDefinition(key, { root: f.home + '/other' })];
+  const rekey = vi.fn(async () => {});
+  f.ports.rekey = rekey;
+  await Promise.all([f.service.reconcileKeys(), f.service.reconcileKeys()]);
+  expect(rekey).toHaveBeenCalledTimes(1);
+});
+it('a person turning finding off clears probes and preserves the loaded hide list', async () => {
+  const f = await fixture();
+  f.add();
+  await f.service.run();
+  const document = JSON.parse(await readFile(f.service.store.file, 'utf8'));
+  document.hidden = [f.home + '/code/ignore'];
+  await writeFile(f.service.store.file, JSON.stringify(document));
+  const fresh = f.create();
+  await fresh.load();
+  f.enabled(false);
+  await fresh.configure();
+  const off = JSON.parse(await readFile(fresh.store.file, 'utf8'));
+  expect(off.entries).toEqual([]);
+  expect(off.probes).toEqual([]);
+  expect(off.hidden).toEqual(document.hidden);
+});

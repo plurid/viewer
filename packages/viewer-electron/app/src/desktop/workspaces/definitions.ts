@@ -13,6 +13,7 @@ import type {
   DefinitionProblem,
   DefinitionRootState,
   WorkspacesFile,
+  WorkspaceDefinitionSource,
 } from '../../domain/workspaces/definitions/schema';
 import {
   definitionEntrySchema,
@@ -364,7 +365,7 @@ export class WorkspaceDefinitions {
       definitions: resolved.definitions.map((item) => ({
         ...item,
         openedAt: this.ports.memory?.openedAt(item.key) ?? previous.get(item.key),
-        remembered: this.remembered(item.key),
+        remembered: this.remembered(item.key, item.source),
       })),
       diagnostics: [
         ...this.problems,
@@ -396,7 +397,8 @@ export class WorkspaceDefinitions {
   async checkRoot(key: string): Promise<DefinitionRootState> {
     const entry = this.entry(key);
     if (!entry) throw new Error('This workspace definition is unavailable.');
-    if (entry.source === 'found' && this.ports.found?.available?.(entry.root) === false) return 'unknown';
+    if (entry.source === 'found' && this.ports.found?.available?.(entry.root) === false)
+      return 'unknown';
     if (this.rootState(entry.root) === 'present') return 'present';
     const value = await this.checkFolder(entry.root);
     this.roots.set(entry.root, { state: value, at: Date.now() });
@@ -438,8 +440,10 @@ export class WorkspaceDefinitions {
     const roots = [...selected].filter(
       (root) =>
         this.wantedRoots.has(root) &&
-        !(this.current.definitions.some((item) => item.root === root && item.source === 'found') &&
-          this.ports.found?.available?.(root) === false) &&
+        !(
+          this.current.definitions.some((item) => item.root === root && item.source === 'found') &&
+          this.ports.found?.available?.(root) === false
+        ) &&
         (retry
           ? this.rootState(root) !== 'present'
           : !this.roots.has(root) || this.rootState(root) === 'unknown'),
@@ -471,8 +475,10 @@ export class WorkspaceDefinitions {
     if (this.stopped) return;
     let changed = false;
     const definitions = this.current.definitions.map((item) => {
-      const rootState = item.source === 'found' && this.ports.found?.available?.(item.root) === false
-        ? 'unknown' : this.rootState(item.root);
+      const rootState =
+        item.source === 'found' && this.ports.found?.available?.(item.root) === false
+          ? 'unknown'
+          : this.rootState(item.root);
       if (item.rootState === rootState) return item;
       changed = true;
       return { ...item, rootState };
@@ -493,7 +499,8 @@ export class WorkspaceDefinitions {
     };
     this.ports.emit(this.snapshot());
   }
-  private remembered(key: string) {
+  private remembered(key: string, source: WorkspaceDefinitionSource) {
+    if (source !== 'found' && this.ports.memory?.linkedSource?.(key) === 'found') return;
     return this.ports.memory?.summary(key);
   }
   private publishMemory(): void {
@@ -503,7 +510,7 @@ export class WorkspaceDefinitions {
       definitions: this.current.definitions.map((item) => ({
         ...item,
         openedAt: this.ports.memory?.openedAt(item.key) ?? item.openedAt,
-        remembered: this.remembered(item.key),
+        remembered: this.remembered(item.key, item.source),
       })),
     };
     if (!this.stopped) this.ports.emit(this.snapshot());

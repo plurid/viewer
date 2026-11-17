@@ -21,23 +21,41 @@ export const remoteUTF8Bytes = (text: string): number => new TextEncoder().encod
 
 export const remotePath = z
   .string()
+  .refine((file) => file.length <= remoteLimits.serverPathBytes, {
+    message: 'The server path is too long.',
+    abort: true,
+  })
   .regex(/^\/(?:[^/\0]+(?:\/[^/\0]+)*)?$/)
   .refine(
     (file) => file.split('/').every((part) => part !== '.' && part !== '..'),
     'Use a normalized server path.',
   )
   .refine(validRemoteUnicode, 'Use valid UTF-8 text.')
-  .refine((file) => remoteUTF8Bytes(file) <= remoteLimits.serverPathBytes);
+  .refine((file) => remoteUTF8Bytes(file) <= remoteLimits.serverPathBytes)
+  .refine(
+    (file) =>
+      file.split('/').every((part) => remoteUTF8Bytes(part) <= remoteLimits.serverNameBytes),
+    'A server name is too long.',
+  );
 
 export const remoteName = z
   .string()
+  .refine((name) => name.length <= remoteLimits.serverNameBytes, {
+    message: 'The server name is too long.',
+    abort: true,
+  })
   .min(1)
   .refine((name) => name !== '.' && name !== '..' && !/[/\0]/.test(name))
   .refine(validRemoteUnicode, 'Use valid UTF-8 text.')
   .refine((name) => remoteUTF8Bytes(name) <= remoteLimits.serverNameBytes);
 
 function locationParts(location: string): ParsedRemoteLocation | undefined {
-  if (!location.startsWith(remoteScheme)) return;
+  if (
+    location.length >
+      remoteScheme.length + remoteLimits.connectionIDMaxCharacters + remoteLimits.serverPathBytes ||
+    !location.startsWith(remoteScheme)
+  )
+    return;
   const boundary = location.indexOf('/', remoteScheme.length);
   if (boundary === -1) return;
   const id = location.slice(remoteScheme.length, boundary);
@@ -70,8 +88,18 @@ export const hasRemoteLocationScheme = (location: string): boolean =>
 export const isRemoteLocation = (location: unknown): location is RemoteLocation =>
   remoteLocation.safeParse(location).success;
 
+export class RemoteInvalidLocation extends Error {
+  readonly code = 'VIEWER_REMOTE_INVALID_LOCATION';
+  constructor() {
+    super('Use a valid Viewer server location.');
+    this.name = 'RemoteInvalidLocation';
+  }
+}
+
 export function parseRemoteLocation(location: string): ParsedRemoteLocation {
-  return locationParts(remoteLocation.parse(location))!;
+  const parsed = locationParts(location);
+  if (!parsed) throw new RemoteInvalidLocation();
+  return parsed;
 }
 
 export function remoteJoin(folder: string, name: string): RemoteLocation {
@@ -93,9 +121,12 @@ export function remoteBaseName(location: string): string {
 
 /** Root through the current folder, with backslashes retained as part of each name. */
 export function remoteAncestry(location: string): RemoteLocation[] {
-  parseRemoteLocation(location);
-  const ancestry = [location];
-  while (remoteParent(ancestry[0]!) !== ancestry[0]) ancestry.unshift(remoteParent(ancestry[0]!));
+  const current = parseRemoteLocation(location);
+  const root = remoteScheme + current.connectionID + '/';
+  const ancestry = [root];
+  for (let end = current.path.indexOf('/', 1); end !== -1; end = current.path.indexOf('/', end + 1))
+    ancestry.push(remoteScheme + current.connectionID + current.path.slice(0, end));
+  if (current.path !== '/') ancestry.push(location);
   return ancestry;
 }
 

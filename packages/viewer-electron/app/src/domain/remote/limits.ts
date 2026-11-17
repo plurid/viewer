@@ -1,6 +1,7 @@
 const second = 1000;
 const minute = 60 * second;
 const MiB = 1024 * 1024;
+const serverPathBytes = 4096;
 
 /** Shared bounds keep transport, desktop policy and presentation in agreement. */
 export const remoteLimits = Object.freeze({
@@ -9,6 +10,13 @@ export const remoteLimits = Object.freeze({
   requestsPerChannel: 64,
   readBytesPerStream: 8 * MiB,
   packetBytes: MiB,
+  codecStringBytes: 64 * 1024,
+  codecNameBytes: 4096,
+  codecExtensionPairs: 128,
+  trashInfoAttempts: 1000,
+  trashListItems: 4000,
+  proofEntries: 10_000,
+  resourceGrants: 256,
   namesPerReply: 10_000,
   listingEntries: 20_000,
   symlinkStatsConcurrent: 16,
@@ -40,7 +48,8 @@ export const remoteLimits = Object.freeze({
   connectionIDMinCharacters: 6,
   connectionIDMaxCharacters: 16,
   connectionNameCharacters: 200,
-  serverPathBytes: 4096,
+  serverPathBytes,
+  addressCharacters: 3 * serverPathBytes + 1024,
   serverNameBytes: 1024,
   serverPromptCharacters: 2000,
   jumpHosts: 3,

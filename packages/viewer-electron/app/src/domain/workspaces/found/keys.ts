@@ -15,14 +15,12 @@ export function foundKey(
 ): string {
   const relative = insideRoot(home, root) ? root.slice(home.length) : root;
   const segments = relative.split('/').filter(Boolean);
-  const parts = segments
-    .slice(-8)
-    .map((segment) => {
-      const part = slug(segment);
-      return part !== segment || part === '.' || part === '..'
-        ? `${part === '.' || part === '..' ? 'x' : part}-${foundPathHash(segment)}`
-        : part;
-    });
+  const parts = segments.slice(-8).map((segment) => {
+    const part = slug(segment);
+    return part !== segment || part === '.' || part === '..'
+      ? `${part === '.' || part === '..' ? 'x' : part}-${foundPathHash(segment)}`
+      : part;
+  });
   let key = parts.join('/') || 'x';
   const shortened = key.length > 190 || segments.length > 8 || !insideRoot(home, root);
   while (key.length > 190 && parts.length > 1) {

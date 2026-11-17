@@ -224,13 +224,13 @@ export function WorkspacesDialog({
                       />
                     )}
                     {linked && changed && (
-                        <button
-                          disabled={opening || elsewhere}
-                          onClick={() => onAction('reset', space.id)}
-                        >
-                          Reset to definition…
-                        </button>
-                      )}
+                      <button
+                        disabled={opening || elsewhere}
+                        onClick={() => onAction('reset', space.id)}
+                      >
+                        Reset to definition…
+                      </button>
+                    )}
                   </li>
                 );
               })}

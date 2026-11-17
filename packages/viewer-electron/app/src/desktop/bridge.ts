@@ -619,10 +619,13 @@ export class Desktop {
       explicit: () =>
         this.definitions?.snapshot().definitions.filter((entry) => entry.source !== 'found') ?? [],
       aliases: () => this.workspaceSessions.folderHistory().aliases,
-      keepOnClear: (key) => !!this.workspaceSessions.findByDefinition(key) || !!this.definedWorkspaces.summary(key),
+      keepOnClear: (key) =>
+        !!this.workspaceSessions.findByDefinition(key) || !!this.definedWorkspaces.summary(key),
       rekey: async (changes) => {
         await this.definedWorkspaces.rekeyFound(changes);
-        const state = await this.workspaceSessions.rekeyFound(changes, (value) => this.storage.save(this.withPreferences(value)));
+        const state = await this.workspaceSessions.rekeyFound(changes, (value) =>
+          this.storage.save(this.withPreferences(value)),
+        );
         if (state) this.emit({ type: 'workspaces', state });
       },
       retained: (key) =>

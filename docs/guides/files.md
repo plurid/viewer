@@ -42,8 +42,9 @@ Trash and archive contents are never learned. See the
 [navigation limits](../reference/capabilities.md#open-and-move-around).
 
 Clearing also forgets found workspace entries and probes, except workspaces linked open or holding
-remembered planes. Undo lets the background finder recognize those folders again with the same keys.
-This found metadata is private and excluded from backups.
+remembered planes, regardless of their age. Undo restores visits for the background finder.
+Unchanged folder paths and explicit definitions give the same keys when those folders are found
+again. This found metadata is private and excluded from backups.
 
 Clearing also forgets declared commands' **Last run** references. Undo does not restore these
 references. See [Declared commands](../reference/terminals.md#declared-commands).

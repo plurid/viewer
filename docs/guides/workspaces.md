@@ -201,7 +201,8 @@ other defined workspaces. It joins **Recently closed** only after Viewer remembe
 workspaces have no written entry to save over.
 
 Viewer recognizes Git roots, workspace markers and common language manifests. An outer Git
-repository holds its nested packages together. A Makefile, justfile or Procfile alone does not make
+repository holds its nested packages together. If it contains two or more inner Git repositories,
+those repositories become separate workspaces. A Makefile, justfile or Procfile alone does not make
 a workspace. Home, its standard top-level folders, hidden folders, Library, dependency trees, app
 bundles and network volumes stay out.
 
@@ -212,9 +213,11 @@ same root.
 
 Turn off **Settings → Browsing → Find workspaces from folders I use** to stop finding and clear its
 cached entries and probes. **Clear recent folders** clears those too, keeping workspaces that are
-linked open or remember planes. Undoing the clear lets Viewer find them again with the same keys.
+linked open or remember planes, including older remembered planes. Undoing the clear restores the
+visits that let Viewer find those folders again. Unchanged paths and definitions keep the same keys.
 Found metadata stays on this Mac and is excluded from backups, project exports and agents. The Store
-edition uses only folders whose access is already active.
+edition uses only folders whose access is already active. A folder granted directly can itself be a
+workspace root.
 
 ## Open a defined workspace
 

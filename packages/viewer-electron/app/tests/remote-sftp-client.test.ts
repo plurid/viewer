@@ -1,6 +1,6 @@
 import type { SFTPRequest } from '../src/desktop/remote/sftp/codec';
+import type { SFTPClient } from '../src/desktop/remote/sftp/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SFTPClient } from '../src/desktop/remote/sftp/client';
 import { encodeReply, sftpExtensions } from '../src/desktop/remote/sftp/codec';
 import { sftpStatusError } from '../src/desktop/remote/sftp/errors';
 import { assertSafeSFTPAfterEach } from './support/fake-sftp-server';

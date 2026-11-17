@@ -120,21 +120,34 @@ export function rootFor(
   const known = paths.filter((path) => probes.has(path));
   const recognized = known.filter((path) => {
     const facts = probes.get(path)!;
-    return facts.git || facts.markers.some((name) =>
-      workspaceMarkers.has(name) || manifests.has(name) || /\.(?:xcodeproj|xcworkspace)$/.test(name),
+    return (
+      facts.git ||
+      facts.markers.some(
+        (name) =>
+          workspaceMarkers.has(name) ||
+          manifests.has(name) ||
+          /\.(?:xcodeproj|xcworkspace)$/.test(name),
+      )
     );
   });
   // Build folder names are meaningful only beneath a recognized project.
-  if (recognized.some((root) =>
-    folder.slice(root.length + 1).split('/').some((part) => buildOutputs.has(part)),
-  )) return;
-  const gitRoots = [...probes].filter(([path, facts]) =>
-    facts.git === 'directory' && !context.hidden?.includes(path),
-  ).map(([path]) => path);
+  if (
+    recognized.some((root) =>
+      folder
+        .slice(root.length + 1)
+        .split('/')
+        .some((part) => buildOutputs.has(part)),
+    )
+  )
+    return;
+  const gitRoots = [...probes]
+    .filter(([path, facts]) => facts.git === 'directory' && !context.hidden?.includes(path))
+    .map(([path]) => path);
   return (
-    known.findLast((path) =>
-      probes.get(path)!.git === 'directory' &&
-      gitRoots.filter((inner) => inner !== path && insideRoot(path, inner)).length < 2,
+    known.findLast(
+      (path) =>
+        probes.get(path)!.git === 'directory' &&
+        gitRoots.filter((inner) => inner !== path && insideRoot(path, inner)).length < 2,
     ) ??
     known.find((path) => {
       const git = probes.get(path)!.git;

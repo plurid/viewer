@@ -2,9 +2,9 @@ import { remoteLimits } from '../../../domain/remote/limits';
 import { SFTPProtocolError } from './errors';
 
 export const sftpBounds = Object.freeze({
-  stringBytes: 64 * 1024,
-  nameBytes: 4096,
-  extensionPairs: 128,
+  stringBytes: remoteLimits.codecStringBytes,
+  nameBytes: remoteLimits.codecNameBytes,
+  extensionPairs: remoteLimits.codecExtensionPairs,
   idNames: 1024,
   defaultDataBytes: 32 * 1024,
 });

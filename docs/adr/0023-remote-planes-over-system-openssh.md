@@ -35,6 +35,10 @@ renderer, logs, diagnostics or persistent storage. Changed host keys block conne
 override. Fixed argument construction, validated connection fields and `--` before the destination
 prevent server addresses from becoming options; no free-form SSH options are accepted.
 
+Before enabling SSH planes, update `NSLocalNetworkUsageDescription` to explain SSH connections to
+servers on the local network alongside model endpoints. Qualify the purpose text and attribution
+with spike S1. Downloads receive the quarantine attribute before publication.
+
 There is no connection at launch by default. Each connection has a **Connect when a plane needs it**
 opt-in, initially off. BatchMode can still cause an SSH agent, hardware key, Kerberos or Local
 Network prompt, so it does not justify an automatic connection without that choice. Remote shells
@@ -53,9 +57,16 @@ Remote identities are opaque and scoped to that connection, not local inode iden
 Pure location, address, connection-record and identity validation, limits and protected-path rules
 belong to `src/domain/remote/`. Its
 [`limits.ts`](../../packages/viewer-electron/app/src/domain/remote/limits.ts) is the authoritative
-source of bounds. Every local filesystem entry refuses the reserved scheme with
-`VIEWER_REMOTE_NOT_LOCAL` before resolving a path, including when native access is unscoped. Widen
-only the schemas needed by remote-capable methods; all other methods retain local-only schemas.
+source of bounds. Local access checks require absolute local paths even when native access is
+unscoped. Shared local services and definition-command entry points refuse the reserved scheme with
+`VIEWER_REMOTE_NOT_LOCAL` before resolving a path. Widen only the schemas needed by remote-capable
+methods; all other methods retain local-only schemas. Invalid internal locations in throwing domain
+helpers use `VIEWER_REMOTE_INVALID_LOCATION` with a plain message. Typed addresses never retain URL
+passwords; macOS asks for share credentials.
+
+Exact saved-name matches are distinct from unknown names. A bare `host:/path` whose host is a known
+URL scheme word is refused, avoiding accidental interpretation of `file:/` or `mailto:/` as SSH
+endpoints. Use an explicit `user@host:/path` or a complete SSH URL for those host names.
 
 Use thin routes for listing, stat, watches, search, thumbnails and identity in IPC handlers. Ports
 inside Operations, Resources, Terminals and Trash retain each owner's shared state. The proposed
@@ -65,26 +76,27 @@ changes. Preview resources use SFTP range reads or a bounded private session-onl
 
 ### SFTP channel boundary
 
-`desktop/remote/sftp` accepts a Node duplex byte stream without owning SSH or authentication.
-Call `connect()` before operations; readiness includes version and advertised-limit negotiation.
-Offsets and sizes use unsigned 64-bit bigints. File opens permit reading or exclusive creation.
-Attribute changes permit permissions and paired access/modification times. Extension calls check
-advertised versions; link calls require OpenSSH extension evidence for its argument ordering.
-Wire layouts follow the [v3 draft](https://www.ietf.org/archive/id/draft-ietf-secsh-filexfer-02.txt)
-and [OpenSSH protocol reference](https://github.com/openssh/openssh-portable/blob/master/PROTOCOL).
+`desktop/remote/sftp` accepts a Node duplex byte stream without owning SSH or authentication. Call
+`connect()` before operations; readiness includes version and advertised-limit negotiation. Offsets
+and sizes use unsigned 64-bit bigints. File opens permit reading or exclusive creation. Attribute
+changes permit permissions and paired access/modification times. Extension calls check advertised
+versions; link calls require OpenSSH extension evidence for its argument ordering. Wire layouts
+follow the [v3 draft](https://www.ietf.org/archive/id/draft-ietf-secsh-filexfer-02.txt) and
+[OpenSSH protocol reference](https://github.com/openssh/openssh-portable/blob/master/PROTOCOL).
 
-The codec caps strings at 64 KiB, wire names at 4 KiB and extension/extended-attribute pairs at 128. Identity-name lookups allow 1,024 IDs per list. The client bounds its waiting queue and local
+The codec caps strings at 64 KiB, wire names at 4 KiB and extension/extended-attribute pairs at 128.
+Identity-name lookups allow 1,024 IDs per list. The client bounds its waiting queue and local
 open-handle budget at 1,024 each, in addition to the shared request and packet limits. Advertised
 server limits can lower packet, read, write and handle budgets. Zero server limits mean unspecified.
 `pread` and `pwrite` keep caller-owned handles, apply byte backpressure and share a progress-based
-stall clock. They default to 32 KiB blocks, lowered by server limits. Sent cancellations retain
-wire credit until a reply arrives; an undrained cancellation retires the channel after its deadline.
-An ownerless handle from a cancelled open also retires the channel. Metadata timeouts and malformed
+stall clock. They default to 32 KiB blocks, lowered by server limits. Sent cancellations retain wire
+credit until a reply arrives; an undrained cancellation retires the channel after its deadline. An
+ownerless handle from a cancelled open also retires the channel. Metadata timeouts and malformed
 replies close it; protocol errors use `VIEWER_REMOTE_PROTOCOL`, cancellation uses `ABORT_ERR`.
 
-Names remain Buffers through decoding. `decodeListingName` exports a strict UTF-8 boundary with
-the domain's 1,024-byte name limit. Invalid names produce inert error entries without a usable
-child name. The in-memory fake server and policy scan exercise this boundary without SSH or network
+Names remain Buffers through decoding. `decodeListingName` exports a strict UTF-8 boundary with the
+domain's 1,024-byte name limit. Invalid names produce inert error entries without a usable child
+name. The in-memory fake server and policy scan exercise this boundary without SSH or network
 access. Transport integration and real-server qualification belong to later packages.
 
 ### Operations and concurrency

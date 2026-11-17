@@ -279,8 +279,15 @@ describe('declared command desktop boundary', () => {
     let agent = false,
       viewer = true;
     const list = vi.fn(async () => ({ commands }));
-    const record = vi.fn<(directory: string, line: string, revision?: number) => Promise<void>>(async () => {});
-    const metadata = { list, record: (directory: string, line: string, revision?: number) => record(directory, line, revision), revision: 4 };
+    const record = vi.fn<(directory: string, line: string, revision?: number) => Promise<void>>(
+      async () => {},
+    );
+    const metadata = {
+      list,
+      record: (directory: string, line: string, revision?: number) =>
+        record(directory, line, revision),
+      revision: 4,
+    };
     const startManual = vi.fn(async () => 'receipt');
     const service = createTerminalHandlers({
       home: root,
@@ -308,7 +315,9 @@ describe('declared command desktop boundary', () => {
       list,
       record,
       startManual,
-      replaceRecord: (work: typeof metadata.record) => { metadata.record = work; },
+      replaceRecord: (work: typeof metadata.record) => {
+        metadata.record = work;
+      },
       agent: () => {
         agent = true;
       },

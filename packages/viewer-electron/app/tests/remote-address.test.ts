@@ -29,10 +29,10 @@ describe('typed server addresses', () => {
     ['sftp://host/caf%C3%A9%20notes%25', { kind: 'sftp', host: 'host', path: '/café notes%' }],
     ['sftp://host/%252e%252e', { kind: 'sftp', host: 'host', path: '/%2e%2e' }],
     ['sftp://host/space here\\file', { kind: 'sftp', host: 'host', path: '/space here\\file' }],
-    ['build-box', { kind: 'saved', name: 'build-box' }],
-    ['Build box', { kind: 'saved', name: 'Build box' }],
-    ['Atelier é', { kind: 'saved', name: 'Atelier é' }],
-    ['  build-box  ', { kind: 'saved', name: 'build-box' }],
+    ['build-box', { kind: 'unknown-name', name: 'build-box' }],
+    ['Build box', { kind: 'unknown-name', name: 'Build box' }],
+    ['Atelier é', { kind: 'unknown-name', name: 'Atelier é' }],
+    ['  build-box  ', { kind: 'unknown-name', name: 'build-box' }],
   ];
   it.each(addresses)('parses %s without creating an internal location', (input, expected) => {
     expect(parseRemoteAddress(input)).toEqual(expected);
@@ -140,5 +140,66 @@ describe('typed server addresses', () => {
     'https://host:65536/path',
   ])('rejects %s', (input) => {
     expect(() => parseRemoteAddress(input)).toThrow();
+  });
+});
+
+describe('reviewed address validation', () => {
+  const passwordMessage =
+    'Viewer does not keep passwords in addresses. Enter the address without it; macOS asks for the password.';
+  it.each(['http', 'https', 'webdav', 'davs', 'smb', 'afp', 'nfs', 'cifs', 'ftp', 'ssh', 'sftp'])(
+    'rejects a password in %s URLs without returning or exposing it',
+    (scheme) => {
+      expect(() => parseRemoteAddress(scheme + '://user:secret@host/files')).toThrow(
+        passwordMessage,
+      );
+      expect(() => parseRemoteAddress(scheme + '://user:sec%72et@host/files')).toThrow(
+        passwordMessage,
+      );
+    },
+  );
+  it.each([
+    'sftp://us er@host/',
+    'host:/a/../b',
+    'ssh://[fe80::1%25en0]/',
+    'host:/viewer-sftp://abc123/path',
+    'a'.repeat(201),
+  ])('gives a plain address error for %s', (input) => {
+    let error: unknown;
+    try {
+      parseRemoteAddress(input);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).name).not.toBe('ZodError');
+    expect((error as Error).message).not.toMatch(/[\n\[\]{}]/);
+    expect((error as Error).message.length).toBeLessThan(180);
+  });
+  it('distinguishes unknown words from exact saved names', () => {
+    expect(parseRemoteAddress('build-box')).toEqual({ kind: 'unknown-name', name: 'build-box' });
+    expect(parseRemoteAddress('build-box', ['build-box'])).toEqual({
+      kind: 'saved',
+      name: 'build-box',
+    });
+  });
+  it.each([
+    'file',
+    'javascript',
+    'mailto',
+    'data',
+    'ftp',
+    'http',
+    'https',
+    'smb',
+    'ssh',
+    'sftp',
+    'webdav',
+    'davs',
+  ])('refuses scheme-like %s hosts without a user', (scheme) => {
+    expect(() => parseRemoteAddress(scheme + ':/srv')).toThrow();
+    expect(parseRemoteAddress('user@' + scheme + ':/srv')).toMatchObject({
+      kind: 'sftp',
+      host: scheme,
+    });
   });
 });

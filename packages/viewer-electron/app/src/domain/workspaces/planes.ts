@@ -4,7 +4,7 @@ import { previewsAsFile } from '../previews/documents/embedded';
 import {
   hasRemoteLocationScheme,
   remoteBaseName,
-  remoteLocation,
+  parseRemoteLocation,
   remoteParent,
 } from '../remote/location';
 
@@ -88,7 +88,10 @@ export function parentPath(path: string): string {
 
 /** Compare lexical paths, without resolving links or touching the filesystem. */
 export function normalizedPanePath(path: string, platform: string): string {
-  if (hasRemoteLocationScheme(path)) return remoteLocation.parse(path);
+  if (hasRemoteLocationScheme(path)) {
+    parseRemoteLocation(path);
+    return path;
+  }
   const windows = platform === 'win32';
   const value = windows ? path.replace(/\\/g, '/') : path;
   const prefix = windows && value.startsWith('//') ? '//' : value.startsWith('/') ? '/' : '';

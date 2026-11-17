@@ -1,8 +1,11 @@
 import type { SavedState, Workspace } from '../contracts';
-import type { DefinitionCatalog } from './definitions/schema';
+import type { DefinitionCatalog, WorkspaceDefinition } from './definitions/schema';
 import type { FoundKeyChange } from './found/catalog';
 
-export function rekeyFoundLinks(workspaces: Workspace[], changes: readonly FoundKeyChange[]): Workspace[] {
+export function rekeyFoundLinks(
+  workspaces: Workspace[],
+  changes: readonly FoundKeyChange[],
+): Workspace[] {
   let changed = false;
   const keys = new Map(changes.map((change) => [change.from, change.to]));
   const next = workspaces.map((space) => {
@@ -15,23 +18,25 @@ export function rekeyFoundLinks(workspaces: Workspace[], changes: readonly Found
   return changed ? next : workspaces;
 }
 
-export function linkedDefinition(space: Workspace, catalog?: DefinitionCatalog) {
-  const link = space.definition;
-  return link && catalog?.definitions.find((item) =>
-    item.key === link.key && (link.source !== 'found' || item.source === 'found'),
+export function definitionLinkMatches(
+  space: Workspace,
+  definition?: WorkspaceDefinition,
+): definition is WorkspaceDefinition {
+  return (
+    !!definition &&
+    space.definition?.key === definition.key &&
+    (space.definition.source !== 'found' || definition.source === 'found')
   );
+}
+export function linkedDefinition(space: Workspace, catalog?: DefinitionCatalog) {
+  return catalog?.definitions.find((item) => definitionLinkMatches(space, item));
 }
 
 export function definitionSourceNotice(
   space: Workspace,
   catalog?: DefinitionCatalog,
 ): string | undefined {
-  if (
-    !space.definition ||
-    !catalog ||
-    linkedDefinition(space, catalog)
-  )
-    return;
+  if (!space.definition || !catalog || linkedDefinition(space, catalog)) return;
   const source = catalog.projectManager;
   const origin = space.definition.source;
   if (origin === 'standalone') return;
@@ -57,7 +62,9 @@ export function definitionWasRemoved(space: Workspace, catalog?: DefinitionCatal
       (catalog.projectManager.state !== 'unreadable' &&
         catalog.projectManager.state !== 'needs-access')) &&
     (space.definition.source !== 'found' ||
-      catalog.definitions.some((item) => item.key === space.definition!.key && item.source !== 'found') ||
+      catalog.definitions.some(
+        (item) => item.key === space.definition!.key && item.source !== 'found',
+      ) ||
       (catalog.found?.state !== 'loading' && catalog.found?.state !== 'off')) &&
     (!definitionSourceNotice(space, catalog) || space.definition.source === 'found') &&
     !catalog.diagnostics.some(

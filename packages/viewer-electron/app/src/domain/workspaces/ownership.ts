@@ -47,9 +47,12 @@ export function definitionShares(
     ['folder', 'preview', 'terminal', 'scratch', 'search'].includes(pane.type),
   );
   const panes = supported.flatMap((pane) => {
-    const folder = purpose === 'proposal'
-      ? pane.type === 'preview' ? parentFolder(pane.path) : pane.path
-      : supportedPlaneFolder(pane);
+    const folder =
+      purpose === 'proposal'
+        ? pane.type === 'preview'
+          ? parentFolder(pane.path)
+          : pane.path
+        : supportedPlaneFolder(pane);
     return folder ? [{ pane, folder }] : [];
   });
   const counts = new Map<WorkspaceDefinition, string[]>();

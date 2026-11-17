@@ -1,4 +1,5 @@
 import { realpath } from 'node:fs/promises';
+import { assertLocalPath } from '../files/local-path';
 import type { BrowserWindow } from 'electron';
 import type { TerminalStart } from '../../domain/automation/actions';
 import type {
@@ -74,6 +75,7 @@ export class DefinitionCommands {
     owner: number,
     wait = false,
   ): Promise<TerminalStatus | undefined> {
+    assertLocalPath(request.cwd);
     const pending = this.starts.get(request.id);
     if (!pending) return;
     await this.matchPending(request, owner, pending);
@@ -88,6 +90,7 @@ export class DefinitionCommands {
     request: TerminalStart,
     reference: DefinitionCommandReference,
   ): Promise<DefinitionCommandPresentation> {
+    assertLocalPath(request.cwd);
     if (!this.ports.ownsWorkspace(owner, request.workspaceID)) return { kind: 'changed' };
     const found = this.ports.lookup(
       owner,
@@ -134,6 +137,7 @@ export class DefinitionCommands {
     owner: number,
     input: readonly DefinitionCommandStart[],
   ): Promise<DefinitionCommandOutcome[]> {
+    input.forEach((item) => assertLocalPath(item.request.cwd));
     this.requireHuman(owner);
     const items = structuredClone(input);
     if (!items.length) return [];

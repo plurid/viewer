@@ -398,29 +398,43 @@ after the desktop accepts the operation.
 workspaces from folders I use**. It uses the person’s own history, not another app’s data. Turning
 it off stops passes and clears entries and probes while keeping hidden roots.
 
-The private `found-workspaces-v1.json` has version `1`, mode 0600 and a 1 MB limit. It stores at
-most 200 entries, 500 hidden roots, 1,000 probes and 200 last-run references. Probes expire after
-seven days. References contain a source file name, command name and time, with no command text. It
-is first written when something is found, hidden or run. Unreadable regular files move aside; an
-unreadable file that cannot be preserved stays protected.
+The private `found-workspaces-v1.json` has version `1`, mode 0600 and a 1 MB limit. Search keeps 200
+ordinary findings, plus retained roots. Entries linked open or opened or remembered within 90 days
+rank first and do not count toward that cap. The file holds at most 1,800 entries, 500 hidden roots,
+1,000 probes and 200 last-run references. References contain a source file name, command name and
+time, with no command text. It is first written when something is found, hidden or run. Launch only
+reads existing metadata. Recovery and a pending setting-off rewrite wait for the first background
+pass or a person’s change. An unreadable regular file moves aside then; a file that cannot be
+preserved stays protected.
 
 Finding starts ten seconds after folder history is prepared. A new visit outside known roots
-schedules a pass after thirty seconds, with passes at least five minutes apart. Each pass uses at
-most 300 bounded probes. Git folders, Git files, workspace markers and language manifests determine
-roots within sixteen ancestors. Home and standard home folders are boundaries. Non-local volumes,
-Library, hidden and generated folders and package bundles are excluded. Volumes that cannot be
-identified as local stay out.
+schedules a pass after thirty seconds, with passes at least five minutes apart. Saving unchanged
+history schedules no pass. Each pass uses at most 300 bounded probes. Cached probes refresh oldest
+first on staggered six-to-seven-day deadlines. Expired observations remain as a fallback while
+refreshing, and incomplete ancestry keeps previous entries instead of choosing an inner root.
+Unchanged metadata causes no write. Git folders, Git files, workspace markers and language manifests
+determine roots within sixteen ancestors. An outer Git folder yields when it would absorb two or
+more inner Git folders. Home and standard home folders are boundaries, compared without case.
+Non-local volumes, Library, hidden folders, dependency trees and package bundles are excluded.
+Build-output names such as `out` and `target` are excluded beneath a recognized project; they may
+name a project itself. Unknown new volumes stay out. Previously found roots on unplugged local
+volumes remain with an unknown folder state.
 
 Found keys derive from the home-relative root through the definition slug rules, keeping the last
-eight segments and fitting the 200-character limit. Explicit keys win collisions. A root’s name uses
-its last two segments and the role-word rule; up to three manifest names become aliases. Viewer
-moves preserve keys, as do outside renames with the same device and inode.
+eight segments and fitting the 200-character limit. Lossy segments and collisions include a
+deterministic path hash. Existing keys are reserved before minting another. Explicit keys win
+collisions; Viewer re-keys the found entry and carries its links and remembered planes. A root’s
+name uses its last two segments and the role-word rule; up to three manifest names become aliases.
+Viewer moves preserve keys. For an outside rename, fresh probes verify the identity claim and
+recheck the old path before carrying its key.
 
 Found definitions have one folder plane and never supply ROOT token references. Explicit sources win
 for the same root, including known realpath aliases. **Clear recent folders** clears entries, probes
-and run references, retaining entries linked open or remembering planes. Undo restores visits and
-lets finding restore the same keys. Hidden roots remain. This document is excluded from backups,
-project exports and agents. Store probes use active access scopes without asking.
+and run references, retaining entries linked open or remembering planes, whatever the memory’s age.
+Undo restores visits so the finder can recognize those folders again. Unchanged paths and explicit
+definitions give the same deterministic keys. Hidden roots remain. This document is excluded from
+backups, project exports and agents. Store probes use active access scopes without asking. A granted
+scope root may itself be a project root; the walk never goes above it.
 
 ## Tour files
 

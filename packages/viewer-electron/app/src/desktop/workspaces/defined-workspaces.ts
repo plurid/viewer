@@ -5,7 +5,6 @@ import { z } from 'zod';
 import type { SavedState, Workspace } from '../../domain/contracts';
 import type { RememberedWorkspace } from '../../domain/workspaces/definitions/schema';
 import type { FoundKeyChange } from '../../domain/workspaces/found/catalog';
-import { rekeyFoundLinks } from '../../domain/workspaces/catalog';
 import { definitionKeySchema } from '../../domain/workspaces/definitions/schema';
 import { fileViewSchema } from '../../domain/previews/history';
 import { previewValuesSchema } from '../../domain/workspaces/project';
@@ -104,6 +103,9 @@ export class DefinedWorkspaces {
   summary(key: string) {
     const entry = this.current.closed.find((item) => item.key === key);
     return entry && { at: entry.at, basis: entry.basis, planes: entry.workspace.panes.length };
+  }
+  linkedSource(key: string) {
+    return this.current.closed.find((entry) => entry.key === key)?.workspace.definition?.source;
   }
   openedAt(key: string): number | undefined {
     return Object.hasOwn(this.current.opened, key) ? this.current.opened[key] : undefined;
@@ -218,22 +220,31 @@ export class DefinedWorkspaces {
   }
   async rekeyFound(changes: readonly FoundKeyChange[]): Promise<void> {
     await this.load();
-    const relevant = changes.filter(({ from }) =>
-      this.current.closed.some((entry) => entry.key === from && entry.workspace.definition?.source === 'found') ||
-      this.current.opened[from] !== undefined,
+    const relevant = changes.filter(
+      ({ from }) =>
+        this.current.closed.some(
+          (entry) => entry.key === from && entry.workspace.definition?.source === 'found',
+        ) || this.current.opened[from] !== undefined,
     );
     if (!relevant.length) return;
     await this.change((current) => {
       for (const change of relevant) {
-        const entry = current.closed.find((item) => item.key === change.from && item.workspace.definition?.source === 'found');
+        const entry = current.closed.find(
+          (item) => item.key === change.from && item.workspace.definition?.source === 'found',
+        );
         if (entry) {
           if (current.closed.some((item) => item.key === change.to))
-            throw new Error('These remembered planes already have another key. Nothing was replaced.');
+            throw new Error(
+              'These remembered planes already have another key. Nothing was replaced.',
+            );
           entry.key = change.to;
-          entry.workspace = rekeyFoundLinks([entry.workspace], [change])[0]!;
+          entry.workspace.definition = { ...entry.workspace.definition!, key: change.to };
         }
         const at = current.opened[change.from];
-        if (at !== undefined) current.opened[change.to] = Math.max(at, current.opened[change.to] ?? 0);
+        if (at !== undefined) {
+          current.opened[change.to] = Math.max(at, current.opened[change.to] ?? 0);
+          delete current.opened[change.from];
+        }
       }
       return current;
     });

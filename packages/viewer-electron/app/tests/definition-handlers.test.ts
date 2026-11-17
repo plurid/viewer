@@ -103,6 +103,32 @@ function fixture() {
 }
 
 describe('desktop definition open decisions', () => {
+  it('never focuses or restores a found workspace for an explicit definition that took its key', async () => {
+    const f = fixture();
+    const workspace = f.a.workspaces.find((item) => item.id === f.first)!;
+    workspace.definition = { key: f.definition.key, basis: f.definition.basis, source: 'found' };
+    f.sessions.save(1, f.a);
+    f.memory.get.mockReturnValue({ workspace });
+    const result = await f.open(2);
+    expect(result.kind).toBe('build');
+    if (result.kind !== 'build') throw new Error('Expected a build.');
+    expect(result.closed).toBeUndefined();
+    expect(f.windows.get(1)!.focus).not.toHaveBeenCalled();
+  });
+  it.each(['close-info', 'close', 'reset'] as const)(
+    'refuses %s against a found link whose key was taken by another source',
+    async (kind) => {
+      const f = fixture();
+      const workspace = f.a.workspaces.find((item) => item.id === f.first)!;
+      workspace.definition = { key: f.definition.key, basis: f.definition.basis, source: 'found' };
+      f.sessions.save(1, f.a);
+      await expect(
+        f.handlers.workspaceDefinitions([{ kind, workspaceID: f.first }], 1),
+      ).rejects.toThrow('no longer finds');
+      expect(f.memory.remember).not.toHaveBeenCalled();
+      expect(f.memory.forget).not.toHaveBeenCalled();
+    },
+  );
   it('allows Save as for a removed link only after a valid catalog load', async () => {
     const f = fixture();
     const space = sampleWorkspace('removed', {

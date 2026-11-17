@@ -9,7 +9,11 @@ import { readItemIdentity, sameIdentity } from '../../domain/files/item-identity
 import type { WorkspaceDefinition } from '../../domain/workspaces/definitions/schema';
 import { definitionKeySchema } from '../../domain/workspaces/definitions/schema';
 import { folderGitMarkers } from '../../domain/workspaces/folder-facts';
-import type { FoundEntry, FoundCatalogState, FoundKeyChange } from '../../domain/workspaces/found/catalog';
+import type {
+  FoundEntry,
+  FoundCatalogState,
+  FoundKeyChange,
+} from '../../domain/workspaces/found/catalog';
 import { foundDefinitions } from '../../domain/workspaces/found/catalog';
 import { candidateFolders, qualifyingRoots } from '../../domain/workspaces/found/candidates';
 import type { FoundRootContext } from '../../domain/workspaces/found/roots';
@@ -77,7 +81,10 @@ const documentSchema = z
     hidden: z.array(folder).max(500),
     probes: z.array(probeSchema).max(1000),
     lastRun: z.array(referenceSchema).max(200),
-    rekeys: z.array(z.object({ from: definitionKeySchema, to: definitionKeySchema }).strict()).max(1800).optional(),
+    rekeys: z
+      .array(z.object({ from: definitionKeySchema, to: definitionKeySchema }).strict())
+      .max(1800)
+      .optional(),
   })
   .strict()
   .refine(
@@ -113,6 +120,7 @@ export class FoundWorkspaces {
   private loading?: Promise<void>;
   private writes: Promise<void> = Promise.resolve();
   private running?: Promise<void>;
+  private reconciling?: Promise<void>;
   private timer?: ReturnType<typeof setTimeout>;
   private lastPass = 0;
   private epoch = 0;
@@ -145,6 +153,14 @@ export class FoundWorkspaces {
   private now() {
     return this.ports.now?.() ?? Date.now();
   }
+  private retained(key: string): boolean {
+    return (
+      this.ports.retained(key) ||
+      !!this.document.rekeys?.some(
+        (change) => change.to === key && this.ports.retained(change.from),
+      )
+    );
+  }
   load(): Promise<void> {
     return (this.loading ??= (async () => {
       try {
@@ -157,7 +173,8 @@ export class FoundWorkspaces {
       } catch {
         this.needsRecovery = true;
         this.retainedFile = true;
-        this.recovery = 'Unreadable found workspace metadata remains protected until finding resumes.';
+        this.recovery =
+          'Unreadable found workspace metadata remains protected until finding resumes.';
       }
       this.configured = this.ports.enabled();
       if (!this.configured) this.state = 'off';
@@ -174,12 +191,14 @@ export class FoundWorkspaces {
     if (!this.needsRecovery) return;
     this.needsRecovery = false;
     try {
-      if (!(await lstat(this.store.file)).isFile()) throw new Error('Found metadata is not a regular file.');
+      if (!(await lstat(this.store.file)).isFile())
+        throw new Error('Found metadata is not a regular file.');
       await rename(this.store.file, this.store.file + '.unreadable-' + randomUUID());
       this.retainedFile = false;
       this.recovery = 'Unreadable found workspaces were kept aside. Viewer can find folders again.';
     } catch {
-      this.recovery = 'Found workspace metadata could not be read or kept aside. It remains protected.';
+      this.recovery =
+        'Found workspace metadata could not be read or kept aside. It remains protected.';
     }
   }
   available(root: string): boolean {
@@ -189,10 +208,14 @@ export class FoundWorkspaces {
   snapshot(explicit: readonly WorkspaceDefinition[] = this.ports.explicit()) {
     const context = {
       home: this.home,
-      localVolumes: [...new Set([
-        ...this.ports.localVolumes(),
-        ...this.document.entries.flatMap((entry) => /^\/Volumes\/[^/]+/.exec(entry.root)?.[0] ?? []),
-      ])],
+      localVolumes: [
+        ...new Set([
+          ...this.ports.localVolumes(),
+          ...this.document.entries.flatMap(
+            (entry) => /^\/Volumes\/[^/]+/.exec(entry.root)?.[0] ?? [],
+          ),
+        ]),
+      ],
       nonLocalRoots: this.ports.nonLocalRoots?.(),
     };
     const entries = this.ports.enabled()
@@ -244,7 +267,8 @@ export class FoundWorkspaces {
     const roots = this.document.entries.map((entry) => entry.root);
     if (
       Object.entries(state.visits ?? {}).some(
-        ([folder, visit]) => visit.last > this.lastPass && !roots.some((root) => insideRoot(root, folder)),
+        ([folder, visit]) =>
+          visit.last > this.lastPass && !roots.some((root) => insideRoot(root, folder)),
       )
     )
       this.schedule(Math.max(30_000, this.lastPass + 300_000 - this.now()));
@@ -293,6 +317,7 @@ export class FoundWorkspaces {
     await this.load();
     if (this.stopped) return;
     await this.prepareWrite();
+    if (this.stopped) return;
     if (!this.ports.enabled()) {
       this.document.entries = [];
       this.document.probes = [];
@@ -300,7 +325,9 @@ export class FoundWorkspaces {
       await this.persist();
       return;
     }
-    const retainedBefore = new Set(this.document.entries.filter((entry) => this.ports.retained(entry.key)).map((entry) => entry.root));
+    const retainedBefore = new Set(
+      this.document.entries.filter((entry) => this.retained(entry.key)).map((entry) => entry.root),
+    );
     await this.reconcileKeys();
     const saved = this.ports.state();
     if (!saved || this.stopped) return;
@@ -324,15 +351,20 @@ export class FoundWorkspaces {
       openWindows: [...(saved.openWindows ?? []), saved.activeWorkspace],
       emptyLocation: this.ports.emptyLocation?.(),
     }).filter((item) => allowedFoundFolder(item.folder, context));
-    const walks = new Map(candidates.map((item) => [
-      item.folder,
-      rootAncestors(item.folder, { ...context, scopeRoot: this.ports.scopeRoot?.(item.folder) }),
-    ]));
+    const walks = new Map(
+      candidates.map((item) => [
+        item.folder,
+        rootAncestors(item.folder, { ...context, scopeRoot: this.ports.scopeRoot?.(item.folder) }),
+      ]),
+    );
     const pass = await probeFoundFolders({
       facts: this.ports.facts,
       records: this.document.probes,
       folders: [
-        ...this.ports.explicit().slice(0, 50).map((entry) => entry.root),
+        ...this.ports
+          .explicit()
+          .slice(0, 50)
+          .map((entry) => entry.root),
         ...[...walks.values()].flatMap((walk) => [...walk].reverse()),
       ],
       context,
@@ -346,14 +378,21 @@ export class FoundWorkspaces {
     if (controller.signal.aborted) return;
     const decision = this.decideRoots(walks, pass, context);
     const retained = new Set([
-      ...this.document.entries.filter((entry) =>
-        this.ports.retained(entry.key) || retainedBefore.has(entry.root) || !this.available(entry.root),
-      ).map((entry) => entry.root),
+      ...this.document.entries
+        .filter(
+          (entry) =>
+            this.retained(entry.key) ||
+            retainedBefore.has(entry.root) ||
+            !this.available(entry.root),
+        )
+        .map((entry) => entry.root),
       ...decision.carried,
-      ...[...claims.owners].filter(([, entry]) => this.ports.retained(entry.key)).map(([root]) => root),
+      ...[...claims.owners].filter(([, entry]) => this.retained(entry.key)).map(([root]) => root),
     ]);
     const roots = qualifyingRoots(
-      [...decision.roots, ...retained].filter((root) => !claims.displaced.has(root) && !claims.blocked.has(root)),
+      [...decision.roots, ...retained].filter(
+        (root) => !claims.displaced.has(root) && !claims.blocked.has(root),
+      ),
       candidates,
       now,
       retained,
@@ -364,7 +403,8 @@ export class FoundWorkspaces {
     this.document.probes = [...pass.cache.values()].sort((a, b) => b.at - a.at).slice(0, 1000);
     this.state = 'ready';
     await this.persist();
-    if (previousState !== this.state || before !== JSON.stringify(this.document.entries)) this.emit();
+    if (previousState !== this.state || before !== JSON.stringify(this.document.entries))
+      this.emit();
   }
 
   private decideRoots(
@@ -375,16 +415,21 @@ export class FoundWorkspaces {
     const roots: string[] = [];
     const carried = new Set<string>();
     for (const [folder, walk] of walks) {
-      const complete = walk.length > 0 && walk.every((path) =>
-        !pass.unknown.has(path) && (pass.facts.has(path) || pass.missing.has(path)),
-      );
+      const complete =
+        walk.length > 0 &&
+        walk.every(
+          (path) => !pass.unknown.has(path) && (pass.facts.has(path) || pass.missing.has(path)),
+        );
       if (!complete) {
         for (const entry of this.document.entries)
           if (insideRoot(entry.root, folder)) carried.add(entry.root);
         continue;
       }
       if (walk.some((path) => pass.missing.has(path))) continue;
-      const root = rootFor(folder, pass.facts, { ...context, scopeRoot: this.ports.scopeRoot?.(folder) });
+      const root = rootFor(folder, pass.facts, {
+        ...context,
+        scopeRoot: this.ports.scopeRoot?.(folder),
+      });
       if (root) roots.push(root);
     }
     return { roots, carried };
@@ -396,15 +441,21 @@ export class FoundWorkspaces {
     const blocked = new Set<string>();
     for (const root of new Set(roots)) {
       const value = pass.facts.get(root);
-      const previous = value && this.document.entries.find((entry) =>
-        entry.root !== root && entry.realpath !== value.path && sameIdentity(entry.identity, value.identity),
-      );
+      const previous =
+        value &&
+        this.document.entries.find(
+          (entry) =>
+            entry.root !== root &&
+            entry.realpath !== value.path &&
+            sameIdentity(entry.identity, value.identity),
+        );
       if (!previous || !value) continue;
       if (!pass.fresh.has(root) && !(await pass.read(root, true))) {
         blocked.add(root);
         continue;
       }
-      if (!pass.fresh.has(root) || !sameIdentity(previous.identity, pass.facts.get(root)!.identity)) continue;
+      if (!pass.fresh.has(root) || !sameIdentity(previous.identity, pass.facts.get(root)!.identity))
+        continue;
       if (!pass.fresh.has(previous.root) && !pass.missing.has(previous.root))
         if (!(await pass.read(previous.root, true))) {
           blocked.add(root);
@@ -424,8 +475,10 @@ export class FoundWorkspaces {
 
   private manifestNames(root: string, pass: FoundProbePass): string[] {
     const first = pass.facts.get(root)?.package?.name;
-    const names = [...pass.facts].filter(([folder]) => insideRoot(root, folder))
-      .flatMap(([, value]) => value.package?.name ?? []).sort();
+    const names = [...pass.facts]
+      .filter(([folder]) => insideRoot(root, folder))
+      .flatMap(([, value]) => value.package?.name ?? [])
+      .sort();
     return [...new Set([...(first ? [first] : []), ...names])].slice(0, 3);
   }
 
@@ -443,26 +496,37 @@ export class FoundWorkspaces {
     const claimed = new Set([...owners.values()].map((entry) => entry.key));
     return roots.flatMap((root): FoundEntry[] => {
       const value = pass.facts.get(root);
-      const previous = owners.get(root) ?? this.document.entries.find((entry) =>
-        entry.root === root && !claimed.has(entry.key),
-      );
+      const previous =
+        owners.get(root) ??
+        this.document.entries.find((entry) => entry.root === root && !claimed.has(entry.key));
       if (!value || pass.unknown.has(root)) return previous ? [previous] : [];
       const key = previous?.key ?? foundKey(root, this.home, taken);
       taken.add(key);
-      const lastVisit = Math.max(0, ...Object.entries(saved.visits ?? {})
-        .filter(([folder]) => insideRoot(root, folder)).map(([, visit]) => visit.last));
-      return [{
-        key,
-        root,
-        realpath: value.path,
-        identity: value.identity,
-        names: this.manifestNames(root, pass),
-        at: previous ? Math.max(previous.at, lastVisit) : now,
-      }];
+      const lastVisit = Math.max(
+        0,
+        ...Object.entries(saved.visits ?? {})
+          .filter(([folder]) => insideRoot(root, folder))
+          .map(([, visit]) => visit.last),
+      );
+      return [
+        {
+          key,
+          root,
+          realpath: value.path,
+          identity: value.identity,
+          names: this.manifestNames(root, pass),
+          at: previous ? Math.max(previous.at, lastVisit) : now,
+        },
+      ];
     });
   }
 
-  async reconcileKeys(): Promise<void> {
+  reconcileKeys(): Promise<void> {
+    return (this.reconciling ??= this.reconcileKeyChanges().finally(() => {
+      this.reconciling = undefined;
+    }));
+  }
+  private async reconcileKeyChanges(): Promise<void> {
     await this.load();
     const explicit = new Set(this.ports.explicit().map((entry) => entry.key));
     const taken = new Set([...explicit, ...this.document.entries.map((entry) => entry.key)]);
@@ -508,9 +572,10 @@ export class FoundWorkspaces {
         trim(next.probes);
         trim(next.lastRun);
         while (bytes > 1_000_000) {
-          const index = next.entries.findLastIndex((entry) => !this.ports.retained(entry.key));
+          const index = next.entries.findLastIndex((entry) => !this.retained(entry.key));
           if (index < 0) {
-            this.recovery = 'Found workspace metadata cannot fit its retained entries in the 1 MB limit. The previous file remains in effect.';
+            this.recovery =
+              'Found workspace metadata cannot fit its retained entries in the 1 MB limit. The previous file remains in effect.';
             return;
           }
           const [removed] = next.entries.splice(index, 1);
@@ -536,7 +601,7 @@ export class FoundWorkspaces {
     this.timer = undefined;
     this.lastPass = 0;
     this.document.entries = this.document.entries.filter((entry) =>
-      this.ports.keepOnClear ? this.ports.keepOnClear(entry.key) : this.ports.retained(entry.key),
+      this.ports.keepOnClear ? this.ports.keepOnClear(entry.key) : this.retained(entry.key),
     );
     this.document.probes = [];
     this.document.lastRun = [];

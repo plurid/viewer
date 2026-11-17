@@ -2,17 +2,12 @@ import { expect, it } from 'vitest';
 import type { Pane, Workspace } from '../src/domain/contracts';
 import type { FolderProbe } from '../src/domain/workspaces/folder-facts';
 import type { WorkspaceDefinition } from '../src/domain/workspaces/definitions/schema';
-import {
-  allowedFoundFolder,
-  rootAncestors,
-  rootFor,
-} from '../src/domain/workspaces/found/roots';
-import { foundKey, foundName } from '../src/domain/workspaces/found/keys';
+import { allowedFoundFolder, rootAncestors, rootFor } from '../src/domain/workspaces/found/roots';
+import { foundKey } from '../src/domain/workspaces/found/keys';
 import { foundDefinitions } from '../src/domain/workspaces/found/catalog';
 import { qualifyingRoots } from '../src/domain/workspaces/found/candidates';
 import { proposeDefinition } from '../src/domain/workspaces/definitions/capture';
 import { mostlyIn } from '../src/domain/workspaces/ownership';
-import { slug } from '../src/domain/workspaces/definitions/keys';
 import { withDefinitionOrigins } from '../src/domain/workspaces/catalog';
 import { sampleDefinition, sampleWorkspace, hashDefinition } from './workspace-definition-fixtures';
 
@@ -34,6 +29,10 @@ it('D1 Store edition: a project folder granted as the scope itself is never foun
     [project + '/src', probe(project + '/src')],
   ]);
   const root = rootFor(project + '/src', facts, { ...context, scopeRoot: project });
+  expect(rootAncestors(project + '/src', { ...context, scopeRoot: project })).toEqual([
+    project + '/src',
+    project,
+  ]);
 
   expect(root).toBe(project);
 });
@@ -69,12 +68,19 @@ it('D2 boundary and exclusion matrix', () => {
   ]);
   check('worktree inside a repo folds into the repo', home + '/code/repo/trees/feature/src', [
     [home + '/code/repo', probe(home + '/code/repo', ['.git'], 'directory')],
-    [home + '/code/repo/trees/feature', probe(home + '/code/repo/trees/feature', ['.git'], 'worktree')],
+    [
+      home + '/code/repo/trees/feature',
+      probe(home + '/code/repo/trees/feature', ['.git'], 'worktree'),
+    ],
   ]);
-  check('nested clone inside a worktree checkout wins over the worktree', home + '/code/wt/vendor/lib/src', [
-    [home + '/code/wt', probe(home + '/code/wt', ['.git'], 'worktree')],
-    [home + '/code/wt/vendor/lib', probe(home + '/code/wt/vendor/lib', ['.git'], 'directory')],
-  ]);
+  check(
+    'nested clone inside a worktree checkout wins over the worktree',
+    home + '/code/wt/vendor/lib/src',
+    [
+      [home + '/code/wt', probe(home + '/code/wt', ['.git'], 'worktree')],
+      [home + '/code/wt/vendor/lib', probe(home + '/code/wt/vendor/lib', ['.git'], 'directory')],
+    ],
+  );
   check('/Users/Shared/acme', '/Users/Shared/acme/src', [
     ['/Users/Shared/acme', probe('/Users/Shared/acme', ['go.mod'])],
   ]);
@@ -85,9 +91,14 @@ it('D2 boundary and exclusion matrix', () => {
     [home + '/Desktop/acme', probe(home + '/Desktop/acme', ['pyproject.toml'])],
   ]);
   check('package.json inside node_modules', home + '/code/acme/node_modules/x', [
-    [home + '/code/acme/node_modules/x', probe(home + '/code/acme/node_modules/x', ['package.json'])],
+    [
+      home + '/code/acme/node_modules/x',
+      probe(home + '/code/acme/node_modules/x', ['package.json']),
+    ],
   ]);
-  check('project named out', home + '/code/out', [[home + '/code/out', probe(home + '/code/out', ['package.json'])]]);
+  check('project named out', home + '/code/out', [
+    [home + '/code/out', probe(home + '/code/out', ['package.json'])],
+  ]);
 
   const allowed = {
     homeLibraryLower: allowedFoundFolder(home + '/library/x', context),
@@ -97,6 +108,10 @@ it('D2 boundary and exclusion matrix', () => {
     usersShared: allowedFoundFolder('/Users/Shared/acme', context),
     otherUser: allowedFoundFolder('/Users/other/acme', context),
   };
+  expect(allowed.homeLibraryLower).toBe(false);
+  expect(allowed.homeLibrary).toBe(false);
+  expect(allowed.usersShared).toBe(true);
+  expect(allowed.otherUser).toBe(false);
 
   expect(rows['dotfiles ~/.git + ~/code/acme/package.json']).toBe(home + '/code/acme');
   expect(rows['versioned ~/Documents + project inside']).toBe(home + '/Documents/notes/proj');
@@ -115,7 +130,13 @@ it('D4 retained roots can fall out of the 200 cap', () => {
   const now = 1_800_000_000_000;
   const busy = Array.from({ length: 200 }, (_, index) => home + '/code/p' + index);
   const retained = home + '/code/zz-open';
-  const evidence = busy.map((root) => ({ folder: root + '/src', count: 50, last: now, score: 5, plane: false }));
+  const evidence = busy.map((root) => ({
+    folder: root + '/src',
+    count: 50,
+    last: now,
+    score: 5,
+    plane: false,
+  }));
   const result = qualifyingRoots([...busy, retained], evidence, now, new Set([retained]));
 
   expect(result).toContain(retained);
@@ -138,7 +159,9 @@ function oldPropose(workspace: Workspace, definitions: readonly WorkspaceDefinit
       .sort((a, b) => b.root.length - a.root.length)[0];
     if (project) counts.set(project, (counts.get(project) ?? 0) + 1);
   }
-  const primary = [...counts].sort(([a, x], [b, y]) => y - x || a.root.length - b.root.length)[0]?.[0];
+  const primary = [...counts].sort(
+    ([a, x], [b, y]) => y - x || a.root.length - b.root.length,
+  )[0]?.[0];
   return primary?.key;
 }
 
@@ -148,7 +171,7 @@ it('D5 proposeDefinition parity against the previous implementation (random)', (
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
     return seed / 0x7fffffff;
   };
-  const pick = <T,>(items: readonly T[]) => items[Math.floor(random() * items.length)]!;
+  const pick = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)]!;
   const folders = ['/a', '/a/b', '/a/b/c', '/a/b/c/d', '/a/e', '/f', '/f/g', '/', '/a/b/', '/ab'];
   let mismatches = 0;
   let mismatchesWithoutAll = 0;
@@ -163,9 +186,29 @@ it('D5 proposeDefinition parity against the previous implementation (random)', (
       const path = pick(folders);
       const type = pick(['folder', 'preview', 'terminal', 'search', 'browser'] as const);
       if (type === 'search')
-        return { id: 'p' + index, type, path, query: 'x', name: 'x', recursive: true, content: false, allLocations: random() < 0.3 } as Pane;
-      if (type === 'browser') return { id: 'p' + index, type, url: 'https://example.com' } as unknown as Pane;
-      return { id: 'p' + index, type, path, history: [path], historyIndex: 0, mode: 'list', sort: 'name', descending: false, showHidden: false } as unknown as Pane;
+        return {
+          id: 'p' + index,
+          type,
+          path,
+          query: 'x',
+          name: 'x',
+          recursive: true,
+          content: false,
+          allLocations: random() < 0.3,
+        } as Pane;
+      if (type === 'browser')
+        return { id: 'p' + index, type, url: 'https://example.com' } as unknown as Pane;
+      return {
+        id: 'p' + index,
+        type,
+        path,
+        history: [path],
+        historyIndex: 0,
+        mode: 'list',
+        sort: 'name',
+        descending: false,
+        showHidden: false,
+      } as unknown as Pane;
     });
     const workspace = sampleWorkspace('w', { panes, roots: panes.map((pane) => pane.id) });
     let expected: string | undefined;
@@ -179,10 +222,18 @@ it('D5 proposeDefinition parity against the previous implementation (random)', (
     }
     if (expected !== actual) {
       mismatches++;
-      const hasAll = panes.some((pane) => pane.type === 'search' && (pane as { allLocations?: boolean }).allLocations);
+      const hasAll = panes.some(
+        (pane) => pane.type === 'search' && (pane as { allLocations?: boolean }).allLocations,
+      );
       if (!hasAll) {
         mismatchesWithoutAll++;
-        if (examples.length < 3) examples.push({ definitions: definitions.map((d) => [d.key, d.root, d.projectName]), panes: panes.map((p) => [p.type, (p as { path?: string }).path]), expected, actual });
+        if (examples.length < 3)
+          examples.push({
+            definitions: definitions.map((d) => [d.key, d.root, d.projectName]),
+            panes: panes.map((p) => [p.type, (p as { path?: string }).path]),
+            expected,
+            actual,
+          });
       }
     }
   }
@@ -205,7 +256,16 @@ it('D7 withDefinitionOrigins allocates a new array on every catalog revision', (
   const catalog = {
     revision: 1,
     file: { path: '/x', state: 'read' as const },
-    projectManager: { path: '/y', state: 'off' as const, enabled: false, projects: 0, missing: 0, disabled: 0, remote: 0, duplicateKeys: 0 },
+    projectManager: {
+      path: '/y',
+      state: 'off' as const,
+      enabled: false,
+      projects: 0,
+      missing: 0,
+      disabled: 0,
+      remote: 0,
+      duplicateKeys: 0,
+    },
     definitions: [],
     diagnostics: [],
   };
@@ -218,9 +278,16 @@ it('D8 mostlyIn ties: shorter root vs explicit', () => {
   const outer = { ...sampleDefinition('outer'), root: home + '/code', source: 'found' as const };
   const inner = { ...sampleDefinition('inner'), root: home + '/code/web' };
   const panes = [home + '/code/a', home + '/code/web'].map((path, index) => ({
-    id: 'p' + index, type: 'folder', path, history: [path], historyIndex: 0, mode: 'list', sort: 'name', descending: false, showHidden: false,
+    id: 'p' + index,
+    type: 'folder',
+    path,
+    history: [path],
+    historyIndex: 0,
+    mode: 'list',
+    sort: 'name',
+    descending: false,
+    showHidden: false,
   })) as Pane[];
   const result = mostlyIn(sampleWorkspace('w', { panes, roots: ['p0', 'p1'] }), [outer, inner]);
-
+  expect(result).toBeUndefined();
 });
-

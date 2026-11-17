@@ -166,24 +166,42 @@ export class WorkspaceSessions {
     return workspace && structuredClone(workspace);
   }
 
-  rekeyFound(changes: readonly FoundKeyChange[], write: (state: SavedState) => Promise<void>): Promise<SavedState | undefined> {
-    const task = this.writes.catch(() => {}).then(async () => {
-      if (!this.current) return;
-      const workspaces = rekeyFoundLinks(this.current.workspaces, changes);
-      if (workspaces !== this.current.workspaces) {
-        const next = { ...this.current, workspaces };
-        await write(structuredClone(next));
-        this.current = next;
-      }
-      for (const session of this.sessions.values())
-        session.baseline.workspaces = rekeyFoundLinks(session.baseline.workspaces, changes);
-      for (const change of changes) {
-        for (const [from, to] of this.definitionRemaps)
-          if (to === change.from) this.definitionRemaps.set(from, change.to);
-        this.definitionRemaps.set(change.from, change.to);
-      }
-      return structuredClone(this.current);
-    });
+  rekeyFound(
+    changes: readonly FoundKeyChange[],
+    write: (state: SavedState) => Promise<void>,
+  ): Promise<SavedState | undefined> {
+    const task = this.writes
+      .catch(() => {})
+      .then(async () => {
+        if (!this.current) return;
+        const reservations = changes.flatMap((change) => {
+          const workspace = this.current!.workspaces.find(
+            (space) => space.definition?.source === 'found' && space.definition.key === change.from,
+          );
+          const reservation = this.definitionReservations.get(change.from);
+          return workspace && reservation && reservation.owner === this.owner(workspace.id)
+            ? [{ change, reservation }]
+            : [];
+        });
+        const workspaces = rekeyFoundLinks(this.current.workspaces, changes);
+        if (workspaces !== this.current.workspaces) {
+          const next = { ...this.current, workspaces };
+          await write(structuredClone(next));
+          this.current = next;
+        }
+        for (const session of this.sessions.values())
+          session.baseline.workspaces = rekeyFoundLinks(session.baseline.workspaces, changes);
+        for (const change of changes) {
+          for (const [from, to] of this.definitionRemaps)
+            if (to === change.from) this.definitionRemaps.set(from, change.to);
+          this.definitionRemaps.set(change.from, change.to);
+        }
+        for (const { change, reservation } of reservations) {
+          this.definitionReservations.delete(change.from);
+          this.definitionReservations.set(change.to, reservation);
+        }
+        return structuredClone(this.current);
+      });
     this.writes = task;
     return task;
   }
@@ -365,7 +383,13 @@ export class WorkspaceSessions {
         this.definitionReservations.delete(key);
     }
     session.workspaceID = input.activeWorkspace;
-    session.baseline = structuredClone(input);
+    session.baseline = structuredClone({
+      ...input,
+      workspaces: rekeyFoundLinks(
+        input.workspaces,
+        [...this.definitionRemaps].map(([from, to]) => ({ from, to })),
+      ),
+    });
     // The old workspace is flushed before building, so only a committed key releases its reservation.
     for (const space of input.workspaces) {
       const key = space.definition?.key;
@@ -397,7 +421,10 @@ export class WorkspaceSessions {
   private merge(owner: number, input: SavedState, visitSave?: FolderVisitSave): SavedState {
     input = {
       ...input,
-      workspaces: rekeyFoundLinks(input.workspaces, [...this.definitionRemaps].map(([from, to]) => ({ from, to }))),
+      workspaces: rekeyFoundLinks(
+        input.workspaces,
+        [...this.definitionRemaps].map(([from, to]) => ({ from, to })),
+      ),
     };
     const session = this.sessions.get(owner);
     if (!session || !this.current) throw new Error('This workspace window has closed.');

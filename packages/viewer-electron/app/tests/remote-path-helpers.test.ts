@@ -31,6 +31,8 @@ describe('location-aware shared path helpers', () => {
     expect(pathContains(root, folder)).toBe(true);
     expect(pathContains(folder, folder)).toBe(true);
     expect(pathContains(folder, folder + '/file')).toBe(true);
+    expect(pathContains(folder, folder + '\\b')).toBe(false);
+    expect(pathContains(folder, folder + '/../../etc')).toBe(false);
     expect(pathContains(folder, folder + '-other/file')).toBe(false);
     expect(pathContains(folder, root + 'srv/project/file')).toBe(false);
     expect(pathContains(folder, 'viewer-sftp://server02/srv/Project/file')).toBe(false);
@@ -96,4 +98,17 @@ describe('plane path schemas without widening local contracts', () => {
     expect(recordVisit(visits, folder, 20)).toBe(visits);
     expect(remembersFolder('/work/Project')).toBe(true);
   });
+});
+
+it('throws a typed plain invalid-location error in shared throwing helpers', () => {
+  const invalid = 'viewer-sftp:notes.txt';
+  for (const work of [
+    () => baseName(invalid),
+    () => parentPath(invalid),
+    () => normalizedPanePath(invalid, 'darwin'),
+    () => pathAncestry(invalid),
+    () => relativePathLabel(invalid, folder),
+  ]) {
+    expect(work).toThrow(expect.objectContaining({ code: 'VIEWER_REMOTE_INVALID_LOCATION' }));
+  }
 });
