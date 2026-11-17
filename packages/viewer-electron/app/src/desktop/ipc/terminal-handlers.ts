@@ -19,6 +19,8 @@ type TerminalHandlers = Pick<
   | 'terminalStart'
   | 'terminalStartAll'
   | 'terminalRunning'
+  | 'terminalStatus'
+  | 'terminalDefinitionCommand'
   | 'terminalCount'
   | 'terminalWrite'
   | 'terminalResize'
@@ -32,8 +34,11 @@ type TerminalHandlers = Pick<
 >;
 interface TerminalPorts {
   home: string;
-  definitionCommands: Pick<DefinitionCommands, 'start' | 'startAll'>;
-  terminals: Pick<Terminals, 'start' | 'write' | 'resize' | 'ack' | 'stop' | 'running' | 'count'>;
+  definitionCommands: Pick<DefinitionCommands, 'start' | 'startAll' | 'inspect' | 'pending'>;
+  terminals: Pick<
+    Terminals,
+    'start' | 'write' | 'resize' | 'ack' | 'stop' | 'running' | 'count' | 'status'
+  >;
   external: Pick<ExternalTerminals, 'application' | 'open'>;
   executions: Pick<Executions, 'start' | 'startManual' | 'list' | 'cancel'>;
   gitActions: Pick<GitActions, 'stop'>;
@@ -64,6 +69,11 @@ export function createTerminalHandlers(ports: TerminalPorts): TerminalHandlers {
         : ports.terminals.start(request, owner),
     terminalStartAll: ([items], owner) => ports.definitionCommands.startAll(owner, items),
     terminalRunning: ([request], owner) => ports.terminals.running(request, owner, false),
+    terminalStatus: async ([request, wait], owner) =>
+      (await ports.definitionCommands.pending(request, owner, wait)) ??
+      ports.terminals.status(request, owner, wait),
+    terminalDefinitionCommand: ([request, reference], owner) =>
+      ports.definitionCommands.inspect(owner, request, reference),
     terminalCount: ([workspaceID], owner) => ports.terminals.count(workspaceID, owner),
     terminalWrite: ([id, data], owner) => ports.terminals.write(id, data, owner),
     terminalResize: ([id, cols, rows], owner) => ports.terminals.resize(id, cols, rows, owner),

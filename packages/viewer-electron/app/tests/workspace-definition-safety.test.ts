@@ -156,6 +156,7 @@ describe('definition command safety boundaries', () => {
     'edit-workspace-definitions',
     'close-workspace',
     'reset-workspace',
+    'reset-definition:sample',
     'save-workspace-definition',
     'save-workspace-as-definition',
     'run-workspace-commands',

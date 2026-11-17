@@ -113,6 +113,9 @@ const api: ViewerAPI = {
     definition ? invoke('terminalStart', request, definition) : invoke('terminalStart', request),
   terminalStartAll: (items) => invoke('terminalStartAll', [...items]),
   terminalRunning: (request) => invoke('terminalRunning', request),
+  terminalStatus: (request, wait) => invoke('terminalStatus', request, wait),
+  terminalDefinitionCommand: (request, reference) =>
+    invoke('terminalDefinitionCommand', request, reference),
   terminalCount: (workspaceID) => invoke('terminalCount', workspaceID),
   terminalWrite: (id, data) => invoke('terminalWrite', id, data),
   terminalResize: (id, cols, rows) => invoke('terminalResize', id, cols, rows),

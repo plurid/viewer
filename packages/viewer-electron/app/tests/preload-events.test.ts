@@ -49,7 +49,25 @@ it('passes a basis-bound definition reference and Run all items through preload 
   expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'terminalCount', ['workspace']);
   expect(methodWindows.terminalRunning).toBe('viewer');
   expect(methodWindows.terminalCount).toBe('viewer');
-  expect(schemas.terminalRunning.safeParse([{ ...request, initialInput: 'echo forged' }]).success).toBe(false);
+  await bridge.api!.terminalStatus(request, true);
+  expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'terminalStatus', [request, true]);
+  await bridge.api!.terminalDefinitionCommand(request, reference);
+  expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'terminalDefinitionCommand', [
+    request,
+    reference,
+  ]);
+  expect(methodWindows.terminalStatus).toBe('viewer');
+  expect(methodWindows.terminalDefinitionCommand).toBe('viewer');
+  expect(
+    schemas.terminalStatus.safeParse([{ ...request, initialInput: 'echo forged' }]).success,
+  ).toBe(false);
+  expect(
+    schemas.terminalDefinitionCommand.safeParse([request, { ...reference, command: 'echo forged' }])
+      .success,
+  ).toBe(false);
+  expect(
+    schemas.terminalRunning.safeParse([{ ...request, initialInput: 'echo forged' }]).success,
+  ).toBe(false);
 });
 
 it('shares one native event subscription among many planes and releases it after the last subscriber', async () => {

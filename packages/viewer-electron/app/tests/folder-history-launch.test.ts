@@ -29,6 +29,7 @@ export function launchFixture(
   const record = { paths: [], launches: [], window: { isDestroyed: () => false } };
   Object.assign(desktop, {
     home: '/fixtures',
+    agentCommands: new Map(),
     storage: { load: async () => ({ state }) },
     fileAccess: { load: async () => {}, require: async () => {} },
     settings: { load: async () => {}, seedFolders: async () => {}, snapshot: () => settings },

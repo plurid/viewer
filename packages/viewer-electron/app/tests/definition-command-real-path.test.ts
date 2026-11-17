@@ -149,7 +149,7 @@ it('runs a clicked catalog command through IPC, approval, Terminals, the real wo
     );
     await vi.waitFor(() => expect(output).toContain('WHOLE_PATH_42'), { timeout: 5000 });
     expect(output).toContain('SIZE_ANSWERED');
-    expect(fake.writes).toEqual(['\x1b[8;24;80t', '\x1bi\x15print -r -- WHOLE_PATH_$((40+2))\r']);
+    expect(fake.writes).toEqual(['\x1b[8;24;80t', '\x1bS\x15print -r -- WHOLE_PATH_$((40+2))\r']);
     expect(ask).toHaveBeenCalledOnce();
     expect(fake.messages.filter((item) => item.kind === 'start')).toHaveLength(1);
   } finally {

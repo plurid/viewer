@@ -72,8 +72,19 @@ it.each(['commands', 'workspaces'] as const)(
         </WorkspaceContext.Provider>
       </CommandsContext.Provider>,
     );
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(view.queryByText('Workspace definitions are available only to the person.')).toBeNull();
-    expect(getState().notice).toBeNull();
+    const unhandled: unknown[] = [];
+    const rejected = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', rejected);
+    try {
+      await waitFor(() => expect(refresh).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+      expect(
+        view.queryByText('Workspace definitions are available only to the person.'),
+      ).toBeNull();
+      expect(getState().notice).toBeNull();
+    } finally {
+      process.off('unhandledRejection', rejected);
+    }
   },
 );

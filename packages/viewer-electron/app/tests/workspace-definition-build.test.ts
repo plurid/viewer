@@ -32,7 +32,8 @@ describe('definition workspace construction', () => {
     const definition = sampleDefinition();
     const workspace = buildDefinition(definition, builders());
     expect(workspace.definition).toEqual({
-      key: definition.key, basis: definition.basis,
+      key: definition.key,
+      basis: definition.basis,
       planes: { [workspace.panes[0]!.id]: 0 },
     });
     expect(workspace.panes[0]).toMatchObject({ type: 'folder', path: definition.root });

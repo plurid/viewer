@@ -111,7 +111,9 @@ async function open(key: string): Promise<void> {
   if (getState().definitionNotice) dismissNotice();
   const problems =
     getState().bootstrap.definitions?.diagnostics.filter(
-      (problem) => problem.key === key && problem.message.includes('left out'),
+      (problem) =>
+        (problem.key === key && problem.message.includes('left out')) ||
+        problem.source === 'defined-workspaces-v1.json',
     ) ?? [];
   if (problems.length) announce(problems.map((problem) => problem.message).join('\n'));
   if (reply.closed && reply.closed.basis !== reply.definition.basis) {
@@ -156,20 +158,36 @@ function freshWorkspace(definition: WorkspaceDefinition): Workspace {
   return workspace;
 }
 
-export const workspaceShells = (workspace: Workspace) =>
-  window.viewer.terminalCount(workspace.id);
+export const workspaceShells = (workspace: Workspace) => window.viewer.terminalCount(workspace.id);
 
-export async function closeDefinedWorkspace(id: string, withoutMemory = false): Promise<boolean> {
+export interface DefinitionCloseProblem {
+  kind: 'close-info';
+  problem: string;
+}
+export type DefinitionCloseResult = boolean | DefinitionCloseProblem;
+
+export async function closeDefinedWorkspace(
+  id: string,
+  withoutMemory = false,
+): Promise<DefinitionCloseResult> {
   if (id !== activeWorkspace().id && getState().saved.openWindows?.includes(id))
     throw new Error('Switch to that window to close it.');
   const space = getState().saved.workspaces.find((item) => item.id === id);
   if (!space?.definition) throw new Error('This workspace has no definition.');
-  const commit = await prepareClose(space.panes.map((pane) => pane.id), space.panes);
+  const commit = await prepareClose(
+    space.panes.map((pane) => pane.id),
+    space.panes,
+  );
   if (!commit) return false;
   await flushState();
   const before = getState();
-  const reply = await window.viewer.workspaceDefinitions({ kind: 'close', workspaceID: id, ...(withoutMemory ? { withoutMemory } : {}) });
-  if (reply.kind === 'close-info') throw new Error('Viewer cannot remember its planes: ' + reply.problem + '. Close it again after reviewing the confirmation.');
+  const reply = await window.viewer.workspaceDefinitions({
+    kind: 'close',
+    workspaceID: id,
+    ...(withoutMemory ? { withoutMemory } : {}),
+  });
+  if (reply.kind === 'close-info')
+    return { kind: 'close-info', problem: reply.problem ?? 'the memory file is unavailable' };
   if (reply.kind !== 'closed') throw new Error('The workspace could not be closed.');
   const workspaces = before.saved.workspaces.filter((item) => item.id !== id);
   let replacement = workspaces
@@ -218,6 +236,8 @@ export async function closeDefinedWorkspace(id: string, withoutMemory = false): 
   } catch (error) {
     savePatch(before.saved);
     update({ ...getState(), activePane: before.activePane });
+    if (!before.saved.workspaces.some((space) => space.id === replacement.id))
+      adapters.delete(replacement.id);
     throw error;
   }
   await commit();

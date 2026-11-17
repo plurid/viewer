@@ -64,6 +64,74 @@ afterEach(async () => {
 });
 
 describe('private initial input in the terminal service', () => {
+  it('reports a running definition shell to its owner without starting it again', async () => {
+    await terminals.start(request(), 7, approvedInput('npm run dev'));
+    await expect(terminals.running(request(), 7, false)).resolves.toBe(true);
+    await expect(terminals.running({ ...request(), cwd: root + '/' }, 7, false)).resolves.toBe(
+      true,
+    );
+    await expect(terminals.running(request('missing'), 7, false)).resolves.toBe(false);
+    expect(fake.postMessage).toHaveBeenCalledOnce();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it.each(['owner', 'workspaceID', 'rootID', 'profileID', 'cwd'] as const)(
+    'refuses a forged %s when checking a running terminal',
+    async (field) => {
+      await terminals.start(request(), 7, approvedInput('npm run dev'));
+      const elsewhere = root + '/elsewhere';
+      await mkdir(elsewhere);
+      const changed =
+        field === 'owner'
+          ? request()
+          : { ...request(), [field]: field === 'cwd' ? elsewhere : 'another' };
+      await expect(terminals.running(changed, field === 'owner' ? 8 : 7, false)).rejects.toThrow(
+        'another plane',
+      );
+      expect(fake.postMessage).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('keeps a renamed original folder reachable through the desktop status query', async () => {
+    const folder = root + '/build';
+    await mkdir(folder);
+    const input = { ...request(), cwd: folder };
+    await terminals.start(input, 7);
+    await rename(folder, folder + '-moved');
+    await expect(terminals.running(input, 7, false)).resolves.toBe(true);
+    expect(fake.postMessage).toHaveBeenCalledOnce();
+  });
+
+  it('X6: reports a pending terminal start as starting and waits for it without another launch', async () => {
+    let release!: () => void;
+    access.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const pending = terminals.start(request(), 7);
+    await expect(terminals.running(request(), 7, false)).resolves.toBe(false);
+    await expect(terminals.status(request(), 7)).resolves.toEqual({ kind: 'starting' });
+    const settled = terminals.status(request(), 7, true);
+    expect(terminals.count('workspace', 7)).toBe(0);
+    release();
+    await pending;
+    await expect(settled).resolves.toEqual({ kind: 'running' });
+    await expect(terminals.running(request(), 7, false)).resolves.toBe(true);
+  });
+
+  it('counts desktop shells by workspace and owner, including shells no renderer has attached', async () => {
+    await terminals.start(request(), 7, approvedInput('npm run dev'));
+    await terminals.start({ ...request('other-workspace'), workspaceID: 'elsewhere' }, 7);
+    await terminals.start(request('other-owner'), 8);
+    expect(terminals.count('workspace', 7)).toBe(1);
+    expect(terminals.count('elsewhere', 7)).toBe(1);
+    expect(terminals.count('workspace', 8)).toBe(1);
+    expect(terminals.count('workspace', 9)).toBe(0);
+    terminals.stop('terminal', 7);
+    expect(terminals.count('workspace', 7)).toBe(0);
+  });
+
   it('refuses a canonical folder different from the one whose approval was passed in', async () => {
     const elsewhere = root + '/elsewhere';
     await mkdir(elsewhere);
@@ -158,6 +226,7 @@ describe('private initial input in the terminal service', () => {
       lookup: (_owner, _key, plane) => ({
         command: plane ? 'npm test' : 'npm run dev',
         cwd: root,
+        paneCwd: root,
         profileID: 'login',
         workspaceName: 'Sample',
         basis: 'basis',

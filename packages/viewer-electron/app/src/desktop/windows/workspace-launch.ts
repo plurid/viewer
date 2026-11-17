@@ -1,5 +1,27 @@
 import type { LaunchRequest } from '../../domain/workspaces/launch';
 import type { WorkspaceQueryResult } from '../../domain/workspaces/definitions/query';
+import { resolveWorkspaceQuery } from '../../domain/workspaces/definitions/query';
+import type { Workspace } from '../../domain/contracts';
+import type {
+  WorkspaceDefinition,
+  DefinitionRootState,
+} from '../../domain/workspaces/definitions/schema';
+
+export async function resolveWorkspaceLaunchQuery(
+  open: readonly Workspace[],
+  definitions: readonly WorkspaceDefinition[],
+  query: string,
+  checkRoot: (key: string) => Promise<DefinitionRootState>,
+): Promise<WorkspaceQueryResult> {
+  const result = resolveWorkspaceQuery(open, definitions, query);
+  if (result.kind !== 'defined') return result;
+  try {
+    if ((await checkRoot(result.key)) !== 'missing') return result;
+  } catch {
+    // An unavailable launch argument belongs in the picker, so the first window can still open.
+  }
+  return { kind: 'none', query };
+}
 
 interface WorkspaceLaunchPorts<Window> {
   current?: Window;

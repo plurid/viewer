@@ -53,7 +53,8 @@ const output = () =>
     .map((event) => (event.type === 'data' ? event.data : ''))
     .join('');
 const command = 'print -r -- VIEWER_NATIVE_$((40+2))';
-const typedCommand = '\x1bi\x15' + command + '\r';
+const typedCommand = '\x1bS\x15' + command + '\r';
+type NativeShell = 'zsh' | 'bash';
 
 describe('initial input through a real zsh worker', () => {
   let unavailable = '';
@@ -104,8 +105,13 @@ describe('initial input through a real zsh worker', () => {
     await trashTemporary(root);
   });
 
-  async function start(rc: string, initialInput = command): Promise<void> {
-    await writeFile(path.join(root, '.zshrc'), rc, { flag: 'wx' });
+  async function start(
+    rc: string,
+    initialInput = command,
+    shell: NativeShell = 'zsh',
+  ): Promise<void> {
+    const rcFile = path.join(root, shell === 'zsh' ? '.zshrc' : '.bashrc');
+    await writeFile(rcFile, rc, { flag: 'wx' });
     send({
       kind: 'start',
       id,
@@ -113,9 +119,14 @@ describe('initial input through a real zsh worker', () => {
       rootID: 'folder',
       profileID: 'login',
       cwd: root,
-      executable: '/bin/zsh',
-      args: ['-i'],
-      env: { PATH: '/usr/bin:/bin', TERM: 'xterm-256color', ZDOTDIR: root },
+      executable: '/bin/' + shell,
+      args: shell === 'zsh' ? ['-i'] : ['--rcfile', rcFile, '-i'],
+      env: {
+        PATH: '/usr/bin:/bin',
+        TERM: 'xterm-256color',
+        ZDOTDIR: root,
+        BASH_SILENCE_DEPRECATION_WARNING: '1',
+      },
       cols: 80,
       rows: 24,
       initialInput,
@@ -171,7 +182,7 @@ describe('initial input through a real zsh worker', () => {
         (await readdir(root)).filter((file) => file.startsWith('FROM_HISTORY_MARKER')),
       ).toEqual([]);
       expect(fake.writes).not.toContain(reply);
-      expect(fake.writes[0]).toBe('\x1bi\x15' + approved + '\r');
+      expect(fake.writes[0]).toBe('\x1bS\x15' + approved + '\r');
     },
   );
 
@@ -318,6 +329,57 @@ describe('initial input through a real zsh worker', () => {
     await vi.waitFor(() => expect(output()).toContain('ANSWER:n'));
   });
 
+  it("W4: delays a person's answer until the deadline, cancels the command and releases the answer", async () => {
+    let answered = false;
+    fake.postMessage.mockImplementation((event) => {
+      events.push(event);
+      if (!answered && event.type === 'data' && output().includes('Update now?')) {
+        answered = true;
+        send({ kind: 'write', id, data: 'n' });
+      }
+    });
+    await start(
+      "read -rk 1 'answer?Update now? [Y/n] '\nprint -r -- \"ANSWER:$answer\"\nPS1='fixture> '\n",
+    );
+    await vi.waitFor(() => expect(answered).toBe(true));
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    expect(fake.writes).toEqual([]);
+    await vi.waitFor(() => expect(output()).toContain('Type this command manually'), {
+      timeout: 5000,
+    });
+    await vi.waitFor(() => expect(output()).toContain('ANSWER:n'));
+    expect(fake.writes).toEqual(['n']);
+    expect(output()).toContain(command);
+    expect(output()).not.toContain('VIEWER_NATIVE_42');
+  });
+
+  it('W1: waits through an instant-prompt style rc and preserves early typing after the command', async () => {
+    await start(
+      "PS1='fixture> '\nprint -n -- 'fixture> '\n/bin/sleep 1\nprint -n -- $'\\r\\e[K'\nprint -r -- FRAMEWORK_READY\n",
+    );
+    send({ kind: 'write', id, data: 'print -r -- PERSON_$((40+2))\r' });
+    await vi.waitFor(() => expect(output()).toContain('PERSON_42'), { timeout: 5000 });
+    expect(output().indexOf('FRAMEWORK_READY')).toBeLessThan(output().indexOf('VIEWER_NATIVE_42'));
+    expect(output().indexOf('VIEWER_NATIVE_42')).toBeLessThan(output().indexOf('PERSON_42'));
+    expect(output().split('VIEWER_NATIVE_42')).toHaveLength(2);
+    expect(fake.writes).toEqual([typedCommand, 'print -r -- PERSON_$((40+2))\r']);
+  });
+
+  it('W2: waits for a slow precmd before typing once', async () => {
+    await start("precmd() { /bin/sleep 0.5; print -n -- $'\\e]0;title\\a'; }\nPS1='fixture> '\n");
+    await vi.waitFor(() => expect(output()).toContain('VIEWER_NATIVE_42'), { timeout: 5000 });
+    expect(output().split('VIEWER_NATIVE_42')).toHaveLength(2);
+    expect(fake.writes).toEqual([typedCommand]);
+  });
+
+  it('W3: never repeats a command after an asynchronous prompt redraw', async () => {
+    await start("zmodload zsh/sched\nsched +1 'print -r -- ASYNC_REDRAW'\nPS1='fixture> '\n");
+    await vi.waitFor(() => expect(output()).toContain('VIEWER_NATIVE_42'), { timeout: 5000 });
+    await vi.waitFor(() => expect(output()).toContain('ASYNC_REDRAW'), { timeout: 5000 });
+    expect(output().split('VIEWER_NATIVE_42')).toHaveLength(2);
+    expect(fake.writes).toEqual([typedCommand]);
+  });
+
   it.each([
     ['P1', "print -r -- 'checking terminal'\nread -s -t 5 -d R reply"],
     ['P1b', 'print -n -- \'probing...\'\nread -s -t 1 -d "\\\\" reply'],
@@ -356,7 +418,11 @@ describe('initial input through a real zsh worker', () => {
   });
 
   it.each([
-    ['emacs', 'cursor'], ['emacs', 'size'], ['vi insert', 'cursor'], ['vi insert', 'size'], ['vi insert', 'both'],
+    ['emacs', 'cursor'],
+    ['emacs', 'size'],
+    ['vi insert', 'cursor'],
+    ['vi insert', 'size'],
+    ['vi insert', 'both'],
   ] as const)(
     'clears an unread %s %s reply from the zsh line editor before the command',
     async (keymap, kind) => {
@@ -373,17 +439,40 @@ describe('initial input through a real zsh worker', () => {
           }
         }
       });
-      await start([
-        keymap === 'emacs' ? 'bindkey -e' : 'bindkey -v',
-        `print -n -- $'${query}'`,
-        "print -r -- 'rc asked and moved on'",
-        "PS1='fixture> '",
-        '',
-      ].join('\n'));
+      await start(
+        [
+          keymap === 'emacs' ? 'bindkey -e' : 'bindkey -v',
+          `print -n -- $'${query}'`,
+          "print -r -- 'rc asked and moved on'",
+          "PS1='fixture> '",
+          '',
+        ].join('\n'),
+      );
       await vi.waitFor(() => expect(output()).toContain('VIEWER_NATIVE_42'), { timeout: 5000 });
       expect(output().split('VIEWER_NATIVE_42')).toHaveLength(2);
       expect(output()).not.toContain('command not found');
       expect(fake.writes.at(-1)).toBe(typedCommand);
+    },
+  );
+
+  it.each(['K5 vi prefill', 'K7 emacs accept-line binding'])(
+    '%s clears pre-existing text without accepting it and preserves early typing',
+    async (mode) => {
+      await start(
+        [
+          mode.startsWith('K5') ? 'bindkey -v' : "bindkey -e; bindkey '^[i' accept-line",
+          "print -z 'touch PREFILL_RAN'",
+          "PS1='fixture> '",
+          '',
+        ].join('\n'),
+      );
+      send({ kind: 'write', id, data: 'print -r -- PERSON_$((40+2))\r' });
+      await vi.waitFor(() => expect(output()).toContain('PERSON_42'), { timeout: 5000 });
+      expect(output().split('VIEWER_NATIVE_42')).toHaveLength(2);
+      expect(output()).toMatch(/\r?\nVIEWER_NATIVE_42\r?\n/);
+      expect(await readdir(root)).not.toContain('PREFILL_RAN');
+      expect(output().indexOf('VIEWER_NATIVE_42')).toBeLessThan(output().indexOf('PERSON_42'));
+      expect(fake.writes).toEqual([typedCommand, 'print -r -- PERSON_$((40+2))\r']);
     },
   );
 
@@ -393,5 +482,37 @@ describe('initial input through a real zsh worker', () => {
       timeout: 5000,
     });
     expect(fake.writes).toEqual([]);
+  });
+
+  it('B1: keeps the ordinary quiet rule for a plain bash prompt', async () => {
+    const input = 'echo BASH_NATIVE_$((40+2))';
+    await start("PS1='fixture> '\n", input, 'bash');
+    await vi.waitFor(() => expect(output()).toContain('BASH_NATIVE_42'), { timeout: 5000 });
+    expect(output().split('BASH_NATIVE_42')).toHaveLength(2);
+    expect(fake.writes).toEqual([input + '\r']);
+  });
+
+  it('B2: exposes the documented startup-question limit in bash', async () => {
+    const input = 'echo BASH_NATIVE_$((40+2))';
+    await start(
+      "read -n 1 -p 'Update now? ' answer\nprintf '\\nANSWER:%s\\n' \"$answer\"\nPS1='fixture> '\n",
+      input,
+      'bash',
+    );
+    await vi.waitFor(() => expect(output()).toContain('ANSWER:e'), { timeout: 5000 });
+    await vi.waitFor(() => expect(output()).toContain('command not found'));
+    expect(output()).not.toContain('BASH_NATIVE_42');
+    expect(fake.writes).toEqual([input + '\r']);
+  });
+
+  it('B3: cancels an unanswered DECRQSS query in bash even without a reader', async () => {
+    await start(
+      "printf '\\033P$qm\\033\\\\'\nPS1='fixture> '\n",
+      'echo BASH_NATIVE_$((40+2))',
+      'bash',
+    );
+    await vi.waitFor(() => expect(output()).toContain('waiting for an answer'), { timeout: 5000 });
+    expect(fake.writes).toEqual([]);
+    expect(output()).not.toContain('BASH_NATIVE_42');
   });
 });

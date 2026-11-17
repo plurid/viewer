@@ -5,6 +5,26 @@ import { tokenizePath } from '../src/domain/workspaces/definitions/paths';
 import { sampleDefinition, sampleWorkspace } from './workspace-definition-fixtures';
 
 describe('definition capture', () => {
+  it('records a changed focus when it is not the first plane', () => {
+    const definition = sampleDefinition();
+    const workspace = sampleWorkspace('focused', {
+      panes: [
+        { id: 'first', type: 'preview', path: definition.root + '/readme.txt' },
+        { id: 'second', type: 'preview', path: definition.root + '/notes.txt' },
+      ],
+      roots: ['first', 'second'],
+      activePane: 'second',
+    });
+    const result = captureDefinition({
+      workspace,
+      order: ['first', 'second'],
+      definition,
+      definitions: [definition],
+      entry: {},
+      home: '/home/sample',
+    });
+    expect(result.entry.focus).toBe(1);
+  });
   it('chooses the longest root, preserves spelling, uses Home and falls back literally', () => {
     const context = {
       home: '/home/sample',
@@ -69,6 +89,10 @@ describe('definition capture', () => {
         { kind: 'terminal' as const, path: '{{ROOT}}', command: 'echo sample' },
       ],
     };
+    definition.planes = [
+      { index: 0, plane: { kind: 'folder', path: definition.root + '/src' } },
+      { index: 1, plane: { kind: 'terminal', path: definition.root, command: 'echo sample' } },
+    ];
     const captured = captureDefinition({
       workspace,
       order: ['terminal', 'folder', 'other'],

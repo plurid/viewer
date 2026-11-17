@@ -72,9 +72,9 @@ function writeInitialInput(id: string, value: Session, trigger: InitialInputTrig
       return;
     }
     cancelInitialInput(value);
-    // Unread reports can leave zsh in a vi command, motion or replace keymap. Escape+i
-    // restores insert mode; emacs ignores that unbound key. Ctrl-U then clears the line.
-    const insertMode = initial.restoreInsertMode ? '\x1bi' : '';
+    // Unread reports or print -z can leave text in a vi keymap. Escape+S clears that line
+    // and enters insert mode; emacs spells the word, then Ctrl-U clears the line.
+    const insertMode = initial.restoreInsertMode ? '\x1bS' : '';
     const clearLine = initial.needsPasteMode ? '\x15' : '';
     value.process.write(insertMode + clearLine + initial.command + '\r');
     writeHeldInput(value, initial.input);

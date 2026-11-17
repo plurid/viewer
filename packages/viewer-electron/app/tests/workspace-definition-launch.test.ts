@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { routeWorkspaceLaunch } from '../src/desktop/windows/workspace-launch';
+import {
+  resolveWorkspaceLaunchQuery,
+  routeWorkspaceLaunch,
+} from '../src/desktop/windows/workspace-launch';
 import { resolveWorkspaceQuery } from '../src/domain/workspaces/definitions/query';
 import type { LaunchRequest } from '../src/domain/workspaces/launch';
 import { sampleDefinition, sampleWorkspace } from './workspace-definition-fixtures';
@@ -20,6 +23,19 @@ function ports(current?: { id: string }) {
 }
 
 describe('workspace query window routing', () => {
+  it('checks the selected unknown root on first launch before choosing its definition', async () => {
+    const definition = sampleDefinition('sample/site', { rootState: 'unknown' });
+    const checkRoot = vi.fn(async () => 'missing' as const);
+    const result = await resolveWorkspaceLaunchQuery([], [definition], definition.key, checkRoot);
+    expect(checkRoot).toHaveBeenCalledExactlyOnceWith(definition.key);
+    expect(result).toEqual({ kind: 'none', query: definition.key });
+    const host = ports();
+    expect(await routeWorkspaceLaunch(request(definition.key), result, host)).toMatchObject({
+      target: { id: 'created' },
+      request: { workspacePicker: definition.key },
+    });
+    expect(host.independent).not.toHaveBeenCalled();
+  });
   it.each(['unmatched-query', ''])(
     'opens the first window and preserves %s in the picker',
     async (query) => {

@@ -67,6 +67,7 @@ beforeEach(async () => {
   definition = {
     command: 'npm run dev',
     cwd: root,
+    paneCwd: root,
     profileID: 'login',
     workspaceName: 'Sample',
     basis: 'basis',

@@ -301,7 +301,13 @@ export const schemas = {
   workspaceDefinitions: z.tuple([
     z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('open'), key: definitionKeySchema }).strict(),
-      z.object({ kind: z.literal('close'), workspaceID: id, withoutMemory: z.boolean().optional() }).strict(),
+      z
+        .object({
+          kind: z.literal('close'),
+          workspaceID: id,
+          withoutMemory: z.boolean().optional(),
+        })
+        .strict(),
       z.object({ kind: z.literal('close-info'), workspaceID: id }).strict(),
       z.object({ kind: z.literal('reset'), workspaceID: id }).strict(),
       z
@@ -635,6 +641,11 @@ export const schemas = {
   terminalExternal: z.tuple([localPath, z.boolean()]),
   terminalStart: z.tuple([terminalStartSchema, definitionCommandReferenceSchema.optional()]),
   terminalRunning: z.tuple([terminalStartSchema.strict()]),
+  terminalStatus: z.tuple([terminalStartSchema.strict(), z.boolean().optional()]),
+  terminalDefinitionCommand: z.tuple([
+    terminalStartSchema.strict(),
+    definitionCommandReferenceSchema,
+  ]),
   terminalCount: z.tuple([id]),
   terminalStartAll: z.tuple([
     z
@@ -1052,6 +1063,8 @@ export const methodWindows = {
   terminalStart: 'viewer',
   terminalStartAll: 'viewer',
   terminalRunning: 'viewer',
+  terminalStatus: 'viewer',
+  terminalDefinitionCommand: 'viewer',
   terminalCount: 'viewer',
   terminalWrite: 'viewer',
   terminalResize: 'viewer',

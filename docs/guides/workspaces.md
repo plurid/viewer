@@ -206,27 +206,34 @@ project's key to override its name or planes.
 tokens and limits. **Settings → Configuration → Workspace definitions → Validate** shows problems
 with line numbers. A broken document keeps the last valid copy in effect.
 
-Definitions accept terminal `command` fields. Those terminals open stopped in this version. Command
-execution will arrive with native approvals. Plain terminal planes keep their normal behavior.
-Changes to a definition apply on its next fresh open; they do not rearrange an open workspace.
+Definitions accept terminal `command` fields. A waiting terminal shows the definition's current
+command when the plane at that index is still a terminal whose folder resolves to this pane's
+folder. **Run** runs that displayed command; **Shell only** starts a shell without it. Otherwise the
+panel says **This terminal changed in the definition.** and offers **Reset to definition…** and
+**Shell only**. **Run all** skips changed terminals and reports their outcome on each plane. New or
+changed commands also need native approval. Plain terminal planes keep their normal behavior.
+Editing a definition never rearranges an open workspace.
 
-| Term                             | What opening it does                                                                                                                                     |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Layout template                  | Adds its planes to the workspace you are in.                                                                                                             |
-| Workspace definition             | Opens a whole workspace by name and root. It stays out of the open list until opened. Command fields are accepted; execution will arrive with approvals. |
-| Project (`viewer.project.jsonc`) | Opens an arrangement shared with a folder. It never starts commands.                                                                                     |
+| Term                             | What opening it does                                                                                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Layout template                  | Adds its planes to the workspace you are in.                                                                                                                                          |
+| Workspace definition             | Opens a whole workspace by name and root. It stays out of the open list until opened. Command terminals offer Run, Shell only and Run all, with approval for new or changed commands. |
+| Project (`viewer.project.jsonc`) | Opens an arrangement shared with a folder. It never starts commands.                                                                                                                  |
 
 ## Close and remember a workspace
 
 Choose **Workspace → Close Workspace** for a workspace opened from a definition. Viewer remembers
 its planes, tiling, focus and preview positions. Running terminals ask before closing; their shells
-stop. Open it again by name to restore those planes. Terminals reopen stopped.
+stop. Unsaved editors and scratch text ask **Save**, **Don’t Save** or **Cancel**. Cancel leaves the
+workspace open. Open it again by name to restore its planes. Terminals reopen stopped.
 
 The workspace menu shows up to three **Recently closed** definitions below the recent open
-workspaces. In **Manage workspaces… → Defined**, **Remembers** marks a saved snapshot. **Forget
-remembered planes** removes that snapshot; the next open builds from the definition. Viewer keeps up
-to 100 snapshots, dropping the oldest if they exceed 16 MB. Snapshots stay on this computer and are
-excluded from personal backups and agent discovery.
+workspaces. In **Manage workspaces… → Defined**, **Remembers** marks a closed workspace’s saved
+snapshot. **Forget remembered planes** asks before removing that snapshot; the next open builds from
+the definition. Viewer keeps up to 100 snapshots, dropping the oldest if they exceed 16 MB. If one
+workspace alone exceeds the limit, Close explains that Viewer cannot remember its planes and asks
+before closing it. Snapshots stay on this computer and are excluded from personal backups and agent
+discovery.
 
 ## Reset or save a definition
 
@@ -234,8 +241,11 @@ excluded from personal backups and agent discovery.
   counts what closes and opens. Unsaved editors ask before anything closes; Cancel keeps the
   workspace open. Command terminals remain stopped and ask before running.
 - **Save to definition** (also found as **sync**) writes the supported planes, their order, tiling
-  and focus to this workspace's entry. A curated definition or a save that removes a command asks
-  once: **Save over definition**. Comments on unchanged planes stay with them.
+  and focus to this workspace's entry. A curated or changed definition, or a save that removes a
+  command, asks once: **Save over definition**. Saving immediately after opening leaves the entry
+  unchanged. Comments on unchanged planes stay with them; planes skipped at open stay written. If
+  the definition changed, planes present only in the file stay written, including planes you closed
+  here.
 - **Save as definition…** links an ad-hoc workspace to a new definition. Review the proposed **Key**
   and **Name**. A project owning most planes supplies the proposed key; otherwise Viewer uses the
   workspace's name and common folder. An existing entry must use **Save to definition**.
@@ -244,9 +254,15 @@ Manage's **Open** tab offers **Close** for defined workspaces and **Delete** for
 The **Defined** tab shows **Remembers**, **Rich**, **Curated**, **Hidden** and **Folder missing**
 badges. Its problem disclosure shows diagnostics without covering the list.
 
-Editing a definition never changes an open workspace. **Definition changed** in Manage and the
-switcher offers **Reset to definition…**. Remembered planes still open when their definition
-changed; a notice offers Reset.
+If a valid definitions file no longer contains the workspace's key, its row says the definition was
+removed. **Delete** and **Save as definition…** become available. A broken file keeps the link until
+it can be read again.
+
+Editing a definition never rearranges an open workspace. **Definition changed** in Manage and the
+switcher offers **Reset to definition…**. Remembered planes take precedence on reopen even when the
+definition changed; a notice offers Reset. A waiting command terminal shows and runs the
+definition's current command when that indexed terminal still names the same folder. Otherwise it
+says **This terminal changed in the definition.** with **Reset to definition…** and **Shell only**.
 
 ## Share a project folder
 

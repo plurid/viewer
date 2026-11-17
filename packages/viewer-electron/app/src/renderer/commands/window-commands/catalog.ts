@@ -1,9 +1,10 @@
 import type { CommandDefinition } from '../registry';
 import { baseName, paneTitle } from '../../../domain/workspaces/planes';
 import type { WindowScopes } from './scope';
-import { orderedWorkspaces } from '../../../domain/workspaces/catalog';
+import { definitionWasRemoved, orderedWorkspaces } from '../../../domain/workspaces/catalog';
 import { searchableDefinition } from '../../../domain/workspaces/definitions/query';
 import { openDefinition } from '../../state/definitions';
+import { getState } from '../../state/store';
 
 /** Dynamic entries: workspaces, open planes, places and saved searches. */
 export function catalogCommands({
@@ -14,25 +15,50 @@ export function catalogCommands({
   workspaceScope,
 }: WindowScopes): CommandDefinition[] {
   const commands: CommandDefinition[] = [];
-  for (const entry of orderedWorkspaces(state.saved))
+  for (const entry of orderedWorkspaces(state.saved)) {
+    const changed =
+      entry.definition &&
+      state.bootstrap.definitions?.definitions.some(
+        (item) => item.key === entry.definition!.key && item.basis !== entry.definition!.basis,
+      );
+    const resetID = changed ? `reset-definition:${entry.id}` : undefined;
     commands.push({
       id: `workspace:${entry.id}`,
       label: entry.name,
       group: 'Workspaces',
-      detail:
-        entry.definition &&
-        state.bootstrap.definitions?.definitions.some(
-          (item) => item.key === entry.definition!.key && item.basis !== entry.definition!.basis,
-        )
-          ? entry.definition.key + ' · Definition changed · Reset to definition…'
+      detail: changed
+        ? entry.definition!.key + ' · Definition changed'
+        : definitionWasRemoved(entry, state.bootstrap.definitions)
+          ? 'Its definition was removed from workspaces.jsonc.'
           : (entry.definition?.key ??
             `${entry.panes.length} open ${entry.panes.length === 1 ? 'plane' : 'planes'}`),
       icon: entry.id === space.id ? 'check' : 'dock',
       aliases: ['workspace', `switch to ${entry.name}`],
       remember: false,
+      relatedID: resetID,
       when: workspaceScope,
       run: () => actions.switchWorkspace(entry.id),
     });
+    if (resetID)
+      commands.push({
+        id: resetID,
+        label: 'Reset to definition…',
+        detail: entry.name,
+        group: 'Workspaces',
+        icon: 'refresh',
+        humanOnly: true,
+        relatedOnly: true,
+        remember: false,
+        when: (context) =>
+          workspaceScope(context) &&
+          (entry.id === space.id || !state.saved.openWindows?.includes(entry.id)),
+        run: async () => {
+          if (entry.id !== getState().saved.activeWorkspace)
+            await actions.switchWorkspace(entry.id);
+          if (entry.id === getState().saved.activeWorkspace) actions.workspaceDialog('reset');
+        },
+      });
+  }
   const opened = new Set(
     state.saved.workspaces.flatMap((entry) => (entry.definition ? [entry.definition.key] : [])),
   );

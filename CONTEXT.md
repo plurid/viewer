@@ -39,6 +39,17 @@ outside session state, backups and agent discovery. `desktop/ipc/definition-hand
 human and window ownership before close, reset, save and reopen. `renderer/state/definitions.ts`
 owns the persisted renderer transitions; Manage is `ui/workspace/WorkspacesDialog.tsx`.
 
+- `domain/terminals/command-text.ts` validates command text.
+- `domain/terminals/definition-commands.ts` defines references and outcomes.
+- `desktop/workspaces/definition-commands.ts` owns approved command starts.
+- `desktop/workspaces/definition-command-lookup.ts` binds commands to owned panes.
+- `desktop/actions/execution-confirmations.ts` owns native approvals and fingerprints.
+- `desktop/terminals/terminal-start-input.ts` separates held input and terminal reports.
+- `renderer/terminals/definition-command-session.ts` owns choices and reattachment.
+- `renderer/terminals/start-authority.ts` drives panel UI state and automatic-start deferral.
+- `renderer/terminals/command-focus.ts` restores focus after notice actions.
+- `renderer/workspace/WorkspaceDefinitionCommands.tsx` owns the notice and Run all.
+
 A **tour** is a `.viewer-tour.jsonc` definition (`domain/tours`, read and saved by
 `desktop/workspaces/tours.ts`) of **stops**: files at an evidence anchor, with captions.
 `renderer/workspace/tour.ts` plays it through a `TourStage` (`workspace/tours/stage.ts`), which only

@@ -67,9 +67,7 @@ export function workspacesCommands({
       aliases: ['dw'],
       detail: `${space.panes.length} open ${space.panes.length === 1 ? 'plane' : 'planes'} · layout only`,
       when: (context) => workspaceScope(context) && !linked,
-      unavailable: linked
-        ? 'Close it: its definition stays in workspaces.jsonc.'
-        : undefined,
+      unavailable: linked ? 'Close it: its definition stays in workspaces.jsonc.' : undefined,
       run: () => actions.workspaceDialog('delete'),
     },
     {
@@ -97,9 +95,7 @@ export function workspacesCommands({
       humanOnly: true,
       when: (context) =>
         workspaceScope(context) &&
-        (kind === 'save-as'
-          ? !linked && canCaptureDefinition(space)
-          : linked),
+        (kind === 'save-as' ? !linked && canCaptureDefinition(space) : linked),
       unavailable:
         kind === 'save-as' && !canCaptureDefinition(space)
           ? 'Open a folder, file, terminal, scratch or search plane first.'

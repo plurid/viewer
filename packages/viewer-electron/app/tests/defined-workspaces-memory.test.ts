@@ -35,7 +35,9 @@ describe('remembered definition storage', () => {
     await memory.remember(workspace(1), {});
     const before = await readFile(memory.store.file, 'utf8');
     const large = 'x'.repeat(3_900_000);
-    await expect(memory.remember(workspace(2, { a: large, b: large, c: large, d: large, e: large }), {})).rejects.toThrow('16 MB');
+    await expect(
+      memory.remember(workspace(2, { a: large, b: large, c: large, d: large, e: large }), {}),
+    ).rejects.toThrow('16 MB');
     expect(await readFile(memory.store.file, 'utf8')).toBe(before);
     expect(memory.get('sample/project-1')).toBeDefined();
   });

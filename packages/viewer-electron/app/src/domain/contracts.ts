@@ -26,7 +26,9 @@ import type {
   DefinitionCommandReference,
   DefinitionCommandStart,
   DefinitionCommandOutcome,
+  DefinitionCommandPresentation,
 } from './terminals/definition-commands';
+import type { TerminalStatus } from './terminals/status';
 import type { LaunchRequest, ShellCommandStatus } from './workspaces/launch';
 import type {
   DefinitionCatalog,
@@ -874,6 +876,11 @@ export interface ViewerAPI {
   ): Promise<void | DefinitionCommandOutcome>;
   terminalStartAll(items: DefinitionCommandStart[]): Promise<DefinitionCommandOutcome[]>;
   terminalRunning(request: TerminalStart): Promise<boolean>;
+  terminalStatus(request: TerminalStart, wait?: boolean): Promise<TerminalStatus>;
+  terminalDefinitionCommand(
+    request: TerminalStart,
+    reference: DefinitionCommandReference,
+  ): Promise<DefinitionCommandPresentation>;
   terminalCount(workspaceID: string): Promise<number>;
   terminalWrite(id: string, data: string): Promise<void>;
   terminalResize(id: string, cols: number, rows: number): Promise<void>;
@@ -1050,7 +1057,11 @@ export interface ViewerAPI {
   /** Asks what to do with unsaved text: before closing it, or before Revert to Saved. */
   textPrompt(kind: 'close' | 'revert', name: string): Promise<'save' | 'discard' | 'cancel'>;
   /** Unsaved text kept in the profile, without the text, and what could not be read. */
-  bufferList(): Promise<{ buffers: TextBufferSummary[]; problems: string[]; remembered?: string[] }>;
+  bufferList(): Promise<{
+    buffers: TextBufferSummary[];
+    problems: string[];
+    remembered?: string[];
+  }>;
   bufferRead(id: string): Promise<TextBuffer | null>;
   bufferWrite(buffer: TextBuffer): Promise<void>;
   /** Removes unsaved text the person chose to discard. */

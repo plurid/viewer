@@ -17,6 +17,32 @@ const mounts = {
   ],
 };
 
+it('invalidates cached fallback mounts as soon as a volume notification arrives', async () => {
+  const run = vi.fn<SharingRunner>(async () => ({
+    ok: true,
+    stdout: '/dev/disk on / (apfs, local)\n',
+    stderr: '',
+  }));
+  let changed!: () => void;
+  const volumes = new SharingVolumes(
+    run,
+    () => undefined,
+    () => 0,
+    (notify) => {
+      changed = notify;
+      return () => {};
+    },
+  );
+  const stop = volumes.watch(() => {});
+  await volumes.read();
+  await volumes.read();
+  expect(run).toHaveBeenCalledTimes(1);
+  changed();
+  await volumes.read();
+  expect(run).toHaveBeenCalledTimes(2);
+  stop();
+});
+
 it('uses native mount notifications without polling or spawning a mount process', async () => {
   vi.useFakeTimers();
   const changed = vi.fn();

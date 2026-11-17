@@ -70,26 +70,41 @@ interface PreparedCatalog {
   prepared: Map<string, PreparedChoice>;
 }
 const catalogs = new WeakMap<readonly WorkspaceDefinition[], PreparedCatalog>();
-const choices = new Map<string, {
-  name: string;
-  aliases: string[];
-  projectName?: string;
-  value: PreparedChoice;
-}>();
+const choices = new Map<
+  string,
+  {
+    name: string;
+    aliases: string[];
+    projectName?: string;
+    value: PreparedChoice;
+  }
+>();
 function prepareCatalog(definitions: readonly WorkspaceDefinition[]) {
   let catalog = catalogs.get(definitions);
   if (!catalog) {
     catalog = {
       byKey: new Map(definitions.map((item) => [item.key, item])),
-      prepared: new Map(definitions.map((item) => {
-        let cached = choices.get(item.key);
-        if (!cached || cached.name !== item.name || cached.projectName !== item.projectName ||
-            cached.aliases.length !== item.aliases.length || cached.aliases.some((alias, index) => alias !== item.aliases[index])) {
-          cached = { name: item.name, aliases: [...item.aliases], projectName: item.projectName, value: prepareChoice(item.name, item) };
-          choices.set(item.key, cached);
-        }
-        return [item.key, cached.value];
-      })),
+      prepared: new Map(
+        definitions.map((item) => {
+          let cached = choices.get(item.key);
+          if (
+            !cached ||
+            cached.name !== item.name ||
+            cached.projectName !== item.projectName ||
+            cached.aliases.length !== item.aliases.length ||
+            cached.aliases.some((alias, index) => alias !== item.aliases[index])
+          ) {
+            cached = {
+              name: item.name,
+              aliases: [...item.aliases],
+              projectName: item.projectName,
+              value: prepareChoice(item.name, item),
+            };
+            choices.set(item.key, cached);
+          }
+          return [item.key, cached.value];
+        }),
+      ),
     };
     catalogs.set(definitions, catalog);
     if (choices.size > 10_000) {

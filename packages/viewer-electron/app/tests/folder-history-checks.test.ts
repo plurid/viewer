@@ -1,4 +1,9 @@
 import { Desktop } from '../src/desktop/bridge';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import type { WorkspaceDefinitions } from '../src/desktop/workspaces/definitions';
+import { defaultSettings } from '../src/domain/services';
+import { temporaryRoot } from '../tools/temporary';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 import { BackgroundFolderHistory } from '../src/desktop/files/folder-history';
 import type { SavedState } from '../src/domain/contracts';
@@ -39,6 +44,74 @@ vi.mock('../src/desktop/workers/utility-client', () => ({
 afterEach(() => {
   workers.length = 0;
   vi.useRealTimers();
+});
+
+it('keeps definition roots in their own lanes and cache while folder history remains immediately usable', async () => {
+  const history = new FolderHistoryChecks('/fixtures/history-worker.cjs');
+  const definitions = new FolderHistoryChecks('/fixtures/history-worker.cjs');
+  const desktop = Object.create(Desktop.prototype) as Desktop;
+  Object.assign(desktop, {
+    home: '/home/sample',
+    folderChecks: history,
+    definitionRootChecks: definitions,
+    settings: { snapshot: () => ({ settings: defaultSettings('/home/sample') }) },
+  });
+  const directory = await temporaryRoot('viewer-definition-checker-wiring-');
+  await writeFile(
+    path.join(directory, 'workspaces.jsonc'),
+    JSON.stringify({
+      version: 1,
+      sources: { projectManager: { enabled: false } },
+      workspaces: {
+        sleepingOne: { root: '/Volumes/Sleeping/one' },
+        sleepingTwo: { root: '/Volumes/Sleeping/two' },
+        ...Object.fromEntries(
+          Array.from({ length: 501 }, (_, index) => [
+            'definition-' + index,
+            { root: '/fixtures/definition-' + index },
+          ]),
+        ),
+      },
+    }),
+  );
+  const create = Reflect.get(desktop, 'createWorkspaceDefinitions') as (
+    directory: string,
+    access: () => Promise<void>,
+    emit: () => void,
+  ) => WorkspaceDefinitions;
+  const service = create.call(
+    desktop,
+    directory,
+    async () => {},
+    () => {},
+  );
+  try {
+    await service.load();
+    vi.useFakeTimers();
+    const check = (key: string) => service.checkRoot(key);
+    await history.check('/fixtures/recent');
+    const pending = [check('sleepingOne'), check('sleepingTwo')];
+    await vi.advanceTimersByTimeAsync(0);
+    const recent = history.check('/fixtures/another');
+    await vi.advanceTimersByTimeAsync(0);
+    let finished = false;
+    void recent.then(() => {
+      finished = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(finished).toBe(true);
+    expect(await recent).toMatchObject({ directory: true });
+    await vi.advanceTimersByTimeAsync(151);
+    await Promise.all(pending);
+    for (let index = 0; index < 501; index++) await check('definition-' + index);
+    expect(history.paths).toEqual(['/fixtures/recent', '/fixtures/another']);
+  } finally {
+    for (const worker of workers)
+      worker.receive?.({ value: { directory: true, path: worker.request } });
+    await service.close();
+    history.close();
+    definitions.close();
+  }
 });
 
 it('shares the desktop pool across launch and windows, quarantines a slow volume, and leaves other disks usable', async () => {

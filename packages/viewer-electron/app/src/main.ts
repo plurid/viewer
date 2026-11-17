@@ -44,8 +44,10 @@ import { debuggingAllowed } from './desktop/diagnostics/debugging';
 import { HotkeyWindow } from './desktop/windows/hotkey-window';
 import { macFiles } from './desktop/native/macos-files';
 import { launchRequestSchema, parseLaunch, type LaunchRequest } from './domain/workspaces/launch';
-import { resolveWorkspaceQuery } from './domain/workspaces/definitions/query';
-import { routeWorkspaceLaunch } from './desktop/windows/workspace-launch';
+import {
+  resolveWorkspaceLaunchQuery,
+  routeWorkspaceLaunch,
+} from './desktop/windows/workspace-launch';
 import { askNatively } from './desktop/native/native-confirmation';
 import { saveBeforeClose, type SaveFailureChoice } from './desktop/windows/save-before-close';
 import { QuitSequence } from './desktop/windows/quit-sequence';
@@ -727,19 +729,12 @@ async function launch(request: LaunchRequest): Promise<void> {
   if (request.workspace !== undefined) {
     await desktop.prepareSettings();
     const spaces = desktop.workspaceSessions.snapshot()?.workspaces ?? [];
-    let result = resolveWorkspaceQuery(
+    const result = await resolveWorkspaceLaunchQuery(
       spaces,
       desktop.definitions.snapshot().definitions,
       request.workspace,
+      (key) => desktop!.definitions.checkRoot(key),
     );
-    if (result.kind === 'defined') {
-      try {
-        if ((await desktop.definitions.checkRoot(result.key)) === 'missing')
-          result = { kind: 'none', query: request.workspace };
-      } catch {
-        result = { kind: 'none', query: request.workspace };
-      }
-    }
     const routed = await routeWorkspaceLaunch(request, result, {
       current: target,
       forWorkspace: (id) => desktop!.windowForWorkspace(id),

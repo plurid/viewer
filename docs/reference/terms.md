@@ -38,8 +38,9 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   _In Viewer:_ **Change workspace…** and the workspace matches in **⌘K**. _Learn:_
   [Open a defined workspace](../guides/workspaces.md#open-a-defined-workspace)
 - **Workspace definition**: the recipe in `workspaces.jsonc` or derived live from a VS Code Project
-  Manager project. It names a root and planes. Command fields are accepted; their terminals open
-  stopped. _In Viewer:_ **Edit workspace definitions** and **Settings → Configuration**. _Learn:_
+  Manager project. It names a root and planes. Command terminals offer **Run** and **Shell only**,
+  plus **Run all** for the waiting commands. _In Viewer:_ **Edit workspace definitions** and
+  **Settings → Configuration**. _Learn:_
   [Workspace definitions](configuration.md#workspace-definitions)
 - **Definition key**: the stable path-shaped identifier derived from a `>`-separated project name,
   such as `sample/tools/sample-cli`. _In Viewer:_ the detail below a defined workspace's name.

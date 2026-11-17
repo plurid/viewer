@@ -79,6 +79,7 @@ beforeEach(async () => {
     lookup: (_owner, _key, plane) => ({
       command: plane ? 'npm test' : 'npm run dev',
       cwd,
+      paneCwd: cwd,
       profileID: 'login',
       workspaceName: 'Sample',
       basis: 'basis',

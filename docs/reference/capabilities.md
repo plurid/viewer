@@ -341,8 +341,8 @@ characters in **⌘K** for definition matches; open workspaces match from one ch
 (`edit-workspace-definitions`) opens `workspaces.jsonc`. **Settings → Configuration → Workspace
 definitions** shows its path, **Open workspaces.jsonc**, **Validate**, source counts and line
 diagnostics, with **Allow access…** when the Store edition needs a source grant. Definitions with
-commands open those terminals stopped. See
-[Open a defined workspace](../guides/workspaces.md#open-a-defined-workspace) and the
+commands offer **Run** and **Shell only** in each terminal, plus **Run all** for the waiting
+commands. See [Open a defined workspace](../guides/workspaces.md#open-a-defined-workspace) and the
 [definition reference](configuration.md#workspace-definitions).
 
 | Feature                                     | Key                        | ⌘K command                                                                                                                                                                       | Menu                                                                                 | Learn                                                                     |

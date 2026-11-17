@@ -41,7 +41,10 @@ const memorySchema = z
   .refine((value) => new Set(value.closed.map((entry) => entry.key)).size === value.closed.length);
 type WorkspaceMemory = z.infer<typeof memorySchema>;
 
-function rememberedEntry(workspace: Workspace, state: Pick<SavedState, 'previewStates' | 'previewHistory'>) {
+function rememberedEntry(
+  workspace: Workspace,
+  state: Pick<SavedState, 'previewStates' | 'previewHistory'>,
+) {
   const link = workspace.definition;
   if (!link) throw new Error('Only a workspace with a definition can remember its planes.');
   return closedSchema.parse({
@@ -49,7 +52,9 @@ function rememberedEntry(workspace: Workspace, state: Pick<SavedState, 'previewS
     basis: link.basis,
     at: Date.now(),
     workspace,
-    previewStates: Object.fromEntries(Object.entries(state.previewStates ?? {}).filter(([id]) => id.startsWith(workspace.id + ':'))),
+    previewStates: Object.fromEntries(
+      Object.entries(state.previewStates ?? {}).filter(([id]) => id.startsWith(workspace.id + ':')),
+    ),
     previewHistory: state.previewHistory?.[workspace.id] ?? [],
   });
 }
@@ -102,22 +107,37 @@ export class DefinedWorkspaces {
     return Object.hasOwn(this.current.opened, key) ? this.current.opened[key] : undefined;
   }
   bufferIDs(): string[] {
-    return [...new Set(this.current.closed.flatMap((entry) =>
-      entry.workspace.panes.flatMap((pane) =>
-        pane.type === 'scratch' || ((pane.type === 'preview' || pane.type === 'diff') && pane.bufferID)
-          ? [pane.bufferID!]
-          : [],
+    return [
+      ...new Set(
+        this.current.closed.flatMap((entry) =>
+          entry.workspace.panes.flatMap((pane) =>
+            pane.type === 'scratch' ||
+            ((pane.type === 'preview' || pane.type === 'diff') && pane.bufferID)
+              ? [pane.bufferID!]
+              : [],
+          ),
+        ),
       ),
-    ))];
+    ];
   }
-  problem(workspace: Workspace, state: Pick<SavedState, 'previewStates' | 'previewHistory'>): string | undefined {
+  problem(
+    workspace: Workspace,
+    state: Pick<SavedState, 'previewStates' | 'previewHistory'>,
+  ): string | undefined {
     if (this.retained) return 'its unreadable memory file remains protected';
     const entry = rememberedEntry(workspace, state);
-    if (Buffer.byteLength(JSON.stringify({ version: 1, closed: [entry], opened: this.current.opened })) > rememberedWorkspaceBytes)
+    if (
+      Buffer.byteLength(
+        JSON.stringify({ version: 1, closed: [entry], opened: this.current.opened }),
+      ) > rememberedWorkspaceBytes
+    )
       return 'this workspace alone exceeds the 16 MB memory limit';
     return undefined;
   }
-  private change(change: (current: WorkspaceMemory) => WorkspaceMemory, keep?: string): Promise<void> {
+  private change(
+    change: (current: WorkspaceMemory) => WorkspaceMemory,
+    keep?: string,
+  ): Promise<void> {
     const task = this.queue
       .catch(() => {})
       .then(async () => {
@@ -128,7 +148,13 @@ export class DefinedWorkspaces {
           );
         const next = change(structuredClone(this.current));
         next.closed.sort((a, b) => b.at - a.at);
+        const protectedEntry = keep && next.closed.find((entry) => entry.key === keep);
         next.closed = next.closed.slice(0, rememberedWorkspaceLimit);
+        if (protectedEntry && !next.closed.includes(protectedEntry)) {
+          next.closed.pop();
+          next.closed.push(protectedEntry);
+          next.closed.sort((a, b) => b.at - a.at);
+        }
         next.opened = Object.fromEntries(
           Object.entries(next.opened)
             .sort(([, a], [, b]) => b - a)
@@ -140,7 +166,8 @@ export class DefinedWorkspaces {
           const [removed] = next.closed.splice(index, 1);
           bytes -= Buffer.byteLength(JSON.stringify(removed)) + 1;
         }
-        if (bytes > rememberedWorkspaceBytes) throw new Error('This workspace exceeds the 16 MB memory limit.');
+        if (bytes > rememberedWorkspaceBytes)
+          throw new Error('This workspace exceeds the 16 MB memory limit.');
         await this.store.save(next);
         this.current = next;
         for (const listener of this.listeners) listener();
@@ -154,16 +181,28 @@ export class DefinedWorkspaces {
   ): Promise<void> {
     const entry = rememberedEntry(workspace, state);
     const problem = this.problem(workspace, state);
-    if (problem) return Promise.reject(new Error('Viewer cannot remember its planes: ' + problem + '.'));
-    return this.change((current) => ({
-      ...current,
-      closed: [entry, ...current.closed.filter((item) => item.key !== entry.key)],
-    }), entry.key);
+    if (problem)
+      return Promise.reject(new Error('Viewer cannot remember its planes: ' + problem + '.'));
+    return this.change(
+      (current) => ({
+        ...current,
+        closed: [entry, ...current.closed.filter((item) => item.key !== entry.key)],
+      }),
+      entry.key,
+    );
   }
   async opened(key: string): Promise<void> {
     definitionKeySchema.parse(key);
     await this.load();
-    if (this.retained) return;
+    if (this.retained) {
+      this.current.opened = Object.fromEntries(
+        Object.entries({ ...this.current.opened, [key]: Date.now() })
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 500),
+      );
+      for (const listener of this.listeners) listener();
+      return;
+    }
     return this.change((current) => ({
       ...current,
       opened: { ...current.opened, [key]: Date.now() },

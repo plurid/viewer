@@ -341,14 +341,17 @@ refuse the newer saved-state file.
 
 **Save to definition** edits only the current key through the existing JSONC file, preserving
 comments on unchanged planes and bytes outside the entry. An outside edit causes one retry against
-the new document. A symbolic link is written through to its target. Invalid JSONC is never replaced
-by a save.
+the new document. A symbolic link is written through to its target, even when that file does not yet
+exist; a missing target folder is refused. Invalid JSONC, invalid entries and duplicate keys must be
+fixed first. An unchanged workspace saves without changing its entry, including omitted defaults.
+Written planes skipped during opening remain in the entry with their comments.
 
 Save records folder, file, terminal, scratch and search planes, their order, tiling and focus. Other
 kinds stay in the open workspace and are listed in the result. Paths use the longest matching
 catalog root, then Home, then a literal absolute fallback. An existing spelling is kept when it
 resolves to the same folder. Commands come only from the existing entry, matched by the terminal's
-written plane index. Removing one asks for **Save over definition**. Name, aliases, look, curated
+written plane index and resolved folder. A changed definition or a removed command asks for **Save
+over definition**. A command is never reassigned to a different folder. Name, aliases, look, curated
 and hidden remain as written.
 
 **Save as definition…** creates one entry and links the open workspace to it. Its proposed key uses
@@ -361,6 +364,11 @@ kept separately in that file. Snapshots include preview positions and history; t
 open workspaces or enter backups or agent discovery. An unreadable file is moved aside before any
 new memory is written. **Forget remembered planes** removes a snapshot and keeps its recency.
 **Reset to definition…** forgets the snapshot after editor-close prompts succeed.
+
+If a workspace alone exceeds 16 MB, Close asks before closing without remembering it. If an
+unreadable memory file cannot be moved aside, Viewer protects it and still opens definitions fresh,
+with a note. Close and Reset resolve unsaved text before closing; “Don’t Save” takes effect only
+after the desktop accepts the operation.
 
 ## Tour files
 

@@ -13,6 +13,71 @@ interface MutationProbe extends MutationEdit {
 }
 
 const probes: Record<string, MutationProbe> = {
+  rendererAuthority: {
+    file: '/src/renderer/terminals/definition-command-session.ts',
+    before: 'if (reason) throw new Error(reason);',
+    after: '',
+  },
+  noticeWaiting: {
+    file: '/src/renderer/terminals/definition-command-session.ts',
+    before: "definitionChoice(workspace, pane).phase === 'waiting',",
+    after: 'true,',
+  },
+  clearLine: {
+    file: '/src/desktop/terminals/terminal-worker.ts',
+    before: "const clearLine = initial.needsPasteMode ? '\\x15' : '';",
+    after: "const clearLine = '';",
+  },
+  insertMode: {
+    file: '/src/desktop/terminals/terminal-worker.ts',
+    before: "const insertMode = initial.restoreInsertMode ? '\\x1bS' : '';",
+    after: "const insertMode = '';",
+  },
+  approvalParent: {
+    file: '/src/desktop/bridge.ts',
+    before: 'definitionWindow.length ? definitionWindow[0] : this.window',
+    after: 'definitionWindow[0]',
+  },
+  closedApprovalParent: {
+    file: '/src/desktop/bridge.ts',
+    before: 'definitionWindow.length && (!parent || parent.isDestroyed())',
+    after: 'false',
+  },
+  persistedFolder: {
+    file: '/src/desktop/workspaces/definition-commands.ts',
+    before: 'cwd !== requestedCwd || cwd !== paneCwd',
+    after: 'cwd !== requestedCwd',
+  },
+  inspectedFolder: {
+    file: '/src/desktop/workspaces/definition-commands.ts',
+    before: 'folders.some((cwd) => cwd !== folders[0])',
+    after: 'false',
+  },
+  inspectedProfile: {
+    file: '/src/desktop/workspaces/definition-commands.ts',
+    before: "if (request.profileID !== current.profileID) return { kind: 'changed' };",
+    after: '',
+  },
+  pendingApproval: {
+    file: '/src/desktop/workspaces/definition-commands.ts',
+    before: "if (!wait) return { kind: 'starting' };",
+    after: "if (!wait) return { kind: 'stopped' };",
+  },
+  pendingOwner: {
+    file: '/src/desktop/workspaces/definition-commands.ts',
+    before: 'pending.owner !== owner ||',
+    after: '',
+  },
+  clientFolder: {
+    file: '/src/renderer/terminals/definition-command-session.ts',
+    before: "return presentation.kind === 'available' ? presentation : undefined;",
+    after: 'return catalogCommand(workspace, pane);',
+  },
+  zshPrefill: {
+    file: '/src/desktop/terminals/terminal-worker.ts',
+    before: "initial.restoreInsertMode ? '\\x1bS'",
+    after: "initial.restoreInsertMode ? '\\x1bi'",
+  },
   lookupWindow: {
     file: '/src/desktop/workspaces/definition-command-lookup.ts',
     before: 'window.workspaceID !== workspaceID',

@@ -2,10 +2,17 @@ import type { SavedState, Workspace } from '../contracts';
 import type { DefinitionCatalog } from './definitions/schema';
 
 export function definitionWasRemoved(space: Workspace, catalog?: DefinitionCatalog): boolean {
-  return !!space.definition && !!catalog &&
+  return (
+    !!space.definition &&
+    !!catalog &&
     (catalog.file.state === 'read' || catalog.file.state === 'absent') &&
-    catalog.projectManager.state !== 'unreadable' && catalog.projectManager.state !== 'needs-access' &&
-    !catalog.definitions.some((item) => item.key === space.definition!.key);
+    catalog.projectManager.state !== 'unreadable' &&
+    catalog.projectManager.state !== 'needs-access' &&
+    !catalog.diagnostics.some(
+      (issue) => issue.key === space.definition!.key && issue.level === 'error',
+    ) &&
+    !catalog.definitions.some((item) => item.key === space.definition!.key)
+  );
 }
 
 export const maximumWorkspaces = 1000;

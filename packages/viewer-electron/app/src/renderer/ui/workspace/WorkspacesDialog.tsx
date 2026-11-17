@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DefinitionDialogKind } from './DefinitionDialog';
+import type { WorkspaceDefinition } from '../../../domain/workspaces/definitions/schema';
 import { rankWorkspaceChoices } from '../../../domain/workspaces/definitions/query';
 import { canCaptureDefinition } from '../../../domain/workspaces/definitions/capture';
 import { openDefinition } from '../../state/definitions';
-import { maximumWorkspaces, orderedWorkspaces } from '../../../domain/workspaces/catalog';
+import {
+  definitionWasRemoved,
+  maximumWorkspaces,
+  orderedWorkspaces,
+} from '../../../domain/workspaces/catalog';
 import { report, useViewer } from '../../state/store';
 import { Dialog, IconButton } from '../primitives';
 import { Icon } from '../Icon';
@@ -149,6 +154,8 @@ export function WorkspacesDialog({
               {rows.map((space) => {
                 const current = space.id === saved.activeWorkspace;
                 const elsewhere = !current && saved.openWindows?.includes(space.id);
+                const removed = definitionWasRemoved(space, catalog);
+                const linked = !!space.definition && !removed;
                 return (
                   <li key={space.id} data-workspace-id={space.id}>
                     <button
@@ -167,6 +174,7 @@ export function WorkspacesDialog({
                               ? 'Open in another window · '
                               : ''}
                           {space.panes.length} {space.panes.length === 1 ? 'plane' : 'planes'}
+                          {removed && ' · Its definition was removed from workspaces.jsonc.'}
                           {space.definition &&
                             catalog?.definitions.some(
                               (item) =>
@@ -187,18 +195,17 @@ export function WorkspacesDialog({
                       onClick={() => onAction('rename', space.id)}
                     />
                     <IconButton
-                      icon={space.definition ? 'close' : 'trash'}
-                      label={`${space.definition ? 'Close' : 'Delete'} ${space.name}`}
+                      icon={linked ? 'close' : 'trash'}
+                      label={`${linked ? 'Close' : 'Delete'} ${space.name}`}
                       disabled={opening || elsewhere}
                       title={
                         elsewhere
-                          ? 'Switch to that window to ' +
-                            (space.definition ? 'close it.' : 'delete it.')
+                          ? 'Switch to that window to ' + (linked ? 'close it.' : 'delete it.')
                           : undefined
                       }
-                      onClick={() => onAction(space.definition ? 'close' : 'delete', space.id)}
+                      onClick={() => onAction(linked ? 'close' : 'delete', space.id)}
                     />
-                    {!space.definition && (
+                    {!linked && (
                       <IconButton
                         icon="dock"
                         label={`Save ${space.name} as definition…`}
@@ -280,6 +287,7 @@ function DefinedRows({ onClose }: { onClose(): void }) {
   const [sort, setSort] = useState<DefinedWorkspaceSort>('recent');
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [forget, setForget] = useState<WorkspaceDefinition>();
   const searchable = useMemo(
     () => catalog?.definitions.map((item) => ({ ...item, hidden: false })) ?? [],
     [catalog],
@@ -360,7 +368,7 @@ function DefinedRows({ onClose }: { onClose(): void }) {
                 <strong>{item.name}</strong>
                 <small>{item.key}</small>
                 <span className="workspace-catalog-badges">
-                  {item.remembered && <span>Remembers</span>}
+                  {item.remembered && !opened && <span>Remembers</span>}
                   {(item.planes.length > 1 ||
                     item.planes[0]?.plane.kind !== 'folder' ||
                     !!item.tiling ||
@@ -372,6 +380,13 @@ function DefinedRows({ onClose }: { onClose(): void }) {
               </div>
               <button
                 disabled={busy || written?.hidden || item.rootState === 'missing'}
+                title={
+                  written?.hidden
+                    ? 'This definition is hidden. Edit workspace definitions to show it.'
+                    : item.rootState === 'missing'
+                      ? 'Its root folder is missing.'
+                      : undefined
+                }
                 onClick={() =>
                   action(async () => {
                     await openDefinition(item.key);
@@ -381,16 +396,13 @@ function DefinedRows({ onClose }: { onClose(): void }) {
               >
                 {opened ? 'Switch' : 'Open'}
               </button>
-              {item.remembered && (
+              {item.remembered && !opened && (
                 <IconButton
-                  icon="refresh"
+                  icon="trash"
+                  className="danger"
                   label={`Forget remembered planes for ${item.name}`}
                   disabled={busy}
-                  onClick={() =>
-                    action(() =>
-                      window.viewer.workspaceDefinitions({ kind: 'forget', key: item.key }),
-                    )
-                  }
+                  onClick={() => setForget(item)}
                 />
               )}
               <IconButton
@@ -412,11 +424,6 @@ function DefinedRows({ onClose }: { onClose(): void }) {
               ? 'No matching definitions.'
               : 'Define a workspace here or read projects from VS Code Project Manager.'}
           </p>
-          <button
-            onClick={() => action(() => window.viewer.workspaceDefinitionFile({ kind: 'edit' }))}
-          >
-            Edit workspace definitions
-          </button>
           {needsAccess && (
             <button
               onClick={() =>
@@ -443,6 +450,38 @@ function DefinedRows({ onClose }: { onClose(): void }) {
             ))}
           </ul>
         </Disclosure>
+      )}
+      {forget && (
+        <Dialog
+          title="Forget remembered planes?"
+          onClose={() => {
+            if (!busy) setForget(undefined);
+          }}
+        >
+          <div className="dialog-copy">
+            <p>
+              Forget the remembered planes of “{forget.name}”? It opens from its definition next
+              time.
+            </p>
+          </div>
+          <footer>
+            <button disabled={busy} onClick={() => setForget(undefined)}>
+              Cancel
+            </button>
+            <button
+              className="danger"
+              disabled={busy}
+              onClick={() =>
+                action(async () => {
+                  await window.viewer.workspaceDefinitions({ kind: 'forget', key: forget.key });
+                  setForget(undefined);
+                })
+              }
+            >
+              Forget remembered planes
+            </button>
+          </footer>
+        </Dialog>
       )}
       <footer>
         <button

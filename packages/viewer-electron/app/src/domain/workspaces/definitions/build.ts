@@ -64,7 +64,8 @@ export function buildDefinition(
     arrangement: {},
     activePane: indexed.get(definition.focus ?? 0) ?? panes[0]?.id,
     definition: {
-      key: definition.key, basis: definition.basis,
+      key: definition.key,
+      basis: definition.basis,
       planes: Object.fromEntries([...indexed].map(([index, id]) => [id, index])),
     },
     ...(definition.look?.spaceColor

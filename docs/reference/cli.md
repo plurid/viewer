@@ -45,8 +45,8 @@ Workspace queries resolve in this order: exact open ID, unique exact open name, 
 Project Manager name, unique alias, then a unique fuzzy match. An open workspace linked to a
 matching definition wins. Hidden and missing-root definitions are excluded. Ambiguous and unmatched
 queries open **Change workspace…** with the query filled in. An unmatched query shows a sentence
-naming it, including on the first launch. Definition terminals with `command` fields open stopped.
-Command execution will arrive with approvals.
+naming it, including on the first launch. Definition terminals with `command` fields offer **Run**
+and **Shell only**, with native approval for new or changed commands.
 
 `viewer --workspace` never starts a definition's commands, from any shell. Each terminal asks with
 **Run** or **Shell only**; **Run all** offers a single review for the waiting commands.

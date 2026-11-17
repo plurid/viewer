@@ -103,9 +103,8 @@ async function discard(pane: Pane): Promise<void> {
 }
 
 /**
- * Before planes close: each holding unsaved text asks Save, Don't Save or Cancel, natively. False
- * when the person cancelled or a save did not happen, and nothing closes. Planes closed another
- * way (an arrangement Undo, a project reload) keep their text in the profile, recovered at launch.
+ * Prompts finish before any discard. The caller commits only after its desktop operation accepts,
+ * so a refusal or a later Cancel leaves earlier editors' text available.
  */
 export type PreparedClose = () => Promise<void>;
 

@@ -5,6 +5,9 @@ import { useWorkspace } from './context';
 import {
   chooseDefinitionTerminals,
   checkDefinitionTerminal,
+  checkDefinitionCommand,
+  definitionCommandPresentation,
+  definitionTerminalChanged,
   commandsNoticeHidden,
   displayedDefinitionCommand,
   hideCommandsNotice,
@@ -16,7 +19,7 @@ import { focusCommandTerminal } from '../terminals/command-focus';
 
 export function WorkspaceDefinitionCommands({ ready = true }: { ready?: boolean }) {
   const workspace = useViewer(activeWorkspace);
-  useViewer((state) => state.bootstrap.definitions);
+  const catalog = useViewer((state) => state.bootstrap.definitions);
   useDefinitionChoices();
   useTerminalAuthority();
   const controller = useWorkspace();
@@ -24,19 +27,29 @@ export function WorkspaceDefinitionCommands({ ready = true }: { ready?: boolean 
     if (!ready || !workspace.definition) return;
     for (const pane of workspace.panes) {
       if (pane.type !== 'terminal' || pane.definitionPlane === undefined) continue;
-      void checkDefinitionTerminal(workspace, pane, {
-        id: pane.id, workspaceID: workspace.id, rootID: controller.rootID(pane.id) || pane.id,
-        cwd: pane.path, profileID: pane.profileID, cols: 80, rows: 24,
-      });
+      const request = {
+        id: pane.id,
+        workspaceID: workspace.id,
+        rootID: controller.rootID(pane.id) || pane.id,
+        cwd: pane.path,
+        profileID: pane.profileID,
+        cols: 80,
+        rows: 24,
+      };
+      void checkDefinitionTerminal(workspace, pane, request);
+      void checkDefinitionCommand(workspace, pane, request);
     }
-  }, [workspace, controller, ready]);
+  }, [workspace, controller, ready, catalog]);
   const panes = waitingDefinitionPanes(workspace);
   if (commandsNoticeHidden(workspace) || !panes.length) return null;
   return (
     <DefinitionCommandsNotice
       count={panes.length}
       disabledReason={definitionRunReason(panes.map((pane) => pane.id))}
-      onNotNow={() => { hideCommandsNotice(workspace); focusCommandTerminal(); }}
+      onNotNow={() => {
+        hideCommandsNotice(workspace);
+        focusCommandTerminal();
+      }}
       onRunAll={() => {
         const items = panes.map((pane) => ({
           pane,
@@ -50,12 +63,20 @@ export function WorkspaceDefinitionCommands({ ready = true }: { ready?: boolean 
             rows: 24,
           },
           reference: displayedDefinitionCommand(workspace, pane)?.reference,
+          problem:
+            definitionCommandPresentation(workspace, pane).kind === 'changed'
+              ? definitionTerminalChanged
+              : undefined,
         }));
-        void chooseDefinitionTerminals(workspace, items).then((started) => {
-          const first = started[0];
-          if (first) controller.focusPane(first);
-          focusCommandTerminal(first);
-        }).catch(report);
+        void chooseDefinitionTerminals(workspace, items)
+          .then((started) => {
+            const current = activeWorkspace();
+            if (current.id !== workspace.id || current.epoch !== workspace.epoch) return;
+            const first = started[0];
+            if (first) controller.focusPane(first);
+            focusCommandTerminal(first);
+          })
+          .catch(report);
       }}
     />
   );

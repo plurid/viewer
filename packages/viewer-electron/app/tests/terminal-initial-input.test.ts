@@ -103,6 +103,25 @@ const dcsReports = [
 ] as const;
 
 describe('private initial shell input', () => {
+  it.each(['/bin/zsh', '/usr/local/bin/fish'])(
+    'clears unread reports and types the command in one write for %s',
+    (executable) => {
+      const { id, process } = start('npm run dev', { executable });
+      process.data('\x1b[6n\x1b[18t');
+      send({ kind: 'write', id, data: '\x1b[12;1R\x1b[8;30;100t' });
+      process.data('prompt> \x1b[?2004h');
+      vi.advanceTimersByTime(120);
+      const restore = executable.endsWith('/zsh') ? '\x1bS' : '';
+      expect(process.write.mock.calls).toEqual([
+        ['\x1b[12;1R'],
+        ['\x1b[8;30;100t'],
+        [restore + '\x15npm run dev\r'],
+      ]);
+      vi.advanceTimersByTime(4000);
+      expect(process.write).toHaveBeenCalledTimes(3);
+    },
+  );
+
   it.each([
     '\x1b]0;\recho AHEAD_OF_COMMAND\r\x07',
     '\x1b]echo INSTEAD_OF_COMMAND; #\x1b\\',
@@ -198,7 +217,9 @@ describe('private initial shell input', () => {
     expect(process.write).not.toHaveBeenCalled();
     process.data('\x1b[?2004h');
     vi.advanceTimersByTime(120);
-    expect(process.write.mock.calls).toEqual([[(executable.endsWith('/zsh') ? '\x1bi' : '') + '\x15npm run dev\r']]);
+    expect(process.write.mock.calls).toEqual([
+      [(executable.endsWith('/zsh') ? '\x1bS' : '') + '\x15npm run dev\r'],
+    ]);
   });
 
   it('cancels zsh with paste mode disabled and displays the literal command for manual input', () => {

@@ -23,6 +23,7 @@ export function definitionCommandLookup(ports: LookupPorts): DefinitionCommandLo
     return {
       command: resolved.plane.command,
       cwd: resolved.plane.path,
+      paneCwd: pane.path,
       profileID: resolved.plane.profileID ?? definition.terminalProfile ?? ports.defaultProfile(),
       workspaceName: definition.name,
       basis: definition.basis,

@@ -23,6 +23,7 @@ import { validInitialInput } from './terminal-protocol';
 import { terminalConfirmation } from '../actions/execution-confirmations';
 import { containsPath } from '../files/containment';
 import { TerminalCommands, type RunTerminalCommand } from './terminal-commands';
+import type { TerminalStatus } from '../../domain/terminals/status';
 
 export interface TerminalStartOptions {
   initialInput?: string;
@@ -87,20 +88,34 @@ export class Terminals {
     return profile ? structuredClone(profile) : undefined;
   }
   async running(request: TerminalStart, owner: number, includePending = true): Promise<boolean> {
-    const existing = this.sessions.get(request.id) ?? (includePending ? this.pending.get(request.id) : undefined);
+    const existing =
+      this.sessions.get(request.id) ?? (includePending ? this.pending.get(request.id) : undefined);
     if (!existing || this.stopping.has(request.id)) return false;
     await this.match(request, owner, existing);
     return true;
   }
 
+  async status(request: TerminalStart, owner: number, wait = false): Promise<TerminalStatus> {
+    const pending = this.pending.get(request.id);
+    if (pending) {
+      await this.match(request, owner, pending);
+      if (pending.cancelled || this.stopping.has(request.id)) return { kind: 'stopped' };
+      if (!wait) return { kind: 'starting' };
+      try {
+        await pending.promise;
+      } catch (error) {
+        return { kind: 'stopped', error: errorMessage(error) };
+      }
+    }
+    return { kind: (await this.running(request, owner, false)) ? 'running' : 'stopped' };
+  }
+
   count(workspaceID: string, owner: number): number {
-    const terminals = new Map<string, PendingTerminal | TerminalSession>([
-      ...this.pending,
-      ...this.sessions,
-    ]);
-    return [...terminals].filter(([id, terminal]) =>
-      terminal.owner === owner && terminal.request.workspaceID === workspaceID &&
-      !this.stopping.has(id) && !('cancelled' in terminal && terminal.cancelled),
+    return [...this.sessions].filter(
+      ([id, terminal]) =>
+        terminal.owner === owner &&
+        terminal.request.workspaceID === workspaceID &&
+        !this.stopping.has(id),
     ).length;
   }
 

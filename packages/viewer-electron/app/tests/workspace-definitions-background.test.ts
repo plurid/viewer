@@ -42,6 +42,17 @@ async function fixture(extra: Partial<WorkspaceDefinitionsPorts> = {}) {
 }
 
 describe('background definition roots', () => {
+  it('releases its volume watcher once on shutdown and never starts another', async () => {
+    const stop = vi.fn();
+    const watchVolumes = vi.fn(() => stop);
+    const f = await fixture({ watchVolumes });
+    await f.service.load();
+    expect(watchVolumes).toHaveBeenCalledOnce();
+    await f.service.close();
+    expect(stop).toHaveBeenCalledOnce();
+    await f.service.load();
+    expect(watchVolumes).toHaveBeenCalledOnce();
+  });
   it('bounds the check of one selected root even when it never answers', async () => {
     const f = await fixture({ checkRoot: () => new Promise(() => {}) });
     await f.service.load();

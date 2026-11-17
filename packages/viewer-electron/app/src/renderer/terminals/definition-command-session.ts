@@ -4,20 +4,25 @@ import type { TerminalStart } from '../../domain/automation/actions';
 import type {
   DefinitionCommandReference,
   DefinitionCommandOutcome,
+  DefinitionCommandPresentation,
 } from '../../domain/terminals/definition-commands';
 import { errorMessage } from '../../domain/errors';
 import { getState } from '../state/core';
 import { terminalSession, terminalStarted } from './sessions';
 import { allowTerminalStart, definitionRunReason } from './start-authority';
 
-type CommandPhase = 'checking' | 'waiting' | 'preparing' | 'starting' | 'started';
+type CommandPhase = 'checking' | 'approval' | 'waiting' | 'preparing' | 'starting' | 'started';
 type StartIntent = 'run' | 'shell';
+type CommandPresentation = DefinitionCommandPresentation | { kind: 'checking' };
 interface CommandChoice {
   phase: CommandPhase;
   error?: string;
 }
 const choices = new Map<string, CommandChoice>();
 const checks = new Map<string, Promise<void>>();
+const presentations = new Map<string, { snapshot: string; value: DefinitionCommandPresentation }>();
+const presentationChecks = new Map<string, Promise<void>>();
+export const definitionTerminalChanged = 'This terminal changed in the definition.';
 const hidden = new Set<string>();
 const listeners = new Set<() => void>();
 let revision = 0;
@@ -48,25 +53,58 @@ export function definitionChoice(workspace: Workspace, pane: TerminalPane): Comm
   return choices.get(key(workspace, pane)) ?? { phase: 'checking' };
 }
 
-export function checkDefinitionTerminal(workspace: Workspace, pane: TerminalPane, request: TerminalStart): Promise<void> {
+export function checkDefinitionTerminal(
+  workspace: Workspace,
+  pane: TerminalPane,
+  request: TerminalStart,
+): Promise<void> {
   const id = key(workspace, pane);
   if (definitionChoice(workspace, pane).phase !== 'checking') return Promise.resolve();
   const existing = checks.get(id);
   if (existing) return existing;
+  const current = () =>
+    getState().saved.workspaces.some(
+      (item) =>
+        commandWorkspaceKey(item) === commandWorkspaceKey(workspace) &&
+        item.panes.some(
+          (item) =>
+            item.id === pane.id &&
+            item.type === 'terminal' &&
+            item.path === request.cwd &&
+            item.profileID === request.profileID,
+        ),
+    );
   const check = (async () => {
     try {
-      if (await window.viewer.terminalRunning(request)) {
-        const session = await terminalSession(request, getState().settings.settings.terminals.scrollback);
+      let status = await window.viewer.terminalStatus(request);
+      if (status.kind !== 'stopped' && current()) {
+        if (status.kind === 'starting') set(workspace, pane, { phase: 'approval' });
+        const session = await terminalSession(
+          request,
+          getState().settings.settings.terminals.scrollback,
+        );
+        if (!current() || session.disposed) return;
         session.park?.();
-        if (await window.viewer.terminalRunning(request)) {
+        const settling = window.viewer.terminalStatus(request, status.kind === 'starting');
+        session.starting = settling.then(() => {});
+        try {
+          status = await settling;
+        } finally {
+          session.starting = undefined;
+        }
+        if (status.kind === 'running' && current() && !session.exited) {
           await terminalStarted(pane.id, session);
-          set(workspace, pane, { phase: 'started' });
+          if (current()) set(workspace, pane, { phase: 'started' });
           return;
         }
       }
-      set(workspace, pane, { phase: 'waiting' });
+      if (current())
+        set(workspace, pane, {
+          phase: 'waiting',
+          error: status.kind === 'stopped' ? status.error : undefined,
+        });
     } catch (error) {
-      set(workspace, pane, { phase: 'waiting', error: errorMessage(error) });
+      if (current()) set(workspace, pane, { phase: 'waiting', error: errorMessage(error) });
     }
   })().finally(() => checks.delete(id));
   checks.set(id, check);
@@ -95,7 +133,7 @@ export function hideCommandsNotice(workspace: Workspace): void {
   changed();
 }
 
-export function displayedDefinitionCommand(workspace: Workspace, pane: TerminalPane) {
+function catalogCommand(workspace: Workspace, pane: TerminalPane) {
   const definition = getState().bootstrap.definitions?.definitions.find(
     (entry) => entry.key === workspace.definition?.key,
   );
@@ -110,12 +148,85 @@ export function displayedDefinitionCommand(workspace: Workspace, pane: TerminalP
   };
 }
 
+const presentationKey = (workspace: Workspace, pane: TerminalPane) =>
+  JSON.stringify([
+    key(workspace, pane),
+    workspace.definition?.key,
+    pane.path,
+    pane.profileID,
+    pane.definitionPlane,
+    catalogCommand(workspace, pane)?.reference.basis,
+    getState().bootstrap.definitions?.revision,
+  ]);
+
+export function definitionCommandPresentation(
+  workspace: Workspace,
+  pane: TerminalPane,
+): CommandPresentation {
+  const command = catalogCommand(workspace, pane);
+  if (!command) {
+    const definition = getState().bootstrap.definitions?.definitions.find(
+      (item) => item.key === workspace.definition?.key,
+    );
+    const plane = definition?.planes.find(
+      (item) => item.index === pane.definitionPlane && item.index >= 0,
+    );
+    return {
+      kind: definition && (!plane || plane.plane.kind !== 'terminal') ? 'changed' : 'unavailable',
+    };
+  }
+  const stored = presentations.get(key(workspace, pane));
+  return stored?.snapshot === presentationKey(workspace, pane)
+    ? stored.value
+    : { kind: 'checking' };
+}
+
+export function displayedDefinitionCommand(workspace: Workspace, pane: TerminalPane) {
+  const presentation = definitionCommandPresentation(workspace, pane);
+  return presentation.kind === 'available' ? presentation : undefined;
+}
+
+export function checkDefinitionCommand(
+  workspace: Workspace,
+  pane: TerminalPane,
+  request: TerminalStart,
+): Promise<void> {
+  const id = presentationKey(workspace, pane);
+  const command = catalogCommand(workspace, pane);
+  if (!command || presentations.get(key(workspace, pane))?.snapshot === id)
+    return Promise.resolve();
+  const existing = presentationChecks.get(id);
+  if (existing) return existing;
+  const check = (async () => {
+    // A newly opened pane must reach desktop persistence before its folder can be checked there.
+    const { flushState } = await import('../state/persistence');
+    await flushState();
+    return window.viewer.terminalDefinitionCommand(request, command.reference);
+  })()
+    .then((presentation) => {
+      if (presentationKey(workspace, pane) !== id) return;
+      presentations.set(key(workspace, pane), { snapshot: id, value: presentation });
+      changed();
+    })
+    .catch(async (error) => {
+      if (presentationKey(workspace, pane) !== id) return;
+      presentations.set(key(workspace, pane), { snapshot: id, value: { kind: 'changed' } });
+      changed();
+      if (errorMessage(error).includes('The definition changed.'))
+        await refreshCommands().catch(() => {});
+    })
+    .finally(() => presentationChecks.delete(id));
+  presentationChecks.set(id, check);
+  return check;
+}
+
 export async function chooseDefinitionTerminals(
   workspace: Workspace,
   items: readonly {
     pane: TerminalPane;
     request: TerminalStart;
     reference?: DefinitionCommandReference;
+    problem?: string;
   }[],
   intent: StartIntent = 'run',
 ): Promise<string[]> {
@@ -129,13 +240,17 @@ export async function chooseDefinitionTerminals(
   }
   const ready = selected.filter((item) => {
     if (intent === 'run' && !item.reference) {
-      set(workspace, item.pane, { phase: 'waiting', error: 'Review the command before running it.' });
+      set(workspace, item.pane, {
+        phase: 'waiting',
+        error: item.problem ?? 'Review the command before running it.',
+      });
       return false;
     }
     return true;
   });
-  if (ready.length !== selected.length) await refreshCommands().catch(() => {});
   for (const { pane } of ready) set(workspace, pane, { phase: 'preparing' });
+  if (ready.length !== selected.length) await refreshCommands().catch(() => {});
+  if (!ready.length) return [];
   const started = new Set<string>();
   try {
     // Desktop lookup sees these exact persisted panes before any request can start a PTY.
@@ -204,7 +319,12 @@ export async function chooseDefinitionTerminals(
     try {
       if (prepared.length === 1) {
         const item = prepared[0]!;
-        resolve([await window.viewer.terminalStart(item.request, intent === 'run' ? item.reference : undefined)]);
+        resolve([
+          await window.viewer.terminalStart(
+            item.request,
+            intent === 'run' ? item.reference : undefined,
+          ),
+        ]);
       } else {
         resolve(
           await window.viewer.terminalStartAll(

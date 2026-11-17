@@ -154,6 +154,7 @@ const modelMutationVerbs = new Set([
 export function humanDefinitionCommand(id: string): boolean {
   return (
     id.startsWith('defined:') ||
+    id.startsWith('reset-definition:') ||
     [
       'edit-workspace-definitions',
       'run-workspace-commands',

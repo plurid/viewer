@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import { createDefinitionHandlers } from '../src/desktop/ipc/definition-handlers';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
+import type { WorkspaceDefinitions } from '../src/desktop/workspaces/definitions';
+import type { DefinedWorkspaces } from '../src/desktop/workspaces/defined-workspaces';
 import { sampleDefinition, sampleWorkspace } from './workspace-definition-fixtures';
 
 const native = vi.hoisted(() => ({
@@ -41,7 +43,7 @@ function fixture() {
     opened: vi.fn(async () => {}),
     checkRoot: vi.fn(async () => 'present' as const),
     searchRoots: vi.fn(),
-    save: vi.fn(async () => ({
+    save: vi.fn<WorkspaceDefinitions['save']>(async () => ({
       kind: 'saved' as const,
       key: definition.key,
       basis: definition.basis,
@@ -59,7 +61,12 @@ function fixture() {
     [1, 2].map((owner) => [owner, { isDestroyed: () => false, show: vi.fn(), focus: vi.fn() }]),
   );
   const isAgent = vi.fn(() => false);
-  const memory = { get: vi.fn(), problem: vi.fn(() => undefined as string | undefined), remember: vi.fn(async () => {}), forget: vi.fn(async () => {}) };
+  const memory = {
+    get: vi.fn(),
+    problem: vi.fn(() => undefined as string | undefined),
+    remember: vi.fn<DefinedWorkspaces['remember']>(async () => {}),
+    forget: vi.fn(async () => {}),
+  };
   const handlers = createDefinitionHandlers({
     definitions,
     memory,
@@ -92,6 +99,147 @@ function fixture() {
 }
 
 describe('desktop definition open decisions', () => {
+  it('allows Save as for a removed link only after a valid catalog load', async () => {
+    const f = fixture();
+    const space = sampleWorkspace('removed', {
+      definition: { key: 'removed', basis: f.definition.basis },
+    });
+    f.a.workspaces.push(space);
+    f.sessions.save(1, f.a);
+    await expect(
+      f.handlers.workspaceDefinitions(
+        [{ kind: 'save-as', workspaceID: space.id, key: 'sample/new', name: 'Sample', order: [] }],
+        1,
+      ),
+    ).resolves.toMatchObject({ kind: 'saved' });
+    expect(f.definitions.save).toHaveBeenCalledWith(
+      expect.objectContaining({ id: space.id }),
+      [],
+      true,
+      { key: 'sample/new', name: 'Sample' },
+      expect.any(Function),
+    );
+  });
+  it.each(['close', 'reset', 'save'] as const)(
+    'refuses %s under another window’s reservation',
+    async (kind) => {
+      const f = fixture();
+      const space = sampleWorkspace('unowned', {
+        definition: { key: f.definition.key, basis: f.definition.basis },
+      });
+      f.a.workspaces.push(space);
+      f.sessions.save(1, f.a);
+      f.sessions.reserveDefinition(2, f.definition.key);
+      await expect(
+        f.handlers.workspaceDefinitions([{ kind, workspaceID: space.id, order: [] }], 1),
+      ).rejects.toThrow('being changed in another window');
+      expect(f.memory.remember).not.toHaveBeenCalled();
+      expect(f.memory.forget).not.toHaveBeenCalled();
+      expect(f.definitions.save).not.toHaveBeenCalled();
+    },
+  );
+  it('rechecks the person after reserving a linked key', async () => {
+    const f = fixture();
+    const space = sampleWorkspace('linked', {
+      definition: { key: f.definition.key, basis: f.definition.basis },
+    });
+    f.a.workspaces.push(space);
+    f.sessions.save(1, f.a);
+    vi.spyOn(f.sessions, 'reserveDefinition').mockImplementation(() => {
+      f.isAgent.mockReturnValue(true);
+      return 1;
+    });
+    await expect(
+      f.handlers.workspaceDefinitions([{ kind: 'close', workspaceID: space.id }], 1),
+    ).rejects.toThrow('only to the person');
+    expect(f.memory.remember).not.toHaveBeenCalled();
+  });
+  it('rechecks the person inside the Save callback', async () => {
+    const f = fixture();
+    const space = sampleWorkspace('linked', {
+      definition: { key: f.definition.key, basis: f.definition.basis },
+    });
+    f.a.workspaces.push(space);
+    f.sessions.save(1, f.a);
+    f.definitions.save.mockImplementationOnce(
+      async (_space, _order, _confirmed, _create, human) => {
+        f.isAgent.mockReturnValue(true);
+        human?.();
+        throw new Error('Save reached the write.');
+      },
+    );
+    await expect(
+      f.handlers.workspaceDefinitions([{ kind: 'save', workspaceID: space.id, order: [] }], 1),
+    ).rejects.toThrow('only to the person');
+  });
+  it('refuses Save as for an open key and for another window’s reservation', async () => {
+    const f = fixture();
+    const space = sampleWorkspace('already-open', {
+      definition: { key: f.definition.key, basis: f.definition.basis },
+    });
+    f.a.workspaces.push(space);
+    f.sessions.save(1, f.a);
+    const request = {
+      kind: 'save-as' as const,
+      workspaceID: f.first,
+      key: f.definition.key,
+      name: 'Sample',
+      order: [],
+    };
+    await expect(f.handlers.workspaceDefinitions([request], 1)).rejects.toThrow('already open');
+    f.sessions.reserveDefinition(2, 'sample/new');
+    await expect(
+      f.handlers.workspaceDefinitions([{ ...request, key: 'sample/new' }], 1),
+    ).rejects.toThrow('being opened in another window');
+    expect(f.definitions.save).not.toHaveBeenCalled();
+  });
+  it('refuses Forget under another window’s reservation even with no open workspace', async () => {
+    const f = fixture();
+    f.sessions.reserveDefinition(2, f.definition.key);
+    await expect(
+      f.handlers.workspaceDefinitions([{ kind: 'forget', key: f.definition.key }], 1),
+    ).rejects.toThrow('Switch to that window');
+    expect(f.memory.forget).not.toHaveBeenCalled();
+  });
+  it('asks before closing without memory when the persisted snapshot is too large', async () => {
+    const f = fixture();
+    const space = sampleWorkspace('large', {
+      definition: { key: f.definition.key, basis: f.definition.basis },
+    });
+    f.a.workspaces.push(space);
+    f.sessions.save(1, f.a);
+    f.memory.problem.mockReturnValue('this workspace alone exceeds the 16 MB memory limit');
+    expect(
+      await f.handlers.workspaceDefinitions([{ kind: 'close', workspaceID: space.id }], 1),
+    ).toMatchObject({ kind: 'close-info', problem: expect.stringContaining('16 MB') });
+    expect(f.memory.remember).not.toHaveBeenCalled();
+    expect(
+      await f.handlers.workspaceDefinitions(
+        [{ kind: 'close', workspaceID: space.id, withoutMemory: true }],
+        1,
+      ),
+    ).toEqual({ kind: 'closed' });
+    expect(f.memory.remember).not.toHaveBeenCalled();
+  });
+  it('stores a fresh scratch buffer and no editor buffer after the close prompts were accepted', async () => {
+    const f = fixture();
+    const space = sampleWorkspace('text', {
+      definition: { key: f.definition.key, basis: f.definition.basis },
+      panes: [
+        { id: 'scratch', type: 'scratch', path: '/projects/sample', bufferID: 'discarded' },
+        { id: 'file', type: 'preview', path: '/projects/sample/readme.txt', bufferID: 'edited' },
+      ],
+      roots: ['scratch', 'file'],
+    });
+    f.a.workspaces.push(space);
+    f.sessions.save(1, f.a);
+    await f.handlers.workspaceDefinitions([{ kind: 'close', workspaceID: space.id }], 1);
+    const stored = f.memory.remember.mock.calls[0]![0] as typeof space;
+    expect(stored.panes[0]).toMatchObject({ type: 'scratch', bufferID: expect.any(String) });
+    expect(stored.panes[0]).not.toMatchObject({ bufferID: 'discarded' });
+    expect(stored.panes[1]).not.toHaveProperty('bufferID');
+    expect(space.panes[0]).toMatchObject({ bufferID: 'discarded' });
+  });
   it('closes only a persisted record, preserves its preview metadata, and reserves against another reopening window', async () => {
     const f = fixture();
     const space = sampleWorkspace('remembered', {
@@ -189,7 +337,7 @@ describe('desktop definition open decisions', () => {
     const f = fixture();
     f.isAgent.mockReturnValue(true);
     await expect(f.open(1)).rejects.toThrow('only to the person');
-    for (const kind of ['close', 'reset', 'save', 'save-as'] as const)
+    for (const kind of ['close-info', 'close', 'reset', 'save', 'save-as'] as const)
       await expect(
         f.handlers.workspaceDefinitions([{ kind, workspaceID: f.first, order: [] }], 1),
       ).rejects.toThrow('only to the person');

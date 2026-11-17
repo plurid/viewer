@@ -178,7 +178,10 @@ export function resolveCatalog(input: CatalogInput): {
         rejected(
           key,
           `${issue.path.length ? issue.path.join('.') + ': ' : ''}${issue.message}`,
-          issue.path.filter((part): part is string | number => typeof part !== 'symbol'),
+          (issue.code === 'unrecognized_keys'
+            ? [...issue.path, issue.keys[0]!]
+            : issue.path
+          ).filter((part): part is string | number => typeof part !== 'symbol'),
         );
       continue;
     }

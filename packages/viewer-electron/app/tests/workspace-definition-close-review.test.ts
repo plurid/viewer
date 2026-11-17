@@ -22,22 +22,50 @@ beforeEach(() => {
       save: vi.fn(async () => {}),
       workspaceDefinitions: request,
       textPrompt: prompt,
-      bufferRead: vi.fn(async () => ({ id: 'idea-buffer', kind: 'scratch', text: 'An unsaved idea', revision: 1, updated: 1 })),
+      bufferRead: vi.fn(async () => ({
+        id: 'idea-buffer',
+        kind: 'scratch',
+        text: 'An unsaved idea',
+        revision: 1,
+        updated: 1,
+      })),
       bufferDiscard: discard,
       bufferList: vi.fn(async () => ({
-        buffers: [{ id: 'remembered-buffer', kind: 'scratch', bytes: 12, title: 'Remembered idea', language: 'plaintext' }],
+        buffers: [
+          {
+            id: 'remembered-buffer',
+            kind: 'scratch',
+            bytes: 12,
+            title: 'Remembered idea',
+            language: 'plaintext',
+          },
+        ],
         problems: [],
         remembered: ['remembered-buffer'],
       })),
       terminalClose: vi.fn(async () => {}),
     },
   });
-  initialize({ home: '/home/sample', platform: 'darwin', state: null, openPaths: [], locations: [] });
+  initialize({
+    home: '/home/sample',
+    platform: 'darwin',
+    state: null,
+    openPaths: [],
+    locations: [],
+  });
   const definition = sampleDefinition();
   const space = {
     ...activeWorkspace(),
     definition: { key: definition.key, basis: definition.basis },
-    panes: [{ id: 'idea', type: 'scratch' as const, path: '/projects/sample', bufferID: 'idea-buffer', title: 'Sample idea' }],
+    panes: [
+      {
+        id: 'idea',
+        type: 'scratch' as const,
+        path: '/projects/sample',
+        bufferID: 'idea-buffer',
+        title: 'Sample idea',
+      },
+    ],
     roots: ['idea'],
     activePane: 'idea',
   };
@@ -83,6 +111,31 @@ it('M5: Close defers Don’t Save until desktop acceptance', async () => {
   });
   expect(await closeDefinedWorkspace(activeWorkspace().id)).toBe(true);
   expect(discard).toHaveBeenCalledWith('idea-buffer');
+});
+
+it('returns a new memory problem without committing discards or closing any plane', async () => {
+  const before = structuredClone(getState().saved.workspaces);
+  request.mockResolvedValueOnce({ kind: 'close-info', problem: 'the memory file needs repair' });
+  expect(await closeDefinedWorkspace(activeWorkspace().id)).toEqual({
+    kind: 'close-info',
+    problem: 'the memory file needs repair',
+  });
+  expect(discard).not.toHaveBeenCalled();
+  expect(window.viewer.terminalClose).not.toHaveBeenCalled();
+  expect(getState().saved.workspaces).toEqual(before);
+});
+
+it('M5: Save resolves unsaved editor text before asking the desktop to close', async () => {
+  const saved = vi.fn(async () => true);
+  release = registerEditingPlane('idea', { dirty: () => true, save: saved, discard });
+  prompt.mockResolvedValue('save');
+  request.mockImplementation(async () => {
+    expect(saved).toHaveBeenCalledOnce();
+    return { kind: 'closed' };
+  });
+  expect(await closeDefinedWorkspace(activeWorkspace().id)).toBe(true);
+  expect(prompt).toHaveBeenCalledWith('close', 'Sample idea');
+  expect(discard).not.toHaveBeenCalled();
 });
 
 it('M5: buffer recovery leaves a buffer referenced by remembered planes alone', async () => {

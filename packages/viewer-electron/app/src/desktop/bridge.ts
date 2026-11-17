@@ -45,6 +45,7 @@ import { createWindowHandlers } from './ipc/window-handlers';
 import { createDefinitionHandlers } from './ipc/definition-handlers';
 import { DefinitionCommands } from './workspaces/definition-commands';
 import { definitionCommandLookup } from './workspaces/definition-command-lookup';
+import type { WorkspaceDefinitionsPorts } from './workspaces/definitions';
 import { WorkspaceDefinitions } from './workspaces/definitions';
 import { DefinedWorkspaces } from './workspaces/defined-workspaces';
 import { createLicenseHandlers } from './ipc/license-handlers';
@@ -197,6 +198,7 @@ import { JournalActivity } from './journal/activity';
 import { realHome } from './native/home';
 
 type WindowRole = 'viewer' | 'settings';
+type DefinitionApprovalParent = [] | [BrowserWindow | undefined];
 
 /** One renderer window, and what it has told the desktop. */
 interface WindowRecord {
@@ -586,16 +588,11 @@ export class Desktop {
       },
     );
     this.definedWorkspaces = new DefinedWorkspaces(dataPath);
-    this.definitions = new WorkspaceDefinitions(dataPath, this.home, {
-      memory: this.definedWorkspaces,
-      access,
-      checkRoot: this.definitionRootChecks.check,
-      watchVolumes: watchSharingVolumes,
-      settings: () => this.settings.snapshot().settings,
-      emit: (catalog) => emit({ type: 'workspace-definitions', catalog }),
-    });
-    const confirmations = new ExecutionConfirmations(dataPath, (summary, window) =>
-      this.confirmExecution(summary, window),
+    this.definitions = this.createWorkspaceDefinitions(dataPath, access, (catalog) =>
+      emit({ type: 'workspace-definitions', catalog }),
+    );
+    const confirmations = new ExecutionConfirmations(dataPath, (...args) =>
+      this.confirmExecution(...args),
     );
     this.terminals = new Terminals(
       options.terminalWorker,
@@ -1383,8 +1380,13 @@ export class Desktop {
       throw new Error('The window closed before Viewer could finish.');
     return record;
   }
-  private confirmExecution(summary: { title: string; detail: string }, window?: BrowserWindow): Promise<boolean> {
-    return confirmNatively(window ?? this.window, summary.title, summary.detail, 'Run');
+  private confirmExecution(
+    summary: { title: string; detail: string },
+    ...definitionWindow: DefinitionApprovalParent
+  ): Promise<boolean> {
+    const parent = definitionWindow.length ? definitionWindow[0] : this.window;
+    if (definitionWindow.length && (!parent || parent.isDestroyed())) return Promise.resolve(false);
+    return confirmNatively(parent, summary.title, summary.detail, 'Run');
   }
   private requireWindow(owner: number): BrowserWindow {
     return this.requireRecord(owner).window;
@@ -2156,6 +2158,23 @@ export class Desktop {
     if (value.directory && value.path)
       this.workspaceSessions.normalizeFolderHistory({ [path]: value.path }, []);
     return value;
+  }
+  private checkDefinitionRoot(root: string) {
+    return this.definitionRootChecks.check(root);
+  }
+  private createWorkspaceDefinitions(
+    directory: string,
+    access: WorkspaceDefinitionsPorts['access'],
+    emit: WorkspaceDefinitionsPorts['emit'],
+  ): WorkspaceDefinitions {
+    return new WorkspaceDefinitions(directory, this.home, {
+      memory: this.definedWorkspaces,
+      access,
+      checkRoot: (root) => this.checkDefinitionRoot(root),
+      watchVolumes: watchSharingVolumes,
+      settings: () => this.settings.snapshot().settings,
+      emit,
+    });
   }
   private async saveWorkspaces(
     input: SavedState,

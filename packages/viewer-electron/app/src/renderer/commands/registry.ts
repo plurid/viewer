@@ -39,6 +39,8 @@ export interface CommandDefinition {
   detail?: string | ((context: CommandContext) => string);
   primary?: boolean | ((context: CommandContext) => boolean);
   remember?: boolean;
+  relatedID?: string;
+  relatedOnly?: boolean;
   /** Custom actions cannot enter a flow reserved for a direct choice by the person. */
   humanOnly?: boolean;
   /** A setting's command: the palette lists it apart, by the setting's name, with its
@@ -101,6 +103,8 @@ export interface ResolvedCommand {
   shortcut?: string;
   aliases: readonly string[];
   detail?: string;
+  relatedID?: string;
+  relatedOnly?: boolean;
   primary: boolean;
   setting?: CommandSetting;
   spoken?: SpokenDefinition;
@@ -252,6 +256,8 @@ export class CommandRegistry {
                 : undefined
               : definition.detail,
           group: definition.group,
+          relatedID: definition.relatedID,
+          relatedOnly: definition.relatedOnly,
           paletteFolder: definition.paletteFolder,
           icon: definition.icon,
           aliases: definition.aliases ?? [],

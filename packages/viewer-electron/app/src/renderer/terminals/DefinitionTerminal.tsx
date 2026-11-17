@@ -1,12 +1,15 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { TerminalPane } from '../../domain/contracts';
 import { activeWorkspace, useViewer } from '../state/core';
 import { useWorkspace } from '../workspace/context';
 import { Empty } from '../ui/primitives';
 import { DefinitionStartPanel } from './DefinitionStartPanel';
+import { DefinitionDialog } from '../ui/workspace/DefinitionDialog';
 import {
   chooseDefinitionTerminals,
   checkDefinitionTerminal,
+  checkDefinitionCommand,
+  definitionCommandPresentation,
   definitionChoice,
   displayedDefinitionCommand,
   useDefinitionChoices,
@@ -19,38 +22,64 @@ const Terminal = lazy(() =>
 
 export function DefinitionTerminal({ pane }: { pane: TerminalPane }) {
   const workspace = useViewer(activeWorkspace);
-  useViewer((state) => state.bootstrap.definitions);
+  const catalog = useViewer((state) => state.bootstrap.definitions);
   useDefinitionChoices();
   useTerminalAuthority();
   const controller = useWorkspace();
+  const [reset, setReset] = useState(false);
   const choice = definitionChoice(workspace, pane);
+  const presentation = definitionCommandPresentation(workspace, pane);
   const shown = displayedDefinitionCommand(workspace, pane);
   const request = {
-    id: pane.id, workspaceID: workspace.id, rootID: controller.rootID(pane.id) || pane.id,
-    cwd: pane.path, profileID: pane.profileID, cols: 80, rows: 24,
+    id: pane.id,
+    workspaceID: workspace.id,
+    rootID: controller.rootID(pane.id) || pane.id,
+    cwd: pane.path,
+    profileID: pane.profileID,
+    cols: 80,
+    rows: 24,
   };
   useEffect(() => {
     void checkDefinitionTerminal(workspace, pane, request);
     // A plane's initial identity is checked once per opening, without starting a shell.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id, workspace.epoch, pane.id]);
+  useEffect(() => {
+    void checkDefinitionCommand(workspace, pane, request);
+    // A catalog edit invalidates the reviewed folder match before another Run can be offered.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.id, workspace.epoch, pane.id, pane.path, pane.profileID, catalog]);
   const start = (run: boolean) =>
-    chooseDefinitionTerminals(workspace, [
-      {
-        pane,
-        request,
-        reference: run ? shown?.reference : undefined,
-      },
-    ], run ? 'run' : 'shell');
+    chooseDefinitionTerminals(
+      workspace,
+      [
+        {
+          pane,
+          request,
+          reference: run ? shown?.reference : undefined,
+        },
+      ],
+      run ? 'run' : 'shell',
+    );
   if (choice.phase === 'checking') return <Empty title="Checking terminal…" />;
+  if (choice.phase === 'approval')
+    return (
+      <Empty title="Waiting for terminal approval…">
+        <p role="status">Finish the approval dialog to start this terminal.</p>
+      </Empty>
+    );
   return (
     <div className="definition-terminal">
       {choice.phase === 'starting' || choice.phase === 'started' ? (
         <>
-        {choice.error ? <p className="definition-command-error" role="alert">{choice.error}</p> : null}
-        <Suspense fallback={<Empty title="Opening terminal…" />}>
-          <Terminal pane={pane} />
-        </Suspense>
+          {choice.error ? (
+            <p className="definition-command-error" role="alert">
+              {choice.error}
+            </p>
+          ) : null}
+          <Suspense fallback={<Empty title="Opening terminal…" />}>
+            <Terminal pane={pane} />
+          </Suspense>
         </>
       ) : (
         <DefinitionStartPanel
@@ -59,16 +88,28 @@ export function DefinitionTerminal({ pane }: { pane: TerminalPane }) {
           cwd={shown?.cwd ?? pane.path}
           pending={choice.phase === 'preparing'}
           failure={choice.error}
+          state={presentation.kind}
+          onReset={() => setReset(true)}
           disabledReason={
             definitionRunReason([pane.id]) ??
-            (!shown
-              ? 'The definition command is no longer available. Choose Shell only.'
-              : undefined)
+            (presentation.kind === 'checking'
+              ? 'Checking the terminal folder…'
+              : presentation.kind === 'unavailable'
+                ? 'The definition command is no longer available. Choose Shell only.'
+                : undefined)
           }
           onRun={() => start(true)}
           onShellOnly={() => start(false)}
         />
       )}
+      {reset ? (
+        <DefinitionDialog
+          kind="reset"
+          workspace={workspace}
+          controller={controller}
+          onClose={() => setReset(false)}
+        />
+      ) : null}
     </div>
   );
 }

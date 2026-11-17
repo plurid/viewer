@@ -11,6 +11,10 @@ export interface DefinitionCommandStart extends DefinitionCommandReference {
   request: TerminalStart;
 }
 
+export type DefinitionCommandPresentation =
+  | { kind: 'available'; command: string; cwd: string; reference: DefinitionCommandReference }
+  | { kind: 'changed' | 'unavailable' };
+
 export type DefinitionCommandOutcome = DefinitionCommandReference & { terminalID: string } & (
     { kind: 'started' | 'running' | 'declined' } | { kind: 'failed'; message: string }
   );

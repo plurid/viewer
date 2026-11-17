@@ -3,6 +3,8 @@ import { errorMessage } from '../../domain/errors';
 import { Button, Empty, PathField } from '../ui/primitives';
 import './definition-commands.css';
 
+type PanelState = 'available' | 'changed' | 'unavailable' | 'checking';
+
 interface DefinitionStartPanelProps {
   plane: number;
   command?: string;
@@ -10,6 +12,8 @@ interface DefinitionStartPanelProps {
   disabledReason?: string;
   pending?: boolean;
   failure?: string;
+  state?: PanelState;
+  onReset?(): void;
   onRun(): void | Promise<unknown>;
   onShellOnly(): void | Promise<unknown>;
 }
@@ -21,6 +25,8 @@ export function DefinitionStartPanel({
   disabledReason,
   pending = false,
   failure,
+  state = command ? 'available' : 'unavailable',
+  onReset,
   onRun,
   onShellOnly,
 }: DefinitionStartPanelProps) {
@@ -49,14 +55,28 @@ export function DefinitionStartPanel({
   return (
     <section
       className="definition-start-panel"
-      aria-label={`Command terminal ${plane + 1}: ${runLabel || 'Command unavailable'}`}
+      aria-label={`Command terminal ${plane + 1}: ${runLabel || (state === 'changed' ? 'Terminal changed' : 'Command unavailable')}`}
       aria-describedby={[command ? commandID : '', folderID].filter(Boolean).join(' ')}
       aria-busy={starting || pending}
     >
-      <Empty icon="terminal" title={command ? 'Command not started' : 'Command unavailable'}>
-        {command ? <code id={commandID} className="definition-command-line">
-          {command}
-        </code> : null}
+      <Empty
+        icon="terminal"
+        title={
+          state === 'changed'
+            ? 'Terminal changed'
+            : state === 'checking'
+              ? 'Checking definition…'
+              : command
+                ? 'Command not started'
+                : 'Command unavailable'
+        }
+      >
+        {state === 'changed' ? <p role="status">This terminal changed in the definition.</p> : null}
+        {command ? (
+          <code id={commandID} className="definition-command-line">
+            {command}
+          </code>
+        ) : null}
         <div id={folderID}>
           <PathField path={cwd} />
         </div>
@@ -65,19 +85,35 @@ export function DefinitionStartPanel({
             {disabledReason}
           </p>
         ) : null}
-        {failure || actionFailure ? <p className="definition-command-error" role="alert">{failure || actionFailure}</p> : null}
+        {failure || actionFailure ? (
+          <p className="definition-command-error" role="alert">
+            {failure || actionFailure}
+          </p>
+        ) : null}
         <div className="empty-actions">
-          <Button
-            variant="primary"
-            className="definition-run-command"
-            disabled={!command || Boolean(disabledReason) || starting || pending}
-            aria-describedby={[command ? commandID : '', disabledReason ? reasonID : ''].filter(Boolean).join(' ')}
-            onClick={() => {
-              void start(onRun);
-            }}
-          >
-            <span>{command ? `Run ${runLabel}` : 'Run'}</span>
-          </Button>
+          {state === 'changed' ? (
+            <Button
+              variant="secondary"
+              disabled={starting || pending || Boolean(disabledReason)}
+              onClick={onReset}
+            >
+              Reset to definition…
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              className="definition-run-command"
+              disabled={!command || Boolean(disabledReason) || starting || pending}
+              aria-describedby={[command ? commandID : '', disabledReason ? reasonID : '']
+                .filter(Boolean)
+                .join(' ')}
+              onClick={() => {
+                void start(onRun);
+              }}
+            >
+              <span>{command ? `Run ${runLabel}` : 'Run'}</span>
+            </Button>
+          )}
           <Button
             variant="secondary"
             disabled={starting || pending}

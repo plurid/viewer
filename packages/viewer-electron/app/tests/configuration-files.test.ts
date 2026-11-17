@@ -16,22 +16,42 @@ async function fixture() {
 }
 
 describe('generalized JSONC configuration', () => {
-  it.each(['config.jsonc', 'workspaces.jsonc'])('preserves a dangling %s link and creates only its target file', async (name) => {
-    const root = await temporaryRoot('viewer-dangling-configuration-');
-    const configuration = new JsoncConfiguration(root, (value) => schema.parse(value), undefined, { name, schemaName: 'sample.schema.json' });
-    await symlink('target.jsonc', configuration.file);
-    await configuration.update(() => ({ count: 2 }));
-    expect(await readlink(configuration.file)).toBe('target.jsonc');
-    expect(JSON.parse(await readFile(path.join(root, 'target.jsonc'), 'utf8'))).toEqual({ count: 2 });
-  });
-  it.each(['config.jsonc', 'workspaces.jsonc'])('refuses a dangling %s target whose folder is missing', async (name) => {
-    const root = await temporaryRoot('viewer-dangling-folder-');
-    const configuration = new JsoncConfiguration(root, (value) => schema.parse(value), undefined, { name, schemaName: 'sample.schema.json' });
-    await symlink('missing/target.jsonc', configuration.file);
-    await expect(configuration.update(() => ({ count: 2 }))).rejects.toThrow('missing');
-    expect(await readlink(configuration.file)).toBe('missing/target.jsonc');
-    await expect(readFile(path.join(root, 'missing/target.jsonc'))).rejects.toMatchObject({ code: 'ENOENT' });
-  });
+  it.each(['config.jsonc', 'workspaces.jsonc'])(
+    'preserves a dangling %s link and creates only its target file',
+    async (name) => {
+      const root = await temporaryRoot('viewer-dangling-configuration-');
+      const configuration = new JsoncConfiguration(
+        root,
+        (value) => schema.parse(value),
+        undefined,
+        { name, schemaName: 'sample.schema.json' },
+      );
+      await symlink('target.jsonc', configuration.file);
+      await configuration.update(() => ({ count: 2 }));
+      expect(await readlink(configuration.file)).toBe('target.jsonc');
+      expect(JSON.parse(await readFile(path.join(root, 'target.jsonc'), 'utf8'))).toEqual({
+        count: 2,
+      });
+    },
+  );
+  it.each(['config.jsonc', 'workspaces.jsonc'])(
+    'refuses a dangling %s target whose folder is missing',
+    async (name) => {
+      const root = await temporaryRoot('viewer-dangling-folder-');
+      const configuration = new JsoncConfiguration(
+        root,
+        (value) => schema.parse(value),
+        undefined,
+        { name, schemaName: 'sample.schema.json' },
+      );
+      await symlink('missing/target.jsonc', configuration.file);
+      await expect(configuration.update(() => ({ count: 2 }))).rejects.toThrow('missing');
+      expect(await readlink(configuration.file)).toBe('missing/target.jsonc');
+      await expect(readFile(path.join(root, 'missing/target.jsonc'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    },
+  );
   it('preserves comments in another named file and writes its own schema', async () => {
     const f = await fixture();
     await writeFile(f.file, '// hand edited\n{"count":1}');

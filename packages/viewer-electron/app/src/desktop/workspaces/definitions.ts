@@ -19,7 +19,11 @@ import {
   definitionLimits,
   workspacesFileSchema,
 } from '../../domain/workspaces/definitions/schema';
-import { definitionLocations, missingDefinitionRoot, resolveCatalog } from '../../domain/workspaces/definitions/catalog';
+import {
+  definitionLocations,
+  missingDefinitionRoot,
+  resolveCatalog,
+} from '../../domain/workspaces/definitions/catalog';
 import type { CheckedFolder } from '../../domain/files/folder-checks';
 import { folderCheckConcurrency, folderCheckTimeout } from '../../domain/files/folder-checks';
 import { rankWorkspaceChoices } from '../../domain/workspaces/definitions/query';
@@ -490,13 +494,16 @@ export class WorkspaceDefinitions {
             'The project source changed. Validate workspace definitions before saving.',
           );
         if (create && Object.hasOwn(current.workspaces, key))
-          throw new Error(
-            'This key already exists. Use Save to definition.',
-          );
+          throw new Error('This key already exists. Use Save to definition.');
         const resolved = resolveCatalog({
           file: current,
           projects: source.enabled ? (this.projects?.projects ?? []) : [],
           home: this.home,
+          terminalProfiles: this.ports.settings().terminals.profiles.map((item) => item.id),
+          settingProfiles: [
+            ...builtInProfiles.map((item) => item.id),
+            ...this.ports.settings().profiles.map((item) => item.id),
+          ],
           hash: (text) => createHash('sha256').update(text).digest('hex'),
         }).definitions;
         let definition = resolved.find((item) => item.key === key);
@@ -504,7 +511,12 @@ export class WorkspaceDefinitions {
         const validated = definitionEntrySchema.safeParse(written);
         if (!validated.success) {
           const issue = validated.error.issues[0]!;
-          const line = locations.lineFor(key, issue.path.filter((part): part is string | number => typeof part !== 'symbol'));
+          const issuePath =
+            issue.code === 'unrecognized_keys' ? [...issue.path, issue.keys[0]!] : issue.path;
+          const line = locations.lineFor(
+            key,
+            issuePath.filter((part): part is string | number => typeof part !== 'symbol'),
+          );
           throw new Error(`Fix ${line ? 'line ' + line + ' of ' : ''}workspaces.jsonc first.`);
         }
         let entry = written as DefinitionEntry;
@@ -535,7 +547,7 @@ export class WorkspaceDefinitions {
         }
         if (!definition) throw new Error('This workspace definition is unavailable.');
         result = captureDefinition({
-          workspace,
+          workspace: create ? { ...workspace, definition: undefined } : workspace,
           order,
           definition,
           entry,

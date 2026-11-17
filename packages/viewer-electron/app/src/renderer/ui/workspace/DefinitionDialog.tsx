@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { Workspace } from '../../../domain/contracts';
 import type { WorkspaceDefinitionReply } from '../../../domain/workspaces/definitions/schema';
+import { definitionKeySchema } from '../../../domain/workspaces/definitions/schema';
 import type { WorkspaceController } from '../../workspace/context';
 import {
   closeDefinedWorkspace,
@@ -38,14 +39,23 @@ export function DefinitionDialog({
   const prepare = useEffectEvent(async (alive: () => boolean) => {
     if (kind === 'close') {
       await flushState();
-      const info = await window.viewer.workspaceDefinitions({ kind: 'close-info', workspaceID: workspace.id });
-      if (info.kind !== 'close-info') throw new Error('The workspace could not be prepared for closing.');
+      const info = await window.viewer.workspaceDefinitions({
+        kind: 'close-info',
+        workspaceID: workspace.id,
+      });
+      if (info.kind !== 'close-info')
+        throw new Error('The workspace could not be prepared for closing.');
       const count = await workspaceShells(workspace);
       if (!alive()) return;
       setMemoryProblem(info.problem ?? '');
       if (!count && !info.problem) {
-        if (await closeDefinedWorkspace(workspace.id)) onClose();
-        return;
+        const result = await closeDefinedWorkspace(workspace.id);
+        if (!alive()) return;
+        if (typeof result === 'boolean') {
+          onClose();
+          return;
+        }
+        setMemoryProblem(result.problem);
       }
       setShells(count);
     } else if (kind === 'reset') {
@@ -101,17 +111,27 @@ export function DefinitionDialog({
         ? 'Reset to definition?'
         : kind === 'save-as'
           ? 'Save as definition'
-          : confirmingSave ? 'Save over definition?' : 'Save to definition';
+          : confirmingSave
+            ? 'Save over definition?'
+            : 'Save to definition';
   const submit = async () => {
     setBusy(true);
     setError('');
     try {
       if (kind === 'close') {
-        if (!(await closeDefinedWorkspace(workspace.id, !!memoryProblem))) return;
-      }
-      else if (kind === 'reset') {
+        const result = await closeDefinedWorkspace(workspace.id, !!memoryProblem);
+        if (typeof result !== 'boolean') {
+          setMemoryProblem(result.problem);
+          return;
+        }
+        if (!result) return;
+      } else if (kind === 'reset') {
         if (!(await resetDefinition(controller, workspace.id))) return;
       } else {
+        if (kind === 'save-as' && !definitionKeySchema.safeParse(key.trim()).success)
+          throw new Error(
+            'Use a key with one to eight path segments containing letters, numbers, dots, underscores or hyphens. The segments "." and ".." are not allowed.',
+          );
         const result = await saveDefinition(
           workspace.id,
           confirmingSave,
@@ -150,8 +170,16 @@ export function DefinitionDialog({
           {ready && kind === 'close' && (
             <p>
               Close “{workspace.name}”?{' '}
-              {shells > 0 && <>Its {shells} {shells === 1 ? 'terminal stops' : 'terminals stop'}. </>}
-              {memoryProblem ? 'Viewer cannot remember its planes: ' + memoryProblem + '. It opens from its definition next time.' : 'Viewer remembers its planes for next time.'}
+              {shells > 0 && (
+                <>
+                  Its {shells} {shells === 1 ? 'terminal stops' : 'terminals stop'}.{' '}
+                </>
+              )}
+              {memoryProblem
+                ? 'Viewer cannot remember its planes: ' +
+                  memoryProblem +
+                  '. It opens from its definition next time.'
+                : 'Viewer remembers its planes for next time.'}
             </p>
           )}
           {kind === 'reset' && (
@@ -159,7 +187,12 @@ export function DefinitionDialog({
               {workspace.panes.length}{' '}
               {workspace.panes.length === 1 ? 'plane closes' : 'planes close'};{' '}
               {definition?.planes.length ?? 0} open from the definition.{' '}
-              {shells > 0 && <>Its {shells} {shells === 1 ? 'running terminal stops' : 'running terminals stop'}. </>}
+              {shells > 0 && (
+                <>
+                  Its {shells} {shells === 1 ? 'running terminal stops' : 'running terminals stop'}
+                  .{' '}
+                </>
+              )}
               {terminals > 0 && (
                 <>
                   {terminals} {terminals === 1 ? 'terminal will' : 'terminals will'} ask before
@@ -171,7 +204,8 @@ export function DefinitionDialog({
           {kind === 'save' && reply?.kind === 'needs-confirmation' && (
             <p>
               {reply.curated && 'This definition is curated. '}
-              {reply.changed && 'The definition changed since this workspace opened. '}
+              {reply.changed &&
+                'The definition changed since this workspace opened. Planes present only in the file are kept, including planes closed here. '}
               {reply.dropsCommands && 'This save removes a command from the definition. '}Save the
               current supported planes over the definition?
             </p>
@@ -215,7 +249,9 @@ export function DefinitionDialog({
           </button>
           <button
             type="submit"
-            className={kind === 'save-as' || (kind === 'save' && !confirmingSave) ? 'primary' : 'danger'}
+            className={
+              kind === 'save-as' || (kind === 'save' && !confirmingSave) ? 'primary' : 'danger'
+            }
             disabled={!ready || busy || (kind === 'reset' && !definition)}
           >
             {kind === 'close'
@@ -224,7 +260,9 @@ export function DefinitionDialog({
                 ? 'Reset to definition'
                 : kind === 'save-as'
                   ? 'Save definition'
-                  : confirmingSave ? 'Save over definition' : 'Retry save'}
+                  : confirmingSave
+                    ? 'Save over definition'
+                    : 'Retry save'}
           </button>
         </footer>
       </form>

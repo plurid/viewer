@@ -8,6 +8,7 @@ import type {
 } from '../actions/execution-confirmations';
 import { definitionCommandFingerprint } from '../actions/execution-confirmations';
 import type { Terminals } from '../terminals/terminals';
+import type { TerminalStatus } from '../../domain/terminals/status';
 import { validInitialInput } from '../terminals/terminal-protocol';
 import { errorMessage } from '../../domain/errors';
 import { definitionKeySchema, definitionLimits } from '../../domain/workspaces/definitions/schema';
@@ -15,6 +16,7 @@ import type {
   DefinitionCommandReference,
   DefinitionCommandStart,
   DefinitionCommandOutcome,
+  DefinitionCommandPresentation,
 } from '../../domain/terminals/definition-commands';
 export type {
   DefinitionCommandReference,
@@ -25,6 +27,7 @@ export type {
 export interface DefinitionCommand {
   command: string;
   cwd: string;
+  paneCwd: string;
   profileID: string;
   workspaceName: string;
   basis: string;
@@ -49,13 +52,73 @@ interface DefinitionCommandPorts {
 
 interface PreparedCommand {
   request: TerminalStart;
+  paneCwd: string;
   confirmation: DefinitionCommandConfirmation;
   fingerprint: string;
 }
 
-/** Only a person's Run action reaches this service; opens and restores never call it. */
+interface PendingDefinitionStart {
+  owner: number;
+  request: TerminalStart;
+  reference: DefinitionCommandReference;
+  result: Promise<DefinitionCommandOutcome>;
+}
+
+/** Inspection and reattachment cannot acquire the approval and start capability of a Run click. */
 export class DefinitionCommands {
+  private starts = new Map<string, PendingDefinitionStart>();
   constructor(private ports: DefinitionCommandPorts) {}
+
+  async pending(
+    request: TerminalStart,
+    owner: number,
+    wait = false,
+  ): Promise<TerminalStatus | undefined> {
+    const pending = this.starts.get(request.id);
+    if (!pending) return;
+    await this.matchPending(request, owner, pending);
+    if (!wait) return { kind: 'starting' };
+    const outcome = await pending.result;
+    if (outcome.kind === 'declined') return { kind: 'stopped' };
+    if (outcome.kind === 'failed') return { kind: 'stopped', error: outcome.message };
+  }
+
+  async inspect(
+    owner: number,
+    request: TerminalStart,
+    reference: DefinitionCommandReference,
+  ): Promise<DefinitionCommandPresentation> {
+    if (!this.ports.ownsWorkspace(owner, request.workspaceID)) return { kind: 'changed' };
+    const found = this.ports.lookup(
+      owner,
+      reference.key,
+      reference.plane,
+      request.workspaceID,
+      request.id,
+    );
+    if (!found) return { kind: 'changed' };
+    if (found.basis !== reference.basis)
+      throw new Error('The definition changed. Review the command again.');
+    try {
+      const folders = await Promise.all(
+        [found.cwd, found.paneCwd, request.cwd].map((cwd) => realpath(cwd)),
+      );
+      if (folders.some((cwd) => cwd !== folders[0])) return { kind: 'changed' };
+    } catch {
+      return { kind: 'changed' };
+    }
+    const current = this.ports.lookup(
+      owner,
+      reference.key,
+      reference.plane,
+      request.workspaceID,
+      request.id,
+    );
+    if (!current || current.basis !== found.basis || current.paneCwd !== found.paneCwd)
+      throw new Error('The definition changed. Review the command again.');
+    if (request.profileID !== current.profileID) return { kind: 'changed' };
+    return { kind: 'available', command: found.command, cwd: found.cwd, reference };
+  }
 
   async start(
     owner: number,
@@ -93,6 +156,88 @@ export class DefinitionCommands {
       new Set(items.map((item) => item.request.id)).size !== items.length
     )
       throw new Error('Choose distinct commands in one workspace.');
+    const claims: {
+      item: DefinitionCommandStart;
+      pending: PendingDefinitionStart;
+      resolve(outcome: DefinitionCommandOutcome): void;
+    }[] = [];
+    const outcomes = items.map((item) => {
+      const existing = this.starts.get(item.request.id);
+      if (
+        existing &&
+        (existing.reference.key !== item.key ||
+          existing.reference.plane !== item.plane ||
+          existing.reference.basis !== item.basis)
+      )
+        return Promise.resolve(
+          this.outcome(item, {
+            kind: 'failed',
+            message: 'This terminal is already waiting for another start.',
+          }),
+        );
+      if (existing)
+        return this.matchPending(item.request, owner, existing).then(
+          () => existing.result,
+          (error) => this.outcome(item, { kind: 'failed', message: errorMessage(error) }),
+        );
+      let resolve!: (outcome: DefinitionCommandOutcome) => void;
+      const result = new Promise<DefinitionCommandOutcome>((done) => {
+        resolve = done;
+      });
+      const pending = {
+        owner,
+        request: item.request,
+        reference: { key: item.key, plane: item.plane, basis: item.basis },
+        result,
+      };
+      this.starts.set(item.request.id, pending);
+      claims.push({ item, pending, resolve });
+      return result;
+    });
+    const finish = (index: number, outcome: DefinitionCommandOutcome) => {
+      const claim = claims[index]!;
+      if (this.starts.get(claim.item.request.id) === claim.pending)
+        this.starts.delete(claim.item.request.id);
+      claim.resolve(outcome);
+    };
+    if (claims.length)
+      void this.startBatch(
+        owner,
+        claims.map(({ item }) => item),
+      ).then(
+        (results) => results.forEach((result, index) => finish(index, result)),
+        (error) =>
+          claims.forEach(({ item }, index) =>
+            finish(index, this.outcome(item, { kind: 'failed', message: errorMessage(error) })),
+          ),
+      );
+    return Promise.all(outcomes);
+  }
+
+  private async matchPending(
+    request: TerminalStart,
+    owner: number,
+    pending: PendingDefinitionStart,
+  ): Promise<void> {
+    if (
+      pending.owner !== owner ||
+      pending.request.workspaceID !== request.workspaceID ||
+      pending.request.rootID !== request.rootID ||
+      pending.request.profileID !== request.profileID
+    )
+      throw new Error('Terminal belongs to another plane.');
+    if (
+      pending.request.cwd !== request.cwd &&
+      (await realpath(pending.request.cwd)) !== (await realpath(request.cwd))
+    )
+      throw new Error('Terminal belongs to another plane.');
+  }
+
+  private async startBatch(
+    owner: number,
+    items: readonly DefinitionCommandStart[],
+  ): Promise<DefinitionCommandOutcome[]> {
+    this.requireHuman(owner);
     const results = new Map<number, DefinitionCommandOutcome>();
     const ready: { item: DefinitionCommandStart; prepared: PreparedCommand; index: number }[] = [];
     for (const [index, item] of items.entries()) {
@@ -141,7 +286,8 @@ export class DefinitionCommands {
               approvedCwd: current.confirmation.cwd,
               validate: () => {
                 this.requireOwner(owner, item.request.workspaceID);
-                this.lookup(owner, item);
+                if (this.lookup(owner, item).paneCwd !== current.paneCwd)
+                  throw new Error('The terminal changed during approval. Review it again.');
               },
             });
             results.set(index, this.outcome(item, { kind: 'started' }));
@@ -191,11 +337,12 @@ export class DefinitionCommands {
       throw new Error('The terminal profile does not match the workspace command.');
     const profile = this.ports.terminals.profile(definition.profileID);
     if (!profile) throw new Error('The terminal profile is no longer available.');
-    const [cwd, requestedCwd] = await Promise.all([
+    const [cwd, requestedCwd, paneCwd] = await Promise.all([
       realpath(definition.cwd),
       realpath(item.request.cwd),
+      realpath(definition.paneCwd),
     ]);
-    if (cwd !== requestedCwd)
+    if (cwd !== requestedCwd || cwd !== paneCwd)
       throw new Error('The terminal folder does not match the workspace command.');
     const confirmation: DefinitionCommandConfirmation = {
       key: item.key,
@@ -205,6 +352,7 @@ export class DefinitionCommands {
       workspaceName: definition.workspaceName,
     };
     return {
+      paneCwd: definition.paneCwd,
       request: {
         id: item.request.id,
         workspaceID: item.request.workspaceID,

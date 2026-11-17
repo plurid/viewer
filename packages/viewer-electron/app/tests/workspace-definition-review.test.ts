@@ -16,6 +16,14 @@ const resolve = (workspaces: Record<string, unknown>, extra: Partial<CatalogInpu
   });
 
 describe('workspace catalog review regressions', () => {
+  it('separates an unrecognized override key from the plain-project fallback with a period', () => {
+    const result = resolve({ 'sample/site': { nmae: 'Sample' } });
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        message: 'Unrecognized key: "nmae". The plain project stays in effect.',
+      }),
+    );
+  });
   it('explains dot segments and excess segments in Project Manager names precisely', () => {
     const result = decodeProjects(
       JSON.stringify([

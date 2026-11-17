@@ -34,7 +34,11 @@ export function workspaceRows(
   );
   let remaining = searching ? 50 : 8;
   const selected = matching.filter((choice) => choice.kind === 'open' || remaining-- > 0);
-  const rows = selected.flatMap((choice) => byID.get(choice.id) ?? []);
+  const rows = selected.flatMap((choice) => {
+    const row = byID.get(choice.id)!;
+    const related = row.relatedID && byID.get(row.relatedID);
+    return related ? [row, related] : [row];
+  });
   const firstDefined = rows.find((row) => row.id.startsWith('defined:'));
   const headings = new Map<string, string>();
   if (searching) {
@@ -67,11 +71,21 @@ export function paletteRows(
   const definitionSearch = query.trim().length >= 2;
   const ordinary = commands.filter(
     (command) =>
+      !command.relatedOnly &&
       !command.id.startsWith('defined:') &&
       (choices === undefined || !definitionSearch || !workspaceRow(command)),
   );
   const view = basePaletteRows(ordinary, query, recent);
-  if (!definitionSearch || !choices?.length) return view;
+  if (!definitionSearch || !choices?.length) {
+    const byID = new Map(commands.map((command) => [command.id, command]));
+    return {
+      ...view,
+      rows: view.rows.flatMap((row) => {
+        const related = row.relatedID && byID.get(row.relatedID);
+        return related ? [row, related] : [row];
+      }),
+    };
+  }
   const byID = new Map(commands.map((command) => [command.id, command]));
   const matching = choices.filter(
     (choice) => byID.has(choice.id) && (choice.kind === 'open' || query.trim().length >= 2),
@@ -79,10 +93,14 @@ export function paletteRows(
   const hasCommands = view.rows.some((row) => !row.setting && row.id !== moreSettingsID);
   const limit = hasCommands ? 4 : 8;
   const selected = matching.filter((choice, index) => index < limit || choice.kind === 'open');
-  const rows = selected.flatMap((choice) => byID.get(choice.id) ?? []);
+  const rows = selected.flatMap((choice) => {
+    const row = byID.get(choice.id)!;
+    const related = row.relatedID && byID.get(row.relatedID);
+    return related ? [row, related] : [row];
+  });
   if (!rows.length) return view;
   const more: ResolvedCommand[] =
-    matching.length > rows.length
+    matching.length > selected.length
       ? [
           {
             id: moreWorkspacesID,

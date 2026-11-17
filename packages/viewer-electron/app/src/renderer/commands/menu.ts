@@ -230,8 +230,12 @@ export function contextMenuSections(
   const sections: MenuSection[] = [];
   if (!focused) {
     if (workspaceIDs) {
+      const workspaces = take(workspaceIDs.slice(0, recentWorkspaceLimit));
       sections.push(
-        section(take(workspaceIDs.slice(0, recentWorkspaceLimit)), 'Recent workspaces'),
+        section(
+          workspaces.flatMap((row) => (row.relatedID ? [row, ...take([row.relatedID])] : [row])),
+          'Recent workspaces',
+        ),
       );
       if (closedDefinitionIDs?.length)
         sections.push(section(take(closedDefinitionIDs.slice(0, 3)), 'Recently closed'));
@@ -241,7 +245,10 @@ export function contextMenuSections(
     take(
       commands
         .filter(
-          (command) => command.id.startsWith('workspace:') || command.id.startsWith('defined:'),
+          (command) =>
+            command.relatedOnly ||
+            command.id.startsWith('workspace:') ||
+            command.id.startsWith('defined:'),
         )
         .map((command) => command.id),
     );

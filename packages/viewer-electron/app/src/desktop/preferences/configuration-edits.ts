@@ -19,7 +19,7 @@ import {
  */
 export type ConfigEdit =
   | { kind: 'set'; path: JSONPath; value: unknown }
-  | { kind: 'insert'; path: JSONPath; value: unknown }
+  | { kind: 'insert'; path: JSONPath; value: unknown; from?: JSONPath }
   | { kind: 'remove'; path: JSONPath };
 
 const plain = (value: unknown): value is Record<string, unknown> =>
@@ -112,6 +112,7 @@ export function configEdits(
   const pairs = matched(before.map(key), after.map(key));
   const kept = new Set(pairs.map(([index]) => index));
   const placed = new Set(pairs.map(([, index]) => index));
+  const reusable = new Set(before.map((_, index) => index).filter((index) => !kept.has(index)));
   return [
     ...before
       .map((_, index) => index)
@@ -121,11 +122,20 @@ export function configEdits(
     ...after
       .map((_, index) => index)
       .filter((index) => !placed.has(index))
-      .map((index): ConfigEdit => ({
-        kind: 'insert',
-        path: [...path, index],
-        value: after[index],
-      })),
+      .map((index): ConfigEdit => {
+        const value = after[index];
+        const from =
+          options.objectValues && plain(value) && !Object.hasOwn(value, 'id')
+            ? [...reusable].find((source) => key(before[source]) === key(value))
+            : undefined;
+        if (from !== undefined) reusable.delete(from);
+        return {
+          kind: 'insert',
+          path: [...path, index],
+          value,
+          ...(from !== undefined ? { from: [...path, from] } : {}),
+        };
+      }),
     ...pairs.flatMap(([from, to]) => configEdits(before[from], after[to], [...path, to], options)),
   ];
 }
@@ -136,12 +146,16 @@ export function applyConfigEdits(
   edits: readonly ConfigEdit[],
   formattingOptions: FormattingOptions,
 ): string {
-  for (const edit of edits)
+  // Read moved items before any removal changes their offsets or discards their comments.
+  const originals = edits.map((edit) =>
+    edit.kind === 'insert' && edit.from ? writtenItem(text, edit.from) : undefined,
+  );
+  for (const [index, edit] of edits.entries())
     text =
       edit.kind === 'remove'
         ? remove(text, edit.path)
         : edit.kind === 'insert'
-          ? insert(text, edit.path, edit.value, formattingOptions)
+          ? insert(text, edit.path, edit.value, formattingOptions, originals[index])
           : applyEdits(text, modify(text, edit.path, edit.value, { formattingOptions }));
   return text;
 }
@@ -207,11 +221,34 @@ function remove(text: string, path: JSONPath): string {
   return result;
 }
 
+interface WrittenConfigItem {
+  prefix: string;
+  value: string;
+  suffix: string;
+}
+
+function writtenItem(text: string, path: JSONPath): WrittenConfigItem | undefined {
+  const { parent, index } = locate(text, path);
+  const child = parent?.children?.[index];
+  if (!parent || !child) return undefined;
+  const end = child.offset + child.length;
+  const own = ownLine(text, parent, index);
+  const previous = parent.children?.[index - 1];
+  const from = lineEnd(text, previous ? previous.offset + previous.length : parent.offset);
+  const start = own ? text.indexOf('\n', from) + 1 : child.offset;
+  return {
+    prefix: text.slice(start, child.offset),
+    value: text.slice(child.offset, end),
+    suffix: own ? text.slice(end, lineEnd(text, end)).replace(/^([\t ]*),/, '$1') : '',
+  };
+}
+
 function insert(
   text: string,
   path: JSONPath,
   value: unknown,
   formattingOptions: FormattingOptions,
+  original?: WrittenConfigItem,
 ): string {
   const { parent, index } = locate(text, path);
   const children = parent?.children ?? [];
@@ -228,8 +265,11 @@ function insert(
       start = above;
     }
     const indent = text.slice(lineStart(text, target.offset), target.offset);
-    const content = indent + JSON.stringify(value) + ',' + eol;
-    return formatted(text.slice(0, start) + content + text.slice(start), start, content.length);
+    const content = original
+      ? (original.prefix || indent) + original.value + ',' + original.suffix + eol
+      : indent + JSON.stringify(value) + ',' + eol;
+    const inserted = text.slice(0, start) + content + text.slice(start);
+    return original ? inserted : formatted(inserted, start, content.length);
   }
   const last = children.at(-1);
   if (parent && last && index === children.length && ownLine(text, parent, children.length - 1)) {
@@ -237,14 +277,32 @@ function insert(
     const end = last.offset + last.length;
     const at = lineEnd(text, end);
     const indent = text.slice(lineStart(text, last.offset), last.offset);
-    const content = eol + indent + JSON.stringify(value);
+    const content =
+      eol +
+      (original
+        ? (original.prefix || indent) + original.value + original.suffix
+        : indent + JSON.stringify(value));
     let inserted = text.slice(0, at) + content + text.slice(at);
     let offset = at;
     if (!/^[\t ]*,/.test(text.slice(end, at))) {
       inserted = inserted.slice(0, end) + ',' + inserted.slice(end);
       offset += 1;
     }
-    return formatted(inserted, offset, content.length);
+    return original ? inserted : formatted(inserted, offset, content.length);
+  }
+  if (original && parent) {
+    const target = children[index];
+    const ending = original.suffix + (original.suffix.includes('//') ? eol : '');
+    const content = original.prefix + original.value;
+    if (target)
+      return text.slice(0, target.offset) + content + ',' + ending + text.slice(target.offset);
+    const at = parent.offset + parent.length - 1;
+    if (last) {
+      const end = last.offset + last.length;
+      const comma = /^[\t ]*,/.test(text.slice(end, at)) ? '' : ',';
+      return text.slice(0, end) + comma + text.slice(end, at) + content + ending + text.slice(at);
+    }
+    return text.slice(0, at) + content + ending + text.slice(at);
   }
   return applyEdits(text, modify(text, path, value, { formattingOptions, isArrayInsertion: true }));
 }

@@ -10,14 +10,14 @@ import {
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { removePanes } from '../src/renderer/state/panes';
 import { activeWorkspace, getState, initialize, navigate } from '../src/renderer/state/store';
-import { savePatch } from '../src/renderer/state/core';
+import { savePatch, update } from '../src/renderer/state/core';
 import { flushState } from '../src/renderer/state/persistence';
 import { sampleDefinition, sampleWorkspace } from './workspace-definition-fixtures';
 
 const unsaved = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }));
 vi.mock('../src/renderer/editing/unsaved', () => ({
   confirmClose: unsaved.confirm,
-  prepareClose: async () => (await unsaved.confirm()) ? async () => {} : undefined,
+  prepareClose: async () => ((await unsaved.confirm()) ? async () => {} : undefined),
   discardUnsaved: vi.fn(),
 }));
 
@@ -65,6 +65,84 @@ afterEach(async () => {
 });
 
 describe('renderer defined workspace opening', () => {
+  it('refuses closing a workspace shown by another window before flushing or prompting', async () => {
+    const other = sampleWorkspace('elsewhere', {
+      definition: { key: definition.key, basis: definition.basis },
+    });
+    savePatch({ workspaces: [...getState().saved.workspaces, other], openWindows: ['elsewhere'] });
+    await expect(closeDefinedWorkspace(other.id)).rejects.toThrow('Switch to that window');
+    expect(request).not.toHaveBeenCalled();
+    expect(unsaved.confirm).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+  it('selects the most recently visited unowned replacement and preserves an earlier Undo deletion', async () => {
+    await openDefinition(definition.key);
+    const closed = activeWorkspace();
+    const other = sampleWorkspace('shown-elsewhere');
+    const recent = sampleWorkspace('unowned');
+    const older = sampleWorkspace('older');
+    const undo = { workspace: sampleWorkspace('deleted'), index: 0 };
+    savePatch({
+      workspaces: [closed, other, recent, older],
+      openWindows: [closed.id, other.id],
+      workspaceVisits: { [other.id]: 100, [recent.id]: 80, [older.id]: 10 },
+    });
+    update({ ...getState(), deletedWorkspace: undo });
+    request.mockResolvedValueOnce({ kind: 'closed' } as never);
+    await closeDefinedWorkspace(closed.id);
+    expect(activeWorkspace().id).toBe(recent.id);
+    expect(getState().deletedWorkspace).toBe(undo);
+  });
+  it('rolls back a close when persistence fails, keeping planes and terminal sessions', async () => {
+    await openDefinition(definition.key);
+    const before = structuredClone(getState().saved);
+    const pane = getState().activePane;
+    request.mockResolvedValueOnce({ kind: 'closed' } as never);
+    save.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('disk full'));
+    await expect(closeDefinedWorkspace(activeWorkspace().id)).rejects.toThrow('disk full');
+    expect(getState().saved.workspaces).toEqual(before.workspaces);
+    expect(getState().saved.activeWorkspace).toBe(before.activeWorkspace);
+    expect(getState().activePane).toBe(pane);
+    expect(window.viewer.terminalClose).not.toHaveBeenCalled();
+  });
+  it('stops the closed workspace’s terminal sessions after its removal is persisted', async () => {
+    await openDefinition(definition.key);
+    const space = activeWorkspace();
+    request.mockResolvedValueOnce({ kind: 'closed' } as never);
+    await closeDefinedWorkspace(space.id);
+    expect(window.viewer.terminalClose).toHaveBeenCalledExactlyOnceWith(space.panes[1]!.id);
+  });
+  it('reopens every remembered terminal stopped, including terminals that previously auto-started', async () => {
+    const space = sampleWorkspace('remembered-terminal', {
+      definition: { key: definition.key, basis: definition.basis },
+      panes: [
+        {
+          id: 'terminal',
+          type: 'terminal',
+          path: definition.root,
+          profileID: 'login',
+          startOnOpen: true,
+        },
+      ],
+      roots: ['terminal'],
+      activePane: 'terminal',
+    });
+    request.mockResolvedValueOnce({
+      kind: 'build',
+      definition,
+      closed: {
+        workspace: space,
+        key: definition.key,
+        basis: definition.basis,
+        at: 1,
+        previewStates: {},
+        previewHistory: [],
+      },
+    } as never);
+    await openDefinition(definition.key);
+    expect(activeWorkspace().panes[0]).toMatchObject({ type: 'terminal', startOnOpen: false });
+    expect(terminalStart).not.toHaveBeenCalled();
+  });
   it('updates the basis and command-plane map after Save to definition', async () => {
     await openDefinition(definition.key);
     const space = activeWorkspace();
@@ -206,7 +284,11 @@ describe('renderer defined workspace opening', () => {
       literalPaths: [],
     } as never);
     await saveDefinition(space.id, true, { key: 'sample/new', name: 'Sample' });
-    expect(activeWorkspace().definition).toEqual({ key: 'sample/new', basis: 'a'.repeat(64), planes: {} });
+    expect(activeWorkspace().definition).toEqual({
+      key: 'sample/new',
+      basis: 'a'.repeat(64),
+      planes: {},
+    });
     expect(request).toHaveBeenCalledWith({
       kind: 'save-as',
       workspaceID: space.id,

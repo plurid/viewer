@@ -18,7 +18,20 @@ describe('definition recheck regressions', () => {
       rankWorkspaceChoices([], [...definitions], 'sample');
       expect(normalize).toHaveBeenCalledTimes(1);
       normalize.mockClear();
-      rankWorkspaceChoices([], definitions.map((item, index) => index ? { ...item } : { ...item, name: 'Changed name', aliases: ['alternate'], projectName: 'Sample > Renamed' }), 'alternate');
+      rankWorkspaceChoices(
+        [],
+        definitions.map((item, index) =>
+          index
+            ? { ...item }
+            : {
+                ...item,
+                name: 'Changed name',
+                aliases: ['alternate'],
+                projectName: 'Sample > Renamed',
+              },
+        ),
+        'alternate',
+      );
       expect(normalize.mock.calls.length).toBeGreaterThan(1);
       expect(normalize.mock.calls.length).toBeLessThan(10);
     } finally {

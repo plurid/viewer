@@ -1,5 +1,6 @@
 import type { ComparisonRequest } from '../src/domain/comparison/folders';
 import type { GitRequest } from '../src/domain/comparison/git';
+import type { TerminalStart } from '../src/domain/automation/actions';
 import { GitReader } from '../src/desktop/comparison/git';
 import { GitWorktrees } from '../src/desktop/comparison/worktrees';
 import { JournalStore } from '../src/desktop/journal/store';
@@ -318,6 +319,7 @@ const definitions = new WorkspaceDefinitions(fixture.root, fixture.files, {
 });
 await definitions.load();
 // Browser fixtures show the handoff without running programs or presenting native dialogs.
+const fixtureTerminals = new Map<string, TerminalStart>();
 const definitionCommandFixtures = new DefinitionCommands({
   lookup: definitionCommandLookup({
     window: () => ({
@@ -330,9 +332,10 @@ const definitionCommandFixtures = new DefinitionCommands({
   terminals: {
     profile: (id) =>
       settings.snapshot().settings.terminals.profiles.find((profile) => profile.id === id),
-    running: async () => false,
+    running: async (request) => fixtureTerminals.has(request.id),
     start: async (request, _owner, options) => {
       options?.validate?.();
+      fixtureTerminals.set(request.id, request);
       emit({
         type: 'terminal',
         event: {
@@ -528,6 +531,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'terminalStart': {
       const [request, reference] = schemas.terminalStart.parse(args);
       if (reference) return definitionCommandFixtures.start(1, request, reference);
+      fixtureTerminals.set(request.id, request);
       emit({
         type: 'terminal',
         event: { type: 'data', id: request.id, data: 'Browser fixture received Shell only.\r\n' },
@@ -536,10 +540,40 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     }
     case 'terminalStartAll':
       return definitionCommandFixtures.startAll(1, schemas.terminalStartAll.parse(args)[0]);
+    case 'terminalStatus': {
+      const [request, wait] = schemas.terminalStatus.parse(args);
+      return (
+        (await definitionCommandFixtures.pending(request, 1, wait)) ?? {
+          kind: fixtureTerminals.has(request.id) ? 'running' : 'stopped',
+        }
+      );
+    }
+    case 'terminalDefinitionCommand': {
+      const [request, reference] = schemas.terminalDefinitionCommand.parse(args);
+      return definitionCommandFixtures.inspect(1, request, reference);
+    }
+    case 'terminalRunning': {
+      const [request] = schemas.terminalRunning.parse(args);
+      const running = fixtureTerminals.get(request.id);
+      return Boolean(
+        running &&
+        running.workspaceID === request.workspaceID &&
+        running.rootID === request.rootID &&
+        running.profileID === request.profileID &&
+        running.cwd === request.cwd,
+      );
+    }
+    case 'terminalCount': {
+      const [workspaceID] = schemas.terminalCount.parse(args);
+      return [...fixtureTerminals.values()].filter((request) => request.workspaceID === workspaceID)
+        .length;
+    }
+    case 'terminalClose':
+      fixtureTerminals.delete(schemas.terminalClose.parse(args)[0]);
+      return;
     case 'terminalAck':
     case 'terminalWrite':
     case 'terminalResize':
-    case 'terminalClose':
       return;
     case 'workspaceClaim':
       return workspaceDefinitionsScenario ? definitionSessions.claim(1, args[0] as string) : true;
