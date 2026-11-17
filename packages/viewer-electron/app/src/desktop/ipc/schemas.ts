@@ -331,14 +331,17 @@ export const schemas = {
     ]),
   ]),
   workspaceDefinitionFile: z.tuple([
-    z
-      .object({
-        kind: z.enum(['catalog', 'edit', 'validate', 'allow-source']),
-        query: z.string().max(200).optional(),
-        limit: z.number().int().min(0).max(50).optional(),
-        keys: z.array(definitionKeySchema).max(50).optional(),
-      })
-      .strict(),
+    z.union([
+      z
+        .object({
+          kind: z.enum(['catalog', 'edit', 'validate', 'allow-source']),
+          query: z.string().max(200).optional(),
+          limit: z.number().int().min(0).max(50).optional(),
+          keys: z.array(definitionKeySchema).max(50).optional(),
+        })
+        .strict(),
+      z.object({ kind: z.literal('project-manager'), enabled: z.boolean() }).strict(),
+    ]),
   ]),
   newWindow: z.tuple([]),
   git: z.tuple([

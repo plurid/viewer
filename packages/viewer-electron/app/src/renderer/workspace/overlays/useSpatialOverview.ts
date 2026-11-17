@@ -41,7 +41,7 @@ export function useSpatialOverview({
       minimapShown: () => current.current.minimapShown(),
       corner: () => current.current.corner(),
       requestMinimap: (shown) => {
-        if (live) setRequestedEpoch(shown ? epoch : undefined);
+        setRequestedEpoch(shown ? epoch : undefined);
       },
       labelForPlane: (id) => current.current.labelForPlane(id),
       onNavigate: (id) => current.current.onNavigate?.(id),

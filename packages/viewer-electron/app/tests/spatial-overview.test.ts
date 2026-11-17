@@ -1,13 +1,22 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
 import { solveOverviewPlacement } from '../src/renderer/workspace/overlays/placement';
 import type { MinimapCorner } from '../src/domain/contracts';
 import { SpatialOverview } from '../src/renderer/workspace/overlays/SpatialOverview';
-import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
+import type { CommandContext } from '../src/renderer/commands/registry';
+import { CommandRegistry } from '../src/renderer/commands/registry';
 import { arrangementCommands } from '../src/renderer/commands/window-commands/arrangement';
-import { windowScopes, type WindowActions } from '../src/renderer/commands/window-commands/scope';
+import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
+import { windowScopes } from '../src/renderer/commands/window-commands/scope';
 import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
 import { replaceState } from '../src/renderer/state/core';
+import { useSpatialOverview } from '../src/renderer/workspace/overlays/useSpatialOverview';
+import {
+  minimapShown,
+  surfaceConfiguration,
+} from '../src/renderer/workspace/surface-configuration';
+import { normalizePreferences } from '../src/domain/preferences/ui';
 
 const viewport = { x: 0, y: 0, width: 1000, height: 600 };
 const size = { width: 172, height: 120 };
@@ -20,7 +29,13 @@ describe('spatial overview placement', () => {
     ['top-left', 16, 16],
   ] as const)('keeps %s despite obstacles and a different current corner', (corner, x, y) => {
     expect(
-      solveOverviewPlacement({ viewport, size, obstacles: [viewport], current: 'top-left', corner }),
+      solveOverviewPlacement({
+        viewport,
+        size,
+        obstacles: [viewport],
+        current: 'top-left',
+        corner,
+      }),
     ).toEqual({ kind: 'corner', corner, bounds: { x, y, ...size } });
     expect(
       solveOverviewPlacement({
@@ -161,6 +176,78 @@ function fixture(options: { minimapShown?: boolean; corner?: MinimapCorner } = {
 }
 
 describe('engine overlay adapter', () => {
+  it.each([false, true])(
+    'requests the engine minimap without changing its preference, automatic=%s',
+    async (automatic) => {
+      const view = fixture({ minimapShown: false });
+      view.adapter.destroy();
+      view.map.remove();
+      const root = { current: view.root };
+      const preferences = {
+        ...normalizePreferences().space,
+        minimap: automatic,
+        minimapAuto: automatic,
+      };
+      const original = { ...preferences };
+      const hook = renderHook(
+        ({ epoch }) => {
+          const visible = minimapShown(preferences, 1);
+          const overview = useSpatialOverview({
+            root,
+            enabled: true,
+            epoch,
+            subscribeEngine: () => () => {},
+            isDocked: view.docked,
+            minimapShown: () => visible,
+            corner: view.corner,
+            labelForPlane: () => ({ label: 'Projects' }),
+          });
+          const configuration = surfaceConfiguration({
+            look: 'dark',
+            size,
+            preferences,
+            minimap: visible || overview.requested,
+          });
+          return { overview, configuration };
+        },
+        { initialProps: { epoch: 'first' } },
+      );
+      stop = () => hook.unmount();
+      act(frame);
+      expect(hook.result.current.configuration.elements?.minimap?.show).toBe(false);
+      act(() => hook.result.current.overview.open());
+      expect(hook.result.current.configuration.elements?.minimap?.show).toBe(true);
+      await act(async () => {
+        view.root.append(view.map);
+        await Promise.resolve();
+        frame();
+      });
+      expect(hook.result.current.overview.expanded).toBe(true);
+      act(() => hook.result.current.overview.close());
+      expect(hook.result.current.configuration.elements?.minimap?.show).toBe(false);
+      expect(preferences).toEqual(original);
+      act(() => hook.result.current.overview.open());
+      hook.rerender({ epoch: 'second' });
+      expect(hook.result.current.configuration.elements?.minimap?.show).toBe(false);
+      hook.rerender({ epoch: 'first' });
+      expect(hook.result.current.configuration.elements?.minimap?.show).toBe(false);
+    },
+  );
+
+  it('cancels a pending open before the engine mounts the map', async () => {
+    const view = fixture({ minimapShown: false });
+    view.map.remove();
+    frame();
+    view.adapter.open();
+    view.adapter.open();
+    expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
+    view.root.append(view.map);
+    await Promise.resolve();
+    frame();
+    expect(view.show).not.toHaveBeenCalled();
+    expect(view.adapter.snapshot().expanded).toBe(false);
+  });
+
   it.each(['Escape', 'outside', 'plane', 'command'] as const)(
     'opens a hidden minimap on demand and returns to hidden after %s',
     async (dismissal) => {

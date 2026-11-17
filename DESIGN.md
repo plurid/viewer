@@ -547,6 +547,12 @@ works inside a transformed or pinned plane, and its rows follow the panel's widt
 Panels in the overlay grid share it and never cover each other. A collapsible panel collapses from
 its title to the title bar and a short status.
 
+**The Overview Rule.** Overview stays reachable from the palette whenever the space is shown,
+including when the minimap is hidden. Opening and closing it never changes the saved minimap
+visibility settings. Minimap corner defaults to Automatic, which avoids controls; a fixed corner
+keeps the minimap and Overview still even over controls, falling back only when the viewport is too
+small. The popup retains top-layer dismissal and focus restoration.
+
 **The Anchored Layer Rule.** A popover or menu opens from its button or the pointer, placed from the
 anchor's box on screen, so it lines up with a control in a transformed plane. It stays 8 px inside
 the window, opens above the anchor when there is no room below, and closes on an outside press or

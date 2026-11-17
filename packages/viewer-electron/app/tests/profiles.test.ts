@@ -160,6 +160,14 @@ describe('profiles', () => {
       }).success,
     ).toBe(false);
     expect(profilePaths).toContain('ui.space.minimap');
+    expect(profilePaths).toContain('ui.space.minimapCorner');
+    expect(
+      profileSchema.safeParse({
+        id: 'still',
+        name: 'Still',
+        values: { 'ui.space.minimapCorner': 'bottom-left' },
+      }).success,
+    ).toBe(true);
   });
   it('Focus hides the chrome, and leaving it puts back what was there', async () => {
     expect(defaultShortcuts['focus-mode']).toBe('Cmd+Shift+F');

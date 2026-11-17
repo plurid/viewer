@@ -959,6 +959,14 @@ function AppWindow() {
             mode={palette}
             onMode={setPalette}
             onClose={() => setPalette(null)}
+            onManageDefinitions={() =>
+              setWindowDialog({
+                type: 'workspace',
+                kind: 'manage',
+                id: getState().saved.activeWorkspace,
+                tab: 'defined',
+              })
+            }
             initialQuery={paletteQuery.text}
             line={{ host: lineHost, run: runFromPalette }}
           />

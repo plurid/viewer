@@ -98,7 +98,9 @@ const worktrees = new GitWorktrees({
 const permissionScenario = process.env.VIEWER_TEST_SCENARIO === 'folder-access';
 const settingsPreviewScenario = process.env.VIEWER_TEST_SCENARIO === 'settings-previews';
 const networkSharingScenario = process.env.VIEWER_TEST_SCENARIO === 'network-sharing';
-const workspaceDefinitionsScenario = process.env.VIEWER_TEST_SCENARIO === 'workspace-definitions';
+const workspaceConsentScenario = process.env.VIEWER_TEST_SCENARIO === 'workspace-consent';
+const workspaceDefinitionsScenario =
+  process.env.VIEWER_TEST_SCENARIO === 'workspace-definitions' || workspaceConsentScenario;
 const networkFolder = path.join(fixture.files, 'Network Drop');
 const networkHelper = process.env.VIEWER_TEST_NETWORK_HELPER;
 const networkVisibility =
@@ -285,7 +287,9 @@ if (workspaceDefinitionsScenario) {
     JSON.stringify(
       {
         version: 1,
-        sources: { projectManager: { path: source } },
+        sources: {
+          projectManager: { path: source, ...(workspaceConsentScenario ? {} : { enabled: true }) },
+        },
         workspaces: {
           'Sample/technologies/tools/sample-cli': {
             name: 'Sample CLI',
@@ -594,7 +598,12 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       const [request] = schemas.workspaceDefinitionFile.parse(args);
       if (request.kind === 'edit') await definitions.edit();
       else if (request.kind === 'validate') await definitions.reload();
-      else if (request.kind === 'catalog') definitions.refreshRoots();
+      else if (request.kind === 'project-manager')
+        await definitions.setProjectManager(request.enabled);
+      else if (request.kind === 'catalog') {
+        await definitions.refreshSourceOffer();
+        definitions.refreshRoots();
+      }
       return definitions.snapshot();
     }
     case 'watchRules':

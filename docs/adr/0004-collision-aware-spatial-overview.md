@@ -42,3 +42,22 @@ tests alone cannot establish physical hit-testing.
 
 Evidence: `spatial-overview.test.ts`, the browser workspace scenarios and the dated native
 qualification ledger.
+
+## Addendum: independent Overview and corner choice
+
+Accepted: November 17, 2026.
+
+At the owner's request, `ui.space.minimapCorner` adds `automatic`, `bottom-right`, `bottom-left`,
+`top-right` and `top-left`. Automatic remains the default and keeps the existing collision solver
+and corner retention. A fixed corner ignores obstacles and falls back only when the viewport cannot
+fit the map. The expanded Overview uses the same fixed corner. This trades collision avoidance for a
+still map when plane focus or camera movement changes the controls beneath it. Viewcube protection
+remains independent.
+
+Overview is available whenever the space is shown, independently of minimap visibility. The host
+temporarily enables the engine's map through surface configuration when needed, waits for its DOM
+element, then opens the original map in the browser top layer. While the saved preference hides the
+minimap, CSS keeps the closed map invisible between mounting, expansion and removal. Closing
+releases the temporary request without editing preferences; dismissal restores the connected opener,
+while choosing a plane retains navigation focus. Pending requests belong to their workspace epoch
+and can be cancelled before the map mounts.

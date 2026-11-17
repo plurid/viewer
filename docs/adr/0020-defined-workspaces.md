@@ -57,3 +57,16 @@ run with the person's authority; neither the working folder nor this review is a
 See [workspace instructions](../guides/workspaces.md#open-a-defined-workspace),
 [terminal reference](../reference/terminals.md#commands-a-workspace-starts) and
 [testing](../development/testing.md#command-startup-with-real-zsh).
+
+## Addendum: consent before reading another app's data
+
+The Project Manager source has no default decision. An absent `enabled` field means undecided;
+explicit `true` and `false` retain their existing meanings. Before consent, the desktop performs
+only a bounded existence check. It does not read or count projects, watch the list's contents or
+request a Store folder grant.
+
+The offer appears in Manage's Defined tab, workspace search and the configuration settings, never as
+a launch dialog or notice. The person's choice is written through the comment-preserving JSONC
+update before any list read or access request. Edit creates an undecided starter. Disabling the
+source stops its watcher and removes catalog stubs without closing open workspaces. Viewer never
+changes the other app's list. Agent discovery and CLI resolution retain their existing boundaries.

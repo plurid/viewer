@@ -142,3 +142,17 @@
   gap: var(--gap-small);
   margin-bottom: var(--gap-content);
 }
+.workspace-project-manager-offer {
+  padding: var(--gap-content);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.workspace-project-manager-offer p {
+  margin: 0 0 var(--gap-content);
+  color: var(--muted);
+}
+.workspace-project-manager-offer > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-inline);
+}

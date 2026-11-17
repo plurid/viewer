@@ -253,7 +253,10 @@ export function CommandResults({
               id={`${id}-${rowIndex}`}
               role="option"
               aria-selected={index === rowIndex}
-              className={row.setting ? 'command-result is-setting' : 'command-result'}
+              className={
+                (row.setting ? 'command-result is-setting' : 'command-result') +
+                (row.muted ? ' is-muted' : '')
+              }
               onPointerMove={() => setActiveID(row.id)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onSelect(row)}

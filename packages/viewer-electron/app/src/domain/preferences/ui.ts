@@ -1,4 +1,10 @@
-import type { PaneSidebar, SidebarSection, UIPreferences, ListColumn, MinimapCorner } from '../contracts';
+import type {
+  PaneSidebar,
+  SidebarSection,
+  UIPreferences,
+  ListColumn,
+  MinimapCorner,
+} from '../contracts';
 import { columnWidth, listColumns } from './list-columns';
 import type { HeaderControls } from './header';
 import { headerControlKeys, headerPresets } from './header';

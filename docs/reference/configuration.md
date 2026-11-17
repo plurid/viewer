@@ -238,7 +238,8 @@ is 0.2 to 0.8.
 `<data>/workspaces.jsonc` defines whole workspaces separately from the open records in
 `viewer-state-v1.json`. **Edit workspace definitions** creates a commented starter only when the
 file is absent. A symbolic link is allowed. `workspaces.schema.json` beside it provides editor
-validation. The file is JSONC with comments and trailing commas:
+validation. The starter leaves the Project Manager choice commented out until you decide. The file
+is JSONC with comments and trailing commas. This example explicitly enables the source:
 
 ```jsonc
 {
@@ -260,18 +261,32 @@ validation. The file is JSONC with comments and trailing commas:
 }
 ```
 
-`sources.projectManager.enabled` defaults to `true`. `path`, when set, selects a local
-`projects.json`; otherwise Viewer reads
-`~/Library/Application Support/Code/User/globalStorage/alefragnani.project-manager/projects.json`.
-Viewer never writes that source. It expands `~` and `$home`, skips remote URIs, counts disabled
-entries and reads each project independently. Each enabled local project supplies a folder plane at
-`rootPath`, plus one per extra `paths` entry. Project `tags` become aliases. Both files reload
-within about one second after an editor saves them.
+`sources.projectManager.enabled` has three states:
 
-In the Store edition, an ungranted source reports **needs-access** without prompting. **Allow
-access…** in **Settings → Configuration → Workspace definitions** asks for a folder grant so
-replacement source files remain readable. Ungranted roots have an unknown state, not a missing
-state; opening their folder planes uses the existing access recovery.
+- Absent (the default): undecided. Viewer checks only whether the list file exists, with a bounded
+  metadata read. It does not open the file, count projects, watch its contents or request access.
+- `true`: use the list. Viewer reads its projects as defined workspaces and watches for changes.
+- `false`: do not use the list. Viewer stops reading and drops its plain definitions; open
+  workspaces stay open.
+
+The choice appears in **Manage workspaces… → Defined** and **Change workspace…** when an undecided
+list exists. **Use VS Code projects**, **Don't use**, and the **Use VS Code Project Manager
+projects** switch in **Settings → Configuration → Workspace definitions** save the choice in this
+file, keeping comments. An explicit choice creates the starter when the file is absent. No offer
+appears at launch, and existing explicit choices stay in effect.
+
+`path`, when set, selects a local `projects.json`; otherwise the source is
+`~/Library/Application Support/Code/User/globalStorage/alefragnani.project-manager/projects.json`.
+Viewer never changes that source. After consent, it expands `~` and `$home`, skips remote URIs,
+counts disabled entries and reads each project independently. Each enabled local project supplies a
+folder plane at `rootPath`, plus one per extra `paths` entry. Project `tags` become aliases. Both
+files reload within about one second after an editor saves them.
+
+In the Store edition, **Use VS Code projects** or turning the switch on asks for a folder grant only
+after saving the choice. If access is declined, **Allow access…** in **Settings → Configuration →
+Workspace definitions** asks again so replacement source files remain readable. Ungranted roots have
+an unknown state, not a missing state; opening their folder planes uses the existing access
+recovery.
 
 | Entry field       | Meaning and limit                                                                                                                                                                      |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -631,6 +646,7 @@ Space** and **Settings → Browsing → List columns** unless marked.
 | `ui.space.toolbar`          | `false` on a first run; an earlier profile keeps its own                                | Boolean                                                                                                                                                                                          | **Show space toolbar**                                                    |
 | `ui.space.minimap`          | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Show minimap**                                                          |
 | `ui.space.minimapAuto`      | `true` on a first run; `false` in an earlier profile                                    | Boolean: with `minimap`, it shows once the space holds 3 or more planes                                                                                                                          | **Minimap only with 3 or more planes**                                    |
+| `ui.space.minimapCorner`    | `automatic`                                                                             | `automatic`, `bottom-right`, `bottom-left`, `top-right`, `top-left`; automatic avoids controls, fixed corners ignore them; also applies to Overview                                              | **Minimap corner**                                                        |
 | `ui.space.viewcube`         | `false` on a first run; an earlier profile keeps its own                                | Boolean                                                                                                                                                                                          | **Show viewcube**                                                         |
 | `ui.space.planeHeaders`     | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Show plane headers**                                                    |
 | `ui.space.dragging`         | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Drag planes by their title**                                            |
@@ -646,6 +662,9 @@ Space** and **Settings → Browsing → List columns** unless marked.
 | `ui.suggestionHistory`      | Absent                                                                                  | App-managed: up to 40 kinds of file, 8 command IDs each                                                                                                                                          | **Forget learned suggestions** command                                    |
 | `ui.insightsDismissed`      | Absent                                                                                  | App-managed: up to 200 folders, 20 insight IDs each                                                                                                                                              | **Show hidden insights** command                                          |
 | `ui.firstRunHint`           | Absent; `{ "used": [] }` in a new profile                                               | App-managed: `used` lists `palette` and `quick-preview`; `retired` once both are used or the tips are closed                                                                                     | None                                                                      |
+
+Overview opens while the space is shown even when `ui.space.minimap` is `false` or `minimapAuto`
+hides the minimap. Closing Overview restores the configured visibility.
 
 A workspace can set its own space colour with the **Workspace look…** command.
 

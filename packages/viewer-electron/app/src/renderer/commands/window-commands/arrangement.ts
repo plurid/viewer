@@ -23,7 +23,7 @@ export function arrangementCommands({
       icon: 'map',
       aliases: ['minimap', 'navigate space'],
       when: (context) => windowScope(context) && !actions.workspace.isDocked(),
-      unavailable: () => overviewUnavailable(actions.workspace.isDocked()),
+      unavailable: overviewUnavailable(actions.workspace.isDocked()),
       run: () => actions.overview?.(),
     },
     {

@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron';
 import { createDefinitionHandlers } from '../src/desktop/ipc/definition-handlers';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 import type { WorkspaceDefinitions } from '../src/desktop/workspaces/definitions';
+import type { DefinitionCatalog } from '../src/domain/workspaces/definitions/schema';
 import type { DefinedWorkspaces } from '../src/desktop/workspaces/defined-workspaces';
 import { sampleDefinition, sampleWorkspace } from './workspace-definition-fixtures';
 
@@ -21,11 +22,12 @@ function fixture() {
   const a = sessions.open(1, '/home/sample', first);
   const b = sessions.open(2, '/home/sample', second);
   const definition = sampleDefinition();
-  const catalog = {
+  const catalog: DefinitionCatalog = {
     revision: 1,
     file: { path: '/data/workspaces.jsonc', state: 'read' as const },
     projectManager: {
       path: '/source/projects.json',
+      enabled: true,
       state: 'read' as const,
       projects: 1,
       missing: 0,
@@ -55,6 +57,8 @@ function fixture() {
     proposal: vi.fn(() => ({ key: definition.key, name: definition.name, root: definition.root })),
     reload: vi.fn(async () => {}),
     refreshRoots: vi.fn(),
+    refreshSourceOffer: vi.fn(async () => {}),
+    setProjectManager: vi.fn<WorkspaceDefinitions['setProjectManager']>(async () => {}),
     edit: vi.fn(async () => catalog.file.path),
   };
   const windows = new Map(
@@ -349,6 +353,10 @@ describe('desktop definition open decisions', () => {
         'only to the person',
       );
     }
+    for (const enabled of [true, false])
+      await expect(
+        f.handlers.workspaceDefinitionFile([{ kind: 'project-manager', enabled }], 1),
+      ).rejects.toThrow('only to the person');
     expect(f.definitions.load).not.toHaveBeenCalled();
     expect(f.definitions.entry).not.toHaveBeenCalled();
   });
@@ -384,5 +392,46 @@ describe('desktop definition open decisions', () => {
       expect.objectContaining({ properties: ['openDirectory'], defaultPath: '/source' }),
       true,
     );
+  });
+  it('only asks Store access after the choice was saved, and refuses access before consent', async () => {
+    const f = fixture();
+    native.choose.mockClear();
+    const snapshot = f.definitions.snapshot;
+    const undecided = snapshot();
+    undecided.projectManager = {
+      ...undecided.projectManager,
+      enabled: undefined,
+      state: 'undecided',
+      projects: 0,
+    };
+    vi.spyOn(f.definitions, 'snapshot').mockImplementation(() => structuredClone(undecided));
+    await f.handlers.workspaceDefinitionFile([{ kind: 'catalog' }], 1);
+    expect(native.choose).not.toHaveBeenCalled();
+    await expect(f.handlers.workspaceDefinitionFile([{ kind: 'allow-source' }], 1)).rejects.toThrow(
+      'Choose Use VS Code projects',
+    );
+    expect(native.choose).not.toHaveBeenCalled();
+    f.definitions.setProjectManager.mockImplementation(async (enabled, assertHuman) => {
+      assertHuman?.();
+      expect(native.choose).not.toHaveBeenCalled();
+      undecided.projectManager.enabled = enabled;
+      undecided.projectManager.state = enabled ? 'needs-access' : 'off';
+    });
+    await f.handlers.workspaceDefinitionFile([{ kind: 'project-manager', enabled: true }], 1);
+    expect(f.definitions.setProjectManager).toHaveBeenCalledWith(true, expect.any(Function));
+    expect(native.choose).toHaveBeenCalledOnce();
+    native.choose.mockClear();
+    await f.handlers.workspaceDefinitionFile([{ kind: 'project-manager', enabled: false }], 1);
+    expect(native.choose).not.toHaveBeenCalled();
+  });
+  it('rechecks agent ownership inside a consent write callback', async () => {
+    const f = fixture();
+    f.definitions.setProjectManager.mockImplementation(async (_enabled, assertHuman) => {
+      f.isAgent.mockReturnValue(true);
+      assertHuman?.();
+    });
+    await expect(
+      f.handlers.workspaceDefinitionFile([{ kind: 'project-manager', enabled: true }], 1),
+    ).rejects.toThrow('only to the person');
   });
 });

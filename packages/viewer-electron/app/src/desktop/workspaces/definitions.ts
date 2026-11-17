@@ -34,14 +34,22 @@ import { errorMessage } from '../../domain/errors';
 import { JsoncConfiguration } from '../preferences/configuration';
 import { watchFileChanges } from '../persistence/watch-file';
 import type { ProjectManagerRead } from './project-manager';
-import { expandProjectPath, projectManagerPath, readProjectManager } from './project-manager';
+import {
+  expandProjectPath,
+  projectManagerExists,
+  projectManagerPath,
+  readProjectManager,
+} from './project-manager';
 
-const starter = `// Definitions are searched by name and opened as whole workspaces.
-// VS Code Project Manager is read live. An entry with the same key overrides its project.
+const starter = (
+  enabled?: boolean,
+) => `// Definitions are searched by name and opened as whole workspaces.
+// An entry with a project's key overrides its planes after you choose to use that source.
 {
   "$schema": "workspaces.schema.json",
   "version": 1,
-  "sources": { "projectManager": { "enabled": true } },
+  // Choose true to read VS Code Project Manager's list, or false to leave it unused.
+  ${enabled === undefined ? '// ' : ''}"sources": { "projectManager": { "enabled": ${enabled ?? true} } },
   "workspaces": {
     // "sample/site": { "root": "~/Projects/sample", "aliases": ["sample"] }
   }
@@ -193,17 +201,18 @@ export class WorkspaceDefinitions {
         message: errorMessage(error),
       });
     }
-    if (sourcePath !== this.projectsPath) {
+    if (sourcePath !== this.projectsPath || source.enabled !== true) {
       this.stopSource?.();
       this.projects = undefined;
       this.sourceMissingSince = undefined;
       this.projectsPath = sourcePath;
-      this.stopSource = this.stopped
-        ? undefined
-        : watchFileChanges(sourcePath, () => this.schedule(), 1000);
+      this.stopSource = undefined;
     }
+    if (source.enabled === true && !this.stopSource && !this.stopped)
+      this.stopSource = watchFileChanges(sourcePath, () => this.schedule(), 1000);
     let status: DefinitionCatalog['projectManager'] = {
       path: sourcePath,
+      enabled: source.enabled,
       state: 'off',
       projects: 0,
       missing: 0,
@@ -211,7 +220,9 @@ export class WorkspaceDefinitions {
       remote: 0,
       duplicateKeys: 0,
     };
-    if (source.enabled) {
+    if (source.enabled === undefined) {
+      status.state = (await projectManagerExists(sourcePath)) ? 'undecided' : 'absent';
+    } else if (source.enabled) {
       try {
         await this.ports.access([sourcePath]);
         this.projects = await readProjectManager(sourcePath, this.home);
@@ -244,6 +255,7 @@ export class WorkspaceDefinitions {
           });
       }
     }
+    status.enabled = source.enabled;
     const projects =
       source.enabled && (status.state === 'read' || status.state === 'unreadable')
         ? (this.projects?.projects ?? [])
@@ -438,20 +450,53 @@ export class WorkspaceDefinitions {
     this.current.revision++;
     this.ports.emit(this.snapshot());
   }
-  async edit(): Promise<string> {
+  private async ensureFile(): Promise<void> {
     await mkdir(path.dirname(this.configuration.file), { recursive: true, mode: 0o700 });
     try {
       await readFile(this.configuration.file, 'utf8');
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      await writeFile(this.configuration.file, starter, { flag: 'wx', mode: 0o600 }).catch(
-        (error: NodeJS.ErrnoException) => {
-          if (error.code !== 'EEXIST') throw error;
-        },
-      );
+      await writeFile(this.configuration.file, starter(this.file.sources.projectManager.enabled), {
+        flag: 'wx',
+        mode: 0o600,
+      }).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'EEXIST') throw error;
+      });
     }
+  }
+  async edit(): Promise<string> {
+    await this.ensureFile();
     await this.reload();
     return this.configuration.file;
+  }
+  async setProjectManager(enabled: boolean, assertHuman?: () => void): Promise<void> {
+    assertHuman?.();
+    if (!enabled) {
+      this.stopSource?.();
+      this.stopSource = undefined;
+    }
+    await this.ensureFile();
+    await this.configuration.update((current) => {
+      assertHuman?.();
+      const file = current ?? workspacesFileSchema.parse({ version: 1 });
+      return {
+        ...file,
+        sources: { projectManager: { ...file.sources.projectManager, enabled } },
+      };
+    });
+    await this.reload();
+  }
+  async refreshSourceOffer(): Promise<void> {
+    if (this.current.projectManager.enabled !== undefined) return;
+    const source = this.current.projectManager;
+    const state = (await projectManagerExists(source.path)) ? 'undecided' : 'absent';
+    if (this.stopped || this.current.projectManager !== source || source.state === state) return;
+    this.current = {
+      ...this.current,
+      revision: this.current.revision + 1,
+      projectManager: { ...source, state },
+    };
+    this.ports.emit(this.snapshot());
   }
   async update(change: (current: WorkspacesFile) => WorkspacesFile): Promise<void> {
     await this.configuration.update((current) =>

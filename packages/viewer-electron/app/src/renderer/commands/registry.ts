@@ -95,6 +95,7 @@ export interface CommandRequest {
   remember?: boolean;
 }
 export interface ResolvedCommand {
+  muted?: boolean;
   id: string;
   label: string;
   group: string;

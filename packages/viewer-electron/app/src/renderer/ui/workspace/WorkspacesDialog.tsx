@@ -3,7 +3,8 @@ import type { DefinitionDialogKind } from './DefinitionDialog';
 import type { WorkspaceDefinition } from '../../../domain/workspaces/definitions/schema';
 import { rankWorkspaceChoices } from '../../../domain/workspaces/definitions/query';
 import { canCaptureDefinition } from '../../../domain/workspaces/definitions/capture';
-import { openDefinition } from '../../state/definitions';
+import { openDefinition, receiveDefinitions } from '../../state/definitions';
+import { ProjectManagerOffer } from './ProjectManagerOffer';
 import {
   definitionWasRemoved,
   maximumWorkspaces,
@@ -17,7 +18,7 @@ import { Disclosure } from '../Disclosure';
 import './workspaces.css';
 
 const pageSize = 25;
-type WorkspaceTab = 'open' | 'defined';
+export type WorkspaceTab = 'open' | 'defined';
 type OpenWorkspaceSort = 'recent' | 'name';
 type DefinedWorkspaceSort = 'recent' | 'key';
 type WorkspaceRowAction = 'new' | 'rename' | 'delete' | DefinitionDialogKind;
@@ -26,14 +27,16 @@ export function WorkspacesDialog({
   onClose,
   onOpen,
   onAction,
+  initialTab = 'open',
 }: {
   onClose(): void;
   onOpen(id: string): Promise<void>;
   onAction(kind: WorkspaceRowAction, id: string): void;
+  initialTab?: WorkspaceTab;
 }) {
   const saved = useViewer((state) => state.saved);
   const catalog = useViewer((state) => state.bootstrap.definitions);
-  const [tab, setTab] = useState<WorkspaceTab>('open');
+  const [tab, setTab] = useState<WorkspaceTab>(initialTab);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<OpenWorkspaceSort>('recent');
   const [page, setPage] = useState(0);
@@ -333,6 +336,18 @@ function DefinedRows({ onClose }: { onClose(): void }) {
   };
   return (
     <>
+      {catalog?.projectManager.state === 'undecided' && (
+        <ProjectManagerOffer
+          busy={busy}
+          onChoose={(enabled) =>
+            action(async () => {
+              receiveDefinitions(
+                await window.viewer.workspaceDefinitionFile({ kind: 'project-manager', enabled }),
+              );
+            })
+          }
+        />
+      )}
       <div className="workspace-catalog-controls">
         <input
           data-autofocus
@@ -422,7 +437,7 @@ function DefinedRows({ onClose }: { onClose(): void }) {
           <p>
             {searchable.length
               ? 'No matching definitions.'
-              : 'Define a workspace here or read projects from VS Code Project Manager.'}
+              : 'No workspace definitions yet. Choose Edit workspace definitions to add one.'}
           </p>
           {needsAccess && (
             <button

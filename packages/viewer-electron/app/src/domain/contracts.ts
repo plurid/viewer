@@ -458,12 +458,7 @@ export interface SavedState {
   ui?: UIPreferences;
 }
 export type SidebarSection = 'locations' | 'favorites' | 'recents';
-export type MinimapCorner =
-  | 'automatic'
-  | 'bottom-right'
-  | 'bottom-left'
-  | 'top-right'
-  | 'top-left';
+export type MinimapCorner = 'automatic' | 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 
 export interface UIPreferences {
   /** preferences/ui.ts `uiPreferencesVersion`. */

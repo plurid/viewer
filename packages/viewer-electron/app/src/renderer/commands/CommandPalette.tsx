@@ -82,10 +82,12 @@ export function CommandPalette({
   onClose,
   initialQuery = '',
   line,
+  onManageDefinitions,
 }: {
   mode: PaletteMode;
   onMode(mode: PaletteMode): void;
   onClose(): void;
+  onManageDefinitions?(): void;
   /** Text the palette opens with (`:help` opens the command line at `help`). */
   initialQuery?: string;
   /** The command line: what a line runs against, and running one (App closes the palette first). */
@@ -174,6 +176,7 @@ export function CommandPalette({
           mode={mode === 'line' || mode === 'prompt' ? 'commands' : mode}
           initialQuery={carried}
           onMode={change}
+          onManageDefinitions={onManageDefinitions}
         />
       )}
     </Dialog>
@@ -188,6 +191,7 @@ function CommandFinder({
   mode,
   initialQuery,
   onMode,
+  onManageDefinitions,
 }: {
   context: CommandContext;
   active: string;
@@ -196,6 +200,7 @@ function CommandFinder({
   mode: Exclude<PaletteMode, 'files'>;
   initialQuery: string;
   onMode(mode: PaletteMode, query?: string): void;
+  onManageDefinitions?(): void;
 }) {
   const registry = useCommands();
   useCommandRevision();
@@ -272,6 +277,22 @@ function CommandFinder({
             recent,
           )
         : paletteRows(commands, query, recent, workspaceChoices);
+  const projectManagerOfferID = 'palette:project-manager';
+  if (workspaces && onManageDefinitions && definitions?.projectManager.state === 'undecided') {
+    commandView.rows.push({
+      id: projectManagerOfferID,
+      label: "Use VS Code Project Manager's projects…",
+      group: 'Workspaces',
+      icon: 'dock',
+      aliases: [],
+      primary: false,
+      muted: true,
+      source: '',
+      context,
+    });
+    if (![...commandView.headings.values()].includes('Defined'))
+      commandView.headings = new Map([...commandView.headings, [projectManagerOfferID, 'Defined']]);
+  }
   const view = withFrequentFolders(
     commandView,
     smart.filter((row) => row.group === 'Frequent folders'),
@@ -369,6 +390,11 @@ function CommandFinder({
         onClearRecent={!settings && recent.length ? clearRecentCommands : undefined}
         clearRecentLabel="Clear recent commands"
         onSelect={(command) => {
+          if (command.id === projectManagerOfferID) {
+            onClose();
+            onManageDefinitions?.();
+            return;
+          }
           const next = folderView.folders.get(command.id);
           if (next) {
             setFolder(next);

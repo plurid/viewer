@@ -21,11 +21,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import type { PluridApplicationHandle } from '@plurid/plurid-react';
-import {
-  PluridApplication,
-  usePluridApi,
-  usePluridPlane,
-} from '@plurid/plurid-react';
+import { PluridApplication, usePluridApi, usePluridPlane } from '@plurid/plurid-react';
 import type { PluridApi, PluridPlane } from '@plurid/plurid-data';
 import { PLURID_PUBSUB_TOPIC } from '@plurid/plurid-data';
 import { activeWorkspace, report, setActivePane, storageAdapter, useViewer } from '../state/store';

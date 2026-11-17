@@ -16,6 +16,9 @@ import { getState, initialize } from '../src/renderer/state/store';
 import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext } from '../src/renderer/commands/registry';
+import { CommandRegistry } from '../src/renderer/commands/registry';
+import { paletteRows, settingRows } from '../src/renderer/commands/palette-sections';
+import { minimapCorners } from '../src/domain/preferences/ui';
 
 const settingsPatch = vi.fn(async (patches: { path: string; value: unknown }[]) => {
   const snapshot = structuredClone(getState().settings);
@@ -114,6 +117,30 @@ describe('a command for every setting', () => {
     expect(getState().saved.ui.space.backdrop).toBe('blur');
     expect(find('setting.ui.space.backdrop=blur').icon).toBe('check');
     expect(label('setting.settings.editor.fontFamily=Menlo')).toBe('Editor › Font: Menlo');
+  });
+  it('offers Minimap corner as a palette choice beside Show minimap', async () => {
+    const position = settingCatalog.findIndex((setting) => setting.path === 'ui.space.minimap');
+    expect(settingCatalog[position + 1]).toMatchObject({
+      path: 'ui.space.minimapCorner',
+      category: 'Space',
+      label: 'Minimap corner',
+      kind: 'choice',
+    });
+    const registry = new CommandRegistry();
+    registry.register('window', { context: () => context, definitions: commands });
+    const rows = registry.discover();
+    expect(paletteRows(rows, 'minimap corner', []).rows).toMatchObject([
+      { label: 'Minimap corner', setting: { value: 'Automatic' } },
+    ]);
+    expect(settingRows(rows, 'Minimap corner: ').rows.map((row) => row.id)).toEqual(
+      minimapCorners.map((corner) => `setting.ui.space.minimapCorner=${corner}`),
+    );
+    await act(async () => {
+      expect(await registry.invoke('setting.ui.space.minimapCorner=bottom-left', {})).toBe(true);
+    });
+    expect(getState().saved.ui.space.minimapCorner).toBe('bottom-left');
+    expect(find('setting.ui.space.minimapCorner=bottom-left').icon).toBe('check');
+    expect(openSettings).not.toHaveBeenCalled();
   });
   it('changes settings the workspace may change, and opens Settings at the others', async () => {
     await act(async () => find('setting.settings.editor.wordWrap').run(context));

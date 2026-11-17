@@ -5,10 +5,12 @@ import type {
   WorkspaceDefinitionFileRequest,
 } from '../../../domain/workspaces/definitions/schema';
 import { errorMessage } from '../../../domain/errors';
-import { Button, PathField } from '../primitives';
+import { Button, PathField, Row } from '../primitives';
+import { projectManagerConsentText } from '../workspace/ProjectManagerOffer';
 import { Disclosure } from '../Disclosure';
 
 function sourceStatus(source: ProjectManagerState): string {
+  if (source.state === 'undecided') return 'The project list has not been read.';
   if (source.state === 'absent') return "VS Code Project Manager's list was not found.";
   if (source.state === 'off') return 'VS Code Project Manager is off.';
   if (source.state === 'needs-access')
@@ -107,6 +109,29 @@ export function WorkspaceDefinitionsSettings() {
       {catalog && (
         <>
           <h3>VS Code Project Manager</h3>
+          {(catalog.projectManager.enabled !== undefined ||
+            catalog.projectManager.state !== 'absent') && (
+            <Row
+              label="Use VS Code Project Manager projects"
+              detail={
+                catalog.projectManager.state === 'undecided'
+                  ? projectManagerConsentText
+                  : 'Viewer reads the list and never changes it.'
+              }
+              control={
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-label="Use VS Code Project Manager projects"
+                  checked={catalog.projectManager.enabled === true}
+                  disabled={busy}
+                  onChange={(event) =>
+                    void run({ kind: 'project-manager', enabled: event.target.checked })
+                  }
+                />
+              }
+            />
+          )}
           <PathField
             path={catalog.projectManager.path}
             onError={(error) => setMessage(errorMessage(error))}

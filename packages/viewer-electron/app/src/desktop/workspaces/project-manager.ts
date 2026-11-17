@@ -155,3 +155,31 @@ export async function readProjectManager(file: string, home: string): Promise<Pr
     throw new Error('projects.json must be a file of at most 8 MiB.');
   return decodeProjects(await readFile(file, 'utf8'), file, home);
 }
+
+const presenceChecks = new Map<string, Promise<boolean>>();
+
+/** Consent needs file presence, never its contents. Stalled volumes get at most two raw reads. */
+export async function projectManagerExists(file: string): Promise<boolean> {
+  let check = presenceChecks.get(file);
+  if (!check) {
+    if (presenceChecks.size >= 2) return false;
+    check = stat(file)
+      .then(
+        (info) => info.isFile(),
+        () => false,
+      )
+      .finally(() => presenceChecks.delete(file));
+    presenceChecks.set(file, check);
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      check,
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), 150);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

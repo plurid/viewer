@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { TOOLBAR_DRAWERS } from '@plurid/plurid-data';
+import { z } from 'zod';
 import {
   minimapPlanes,
   minimapShown,
   surfaceConfiguration,
 } from '../src/renderer/workspace/surface-configuration';
 import { preferencesSchema } from '../src/domain/preferences/presentation/ui-schema';
-import { normalizePreferences } from '../src/domain/preferences/ui';
+import { minimapCorners, normalizePreferences } from '../src/domain/preferences/ui';
 
 describe('the plurid configuration of a workspace (2026-10-21)', () => {
   const configuration = (toolbar = true) =>
@@ -68,5 +69,35 @@ describe('a first run', () => {
     // a configuration written before the setting keeps the minimap always
     const { minimapAuto: _automatic, ...space } = earlier.space;
     expect(preferencesSchema.parse({ ...earlier, space }).space.minimapAuto).toBe(false);
+  });
+});
+
+describe('minimap corner preferences', () => {
+  it.each([undefined, null, '', 'invalid', false, 42, [], {}])(
+    'defaults a missing or invalid corner %j to automatic',
+    (minimapCorner) => {
+      expect(normalizePreferences({ space: { minimapCorner } }).space.minimapCorner).toBe(
+        'automatic',
+      );
+    },
+  );
+
+  it.each(minimapCorners)('keeps the valid corner %s', (minimapCorner) => {
+    const preferences = normalizePreferences({ space: { minimapCorner } });
+    expect(preferences.space.minimapCorner).toBe(minimapCorner);
+    expect(preferencesSchema.parse(preferences).space.minimapCorner).toBe(minimapCorner);
+  });
+
+  it('defaults an earlier configuration and advertises every value to the editor', () => {
+    const preferences = normalizePreferences();
+    expect(preferences.space.minimapCorner).toBe('automatic');
+    const { minimapCorner: _corner, ...space } = preferences.space;
+    expect(preferencesSchema.parse({ ...preferences, space }).space.minimapCorner).toBe(
+      'automatic',
+    );
+    expect(z.toJSONSchema(preferencesSchema.shape.space.shape.minimapCorner)).toMatchObject({
+      default: 'automatic',
+      enum: [...minimapCorners],
+    });
   });
 });

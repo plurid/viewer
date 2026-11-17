@@ -1,3 +1,5 @@
+import type { MinimapCorner } from '../../../domain/contracts';
+
 const overviewInset = 16;
 const overviewClearance = 8;
 const overviewCorners = ['top-right', 'bottom-left', 'top-left', 'bottom-right'] as const;
@@ -78,5 +80,3 @@ export function solveOverviewPlacement({
   }
   return { kind: 'fallback' };
 }
-import type { MinimapCorner } from '../../../domain/contracts';
-

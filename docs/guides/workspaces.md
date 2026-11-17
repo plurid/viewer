@@ -51,6 +51,15 @@ The minimap appears once three planes are open, to find one among them. **Settin
 it always (turn off **Minimap only with 3 or more planes**), and adds the space toolbar and the
 viewcube (**Show space toolbar**, **Show viewcube**).
 
+Choose **Minimap corner** beside **Show minimap** to keep the map in one corner. **Automatic**, the
+default, moves it clear of plane controls. A fixed corner stays put even when controls overlap it.
+Overview uses the chosen corner too.
+
+Choose **⌘K → Overview** to navigate the space, even with **Show minimap** off or fewer than three
+planes. Press **Escape**, click outside, choose a plane or run **Overview** again to close it. The
+minimap returns to its previous visibility without changing its settings. If a plane is docked,
+choose **Reveal space** (**⌘Return**) first.
+
 **⌥⌘Z** only undoes arrangement. File changes have their own **⌘Z**; see
 [Browse and organize](files.md#copy-move-and-rename).
 
@@ -192,12 +201,19 @@ search. A search shows up to 50 defined matches, with **N more · keep typing** 
 the main **⌘K** palette, open workspaces match from one character; definitions need at least two.
 **All N matching workspaces** opens the workspace search.
 
-Viewer reads VS Code Project Manager's local projects as plain definitions. They do not fill the
-open workspace list until you open them. Definitions marked hidden and definitions whose root folder
-is missing stay out of search. Missing and unknown roots among search candidates are checked again
-when you search and when mounted volumes change. Catalog loading does not wait for folder checks. In
-the Store edition, **Settings → Configuration → Workspace definitions → Allow access…** grants
-access to the Project Manager folder.
+Viewer asks before reading VS Code Project Manager's list. If a list is found, **Manage workspaces…
+→ Defined** offers **Use VS Code projects** and **Don't use**. The **Use VS Code Project Manager's
+projects…** row in Change workspace opens that tab without deciding. Nothing is read or counted
+until you choose Use, and Viewer never changes the list.
+
+Change the choice with **Settings → Configuration → Workspace definitions → Use VS Code Project
+Manager projects**. In the Store edition, choosing Use asks for folder access. If declined, **Allow
+access…** lets you try again. Projects appear as plain definitions and join the open list only when
+opened. Turning the switch off leaves open workspaces open.
+
+Definitions marked hidden and definitions whose root folder is missing stay out of search. Missing
+and unknown roots among search candidates are checked again when you search and when mounted volumes
+change. Catalog loading does not wait for folder checks.
 
 To customize a definition, choose **⌘K** → **Edit workspace definitions**. This creates a commented
 `workspaces.jsonc` only if it is absent, then opens it in your editor. Add an entry with the

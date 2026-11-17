@@ -24,6 +24,8 @@ interface DefinitionPorts {
     | 'searchRoots'
     | 'save'
     | 'proposal'
+    | 'setProjectManager'
+    | 'refreshSourceOffer'
   >;
   memory: Pick<DefinedWorkspaces, 'get' | 'remember' | 'forget' | 'problem'>;
   sessions: Pick<
@@ -177,17 +179,29 @@ export function createDefinitionHandlers(
       human(owner);
       await ports.definitions.load();
       human(owner);
+      if (request.kind === 'project-manager')
+        await ports.definitions.setProjectManager(request.enabled, () => human(owner));
       if (request.kind === 'edit') {
         const file = await ports.definitions.edit();
         const error = await shell.openPath(file);
         if (error) throw new Error(error);
       } else if (request.kind === 'validate') await ports.definitions.reload();
       else if (request.kind === 'catalog') {
+        await ports.definitions.refreshSourceOffer();
         if (request.keys !== undefined) ports.definitions.refreshRoots(request.keys, owner);
         else if (request.query !== undefined)
           ports.definitions.searchRoots(request.query, owner, request.limit);
         else ports.definitions.refreshRoots();
-      } else if (request.kind === 'allow-source') {
+      }
+      if (
+        request.kind === 'allow-source' ||
+        (request.kind === 'project-manager' &&
+          request.enabled &&
+          ports.definitions.snapshot().projectManager.state === 'needs-access')
+      ) {
+        human(owner);
+        if (ports.definitions.snapshot().projectManager.enabled !== true)
+          throw new Error('Choose Use VS Code projects before allowing access.');
         const window = ports.window(owner);
         if (!window) throw new Error('This window has closed.');
         await chooseRemembered(
@@ -202,6 +216,7 @@ export function createDefinitionHandlers(
         );
         await ports.definitions.reload();
       }
+      human(owner);
       return ports.definitions.snapshot();
     },
   };

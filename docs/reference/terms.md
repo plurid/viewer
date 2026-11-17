@@ -81,6 +81,10 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   **Escape** to move around again, and **Frame all planes** (**⌘0**) brings every plane into view. A
   saved view keeps a camera position to fly back to. _In Viewer:_ the space toolbar, minimap and
   viewcube; **Save view…**. _Learn:_ [Keep your work together](../guides/workspaces.md)
+- **Overview**: a popup map for navigating the space, available even when the minimap is hidden.
+  **Minimap corner** chooses automatic avoidance of controls or a fixed corner for both maps. _In
+  Viewer:_ **⌘K → Overview**; **Settings → Space → Minimap corner**. _Learn:_
+  [Move between planes](../guides/workspaces.md#move-between-planes)
 - **Workspace**: a named set of planes and where you put them. Viewer saves it as you go and brings
   it back at launch; your files stay in their own folders. _In Viewer:_ the workspace menu in the
   title bar, and the **Workspace** menu. _Learn:_ [Keep your work together](../guides/workspaces.md)

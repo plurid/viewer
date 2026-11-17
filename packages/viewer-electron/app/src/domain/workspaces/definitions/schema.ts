@@ -114,14 +114,14 @@ export const workspacesFileSchema = z
       .object({
         projectManager: z
           .object({
-            enabled: z.boolean().default(true),
+            enabled: z.boolean().optional(),
             path: z.string().min(1).max(4096).optional(),
           })
           .strict()
-          .default({ enabled: true }),
+          .default({}),
       })
       .strict()
-      .default({ projectManager: { enabled: true } }),
+      .default({ projectManager: {} }),
     workspaces: z
       .record(z.string(), z.unknown())
       .default({})
@@ -137,7 +137,8 @@ export type DefinitionProblemLevel = 'error' | 'warning' | 'note';
 export type DefinitionProblemSource =
   'workspaces.jsonc' | 'projects.json' | 'defined-workspaces-v1.json';
 export type WorkspaceDefinitionSource = 'project-manager' | 'override' | 'standalone';
-export type ProjectManagerReadState = 'off' | 'absent' | 'read' | 'needs-access' | 'unreadable';
+export type ProjectManagerReadState =
+  'undecided' | 'off' | 'absent' | 'read' | 'needs-access' | 'unreadable';
 export type DefinitionFileState = 'absent' | 'read' | 'last-valid' | 'unreadable';
 export type WorkspaceDefinitionFileKind = 'catalog' | 'edit' | 'validate' | 'allow-source';
 export interface DefinitionProblem {
@@ -188,6 +189,7 @@ export interface RememberedWorkspace {
 }
 export interface ProjectManagerState {
   path: string;
+  enabled?: boolean;
   state: ProjectManagerReadState;
   projects: number;
   missing: number;
@@ -229,9 +231,11 @@ export type WorkspaceDefinitionReply =
   | ({ kind: 'saved' } & DefinitionSaveResult)
   | { kind: 'needs-confirmation'; curated: boolean; dropsCommands: boolean; changed?: boolean }
   | { kind: 'proposal'; key: string; name: string; root: string };
-export type WorkspaceDefinitionFileRequest = {
-  kind: WorkspaceDefinitionFileKind;
-  query?: string;
-  limit?: number;
-  keys?: string[];
-};
+export type WorkspaceDefinitionFileRequest =
+  | {
+      kind: WorkspaceDefinitionFileKind;
+      query?: string;
+      limit?: number;
+      keys?: string[];
+    }
+  | { kind: 'project-manager'; enabled: boolean };

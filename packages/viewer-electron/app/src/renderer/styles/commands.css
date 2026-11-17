@@ -97,6 +97,9 @@
 .command-result.is-unavailable .command-result-text small {
   white-space: normal;
 }
+.command-result.is-muted {
+  color: var(--muted);
+}
 .command-result-text {
   display: flex;
   flex-direction: column;

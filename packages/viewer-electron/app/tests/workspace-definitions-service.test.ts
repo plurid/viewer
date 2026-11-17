@@ -207,7 +207,11 @@ describe('desktop workspace definition catalog', () => {
     await writeFile(other, JSON.stringify([{ name: 'Other', rootPath: f.folder }]));
     await writeFile(
       f.file,
-      JSON.stringify({ version: 1, sources: { projectManager: { path: other } }, workspaces: {} }),
+      JSON.stringify({
+        version: 1,
+        sources: { projectManager: { path: other, enabled: true } },
+        workspaces: {},
+      }),
     );
     await f.service.reload();
     expect(f.service.entry('Other')).toBeDefined();

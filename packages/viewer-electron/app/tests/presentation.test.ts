@@ -3,20 +3,20 @@ import type { Workspace } from '../src/domain/contracts';
 import { scopedPresentation } from '../src/renderer/state/folder-presentation';
 import type { JSONValue } from '../src/domain/workspaces/project';
 import { describe, expect, it } from 'vitest';
-import { normalizePreferences } from '../src/domain/preferences/ui';
+import { minimapCorners, normalizePreferences } from '../src/domain/preferences/ui';
 import { defaultSettings } from '../src/domain/services';
 import { settingValue } from '../src/domain/preferences/catalog';
 import { tileLayouts } from '../src/domain/workspaces/tiling';
+import type { PresentationValues } from '../src/domain/preferences/presentation/profile-fields';
 import {
   compilePresentationValues,
   presentationFields,
-  type PresentationValues,
 } from '../src/domain/preferences/presentation/profile-fields';
+import type { WindowPreferencesInput } from '../src/domain/preferences/presentation/resolver';
 import {
   createWindowPreferencesResolver,
   profileDiagnostics,
   resolveWindowPreferences,
-  type WindowPreferencesInput,
 } from '../src/domain/preferences/presentation/resolver';
 import { profileSchema } from '../src/desktop/preferences/settings-schema';
 
@@ -80,6 +80,7 @@ describe('window presentation resolution', () => {
       'folder',
       'terminal',
       'scratch',
+      ...minimapCorners,
       ...tileLayouts,
       [],
       ['name'],

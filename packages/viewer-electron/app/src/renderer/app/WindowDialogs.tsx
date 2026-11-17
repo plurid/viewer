@@ -29,6 +29,7 @@ import {
 import { slugID } from '../../domain/ids';
 import { DefinitionDialog } from '../ui/workspace/DefinitionDialog';
 import type { DefinitionDialogKind } from '../ui/workspace/DefinitionDialog';
+import type { WorkspaceTab } from '../ui/workspace/WorkspacesDialog';
 
 // each dialog's code loads the first time it opens
 const BackupDialog = lazyComponent(() =>
@@ -99,6 +100,7 @@ export type WindowDialog =
       kind: 'new' | 'rename' | 'delete' | 'background' | 'manage' | DefinitionDialogKind;
       id: string;
       returnToManager?: boolean;
+      tab?: WorkspaceTab;
     }
   | { type: 'view'; kind: 'save' | 'manage' }
   | { type: 'profile' | 'template' | 'go-to' | 'connect' | 'tag' }
@@ -227,6 +229,8 @@ export function WindowDialogs({
         )}
         {workspaceDialog?.kind === 'manage' && (
           <WorkspacesDialog
+            key={workspaceDialog.tab ?? 'open'}
+            initialTab={workspaceDialog.tab}
             onClose={onClose}
             onOpen={(id) => transitionWorkspace(() => switchWorkspace(id))}
             onAction={(kind, id) => {

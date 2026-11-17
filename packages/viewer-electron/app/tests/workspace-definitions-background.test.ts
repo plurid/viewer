@@ -35,7 +35,7 @@ async function fixture(extra: Partial<WorkspaceDefinitionsPorts> = {}) {
     );
   await writeFile(
     file,
-    JSON.stringify({ version: 1, sources: { projectManager: { path: source } } }),
+    JSON.stringify({ version: 1, sources: { projectManager: { path: source, enabled: true } } }),
   );
   await projects();
   return { root, source, file, folder, service, emit, checkRoot, projects };
@@ -214,7 +214,7 @@ describe('background definition roots', () => {
         f.file,
         JSON.stringify({
           version: 1,
-          sources: { projectManager: { path: f.source } },
+          sources: { projectManager: { path: f.source, enabled: true } },
           workspaces: { 'Sample/site': { name: `Name ${index}` } },
         }),
       );
