@@ -328,7 +328,6 @@ function AppWindow() {
           workspace: controller,
           ready,
           overview: () => overview?.open(),
-          overviewAvailable: overview?.available ?? false,
           tool,
           palette: openPalette,
           settings: () => {

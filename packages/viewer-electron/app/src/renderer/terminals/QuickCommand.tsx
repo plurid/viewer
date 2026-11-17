@@ -13,6 +13,7 @@ import {
   subscribeQuickCommand,
 } from './quick-command';
 import './run-command.css';
+import { DeclaredCommandList } from './DeclaredCommandList';
 
 export function QuickCommand({
   context,
@@ -92,6 +93,15 @@ export function QuickCommand({
           </button>
         )}
       </div>
+      {!current.draft && !busy && (
+        <DeclaredCommandList
+          directory={directory}
+          onPick={(line) => {
+            editQuickCommand(line);
+            input.current?.focus();
+          }}
+        />
+      )}
       <p className="quick-command-note muted">Use a terminal for interactive programs.</p>
       {error && (
         <p role="alert" className="error">

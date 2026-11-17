@@ -6,7 +6,10 @@ import {
   moreWorkspacesID,
   unavailableRows,
 } from '../src/renderer/commands/palette-sections';
-import { rankWorkspaceChoices } from '../src/domain/workspaces/definitions/query';
+import {
+  anchoredDefinitionMatch,
+  rankWorkspaceChoices,
+} from '../src/domain/workspaces/definitions/query';
 import { sampleDefinition, sampleWorkspace } from './workspace-definition-fixtures';
 
 const context = {
@@ -135,6 +138,89 @@ describe('workspace palette sections', () => {
         (item) => item.label,
       ),
     ).toContain('transview-speech');
+  });
+
+  // keys hold none of the words under test, so only the name or alias can match
+  const named = (name: string, aliases: string[] = []) =>
+    sampleDefinition('sample/q/x', { name, aliases });
+
+  it('finds word starts across punctuation, case changes and capital runs', () => {
+    expect(anchoredDefinitionMatch(named('PluridViewer'), 'viewer')).toBe(true);
+    expect(anchoredDefinitionMatch(named('PluridViewer'), 'pv')).toBe(true);
+    expect(anchoredDefinitionMatch(named('XMLParser'), 'parser')).toBe(true);
+    expect(anchoredDefinitionMatch(named('@acme/ui-kit'), 'acme')).toBe(true);
+    expect(anchoredDefinitionMatch(named('Desktop (Electron)'), 'electron')).toBe(true);
+    expect(anchoredDefinitionMatch(named('pluridviewer'), 'viewer')).toBe(false);
+  });
+
+  it('folds accents and marks alike on both sides, so exact names in any script match', () => {
+    for (const name of [
+      'Crème Brûlée',
+      'がっこう',
+      'デザイン',
+      'हिन्दी',
+      'שָׁלוֹם',
+      'สวัสดี',
+      '한국어',
+    ])
+      expect(anchoredDefinitionMatch(named(name), name)).toBe(true);
+    expect(anchoredDefinitionMatch(named('Crème Brûlée'), 'creme brulee')).toBe(true);
+    expect(anchoredDefinitionMatch(named('Creme Brulee'), 'crème brûlée')).toBe(true);
+    // a dropped mark joins its word: "Crème" is one word, so "me" does not start one
+    expect(anchoredDefinitionMatch(named('Crème'), 'me')).toBe(false);
+    // letters with no decomposition fold to what people type
+    expect(anchoredDefinitionMatch(named('Łódź office'), 'lodz')).toBe(true);
+    expect(anchoredDefinitionMatch(named('Đà Nẵng'), 'da nang')).toBe(true);
+    expect(anchoredDefinitionMatch(named('Øresund'), 'oresund')).toBe(true);
+    expect(anchoredDefinitionMatch(named('Straße'), 'strasse')).toBe(true);
+    expect(anchoredDefinitionMatch(named('Strasse'), 'straße')).toBe(true);
+  });
+
+  it('matches aliases, terms in any order, but word starts only in order within a term', () => {
+    expect(anchoredDefinitionMatch(named('Shop', ['storefront']), 'store')).toBe(true);
+    expect(anchoredDefinitionMatch(named('Shop'), 'store')).toBe(false);
+    expect(anchoredDefinitionMatch(named('plurid-cli'), 'cli plurid')).toBe(true);
+    expect(anchoredDefinitionMatch(named('plurid-cli'), 'plcli')).toBe(true);
+    expect(anchoredDefinitionMatch(named('plurid-cli'), 'clipl')).toBe(false);
+    // every typed letter is used: "pluridx" is not "plurid" plus a stray letter
+    expect(anchoredDefinitionMatch(named('plurid-cli'), 'pluridx')).toBe(false);
+    // the longest shared start is not always the right one: "a" + "bcd", not "abc" + "d"
+    expect(anchoredDefinitionMatch(named('abc bcd'), 'abcd')).toBe(true);
+  });
+
+  it('lists nothing for separators alone and caps a term at 100 letters', () => {
+    const one = named('sample-cli');
+    const rows = [row('defined:' + one.key, one.name)];
+    for (const query of ['//', '/ /'])
+      expect(
+        paletteRows(rows, query, [], rankWorkspaceChoices([], [one], query)).rows,
+      ).toHaveLength(0);
+    expect(anchoredDefinitionMatch(named('s'.repeat(100)), 's'.repeat(100))).toBe(true);
+    expect(anchoredDefinitionMatch(named('s'.repeat(101)), 's'.repeat(101))).toBe(false);
+  });
+
+  it('keeps the loose search one row away when nothing else matches', () => {
+    const viewer = sampleDefinition('sample/tools/viewer', { name: 'viewer' });
+    const choices = rankWorkspaceChoices([], [viewer], 'veiwer');
+    expect(choices.map((choice) => choice.key)).toEqual([viewer.key]);
+    const alone = paletteRows([row('defined:' + viewer.key, 'viewer')], 'veiwer', [], choices);
+    expect(alone.rows.map((item) => item.id)).toEqual([moreWorkspacesID]);
+    expect(alone.rows[0]!.label).toBe('All 1 matching workspaces');
+    const beside = paletteRows(
+      [row('veiwer-command', 'Veiwer command'), row('defined:' + viewer.key, 'viewer')],
+      'veiwer',
+      [],
+      choices,
+    );
+    expect(beside.rows.map((item) => item.id)).toEqual(['veiwer-command']);
+  });
+
+  it('decides a failing word-start match over repeated words in bounded time', () => {
+    // without remembering failed (letter, word) pairs this takes seconds; with it, well under 1 ms
+    const heavy = named(Array.from({ length: 16 }, () => 'aaaa').join(' '));
+    const started = performance.now();
+    expect(anchoredDefinitionMatch(heavy, 'a'.repeat(15) + 'b')).toBe(false);
+    expect(performance.now() - started).toBeLessThan(500);
   });
 
   it('requires two characters, then shows four definitions after commands or eight alone', () => {

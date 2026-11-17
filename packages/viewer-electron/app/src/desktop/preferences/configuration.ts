@@ -58,7 +58,7 @@ export class JsoncConfiguration<T> {
   missing = false;
   constructor(
     directory: string,
-    private validate: (value: unknown) => T,
+    private validate: (value: unknown, text?: string) => T,
     /** An earlier format's value as this one's; `validate` applies it too. */
     private upgrade?: (value: unknown) => unknown,
     private options: JsoncConfigurationOptions = {
@@ -91,7 +91,7 @@ export class JsoncConfiguration<T> {
         `${printParseErrorCode(error.error)} at line ${lines.length}, column ${(lines.at(-1) ?? '').length + 1}.`,
       );
     }
-    return this.validate(value);
+    return this.validate(value, text);
   }
   /**
    * A file of an earlier format, rewritten with its upgrade: only what the upgrade changes, its

@@ -221,10 +221,47 @@ const choiceScore = (
     new Map(),
   );
 
-const wordBreak = /[\s….\/_-]+/;
-/** The term is the starts of some of the text's words, in order: "plcli" is "pl" + "cli". */
-function anchoredIn(text: string, term: string): boolean {
-  const words = text.split(wordBreak).filter(Boolean);
+/** Longer typing names nothing a word-start match would find, and bounds the search's cost. */
+const anchoredTermLimit = 100;
+/** Letters with no decomposition that people type as plain letters: "Łódź" as "lodz". */
+const letterFolds: Readonly<Record<string, string>> = {
+  ł: 'l',
+  đ: 'd',
+  ø: 'o',
+  ß: 'ss',
+  æ: 'ae',
+  œ: 'oe',
+  þ: 'th',
+  ð: 'd',
+};
+/**
+ * Typing and names fold alike: decomposed, every combining mark dropped, lower case. Marks carry
+ * accents in "Crème" but whole vowels in "हिन्दी" and voicing in "がっこう", so both sides must lose
+ * the same ones or an exact name stops matching itself.
+ */
+const folded = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
+    .toLocaleLowerCase()
+    .replace(/[łđøßæœþð]/gu, (letter) => letterFolds[letter] ?? letter);
+/**
+ * The words of a name: runs of letters and digits, split again where a lower-case letter meets an
+ * upper-case one and before the last capital of a capital run, so "PluridViewer", "XMLParser",
+ * "@acme/ui-kit" and "Desktop (Electron)" all have words.
+ */
+function nameWords(value: string): string[] {
+  return folded(
+    value
+      .normalize('NFC')
+      .replace(/(\p{Ll})(\p{Lu})/gu, '$1 $2')
+      .replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, '$1 $2'),
+  )
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+/** The term is the starts of some of the words, in order: "plcli" is "pl" + "cli". */
+function anchoredIn(words: readonly string[], term: string): boolean {
   const failed = new Set<number>();
   const from = (offset: number, word: number): boolean => {
     if (offset === term.length) return true;
@@ -249,20 +286,22 @@ function anchoredIn(text: string, term: string): boolean {
  * "technologies/…/transview" match loosely but name nothing the person meant.
  */
 export function anchoredDefinitionMatch(definition: WorkspaceDefinition, query: string): boolean {
-  const terms = normalize(query).trim().split(/\s+/).filter(Boolean);
+  // "tools/sample-cli" names the same word starts as "toolssamplecli"
+  const terms = folded(query)
+    .split(/\s+/)
+    .map((typed) => typed.replace(/[^\p{L}\p{N}]+/gu, ''))
+    .filter(Boolean);
+  // only separators typed, or more than any name could hold, names nothing
+  if (!terms.length || terms.some((term) => term.length > anchoredTermLimit)) return false;
   const texts = [
     definition.name,
     definition.key,
     definition.projectName ?? '',
     ...definition.aliases,
   ]
-    .map(normalize)
-    .filter(Boolean);
-  return terms.every((typed) => {
-    // "tools/sample-cli" names the same word starts as "toolssamplecli"
-    const term = typed.replace(new RegExp(wordBreak.source, 'g'), '');
-    return !term || texts.some((text) => anchoredIn(text, term));
-  });
+    .map(nameWords)
+    .filter((words) => words.length > 0);
+  return terms.every((term) => texts.some((words) => anchoredIn(words, term)));
 }
 
 export function rankWorkspaceChoices(

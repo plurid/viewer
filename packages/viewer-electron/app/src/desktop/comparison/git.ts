@@ -13,6 +13,7 @@ import {
   commitPattern,
 } from '../../domain/comparison/git';
 import { errorMessage } from '../../domain/errors';
+import { assertLocalPath } from '../files/local-path';
 export { runGit, gitEnvironment, gitSafeOptions, type GitRunner } from './git-process';
 
 const maximumStatus = 8 * 1024 * 1024;
@@ -78,6 +79,7 @@ export class GitReader {
     args: readonly string[],
     limit = maximumStatus,
   ): Promise<Buffer> {
+    assertLocalPath(directory);
     this.check();
     if (this.queued >= 64) throw new Error('Git request queue exceeded its limit.');
     const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(5000)]);
@@ -113,6 +115,7 @@ export class GitReader {
     await this.compatible;
   }
   private async directory(file: string) {
+    assertLocalPath(file);
     await this.access([file]);
     return realpath(file).catch(async () =>
       path.join(await realpath(path.dirname(file)), path.basename(file)),
@@ -132,6 +135,7 @@ export class GitReader {
     return actual;
   }
   async status(file: string, refresh = false): Promise<GitResult> {
+    assertLocalPath(file);
     if (!this.enabled())
       return { kind: 'disabled', message: 'Enable Git in Settings to show repository status.' };
     const previous = this.cached.get(file);
@@ -306,6 +310,7 @@ export class GitReader {
     };
   }
   private async object(source: GitSource): Promise<string | undefined> {
+    assertLocalPath(source.repository);
     this.check();
     gitSourceSchema.parse(source);
     const directory = await realpath(source.repository);

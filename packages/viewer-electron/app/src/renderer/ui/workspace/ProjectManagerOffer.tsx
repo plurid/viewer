@@ -18,7 +18,7 @@ export function ProjectManagerOffer({
           Use VS Code projects
         </Button>
         <Button variant="secondary" disabled={busy} onClick={() => onChoose(false)}>
-          Don't use
+          Don’t use
         </Button>
       </div>
     </section>

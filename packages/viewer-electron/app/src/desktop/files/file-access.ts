@@ -5,6 +5,7 @@ import { DocumentStore } from '../persistence/document-store';
 import type { TrashReceipt } from '../native/macos-files';
 import { localPath } from '../schemas';
 import { containsPath } from './containment';
+import { assertLocalPath } from './local-path';
 
 const document = z
   .object({
@@ -72,6 +73,7 @@ export class FileAccess {
     return [...this.denied, ...this.held.keys()].some((root) => containsPath(root, file));
   }
   async withBlocked<T>(file: string, work: () => Promise<T>): Promise<T> {
+    assertLocalPath(file);
     const root = path.resolve(localPath.parse(file));
     this.held.set(root, (this.held.get(root) ?? 0) + 1);
     try {
@@ -107,6 +109,7 @@ export class FileAccess {
       }));
   }
   remember(file: string, directory: boolean, bookmark: string | undefined): Promise<void> {
+    assertLocalPath(file);
     if (!this.scoped) return Promise.resolve();
     const wasDenied = this.blocked(path.resolve(file));
     const work = this.mutations
@@ -136,12 +139,14 @@ export class FileAccess {
   /** A file chosen in a panel for one use, an export or an import: for this session only. Each was
    * saved as a folder permission, and at 128 of them new folders were refused. */
   allowOnce(file: string, bookmark: string | undefined): Promise<void> {
+    assertLocalPath(file);
     if (!this.scoped || !bookmark) return Promise.resolve();
     return this.receiveNative([{ path: file, directory: false, bookmark }]);
   }
   /** Native clipboard/drop capabilities last for this desktop session. They
    * must not fill the small persistent picker list or silently grant a parent. */
   async receiveNative(files: readonly Grant[]): Promise<void> {
+    files.forEach((file) => assertLocalPath(file.path));
     if (!this.scoped) return;
     const revision = this.nativeRevision;
     if (files.length > 10000) throw new Error('Select at most 10,000 items at a time.');
@@ -176,6 +181,7 @@ export class FileAccess {
     this.incomingDirectories = new Map([...incoming].filter(([, grant]) => grant.directory));
   }
   async require(files: readonly string[]): Promise<void> {
+    files.forEach(assertLocalPath);
     for (const file of files)
       if (this.blocked(path.resolve(file))) throw new FileAccessRequired(file);
     if (!this.scoped) return;
@@ -243,8 +249,18 @@ export class FileAccess {
       if (!allowed) throw new FileAccessRequired(file);
     }
   }
+  historyScopeRoot(file: string): string | undefined {
+    assertLocalPath(file);
+    if (!this.scoped) return;
+    return [...this.active]
+      .filter(([root, scope]) => scope.directory && scope.resolved && containsPath(root, file))
+      .map(([root]) => root)
+      .sort((a, b) => b.length - a.length)[0];
+  }
+
   /** History can borrow an established scope, but cannot acquire or retire ordinary access. */
   historyScope(file: string): ActiveFolderScope | undefined {
+    assertLocalPath(file);
     const requested = path.resolve(localPath.parse(file));
     if (this.closed || this.blocked(requested)) return;
     if (!this.scoped) return { allows: () => !this.closed && !this.blocked(requested) };
@@ -316,6 +332,7 @@ export class FileAccess {
   /** A private Trash receipt leases one item during guarded Undo, without
    * creating saved permission to browse the user's Trash. */
   async withReceipt<T>(receipt: TrashReceipt, work: () => Promise<T>): Promise<T> {
+    assertLocalPath(receipt.path);
     if (!this.scoped) return work();
     if (this.closed) throw new Error('Folder access has closed.');
     const grant = document.shape.grants.element.parse(receipt);
@@ -332,6 +349,7 @@ export class FileAccess {
     }
   }
   revoke(file: string, quiesce: () => Promise<void>): Promise<void> {
+    assertLocalPath(file);
     const root = path.resolve(localPath.parse(file));
     this.nativeRevision++;
     const revision = (this.revocations.get(root) ?? 0) + 1;

@@ -26,3 +26,6 @@ These records explain decisions that still shape the application. Feature usage 
 - [Explicit PostScript rendering](0018-explicit-postscript-rendering.md)
 - [Alpha versioning](0019-alpha-versioning.md)
 - [Defined workspaces and explicit command starts](0020-defined-workspaces.md)
+- [Found workspaces](0021-found-workspaces.md)
+- [Declared commands are typed lines](0022-declared-commands-are-typed-lines.md)
+- [Remote planes over the system's OpenSSH (proposed)](0023-remote-planes-over-system-openssh.md)

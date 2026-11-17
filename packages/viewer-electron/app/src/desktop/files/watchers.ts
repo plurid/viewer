@@ -2,6 +2,7 @@ import { watchDirectory, type DirectoryWatch } from './directory-watch';
 import { absolute } from './filesystem';
 import type { DesktopEvent } from '../../domain/contracts';
 import { errorMessage } from '../../domain/errors';
+import { assertLocalPath } from './local-path';
 
 interface SharedWatch {
   watcher: DirectoryWatch;
@@ -15,6 +16,7 @@ export class Watchers {
   private closed = false;
   constructor(private emit: (event: DesktopEvent) => void) {}
   async add(folder: string, subscriber: string): Promise<void> {
+    assertLocalPath(folder);
     const normalized = absolute(folder);
     if (this.closed) throw new Error('Folder watching has closed.');
     if (this.subscribers.get(subscriber) === normalized && !this.watches.get(normalized)?.failed)

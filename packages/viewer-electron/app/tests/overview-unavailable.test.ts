@@ -6,7 +6,7 @@ import { arrangementCommands } from '../src/renderer/commands/window-commands/ar
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import { windowScopes } from '../src/renderer/commands/window-commands/scope';
 import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
-import { replaceState } from '../src/renderer/state/core';
+import { changeWorkspace, replaceState } from '../src/renderer/state/core';
 import type { UIPreferences } from '../src/domain/contracts';
 
 function withSpace(space: Partial<UIPreferences['space']>): void {
@@ -20,11 +20,10 @@ function withSpace(space: Partial<UIPreferences['space']>): void {
   });
 }
 
-async function overviewRow(docked = false) {
+async function overviewRow(docked = false, scope: CommandContext['scope'] = 'window') {
   const actions = {
     workspace: { isDocked: () => docked },
     ready: true,
-    overviewAvailable: false,
     overview: vi.fn(),
   } as unknown as WindowActions;
   const context: CommandContext = {
@@ -40,7 +39,7 @@ async function overviewRow(docked = false) {
     definitions: () =>
       arrangementCommands(windowScopes(actions)).filter((command) => command.id === 'overview'),
   });
-  const rows = registry.discover();
+  const rows = registry.discover({ scope });
   return rows.find((row) => row.id === 'overview');
 }
 
@@ -48,6 +47,49 @@ describe('Overview when the minimap is not there', () => {
   beforeEach(() => {
     Object.assign(window, { viewer: { save: vi.fn(async () => {}) } });
     initialize({ home: '/fixture', platform: 'darwin', state: null, locations: [], openPaths: [] });
+  });
+
+  it('asks for a plane in an empty space', async () => {
+    changeWorkspace((space) => ({ ...space, panes: [], roots: [] }));
+    const row = await overviewRow();
+    expect(row?.available).toBe(false);
+    expect(row?.reason).toBe('Open a plane first.');
+  });
+
+  it('names the window palette in a plane-scoped list with open planes', async () => {
+    const row = await overviewRow(false, 'folder');
+    expect(activeWorkspace().panes.length).toBeGreaterThan(0);
+    expect(row?.available).toBe(false);
+    expect(row?.reason).toBe('Open Overview from the window command palette (⌘K).');
+  });
+
+  it('offers Overview when only engine roots remain', async () => {
+    changeWorkspace((space) => ({ ...space, panes: [], roots: ['engine-root'] }));
+    const row = await overviewRow();
+    expect(row?.available).toBe(true);
+    expect(row?.reason).toBeUndefined();
+  });
+
+  it('resolves the unavailable reason at invocation time', () => {
+    let docked = false;
+    const actions = {
+      workspace: { isDocked: () => docked },
+      ready: true,
+      overview: vi.fn(),
+    } as unknown as WindowActions;
+    const overview = arrangementCommands(windowScopes(actions)).find(
+      (command) => command.id === 'overview',
+    )!;
+    const context = { scope: 'window' } as CommandContext;
+    expect(typeof overview.unavailable).toBe('function');
+    if (typeof overview.unavailable !== 'function') throw new Error('Expected a live reason.');
+    docked = true;
+    expect(overview.when(context)).toBe(false);
+    expect(overview.unavailable(context)).toContain('Reveal space');
+    docked = false;
+    changeWorkspace((space) => ({ ...space, panes: [], roots: [] }));
+    expect(overview.when(context)).toBe(false);
+    expect(overview.unavailable(context)).toBe('Open a plane first.');
   });
 
   it('offers Overview below three planes with the automatic minimap', async () => {

@@ -459,7 +459,13 @@ export function WorkspaceSurface({
     labelsVersion: space.panes,
     subscribeEngine: (listener) => workspace.subscribeEngine(listener),
     isDocked: () => workspace.isDocked(),
+    hasPlanes: () => {
+      const current = activeWorkspace();
+      return current.panes.length > 0 || current.roots.length > 0;
+    },
+    minimapApplied: () => api?.getSnapshot().configuration.elements.minimap?.show === true,
     minimapShown: () => minimapVisible,
+    viewcubeConcealed: () => api?.getSnapshot().configuration.elements.viewcube?.conceal,
     corner: () => preferences.minimapCorner,
     labelForPlane: (engineID) => {
       const node = engine.current

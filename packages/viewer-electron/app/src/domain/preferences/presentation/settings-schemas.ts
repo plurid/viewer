@@ -23,6 +23,7 @@ export const browsingSchema = z
     foldersFirst: z.boolean(),
     showHidden: z.boolean(),
     restoreSession: z.boolean(),
+    findWorkspaces: z.boolean().default(true),
     confirmTrash: z.boolean().default(true),
     suggestions: z.boolean().default(true),
     // rule ids from domain/suggestions/rules.ts

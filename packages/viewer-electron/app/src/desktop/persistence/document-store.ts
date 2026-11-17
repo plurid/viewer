@@ -11,6 +11,7 @@ export class DocumentStore<T> {
   constructor(
     readonly file: string,
     private validate: (value: unknown) => T,
+    private maxBytes = 16000000,
   ) {}
   async load(): Promise<T | null> {
     await this.writes;
@@ -21,7 +22,7 @@ export class DocumentStore<T> {
       );
       try {
         const before = await handle.stat();
-        if (!before.isFile() || before.size > 16000000)
+        if (!before.isFile() || before.size > this.maxBytes)
           throw new Error('Application metadata exceeds its limit or is not a regular file.');
         const buffer = Buffer.alloc(before.size);
         let offset = 0;
@@ -48,7 +49,7 @@ export class DocumentStore<T> {
   }
   save(input: T): Promise<void> {
     const text = JSON.stringify(this.validate(input));
-    if (Buffer.byteLength(text, 'utf8') > 16000000)
+    if (Buffer.byteLength(text, 'utf8') > this.maxBytes)
       throw new Error('Application metadata exceeds its limit.');
     const task = this.writes
       .catch(() => {})

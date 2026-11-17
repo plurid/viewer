@@ -1,18 +1,96 @@
 import type { SavedState, Workspace } from '../contracts';
 import type { DefinitionCatalog } from './definitions/schema';
+import type { FoundKeyChange } from './found/catalog';
+
+export function rekeyFoundLinks(workspaces: Workspace[], changes: readonly FoundKeyChange[]): Workspace[] {
+  let changed = false;
+  const keys = new Map(changes.map((change) => [change.from, change.to]));
+  const next = workspaces.map((space) => {
+    const link = space.definition;
+    const key = link?.source === 'found' ? keys.get(link.key) : undefined;
+    if (!link || !key || key === link.key) return space;
+    changed = true;
+    return { ...space, definition: { ...link, key } };
+  });
+  return changed ? next : workspaces;
+}
+
+export function linkedDefinition(space: Workspace, catalog?: DefinitionCatalog) {
+  const link = space.definition;
+  return link && catalog?.definitions.find((item) =>
+    item.key === link.key && (link.source !== 'found' || item.source === 'found'),
+  );
+}
+
+export function definitionSourceNotice(
+  space: Workspace,
+  catalog?: DefinitionCatalog,
+): string | undefined {
+  if (
+    !space.definition ||
+    !catalog ||
+    linkedDefinition(space, catalog)
+  )
+    return;
+  const source = catalog.projectManager;
+  const origin = space.definition.source;
+  if (origin === 'standalone') return;
+  if (origin === 'found') {
+    if (catalog.found?.state === 'off') return 'Finding workspaces is off.';
+    return catalog.found?.state === 'loading' ? undefined : 'Viewer no longer finds this folder.';
+  }
+  if (source.state === 'undecided')
+    return 'VS Code Project Manager is not in use. Choose Use VS Code projects in Manage workspaces to restore its projects.';
+  if (source.state === 'off')
+    return 'VS Code Project Manager is not in use. Turn it on in Settings → Configuration → Workspace definitions.';
+  if (source.state === 'absent' && source.enabled === undefined)
+    return 'VS Code Project Manager’s list was not found. This workspace keeps its definition link.';
+}
 
 export function definitionWasRemoved(space: Workspace, catalog?: DefinitionCatalog): boolean {
   return (
     !!space.definition &&
     !!catalog &&
     (catalog.file.state === 'read' || catalog.file.state === 'absent') &&
-    catalog.projectManager.state !== 'unreadable' &&
-    catalog.projectManager.state !== 'needs-access' &&
+    (space.definition.source === 'standalone' ||
+      space.definition.source === 'found' ||
+      (catalog.projectManager.state !== 'unreadable' &&
+        catalog.projectManager.state !== 'needs-access')) &&
+    (space.definition.source !== 'found' ||
+      catalog.definitions.some((item) => item.key === space.definition!.key && item.source !== 'found') ||
+      (catalog.found?.state !== 'loading' && catalog.found?.state !== 'off')) &&
+    (!definitionSourceNotice(space, catalog) || space.definition.source === 'found') &&
     !catalog.diagnostics.some(
       (issue) => issue.key === space.definition!.key && issue.level === 'error',
     ) &&
-    !catalog.definitions.some((item) => item.key === space.definition!.key)
+    !linkedDefinition(space, catalog)
   );
+}
+
+export function withDefinitionOrigins(
+  workspaces: Workspace[],
+  catalog: DefinitionCatalog,
+): Workspace[];
+export function withDefinitionOrigins(
+  workspaces: readonly Workspace[],
+  catalog: DefinitionCatalog,
+): readonly Workspace[];
+export function withDefinitionOrigins(
+  workspaces: readonly Workspace[],
+  catalog: DefinitionCatalog,
+): readonly Workspace[] {
+  const origins = new Map(
+    catalog.definitions.map((definition) => [definition.key, definition.source]),
+  );
+  let changed = false;
+  const next = workspaces.map((space) => {
+    if (!space.definition || space.definition.source) return space;
+    const source = origins.get(space.definition.key);
+    if (!source) return space;
+    changed = true;
+    return { ...space, definition: { ...space.definition, source } };
+  });
+  return changed ? next : workspaces;
 }
 
 export const maximumWorkspaces = 1000;

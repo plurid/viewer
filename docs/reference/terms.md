@@ -9,12 +9,13 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 [Checkpoint](#changes-and-recovery) · [CLI](#commands-and-automation) ·
 [Columns preview](#looking-at-files) · [Command](#commands-and-automation) ·
 [Command language](#commands-and-automation) · [Curated definition](#workspace-definitions) ·
-[Defined workspace](#workspace-definitions) · [Definition key](#workspace-definitions) ·
-[Docked](#planes-and-the-space) · [File overview](#suggestions) ·
-[Folder access](#three-separate-permissions) · [Insight](#suggestions) ·
-[Job](#changes-and-recovery) · [Journal](#changes-and-recovery) ·
-[Layout of planes](#planes-and-the-space) · [Layout template](#workspace-definitions) ·
-[Lens](#looking-at-files) · [Linked plane](#planes-and-the-space) · [Model](#models-and-agents) ·
+[Declared command](#commands-and-automation) · [Defined workspace](#workspace-definitions) ·
+[Definition key](#workspace-definitions) · [Docked](#planes-and-the-space) ·
+[File overview](#suggestions) · [Folder access](#three-separate-permissions) ·
+[Found workspace](#workspace-definitions) · [Insight](#suggestions) · [Job](#changes-and-recovery) ·
+[Journal](#changes-and-recovery) · [Layout of planes](#planes-and-the-space) ·
+[Layout template](#workspace-definitions) · [Lens](#looking-at-files) ·
+[Linked plane](#planes-and-the-space) · [Model](#models-and-agents) ·
 [Model data](#three-separate-permissions) · [Model data levels](#models-and-agents) ·
 [Note](#text-notes-and-tasks) · [Open workspace](#workspace-definitions) ·
 [Plane](#planes-and-the-space) · [Prefix key](#commands-and-automation) ·
@@ -31,16 +32,21 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 
 ## Workspace definitions
 
+- **Found workspace**: a defined workspace Viewer recognizes from folders you use. It opens one
+  folder plane and shows **Found** with its root in search and Manage. Finding stays private and
+  never runs a command. _Learn:_
+  [Workspaces Viewer finds](../guides/workspaces.md#workspaces-viewer-finds)
+
 - **Open workspace**: a workspace in the saved session, with live plane records. Only open
   workspaces appear in agent discovery. _In Viewer:_ the workspace menu and **Change workspace…**.
   _Learn:_ [Use several workspaces](../guides/workspaces.md#use-several-workspaces)
 - **Defined workspace**: available to search and open, with no live workspace record until opened.
   _In Viewer:_ **Change workspace…** and the workspace matches in **⌘K**. _Learn:_
   [Open a defined workspace](../guides/workspaces.md#open-a-defined-workspace)
-- **Workspace definition**: the recipe in `workspaces.jsonc` or derived live from a VS Code Project
-  Manager project. It names a root and planes. Command terminals offer **Run** and **Shell only**,
-  plus **Run all** for the waiting commands. _In Viewer:_ **Edit workspace definitions** and
-  **Settings → Configuration**. _Learn:_
+- **Workspace definition**: the recipe in `workspaces.jsonc`, derived live from a VS Code Project
+  Manager project, or found from folders you use. It names a root and planes. Command terminals
+  offer **Run** and **Shell only**, plus **Run all** for the waiting commands. _In Viewer:_ **Edit
+  workspace definitions** and **Settings → Configuration**. _Learn:_
   [Workspace definitions](configuration.md#workspace-definitions)
 - **Definition key**: the stable path-shaped identifier derived from a `>`-separated project name,
   such as `sample/tools/sample-cli`. _In Viewer:_ the detail below a defined workspace's name.
@@ -193,6 +199,12 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   Viewer:_ **Open worktree…**. _Learn:_ [Tasks, branches and worktrees](tasks-and-git.md)
 
 ## Commands and automation
+
+- **Declared command**: a line a folder's package scripts, Makefile targets, justfile recipes,
+  Procfile entries or Deno tasks declare. Picking one fills the input; the person's **Run** runs it
+  as a typed line. The nearest reachable declaration is offered; parent Make targets name their
+  folder with `make -C`. _In Viewer:_ **Run command…** and `!` in **⌘K**. _Learn:_
+  [Declared commands](terminals.md#declared-commands)
 
 - **Command**: one thing Viewer can do, such as **Copy path**, with an id such as `copy-path`. The
   same command runs from **⌘K**, a menu, a key, a typed line or an agent's proposal, and shows only

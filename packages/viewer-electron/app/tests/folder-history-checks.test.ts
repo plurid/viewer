@@ -215,9 +215,14 @@ it('keeps normal lanes available after four reads never answer, within a six-rea
   checks.close();
 });
 
-it.each([true, false])(
-  'the actual save handler removes only forgotten cache entries (Clear: %s)',
-  async (clear) => {
+it.each([
+  { clear: true, failed: '' },
+  { clear: false, failed: '' },
+  { clear: true, failed: 'declared' },
+  { clear: true, failed: 'found' },
+])(
+  'the actual save handler finishes Clear with every private store ($clear, $failed)',
+  async ({ clear, failed }) => {
     const checks = new FolderHistoryChecks('/fixtures/history-worker.cjs');
     await checks.check('/fixtures/A');
     await checks.check('/fixtures/Unrelated');
@@ -234,10 +239,19 @@ it.each([true, false])(
     });
     const desktop = Object.create(Desktop.prototype) as Desktop;
     const emitted = vi.fn();
+    const clearDeclared = vi.fn(async () => {
+      if (failed === 'declared') throw new Error('Declared store EACCES');
+    });
+    const clearFound = vi.fn(async () => {
+      if (failed === 'found') throw new Error('Found store EACCES');
+    });
+    const diagnose = vi.fn();
     Object.assign(desktop, {
       workspaceSessions: sessions,
       folderChecks: checks,
       folderHistoryPrepared: new BackgroundFolderHistory(),
+      declaredCommands: { clearHistory: clearDeclared },
+      foundWorkspaces: { clearHistory: clearFound, historyChanged: vi.fn() },
       chats: { retain: () => {} },
       storage: { save: async () => {} },
       activity: {
@@ -247,7 +261,7 @@ it.each([true, false])(
       withPreferences: (value: unknown) => value,
       emit: emitted,
       assignWorkspace: () => {},
-      options: {},
+      options: { diagnose },
     });
     const save = Reflect.get(desktop, 'saveWorkspaces') as (
       input: SavedState,
@@ -264,6 +278,9 @@ it.each([true, false])(
       forgotten: ['/fixtures/A'],
     });
     expect(checks.paths).toEqual(['/fixtures/Unrelated']);
+    expect(clearDeclared).toHaveBeenCalledTimes(clear ? 1 : 0);
+    expect(clearFound).toHaveBeenCalledTimes(clear ? 1 : 0);
+    expect(diagnose).toHaveBeenCalledTimes(failed ? 1 : 0);
     if (clear) {
       expect(reply).toHaveProperty('clearID', 'clear');
       expect(emitted.mock.calls[0]?.[0]).toHaveProperty('folderClearID', 'clear');

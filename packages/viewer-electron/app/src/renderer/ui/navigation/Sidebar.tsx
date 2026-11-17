@@ -294,24 +294,27 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                 <Icon name={sidebar.collapsed.includes(section) ? 'right' : 'down'} size={12} />
                 <span>{titles[section]}</span>
               </button>
-              {section === 'recents' && (recents.length > 0 || hasFolderHistory || recovery) && (
-                <button
-                  type="button"
-                  className="sidebar-clear-recent"
-                  aria-label="Clear recent folders"
-                  disabled={!recents.length && !hasFolderHistory}
-                  onClick={(event) => {
-                    const heading =
-                      event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(
-                        '.sidebar-section-title',
-                      );
-                    clearRecentFolders();
-                    heading?.focus();
-                  }}
-                >
-                  Clear
-                </button>
-              )}
+              {section === 'recents' &&
+                // a folded section shows only its title: Clear acts on a list the person cannot see
+                !sidebar.collapsed.includes(section) &&
+                (recents.length > 0 || hasFolderHistory || recovery) && (
+                  <button
+                    type="button"
+                    className="sidebar-clear-recent"
+                    aria-label="Clear recent folders"
+                    disabled={!recents.length && !hasFolderHistory}
+                    onClick={(event) => {
+                      const heading =
+                        event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(
+                          '.sidebar-section-title',
+                        );
+                      clearRecentFolders();
+                      heading?.focus();
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
             </div>
             {!sidebar.collapsed.includes(section) && (
               <div>

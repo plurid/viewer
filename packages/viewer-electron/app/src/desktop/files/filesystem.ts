@@ -8,7 +8,9 @@ import type { FileEntry, FolderListing } from '../../domain/contracts';
 import { errorMessage } from '../../domain/errors';
 import type { FileVisibility } from './visibility';
 import { fileVisibility } from './visibility';
+import { assertLocalPath } from './local-path';
 export function absolute(input: string): string {
+  assertLocalPath(input);
   if (!input || input.includes('\0') || !path.isAbsolute(input))
     throw new Error('An absolute local path is required.');
   return path.normalize(input);

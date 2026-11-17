@@ -235,6 +235,8 @@ is 0.2 to 0.8.
 
 ## Workspace definitions
 
+Definitions also include [found workspaces](#found-workspaces), recognized from folders you use.
+
 `<data>/workspaces.jsonc` defines whole workspaces separately from the open records in
 `viewer-state-v1.json`. **Edit workspace definitions** creates a commented starter only when the
 file is absent. A symbolic link is allowed. `workspaces.schema.json` beside it provides editor
@@ -270,10 +272,15 @@ is JSONC with comments and trailing commas. This example explicitly enables the 
   workspaces stay open.
 
 The choice appears in **Manage workspaces… → Defined** and **Change workspace…** when an undecided
-list exists. **Use VS Code projects**, **Don't use**, and the **Use VS Code Project Manager
+list exists. **Use VS Code projects**, **Don’t use**, and the **Use VS Code Project Manager
 projects** switch in **Settings → Configuration → Workspace definitions** save the choice in this
 file, keeping comments. An explicit choice creates the starter when the file is absent. No offer
-appears at launch, and existing explicit choices stay in effect.
+appears at launch. If a sandbox refuses the existence check, Viewer still offers the choice and
+requests access only after Use.
+
+Existing explicit choices stay in effect. The exact source stanza written by Viewer’s earlier
+starter is treated as undecided until you choose. An edited line, different spacing or comment, or a
+path override keeps its written choice. Deciding fills the starter’s source slot in place.
 
 `path`, when set, selects a local `projects.json`; otherwise the source is
 `~/Library/Application Support/Code/User/globalStorage/alefragnani.project-manager/projects.json`.
@@ -384,6 +391,36 @@ If a workspace alone exceeds 16 MB, Close asks before closing without rememberin
 unreadable memory file cannot be moved aside, Viewer protects it and still opens definitions fresh,
 with a note. Close and Reset resolve unsaved text before closing; “Don’t Save” takes effect only
 after the desktop accepts the operation.
+
+## Found workspaces
+
+`settings.browsing.findWorkspaces` defaults to `true`. Its control is **Settings → Browsing → Find
+workspaces from folders I use**. It uses the person’s own history, not another app’s data. Turning
+it off stops passes and clears entries and probes while keeping hidden roots.
+
+The private `found-workspaces-v1.json` has version `1`, mode 0600 and a 1 MB limit. It stores at
+most 200 entries, 500 hidden roots, 1,000 probes and 200 last-run references. Probes expire after
+seven days. References contain a source file name, command name and time, with no command text. It
+is first written when something is found, hidden or run. Unreadable regular files move aside; an
+unreadable file that cannot be preserved stays protected.
+
+Finding starts ten seconds after folder history is prepared. A new visit outside known roots
+schedules a pass after thirty seconds, with passes at least five minutes apart. Each pass uses at
+most 300 bounded probes. Git folders, Git files, workspace markers and language manifests determine
+roots within sixteen ancestors. Home and standard home folders are boundaries. Non-local volumes,
+Library, hidden and generated folders and package bundles are excluded. Volumes that cannot be
+identified as local stay out.
+
+Found keys derive from the home-relative root through the definition slug rules, keeping the last
+eight segments and fitting the 200-character limit. Explicit keys win collisions. A root’s name uses
+its last two segments and the role-word rule; up to three manifest names become aliases. Viewer
+moves preserve keys, as do outside renames with the same device and inode.
+
+Found definitions have one folder plane and never supply ROOT token references. Explicit sources win
+for the same root, including known realpath aliases. **Clear recent folders** clears entries, probes
+and run references, retaining entries linked open or remembering planes. Undo restores visits and
+lets finding restore the same keys. Hidden roots remain. This document is excluded from backups,
+project exports and agents. Store probes use active access scopes without asking.
 
 ## Tour files
 

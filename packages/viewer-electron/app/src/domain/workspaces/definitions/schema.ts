@@ -133,10 +133,12 @@ export const workspacesFileSchema = z
   .strict();
 export type WorkspacesFile = z.infer<typeof workspacesFileSchema>;
 export type DefinitionRootState = 'present' | 'missing' | 'unknown';
+export type FoundWorkspaceState = 'loading' | 'ready' | 'off';
 export type DefinitionProblemLevel = 'error' | 'warning' | 'note';
 export type DefinitionProblemSource =
-  'workspaces.jsonc' | 'projects.json' | 'defined-workspaces-v1.json';
-export type WorkspaceDefinitionSource = 'project-manager' | 'override' | 'standalone';
+  'workspaces.jsonc' | 'projects.json' | 'defined-workspaces-v1.json' | 'found-workspaces-v1.json';
+export const workspaceDefinitionSourceSchema = z.enum(['project-manager', 'override', 'standalone', 'found']);
+export type WorkspaceDefinitionSource = z.infer<typeof workspaceDefinitionSourceSchema>;
 export type ProjectManagerReadState =
   'undecided' | 'off' | 'absent' | 'read' | 'needs-access' | 'unreadable';
 export type DefinitionFileState = 'absent' | 'read' | 'last-valid' | 'unreadable';
@@ -198,6 +200,7 @@ export interface ProjectManagerState {
   duplicateKeys: number;
 }
 export interface DefinitionCatalog {
+  found?: { state: FoundWorkspaceState; count: number; hidden: number };
   revision: number;
   file: { path: string; state: DefinitionFileState };
   projectManager: ProjectManagerState;
@@ -205,6 +208,7 @@ export interface DefinitionCatalog {
   diagnostics: DefinitionProblem[];
 }
 export interface DefinitionSaveResult {
+  source?: WorkspaceDefinitionSource;
   key: string;
   basis: string;
   planes: Record<string, number>;

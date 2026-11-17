@@ -112,7 +112,7 @@ it.each([true, false])(
     expect(view.queryByText(/0 VS Code projects/)).toBeNull();
     const use = view.getByRole('button', { name: 'Use VS Code projects' });
     expect(use.className).toContain('primary');
-    fireEvent.click(enabled ? use : view.getByRole('button', { name: "Don't use" }));
+    fireEvent.click(enabled ? use : view.getByRole('button', { name: 'Don’t use' }));
     await waitFor(() =>
       expect(f.request).toHaveBeenCalledWith({ kind: 'project-manager', enabled }),
     );
@@ -179,7 +179,7 @@ it('the muted workspace row opens Manage on Defined without taking a decision', 
       </WorkspaceContext.Provider>
     </CommandsContext.Provider>,
   );
-  const offer = view.getByRole('option', { name: "Use VS Code Project Manager's projects…" });
+  const offer = view.getByRole('option', { name: 'Use VS Code Project Manager’s projects…' });
   expect(offer.className).toContain('is-muted');
   expect(view.getByText('Defined')).toBeTruthy();
   fireEvent.click(offer);
@@ -220,13 +220,37 @@ it.each(['absent', 'off', 'read'] as const)(
     );
     expect(view.queryByText(projectManagerConsentText)).toBeNull();
     expect(view.queryByRole('button', { name: 'Use VS Code projects' })).toBeNull();
-    expect(view.queryByRole('button', { name: "Don't use" })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Don’t use' })).toBeNull();
     expect(
-      view.queryByRole('option', { name: "Use VS Code Project Manager's projects…" }),
+      view.queryByRole('option', { name: 'Use VS Code Project Manager’s projects…' }),
     ).toBeNull();
     if (state === 'absent')
       expect(
         view.queryByRole('switch', { name: 'Use VS Code Project Manager projects' }),
       ).toBeNull();
+  },
+);
+
+it.each(['undecided', 'off'] as const)(
+  'Manage keeps an unavailable project linked and offers Close while the source is %s',
+  (state) => {
+    setup(state);
+    const definition = sampleDefinition();
+    const space = {
+      ...activeWorkspace(),
+      name: 'Sample',
+      definition: { key: definition.key, basis: definition.basis },
+    };
+    initialize({
+      ...getState().bootstrap,
+      state: { ...getState().saved, workspaces: [space] },
+    });
+    const view = render(
+      <WorkspacesDialog onClose={() => {}} onOpen={async () => {}} onAction={() => {}} />,
+    );
+    expect(view.getByRole('button', { name: 'Close Sample' })).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Delete Sample' })).toBeNull();
+    expect(view.getByText(/VS Code Project Manager is not in use/)).toBeTruthy();
+    expect(view.queryByText(/Its definition was removed/)).toBeNull();
   },
 );

@@ -66,6 +66,7 @@ export function buildDefinition(
     definition: {
       key: definition.key,
       basis: definition.basis,
+      source: definition.source,
       planes: Object.fromEntries([...indexed].map(([index, id]) => [id, index])),
     },
     ...(definition.look?.spaceColor

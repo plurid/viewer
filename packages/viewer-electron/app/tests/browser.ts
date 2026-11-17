@@ -141,6 +141,7 @@ const api: ViewerAPI = {
   terminalDefinitionCommand: (request, reference) =>
     invoke('terminalDefinitionCommand', request, reference),
   terminalCount: (workspaceID) => invoke('terminalCount', workspaceID),
+  declaredCommands: (directory) => invoke('declaredCommands', directory),
   terminalWrite: (id, data) => invoke('terminalWrite', id, data),
   terminalResize: (id, cols, rows) => invoke('terminalResize', id, cols, rows),
   terminalAck: (id, bytes) => invoke('terminalAck', id, bytes),

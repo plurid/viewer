@@ -53,12 +53,15 @@ viewcube (**Show space toolbar**, **Show viewcube**).
 
 Choose **Minimap corner** beside **Show minimap** to keep the map in one corner. **Automatic**, the
 default, moves it clear of plane controls. A fixed corner stays put even when controls overlap it.
-Overview uses the chosen corner too.
+Overview uses the chosen corner too. The viewcube moves aside for a fixed-corner minimap when
+conceal is off. A concealed viewcube stays in its corner when you hover to reveal its controls, even
+if it overlaps the fixed minimap.
 
 Choose **⌘K → Overview** to navigate the space, even with **Show minimap** off or fewer than three
 planes. Press **Escape**, click outside, choose a plane or run **Overview** again to close it. The
-minimap returns to its previous visibility without changing its settings. If a plane is docked,
-choose **Reveal space** (**⌘Return**) first.
+minimap returns to its previous visibility without changing its settings. In an empty space,
+Overview says **Open a plane first.** If a plane is docked, choose **Reveal space** (**⌘Return**)
+first.
 
 **⌥⌘Z** only undoes arrangement. File changes have their own **⌘Z**; see
 [Browse and organize](files.md#copy-move-and-rename).
@@ -189,6 +192,30 @@ own: a writing workspace with a folder, a PDF and notes; a project workspace wit
 terminal and a browser. Choose where new folder planes open in **Settings → Browsing → New folder
 planes start in**.
 
+## Workspaces Viewer finds
+
+Choose **⌘K → Change workspace…** or **Manage workspaces… → Defined** and search for a folder you
+use. **Found** marks a workspace Viewer recognized from your private folder history or open planes.
+Its detail shows the root folder. Opening it adds one folder plane; Close and reopen work as for
+other defined workspaces. It joins **Recently closed** only after Viewer remembers its planes. Found
+workspaces have no written entry to save over.
+
+Viewer recognizes Git roots, workspace markers and common language manifests. An outer Git
+repository holds its nested packages together. A Makefile, justfile or Procfile alone does not make
+a workspace. Home, its standard top-level folders, hidden folders, Library, dependency trees, app
+bundles and network volumes stay out.
+
+Finding runs quietly after folder history is ready. It never delays launch, asks for access or runs
+a command. Three visits within a root, with the newest in the last 90 days, qualify it; a plane in a
+recently used workspace also qualifies. Handwritten and VS Code definitions take precedence for the
+same root.
+
+Turn off **Settings → Browsing → Find workspaces from folders I use** to stop finding and clear its
+cached entries and probes. **Clear recent folders** clears those too, keeping workspaces that are
+linked open or remember planes. Undoing the clear lets Viewer find them again with the same keys.
+Found metadata stays on this Mac and is excluded from backups, project exports and agents. The Store
+edition uses only folders whose access is already active.
+
 ## Open a defined workspace
 
 1. Choose **⌘K** → **Change workspace…**.
@@ -201,15 +228,17 @@ search. A search shows up to 50 defined matches, with **N more · keep typing** 
 the main **⌘K** palette, open workspaces match from one character; definitions need at least two.
 **All N matching workspaces** opens the workspace search.
 
-Viewer asks before reading VS Code Project Manager's list. If a list is found, **Manage workspaces…
-→ Defined** offers **Use VS Code projects** and **Don't use**. The **Use VS Code Project Manager's
+Viewer asks before reading VS Code Project Manager’s list. If a list is found, **Manage workspaces…
+→ Defined** offers **Use VS Code projects** and **Don’t use**. The **Use VS Code Project Manager’s
 projects…** row in Change workspace opens that tab without deciding. Nothing is read or counted
 until you choose Use, and Viewer never changes the list.
 
 Change the choice with **Settings → Configuration → Workspace definitions → Use VS Code Project
 Manager projects**. In the Store edition, choosing Use asks for folder access. If declined, **Allow
 access…** lets you try again. Projects appear as plain definitions and join the open list only when
-opened. Turning the switch off leaves open workspaces open.
+opened. Turning the switch off leaves open workspaces open and keeps their definition links. Choose
+Use again to restore the projects. While the source is not in use, Close stays available and Delete
+stays unavailable for workspaces linked to its projects.
 
 Definitions marked hidden and definitions whose root folder is missing stay out of search. Missing
 and unknown roots among search candidates are checked again when you search and when mounted volumes
@@ -270,9 +299,11 @@ Manage's **Open** tab offers **Close** for defined workspaces and **Delete** for
 The **Defined** tab shows **Remembers**, **Rich**, **Curated**, **Hidden** and **Folder missing**
 badges. Its problem disclosure shows diagnostics without covering the list.
 
-If a valid definitions file no longer contains the workspace's key, its row says the definition was
-removed. **Delete** and **Save as definition…** become available. A broken file keeps the link until
-it can be read again.
+If a valid catalog no longer contains a standalone definition’s key, its row says the definition was
+removed. **Delete** and **Save as definition…** become available. Project Manager and override links
+stay protected while their source is not in use. A found link waits for finding to finish, then says
+**Viewer no longer finds this folder.** if its root is no longer found. A broken file keeps the
+link.
 
 Editing a definition never rearranges an open workspace. **Definition changed** in Manage and the
 switcher offers **Reset to definition…**. Remembered planes take precedence on reopen even when the

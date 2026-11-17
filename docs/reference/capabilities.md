@@ -285,6 +285,11 @@ styles and **Save** are in the plane itself.
 
 ## Workspaces and planes
 
+Found workspaces appear with **Found** and their root in **Change workspace…**, **⌘K** word-start
+matches and **Manage workspaces… → Defined**. **Settings → Browsing → Find workspaces from folders I
+use** controls finding. See
+[Workspaces Viewer finds](../guides/workspaces.md#workspaces-viewer-finds).
+
 ### Planes
 
 | Feature                                          | Key                                             | ⌘K command                                                                                                                   | Menu                                                   | Learn                                 |
@@ -333,6 +338,11 @@ styles and **Save** are in the plane itself.
 | Themes for the current appearance                 |                                                    | **Theme: …** `theme.<id>`                                                                                                                                                                                                            | **Settings → Themes**                                                                | [Configuration](configuration.md)                                    |
 | Reuse an arrangement of plane kinds               |                                                    | **Save layout as template…** `layout-save-as`, **Open layout “…”** `layout.<id>`, **Remove layout “…”** `layout-remove.<id>`                                                                                                         |                                                                                      | [Workspaces](../guides/workspaces.md)                                |
 | Show Viewer from anywhere with one key            | **⌥Space**, once turned on                         | **Turn on: Quick access › Global shortcut** `setting.settings.hotkey.enabled`; **Restore normal window placement** `restore-window`                                                                                                  | **Settings → Navigation**                                                            | [Configuration](configuration.md)                                    |
+
+Overview needs at least one open plane. An empty space says **Open a plane first.** A fixed map
+corner makes the viewcube move clear of the map. The cube keeps its conceal and hover behavior; when
+no corner fits, it stays hidden until there is room. An expanded fixed Overview follows window,
+sidebar and corner changes. Clicking another plane to dismiss Overview keeps focus there.
 
 ### Workspaces and projects
 

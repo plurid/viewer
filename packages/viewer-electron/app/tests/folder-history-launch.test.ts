@@ -7,7 +7,8 @@ import { Desktop } from '../src/desktop/bridge';
 import { BackgroundFolderHistory } from '../src/desktop/files/folder-history';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 import { defaultSettings } from '../src/domain/services';
-import type { Bootstrap, DesktopEvent } from '../src/domain/contracts';
+import type { Bootstrap, DesktopEvent, SavedState } from '../src/domain/contracts';
+import type { FolderVisitSave, FolderVisitReply } from '../src/domain/files/folder-visit-changes';
 import type { DefinitionCatalog } from '../src/domain/workspaces/definitions/schema';
 
 vi.mock('electron', () => ({ app: { getPath: () => '/fixtures' } }));
@@ -75,7 +76,7 @@ export function launchFixture(
         desktop,
         1,
       ),
-    { stop: () => preparation.clear(), events },
+    { stop: () => preparation.clear(), events, desktop },
   );
 }
 
@@ -165,5 +166,55 @@ it('broadcasts the background checked folders to windows that are already open',
   await vi.advanceTimersByTimeAsync(1);
   const event = launch.events.find((event) => event.type === 'workspaces');
   expect(event?.type === 'workspaces' && event.checkedFolders).toEqual(['/fixtures/Downloads']);
+  launch.stop();
+});
+
+it('starts workspace finding only after folder history preparation completes', async () => {
+  vi.useFakeTimers();
+  const launch = launchFixture(async () => ({ directory: true }));
+  const start = vi.fn();
+  Reflect.set(launch.desktop, 'foundWorkspaces', { start });
+  await launch();
+  expect(start).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(start).toHaveBeenCalledOnce();
+  launch.stop();
+});
+
+it('clears found history at Clear and schedules finding after Undo restores visits', async () => {
+  const launch = launchFixture(async () => ({ directory: true }));
+  const state = (await launch()).state!;
+  const found = { start: vi.fn(), clearHistory: vi.fn(async () => {}), historyChanged: vi.fn() };
+  Reflect.set(launch.desktop, 'foundWorkspaces', found);
+  Reflect.set(launch.desktop, 'declaredCommands', { clearHistory: async () => {} });
+  Reflect.set(launch.desktop, 'chats', { retain: () => {} });
+  Reflect.set(launch.desktop, 'activity', {
+    at: async (_target: unknown, run: () => Promise<unknown>) => run(),
+    run: async (_kind: string, _action: string, run: () => Promise<unknown>) => run(),
+  });
+  Object.assign(Reflect.get(launch.desktop, 'storage'), { save: async () => {} });
+  Object.assign(Reflect.get(launch.desktop, 'folderChecks'), { clear: () => {} });
+  const save = Reflect.get(launch.desktop, 'saveWorkspaces') as (
+    input: SavedState,
+    sender: number,
+    visits: FolderVisitSave,
+  ) => Promise<FolderVisitReply>;
+  const cleared = await save.call(launch.desktop, { ...state, visits: {}, recents: [] }, 1, {
+    id: 'clear',
+    base: state.visits ?? {},
+    clear: true,
+  });
+  expect(cleared.visits).toEqual({});
+  expect(found.clearHistory).toHaveBeenCalledOnce();
+  expect(found.historyChanged).not.toHaveBeenCalled();
+  await save.call(launch.desktop, state, 1, {
+    id: 'undo',
+    base: {},
+    clear: false,
+    restored: state.visits,
+    revision: cleared.revision,
+    clearRevision: cleared.clearRevision,
+  });
+  expect(found.historyChanged).toHaveBeenCalledOnce();
   launch.stop();
 });

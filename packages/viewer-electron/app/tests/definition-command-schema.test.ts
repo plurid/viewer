@@ -16,6 +16,13 @@ describe('definition command validation', () => {
     ['echo\0hidden', 'control'],
     ['echo\u202ehidden', 'formatting'],
     ['echo\ud800', 'surrogates'],
+    ['echo\u3164', 'invisible'],
+    ['echo\u115F', 'invisible'],
+    ['echo\u034F', 'invisible'],
+    ['echo\uFE0F', 'invisible'],
+    ['echo\u{E0100}', 'invisible'],
+    ['echo\u17B4', 'invisible'],
+    ['echo\u180B', 'invisible'],
   ])(
     'names the actual problem in %j without changing the editor schema type',
     (command, problem) => {

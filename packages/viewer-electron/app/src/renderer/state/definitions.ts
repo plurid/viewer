@@ -13,6 +13,7 @@ import {
   isPristineWorkspace,
   maximumWorkspaces,
   mergeWorkspaceVisits,
+  withDefinitionOrigins,
 } from '../../domain/workspaces/catalog';
 import { scratchPaneRecord } from '../../domain/workspaces/pane-records';
 import { languageFor } from '../../domain/editing/languages';
@@ -36,7 +37,14 @@ import { newPlaneFolder } from '../../domain/services';
 
 export function receiveDefinitions(catalog: DefinitionCatalog): void {
   if ((getState().bootstrap.definitions?.revision ?? -1) > catalog.revision) return;
-  update({ ...getState(), bootstrap: { ...getState().bootstrap, definitions: catalog } });
+  update({
+    ...getState(),
+    saved: {
+      ...getState().saved,
+      workspaces: withDefinitionOrigins(getState().saved.workspaces, catalog),
+    },
+    bootstrap: { ...getState().bootstrap, definitions: catalog },
+  });
 }
 
 let opening: Promise<void> = Promise.resolve();
@@ -67,6 +75,7 @@ async function open(key: string): Promise<void> {
   const workspace = reply.closed
     ? {
         ...reply.closed.workspace,
+        definition: { ...reply.closed.workspace.definition!, source: reply.definition.source },
         epoch: (reply.closed.workspace.epoch ?? 0) + 1,
         panes: reply.closed.workspace.panes.map((pane) =>
           pane.type === 'terminal' ? { ...pane, startOnOpen: false } : pane,
@@ -318,7 +327,16 @@ export async function saveDefinition(
           ? item
           : {
               ...item,
-              definition: { key: reply.key, basis: reply.basis, planes: reply.planes },
+              definition: {
+                key: reply.key,
+                basis: reply.basis,
+                planes: reply.planes,
+                source:
+                  reply.source ??
+                  getState().bootstrap.definitions?.definitions.find(
+                    (definition) => definition.key === reply.key,
+                  )?.source,
+              },
               panes: item.panes.map((pane) => {
                 if (pane.type !== 'terminal') return pane;
                 const { definitionPlane: _previous, ...rest } = pane;

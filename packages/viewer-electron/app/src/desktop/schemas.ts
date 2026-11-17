@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { z } from 'zod';
 import type { FileEntry, FileKind } from '../domain/contracts';
+import { remoteLocation } from '../domain/remote/location';
 
 /** An absolute path on this platform, without NUL characters. */
 export const localPath = z
@@ -8,6 +9,8 @@ export const localPath = z
   .min(1)
   .max(32768)
   .refine((value) => path.isAbsolute(value) && !value.includes('\0'));
+
+export const desktopPlanePath = z.union([localPath, remoteLocation]);
 /** Identifiers of workspaces, panes, clients and the like. */
 export const id = z.string().min(1).max(200);
 

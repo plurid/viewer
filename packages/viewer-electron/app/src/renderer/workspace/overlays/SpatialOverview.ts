@@ -1,6 +1,6 @@
 import type { MinimapCorner } from '../../../domain/contracts';
 import type { OverlayRect, OverviewCorner } from './placement';
-import { solveOverviewPlacement, validOverlayRect } from './placement';
+import { fixedOverviewCorner, solveOverviewPlacement, validOverlayRect } from './placement';
 import { SpatialViewcube } from './SpatialViewcube';
 
 export interface SpatialOverviewState {
@@ -12,7 +12,11 @@ export interface SpatialOverviewState {
 export interface SpatialOverviewPorts {
   subscribeEngine(listener: () => void): () => void;
   isDocked(): boolean;
+  hasPlanes?(): boolean;
+  /** A request must reach the engine before an absent map can cancel it. */
+  minimapApplied?(): boolean;
   minimapShown(): boolean;
+  viewcubeConcealed?(): boolean | undefined;
   corner(): MinimapCorner;
   requestMinimap(shown: boolean): void;
   labelForPlane(id: string): { label: string; path?: string } | undefined;
@@ -62,6 +66,7 @@ function visible(element: HTMLElement): boolean {
 export class SpatialOverview {
   private map?: HTMLElement;
   private frame?: number;
+  private releaseFrame?: number;
   private corner?: OverviewCorner;
   private size = { width: 0, height: 0 };
   private state: SpatialOverviewState = { available: false, collapsed: false, expanded: false };
@@ -113,6 +118,7 @@ export class SpatialOverview {
     window.addEventListener('resize', this.invalidate);
     window.addEventListener('pointerup', this.releasePointer);
     window.addEventListener('pointercancel', this.releasePointer);
+    window.addEventListener('keydown', this.pendingKeyDown, true);
     this.invalidate();
   }
 
@@ -132,7 +138,7 @@ export class SpatialOverview {
   }
 
   invalidate = (): void => {
-    if (this.disposed || this.frame !== undefined || this.pressed || this.state.expanded) return;
+    if (this.disposed || this.frame !== undefined || this.pressed) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = undefined;
       this.measure();
@@ -150,10 +156,14 @@ export class SpatialOverview {
   };
 
   private keyDown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Escape' || !this.state.expanded) return;
+    if (event.key !== 'Escape' || (!this.state.expanded && !this.opening)) return;
     event.preventDefault();
     event.stopPropagation();
     this.close();
+  };
+
+  private pendingKeyDown = (event: KeyboardEvent): void => {
+    if (this.opening) this.keyDown(event);
   };
 
   private click = (event: MouseEvent): void => {
@@ -170,11 +180,13 @@ export class SpatialOverview {
 
   private toggle = (event: Event): void => {
     if ((event as ToggleEvent).newState !== 'closed' || !this.state.expanded) return;
+    const focused = document.activeElement;
+    this.restoreFocus = !focused || focused === document.body || !!this.map?.contains(focused);
     this.finishClose();
   };
 
   open(opener?: HTMLElement): void {
-    if (this.disposed || this.ports.isDocked()) return;
+    if (this.disposed || this.ports.isDocked() || this.ports.hasPlanes?.() === false) return;
     if (this.state.expanded || this.opening) {
       this.close();
       return;
@@ -184,8 +196,10 @@ export class SpatialOverview {
       (document.activeElement instanceof HTMLElement ? document.activeElement : undefined);
     this.restoreFocus = true;
     this.opening = true;
+    if (this.releaseFrame !== undefined) cancelAnimationFrame(this.releaseFrame);
+    this.releaseFrame = undefined;
     this.ports.requestMinimap(true);
-    this.measure();
+    this.measure(false);
   }
 
   private expand(): void {
@@ -209,25 +223,38 @@ export class SpatialOverview {
       borderColor: 'var(--plurid-surface-strong)',
     });
     map.showPopover();
+    this.placeExpanded(rectangle(this.root));
+    this.opening = false;
+    this.publish({ available: true, collapsed: this.state.collapsed, expanded: true });
+    map.querySelector<HTMLElement>('button:not([disabled])')?.focus({ preventScroll: true });
+  }
+
+  private placeExpanded(viewport: OverlayRect): OverlayRect | undefined {
+    const map = this.map;
+    if (!map) return;
     const corner = this.ports.corner();
-    if (corner !== 'automatic') {
+    if (fixedOverviewCorner(corner)) {
       const { width, height } = rectangle(map);
       const placement = solveOverviewPlacement({
-        viewport: rectangle(this.root),
+        viewport,
         size: { width, height },
         obstacles: [],
         corner,
       });
-      if (placement.kind === 'corner')
+      if (placement.kind === 'corner') {
         Object.assign(map.style, {
           left: `${placement.bounds.x}px`,
           top: `${placement.bounds.y}px`,
           transform: 'none',
         });
+        return placement.bounds;
+      }
     }
-    this.opening = false;
-    this.publish({ available: true, collapsed: this.state.collapsed, expanded: true });
-    map.querySelector<HTMLElement>('button:not([disabled])')?.focus({ preventScroll: true });
+    Object.assign(map.style, {
+      left: '50%',
+      top: '50%',
+      transform: 'translate(-50%, -50%)',
+    });
   }
 
   close(restoreFocus = true): void {
@@ -250,7 +277,12 @@ export class SpatialOverview {
     this.restoreAttributes();
     // Keep a closed popup out of hit-testing until its safe corner is remeasured.
     this.map?.setAttribute('popover', 'auto');
-    this.ports.requestMinimap(false);
+    // A real mouse click can flush React between the native map listener and its root listener.
+    // Keep the engine button mounted until that root has performed camera navigation.
+    this.releaseFrame = requestAnimationFrame(() => {
+      this.releaseFrame = undefined;
+      if (!this.opening && !this.state.expanded) this.ports.requestMinimap(false);
+    });
     this.awaitingPlacement = true;
     this.applied = '';
     this.invalidate();
@@ -305,35 +337,62 @@ export class SpatialOverview {
     map.addEventListener('toggle', this.toggle);
   }
 
-  private measure(): void {
-    if (this.disposed || this.state.expanded) return;
+  private measure(settled = true): void {
+    if (this.disposed) return;
     const map = this.root.querySelector<HTMLElement>(mapSelector) ?? undefined;
     const cube = this.root.querySelector<HTMLElement>(cubeSelector) ?? undefined;
-    const viewport = rectangle(this.root);
-    const elements = [...this.root.querySelectorAll<HTMLElement>(obstacleSelector)];
-    this.observe(new Set<Element>([this.root, ...(map ? [map] : []), ...elements]));
-    this.viewcube.bind(cube);
-    this.viewcube.place(
-      viewport,
-      elements.filter((element) => element !== cube && visible(element)).map(rectangle),
-      this.ports.isDocked(),
-    );
+    const wasOpen = this.opening || this.state.expanded;
     this.bind(map);
-    if (this.ports.isDocked()) {
+    this.viewcube.bind(cube);
+    const empty = this.ports.hasPlanes?.() === false;
+    if (this.ports.isDocked() || empty) {
       if (this.opening) this.close();
+      if (this.state.expanded) this.close(false);
+      if (empty && wasOpen) this.root.focus({ preventScroll: true });
+      this.observe(new Set([this.root]));
+      if (cube) this.viewcube.place(rectangle(this.root), [], true);
       this.publish({ available: false, collapsed: false, expanded: false });
       return;
     }
+    if (!map && this.opening && settled && this.ports.minimapApplied?.() !== false) this.close();
+    if (!map && !cube) {
+      this.observe(new Set([this.root]));
+      this.publish({ available: !this.ports.minimapShown(), collapsed: false, expanded: false });
+      return;
+    }
+    const viewport = rectangle(this.root);
+    const elements = [...this.root.querySelectorAll<HTMLElement>(obstacleSelector)];
+    this.observe(new Set<Element>([this.root, ...(map ? [map] : []), ...elements]));
+    const placeCube = (fixedMap?: OverlayRect) => {
+      if (!cube) return;
+      this.viewcube.place(
+        viewport,
+        elements.filter((element) => element !== cube && visible(element)).map(rectangle),
+        false,
+        fixedMap,
+        this.ports.viewcubeConcealed?.(),
+      );
+    };
+    const fixed = fixedOverviewCorner(this.ports.corner());
+    if (!fixed) placeCube();
+    if (this.state.expanded) {
+      const bounds = this.placeExpanded(viewport);
+      if (fixed) placeCube(bounds);
+      return;
+    }
     if (!map) {
+      if (fixed) placeCube();
       this.publish({ available: !this.ports.minimapShown(), collapsed: false, expanded: false });
       return;
     }
     if (!this.ports.minimapShown() && !this.opening) {
+      if (fixed) placeCube();
       map.setAttribute('popover', 'auto');
       this.publish({ available: true, collapsed: false, expanded: false });
       return;
     }
     if (!this.opening && !this.state.collapsed && !this.awaitingPlacement && !visible(map)) {
+      if (fixed) placeCube();
       this.publish({ available: false, collapsed: false, expanded: false });
       return;
     }
@@ -347,6 +406,7 @@ export class SpatialOverview {
       current: this.corner,
       corner: this.ports.corner(),
     });
+    if (fixed) placeCube(placement.kind === 'corner' ? placement.bounds : undefined);
     const parent = map.offsetParent instanceof HTMLElement ? rectangle(map.offsetParent) : viewport;
     const signature = JSON.stringify([placement, parent.x, parent.y]);
     const changed = signature !== this.applied;
@@ -410,8 +470,14 @@ export class SpatialOverview {
     window.removeEventListener('resize', this.invalidate);
     window.removeEventListener('pointerup', this.releasePointer);
     window.removeEventListener('pointercancel', this.releasePointer);
+    window.removeEventListener('keydown', this.pendingKeyDown, true);
     this.viewcube.destroy();
     this.bind(undefined);
+    if (this.releaseFrame !== undefined) {
+      cancelAnimationFrame(this.releaseFrame);
+      this.releaseFrame = undefined;
+      this.ports.requestMinimap(false);
+    }
     this.observed.clear();
   }
 }

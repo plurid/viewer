@@ -1,6 +1,6 @@
 import { readItemIdentity } from '../../domain/files/item-identity';
 import { maximumWorkspaces, uniqueDefinitionLinks } from '../../domain/workspaces/catalog';
-import { definitionKeySchema } from '../../domain/workspaces/definitions/schema';
+import { definitionKeySchema, workspaceDefinitionSourceSchema } from '../../domain/workspaces/definitions/schema';
 import { syncParentDirectory } from './directory-sync';
 import {
   compilePresentationValues,
@@ -273,6 +273,7 @@ const savedStateSchema = z
             .object({
               key: definitionKeySchema,
               basis: z.string().regex(/^[0-9a-f]{64}$/),
+              source: workspaceDefinitionSourceSchema.optional(),
               planes: z.record(id, z.number().int().min(-1).max(29)).optional(),
             })
             .strict()

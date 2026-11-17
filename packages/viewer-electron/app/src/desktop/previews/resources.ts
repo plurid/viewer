@@ -58,6 +58,7 @@ import { previewTextLimit } from '../../domain/files/read-limits';
 import { readPostScript } from './postscript';
 import { needsFolderAccess } from '../../domain/files/access';
 import { hasFilePreview } from '../../domain/previews/formats';
+import { assertLocalPath } from '../files/local-path';
 
 interface Grant {
   dispose?(): void;
@@ -160,6 +161,7 @@ export class Resources {
   }
   /** Immutable repository bytes are readable resources, never editable filesystem files. */
   async grantBytes(authority: string, name: string, data: Buffer): Promise<Resource> {
+    assertLocalPath(authority);
     await this.access([authority]);
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
     const held = [...this.grants.values()].reduce(
@@ -194,6 +196,7 @@ export class Resources {
     return resource;
   }
   private async grantFile(file: string, scope: PreviewScope): Promise<Resource> {
+    assertLocalPath(file);
     scope.check();
     await this.access([file]);
     const actual = await realpath(file);

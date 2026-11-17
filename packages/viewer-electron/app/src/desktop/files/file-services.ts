@@ -8,6 +8,7 @@ import type { IndexMethods } from '../workers/index-protocol';
 import type { FolderSizeMethods } from './folder-size-worker';
 import type { PreviewMethods } from '../workers/preview-worker';
 import { entry } from './filesystem';
+import { assertLocalPath } from './local-path';
 import { spotlightTagged } from '../search/spotlight';
 import { parseFileQuery } from '../../domain/search/query';
 import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
@@ -126,12 +127,17 @@ export class FileServices {
       });
     this.previews = this.createPreviews();
   }
+  private requireLocal(files: readonly string[]): Promise<void> {
+    files.forEach(assertLocalPath);
+    return this.options.access?.(files) ?? Promise.resolve();
+  }
   /** Starts the preview worker while the window is idle, so the first preview finds it ready. */
   warmPreviews(): Promise<void> {
     return this.previews.call('ready').then(() => {});
   }
   /** `rebuild`: crawl every root and extract every document again, whatever is stored. */
   configure(value: ApplicationSettings['search'], rebuild = false): Promise<void> {
+    [...value.roots, ...value.contentRoots].forEach(assertLocalPath);
     this.revision++;
     const work = this.configurations
       .catch(() => {})
@@ -140,7 +146,7 @@ export class FileServices {
           unavailable: string[] = [];
         for (const root of value.roots) {
           try {
-            await this.options.access?.([root]);
+            await this.requireLocal([root]);
             allowed.push(root);
           } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'FILE_ACCESS_REQUIRED') throw error;
@@ -150,7 +156,7 @@ export class FileServices {
         const contentRoots: string[] = [];
         for (const root of value.contentRoots) {
           try {
-            await this.options.access?.([root]);
+            await this.requireLocal([root]);
             contentRoots.push(root);
           } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'FILE_ACCESS_REQUIRED') throw error;
@@ -210,18 +216,18 @@ export class FileServices {
   }
   async query(value: IndexedQuery) {
     const revision = this.revision;
-    if (value.root) await this.options.access?.([value.root]);
+    if (value.root) await this.requireLocal([value.root]);
     const result = await this.index.call('query', [await this.tagged(value)]);
     if (revision !== this.revision) throw new Error('Search configuration changed. Search again.');
-    if (value.root) await this.options.access?.([value.root]);
-    await this.options.access?.(result.entries.map((entry) => entry.path));
+    if (value.root) await this.requireLocal([value.root]);
+    await this.requireLocal(result.entries.map((entry) => entry.path));
     return { ...result, status: this.withUnavailable(result.status) };
   }
   async snapshot(value: IndexedQuery) {
     const revision = this.revision;
-    if (value.root) await this.options.access?.([value.root]);
+    if (value.root) await this.requireLocal([value.root]);
     const snapshot = await this.index.call('query-snapshot', [await this.tagged(value)]);
-    await this.options.access?.(snapshot.entries.map((item) => item.path));
+    await this.requireLocal(snapshot.entries.map((item) => item.path));
     let cursor = 0;
     await Promise.all(
       Array.from({ length: Math.min(8, snapshot.entries.length) }, async () => {
@@ -237,11 +243,11 @@ export class FileServices {
     );
     if (revision !== this.revision)
       throw new Error('Search permissions changed. Take another selection snapshot.');
-    await this.options.access?.(snapshot.entries.map((item) => item.path));
+    await this.requireLocal(snapshot.entries.map((item) => item.path));
     return snapshot;
   }
   async sizeStart(paths: string[]) {
-    await this.options.access?.(paths);
+    await this.requireLocal(paths);
     return this.measurement.call('size-start', [paths]);
   }
   sizeGet(id: string) {
@@ -254,7 +260,7 @@ export class FileServices {
     return this.withUnavailable(await this.index.call('status'));
   }
   async update(file: string, removed = false) {
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     await this.index.call('update', [file, removed]);
   }
   /** `format`, the extension a preview reads the file as; its name otherwise. `message`, one
@@ -267,7 +273,7 @@ export class FileServices {
     format?: string,
     message?: number,
   ): Promise<DocumentData> {
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     const revision = this.accessRevision;
     const result = await this.previews.call(
       'extract',
@@ -282,7 +288,7 @@ export class FileServices {
     );
     if (revision !== this.accessRevision)
       throw new Error('File access changed. Read the document again.');
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     return result;
   }
   /** An email's HTML body or a saved web page, with the parts it shows, read in the preview
@@ -293,7 +299,7 @@ export class FileServices {
     message?: number,
     signal?: AbortSignal,
   ): Promise<SavedPage> {
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     const revision = this.accessRevision;
     const page = await this.previews.call(
       'page',
@@ -302,35 +308,35 @@ export class FileServices {
     );
     if (revision !== this.accessRevision)
       throw new Error('File access changed. Open the preview again.');
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     return page;
   }
   async sqlite(file: string, request: SQLiteRequest, signal?: AbortSignal): Promise<SQLiteReply> {
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     const revision = this.accessRevision;
     const reply = await this.previews.call('sqlite', [file, request], signal);
     if (revision !== this.accessRevision)
       throw new Error('File access changed. Read the database again.');
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     return reply;
   }
   async inspect(file: string, content = false, ocr = false, signal?: AbortSignal) {
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     // Explicit inspection is independent of index preferences. Reset/revocation
     // still retires its results, and the native grant is checked again below.
     const revision = this.accessRevision;
     const result = await this.index.call('inspect', [file, content, ocr], signal);
     if (revision !== this.accessRevision) throw new Error('File access changed. Inspect again.');
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     return result;
   }
   async drawingGeometry(file: string, options: DrawingGeometryOptions = {}, signal?: AbortSignal) {
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     const revision = this.accessRevision;
     const result = await this.index.call('drawing-geometry', [file, options], signal);
     if (revision !== this.accessRevision)
       throw new Error('File access changed. Read the geometry again.');
-    await this.options.access?.([file]);
+    await this.requireLocal([file]);
     return result;
   }
   reset(): Promise<void> {

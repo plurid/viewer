@@ -3,6 +3,12 @@ import type { DiagnosticErrorFields } from '../domain/diagnostics/failure';
 import { diagnosticFailure } from '../domain/diagnostics/failure';
 import { BackgroundFolderHistory } from './files/folder-history';
 import { createFolderHistoryChecks } from './windows/folder-history-checks';
+import { FolderFacts } from './workspaces/folder-facts';
+import { FoundWorkspaces } from './workspaces/found-workspaces';
+import { withDefinitionOrigins } from '../domain/workspaces/catalog';
+import { foundRecentAge } from '../domain/workspaces/found/candidates';
+import { foundVolumeRoots } from '../domain/workspaces/found/roots';
+import { DeclaredCommands } from './terminals/declared-commands';
 import type { FolderHistoryChecks } from './windows/folder-history-checks';
 import { containsPath } from './files/containment';
 import { Reconstructions } from './canvases/reconstruction';
@@ -246,6 +252,7 @@ export class Desktop {
   private commandCatalog?: { target: CapturedTarget; commands: CommandDescriptor[] };
   private workspaceCatalog?: AgentWorkspaceSnapshot;
   readonly terminals: Terminals;
+  readonly declaredCommands: DeclaredCommands;
   readonly externalTerminals: ExternalTerminals;
   readonly executions: Executions;
   readonly receipts: CommandReceipts;
@@ -286,6 +293,7 @@ export class Desktop {
   readonly definitions: WorkspaceDefinitions;
   readonly definitionCommands: DefinitionCommands;
   readonly definedWorkspaces: DefinedWorkspaces;
+  readonly foundWorkspaces: FoundWorkspaces;
   readonly files: FileServices;
   readonly applications: Applications;
   readonly credentials: Credentials;
@@ -321,6 +329,7 @@ export class Desktop {
   private folderHistoryPrepared = new BackgroundFolderHistory();
   private folderChecks: FolderHistoryChecks;
   private definitionRootChecks: FolderHistoryChecks;
+  private folderFacts: FolderFacts;
   /** Settings loaded as bootstrap loads them (seeded from saved state on a first configuration), so
    * the window is made with its backdrop (backdrop.ts). */
   prepareSettings(): Promise<void> {
@@ -455,6 +464,13 @@ export class Desktop {
       path.join(path.dirname(options.worker), 'folder-history-worker.cjs'),
       this.fileAccess,
     );
+    this.folderFacts = new FolderFacts(
+      path.join(path.dirname(options.worker), 'folder-facts-worker.cjs'),
+      {
+        access: (file) => this.fileAccess.historyScope(file),
+        report: (message) => this.options.diagnose?.(message),
+      },
+    );
     this.pasteboard = new Pasteboard(this.fileAccess, this.nativeSelections);
     this.trash = new Trash(this.home, this.fileAccess, {
       origins: () => this.operations.trashOrigins(),
@@ -554,6 +570,7 @@ export class Desktop {
       this.home,
       () => nativeTheme.shouldUseDarkColors,
       (snapshot) => {
+        void this.foundWorkspaces?.configure().catch(() => {});
         if (!snapshot.settings.git.enabled) {
           this.git.invalidate();
           for (const id of this.gitResources) this.resources.release(id);
@@ -588,9 +605,49 @@ export class Desktop {
       },
     );
     this.definedWorkspaces = new DefinedWorkspaces(dataPath);
+    const foundMounts = () => {
+      try {
+        return macFiles().sharingMounts?.();
+      } catch {
+        return undefined;
+      }
+    };
+    this.foundWorkspaces = new FoundWorkspaces(dataPath, this.home, {
+      facts: this.folderFacts,
+      state: () => this.workspaceSessions.snapshot(),
+      enabled: () => this.settings.snapshot().settings.browsing.findWorkspaces,
+      explicit: () =>
+        this.definitions?.snapshot().definitions.filter((entry) => entry.source !== 'found') ?? [],
+      aliases: () => this.workspaceSessions.folderHistory().aliases,
+      keepOnClear: (key) => !!this.workspaceSessions.findByDefinition(key) || !!this.definedWorkspaces.summary(key),
+      rekey: async (changes) => {
+        await this.definedWorkspaces.rekeyFound(changes);
+        const state = await this.workspaceSessions.rekeyFound(changes, (value) => this.storage.save(this.withPreferences(value)));
+        if (state) this.emit({ type: 'workspaces', state });
+      },
+      retained: (key) =>
+        !!this.workspaceSessions.findByDefinition(key) ||
+        Math.max(
+          this.definedWorkspaces.openedAt(key) ?? 0,
+          this.definedWorkspaces.summary(key)?.at ?? 0,
+        ) >=
+          Date.now() - foundRecentAge,
+      localVolumes: () => foundVolumeRoots(foundMounts()).localVolumes,
+      nonLocalRoots: () => foundVolumeRoots(foundMounts()).nonLocalRoots,
+      access: (folder) => !!this.fileAccess.historyScope(folder),
+      scopeRoot: (folder) => this.fileAccess.historyScopeRoot(folder),
+      emptyLocation: () => this.initialFolder(),
+    });
     this.definitions = this.createWorkspaceDefinitions(dataPath, access, (catalog) =>
       emit({ type: 'workspace-definitions', catalog }),
     );
+    this.declaredCommands = new DeclaredCommands({
+      facts: this.folderFacts,
+      roots: () => this.definitions.snapshot().definitions.map((item) => item.root),
+      dataPath,
+      home: this.home,
+      access: (file) => this.fileAccess.historyScope(file),
+    });
     const confirmations = new ExecutionConfirmations(dataPath, (...args) =>
       this.confirmExecution(...args),
     );
@@ -1785,6 +1842,7 @@ export class Desktop {
   emit(event: DesktopEvent, except?: number): void {
     if (event.type === 'file-changes') {
       this.workspaceSessions.remapFolderHistory(event.changes);
+      void this.foundWorkspaces?.remap(event.changes).catch(() => {});
       this.folderChecks.remap(event.changes);
       event = { ...event, folderHistoryRevision: this.workspaceSessions.folderHistoryRevision };
     }
@@ -1886,6 +1944,7 @@ export class Desktop {
     if (process.platform === 'darwin') macFiles().dismissFilePanels();
     this.settings.close();
     await this.definitions.close();
+    await this.foundWorkspaces?.close();
     await this.definedWorkspaces.close();
     await this.resources.clear();
     this.comparisons.close();
@@ -1905,6 +1964,8 @@ export class Desktop {
       this.files.close(),
       Promise.resolve(this.folderChecks?.close()),
       Promise.resolve(this.definitionRootChecks?.close()),
+      Promise.resolve(this.folderFacts?.close()),
+      this.declaredCommands.close(),
       this.actions.close(),
       this.watchers.close(),
       this.operations.close(),
@@ -2083,6 +2144,11 @@ export class Desktop {
     }
     await this.credentials.load();
     performanceMeter.mark('bootstrap:settings');
+    if (stored.state)
+      stored.state.workspaces = withDefinitionOrigins(
+        stored.state.workspaces,
+        this.definitions.snapshot(),
+      );
     this.workspaceSessions.seed(stored.state);
     stored.state = this.workspaceSessions.open(
       sender,
@@ -2112,6 +2178,7 @@ export class Desktop {
       (path) => this.checkFolderHistory(path),
       (prepared) => {
         this.workspaceSessions.normalizeFolderHistory(prepared.aliases, prepared.files);
+        this.foundWorkspaces?.start();
         const state = this.workspaceSessions.snapshot();
         if (state) {
           const history = this.workspaceSessions.folderHistory();
@@ -2169,6 +2236,7 @@ export class Desktop {
   ): WorkspaceDefinitions {
     return new WorkspaceDefinitions(directory, this.home, {
       memory: this.definedWorkspaces,
+      found: this.foundWorkspaces,
       access,
       checkRoot: (root) => this.checkDefinitionRoot(root),
       watchVolumes: watchSharingVolumes,
@@ -2216,6 +2284,14 @@ export class Desktop {
       this.folderHistoryPrepared.clear();
       this.folderChecks.clear(forgotten);
     }
+    if (visitSave?.clear) {
+      const results = await Promise.allSettled([
+        Promise.resolve().then(() => this.declaredCommands.clearHistory()),
+        Promise.resolve().then(() => this.foundWorkspaces?.clearHistory()),
+      ]);
+      for (const result of results)
+        if (result.status === 'rejected') this.diagnoseFailure(result.reason);
+    } else this.foundWorkspaces?.historyChanged();
     state.visits = history.visits;
     this.emit(
       {
@@ -2459,6 +2535,7 @@ export class Desktop {
         home: this.home,
         terminals: this.terminals,
         definitionCommands: this.definitionCommands,
+        declaredCommands: this.declaredCommands,
         external: this.externalTerminals,
         executions: this.executions,
         gitActions: this.gitActions,

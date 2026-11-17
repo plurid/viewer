@@ -1,6 +1,12 @@
 import type { FileEntry, Pane, Workspace } from '../contracts';
 import { gitActionLabels } from '../comparison/git-actions';
 import { previewsAsFile } from '../previews/documents/embedded';
+import {
+  hasRemoteLocationScheme,
+  remoteBaseName,
+  remoteLocation,
+  remoteParent,
+} from '../remote/location';
 
 /** The planes a file system item opens in. */
 export type ItemPlaneType = Extract<Pane['type'], 'folder' | 'preview'>;
@@ -63,6 +69,7 @@ export function paneTitle(pane: Pane, collectionName?: string): string {
 
 /** The last path component, for display; a root or empty path is returned unchanged. */
 export function baseName(path: string): string {
+  if (hasRemoteLocationScheme(path)) return remoteBaseName(path);
   return (
     path
       .replace(/[\\/]+$/, '')
@@ -71,6 +78,7 @@ export function baseName(path: string): string {
   );
 }
 export function parentPath(path: string): string {
+  if (hasRemoteLocationScheme(path)) return remoteParent(path);
   const separator = path.includes('\\') ? '\\' : '/';
   const normalized = path.replace(/[\\/]$/, '');
   const end = normalized.lastIndexOf(separator);
@@ -80,6 +88,7 @@ export function parentPath(path: string): string {
 
 /** Compare lexical paths, without resolving links or touching the filesystem. */
 export function normalizedPanePath(path: string, platform: string): string {
+  if (hasRemoteLocationScheme(path)) return remoteLocation.parse(path);
   const windows = platform === 'win32';
   const value = windows ? path.replace(/\\/g, '/') : path;
   const prefix = windows && value.startsWith('//') ? '//' : value.startsWith('/') ? '/' : '';

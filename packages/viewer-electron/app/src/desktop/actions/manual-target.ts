@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { CapturedTarget } from '../../domain/automation/actions';
 import type { GitTargetWindow } from '../comparison/git-target';
 import { containsPath } from '../files/containment';
+import { assertLocalPath } from '../files/local-path';
 
 /** Manual commands capture an owned view or the workspace's Home context, never an arbitrary cwd. */
 export async function validateManualTarget(
@@ -11,6 +12,9 @@ export async function validateManualTarget(
   home: string,
   canonical: (file: string) => Promise<string> = realpath,
 ): Promise<void> {
+  assertLocalPath(target.directory);
+  if (target.panePath) assertLocalPath(target.panePath);
+  target.selection.forEach((file) => assertLocalPath(file.path));
   const space = window?.workspaces?.workspaces.find((space) => space.id === target.workspaceID);
   if (
     !window?.alive ||
@@ -32,6 +36,8 @@ export async function validateManualTarget(
     throw new Error('An empty workspace command must use Home without a file selection.');
   }
   const fileContext = pane && ['folder', 'terminal', 'preview'].includes(pane.type);
+  if (fileContext) assertLocalPath(pane.path);
+  else assertLocalPath(home);
   if (fileContext && pane.path !== target.panePath)
     throw new Error('The originating path changed. Open the command again.');
   const source = fileContext

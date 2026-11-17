@@ -7,6 +7,7 @@ import path from 'node:path';
 import { cameraRawFormats } from '../../domain/previews/images/rendered';
 import type { DerivedPreviews } from './derived';
 import { Slots } from './slots';
+import { assertLocalPath } from '../files/local-path';
 /** Cache bounded, resized PNGs, never original decoded images. */
 export class Thumbnails {
   private cache = new Map<string, { file: string; source: string; value: string }>();
@@ -21,6 +22,7 @@ export class Thumbnails {
     private images?: Pick<DerivedPreviews, 'read'>,
   ) {}
   get(file: string, size: number): Promise<string> {
+    assertLocalPath(file);
     if (this.closed) return Promise.resolve('');
     return this.work.track([file], (scope) => this.read(file, size, scope)).catch(() => '');
   }

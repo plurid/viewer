@@ -125,6 +125,16 @@
   margin-left: auto;
   flex-shrink: 0;
 }
+.workspace-found-badge {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: var(--text-label);
+  color: var(--muted);
+  margin-inline-start: var(--gap-inline);
+  padding-inline: var(--gap-tight);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
 .command-group {
   padding: 7px 9px var(--gap-tight);
   font-size: var(--text-label);

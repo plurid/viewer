@@ -3,6 +3,7 @@ import { lstat as nodeLstat, stat as nodeStat } from 'node:fs/promises';
 import type { BigIntStats, PathLike } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 import { exactIdentityParts } from '../../domain/files/item-identity';
+import { assertLocalPath } from './local-path';
 
 export type FileStats = Omit<Stats, 'dev' | 'ino' | 'rdev' | 'blksize' | 'gid'> & {
   dev: bigint;
@@ -61,10 +62,12 @@ export function fileStats(info: NodeStats): FileStats {
 }
 
 export async function lstat(file: PathLike): Promise<FileStats> {
+  if (typeof file === 'string') assertLocalPath(file);
   return fileStats(await nodeLstat(file, { bigint: true }));
 }
 
 export async function stat(file: PathLike): Promise<FileStats> {
+  if (typeof file === 'string') assertLocalPath(file);
   return fileStats(await nodeStat(file, { bigint: true }));
 }
 

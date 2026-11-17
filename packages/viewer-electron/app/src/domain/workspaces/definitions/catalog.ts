@@ -82,6 +82,27 @@ function canonical(value: unknown): unknown {
   return value;
 }
 
+export function definitionBasis(
+  definition: Pick<
+    WorkspaceDefinition,
+    'root' | 'planes' | 'tiling' | 'focus' | 'terminalProfile' | 'look'
+  >,
+  hash: (text: string) => string,
+): string {
+  return hash(
+    JSON.stringify(
+      canonical({
+        root: definition.root,
+        planes: definition.planes,
+        tiling: definition.tiling,
+        focus: definition.focus,
+        terminalProfile: definition.terminalProfile,
+        look: definition.look,
+      }),
+    ),
+  );
+}
+
 export interface CatalogInput {
   file: WorkspacesFile;
   projects: readonly WorkspaceProject[];
@@ -397,18 +418,7 @@ export function resolveCatalog(input: CatalogInput): {
     definitions.push({
       ...definition,
       rootState,
-      basis: hash(
-        JSON.stringify(
-          canonical({
-            root,
-            planes: resolved,
-            tiling: definition.tiling,
-            focus: definition.focus,
-            terminalProfile,
-            look,
-          }),
-        ),
-      ),
+      basis: definitionBasis(definition, hash),
     });
   }
   return { definitions, diagnostics, rootProblems };

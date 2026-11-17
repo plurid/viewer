@@ -2,7 +2,9 @@ import {
   maximumWorkspaces,
   mergeWorkspaceVisits,
   uniqueDefinitionLinks,
+  rekeyFoundLinks,
 } from '../../domain/workspaces/catalog';
+import type { FoundKeyChange } from '../../domain/workspaces/found/catalog';
 import type { FolderVisitSave } from '../../domain/files/folder-visit-changes';
 import type { FileChange } from '../../domain/files/changes';
 import { pathMapper } from '../../domain/files/changes';
@@ -48,6 +50,7 @@ export class WorkspaceSessions {
   private reservations = new Map<number, string>();
   private definitionReservations = new Map<string, { owner: number; expires: number }>();
   private writes: Promise<unknown> = Promise.resolve();
+  private definitionRemaps = new Map<string, string>();
   private historyRevision = 0;
   private clearRevision = 0;
   private clearID?: string;
@@ -161,6 +164,28 @@ export class WorkspaceSessions {
   findByDefinition(key: string): Workspace | undefined {
     const workspace = this.current?.workspaces.find((space) => space.definition?.key === key);
     return workspace && structuredClone(workspace);
+  }
+
+  rekeyFound(changes: readonly FoundKeyChange[], write: (state: SavedState) => Promise<void>): Promise<SavedState | undefined> {
+    const task = this.writes.catch(() => {}).then(async () => {
+      if (!this.current) return;
+      const workspaces = rekeyFoundLinks(this.current.workspaces, changes);
+      if (workspaces !== this.current.workspaces) {
+        const next = { ...this.current, workspaces };
+        await write(structuredClone(next));
+        this.current = next;
+      }
+      for (const session of this.sessions.values())
+        session.baseline.workspaces = rekeyFoundLinks(session.baseline.workspaces, changes);
+      for (const change of changes) {
+        for (const [from, to] of this.definitionRemaps)
+          if (to === change.from) this.definitionRemaps.set(from, change.to);
+        this.definitionRemaps.set(change.from, change.to);
+      }
+      return structuredClone(this.current);
+    });
+    this.writes = task;
+    return task;
   }
 
   definitionOwner(key: string): number | undefined {
@@ -370,6 +395,10 @@ export class WorkspaceSessions {
   }
 
   private merge(owner: number, input: SavedState, visitSave?: FolderVisitSave): SavedState {
+    input = {
+      ...input,
+      workspaces: rekeyFoundLinks(input.workspaces, [...this.definitionRemaps].map(([from, to]) => ({ from, to }))),
+    };
     const session = this.sessions.get(owner);
     if (!session || !this.current) throw new Error('This workspace window has closed.');
     const baseline = session.baseline;

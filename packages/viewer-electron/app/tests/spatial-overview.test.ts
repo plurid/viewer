@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { solveOverviewPlacement } from '../src/renderer/workspace/overlays/placement';
+import {
+  overlaysIntersect,
+  solveOverviewPlacement,
+} from '../src/renderer/workspace/overlays/placement';
 import type { MinimapCorner } from '../src/domain/contracts';
 import { SpatialOverview } from '../src/renderer/workspace/overlays/SpatialOverview';
 import type { CommandContext } from '../src/renderer/commands/registry';
@@ -105,6 +108,7 @@ afterEach(() => {
   stop?.();
   stop = undefined;
   document.body.replaceChildren();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 function frame() {
@@ -140,7 +144,10 @@ function fixture(options: { minimapShown?: boolean; corner?: MinimapCorner } = {
   const changed = vi.fn();
   const navigate = vi.fn();
   const docked = vi.fn(() => false);
+  const hasPlanes = vi.fn(() => true);
+  const minimapApplied = vi.fn(() => false);
   const minimapShown = vi.fn(() => options.minimapShown ?? true);
+  const viewcubeConcealed = vi.fn((): boolean | undefined => undefined);
   const corner = vi.fn(() => options.corner ?? 'automatic');
   const requestMinimap = vi.fn();
   const adapter = new SpatialOverview(root, {
@@ -149,7 +156,10 @@ function fixture(options: { minimapShown?: boolean; corner?: MinimapCorner } = {
       return unsubscribe;
     },
     isDocked: docked,
+    hasPlanes,
+    minimapApplied,
     minimapShown,
+    viewcubeConcealed,
     corner,
     requestMinimap,
     labelForPlane: () => ({ label: 'Projects', path: '/fixtures/Projects' }),
@@ -165,7 +175,10 @@ function fixture(options: { minimapShown?: boolean; corner?: MinimapCorner } = {
     hide,
     adapter,
     docked,
+    hasPlanes,
+    minimapApplied,
     minimapShown,
+    viewcubeConcealed,
     corner,
     requestMinimap,
     changed,
@@ -176,6 +189,299 @@ function fixture(options: { minimapShown?: boolean; corner?: MinimapCorner } = {
 }
 
 describe('engine overlay adapter', () => {
+  it('refuses an empty space without leaving a forced map request', () => {
+    const view = fixture({ minimapShown: false });
+    view.hasPlanes.mockReturnValue(false);
+    frame();
+    view.adapter.open();
+    expect(view.requestMinimap).not.toHaveBeenCalledWith(true);
+    expect(view.adapter.snapshot().available).toBe(false);
+    expect(view.show).not.toHaveBeenCalled();
+  });
+
+  it('cancels a pending open after configuration is applied without a map', async () => {
+    const view = fixture({ minimapShown: false });
+    view.map.remove();
+    frame();
+    view.adapter.open();
+    frame();
+    view.adapter.invalidate();
+    frame();
+    frame();
+    expect(view.requestMinimap).toHaveBeenLastCalledWith(true);
+    view.minimapApplied.mockReturnValue(true);
+    view.emit();
+    frame();
+    frame();
+    expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
+    view.root.append(view.map);
+    await Promise.resolve();
+    frame();
+    expect(view.show).not.toHaveBeenCalled();
+  });
+
+  it('cancels a pending open on Escape outside the absent map', async () => {
+    const view = fixture({ minimapShown: false });
+    view.map.remove();
+    frame();
+    view.adapter.open();
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(escape);
+    frame();
+    expect(escape.defaultPrevented).toBe(true);
+    expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
+    view.root.append(view.map);
+    await Promise.resolve();
+    frame();
+    expect(view.show).not.toHaveBeenCalled();
+  });
+
+  it('lets the engine receive a mouse click before releasing its forced map', () => {
+    const view = fixture({ minimapShown: false });
+    frame();
+    view.adapter.open();
+    view.requestMinimap.mockImplementation((shown: boolean) => {
+      // A synchronous React flush can unmount the map between its native listener and the root.
+      if (!shown) view.map.remove();
+    });
+    const engineNavigation = vi.fn();
+    view.root.addEventListener('click', () => {
+      if (view.button.isConnected) engineNavigation();
+    });
+    view.button.click();
+    expect(engineNavigation).toHaveBeenCalledTimes(1);
+    expect(view.requestMinimap).toHaveBeenLastCalledWith(true);
+    expect(view.adapter.snapshot().expanded).toBe(false);
+    frame();
+    expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
+  });
+
+  it('does not release a reopened map from an older deferred close', () => {
+    const view = fixture({ minimapShown: false });
+    frame();
+    view.adapter.open();
+    view.adapter.close();
+    view.adapter.open();
+    view.requestMinimap.mockClear();
+    frame();
+    expect(view.adapter.snapshot().expanded).toBe(true);
+    expect(view.requestMinimap).not.toHaveBeenCalledWith(false);
+  });
+
+  it('cancels the old scheduled release when reopened', () => {
+    const view = fixture({ minimapShown: false });
+    frame();
+    view.adapter.open();
+    const releaseID = nextFrame + 1;
+    view.adapter.close();
+    expect(frames.has(releaseID)).toBe(true);
+    view.adapter.open();
+    expect(frames.has(releaseID)).toBe(false);
+  });
+
+  it('guards a release callback already dequeued before reopening', () => {
+    const view = fixture({ minimapShown: false });
+    frame();
+    view.adapter.open();
+    view.adapter.close();
+    // Cancellation cannot recall a callback already handed to the event loop.
+    const dequeued = [...frames.values()];
+    frames.clear();
+    view.adapter.open();
+    view.requestMinimap.mockClear();
+    for (const callback of dequeued) callback(0);
+    expect(view.adapter.snapshot().expanded).toBe(true);
+    expect(view.requestMinimap).not.toHaveBeenCalledWith(false);
+  });
+
+  it.each(['automatic', 'bottom-right'] as const)(
+    'leaves another plane focused after light dismissal with %s placement',
+    (corner) => {
+      const view = fixture({ corner });
+      frame();
+      const opener = document.createElement('button');
+      const destination = document.createElement('button');
+      let activePlane = 'A';
+      opener.addEventListener('focus', () => {
+        activePlane = 'A';
+      });
+      destination.addEventListener('focus', () => {
+        activePlane = 'B';
+      });
+      document.body.append(opener, destination);
+      opener.focus();
+      view.adapter.open();
+      destination.focus();
+      view.map.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed' }));
+      expect(document.activeElement).toBe(destination);
+      expect(activePlane).toBe('B');
+    },
+  );
+
+  it('replaces an expanded fixed corner after resize, layout and a corner change', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    frame();
+    view.adapter.open();
+    vi.mocked(view.root.getBoundingClientRect).mockReturnValue(new DOMRect(0, 0, 700, 400));
+    window.dispatchEvent(new Event('resize'));
+    frame();
+    expect(view.map.style.left).toBe('512px');
+    expect(view.map.style.top).toBe('264px');
+    vi.mocked(view.root.getBoundingClientRect).mockReturnValue(new DOMRect(200, 50, 500, 300));
+    view.emit();
+    frame();
+    expect(view.map.style.left).toBe('512px');
+    expect(view.map.style.top).toBe('214px');
+    view.corner.mockReturnValue('top-left');
+    view.adapter.invalidate();
+    frame();
+    expect(view.map.style.left).toBe('216px');
+    expect(view.map.style.top).toBe('66px');
+  });
+
+  it('leaves Escape in another control alone while light dismissal is queued', () => {
+    const view = fixture();
+    frame();
+    view.adapter.open();
+    const destination = document.createElement('button');
+    document.body.append(destination);
+    destination.focus();
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    destination.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(destination);
+    view.map.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed' }));
+    expect(view.adapter.snapshot().expanded).toBe(false);
+  });
+
+  it('measures no obstacles when both overlays are absent', () => {
+    const view = fixture({ minimapShown: false });
+    view.map.remove();
+    const controls = document.createElement('div');
+    controls.className = 'plane-controls';
+    const measured = vi.spyOn(controls, 'getBoundingClientRect');
+    view.root.append(controls);
+    frame();
+    measured.mockClear();
+    vi.mocked(view.root.getBoundingClientRect).mockClear();
+    const queries = vi.spyOn(view.root, 'querySelectorAll');
+    const styles = vi.spyOn(window, 'getComputedStyle');
+    for (let index = 0; index < 60; index++) {
+      view.emit();
+      frame();
+    }
+    expect(measured).not.toHaveBeenCalled();
+    expect(styles).not.toHaveBeenCalled();
+    expect(view.root.getBoundingClientRect).not.toHaveBeenCalled();
+    expect(queries).not.toHaveBeenCalled();
+  });
+
+  it('expands a requested map despite the overview-only visibility rule', async () => {
+    const view = fixture({ minimapShown: false });
+    view.map.remove();
+    frame();
+    view.adapter.open();
+    view.map.style.visibility = 'hidden';
+    view.root.append(view.map);
+    await Promise.resolve();
+    frame();
+    expect(view.show).toHaveBeenCalledOnce();
+    expect(view.adapter.snapshot().expanded).toBe(true);
+  });
+
+  it.each(['dock', 'destroy'] as const)('releases a pending open on %s', async (reason) => {
+    const view = fixture({ minimapShown: false });
+    view.map.remove();
+    frame();
+    view.adapter.open();
+    if (reason === 'dock') {
+      view.docked.mockReturnValue(true);
+      view.emit();
+      frame();
+    } else view.adapter.destroy();
+    frame();
+    expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
+    view.docked.mockReturnValue(false);
+    view.root.append(view.map);
+    await Promise.resolve();
+    view.emit();
+    frame();
+    expect(view.show).not.toHaveBeenCalled();
+  });
+
+  it('does not start a pending request when docked', () => {
+    const view = fixture({ minimapShown: false });
+    view.map.remove();
+    view.docked.mockReturnValue(true);
+    frame();
+    view.adapter.open();
+    expect(view.requestMinimap).not.toHaveBeenCalledWith(true);
+  });
+
+  it.each([false, true])(
+    'closes Overview and focuses the empty surface, map removed=%s',
+    (removed) => {
+      const view = fixture({ minimapShown: false });
+      view.root.tabIndex = -1;
+      frame();
+      view.adapter.open();
+      if (removed) view.map.remove();
+      view.hasPlanes.mockReturnValue(false);
+      view.emit();
+      frame();
+      expect(view.adapter.snapshot().expanded).toBe(false);
+      expect(document.activeElement).toBe(view.root);
+      frame();
+      expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
+    },
+  );
+
+  it('treats an unknown corner as automatic while expanded', () => {
+    const view = fixture();
+    view.corner.mockReturnValue('unknown' as MinimapCorner);
+    frame();
+    view.adapter.open();
+    expect(view.map.style.left).toBe('50%');
+    expect(view.map.style.top).toBe('50%');
+  });
+
+  it('keeps a pending request out of the next workspace before effect cleanup', () => {
+    const view = fixture({ minimapShown: false });
+    view.adapter.destroy();
+    view.map.remove();
+    const root = { current: view.root };
+    const renders: { epoch: string; requested: boolean }[] = [];
+    const hook = renderHook(
+      ({ epoch }) => {
+        const overview = useSpatialOverview({
+          root,
+          enabled: true,
+          epoch,
+          subscribeEngine: () => () => {},
+          isDocked: view.docked,
+          minimapShown: view.minimapShown,
+          corner: view.corner,
+          labelForPlane: () => undefined,
+        });
+        renders.push({ epoch, requested: overview.requested });
+        return overview;
+      },
+      { initialProps: { epoch: 'first' } },
+    );
+    stop = () => hook.unmount();
+    act(frame);
+    act(() => hook.result.current.open());
+    expect(hook.result.current.requested).toBe(true);
+    hook.rerender({ epoch: 'second' });
+    expect(
+      renders.filter(({ epoch }) => epoch === 'second').every(({ requested }) => !requested),
+    ).toBe(true);
+    act(frame);
+    expect(hook.result.current.requested).toBe(false);
+    hook.rerender({ epoch: 'first' });
+    expect(hook.result.current.requested).toBe(false);
+  });
+
   it.each([false, true])(
     'requests the engine minimap without changing its preference, automatic=%s',
     async (automatic) => {
@@ -224,6 +530,8 @@ describe('engine overlay adapter', () => {
       });
       expect(hook.result.current.overview.expanded).toBe(true);
       act(() => hook.result.current.overview.close());
+      expect(hook.result.current.configuration.elements?.minimap?.show).toBe(true);
+      act(frame);
       expect(hook.result.current.configuration.elements?.minimap?.show).toBe(false);
       expect(preferences).toEqual(original);
       act(() => hook.result.current.overview.open());
@@ -240,6 +548,7 @@ describe('engine overlay adapter', () => {
     frame();
     view.adapter.open();
     view.adapter.open();
+    frame();
     expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
     view.root.append(view.map);
     await Promise.resolve();
@@ -276,10 +585,11 @@ describe('engine overlay adapter', () => {
       else view.adapter.open();
 
       expect(view.adapter.snapshot().expanded).toBe(false);
-      expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
+      expect(view.requestMinimap).toHaveBeenLastCalledWith(true);
       if (dismissal === 'plane') expect(view.navigate).toHaveBeenCalledWith('engine-plane');
       else expect(document.activeElement).toBe(opener);
       frame();
+      expect(view.requestMinimap).toHaveBeenLastCalledWith(false);
       expect(view.map.getAttribute('popover')).toBe('auto');
       expect(view.adapter.snapshot().available).toBe(true);
     },
@@ -304,7 +614,7 @@ describe('engine overlay adapter', () => {
     expect(view.map.style.top).toBe('464px');
   });
 
-  function cube(view: ReturnType<typeof fixture>) {
+  function cube(view: ReturnType<typeof fixture>, animated = false) {
     const element = document.createElement('div');
     element.dataset.pluridOverlay = 'viewcube';
     element.style.right = '0px';
@@ -312,25 +622,49 @@ describe('engine overlay adapter', () => {
     const button = document.createElement('button');
     button.setAttribute('aria-label', 'view from front middleCenter');
     element.append(button);
-    vi.spyOn(element, 'getBoundingClientRect').mockImplementation(
-      () =>
-        new DOMRect(
-          element.style.left
+    let shown = '';
+    if (animated) {
+      const computedStyle = globalThis.getComputedStyle;
+      vi.spyOn(globalThis, 'getComputedStyle').mockImplementation((target, pseudo) => {
+        const style = computedStyle(target, pseudo);
+        if (target !== element) return style;
+        return new Proxy(style, {
+          get: (value, property) =>
+            property === 'translate' ? shown : Reflect.get(value, property),
+        });
+      });
+    }
+    vi.spyOn(element, 'getBoundingClientRect').mockImplementation(() => {
+      const translation = (animated ? shown : element.style.translate)
+        .split(/\s+/)
+        .map(Number.parseFloat);
+      return new DOMRect(
+        (translation[0] || 0) +
+          (element.style.left
             ? Number.parseFloat(element.style.left)
             : view.root.getBoundingClientRect().right -
-                150 -
-                Number.parseFloat(element.style.right),
-          element.style.top
+              150 -
+              Number.parseFloat(element.style.right)),
+        (translation[1] || 0) +
+          (element.style.top
             ? Number.parseFloat(element.style.top)
             : view.root.getBoundingClientRect().bottom -
-                175 -
-                Number.parseFloat(element.style.bottom),
-          150,
-          175,
-        ),
-    );
+              175 -
+              Number.parseFloat(element.style.bottom)),
+        150,
+        175,
+      );
+    });
     view.root.append(element);
-    return element;
+    return Object.assign(element, {
+      arrive: () => {
+        if (shown === element.style.translate) return false;
+        // A transition keeps reporting its previous box until it reaches its new translation.
+        shown = element.style.translate;
+        element.dispatchEvent(new Event('transitionend'));
+        return true;
+      },
+    });
   }
 
   function protectedArea(view: ReturnType<typeof fixture>, bounds: DOMRect) {
@@ -340,6 +674,238 @@ describe('engine overlay adapter', () => {
     view.root.append(element);
     return { element, rectangle };
   }
+
+  it('moves the cube around a fixed map and restores its engine anchors and translation', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view);
+    element.style.setProperty('translate', '2px 3px', 'important');
+    frame();
+    const mapBounds = { x: 812, y: 464, width: 172, height: 120 };
+    expect(overlaysIntersect(element.getBoundingClientRect(), mapBounds)).toBe(false);
+    expect(element.style.visibility).toBe('');
+    expect(element.style.right).toBe('0px');
+    expect(element.style.bottom).toBe('0px');
+    expect(element.style.left).toBe('');
+    expect(element.style.top).toBe('');
+    view.adapter.open();
+    view.emit();
+    frame();
+    expect(overlaysIntersect(element.getBoundingClientRect(), mapBounds)).toBe(false);
+    view.adapter.close();
+    frame();
+    view.corner.mockReturnValue('top-left');
+    view.emit();
+    frame();
+    expect(element.style.translate).toBe('2px 3px');
+    expect(element.style.getPropertyPriority('translate')).toBe('important');
+    view.corner.mockReturnValue('bottom-right');
+    view.emit();
+    frame();
+    view.adapter.destroy();
+    expect(element.style.translate).toBe('2px 3px');
+    expect(element.style.visibility).toBe('');
+  });
+
+  it('keeps a concealed viewcube in its engine position through reveal', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    element.style.right = '-100px';
+    element.style.bottom = '-90px';
+    frame();
+    element.arrive();
+    const tucked = element.getBoundingClientRect();
+    expect(tucked.right > 1000 || tucked.x < 0 || tucked.bottom > 600 || tucked.y < 0).toBe(true);
+    element.style.right = '0px';
+    element.style.bottom = '0px';
+    const revealing = element.getBoundingClientRect();
+    const visibleArea = (bounds: DOMRect) =>
+      Math.max(0, Math.min(bounds.right, 1000) - Math.max(bounds.x, 0)) *
+      Math.max(0, Math.min(bounds.bottom, 600) - Math.max(bounds.y, 0));
+    expect(visibleArea(revealing)).toBeGreaterThan(visibleArea(tucked));
+    element.dispatchEvent(new Event('transitionend'));
+    frame();
+    expect(element.arrive()).toBe(false);
+    frame();
+    const revealed = element.getBoundingClientRect();
+    expect(revealed.x).toBeGreaterThanOrEqual(0);
+    expect(revealed.y).toBeGreaterThanOrEqual(0);
+    expect(revealed.right).toBeLessThanOrEqual(1000);
+    expect(revealed.bottom).toBeLessThanOrEqual(600);
+    expect(element.style.visibility).toBe('');
+    expect(element.arrive()).toBe(false);
+  });
+
+  it('settles after moving clear of the map with delayed transition geometry', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    const styles = vi.spyOn(element.style, 'setProperty');
+    frame();
+    let transitions = 0;
+    for (let step = 0; step < 8 && element.arrive(); step++) {
+      transitions++;
+      frame();
+    }
+    expect(transitions).toBe(1);
+    expect(overlaysIntersect(element.getBoundingClientRect(), { x: 812, y: 464, ...size })).toBe(
+      false,
+    );
+    expect(element.arrive()).toBe(false);
+    expect(styles.mock.calls.filter(([property]) => property === 'translate')).toHaveLength(1);
+  });
+
+  it('keeps the horizontal tuck even when the vertical offset is already revealed', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    element.style.right = '-100px';
+    frame();
+    expect(element.style.translate).toBe('');
+    expect(element.getBoundingClientRect().x).toBe(950);
+    element.style.right = '0px';
+    element.dispatchEvent(new Event('transitionend'));
+    frame();
+    element.arrive();
+    frame();
+    expect(element.getBoundingClientRect().x).toBe(850);
+    expect(element.arrive()).toBe(false);
+  });
+
+  it('keeps a concealed viewcube under the pointer that reveals it', async () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    element.style.right = '-100px';
+    element.style.bottom = '-90px';
+    element.dataset.pluridHover = 'false';
+    frame();
+    const pointer = { x: 990, y: 590 };
+    const underPointer = () => {
+      const bounds = element.getBoundingClientRect();
+      return (
+        pointer.x >= bounds.x &&
+        pointer.x <= bounds.right &&
+        pointer.y >= bounds.y &&
+        pointer.y <= bounds.bottom
+      );
+    };
+    expect(underPointer()).toBe(true);
+    element.style.right = '0px';
+    element.style.bottom = '0px';
+    element.dataset.pluridHover = 'true';
+    await Promise.resolve();
+    frame();
+    for (let step = 0; step < 4 && element.arrive(); step++) frame();
+    expect(underPointer()).toBe(true);
+    expect(element.style.translate).toBe('');
+    expect(element.style.visibility).toBe('');
+    expect(element.arrive()).toBe(false);
+  });
+
+  it('respects the conceal setting while revealed and resumes placement when it is off', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    view.viewcubeConcealed.mockReturnValue(true);
+    frame();
+    expect(element.style.translate).toBe('');
+    expect(element.style.visibility).toBe('');
+    view.viewcubeConcealed.mockReturnValue(false);
+    view.emit();
+    frame();
+    element.arrive();
+    frame();
+    expect(element.getBoundingClientRect()).toEqual(new DOMRect(834, 16, 150, 175));
+    view.viewcubeConcealed.mockReturnValue(true);
+    view.emit();
+    frame();
+    element.arrive();
+    frame();
+    expect(element.getBoundingClientRect()).toEqual(new DOMRect(850, 425, 150, 175));
+    expect(element.style.visibility).toBe('');
+    expect(element.arrive()).toBe(false);
+  });
+
+  it('subtracts its settled translation when the map changes corners', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    frame();
+    element.arrive();
+    frame();
+    view.corner.mockReturnValue('top-right');
+    view.emit();
+    frame();
+    expect(element.style.translate).toBe('');
+    element.arrive();
+    frame();
+    expect(element.getBoundingClientRect()).toEqual(new DOMRect(850, 425, 150, 175));
+    expect(element.arrive()).toBe(false);
+  });
+
+  it('uses the current transition offset when the viewport changes before arrival', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    frame();
+    vi.mocked(view.root.getBoundingClientRect).mockReturnValue(new DOMRect(0, 0, 1000, 400));
+    view.emit();
+    frame();
+    element.arrive();
+    frame();
+    expect(element.getBoundingClientRect()).toEqual(new DOMRect(834, 16, 150, 175));
+    expect(element.arrive()).toBe(false);
+  });
+
+  it('can move again before a restoration transition reaches the engine position', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    frame();
+    element.arrive();
+    frame();
+    view.corner.mockReturnValue('top-right');
+    view.emit();
+    frame();
+    view.corner.mockReturnValue('bottom-right');
+    view.emit();
+    frame();
+    element.arrive();
+    frame();
+    expect(element.getBoundingClientRect()).toEqual(new DOMRect(834, 16, 150, 175));
+    expect(element.style.visibility).toBe('');
+    expect(element.arrive()).toBe(false);
+  });
+
+  it('reveals a fixed-map cube once a corner becomes clear without resizing', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    const obstacle = protectedArea(view, new DOMRect(0, 0, 1000, 600));
+    frame();
+    expect(element.style.visibility).toBe('hidden');
+    obstacle.element.remove();
+    view.emit();
+    frame();
+    element.arrive();
+    frame();
+    expect(element.style.visibility).toBe('');
+    expect(overlaysIntersect(element.getBoundingClientRect(), { x: 812, y: 464, ...size })).toBe(
+      false,
+    );
+    expect(element.arrive()).toBe(false);
+  });
+
+  it('holds its chosen corner when a control appears over it', () => {
+    const view = fixture({ corner: 'bottom-right' });
+    const element = cube(view, true);
+    frame();
+    element.arrive();
+    frame();
+    const translation = element.style.translate;
+    const obstacle = protectedArea(view, new DOMRect(800, 0, 200, 200));
+    view.emit();
+    frame();
+    expect(element.style.translate).toBe(translation);
+    expect(element.style.visibility).toBe('hidden');
+    obstacle.element.remove();
+    view.emit();
+    frame();
+    expect(element.style.visibility).toBe('');
+    expect(element.arrive()).toBe(false);
+  });
 
   it('protects a composer without overriding the engine Viewcube position', () => {
     const view = fixture();
@@ -549,7 +1115,6 @@ describe('engine overlay adapter', () => {
       const actions = {
         workspace: { isDocked: () => false },
         ready: true,
-        overviewAvailable: view.adapter.snapshot().available,
         overview: () => view.adapter.open(),
       } as unknown as WindowActions;
       const context: CommandContext = {

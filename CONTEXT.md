@@ -21,6 +21,21 @@ A **file entry** combines a path, metadata and stable identity. File operations 
 source version rather than trusting a previously displayed path. Native file permission belongs to
 desktop services and can be revoked.
 
+The [remote-plane proposal](docs/adr/0023-remote-planes-over-system-openssh.md) defines a **remote
+location** as the raw internal string `viewer-sftp://<connectionID><absolute-path>`. It is not a
+local path or a typed server address. `domain/remote/*` owns pure location, address, identity and
+connection-record validation, limits and protected-path rules. Local filesystem entry points refuse
+the reserved scheme before path resolution.
+
+A **server connection** is a private saved SSH endpoint and its connection lifetime, distinct from a
+local server listener. The proposed `desktop/remote/*` owner coordinates system OpenSSH, askpass,
+the SFTP worker, remote resources, server Trash and operation executors. Existing Operations,
+Resources, Terminals and Trash retain their shared state and authority. SSH planes are proposed for
+the direct build behind `VIEWER_REMOTE=1` until qualification; connections and secrets stay outside
+editable JSONC and agent authority.
+
+`desktop/remote/sftp` owns the bounded SFTP v3 codec, duplex client, stream windows and listing-name boundary.
+
 A **plane** is a view record. Its engine route, framing and geometry belong to
 `src/renderer/workspace/controller.ts`. A **root** is an independent spatial branch: preview reuse
 is scoped to that root. Keep engine IDs inside the adapter. Where a new root opens, beside the
@@ -39,7 +54,16 @@ outside session state, backups and agent discovery. `desktop/ipc/definition-hand
 human and window ownership before close, reset, save and reopen. `renderer/state/definitions.ts`
 owns the persisted renderer transitions; Manage is `ui/workspace/WorkspacesDialog.tsx`.
 
+`domain/workspaces/found` owns root rules, candidate evidence, keys and plain found definitions.
+`domain/workspaces/ownership.ts` indexes owning roots and workspace shares. The desktop
+`workspaces/found-workspaces.ts` schedules bounded probes through FolderFacts and keeps the private
+found cache, hidden roots and run references. Workspace links record their definition source.
+
 - `domain/terminals/command-text.ts` validates command text.
+- `domain/terminals/declared-commands.ts` parses bounded file declarations without execution.
+- `desktop/workspaces/folder-facts.ts` owns scoped, prioritized reads and disposable probe threads.
+- `desktop/terminals/declared-commands.ts` owns root walks, cache and private last-run references.
+- `renderer/terminals/DeclaredCommandList.tsx` fills the command input from declared lines.
 - `domain/terminals/definition-commands.ts` defines references and outcomes.
 - `desktop/workspaces/definition-commands.ts` owns approved command starts.
 - `desktop/workspaces/definition-command-lookup.ts` binds commands to owned panes.

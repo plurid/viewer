@@ -572,6 +572,9 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
       return [...fixtureTerminals.values()].filter((request) => request.workspaceID === workspaceID)
         .length;
     }
+    case 'declaredCommands':
+      schemas.declaredCommands.parse(args);
+      return { commands: [] };
     case 'terminalClose':
       fixtureTerminals.delete(schemas.terminalClose.parse(args)[0]);
       return;

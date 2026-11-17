@@ -24,6 +24,7 @@ import { terminalConfirmation } from '../actions/execution-confirmations';
 import { containsPath } from '../files/containment';
 import { TerminalCommands, type RunTerminalCommand } from './terminal-commands';
 import type { TerminalStatus } from '../../domain/terminals/status';
+import { assertLocalPath } from '../files/local-path';
 
 export interface TerminalStartOptions {
   initialInput?: string;
@@ -88,6 +89,7 @@ export class Terminals {
     return profile ? structuredClone(profile) : undefined;
   }
   async running(request: TerminalStart, owner: number, includePending = true): Promise<boolean> {
+    assertLocalPath(request.cwd);
     const existing =
       this.sessions.get(request.id) ?? (includePending ? this.pending.get(request.id) : undefined);
     if (!existing || this.stopping.has(request.id)) return false;
@@ -96,6 +98,7 @@ export class Terminals {
   }
 
   async status(request: TerminalStart, owner: number, wait = false): Promise<TerminalStatus> {
+    assertLocalPath(request.cwd);
     const pending = this.pending.get(request.id);
     if (pending) {
       await this.match(request, owner, pending);
@@ -125,6 +128,8 @@ export class Terminals {
     existing: TerminalSession | PendingTerminal,
     options: TerminalStartOptions = {},
   ): Promise<void> {
+    assertLocalPath(request.cwd);
+    assertLocalPath(existing.request.cwd);
     if (
       existing.owner !== owner ||
       existing.request.workspaceID !== request.workspaceID ||
@@ -143,6 +148,8 @@ export class Terminals {
   }
 
   start(request: TerminalStart, owner: number, options: TerminalStartOptions = {}): Promise<void> {
+    assertLocalPath(request.cwd);
+    if (options.approvedCwd) assertLocalPath(options.approvedCwd);
     options = {
       initialInput: options.initialInput,
       approvedProfile: options.approvedProfile
@@ -190,6 +197,7 @@ export class Terminals {
   /** Called only by GitActions after compiling a fixed operation and reviewing mutations. */
   startGit(program: GitTerminalLaunch, owner: number): Promise<void> {
     const { request } = program;
+    assertLocalPath(request.cwd);
     if (this.commands.has(request.id))
       return Promise.reject(new Error('This ID belongs to command output.'));
     if (process.mas)
@@ -249,6 +257,8 @@ export class Terminals {
 
   /** Desktop-only: the manual execution service has already checked the profile and target. */
   runCommand: RunTerminalCommand = (program, signal, output) => {
+    assertLocalPath(program.cwd);
+    assertLocalPath(program.executable);
     if (this.closed) return Promise.reject(new Error('Terminals have closed.'));
     if (this.sessions.size + this.pending.size + this.commands.size >= 100)
       return Promise.reject(new Error('Close a terminal before starting another command.'));
@@ -262,6 +272,7 @@ export class Terminals {
   };
 
   private async prepareGit(program: GitTerminalLaunch, ticket: PendingTerminal): Promise<void> {
+    assertLocalPath(program.request.cwd);
     const check = () => {
       if (this.closed || ticket.cancelled || program.signal.aborted)
         throw new Error('Git action cancelled before launch.');
@@ -320,6 +331,7 @@ export class Terminals {
     owner: number,
     options: TerminalStartOptions,
   ): Promise<void> {
+    assertLocalPath(request.cwd);
     const existing = this.sessions.get(request.id);
     if (existing) {
       await this.match(request, owner, existing, options);

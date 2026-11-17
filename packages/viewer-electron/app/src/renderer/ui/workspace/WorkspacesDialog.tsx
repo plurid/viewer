@@ -6,7 +6,9 @@ import { canCaptureDefinition } from '../../../domain/workspaces/definitions/cap
 import { openDefinition, receiveDefinitions } from '../../state/definitions';
 import { ProjectManagerOffer } from './ProjectManagerOffer';
 import {
+  definitionSourceNotice,
   definitionWasRemoved,
+  linkedDefinition,
   maximumWorkspaces,
   orderedWorkspaces,
 } from '../../../domain/workspaces/catalog';
@@ -158,7 +160,10 @@ export function WorkspacesDialog({
                 const current = space.id === saved.activeWorkspace;
                 const elsewhere = !current && saved.openWindows?.includes(space.id);
                 const removed = definitionWasRemoved(space, catalog);
+                const sourceNotice = definitionSourceNotice(space, catalog);
                 const linked = !!space.definition && !removed;
+                const definition = linkedDefinition(space, catalog);
+                const changed = definition && definition.basis !== space.definition!.basis;
                 return (
                   <li key={space.id} data-workspace-id={space.id}>
                     <button
@@ -177,14 +182,11 @@ export function WorkspacesDialog({
                               ? 'Open in another window · '
                               : ''}
                           {space.panes.length} {space.panes.length === 1 ? 'plane' : 'planes'}
-                          {removed && ' · Its definition was removed from workspaces.jsonc.'}
-                          {space.definition &&
-                            catalog?.definitions.some(
-                              (item) =>
-                                item.key === space.definition!.key &&
-                                item.basis !== space.definition!.basis,
-                            ) &&
-                            ' · Definition changed'}
+                          {removed &&
+                            ' · ' +
+                              (sourceNotice ?? 'Its definition was removed from workspaces.jsonc.')}
+                          {sourceNotice && !removed && ' · ' + sourceNotice}
+                          {changed && ' · Definition changed'}
                         </small>
                       </span>
                     </button>
@@ -221,12 +223,7 @@ export function WorkspacesDialog({
                         onClick={() => onAction('save-as', space.id)}
                       />
                     )}
-                    {space.definition &&
-                      catalog?.definitions.some(
-                        (item) =>
-                          item.key === space.definition!.key &&
-                          item.basis !== space.definition!.basis,
-                      ) && (
+                    {linked && changed && (
                         <button
                           disabled={opening || elsewhere}
                           onClick={() => onAction('reset', space.id)}
@@ -283,6 +280,7 @@ export function WorkspacesDialog({
 }
 
 function DefinedRows({ onClose }: { onClose(): void }) {
+  const home = useViewer((state) => state.bootstrap.home);
   const catalog = useViewer((state) => state.bootstrap.definitions);
   const saved = useViewer((state) => state.saved);
   const needsAccess = catalog?.projectManager.state === 'needs-access';
@@ -381,8 +379,15 @@ function DefinedRows({ onClose }: { onClose(): void }) {
             <li key={item.key}>
               <div className="workspace-catalog-definition">
                 <strong>{item.name}</strong>
-                <small>{item.key}</small>
+                <small>
+                  {item.source === 'found' && item.root.startsWith(home + '/')
+                    ? '~' + item.root.slice(home.length)
+                    : item.source === 'found'
+                      ? item.root
+                      : item.key}
+                </small>
                 <span className="workspace-catalog-badges">
+                  {item.source === 'found' && <span>Found</span>}
                   {item.remembered && !opened && <span>Remembers</span>}
                   {(item.planes.length > 1 ||
                     item.planes[0]?.plane.kind !== 'folder' ||

@@ -547,11 +547,13 @@ works inside a transformed or pinned plane, and its rows follow the panel's widt
 Panels in the overlay grid share it and never cover each other. A collapsible panel collapses from
 its title to the title bar and a short status.
 
-**The Overview Rule.** Overview stays reachable from the palette whenever the space is shown,
-including when the minimap is hidden. Opening and closing it never changes the saved minimap
+**The Overview Rule.** Overview stays reachable from the palette when the space is shown and holds a
+plane, including when the minimap is hidden. Opening and closing it never changes the saved minimap
 visibility settings. Minimap corner defaults to Automatic, which avoids controls; a fixed corner
-keeps the minimap and Overview still even over controls, falling back only when the viewport is too
-small. The popup retains top-layer dismissal and focus restoration.
+keeps the minimap and Overview in that corner even over controls, falling back only when the
+viewport is too small. An expanded fixed Overview follows viewport and layout changes. The viewcube
+moves clear of a fixed map while keeping its engine conceal behavior. Light dismissal keeps focus on
+a control the person clicked; Escape returns it to the connected opener.
 
 **The Anchored Layer Rule.** A popover or menu opens from its button or the pointer, placed from the
 anchor's box on screen, so it lines up with a control in a transformed plane. It stays 8 px inside
@@ -587,12 +589,21 @@ eight saved pins.
 Definitions are searched by name, not listed as hundreds of open workspaces. A first run stays
 quiet: do not create a definition file or ask for source access until the person requests it.
 
+**The Found Workspaces Rule.** Find silently from folders the person uses. Show found workspaces
+only in search, Manage and Recently closed after planes are remembered. Mark them Found and show
+their root. Explicit definitions win for the same root. Any hiding action must offer Undo.
+
 **The Definition Command Rule.** Every open, reopen, reset, launch restore and reload asks in each
 command plane: show the literal command and folder, primary **Run `npm run dev`**, secondary **Shell
 only**. Run has no autofocus. A normal-flow notice offers secondary **Run all N commands** and **Not
 now**. Nothing starts on open. A new or changed command also needs a native review of its folder and
 exact profile program. Disabled Run controls show their reason; Shell only stays available in
 agent-driven views. Keep each xterm attached from the Run choice, even offscreen.
+
+**The Declared Command Rule.** Show a folder's declared command as a literal line under its file
+name, with its body as muted detail. A pick fills and focuses the input; it never runs the line.
+Keep Run the one primary action. Discovery never executes a tool, asks for access or serves an
+agent-driven window. Slow reads leave typing available without an error notice.
 
 **The Discovery Space Rule.** Pinned tools and keyboard help start closed. Opening either closes the
 other; each expanded section has bounded scrolling while search and the footer stay reachable.

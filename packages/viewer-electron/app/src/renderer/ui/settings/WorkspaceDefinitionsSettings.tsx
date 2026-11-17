@@ -11,10 +11,10 @@ import { Disclosure } from '../Disclosure';
 
 function sourceStatus(source: ProjectManagerState): string {
   if (source.state === 'undecided') return 'The project list has not been read.';
-  if (source.state === 'absent') return "VS Code Project Manager's list was not found.";
+  if (source.state === 'absent') return 'VS Code Project Manager’s list was not found.';
   if (source.state === 'off') return 'VS Code Project Manager is off.';
   if (source.state === 'needs-access')
-    return "Allow access to read VS Code Project Manager's list.";
+    return 'Allow access to read VS Code Project Manager’s list.';
   const counts =
     [
       `${source.projects} VS Code ${source.projects === 1 ? 'project' : 'projects'}`,
@@ -29,7 +29,7 @@ function sourceStatus(source: ProjectManagerState): string {
     ].join(', ') + '.';
   if (source.state === 'unreadable')
     return (
-      "VS Code Project Manager's list could not be read." +
+      'VS Code Project Manager’s list could not be read.' +
       (source.projects ? ` The last valid list remains in effect. ${counts}` : '')
     );
   return counts;

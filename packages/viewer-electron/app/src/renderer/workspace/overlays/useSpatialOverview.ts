@@ -38,7 +38,10 @@ export function useSpatialOverview({
     const value = new SpatialOverview(root.current, {
       subscribeEngine: (listener) => current.current.subscribeEngine(listener),
       isDocked: () => current.current.isDocked(),
+      hasPlanes: () => current.current.hasPlanes?.() ?? true,
+      minimapApplied: () => current.current.minimapApplied?.() ?? true,
       minimapShown: () => current.current.minimapShown(),
+      viewcubeConcealed: () => current.current.viewcubeConcealed?.(),
       corner: () => current.current.corner(),
       requestMinimap: (shown) => {
         setRequestedEpoch(shown ? epoch : undefined);

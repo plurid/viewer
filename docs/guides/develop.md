@@ -25,6 +25,11 @@ Over It** or **Cancel**.
 - **⌘K** → **Run command…** runs one shell line in the current folder. Type the line and choose
   **Run**, or press **⌘Return**. Its output appears in the command progress panel, with a **Stop**
   button while it runs and **Open receipt** for the full record.
+- Commands declared in `package.json`, Makefiles, justfiles, `Procfile` and Deno task files appear
+  under their file names above **Recent**. Pick a row to fill the line, review it, then choose
+  **Run**. In **⌘K**, type `!` to find the same rows while the quick-command draft is empty. A pick
+  never runs anything. [Declared commands](../reference/terminals.md#declared-commands) explains the
+  parsing rules and private **Last run** reference.
 - To keep a line for next time, open **Run command…** again, pick it under **Recent**, and choose
   **Save as action…**. [Make repeated work a command](automate.md) has the rest.
 - **⌘K** → **Open terminal plane** opens an interactive shell in the folder. **File → New Terminal

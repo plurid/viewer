@@ -75,6 +75,19 @@ import { guardDestination, outputName, sameItemAt, singleOutput } from './destin
 import { isActiveJob } from '../../domain/operations/jobs';
 import { errorMessage } from '../../domain/errors';
 import { MAX_CLIPBOARD_IMAGE_BYTES, checkClipboardImageSize } from '../../domain/files/clipboard';
+import { assertLocalPath } from '../files/local-path';
+
+function assertLocalOperation(request: OperationRequest): void {
+  request.sources.forEach(assertLocalPath);
+  if (request.destination) assertLocalPath(request.destination);
+  if (request.reviewedDestination) assertLocalPath(request.reviewedDestination.path);
+  for (const files of [
+    request.expectedSources,
+    request.expectedContents,
+    request.preparedTransforms,
+  ])
+    files?.forEach((file) => assertLocalPath(file.path));
+}
 
 interface UndoStep {
   from: string;
@@ -331,6 +344,7 @@ export class Operations {
   }
   /** The exact output the operation recorded, still unchanged; callers receive no Undo authority. */
   async matchesOutput(id: string, file: string): Promise<boolean> {
+    assertLocalPath(file);
     await this.load();
     const task = this.tasks.get(id);
     const step = task?.undo.find((item) => item.from === file && item.remove && item.proof);
@@ -462,6 +476,8 @@ export class Operations {
     actor: OperationActor = 'person',
     image?: Buffer,
   ): string {
+    assertLocalOperation(request);
+    if (reviewedFile) assertLocalPath(reviewedFile.path);
     if (this.stopped) throw new Error('The file operation queue has closed.');
     if (request.imageBytes !== undefined)
       throw new Error('Paste a picture from the clipboard to create an image file.');
@@ -912,6 +928,11 @@ export class Operations {
   private async undoTask(id: string): Promise<void> {
     const task = this.tasks.get(id);
     if (!task?.job.undoable) throw new Error('This operation cannot be undone.');
+    assertLocalOperation(task.request);
+    task.undo.forEach((step) => {
+      assertLocalPath(step.from);
+      assertLocalPath(step.to);
+    });
     await this.access(
       task.undo.flatMap((step) =>
         step.trash ? [step.to] : step.remove ? [step.from] : [step.from, step.to],
@@ -1045,6 +1066,8 @@ export class Operations {
     return this.startOperation(request, true, task.reviewedFile);
   }
   private withStep<T>(step: UndoStep, work: () => Promise<T>): Promise<T> {
+    assertLocalPath(step.from);
+    assertLocalPath(step.to);
     return step.trash
       ? this.receiptAccess(
           { path: step.from, directory: !!step.directory, bookmark: step.bookmark },
@@ -1609,6 +1632,8 @@ export class Operations {
   }
   /** One source, or the one output of a single-output job. */
   private async runItem(task: Task, source: string): Promise<ItemOutcome> {
+    assertLocalPath(source);
+    assertLocalOperation(task.request);
     const { job, request } = task;
     await this.admit(task, source);
     // A transfer moves only within one volume. Its destination folder is resolved, as

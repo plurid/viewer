@@ -29,6 +29,12 @@
 }
 .run-command-dialog footer {
   flex-wrap: wrap;
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--surface);
+  padding-block: var(--gap-small);
 }
 .run-command-recent {
   max-height: 180px;

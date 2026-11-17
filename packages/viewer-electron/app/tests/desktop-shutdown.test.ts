@@ -34,6 +34,7 @@ function fixture() {
     'settings',
     'definitions',
     'definedWorkspaces',
+    'declaredCommands',
     'comparisons',
     'duplicates',
     'watchRules',

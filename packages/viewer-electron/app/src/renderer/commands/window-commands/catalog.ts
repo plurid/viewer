@@ -1,7 +1,12 @@
 import type { CommandDefinition } from '../registry';
 import { baseName, paneTitle } from '../../../domain/workspaces/planes';
 import type { WindowScopes } from './scope';
-import { definitionWasRemoved, orderedWorkspaces } from '../../../domain/workspaces/catalog';
+import {
+  definitionSourceNotice,
+  definitionWasRemoved,
+  linkedDefinition,
+  orderedWorkspaces,
+} from '../../../domain/workspaces/catalog';
 import { searchableDefinition } from '../../../domain/workspaces/definitions/query';
 import { openDefinition } from '../../state/definitions';
 import { getState } from '../../state/store';
@@ -16,11 +21,9 @@ export function catalogCommands({
 }: WindowScopes): CommandDefinition[] {
   const commands: CommandDefinition[] = [];
   for (const entry of orderedWorkspaces(state.saved)) {
+    const definition = linkedDefinition(entry, state.bootstrap.definitions);
     const changed =
-      entry.definition &&
-      state.bootstrap.definitions?.definitions.some(
-        (item) => item.key === entry.definition!.key && item.basis !== entry.definition!.basis,
-      );
+      definition && definition.basis !== entry.definition!.basis;
     const resetID = changed ? `reset-definition:${entry.id}` : undefined;
     commands.push({
       id: `workspace:${entry.id}`,
@@ -29,8 +32,10 @@ export function catalogCommands({
       detail: changed
         ? entry.definition!.key + ' · Definition changed'
         : definitionWasRemoved(entry, state.bootstrap.definitions)
-          ? 'Its definition was removed from workspaces.jsonc.'
-          : (entry.definition?.key ??
+          ? (definitionSourceNotice(entry, state.bootstrap.definitions) ??
+            'Its definition was removed from workspaces.jsonc.')
+          : (definitionSourceNotice(entry, state.bootstrap.definitions) ??
+            entry.definition?.key ??
             `${entry.panes.length} open ${entry.panes.length === 1 ? 'plane' : 'planes'}`),
       icon: entry.id === space.id ? 'check' : 'dock',
       aliases: ['workspace', `switch to ${entry.name}`],
@@ -60,7 +65,7 @@ export function catalogCommands({
       });
   }
   const opened = new Set(
-    state.saved.workspaces.flatMap((entry) => (entry.definition ? [entry.definition.key] : [])),
+    state.saved.workspaces.flatMap((entry) => (linkedDefinition(entry, state.bootstrap.definitions) ? [entry.definition!.key] : [])),
   );
   for (const definition of state.bootstrap.definitions?.definitions ?? []) {
     if (!searchableDefinition(definition) || opened.has(definition.key)) continue;
@@ -70,9 +75,15 @@ export function catalogCommands({
     commands.push({
       id: `defined:${definition.key}`,
       label: definition.name,
+      badge: definition.source === 'found' ? 'Found' : undefined,
       group: 'Workspaces',
       icon: 'dock',
-      detail: `${definition.key} · ${definition.remembered ? 'Remembers ' + definition.remembered.planes : definition.planes.length} ${(definition.remembered?.planes ?? definition.planes.length) === 1 ? 'plane' : 'planes'}${command?.kind === 'terminal' ? ` · ${command.command}` : ''}`,
+      detail:
+        definition.source === 'found'
+          ? definition.root.startsWith(state.bootstrap.home + '/')
+            ? '~' + definition.root.slice(state.bootstrap.home.length)
+            : definition.root
+          : `${definition.key} · ${definition.remembered ? 'Remembers ' + definition.remembered.planes : definition.planes.length} ${(definition.remembered?.planes ?? definition.planes.length) === 1 ? 'plane' : 'planes'}${command?.kind === 'terminal' ? ` · ${command.command}` : ''}`,
       aliases: definition.aliases,
       humanOnly: true,
       remember: false,

@@ -1,0 +1,35 @@
+.declared-commands {
+  max-height: 260px;
+  overflow: auto;
+  min-width: 0;
+}
+.declared-commands h3 {
+  margin: var(--gap-inline) 0 var(--gap-tight);
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+.declared-commands .declared-command-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  gap: var(--gap-tight);
+  padding: var(--gap-small) var(--gap-inline);
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.declared-command-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-inline);
+}
+.declared-command-line code {
+  min-width: 0;
+  white-space: pre-wrap;
+}
+.declared-command-line > span {
+  flex-shrink: 0;
+  font-size: var(--text-label);
+}

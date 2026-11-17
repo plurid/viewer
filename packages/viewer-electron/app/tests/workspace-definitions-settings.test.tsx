@@ -35,9 +35,9 @@ afterEach(() => {
 
 describe('workspace definitions in Settings', () => {
   it.each([
-    ['absent', "VS Code Project Manager's list was not found."],
+    ['absent', 'VS Code Project Manager’s list was not found.'],
     ['off', 'VS Code Project Manager is off.'],
-    ['unreadable', "VS Code Project Manager's list could not be read."],
+    ['unreadable', 'VS Code Project Manager’s list could not be read.'],
     ['read', '0 VS Code projects.'],
   ] as const)('explains %s in plain sentences and omits zero counters', async (state, expected) => {
     const next = {
@@ -83,7 +83,7 @@ describe('workspace definitions in Settings', () => {
     });
     const view = render(<WorkspaceDefinitionsSettings />);
     await waitFor(() =>
-      expect(screen.getByText("Allow access to read VS Code Project Manager's list.")).toBeTruthy(),
+      expect(screen.getByText('Allow access to read VS Code Project Manager’s list.')).toBeTruthy(),
     );
     expect(
       screen.getByText(

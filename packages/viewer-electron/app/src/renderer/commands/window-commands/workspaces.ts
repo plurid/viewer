@@ -11,6 +11,11 @@ export function workspacesCommands({
   workspaceScope,
 }: WindowScopes): CommandDefinition[] {
   const linked = !!space.definition && !definitionWasRemoved(space, state.bootstrap.definitions);
+  const found =
+    (space.definition?.source ??
+      state.bootstrap.definitions?.definitions.find(
+        (definition) => definition.key === space.definition?.key,
+      )?.source) === 'found';
   const commands: CommandDefinition[] = [
     {
       id: 'manage-workspaces',
@@ -95,11 +100,15 @@ export function workspacesCommands({
       humanOnly: true,
       when: (context) =>
         workspaceScope(context) &&
-        (kind === 'save-as' ? !linked && canCaptureDefinition(space) : linked),
+        (kind === 'save-as'
+          ? !linked && canCaptureDefinition(space)
+          : linked && (kind !== 'save' || !found)),
       unavailable:
-        kind === 'save-as' && !canCaptureDefinition(space)
-          ? 'Open a folder, file, terminal, scratch or search plane first.'
-          : undefined,
+        kind === 'save' && found
+          ? 'Found workspaces have no written definition.'
+          : kind === 'save-as' && !canCaptureDefinition(space)
+            ? 'Open a folder, file, terminal, scratch or search plane first.'
+            : undefined,
       run: () => actions.workspaceDialog(kind),
     });
   return commands;

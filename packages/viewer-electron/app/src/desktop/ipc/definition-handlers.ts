@@ -26,7 +26,7 @@ interface DefinitionPorts {
     | 'proposal'
     | 'setProjectManager'
     | 'refreshSourceOffer'
-  >;
+  > & Partial<Pick<WorkspaceDefinitions, 'prepareKeys'>>;
   memory: Pick<DefinedWorkspaces, 'get' | 'remember' | 'forget' | 'problem'>;
   sessions: Pick<
     WorkspaceSessions,
@@ -56,6 +56,8 @@ export function createDefinitionHandlers(
     workspaceDefinitions: async ([request], owner) => {
       human(owner);
       await ports.definitions.load();
+      human(owner);
+      await ports.definitions.prepareKeys?.();
       human(owner);
       if (request.kind === 'forget') {
         const reserved = ports.sessions.definitionOwner(request.key);
@@ -104,6 +106,10 @@ export function createDefinitionHandlers(
           );
         }
         if (!key) throw new Error('This workspace has no definition.');
+        if (workspace.definition?.source === 'found' &&
+          ports.definitions.entry(key)?.source !== undefined &&
+          ports.definitions.entry(key)?.source !== 'found')
+          throw new Error('Viewer no longer finds this folder. Save it as another definition.');
         if (request.kind === 'close-info')
           return { kind: 'close-info', problem: ports.memory.problem(workspace, state) };
         if (ports.sessions.reserveDefinition(owner, key) !== owner)
@@ -160,7 +166,7 @@ export function createDefinitionHandlers(
       const reservedOwner = ports.sessions.definitionOwner(request.key);
       if (reservedOwner !== undefined && reservedOwner !== owner) return elsewhere(reservedOwner);
       const open = ports.sessions.findByDefinition(request.key);
-      if (open) {
+      if (open && !(open.definition?.source === 'found' && definition.source !== 'found')) {
         const other = ports.sessions.owner(open.id);
         if (other !== undefined && other !== owner) return elsewhere(other);
         return { kind: 'active', workspaceID: open.id };
@@ -169,10 +175,12 @@ export function createDefinitionHandlers(
       if (reserved !== owner) return elsewhere(reserved);
       await ports.definitions.opened(request.key);
       human(owner);
+      const closed = ports.memory.get(request.key);
       return {
         kind: 'build',
         definition: structuredClone(definition),
-        closed: ports.memory.get(request.key),
+        closed: closed?.workspace.definition?.source === 'found' && definition.source !== 'found'
+          ? undefined : closed,
       };
     },
     workspaceDefinitionFile: async ([request], owner) => {

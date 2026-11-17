@@ -28,6 +28,7 @@ export interface CommandContext {
   lensGroup?: { id: string | null; label: string };
 }
 export interface CommandDefinition {
+  badge?: string;
   id: string;
   /** Dynamic metadata may rely on when(). Discovery uses an ID label outside that context. */
   label: string | ((context: CommandContext) => string);
@@ -96,6 +97,7 @@ export interface CommandRequest {
 }
 export interface ResolvedCommand {
   muted?: boolean;
+  badge?: string;
   id: string;
   label: string;
   group: string;
@@ -261,6 +263,7 @@ export class CommandRegistry {
           relatedOnly: definition.relatedOnly,
           paletteFolder: definition.paletteFolder,
           icon: definition.icon,
+          badge: definition.badge,
           aliases: definition.aliases ?? [],
           shortcut: this.shortcut(definition.id) ?? definition.shortcut,
           primary:

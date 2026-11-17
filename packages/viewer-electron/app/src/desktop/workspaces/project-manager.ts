@@ -166,7 +166,7 @@ export async function projectManagerExists(file: string): Promise<boolean> {
     check = stat(file)
       .then(
         (info) => info.isFile(),
-        () => false,
+        (error: NodeJS.ErrnoException) => error.code === 'EPERM' || error.code === 'EACCES',
       )
       .finally(() => presenceChecks.delete(file));
     presenceChecks.set(file, check);

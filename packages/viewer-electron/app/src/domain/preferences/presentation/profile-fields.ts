@@ -24,6 +24,7 @@ const { headerControls, ...space } = preferencesSchema.shape.space.shape;
 const { visible, widths, ...list } = preferencesSchema.shape.list.shape;
 const {
   restoreSession: _restoreSession,
+  findWorkspaces: _findWorkspaces,
   confirmTrash: _confirmTrash,
   ...browsing
 } = browsingSchema.shape;

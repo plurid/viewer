@@ -63,6 +63,7 @@ export interface ApplicationSettings {
     foldersFirst: boolean;
     showHidden: boolean;
     restoreSession: boolean;
+    findWorkspaces: boolean;
     confirmTrash: boolean;
     /** A Suggested section in file menus, from rules and what the person chooses. */
     suggestions: boolean;
@@ -422,6 +423,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       foldersFirst: true,
       showHidden: false,
       restoreSession: true,
+      findWorkspaces: true,
       confirmTrash: true,
       suggestions: true,
       suggestionRulesOff: [],

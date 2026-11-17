@@ -1,9 +1,18 @@
+import {
+  hasRemoteLocationScheme,
+  parseRemoteLocation,
+  remoteAncestry,
+  remoteContains,
+} from '../remote/location';
+
 /**
  * Whether `file` is `root` or inside it, for absolute paths the desktop has already resolved.
  * Pure string work, on either separator, for the renderer and the domain; the desktop uses
  * `containsPath` (desktop/files/containment.ts), which also resolves `..`.
  */
 export function pathContains(root: string, file: string): boolean {
+  if (hasRemoteLocationScheme(root) || hasRemoteLocationScheme(file))
+    return remoteContains(root, file);
   if (file === root) return true;
   const base = root.replace(/[\\/]+$/, '');
   return file.startsWith(base + '/') || file.startsWith(base + '\\');
@@ -11,6 +20,7 @@ export function pathContains(root: string, file: string): boolean {
 
 /** Root through the current folder, retaining drive and network-share roots. */
 export function pathAncestry(path: string): string[] {
+  if (hasRemoteLocationScheme(path)) return remoteAncestry(path);
   const prefix = path.match(/^([A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+|[\\/])/);
   if (!prefix) return [path];
   const root = prefix[0];
@@ -25,6 +35,20 @@ export function pathAncestry(path: string): string[] {
 
 /** Display only: navigation must retain the resolved absolute path. */
 export function relativePathLabel(folder: string, file: string): string {
+  if (hasRemoteLocationScheme(folder) || hasRemoteLocationScheme(file)) {
+    const base = hasRemoteLocationScheme(folder) ? parseRemoteLocation(folder) : undefined;
+    const target = hasRemoteLocationScheme(file) ? parseRemoteLocation(file) : undefined;
+    if (!base || !target || base.connectionID !== target.connectionID) return file;
+    const baseParts = base.path.split('/').filter(Boolean);
+    const targetParts = target.path.split('/').filter(Boolean);
+    let common = 0;
+    while (common < baseParts.length && baseParts[common] === targetParts[common]) common++;
+    return (
+      [...Array<string>(baseParts.length - common).fill('..'), ...targetParts.slice(common)].join(
+        '/',
+      ) || '.'
+    );
+  }
   const windows = /^[A-Za-z]:[\\/]|^\\\\/.test(folder);
   const split = (value: string) => {
     const normalized = windows ? value.replace(/\\/g, '/') : value;

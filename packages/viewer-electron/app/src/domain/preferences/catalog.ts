@@ -72,6 +72,7 @@ export const workspaceSettingPaths: readonly (readonly string[])[] = [
 /** Within those, the person's own safeguards: Trash confirmation changes only in Settings. */
 export const settingsOnlyPaths: readonly (readonly string[])[] = [
   ['settings', 'browsing', 'confirmTrash'],
+  ['settings', 'browsing', 'findWorkspaces'],
 ];
 const within = (paths: readonly (readonly string[])[], keys: readonly string[]) =>
   paths.some((prefix) => prefix.every((key, index) => keys[index] === key));
@@ -257,6 +258,13 @@ export const settingCatalog: SettingDefinition[] = [
     path: 'settings.browsing.restoreSession',
     category: 'Browsing',
     label: 'Restore the previous workspace',
+    kind: 'boolean',
+  },
+  {
+    path: 'settings.browsing.findWorkspaces',
+    category: 'Browsing',
+    label: 'Find workspaces from folders I use',
+    detail: 'Uses your private folder history. No folders are scanned at launch.',
     kind: 'boolean',
   },
   {

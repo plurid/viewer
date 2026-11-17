@@ -70,6 +70,16 @@ it('passes a basis-bound definition reference and Run all items through preload 
   ).toBe(false);
 });
 
+it('forwards declared-command discovery as a directory-only workspace request', async () => {
+  await import('../src/preload');
+  ipc.invoke.mockResolvedValue({ ok: true, value: { commands: [] } });
+  await expect(bridge.api!.declaredCommands('/projects/sample')).resolves.toEqual({ commands: [] });
+  expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'declaredCommands', [
+    '/projects/sample',
+  ]);
+  expect(methodWindows.declaredCommands).toBe('viewer');
+});
+
 it('shares one native event subscription among many planes and releases it after the last subscriber', async () => {
   await import('../src/preload');
   const callbacks = Array.from({ length: 24 }, () => vi.fn());

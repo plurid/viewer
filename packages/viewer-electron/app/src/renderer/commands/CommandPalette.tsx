@@ -281,7 +281,7 @@ function CommandFinder({
   if (workspaces && onManageDefinitions && definitions?.projectManager.state === 'undecided') {
     commandView.rows.push({
       id: projectManagerOfferID,
-      label: "Use VS Code Project Manager's projects…",
+      label: 'Use VS Code Project Manager’s projects…',
       group: 'Workspaces',
       icon: 'dock',
       aliases: [],

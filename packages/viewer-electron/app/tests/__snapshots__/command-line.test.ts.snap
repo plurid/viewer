@@ -25,6 +25,7 @@ exports[`set > names settings that exist, each by one path, frozen 1`] = `
   "lineheight",
   "minimap",
   "minimapauto",
+  "minimapcorner",
   "modelmb",
   "newfile",
   "newplanes",

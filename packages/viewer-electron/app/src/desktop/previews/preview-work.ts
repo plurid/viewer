@@ -1,7 +1,15 @@
 import path from 'node:path';
 import { realpath } from 'node:fs/promises';
+import { assertLocalPath } from '../files/local-path';
+
+const resolvedLocalPath = (file: string) => {
+  assertLocalPath(file);
+  return path.resolve(file);
+};
 
 export function previewContains(root: string, file: string): boolean {
+  assertLocalPath(root);
+  assertLocalPath(file);
   const relative = path.relative(root, file);
   return (
     relative === '' ||
@@ -19,19 +27,19 @@ export class PreviewScope {
   private abort = new AbortController();
   readonly signal = this.abort.signal;
   constructor(files: readonly string[]) {
-    for (const file of files) this.paths.add(path.resolve(file));
+    for (const file of files) this.paths.add(resolvedLocalPath(file));
   }
   add(file: string): void {
-    this.paths.add(path.resolve(file));
+    this.paths.add(resolvedLocalPath(file));
     this.check();
   }
   invalidate(root?: string, canonical?: Promise<string | undefined>): void {
-    if (root) this.invalidated.add(path.resolve(root));
+    if (root) this.invalidated.add(resolvedLocalPath(root));
     else this.expired = true;
     if (canonical) {
       const pending = canonical
         .then((actual) => {
-          if (actual) this.invalidated.add(path.resolve(actual));
+          if (actual) this.invalidated.add(resolvedLocalPath(actual));
           this.cancelIfExpired();
         })
         .finally(() => this.pending.delete(pending));
@@ -101,6 +109,7 @@ export class PreviewWork {
     return task;
   }
   invalidate(root?: string): Promise<string | undefined> {
+    if (root) assertLocalPath(root);
     const canonical = root ? realpath(root).catch(() => root) : Promise.resolve(undefined);
     for (const scope of this.tasks.values()) scope.invalidate(root, root ? canonical : undefined);
     return canonical;

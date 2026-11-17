@@ -16,7 +16,8 @@ jitter. Visible plane controls, the viewcube and engine toolbar are obstacles. I
 fits, the host collapses the map to an explicit Overview entry rather than covering a control.
 
 The Viewcube keeps the engine's corner anchors, conceal offsets, responsive rules and hover
-transition. Viewer never writes its position or transition styles. If its visible, viewport-clipped
+transition. Viewer leaves those anchors and transition styles to the engine; a cube with conceal off
+may receive a temporary translation to yield to a fixed map. If its visible, viewport-clipped
 portion overlaps a protected control, the host temporarily suppresses its visibility and restores it
 when the obstruction clears. The toolbar's full-width, click-through band is not an obstacle: only
 its actual controls and open menus participate. Hover and completed transitions invalidate the
@@ -51,13 +52,26 @@ At the owner's request, `ui.space.minimapCorner` adds `automatic`, `bottom-right
 `top-right` and `top-left`. Automatic remains the default and keeps the existing collision solver
 and corner retention. A fixed corner ignores obstacles and falls back only when the viewport cannot
 fit the map. The expanded Overview uses the same fixed corner. This trades collision avoidance for a
-still map when plane focus or camera movement changes the controls beneath it. Viewcube protection
-remains independent.
+still map when plane focus or camera movement changes the controls beneath it. An expanded fixed
+Overview follows viewport, layout and corner changes. The viewcube yields to a fixed map by moving
+to a clear corner while conceal is off. A concealed viewcube always keeps its engine position,
+including when hovering reveals its controls. It may overlap the fixed map so it stays under the
+pointer. The host adds a temporary translation without changing the engine's anchors or transitions,
+restoring it when conceal is enabled or the map no longer obstructs its original position.
+Measurements subtract the host's current animated translation from the reported box instead of
+resetting styles. Placement is cached by map bounds, viewport and cube size, so completed
+transitions do not restart movement. If no corner fits, the cube with conceal off is suppressed
+until there is room.
 
-Overview is available whenever the space is shown, independently of minimap visibility. The host
-temporarily enables the engine's map through surface configuration when needed, waits for its DOM
-element, then opens the original map in the browser top layer. While the saved preference hides the
-minimap, CSS keeps the closed map invisible between mounting, expansion and removal. Closing
-releases the temporary request without editing preferences; dismissal restores the connected opener,
-while choosing a plane retains navigation focus. Pending requests belong to their workspace epoch
-and can be cancelled before the map mounts.
+Overview is available when the space is shown and holds a plane, independently of minimap
+visibility. An empty space says Open a plane first. The host temporarily enables the engine's map
+through surface configuration when needed, waits for its DOM element, then opens the original map in
+the browser top layer. While the saved preference hides the minimap, CSS keeps the closed map
+invisible between mounting, expansion and removal. Closing releases the temporary request on the
+next animation frame without editing preferences, after the engine's root click listener has handled
+navigation. Light dismissal restores the connected opener only if focus is on the body or inside the
+map; focus taken by a clicked control stays there. Escape returns focus to the opener, while
+choosing a plane retains navigation focus. Pending requests belong to their workspace epoch, can be
+cancelled with Escape before the map mounts and are cancelled when an applied engine configuration
+produces no map. Docking or closing the last plane also closes Overview. Closing the last plane puts
+keyboard focus on the empty workspace surface.

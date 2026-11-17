@@ -3,13 +3,8 @@
  * are; verbs by vim's names and tmux's; `set` by fixed setting names.
  */
 import { describe, expect, it } from 'vitest';
-import {
-  expandPath,
-  LineError,
-  parseLine,
-  quoteWord,
-  type Word,
-} from '../src/domain/command-line/lex';
+import type { Word } from '../src/domain/command-line/lex';
+import { expandPath, LineError, parseLine, quoteWord } from '../src/domain/command-line/lex';
 import {
   bindStep,
   didYouMean,
@@ -156,6 +151,15 @@ describe('the verbs', () => {
 });
 
 describe('set', () => {
+  it('changes and shows the corner by its short name', () => {
+    expect(settingByName('minimapcorner')?.path).toBe('ui.space.minimapCorner');
+    const [assignment] = parseSet([{ text: 'minimapcorner=bottom-left', at: 0 } as Word]);
+    expect(assignment).toMatchObject({ op: 'value', value: 'bottom-left' });
+    const definition = settingByName('minimapcorner');
+    expect(definition).toBeDefined();
+    expect(settingText(definition!, 'top-right')).toBe('minimapcorner=top-right');
+  });
+
   it('names settings that exist, each by one path, frozen', () => {
     for (const [name, path] of Object.entries(settingNames))
       expect(settingByName(name)?.path, name).toBe(path);

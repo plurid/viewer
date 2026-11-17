@@ -699,6 +699,7 @@ export const schemas = {
       .optional(),
   ]),
   executionList: z.tuple([]),
+  declaredCommands: z.tuple([localPath]),
   runCommand: z.tuple([
     z
       .string()
@@ -1076,6 +1077,7 @@ export const methodWindows = {
   customExecute: 'viewer',
   executionList: 'viewer',
   runCommand: 'viewer',
+  declaredCommands: 'viewer',
   commandDraft: 'both',
   executionCancel: 'viewer',
   openSettings: 'viewer',

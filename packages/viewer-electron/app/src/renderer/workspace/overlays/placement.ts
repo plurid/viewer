@@ -6,6 +6,10 @@ const overviewCorners = ['top-right', 'bottom-left', 'top-left', 'bottom-right']
 
 export type OverviewCorner = (typeof overviewCorners)[number];
 
+export function fixedOverviewCorner(value: unknown): value is OverviewCorner {
+  return overviewCorners.includes(value as OverviewCorner);
+}
+
 export interface OverlayRect {
   x: number;
   y: number;
@@ -54,12 +58,11 @@ export function solveOverviewPlacement({
     size.height + overviewInset * 2 > viewport.height
   )
     return { kind: 'fallback' };
-  const candidates =
-    corner !== 'automatic'
-      ? [corner]
-      : current
-        ? [current, ...overviewCorners.filter((candidate) => candidate !== current)]
-        : overviewCorners;
+  const candidates = fixedOverviewCorner(corner)
+    ? [corner]
+    : current
+      ? [current, ...overviewCorners.filter((candidate) => candidate !== current)]
+      : overviewCorners;
   for (const candidate of candidates) {
     const bounds = {
       x: candidate.endsWith('right')
@@ -71,7 +74,7 @@ export function solveOverviewPlacement({
       ...size,
     };
     if (
-      corner !== 'automatic' ||
+      fixedOverviewCorner(corner) ||
       !obstacles.some(
         (obstacle) => validOverlayRect(obstacle) && overlaysIntersect(bounds, obstacle),
       )

@@ -6,7 +6,7 @@ export function validTerminalCommand(value: unknown): value is string {
     typeof value === 'string' &&
     value.length > 0 &&
     value.length <= terminalCommandLimit &&
-    !/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(value)
+    !/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u.test(value)
   );
 }
 
@@ -16,7 +16,8 @@ export function terminalCommandProblem(value: unknown): string | undefined {
   if (value.includes('\t'))
     return 'Remove tabs from the command: a typed tab triggers shell completion.';
   if (/\p{Cc}/u.test(value)) return 'Remove control characters from the command.';
-  if (/\p{Cf}/u.test(value)) return 'Remove invisible formatting characters from the command.';
+  if (/[\p{Cf}\p{Default_Ignorable_Code_Point}]/u.test(value))
+    return 'Remove invisible formatting characters from the command.';
   if (/\p{Cs}/u.test(value)) return 'Remove unpaired Unicode surrogates from the command.';
   return undefined;
 }

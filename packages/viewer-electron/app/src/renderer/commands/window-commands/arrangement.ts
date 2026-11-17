@@ -2,10 +2,14 @@ import { confirmClose } from '../../editing/unsaved';
 import { closePlanes, otherPlanes, rootPlanes } from '../closing';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
+import { activeWorkspace } from '../../state/store';
 
 /** Why Overview is missing here, in words that name the way back. */
-export function overviewUnavailable(docked: boolean): string | undefined {
+export function overviewUnavailable(docked: boolean): string {
   if (docked) return 'A docked plane fills the window. Reveal space (⌘↵) first.';
+  const space = activeWorkspace();
+  if (!space.panes.length && !space.roots.length) return 'Open a plane first.';
+  return 'Open Overview from the window command palette (⌘K).';
 }
 
 /** Framing, docking, closing and arranging planes in space. */
@@ -22,8 +26,11 @@ export function arrangementCommands({
       group: 'Space',
       icon: 'map',
       aliases: ['minimap', 'navigate space'],
-      when: (context) => windowScope(context) && !actions.workspace.isDocked(),
-      unavailable: overviewUnavailable(actions.workspace.isDocked()),
+      when: (context) =>
+        windowScope(context) &&
+        !actions.workspace.isDocked() &&
+        (activeWorkspace().panes.length > 0 || activeWorkspace().roots.length > 0),
+      unavailable: () => overviewUnavailable(actions.workspace.isDocked()),
       run: () => actions.overview?.(),
     },
     {

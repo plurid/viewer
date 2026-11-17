@@ -6,6 +6,7 @@ import { Dialog, PathField } from '../ui/primitives';
 import { attachCommandReceipt } from '../tasks/state';
 import { report } from '../state/store';
 import './run-command.css';
+import { DeclaredCommandList } from './DeclaredCommandList';
 
 // Per-window memory only: shell commands can contain credentials.
 let recentCommands: string[] = [];
@@ -17,6 +18,7 @@ export function RunCommandDialog({ target, onClose }: { target: CapturedTarget; 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const pending = useRef(false);
+  const input = useRef<HTMLTextAreaElement>(null);
   const submit = async () => {
     if (pending.current || !script.trim()) return;
     pending.current = true;
@@ -83,6 +85,7 @@ export function RunCommandDialog({ target, onClose }: { target: CapturedTarget; 
         <label className="field-label">
           Command
           <textarea
+            ref={input}
             data-autofocus
             rows={4}
             maxLength={16000}
@@ -110,6 +113,17 @@ export function RunCommandDialog({ target, onClose }: { target: CapturedTarget; 
             ? 'Review and add this command in Settings.'
             : 'Shell syntax is supported. Commands and output are saved privately in Command history. Use a terminal for interactive programs.'}
         </p>
+        {!saving && (
+          <DeclaredCommandList
+            directory={target.directory}
+            disabled={busy}
+            onPick={(line) => {
+              setScript(line);
+              setError('');
+              input.current?.focus();
+            }}
+          />
+        )}
         {!!recent.length && !saving && (
           <section className="run-command-recent" aria-label="Recent commands">
             <div>

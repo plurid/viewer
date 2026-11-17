@@ -10,6 +10,7 @@ import type {
 import { definitionEntrySchema } from './schema';
 import { slug } from './keys';
 import { normalizedProjectName, resolveDefinitionPath, tokenizePath } from './paths';
+import { definitionShares } from '../ownership';
 
 export interface SkippedDefinitionPlane {
   id: string;
@@ -49,16 +50,11 @@ export function proposeDefinition(
     .filter(supported)
     .map((pane) => (pane.type === 'preview' ? parent(pane.path) : pane.path));
   if (!paths.length) throw new Error('This workspace has no planes a definition can hold.');
-  const counts = new Map<WorkspaceDefinition, number>();
-  for (const file of paths) {
-    const project = definitions
-      .filter((item) => item.projectName && holds(item.root, file))
-      .sort((a, b) => b.root.length - a.root.length)[0];
-    if (project) counts.set(project, (counts.get(project) ?? 0) + 1);
-  }
-  const primary = [...counts].sort(
-    ([a, x], [b, y]) => y - x || a.root.length - b.root.length,
-  )[0]?.[0];
+  const primary = definitionShares(
+    workspace,
+    definitions.filter((item) => item.projectName || item.source === 'found'),
+    'proposal',
+  )[0]?.definition;
   let root = paths[0] ?? home;
   for (const file of paths) while (!holds(root, file)) root = parent(root);
   return {
@@ -77,7 +73,11 @@ export function captureDefinition(input: CaptureDefinitionInput): CapturedDefini
     input.order.some((id) => !byID.has(id))
   )
     throw new Error('The plane order must name this workspace’s planes once each.');
-  const roots = new Map(input.definitions.map((item) => [item.key, item.root]));
+  const roots = new Map(
+    input.definitions
+      .filter((item) => item.source !== 'found')
+      .map((item) => [item.key, item.root]),
+  );
   const names = new Map(
     input.definitions.flatMap((item) =>
       item.projectName ? [[normalizedProjectName(item.projectName), item.key] as const] : [],

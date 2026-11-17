@@ -88,10 +88,10 @@ export function paletteRows(
     };
   }
   const byID = new Map(commands.map((command) => [command.id, command]));
-  const matching = choices.filter(
-    (choice) =>
-      byID.has(choice.id) &&
-      (choice.kind === 'open' || anchoredDefinitionMatch(choice.definition, query)),
+  // the loose search Change workspace… shows; ⌘K lists only rows the typing names by word starts
+  const loose = choices.filter((choice) => byID.has(choice.id));
+  const matching = loose.filter(
+    (choice) => choice.kind === 'open' || anchoredDefinitionMatch(choice.definition, query),
   );
   const hasCommands = view.rows.some((row) => !row.setting && row.id !== moreSettingsID);
   const limit = hasCommands ? 4 : 8;
@@ -101,24 +101,31 @@ export function paletteRows(
     const related = row.relatedID && byID.get(row.relatedID);
     return related ? [row, related] : [row];
   });
-  if (!rows.length) return view;
-  const more: ResolvedCommand[] =
-    matching.length > selected.length
-      ? [
-          {
-            id: moreWorkspacesID,
-            label: `All ${matching.length} matching workspaces`,
-            group: 'Workspaces',
-            icon: 'dock',
-            aliases: [],
-            primary: false,
-            source: '',
-            context: rows[0]!.context,
-          },
-        ]
-      : [];
+  // a typo such as "veiwer" names no word start: when nothing else matches either, the loose
+  // search is still one row away; beside matching commands, scattered letters stay unlisted
+  const offerLoose =
+    loose.length > selected.length &&
+    (rows.length > 0 || !hasCommands) &&
+    // separators alone name nothing, loosely or not
+    /[\p{L}\p{N}]/u.test(query);
+  if (!rows.length && !offerLoose) return view;
+  const context = rows[0]?.context ?? byID.get(loose[0]!.id)!.context;
+  const more: ResolvedCommand[] = offerLoose
+    ? [
+        {
+          id: moreWorkspacesID,
+          label: `All ${loose.length} matching workspaces`,
+          group: 'Workspaces',
+          icon: 'dock',
+          aliases: [],
+          primary: false,
+          source: '',
+          context,
+        },
+      ]
+    : [];
   const headings = new Map(view.headings);
-  headings.set(rows[0]!.id, 'Workspaces');
+  headings.set((rows[0] ?? more[0]!).id, 'Workspaces');
   return { rows: [...view.rows, ...rows, ...more], headings };
 }
 

@@ -6,6 +6,12 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { realpath } from 'node:fs/promises';
 import { macFiles, type FileAccessIntent, type MacFiles } from '../native/macos-files';
 import { containsPath } from './containment';
+import { assertLocalPath } from './local-path';
+
+const resolvedLocalPath = (file: string) => {
+  assertLocalPath(file);
+  return path.resolve(file);
+};
 
 type Binding = Pick<
   MacFiles,
@@ -67,15 +73,20 @@ export class FileCoordination {
     return this.context.getStore()?.purpose;
   }
   path(file: string): string {
-    return this.context.getStore()?.resolved.get(path.resolve(file)) ?? file;
+    assertLocalPath(file);
+    return this.context.getStore()?.resolved.get(resolvedLocalPath(file)) ?? file;
   }
   async acquire(intents: FileAccessIntent[], signal?: AbortSignal) {
+    intents.forEach((intent) => assertLocalPath(intent.path));
     if (this.closed) throw new Error('File coordination has closed.');
     signal?.throwIfAborted();
     if (!this.native || !intents.length)
       return {
         signal,
-        path: (file: string) => file,
+        path: (file: string) => {
+          assertLocalPath(file);
+          return file;
+        },
         release: async () => {},
         run: <T>(work: () => Promise<T>) => work(),
       };
@@ -107,7 +118,7 @@ export class FileCoordination {
       parent.abort.signal.throwIfAborted();
       return {
         signal: parent.abort.signal,
-        path: (file: string) => parent.resolved.get(path.resolve(file)) ?? file,
+        path: (file: string) => parent.resolved.get(resolvedLocalPath(file)) ?? file,
         release: async () => {},
         run: <T>(work: () => Promise<T>) => work(),
       };
@@ -193,7 +204,7 @@ export class FileCoordination {
         );
       const originals = await claim.canonical;
       for (const [index, returned] of paths.entries()) {
-        const file = path.resolve(returned);
+        const file = resolvedLocalPath(returned);
         const requested = normalized[index],
           original = originals[index];
         // Anything that cannot be matched to its request counts as moved.
@@ -210,7 +221,7 @@ export class FileCoordination {
       abort.signal.throwIfAborted();
       return {
         signal: abort.signal,
-        path: (file: string) => claim.resolved.get(path.resolve(file)) ?? file,
+        path: (file: string) => claim.resolved.get(resolvedLocalPath(file)) ?? file,
         release,
         run: <T>(work: () => Promise<T>) => this.context.run(claim, work),
       };
@@ -236,6 +247,7 @@ export class FileCoordination {
     }
   }
   async quiesce(root?: string): Promise<void> {
+    if (root) assertLocalPath(root);
     const claims = [...this.active.values()],
       normalized = root && path.resolve(root),
       actual = normalized && (await canonical(normalized));

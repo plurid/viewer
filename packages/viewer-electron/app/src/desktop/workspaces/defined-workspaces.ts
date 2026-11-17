@@ -4,6 +4,8 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { SavedState, Workspace } from '../../domain/contracts';
 import type { RememberedWorkspace } from '../../domain/workspaces/definitions/schema';
+import type { FoundKeyChange } from '../../domain/workspaces/found/catalog';
+import { rekeyFoundLinks } from '../../domain/workspaces/catalog';
 import { definitionKeySchema } from '../../domain/workspaces/definitions/schema';
 import { fileViewSchema } from '../../domain/previews/history';
 import { previewValuesSchema } from '../../domain/workspaces/project';
@@ -213,6 +215,28 @@ export class DefinedWorkspaces {
       ...current,
       closed: current.closed.filter((item) => item.key !== key),
     }));
+  }
+  async rekeyFound(changes: readonly FoundKeyChange[]): Promise<void> {
+    await this.load();
+    const relevant = changes.filter(({ from }) =>
+      this.current.closed.some((entry) => entry.key === from && entry.workspace.definition?.source === 'found') ||
+      this.current.opened[from] !== undefined,
+    );
+    if (!relevant.length) return;
+    await this.change((current) => {
+      for (const change of relevant) {
+        const entry = current.closed.find((item) => item.key === change.from && item.workspace.definition?.source === 'found');
+        if (entry) {
+          if (current.closed.some((item) => item.key === change.to))
+            throw new Error('These remembered planes already have another key. Nothing was replaced.');
+          entry.key = change.to;
+          entry.workspace = rekeyFoundLinks([entry.workspace], [change])[0]!;
+        }
+        const at = current.opened[change.from];
+        if (at !== undefined) current.opened[change.to] = Math.max(at, current.opened[change.to] ?? 0);
+      }
+      return current;
+    });
   }
   async close(): Promise<void> {
     await this.queue.catch(() => {});

@@ -8,7 +8,6 @@ export interface WindowActions {
   workspace: WorkspaceController;
   ready: boolean;
   overview?(): void;
-  overviewAvailable?: boolean;
   palette(mode: PaletteMode, query?: string): void;
   settings(): void;
   backup?(): void;

@@ -3,6 +3,7 @@ import type { AgentWorkspaceSnapshot } from '../../domain/agents/requests';
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { containsPath } from '../files/containment';
+import { assertLocalPath } from '../files/local-path';
 
 export interface GitTargetWindow {
   originID: string;
@@ -21,8 +22,12 @@ export async function validateGitTarget(
   canonical: CanonicalPath = realpath,
   allowedTypes: readonly string[] = ['folder'],
 ): Promise<void> {
+  assertLocalPath(target.directory);
+  if (target.panePath) assertLocalPath(target.panePath);
+  target.selection.forEach((file) => assertLocalPath(file.path));
   const space = window?.workspaces?.workspaces.find((space) => space.id === target.workspaceID);
   const pane = space?.panes.find((pane) => pane.id === target.paneID);
+  if (pane) assertLocalPath(pane.path);
   const owner =
     pane && window?.owners && Object.hasOwn(window.owners, pane.id)
       ? window.owners[pane.id]

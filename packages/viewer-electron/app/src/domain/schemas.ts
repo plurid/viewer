@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { remoteLocation } from './remote/location';
 
 /** An absolute POSIX or Windows path, checked without `node:path` so the renderer can
  * use it too. The desktop process validates paths for its own platform as well. */
@@ -10,3 +11,5 @@ export const portablePath = z
     (value) => (value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)) && !value.includes('\0'),
     'Use an absolute local path.',
   );
+
+export const planePath = z.union([portablePath, remoteLocation]);

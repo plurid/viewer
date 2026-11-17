@@ -1,4 +1,5 @@
 import type { DefinitionCommands } from '../workspaces/definition-commands';
+import type { DeclaredCommands } from '../terminals/declared-commands';
 import { randomUUID } from 'node:crypto';
 import type { CustomAction } from '../../domain/automation/actions';
 import type { ApiHandlers } from './schemas';
@@ -28,12 +29,14 @@ type TerminalHandlers = Pick<
   | 'terminalClose'
   | 'customExecute'
   | 'runCommand'
+  | 'declaredCommands'
   | 'commandDraft'
   | 'executionList'
   | 'executionCancel'
 >;
 interface TerminalPorts {
   home: string;
+  declaredCommands: Pick<DeclaredCommands, 'list' | 'record' | 'revision'>;
   definitionCommands: Pick<DefinitionCommands, 'start' | 'startAll' | 'inspect' | 'pending'>;
   terminals: Pick<
     Terminals,
@@ -57,6 +60,10 @@ interface TerminalPorts {
  * in Settings, which takes the draft once. */
 export function createTerminalHandlers(ports: TerminalPorts): TerminalHandlers {
   let pendingDraft: CustomAction | undefined;
+  const requirePerson = (owner: number) => {
+    if (ports.isAgent(owner) || !ports.isViewer(owner))
+      throw new Error('Declared commands require a person in a workspace window.');
+  };
   return {
     terminalApplication: () => ports.external.application(),
     terminalExternal: async ([cwd, tmux]) => {
@@ -92,7 +99,20 @@ export function createTerminalHandlers(ports: TerminalPorts): TerminalHandlers {
       if (ports.isAgent(owner)) throw new Error('Agents cannot run shell commands.');
       if (!ports.isViewer(owner)) throw new Error('Run commands from a workspace window.');
       const target = await bindManualTarget(input, ports.gitWindow(owner), ports.home);
-      return ports.executions.startManual(script, target, owner);
+      requirePerson(owner);
+      const revision = ports.declaredCommands.revision;
+      const receipt = await ports.executions.startManual(script, target, owner);
+      if (!ports.isAgent(owner) && ports.isViewer(owner)) {
+        // Reference persistence must not turn an already-started command into an apparent failure.
+        void ports.declaredCommands.record(target.directory, script, revision).catch(() => {});
+      }
+      return receipt;
+    },
+    declaredCommands: async ([directory], owner) => {
+      requirePerson(owner);
+      const value = await ports.declaredCommands.list(directory);
+      requirePerson(owner);
+      return value;
     },
     commandDraft: async ([request], owner) => {
       if (request) {

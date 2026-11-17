@@ -1,5 +1,7 @@
-import { settingCatalog, type SettingDefinition } from '../preferences/catalog';
-import { LineError, type Word } from './lex';
+import type { SettingDefinition } from '../preferences/catalog';
+import { settingCatalog } from '../preferences/catalog';
+import type { Word } from './lex';
+import { LineError } from './lex';
 
 /**
  * Setting names: short and fixed, as vim's option names are, so a saved line keeps
@@ -11,6 +13,7 @@ export const settingNames: Readonly<Record<string, string>> = {
   toolbar: 'ui.space.toolbar',
   minimap: 'ui.space.minimap',
   minimapauto: 'ui.space.minimapAuto',
+  minimapcorner: 'ui.space.minimapCorner',
   viewcube: 'ui.space.viewcube',
   headers: 'ui.space.planeHeaders',
   dragging: 'ui.space.dragging',

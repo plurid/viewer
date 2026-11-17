@@ -19,6 +19,10 @@ quick command runs at a time in a window. The output buffer keeps the last 256 K
 truncation. Interactive programs need a terminal plane. Quick commands use the same execution
 service, process cancellation and receipts as **Run command…**.
 
+While the draft is empty, Quick command lists [declared commands](#declared-commands) from files
+under their file names. Pick one to fill the input, then press **Return** or choose **Run**. Picking
+a row never runs it.
+
 ## Run one command
 
 **Run command…** opens the **Run command** dialog for the current folder.
@@ -60,6 +64,55 @@ combined. Viewer checks the folder is the same one before launch and refuses if 
 | Replay    | Never. Restarting Viewer does not run a command again.                                                                                     |
 
 For a program that needs input, use a terminal plane.
+
+## Declared commands
+
+**Run command…** lists declared commands above **Recent**. Quick command lists them while its draft
+is empty. Rows show the literal line and muted body. Make targets also show the comment above as
+context; Procfile rows show their entry name. Parent sources show their relative path, such as
+`../../package.json`. The last matching entry you ran appears first with **Last run**. At most eight
+rows appear; each is keyboard reachable. A pick fills and focuses the input. Review it, then choose
+**Run**. These picks do not create a terminal plane or start anything by themselves.
+
+| File                                  | Entries and resulting lines                                                                                                                                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`                        | String-valued `scripts`: `pnpm run dev`, for example. Installation and packaging lifecycle scripts are hidden. `pre<x>` and `post<x>` are hidden only when `<x>` is a script in that file or an npm lifecycle event; `preview` and `prettier` remain visible. |
+| `GNUmakefile`, `makefile`, `Makefile` | Column-zero targets: `make test`. Only the first of these filenames present in a folder is used. `.PHONY` targets lead; special, pattern, variable and assignment declarations are omitted. Includes are not followed.                                        |
+| `justfile`, `Justfile`, `.justfile`   | Public recipes without required parameters: `just dev`. Private, confirmation and recipes for other operating systems are omitted.                                                                                                                            |
+| `Procfile`                            | Named entries: the literal command after `name:`.                                                                                                                                                                                                             |
+| `deno.json`, `deno.jsonc`             | String tasks or task objects with a `command`: `deno task dev`. JSON comments and trailing commas are accepted.                                                                                                                                               |
+
+The package manager comes from the nearest `package.json` with `packageManager` toward the root,
+then the nearest lockfile toward the root, then defaults to npm. At the same level, lockfile
+precedence is pnpm, yarn, bun, npm. Viewer reads from the captured folder toward the deepest
+enclosing definition root. Without one, it uses the nearest Git marker within six folders, counting
+the current folder. Without that marker, it reads only the captured folder. Home and its ancestors
+are never owning roots; the walk stops below home. Nearest files lead; duplicate literal lines
+appear once. For package scripts, just recipes and Deno tasks, a parent file is offered only if
+there is no nearer file of the same kind. The tool's own upward search finds that file. A parent
+Makefile uses `make -C ../.. target` to run in its folder. Parent Procfiles are never offered.
+
+Each file is limited to 256 KiB and 50 entries. Names must match
+`^[A-Za-z0-9][A-Za-z0-9:._/@+-]{0,99}$`; invalid names are dropped, never quoted. Generated lines
+and command bodies must be one line of at most 1,000 characters, without controls, tabs, invisible
+formatting, default ignorable Unicode characters or unpaired surrogates. Detail and context are each
+limited to 200 characters. Discovery executes no program and follows no Makefile include. Results
+are cached in memory for ten seconds; slow or unavailable reads show no list and leave typing
+available.
+
+After a successful Run of a line in the cached list, the desktop re-reads the declarations in the
+background. Recording never delays the Run reply or turns a started command into a failure. For an
+exact line match it remembers only the source file relative to the real root, entry name and time in
+the private `declared-commands-v1.json` (mode 0600, at most 200 roots and 1 MiB), the sole Last run
+store. Found workspace storage holds no Last run references. It creates this file on the first
+recorded match, never at launch, and keeps unreadable data aside. **Clear recent folders** clears
+these references; Undo does not restore them. They are excluded from backups, exports and agent
+discovery. This store contains no command text; running still creates the ordinary Command history
+receipt below.
+
+Agents and agent-driven windows cannot request these lists. Spoken plans, macros and custom actions
+gain no new execution route. In the Store edition, discovery borrows active folder access and never
+asks for permission.
 
 ## Command receipts
 

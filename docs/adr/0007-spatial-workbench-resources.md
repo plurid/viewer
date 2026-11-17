@@ -27,6 +27,12 @@ and skip larger candidates. The renderer owns tools and drafts, not process argu
 filesystem mutation queue. Workflows and agents prepare reviewed typed exports; they gain no shell,
 deletion-approval or authenticated-browser capability.
 
+Proposed amendment: [ADR 0023](0023-remote-planes-over-system-openssh.md) keeps one operation owner,
+journal and job model, while allowing server transfers beside local jobs only for disjoint
+per-source footprints, including source paths, destination paths and their parents. Overlapping
+footprints and their Undo order serialize. Global exclusive work, quiesce and cancellation cover
+every lane. WP8 and WP9 must verify these invariants before parallel mutation is enabled.
+
 Fabrication checks are private documents with independent views. Closing a plane detaches its owner;
 only explicit cancellation stops its request. A restored check reads its saved result and never
 replays a model call. Source verification and human confirmations bind to captured source versions.

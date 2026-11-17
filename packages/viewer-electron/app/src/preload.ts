@@ -123,6 +123,7 @@ const api: ViewerAPI = {
   terminalClose: (id) => invoke('terminalClose', id),
   customExecute: (actionID, target, values) => invoke('customExecute', actionID, target, values),
   runCommand: (script, target) => invoke('runCommand', script, target),
+  declaredCommands: (directory) => invoke('declaredCommands', directory),
   commandDraft: (request) => (request ? invoke('commandDraft', request) : invoke('commandDraft')),
   executionList: () => invoke('executionList'),
   executionCancel: (id) => invoke('executionCancel', id),

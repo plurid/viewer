@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { applyEdits, modify, parse } from 'jsonc-parser';
 import { z } from 'zod';
 import type { Workspace } from '../../domain/contracts';
 import type { WorkspaceDefinitionReply } from '../../domain/workspaces/definitions/schema';
@@ -28,6 +29,7 @@ import type { CheckedFolder } from '../../domain/files/folder-checks';
 import { folderCheckConcurrency, folderCheckTimeout } from '../../domain/files/folder-checks';
 import { rankWorkspaceChoices } from '../../domain/workspaces/definitions/query';
 import type { DefinedWorkspaces } from './defined-workspaces';
+import type { FoundWorkspaces } from './found-workspaces';
 import type { SettingsSnapshot } from '../../domain/services';
 import { builtInProfiles } from '../../domain/preferences/profiles';
 import { errorMessage } from '../../domain/errors';
@@ -56,7 +58,57 @@ const starter = (
 }
 `;
 
+// Only the exact source stanza shipped by the earlier starter lacked a person's choice.
+const earlierStarterSource = `// Definitions are searched by name and opened as whole workspaces.
+// VS Code Project Manager is read live. An entry with the same key overrides its project.
+{
+  "$schema": "workspaces.schema.json",
+  "version": 1,
+  "sources": { "projectManager": { "enabled": true } },
+`;
+
+function readWorkspacesFile(value: unknown, text?: string): WorkspacesFile {
+  const file = workspacesFileSchema.parse(value);
+  if (
+    !text?.replace(/\r\n/g, '\n').startsWith(earlierStarterSource) ||
+    file.sources.projectManager.enabled !== true ||
+    file.sources.projectManager.path !== undefined
+  )
+    return file;
+  return { ...file, sources: { projectManager: {} } };
+}
+
+function documentSourceChoice(text: string, added?: Set<string>): string {
+  if (!added?.has('sources.projectManager.enabled')) return text;
+  const source = parse(text).sources?.projectManager;
+  const enabled: unknown = source?.enabled;
+  if (typeof enabled !== 'boolean') return text;
+  const newline = text.includes('\r\n') ? '\r\n' : '\n';
+  const prefix = (choice?: boolean) =>
+    starter(choice).split('  "workspaces": {')[0]!.replace(/\n/g, newline);
+  const earlier = earlierStarterSource.replace('"enabled": true', '"enabled": ' + enabled);
+  if (text.replace(/\r\n/g, '\n').startsWith(earlier)) {
+    let end = 0;
+    for (const _line of earlier.split('\n').slice(0, -1)) end = text.indexOf('\n', end) + 1;
+    return prefix(enabled) + text.slice(end);
+  }
+  const undecided = prefix();
+  if (!text.startsWith(undecided)) return text;
+  const edits = modify(text, ['sources'], undefined, {});
+  const withoutAppendedSource = applyEdits(text, edits);
+  // Moving a handwritten source can detach its comments or lose its path override.
+  if (
+    source.path !== undefined ||
+    edits.some((edit) => /\/[/*]/.test(text.slice(edit.offset, edit.offset + edit.length))) ||
+    !withoutAppendedSource.startsWith(undecided)
+  )
+    return text.replace('  // "sources": { "projectManager": { "enabled": true } },' + newline, '');
+  return prefix(enabled) + withoutAppendedSource.slice(undecided.length);
+}
+
 export interface WorkspaceDefinitionsPorts {
+  found?: Pick<FoundWorkspaces, 'load' | 'snapshot' | 'subscribe' | 'configure' | 'recovery'> &
+    Partial<Pick<FoundWorkspaces, 'available' | 'reconcileKeys'>>;
   access(files: readonly string[]): Promise<void>;
   settings(): SettingsSnapshot['settings'];
   emit(catalog: DefinitionCatalog): void;
@@ -81,6 +133,7 @@ export class WorkspaceDefinitions {
   private wantedRoots = new Set<string>();
   private shownRoots = new Map<number, string[]>();
   private stopMemory?: () => void;
+  private stopFound?: () => void;
   private projectRoots: string[] = [];
   private rootEpoch = 0;
   private rootCheck?: ReturnType<typeof setTimeout>;
@@ -93,17 +146,13 @@ export class WorkspaceDefinitions {
     readonly home: string,
     private ports: WorkspaceDefinitionsPorts,
   ) {
-    this.configuration = new JsoncConfiguration(
-      directory,
-      (value) => workspacesFileSchema.parse(value),
-      undefined,
-      {
-        name: 'workspaces.jsonc',
-        schemaName: 'workspaces.schema.json',
-        objectValues: true,
-        limit: definitionLimits.file,
-      },
-    );
+    this.configuration = new JsoncConfiguration(directory, readWorkspacesFile, undefined, {
+      name: 'workspaces.jsonc',
+      schemaName: 'workspaces.schema.json',
+      objectValues: true,
+      document: documentSourceChoice,
+      limit: definitionLimits.file,
+    });
     this.current = {
       revision: 0,
       file: { path: this.configuration.file, state: 'absent' },
@@ -130,9 +179,15 @@ export class WorkspaceDefinitions {
     const item = this.entry(key)?.planes.find((item) => item.index === plane)?.plane;
     return item?.kind === 'terminal' ? item.command : undefined;
   }
+  async prepareKeys(): Promise<void> {
+    await this.ports.found?.reconcileKeys?.();
+    await this.reload();
+  }
   load(): Promise<void> {
     return (this.loading ??= (async () => {
       await this.ports.memory?.load();
+      await this.ports.found?.load();
+      this.stopFound = this.ports.found?.subscribe(() => this.schedule());
       this.stopMemory = this.ports.memory?.subscribe(() => this.publishMemory());
       await this.reload();
       const schema = z.toJSONSchema(workspacesFileSchema, { unrepresentable: 'any' });
@@ -261,6 +316,7 @@ export class WorkspaceDefinitions {
         ? (this.projects?.projects ?? [])
         : [];
     const settings = this.ports.settings();
+    await this.ports.found?.configure();
     const input = {
       file: this.file,
       projects,
@@ -276,6 +332,14 @@ export class WorkspaceDefinitions {
       rootStates: new Map([...this.roots].map(([root]) => [root, this.rootState(root)])),
     };
     const resolved = resolveCatalog(input);
+    const found = this.ports.found?.snapshot(resolved.definitions);
+    if (found) resolved.definitions.push(...found.definitions);
+    if (this.ports.found?.recovery)
+      diagnostics.push({
+        source: 'found-workspaces-v1.json',
+        level: 'note',
+        message: this.ports.found.recovery,
+      });
     this.projectRoots = projects.map((project) => project.root);
     this.wantedRoots = new Set([
       ...resolved.definitions.map((item) => item.root),
@@ -296,6 +360,7 @@ export class WorkspaceDefinitions {
       revision: this.current.revision + 1,
       file: { path: this.configuration.file, state: fileState },
       projectManager: status,
+      ...(found ? { found: found.state } : {}),
       definitions: resolved.definitions.map((item) => ({
         ...item,
         openedAt: this.ports.memory?.openedAt(item.key) ?? previous.get(item.key),
@@ -331,6 +396,7 @@ export class WorkspaceDefinitions {
   async checkRoot(key: string): Promise<DefinitionRootState> {
     const entry = this.entry(key);
     if (!entry) throw new Error('This workspace definition is unavailable.');
+    if (entry.source === 'found' && this.ports.found?.available?.(entry.root) === false) return 'unknown';
     if (this.rootState(entry.root) === 'present') return 'present';
     const value = await this.checkFolder(entry.root);
     this.roots.set(entry.root, { state: value, at: Date.now() });
@@ -372,6 +438,8 @@ export class WorkspaceDefinitions {
     const roots = [...selected].filter(
       (root) =>
         this.wantedRoots.has(root) &&
+        !(this.current.definitions.some((item) => item.root === root && item.source === 'found') &&
+          this.ports.found?.available?.(root) === false) &&
         (retry
           ? this.rootState(root) !== 'present'
           : !this.roots.has(root) || this.rootState(root) === 'unknown'),
@@ -403,7 +471,8 @@ export class WorkspaceDefinitions {
     if (this.stopped) return;
     let changed = false;
     const definitions = this.current.definitions.map((item) => {
-      const rootState = this.rootState(item.root);
+      const rootState = item.source === 'found' && this.ports.found?.available?.(item.root) === false
+        ? 'unknown' : this.rootState(item.root);
       if (item.rootState === rootState) return item;
       changed = true;
       return { ...item, rootState };
@@ -450,13 +519,13 @@ export class WorkspaceDefinitions {
     this.current.revision++;
     this.ports.emit(this.snapshot());
   }
-  private async ensureFile(): Promise<void> {
+  private async ensureFile(enabled = this.file.sources.projectManager.enabled): Promise<void> {
     await mkdir(path.dirname(this.configuration.file), { recursive: true, mode: 0o700 });
     try {
       await readFile(this.configuration.file, 'utf8');
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      await writeFile(this.configuration.file, starter(this.file.sources.projectManager.enabled), {
+      await writeFile(this.configuration.file, starter(enabled), {
         flag: 'wx',
         mode: 0o600,
       }).catch((error: NodeJS.ErrnoException) => {
@@ -475,7 +544,7 @@ export class WorkspaceDefinitions {
       this.stopSource?.();
       this.stopSource = undefined;
     }
-    await this.ensureFile();
+    await this.ensureFile(enabled);
     await this.configuration.update((current) => {
       assertHuman?.();
       const file = current ?? workspacesFileSchema.parse({ version: 1 });
@@ -622,6 +691,7 @@ export class WorkspaceDefinitions {
     if (!definition || !result) throw new Error('The saved definition could not be resolved.');
     return {
       kind: 'saved',
+      source: definition.source,
       key,
       basis: definition.basis,
       planes: result.planes,
@@ -642,6 +712,7 @@ export class WorkspaceDefinitions {
     this.stopSource?.();
     this.stopVolumes?.();
     this.stopMemory?.();
+    this.stopFound?.();
     await this.queue.catch(() => {});
   }
 }

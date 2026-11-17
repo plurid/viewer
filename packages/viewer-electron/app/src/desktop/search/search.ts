@@ -13,6 +13,7 @@ import { absolute, entryForScan as entry } from '../files/filesystem';
 import { HiddenPaths } from '../files/hidden-paths';
 import { searchExclusions } from './exclusions';
 import { commonSearchExclusions } from '../../domain/search/exclusions';
+import { assertLocalPath } from '../files/local-path';
 
 export class Search {
   private requests = new Map<string, AbortController>();
@@ -45,6 +46,7 @@ export class Search {
     return this.quiesce();
   }
   start(request: SearchRequest): void {
+    assertLocalPath(request.root);
     if (this.closed) throw new Error('Folder search has closed.');
     // the file query language (domain/search/query.ts), as the folder filter and the index read it
     let query: FileQuery;

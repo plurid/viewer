@@ -146,6 +146,7 @@ the override.
 | `toolbar`         | `ui.space.toolbar`                         |
 | `minimap`         | `ui.space.minimap`                         |
 | `minimapauto`     | `ui.space.minimapAuto`                     |
+| `minimapcorner`   | `ui.space.minimapCorner`                   |
 | `viewcube`        | `ui.space.viewcube`                        |
 | `headers`         | `ui.space.planeHeaders`                    |
 | `dragging`        | `ui.space.dragging`                        |

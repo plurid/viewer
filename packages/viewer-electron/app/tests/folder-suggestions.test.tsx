@@ -272,6 +272,25 @@ describe('recording folder views', () => {
     clearing.run(context);
     expect(getState().saved.visits).toEqual({});
   });
+
+  it('shows Clear only while the Recent section is unfolded', () => {
+    remember('/fixtures/Documents');
+    updatePane(getState().activePane, { sidebar: { visible: true, width: 210 } });
+    render(
+      <WorkspaceContext.Provider value={{ openPath: open } as unknown as WorkspaceController}>
+        <Sidebar paneID={getState().activePane} />
+      </WorkspaceContext.Provider>,
+    );
+    const heading = screen.getByRole('button', { name: 'Recent' });
+    expect(heading.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.queryByRole('button', { name: 'Clear recent folders' })).not.toBeNull();
+    fireEvent.click(heading);
+    expect(heading.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Clear recent folders' })).toBeNull();
+    fireEvent.click(heading);
+    expect(screen.queryByRole('button', { name: 'Clear recent folders' })).not.toBeNull();
+    expect(getState().saved.recents).toEqual(['/fixtures/Documents']);
+  });
 });
 
 describe('Go to folder suggestions', () => {

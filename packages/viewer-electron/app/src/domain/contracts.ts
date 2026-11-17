@@ -1,4 +1,6 @@
 import type { CheckedFolder } from './files/folder-checks';
+import type { WorkspaceDefinitionSource } from './workspaces/definitions/schema';
+import type { DeclaredCommandsReply } from './terminals/declared-commands';
 import type { ObservedIdentity } from './files/item-identity';
 import type { DiagnosticInput } from './diagnostics/failure';
 import type { FolderVisitReply, FolderVisitSave } from './files/folder-visit-changes';
@@ -405,7 +407,12 @@ export const paneTypes = {
 export interface Workspace {
   id: string;
   name: string;
-  definition?: { key: string; basis: string; planes?: Record<string, number> };
+  definition?: {
+    key: string;
+    basis: string;
+    source?: WorkspaceDefinitionSource;
+    planes?: Record<string, number>;
+  };
   panes: Pane[];
   roots: string[];
   /** Private task context persists independently of open views. Never exported in a project. */
@@ -895,6 +902,7 @@ export interface ViewerAPI {
     values?: Record<string, string>,
   ): Promise<string>;
   runCommand(script: string, target: CapturedTarget): Promise<string>;
+  declaredCommands(directory: string): Promise<DeclaredCommandsReply>;
   commandDraft(request?: { script: string; name: string }): Promise<CustomAction | undefined>;
   executionList(): Promise<ExecutionTask[]>;
   executionCancel(id: string): Promise<void>;
