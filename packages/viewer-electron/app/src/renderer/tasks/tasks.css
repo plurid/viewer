@@ -242,6 +242,11 @@
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+/* A one-line path label fits the row's width, not its own: it shortens instead of running off. */
+.tasks-list > button > small {
+  align-self: stretch;
+  min-width: 0;
+}
 .task-create-form {
   border-top: 1px solid var(--line);
   display: flex;

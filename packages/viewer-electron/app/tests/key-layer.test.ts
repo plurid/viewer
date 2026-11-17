@@ -85,7 +85,7 @@ describe('a sequence in the window', () => {
     expect(view.container.textContent).toContain('Label of new-terminal-plane');
     expect(view.container.querySelector('.which-key-trail')?.textContent).toBe('⌃B');
     press(document.body, 'y');
-    expect(view.container.textContent).toContain('Not bound');
+    expect(view.container.textContent).toContain('No action for this key');
     act(() => vi.advanceTimersByTime(1000));
     expect(view.container.querySelector('.which-key')).toBeNull();
   });

@@ -98,7 +98,7 @@ function ProviderEditor({
             className="primary"
             disabled={!draft.name.trim() || !draft.model.trim() || !draft.endpoint.trim()}
           >
-            Save provider
+            Save Provider
           </button>
         </div>
       </fieldset>
@@ -131,11 +131,7 @@ export function HostedSpeechSettings({
   return (
     <section className="speech-hosted" aria-label="Hosted speech providers">
       <h2>Hosted provider</h2>
-      <p className="settings-note">
-        Finishing a recording sends its audio to the selected provider. Your chat model settings and
-        microphone permission do not authorize this transfer. Local recognition remains available as
-        a separate choice.
-      </p>
+      <p className="settings-note">Recordings are sent to this provider to transcribe.</p>
       <div className="settings-row">
         <span>Use provider</span>
         <ChoiceButton
@@ -157,8 +153,11 @@ export function HostedSpeechSettings({
           disabled={busy || snapshot.providers.length >= 8}
           onClick={() => setDraft(newSpeechProvider('meta', crypto.randomUUID()))}
         >
-          Add speech provider
+          Add Speech Provider
         </button>
+      )}
+      {!draft && snapshot.providers.length >= 8 && (
+        <p className="settings-note">Viewer keeps up to 8 speech providers. Remove one first.</p>
       )}
       {draft ? (
         <ProviderEditor
@@ -190,7 +189,7 @@ export function HostedSpeechSettings({
                     })
                   }
                 >
-                  Edit provider
+                  Edit Provider
                 </button>
                 <button
                   type="button"
@@ -199,7 +198,7 @@ export function HostedSpeechSettings({
                     void request({ kind: 'provider-remove', id: selected.id }).catch(() => {})
                   }
                 >
-                  Remove provider
+                  Remove Provider
                 </button>
               </div>
             </div>
@@ -212,7 +211,7 @@ export function HostedSpeechSettings({
                 spellCheck={false}
                 maxLength={20000}
                 value={key?.id === selected.id ? key.value : ''}
-                placeholder={selected.hasKey ? 'Stored securely' : 'Enter API key'}
+                placeholder={selected.hasKey ? 'Saved' : 'Enter API key'}
                 disabled={busy}
                 onChange={(event) => setKey({ id: selected.id, value: event.target.value })}
               />
@@ -229,7 +228,7 @@ export function HostedSpeechSettings({
                     .catch(() => {})
                 }
               >
-                Save key
+                Save Key
               </button>
               {selected.hasKey && (
                 <button
@@ -239,7 +238,7 @@ export function HostedSpeechSettings({
                     void request({ kind: 'provider-key', id: selected.id, key: '' }).catch(() => {})
                   }
                 >
-                  Clear stored key
+                  Clear Key
                 </button>
               )}
             </div>
@@ -254,10 +253,10 @@ export function HostedSpeechSettings({
               aria-live="polite"
             >
               {checking
-                ? 'Checking the saved key and model catalog…'
+                ? 'Checking the key and model…'
                 : selected.check
                   ? `${selected.check.detail}${selected.check.httpStatus ? ` (HTTP ${selected.check.httpStatus})` : ''}`
-                  : 'Not checked in this session. Check the saved provider before your first recording.'}
+                  : 'Not checked yet. Check it before your first recording.'}
             </p>
             <div className="speech-model-actions">
               <button
@@ -273,16 +272,17 @@ export function HostedSpeechSettings({
                 {checking ? 'Checking…' : 'Check connection and model'}
               </button>
             </div>
+            {!selected.hasKey && <p className="settings-note">Save an API key above first.</p>}
             <p className="settings-note">
-              This uses your saved key to request provider metadata. It records and sends no audio.
-              Catalog access does not confirm transcription quality or remaining credit.
+              Asks the provider about the model with your key and sends no audio. It doesn’t confirm
+              transcription quality or remaining credit.
             </p>
             <h3>Audio access</h3>
             <p className="settings-note" role="status">
               {selected.allowed
                 ? 'Recordings are allowed for this saved endpoint and model.'
                 : 'Recordings are not allowed yet.'}{' '}
-              Changing the endpoint or model revokes audio access and stops affected sessions. A new
+              Changing the endpoint or model turns this off and stops recordings in progress; a new
               endpoint needs its own key.
             </p>
             <div className="speech-model-actions">
@@ -297,14 +297,9 @@ export function HostedSpeechSettings({
                   }).catch(() => {})
                 }
               >
-                {selected.allowed ? 'Revoke audio access' : 'Allow recordings…'}
+                {selected.allowed ? 'Revoke Audio Access' : 'Allow Recordings…'}
               </button>
             </div>
-            <p className="settings-note">
-              Keys are encrypted privately and never included in configuration exports. Each
-              recording is at most 60 seconds. Viewer does not retry or switch providers
-              automatically.
-            </p>
           </>
         )
       )}

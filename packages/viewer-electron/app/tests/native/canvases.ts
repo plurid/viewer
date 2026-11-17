@@ -149,7 +149,7 @@ const click = async (main: Connection, id: string, label: string) => {
             const option = [
               ...document.querySelectorAll<HTMLElement>('[role="menuitem"], .context-menu button'),
             ].find(
-              (item) => item.textContent?.trim() === (label === 'Undo' ? 'Undo revision' : label),
+              (item) => item.textContent?.trim() === (label === 'Undo' ? 'Undo Revision' : label),
             );
             option?.click();
             return !!option;
@@ -324,7 +324,7 @@ try {
       main!.evaluate(
         pageCall(() =>
           [...document.querySelectorAll('button')].some(
-            (button) => button.textContent === 'Ask about selection',
+            (button) => button.textContent === 'Ask About Selection',
           ),
         ),
       ),
@@ -334,7 +334,7 @@ try {
   await main.evaluate(
     pageCall(() =>
       [...document.querySelectorAll('button')]
-        .find((button) => button.textContent === 'Ask about selection')!
+        .find((button) => button.textContent === 'Ask About Selection')!
         .click(),
     ),
   );
@@ -435,7 +435,7 @@ try {
     (text) => text === 'Drag to orbit · scroll to zoom',
     'alternative revision renders',
   );
-  await click(main, branch.canvasID, 'Compare original');
+  await click(main, branch.canvasID, 'Compare Original');
   content = await frame(main, canvas.id);
   await content.evaluate(
     pageCall(() => {
@@ -444,7 +444,7 @@ try {
       input.dispatchEvent(new Event('input', { bubbles: true }));
     }),
   );
-  await click(main, branch.canvasID, 'Apply to original');
+  await click(main, branch.canvasID, 'Apply to Original');
   content = await frame(main, canvas.id, content.url);
   await until(
     () => content.evaluate(pageCall(() => document.querySelector('#status')?.textContent)),
@@ -455,7 +455,7 @@ try {
   assert.equal((await canvases.read(1, branch.canvasID)).state.budget, 300);
   checks.push('compare and apply retain the original latest inputs and independent alternative');
   const applied = (await canvases.read(1, canvas.id)).revision;
-  await click(main, branch.canvasID, 'Apply to original');
+  await click(main, branch.canvasID, 'Apply to Original');
   await until(
     () =>
       main!.evaluate(

@@ -29,7 +29,7 @@ export function WorkspaceBackgroundDialog({ onClose }: { onClose(): void }) {
     return definition ? [definition] : [];
   });
   return (
-    <Dialog title="Workspace look" onClose={onClose} className="workspace-background-dialog">
+    <Dialog title="Workspace Look" onClose={onClose} className="workspace-background-dialog">
       <div className="workspace-look">
         <div className="workspace-look-row">
           <span className="workspace-look-label">Default profile</span>
@@ -43,7 +43,12 @@ export function WorkspaceBackgroundDialog({ onClose }: { onClose(): void }) {
                 label: profile.name,
               })),
               ...(missing
-                ? [{ value: workspace.profileID!, label: `Unavailable (${workspace.profileID})` }]
+                ? [
+                    {
+                      value: workspace.profileID!,
+                      label: `Missing profile (${workspace.profileID})`,
+                    },
+                  ]
                 : []),
             ]}
             onChoose={(profileID) =>
@@ -53,7 +58,7 @@ export function WorkspaceBackgroundDialog({ onClose }: { onClose(): void }) {
         </div>
         {missing && (
           <p role="status">
-            The saved default profile is unavailable. Choose another profile or General.
+            The saved default profile was deleted. Choose another profile or General.
           </p>
         )}
         <span className="workspace-look-label">Background</span>

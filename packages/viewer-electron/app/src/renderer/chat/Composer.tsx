@@ -56,7 +56,7 @@ export function Composer({
       />
       <div className="chat-composer-actions">
         <p className="chat-composer-hint" id={hintID}>
-          {hint ?? 'Command or Control + Enter to send.'}
+          {hint ?? '⌘↩ to send.'}
         </p>
         {running ? (
           <button

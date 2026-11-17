@@ -61,8 +61,8 @@ export function CommandFields({
         <section className="command-input-editor">
           <h3>Parameters</h3>
           <p className="settings-note">
-            Executable arguments use {'{input:name}'}. Shell scripts read $VIEWER_INPUT_NAME. Values
-            stay literal.
+            Program arguments use {'{input:name}'}; shell scripts read $VIEWER_INPUT_NAME. Values
+            are passed as typed.
           </p>
           {action.inputs?.map((input, index) => (
             <fieldset key={index}>
@@ -153,8 +153,11 @@ export function CommandFields({
               })
             }
           >
-            Add parameter
+            Add Parameter
           </button>
+          {(action.inputs?.length ?? 0) >= 20 && (
+            <p className="settings-note">A command takes up to 20 parameters.</p>
+          )}
         </section>
       )}
       {action.executor.kind === 'workflow' && (
@@ -223,7 +226,7 @@ function WorkflowFields({
                 change(next);
               }}
             >
-              Move step {index + 1} up
+              Move Step {index + 1} Up
             </button>
             <button
               disabled={index === steps.length - 1}
@@ -233,13 +236,13 @@ function WorkflowFields({
                 change(next);
               }}
             >
-              Move step {index + 1} down
+              Move Step {index + 1} Down
             </button>
             <button
               disabled={steps.length === 1}
               onClick={() => change(steps.filter((_, row) => row !== index))}
             >
-              Remove step {index + 1}
+              Remove Step {index + 1}
             </button>
           </div>
         </fieldset>
@@ -249,15 +252,24 @@ function WorkflowFields({
           disabled={!programs.length || steps.length >= 20}
           onClick={() => change([...steps, { kind: 'action', actionID: programs[0]!.id }])}
         >
-          Add command step
+          Add Command Step
         </button>
         <button
           disabled={steps.length >= 20}
           onClick={() => change([...steps, { kind: 'command', line: 'refresh' }])}
         >
-          Add built-in step
+          Add Built-In Step
         </button>
       </div>
+      {steps.length >= 20 ? (
+        <p className="settings-note">A workflow takes up to 20 steps.</p>
+      ) : (
+        !programs.length && (
+          <p className="settings-note">
+            Add a shell or program command first; a command step runs one.
+          </p>
+        )
+      )}
     </section>
   );
 }

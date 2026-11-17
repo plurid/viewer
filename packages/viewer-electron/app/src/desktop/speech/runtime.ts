@@ -46,7 +46,7 @@ export class SpeechRuntime {
           info = await lstat(file),
           hash = createHash('sha256');
         if (!info.isFile() || info.isSymbolicLink() || info.size > 128 * 1024 ** 2)
-          throw new Error('The speech engine resource is not a bounded ordinary file.');
+          throw new Error('A speech engine file is too large or is not a regular file.');
         for await (const chunk of createReadStream(file)) hash.update(chunk);
         if (hash.digest('hex') !== manifest.files[name]) changedBySigning = true;
       }

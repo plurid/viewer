@@ -161,26 +161,26 @@ Viewer keeps up to 100 named clients, revoked ones included. To make room,
 2. Turn on **Allow local agent clients**. A system dialog, **Allow local agent clients to use
    Viewer?**, lists the shared connection's folders and capabilities. Choose **Allow**.
 3. Under **Agent clients**, in **New client**, enter a **Name**.
-4. Use **Choose folder…** to add each folder the agent may use.
+4. Use **Choose Folder…** to add each folder the agent may use.
 5. Turn on the capabilities it needs. A new client starts with **Metadata and discovery** only.
-6. Set **Maximum returned content (MiB)**, 1 to 8, and **Concurrent requests and pending recipe
-   tasks**, then choose **Create client**.
-7. Copy the **Client MCP configuration** into the agent client's MCP settings. The token is shown
-   once.
+6. Set **Maximum returned content (MiB)**, 1 to 8, and **Tasks at a time**, then choose **Create
+   Client**.
+7. Choose **Copy** under the configuration and paste it into the agent client's MCP settings. The
+   key is shown only once.
 8. Restart or reload the agent client so it starts the server.
 
-To change a client later, choose **Permissions**, edit, then **Save permissions**.
+To change a client later, choose **Permissions**, edit, then **Save Permissions**.
 
 ### Connect through the shared connection
 
 1. Turn on **Allow local agent clients** and choose **Allow**, as above.
-2. Open **Shared connection** and choose **Authorize folder…** for each folder. The folder panel is
+2. Open **Shared connection** and choose **Authorize Folder…** for each folder. The folder panel is
    the approval.
 3. Under **What the connection may do**, turn on what it needs. Adding a capability asks **Allow the
    shared agent connection more?**; choose **Allow**.
-4. Choose **Generate MCP configuration** and copy the **MCP configuration** into the agent client.
+4. Choose **Generate MCP Configuration**, then **Copy**, and paste it into the agent client.
 
-**Generate MCP configuration** is available once access is on and a folder is authorized. Each use
+**Generate MCP Configuration** is available once access is on and a folder is authorized. Each use
 makes a new token: it disconnects every earlier holder, stops the connection's work and revokes its
 terminal read grants.
 
@@ -218,15 +218,15 @@ the token private: anyone holding it acts as that client.
 
 ### Capabilities
 
-| Capability       | Named client label                   | Shared connection label                                | Allows                                                                          |
-| ---------------- | ------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `metadata`       | **Metadata and discovery**           | **Names, sizes, dates and available tools**            | Discovery, names, sizes, dates, configuration reads, session reports            |
-| `content`        | **Read file contents**               | **Search document text and run actions that read it**  | Named: every content tool. Shared: document-text search and content recipes     |
-| `navigation`     | **Navigate without review**          | **Propose opening folders and files, for your review** | Opening, selecting, focusing and switching; at once for a named client          |
-| `propose`        | **Propose changes**                  | **Propose commands and changes, for your review**      | Commands, configuration, exports, recipes, tasks and speech setup, all reviewed |
-| `terminal-read`  | **Read terminal output**             | **Read terminal output, where granted**                | `read_terminal`, with a terminal read grant                                     |
-| `execute`        | **Unattended execution unavailable** | Not offered                                            | Nothing: the box cannot be turned on                                            |
-| `terminal-write` | **Terminal input unavailable**       | Not offered                                            | Nothing: the box cannot be turned on                                            |
+| Capability       | Named client label          | Shared connection label                                | Allows                                                                          |
+| ---------------- | --------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `metadata`       | **Metadata and discovery**  | **Names, sizes, dates and available tools**            | Discovery, names, sizes, dates, configuration reads, session reports            |
+| `content`        | **Read file contents**      | **Search document text and run actions that read it**  | Named: every content tool. Shared: document-text search and content recipes     |
+| `navigation`     | **Navigate without review** | **Propose opening folders and files, for your review** | Opening, selecting, focusing and switching; at once for a named client          |
+| `propose`        | **Propose changes**         | **Propose commands and changes, for your review**      | Commands, configuration, exports, recipes, tasks and speech setup, all reviewed |
+| `terminal-read`  | **Read terminal output**    | **Read terminal output, where granted**                | `read_terminal`, with a terminal read grant                                     |
+| `execute`        | Not offered                 | Not offered                                            | Nothing                                                                         |
+| `terminal-write` | Not offered                 | Not offered                                            | Nothing                                                                         |
 
 When agents are turned on and the shared connection has no capabilities yet, it gets `metadata`,
 `navigation` and `propose`.
@@ -259,12 +259,12 @@ agent clients** on again.
 ### Watch and stop
 
 - **Activity** on a client shows its recent tool calls and reviews, newest first.
-- **Stop tasks** cancels the client's proposals, recipe tasks and workflows.
+- **Stop Tasks** cancels the client's proposals, recipe tasks and workflows.
 - **Revoke** retires the client, its token and its grants.
 - **Remove** on a revoked client clears it from the list.
 - Saving a client's permissions stops its work.
 - Turning access off, or removing a shared folder or capability, stops every client's work.
-- Turning access back on does not resume cancelled work.
+- Turning access back on does not resume canceled work.
 
 ### Remove a client
 
@@ -276,26 +276,25 @@ Removing forgets the client's name, folders and capabilities, and its **Activity
 listed. Sessions it reported stay in their tasks. Only a revoked client can be removed, and only
 from Settings: no agent tool or CLI command removes a client.
 
-At 100 clients, **Create client** is unavailable and Settings says how many are active and how many
-revoked, for example **Viewer keeps up to 100 agent clients and has 100: 63 active and 37 revoked.
-Remove a revoked client, then create this one.** When all 100 are active, it asks you to revoke one
-first.
+At 100 clients, **Create Client** is off and Settings says how many are active and how many revoked,
+for example **Viewer keeps up to 100 agent clients and has 100: 63 active and 37 revoked. Remove a
+revoked client, then create this one.** When all 100 are active, it asks you to revoke one first.
 
 ## What the person reviews
 
 | Request                               | Review in Viewer                                         | Then a system dialog         |
 | ------------------------------------- | -------------------------------------------------------- | ---------------------------- |
-| `propose_command`                     | **Run action**, or **Move to Trash** for a removal       | **Run** or **Move to Trash** |
-| `propose_config`                      | **Apply changes**                                        | **Change**                   |
+| `propose_command`                     | **Run Action**, or **Move to Trash** for a removal       | **Run** or **Move to Trash** |
+| `propose_config`                      | **Apply Changes**                                        | **Change**                   |
 | `propose_task_create`                 | **Create task**                                          | **Create task**              |
-| `propose_speech_*`                    | **Download model**, **Import model** or **Choose model** | The same label               |
+| `propose_speech_*`                    | **Download Model**, **Import Model** or **Choose Model** | The same label               |
 | `propose_transform`                   | **Export**                                               | None                         |
-| `run_action`, workflow mutation steps | **Action tasks**: **Apply _n_ changes**                  | None                         |
+| `run_action`, workflow mutation steps | **Action Tasks**: **Apply _n_ Changes**                  | None                         |
 | Navigation, shared connection         | The proposal's title, such as **Open path**              | None                         |
 | Navigation, named client              | None, except opening `viewer.project.jsonc` or a tour    | None                         |
 
 The review ends with what approving does for that request and that target, and whether a system
-dialog follows. For example, a command on two selected items reads **After Run action, a system
+dialog follows. For example, a command on two selected items reads **After Run Action, a system
 dialog asks once more. Then “Rename” runs on the 2 selected items.**, and an export reads **Export
 saves Photo.png as a new file in /work/Exports. The sources and existing files are kept. No system
 dialog follows: this review is the approval.** An export only adds a file, so no dialog follows it.
@@ -366,22 +365,22 @@ key that contains dots, such as a folder path:
 
 ### Limits
 
-| Limit                               | Value                                                                            |
-| ----------------------------------- | -------------------------------------------------------------------------------- |
-| One request                         | 65,536 bytes on one line                                                         |
-| Result size                         | **Maximum returned content**: 1 to 8 MiB, default 4; shared: 4 MiB               |
-| One reply                           | 17 MiB (17,825,792 bytes) on one line                                            |
-| Named clients                       | 100, revoked ones included                                                       |
-| Concurrent requests per client      | **Concurrent requests and pending recipe tasks**: 1 to 20, default 4; shared: 20 |
-| Order                               | One connection's requests are answered one at a time, in order                   |
-| Waiting replies per `--mcp` process | 100                                                                              |
-| Time per request                    | 120 seconds                                                                      |
-| Proposals waiting for review        | 100 across all clients                                                           |
-| Pending task proposals              | 100; a prepared task expires after 5 minutes                                     |
-| Task areas per workspace            | 50                                                                               |
-| Path                                | 32,768 characters                                                                |
-| Concurrent Git reads                | 8                                                                                |
-| Activity                            | The last 1,000 calls are kept; **Activity** shows 50                             |
+| Limit                               | Value                                                              |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| One request                         | 65,536 bytes on one line                                           |
+| Result size                         | **Maximum returned content**: 1 to 8 MiB, default 4; shared: 4 MiB |
+| One reply                           | 17 MiB (17,825,792 bytes) on one line                              |
+| Named clients                       | 100, revoked ones included                                         |
+| Concurrent requests per client      | **Tasks at a time**: 1 to 20, default 4; shared: 20                |
+| Order                               | One connection's requests are answered one at a time, in order     |
+| Waiting replies per `--mcp` process | 100                                                                |
+| Time per request                    | 120 seconds                                                        |
+| Proposals waiting for review        | 100 across all clients                                             |
+| Pending task proposals              | 100; a prepared task expires after 5 minutes                       |
+| Task areas per workspace            | 50                                                                 |
+| Path                                | 32,768 characters                                                  |
+| Concurrent Git reads                | 8                                                                  |
+| Activity                            | The last 1,000 calls are kept; **Activity** shows 50               |
 
 A result reaches the agent as JSON text inside a JSON string, where each quote and backslash is
 escaped once more, so a reply can take twice the result's size: 17 MiB holds any result within 8
@@ -410,7 +409,7 @@ The `--mcp` process prints these on standard error and exits with status 1:
 | Message                                                                                                              | Meaning                                                                                      |
 | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `Set VIEWER_AGENT_TOKEN to the token shown in Viewer Settings.`                                                      | The client configuration has no token                                                        |
-| `Viewer’s agent connection is unavailable. Open Viewer and approve agent access in Settings → Agents.`               | Agent access was never turned on                                                             |
+| `Can’t connect to Viewer. Open Viewer and allow agent access in Settings → Agents.`                                  | Agent access was never turned on                                                             |
 | `Viewer is not running. Open Viewer (/Applications/Viewer.app), then start the agent again.`                         | Viewer quit or ended. The path is the Viewer that last ran, or else the one the agent starts |
 | `… This agent starts another copy, at …`                                                                             | Added when the agent's configuration names another copy of Viewer than the one that last ran |
 | `Agent access is off in Viewer. Turn on Allow local agent clients in Settings → Agents, then start the agent again.` | Viewer runs with agent access off                                                            |
@@ -435,7 +434,7 @@ Calls fail with these:
 | `Selection changed. Ask the agent for a new proposal.`                                                  | A file changed identity before the proposal ran                                             |
 | `The source changed. Read it again.`                                                                    | The file changed while it was read                                                          |
 | `Agent permissions changed while this request was running. Try again.`                                  | Access, folders or capabilities changed during the call                                     |
-| `This client has reached its concurrent request budget.`                                                | Too many calls at once                                                                      |
+| `This client already runs as many requests as it may. Wait for one to finish.`                          | Too many calls at once                                                                      |
 | `Review or stop a task before starting another.`                                                        | The client's recipe tasks fill its budget                                                   |
 | `The read_content result is 5.3 MiB, over this client’s read budget of 4 MiB. …`                        | Ask for less, as the message says; see below                                                |
 | `The reply is … bytes, over the 17,825,792 one reply to an agent may take. …`                           | A reply too long for the relay. A result within its budget never is                         |
@@ -499,11 +498,11 @@ steps.
 
 | Label                                                 | What it does                                                                                             |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Add model**, then **Set up model**                  | Adds a provider: OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter, Meta or **Local endpoint** |
+| **Add Model**, then **Set Up Model**                  | Adds a provider: OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter, Meta or **Local endpoint** |
 | **Default for Ask Viewer**                            | The model that answers requests in words and reads spoken requests into plans                            |
 | **Data access**                                       | What the provider may receive                                                                            |
-| **Allow selected data**                               | Approves the chosen level                                                                                |
-| **Revoke access**                                     | Withdraws it                                                                                             |
+| **Allow Selected Data**                               | Approves the chosen level                                                                                |
+| **Revoke Access**                                     | Withdraws it                                                                                             |
 | **Allow agent-started actions to send the same data** | Lets `ask_in_words`, agent recipes and agent workflows use the model                                     |
 | **Reasoning effort**                                  | How long the model reasons before it answers; shown only for a provider that takes it, such as Meta      |
 | **Outlines with SAM**                                 | The SAM model a local server also answers, such as `sam-3.1`; shown only for **Local endpoint**          |
@@ -564,7 +563,7 @@ there.
 | Stage    | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Reading  | With the **Default for Ask Viewer** model allowed `names`, the model receives the words, up to 2,000 characters, the folder's path, up to 50 selected names and up to 600 commands there: each ID, label, what it acts on, such as "Job 1042", and the command it follows. The answer is held to `spokenAnswerSchema` with a strict `json_schema`. Without that model or its permission, or when it does not answer, Viewer matches the words to command labels and aliases itself, and says so |
-| Checking | Each step is a command offered there, or one that follows an earlier step, such as **Prepare cut sheets** after **Check laser job…**: at most 6, each once, in order. A step naming a target its command does not act on, such as "Job 1043" where Job 1042 is shown, or a part of the request no command does, makes the plan wait for the person's press                                                                                                                                      |
+| Checking | Each step is a command offered there, or one that follows an earlier step, such as **Prepare Cut Sheets** after **Check Laser Job…**: at most 6, each once, in order. A step naming a target its command does not act on, such as "Job 1043" where Job 1042 is shown, or a part of the request no command does, makes the plan wait for the person's press                                                                                                                                      |
 | Running  | Steps run one after another on the folder and selection captured when the recording began, each once the one before is done: a check once it is graded                                                                                                                                                                                                                                                                                                                                          |
 
 | Runs                  | Commands                                                                                                                                                                                                                                                                                                                                                                                                                                                                |

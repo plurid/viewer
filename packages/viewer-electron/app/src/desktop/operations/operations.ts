@@ -549,8 +549,7 @@ export class Operations {
       throw new Error('Enter a ZIP archive name.');
     if (request.kind === 'convert') {
       if (request.transform) {
-        if (!this.transforms)
-          throw new Error('Transform processors are unavailable in this build.');
+        if (!this.transforms) throw new Error('This build of Viewer can’t convert files.');
         if (request.conversion) throw new Error('Choose one conversion plan.');
         request.transform = validateTransform(request.transform, roots.length);
         if (combinedTransform(request.transform) && (!request.destination || !request.name))
@@ -803,7 +802,7 @@ export class Operations {
           // This job touched no files; its failed cancellation record cannot fail unrelated work.
           task.job.errors.push({
             path: task.job.destination || '',
-            message: 'The cancelled picture receipt could not be saved. ' + errorMessage(error),
+            message: 'Viewer couldn’t record the canceled picture. ' + errorMessage(error),
           });
           this.emit(task);
           // Retrying this failed record from another job's checkpoint would fail that job too.
@@ -1151,7 +1150,7 @@ export class Operations {
       task.job.errors.push({
         path: file,
         message:
-          `Moved to the Trash at ${receipt.path}, but Undo is unavailable: ${errorMessage(error)}`.slice(
+          `Moved to the Trash at ${receipt.path}, but this move can’t be undone: ${errorMessage(error)}`.slice(
             0,
             4000,
           ),
@@ -1248,7 +1247,7 @@ export class Operations {
         throw new Error(
           kept
             ? `${errorMessage(error)} The replaced item was kept as ${path.basename(kept)}.`
-            : `${errorMessage(error)} The replaced item is in the Trash; Undo in File operations can restore it.`,
+            : `${errorMessage(error)} The replaced item is in the Trash; Undo in File Operations can restore it.`,
         );
       throw error;
     }

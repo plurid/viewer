@@ -417,7 +417,7 @@ describe('existing worktree views', () => {
       catalogID: 'catalog',
       worktreeID: 'feature',
     });
-    const rejection = expect(opening).rejects.toThrow('originating folder changed');
+    const rejection = expect(opening).rejects.toThrow('folder this started from changed');
     act(() => navigate(captured.paneID, '/fixtures/elsewhere'));
     finish({ kind: 'folder', entry: { path: '/fixtures-feature', directory: true } });
     await rejection;

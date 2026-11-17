@@ -74,7 +74,7 @@ export function TourStops() {
             title={activeFile ? activeFile : 'Click a file’s plane to add it as a stop.'}
             onClick={() => run(() => recordStop(workspace))}
           >
-            {activeFile ? `Add “${fileName(activeFile)}”` : 'Add a file plane'}
+            {activeFile ? `Add “${fileName(activeFile)}”` : 'Add a File Plane'}
           </Button>
           <span className="tour-stops-destination muted">{destination}</span>
           <Button
@@ -93,7 +93,7 @@ export function TourStops() {
             disabled={busy || !draft.stops.length || !file}
             onClick={() => run(saveDraft)}
           >
-            {draft.file ? `Save ${tourFileName(draft.file)}` : 'Save tour'}
+            {draft.file ? `Save ${tourFileName(draft.file)}` : 'Save Tour'}
           </Button>
         </>
       }

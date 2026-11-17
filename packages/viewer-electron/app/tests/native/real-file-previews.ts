@@ -131,7 +131,7 @@ function selectRow(row: string): void {
 
 function officeViewChoices(): boolean {
   return [...document.querySelectorAll('.preview-toolbar button')].some((button) =>
-    ['Layout', 'Print layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
+    ['Layout', 'Print Layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
   );
 }
 
@@ -246,7 +246,7 @@ try {
         178,
       );
     if (result.ready && result.media && !result.media.width) {
-      assert.ok(result.warning.includes('No video picture'));
+      assert.ok(result.warning.includes("can't show this video's picture"));
       await evaluate(
         pageCall(() => document.querySelector<HTMLAudioElement>('.quick-preview audio')!.play()),
       );

@@ -110,7 +110,7 @@ export class XMLStream {
   }
   private count(): void {
     if (++this.nodes > this.maximumNodes)
-      throw new Error('XML structure exceeds the reader limit.');
+      throw new Error('This XML has more elements than Viewer reads.');
   }
   private text(value: string): void {
     if (!value) return;
@@ -145,7 +145,7 @@ export class XMLStream {
       if (xml.startsWith('<!--', cursor)) {
         end = xml.indexOf('-->', cursor + 4);
         if (end < 0) break;
-        if (end - cursor > 262144) throw new Error('XML token exceeds the reader limit.');
+        if (end - cursor > 262144) throw new Error('This XML has a part larger than Viewer reads.');
         if (xml.slice(cursor + 4, end).includes('--')) throw fail();
         cursor = end + 3;
         continue;
@@ -153,7 +153,7 @@ export class XMLStream {
       if (xml.startsWith('<![CDATA[', cursor)) {
         end = xml.indexOf(']]>', cursor + 9);
         if (end < 0) break;
-        if (end - cursor > 262144) throw new Error('XML token exceeds the reader limit.');
+        if (end - cursor > 262144) throw new Error('This XML has a part larger than Viewer reads.');
         this.text(xml.slice(cursor + 9, end));
         cursor = end + 3;
         continue;
@@ -161,7 +161,7 @@ export class XMLStream {
       if (xml.startsWith('<?', cursor)) {
         end = xml.indexOf('?>', cursor + 2);
         if (end < 0) break;
-        if (end - cursor > 262144) throw new Error('XML token exceeds the reader limit.');
+        if (end - cursor > 262144) throw new Error('This XML has a part larger than Viewer reads.');
         cursor = end + 2;
         continue;
       }
@@ -182,7 +182,7 @@ export class XMLStream {
         }
       }
       if (end < 0) break;
-      if (end - cursor > 262144) throw new Error('XML token exceeds the reader limit.');
+      if (end - cursor > 262144) throw new Error('This XML has a part larger than Viewer reads.');
       const { node, closing, self } = tagNode(xml.slice(cursor, end + 1));
       if (closing) {
         if (this.stack.pop() !== node.name) throw fail();
@@ -190,7 +190,7 @@ export class XMLStream {
       } else {
         this.count();
         if (!this.stack.length && ++this.roots > 1) throw fail();
-        if (this.stack.length >= 63) throw new Error('XML nesting exceeds the reader limit.');
+        if (this.stack.length >= 63) throw new Error('This XML nests deeper than Viewer reads.');
         this.events.open(node);
         if (self) this.events.close(node.name);
         else this.stack.push(node.name);
@@ -198,7 +198,8 @@ export class XMLStream {
       cursor = end + 1;
     }
     this.pending = xml.slice(cursor);
-    if (this.pending.length > 262144) throw new Error('XML token exceeds the reader limit.');
+    if (this.pending.length > 262144)
+      throw new Error('This XML has a part larger than Viewer reads.');
     if (final && this.pending) throw fail();
   }
 }

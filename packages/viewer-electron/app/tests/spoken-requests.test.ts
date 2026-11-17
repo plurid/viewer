@@ -10,6 +10,7 @@ import type { SpokenCommand, SpokenRequest } from '../src/domain/command-line/sp
 import type { ModelDataLevel } from '../src/domain/models/permissions';
 import type { ModelProvider, RequestActor } from '../src/domain/services';
 import {
+  labelPhrase,
   matchSpoken,
   spokenInput,
   spokenInstructions,
@@ -92,6 +93,19 @@ const commands: SpokenCommand[] = [
   },
 ];
 const plan = (transcript: string) => spokenPlan(matchSpoken(transcript, commands), commands);
+
+describe('a command label in a spoken plan', () => {
+  it('reads a menu’s Title Case as words in a sentence, keeping acronyms and names', () => {
+    expect(labelPhrase('Frame All Planes')).toBe('frame all planes');
+    expect(labelPhrase('PDF Tools…')).toBe('PDF tools');
+    expect(labelPhrase('Move to Trash')).toBe('move to Trash');
+    expect(labelPhrase('Open in Quick Look')).toBe('open in Quick Look');
+    expect(labelPhrase('What Can I Do Here?')).toBe('what can I do here?');
+    expect(labelPhrase('Use VS Code Project Manager’s Projects…')).toBe(
+      'use VS Code project manager’s projects',
+    );
+  });
+});
 
 describe('Viewer’s own matching, without a model', () => {
   it('reads “check this job and prepare the cut sheets” as the check, then its cut sheets', () => {

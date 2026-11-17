@@ -23,7 +23,7 @@ const profiles = () => presentationProfiles(getState().settings.settings.profile
 /** Selects a window-local overlay; canonical configuration remains untouched. */
 export async function applyProfile(profile: SettingProfile): Promise<void> {
   if (!profiles().some((item) => item.id === profile.id))
-    throw new Error(`The profile “${profile.id}” is unavailable.`);
+    throw new Error(`The profile “${profile.id}” was deleted.`);
   stopTour();
   savePatch({ profile: { id: profile.id, previous: {} } });
   const issues = effectiveWindowPreferences(getState()).diagnostics;
@@ -72,7 +72,7 @@ export function profileCommands({
   return [
     {
       id: 'focus-mode',
-      label: active?.id === 'focus' ? 'Leave focus mode' : 'Focus mode',
+      label: active?.id === 'focus' ? 'Leave Focus Mode' : 'Focus Mode',
       group: 'View',
       icon: 'eye',
       shortcut: '⇧⌘F',
@@ -94,7 +94,7 @@ export function profileCommands({
     })),
     {
       id: 'profile-restore',
-      label: name ? `Leave profile ${name}` : 'Leave profile',
+      label: name ? `Leave Profile ${name}` : 'Leave Profile',
       group: 'View',
       icon: 'restore',
       aliases: ['profile', 'restore', 'back'],
@@ -111,6 +111,7 @@ export function profileCommands({
           label: `Theme: ${theme.name}`,
           group: 'View',
           icon: chosen ? 'check' : 'sun',
+          // eslint-disable-next-line no-restricted-syntax -- British spelling finds it too
           aliases: ['theme', 'colours', 'colors', theme.name],
           when: windowScope,
           run: () =>
@@ -122,7 +123,7 @@ export function profileCommands({
       }),
     {
       id: 'profile-save-as',
-      label: 'Save profile as…',
+      label: 'Save Profile As…',
       group: 'View',
       icon: 'star',
       aliases: ['profile', 'save settings', 'preset'],

@@ -4,8 +4,7 @@ import type { FileAccess } from '../files/file-access';
 import type { Pasteboard } from '../native/pasteboard';
 import type { Operations } from '../operations/operations';
 import type { OperationRequest } from '../../domain/contracts';
-import { assertLocalPath } from '../files/local-path';
-import { localPath } from '../schemas';
+import { requireAbsoluteLocalPath } from '../files/local-path';
 
 type PasteboardHandlers = Pick<
   ApiHandlers,
@@ -36,8 +35,7 @@ export function createPasteboardHandlers(ports: PasteboardPorts): PasteboardHand
     clipboardWriteText: ([text]) => ports.pasteboard.writeText(text),
     clipboardRead: () => ports.pasteboard.read(),
     clipboardPaste: async ([destination], owner) => {
-      assertLocalPath(destination);
-      localPath.parse(destination);
+      requireAbsoluteLocalPath(destination);
       const content = await ports.pasteboard.readForPaste();
       if (!content) return null;
       // This window-wide attribution also covers the person's input while an agent awaits its reply.

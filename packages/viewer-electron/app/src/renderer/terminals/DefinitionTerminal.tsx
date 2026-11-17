@@ -95,7 +95,7 @@ export function DefinitionTerminal({ pane }: { pane: TerminalPane }) {
             (presentation.kind === 'checking'
               ? 'Checking the terminal folder…'
               : presentation.kind === 'unavailable'
-                ? 'The definition command is no longer available. Choose Shell only.'
+                ? 'This terminal’s command is no longer in the definition. Choose Shell only.'
                 : undefined)
           }
           onRun={() => start(true)}

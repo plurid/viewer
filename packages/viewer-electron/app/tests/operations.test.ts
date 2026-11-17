@@ -857,7 +857,7 @@ describe('replace safety', () => {
     const job = await run({ kind: 'trash', sources: [source] });
     expect(job.status).toBe('completed');
     expect(job.completed).toHaveLength(1);
-    expect(job.errors[0]?.message).toContain('Undo is unavailable');
+    expect(job.errors[0]?.message).toContain('this move can’t be undone');
   });
   it('says Undo is unavailable for a trashed folder too large to check before putting it back', async () => {
     // Over 10,000 items the folder cannot be proven unchanged, so it has no Undo; the job completed
@@ -877,7 +877,7 @@ describe('replace safety', () => {
     expect(job.status).toBe('completed');
     expect(job.completed).toHaveLength(1);
     expect(job.errors).toHaveLength(1);
-    expect(job.errors[0]?.message).toContain('Undo is unavailable');
+    expect(job.errors[0]?.message).toContain('this move can’t be undone');
     expect(job.errors[0]?.message).toContain('10,000');
   });
   it('says which copy Undo leaves, too large to check, and what to do with it', async () => {

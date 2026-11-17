@@ -31,6 +31,8 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   background: var(--surface);
   color: var(--ink);
 }
@@ -56,21 +58,26 @@
 }
 .preview-info {
   height: 31px;
-  flex-shrink: 0;
+  flex: 0 0 31px;
   display: flex;
-  gap: 10px;
+  gap: var(--gap-inline);
   align-items: center;
-  padding: 0 14px;
+  padding: 0 var(--gap-content);
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: var(--text-label);
+  overflow: hidden;
+  white-space: nowrap;
 }
 .preview-file-info {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--gap-inline);
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .preview-filename {
   min-width: 0;
@@ -79,8 +86,23 @@
   text-overflow: ellipsis;
 }
 .preview-file-details {
-  flex-shrink: 0;
+  display: flex;
+  flex: none;
+  gap: var(--gap-inline);
   white-space: nowrap;
+}
+.preview-file-detail {
+  display: inline-flex;
+  gap: var(--gap-inline);
+}
+.preview-info-measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  width: max-content;
+}
+.preview-info > .icon-button {
+  flex: none;
 }
 .preview-toolbar {
   --preview-control-height: 30px;
@@ -92,6 +114,52 @@
   min-height: 42px;
   flex-shrink: 0;
 }
+/* The Preview Bar Rule (DESIGN.md): wherever a preview stands, as in a Columns preview, Quick
+   Preview or the Trash, its toolbars keep one line of one height. What does not fit gives way into
+   the toolbar's "…" (controls.tsx); a control with no command scrolls only as the last resort. A
+   plane's header holds its own (planes.css). */
+.preview-host .preview-toolbar {
+  height: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  min-width: 0;
+  padding: 0 var(--gap-inline);
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  overflow-anchor: none;
+}
+/* a label never breaks or squeezes; only a field shrinks, to its own minimum */
+.preview-host .preview-toolbar > :not(.toolbar-spacer, input),
+.preview-toolbar-group > * {
+  flex-shrink: 0;
+}
+.preview-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-small);
+}
+.preview-toolbar [data-spilled] {
+  display: none !important;
+}
+.preview-toolbar-action {
+  gap: var(--gap-small);
+}
+.preview-toolbar-action > svg {
+  display: none;
+}
+.preview-toolbar-action[data-compact] {
+  width: var(--preview-control-height);
+  padding-inline: var(--gap-tight);
+}
+.preview-toolbar-action[data-compact] > svg {
+  display: block;
+}
+.preview-toolbar-action[data-compact] > .preview-toolbar-label {
+  display: none;
+}
 .preview-toolbar input {
   max-width: 180px;
   padding: 5px var(--gap-inline);
@@ -102,6 +170,7 @@
   min-height: var(--preview-control-height);
   padding-block: 0;
   font-size: var(--text-compact);
+  white-space: nowrap;
 }
 .preview-toolbar button {
   display: inline-flex;
@@ -167,6 +236,22 @@
 }
 .image-stage:active {
   cursor: grabbing;
+}
+/* Quick Preview on a folder the selection moved to: its icon and name, as Gallery shows one */
+.quick-preview-folder-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.quick-preview-folder {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-content);
+  color: var(--ink);
 }
 .image-stage img {
   max-width: calc(100% - 40px);

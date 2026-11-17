@@ -223,7 +223,7 @@ describe('light pages', () => {
     expect([...drawings.values()].flatMap((drawing) => drawing.filters)).toEqual([]);
     const button = view.getByRole('button', { name: 'Dark pages' });
     expect(button.getAttribute('aria-pressed')).toBe('false');
-    expect(command('dark-pages')?.label).toBe('Dark pages');
+    expect(command('dark-pages')?.label).toBe('Dark Pages');
     fireEvent.click(button);
     expect(toggle).toHaveBeenCalledTimes(1);
   });
@@ -260,7 +260,7 @@ describe('dark pages', () => {
     expect(sheet().style.getPropertyValue('--page')).toBe(colors.page);
     const button = view.getByRole('button', { name: 'Dark pages' });
     expect(button.getAttribute('aria-pressed')).toBe('true');
-    expect(command('dark-pages')?.label).toBe('Light pages');
+    expect(command('dark-pages')?.label).toBe('Light Pages');
     await command('dark-pages')!.run();
     expect(toggle).toHaveBeenCalledTimes(1);
   });
@@ -365,7 +365,7 @@ describe('what dark pages leave alone', () => {
     fireEvent.click(view.getByRole('button', { name: 'Print…' }));
     expect(window.viewer.printPDF).toHaveBeenCalledWith('pdf', undefined);
     fireEvent.click(view.getByText('Optimize…'));
-    fireEvent.click(view.getByText('PDF tools…'));
+    fireEvent.click(view.getByText('PDF Tools…'));
     expect(context.optimize).toHaveBeenCalledTimes(1);
     expect(context.editPDF).toHaveBeenCalledTimes(1);
   });
@@ -374,9 +374,9 @@ describe('what dark pages leave alone', () => {
     await waitFor(() => expect(renders).toHaveLength(1));
     // fabrication's native check presses this one
     expect(view.getByRole('button', { name: 'Dark pages' })).toBeTruthy();
-    for (const name of ['Search PDF', 'Previous page', 'Next page'])
+    for (const name of ['Find', 'Previous page', 'Next page'])
       expect(view.getByRole('button', { name })).toBeTruthy();
-    expect(view.getByText('PDF tools…')).toBeTruthy();
+    expect(view.getByText('PDF Tools…')).toBeTruthy();
     for (const name of ['Show pages', 'Show outline', 'Print…'])
       expect(view.queryByRole('button', { name })).toBeNull();
     expect(view.queryByText('Optimize…')).toBeNull();

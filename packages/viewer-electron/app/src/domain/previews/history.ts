@@ -45,6 +45,8 @@ const recalledKeys = new Set([
   'text.wrap',
   'image.zoom',
   'image.pan',
+  // a picture's turn, without which its remembered pan points elsewhere
+  'image.turn',
   'media.position',
   'media.subtitles',
   'model.camera',

@@ -62,7 +62,7 @@ it('merges common exclusions after a preceding textarea blur has saved, without 
   const input = screen.getByRole('textbox', { name: 'Excluded search names and paths' });
   fireEvent.change(input, { target: { value: 'node_modules\nprivate-project-cache' } });
   fireEvent.blur(input);
-  fireEvent.click(screen.getByRole('button', { name: 'Add common exclusions' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add Common Exclusions' }));
   finish();
   await act(() => queued);
   expect(errors).not.toHaveBeenCalled();

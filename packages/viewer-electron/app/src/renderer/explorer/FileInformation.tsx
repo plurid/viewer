@@ -2,7 +2,8 @@ import { sameIdentity, temporalIdentity } from '../../domain/files/item-identity
 import { sameCapturedItem } from '../../domain/files/entries';
 import { useEffect, useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
-import { formatBytes } from '../../domain/files/entries';
+import { formatBytes, kindLabel } from '../../domain/files/entries';
+import { plural } from '../../domain/plural';
 import {
   informationChanges,
   tagColors,
@@ -115,10 +116,13 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
       {draft && (
         <>
           <dl className="information-native-details">
-            <div>
-              <dt>{entry.directory ? 'Folder entry allocation' : 'Allocated size'}</dt>
-              <dd>{formatBytes(draft.allocatedSize)}</dd>
-            </div>
+            {/* a folder's own entry on disk means nothing to people; its contents are its Size */}
+            {!entry.directory && (
+              <div>
+                <dt>On disk</dt>
+                <dd>{formatBytes(draft.allocatedSize)}</dd>
+              </div>
+            )}
             <div>
               <dt>Owner</dt>
               <dd>{draft.owner}</dd>
@@ -288,7 +292,7 @@ function InformationEditor({ entry }: { entry: FileEntry }) {
         </button>
         {draft?.canEdit && (
           <button className="primary" disabled={disabled || !dirty}>
-            {busy ? 'Saving…' : 'Save changes'}
+            {busy ? 'Saving…' : 'Save Changes'}
           </button>
         )}
       </div>
@@ -312,7 +316,14 @@ function AdditionalInformation({ entry }: { entry: FileEntry }) {
 }
 export function FileInformation({ entries, onClose }: { entries: FileEntry[]; onClose(): void }) {
   return (
-    <Dialog title="File information" onClose={onClose}>
+    <Dialog
+      title={
+        entries.length === 1
+          ? `“${entries[0]!.name}” Info`
+          : `Info for ${plural(entries.length, 'Item')}`
+      }
+      onClose={onClose}
+    >
       <div className="file-information">
         {entries.map((entry) => (
           <section key={entry.path} aria-label={entry.name}>
@@ -322,13 +333,7 @@ export function FileInformation({ entries, onClose }: { entries: FileEntry[]; on
                 <PathField path={entry.path} />
               </dd>
               <dt>Kind</dt>
-              <dd>
-                {entry.kind === 'symlink'
-                  ? 'Symbolic link'
-                  : entry.directory
-                    ? 'Folder'
-                    : entry.mime}
-              </dd>
+              <dd>{kindLabel(entry)}</dd>
               <dt>Size</dt>
               <dd>
                 {entry.directory ? (
@@ -338,9 +343,9 @@ export function FileInformation({ entries, onClose }: { entries: FileEntry[]; on
                 )}
               </dd>
               <dt>Modified</dt>
-              <dd>{entry.modified ? new Date(entry.modified).toLocaleString() : 'Unavailable'}</dd>
+              <dd>{entry.modified ? new Date(entry.modified).toLocaleString() : '--'}</dd>
               <dt>Created</dt>
-              <dd>{entry.created ? new Date(entry.created).toLocaleString() : 'Unavailable'}</dd>
+              <dd>{entry.created ? new Date(entry.created).toLocaleString() : '--'}</dd>
               {entry.linkTarget && (
                 <>
                   <dt>Target</dt>

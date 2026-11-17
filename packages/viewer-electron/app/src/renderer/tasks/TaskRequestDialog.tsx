@@ -3,7 +3,7 @@ import { taskWorkflowInputSchema, type AgentTaskResult } from '../../domain/agen
 import type { TaskWorkflowDraft } from '../../domain/command-line/task';
 import { errorMessage } from '../../domain/errors';
 import { ChoiceButton } from '../ui/ChoiceMenu';
-import { Dialog } from '../ui/primitives';
+import { Dialog, PathField } from '../ui/primitives';
 import { announce, useViewer } from '../state/store';
 import './tasks.css';
 
@@ -71,7 +71,7 @@ export function TaskRequestDialog({
       } else if (result.kind === 'failed') {
         setError(result.error);
         setPartial(result.result);
-      } else setError('Creation cancelled. Your parameters are still here to edit.');
+      } else setError('Canceled. Your choices are still here to edit.');
     } catch (error) {
       if (mounted.current) setError(errorMessage(error));
     } finally {
@@ -82,22 +82,21 @@ export function TaskRequestDialog({
   if (busy)
     return (
       <p className="task-request-progress" role="status">
-        Preparing branch task… Review the desktop confirmation to continue.
+        Preparing the task… Confirm in the dialog to continue.
       </p>
     );
-  const choices = workspaces.map((space) => ({
+  const choices: { value: string; label: string; detail?: string }[] = workspaces.map((space) => ({
     value: space.id,
     label: space.name,
-    detail: space.id,
   }));
   if (draft.workspace && !workspaces.some((space) => space.id === draft.workspace))
     choices.unshift({
       value: draft.workspace,
-      label: `Unavailable: ${draft.workspace}`,
-      detail: 'Choose an available workspace',
+      label: 'Workspace not found',
+      detail: 'Choose another workspace',
     });
   return (
-    <Dialog title="Create branch task" onClose={onClose} className="task-request-dialog">
+    <Dialog title="Create Branch Task" onClose={onClose} className="task-request-dialog">
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -106,8 +105,8 @@ export function TaskRequestDialog({
       >
         <div className="task-request-fields">
           <p className="muted">
-            Review the parameters. Viewer will create a worktree and arrange its folder, note,
-            terminal and Git changes.
+            Check these, then Viewer creates a worktree with its folder, note, terminal and Git
+            changes.
           </p>
           <label className="field-label">
             Task name
@@ -150,7 +149,7 @@ export function TaskRequestDialog({
               disabled={!!partial}
               onClick={() => change({ existing: false })}
             >
-              New branch
+              New Branch
             </button>
             <button
               type="button"
@@ -158,7 +157,7 @@ export function TaskRequestDialog({
               disabled={!!partial}
               onClick={() => change({ existing: true, base: undefined })}
             >
-              Existing branch
+              Existing Branch
             </button>
           </div>
           <label className="field-label">
@@ -206,8 +205,8 @@ export function TaskRequestDialog({
             </small>
           </label>
           <p className="muted">
-            The terminal stays stopped. Load Git review when you are ready. Creation does not run
-            repository hooks or filters.
+            The terminal stays stopped until you start it. Creating the task doesn’t run the
+            repository’s hooks or filters.
           </p>
           {error && (
             <p className="error" role="alert">
@@ -221,8 +220,8 @@ export function TaskRequestDialog({
           )}
           {partial && (
             <div className="task-request-recovery">
-              <strong>Inspect the retained worktree before trying again</strong>
-              <p>{partial.path}</p>
+              <strong>Check the worktree Viewer kept before you try again</strong>
+              <PathField path={partial.path} />
               <p>
                 Setup stopped at{' '}
                 {partial.stage === 'worktree-created'
@@ -246,7 +245,7 @@ export function TaskRequestDialog({
                   .catch((error: unknown) => setError(errorMessage(error)))
               }
             >
-              Open retained folder
+              Open Worktree Folder
             </button>
           ) : (
             !partial && (

@@ -335,7 +335,7 @@ export function LineFinder({
         </div>
       )}
       <div className="palette-context">
-        <span>Tab completes · ⌃P ⌃N history · help lists commands</span>
+        <span>⇥ completes · ⌃P ⌃N history · help lists commands</span>
       </div>
     </div>
   );

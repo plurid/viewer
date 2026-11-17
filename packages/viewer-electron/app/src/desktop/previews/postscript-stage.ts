@@ -51,7 +51,9 @@ export async function withPostScriptStage<T>(
       if (!sameItem(original, moved) || moved.isSymbolicLink())
         throw new Error('The Ghostscript scratch folder changed and was kept.');
       if (!options.trash)
-        throw new Error('Ghostscript scratch was kept because Trash is unavailable.');
+        throw new Error(
+          'Ghostscript’s temporary files were kept because Viewer couldn’t move them to the Trash.',
+        );
       try {
         await options.trash(retained);
         if (

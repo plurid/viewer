@@ -31,6 +31,7 @@ import { useCommands } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
 import { useContextPublish } from './context-publish';
 import { requestRefresh } from '../state/refresh';
+import { plural } from '../../domain/plural';
 const emptyEntries: FileEntry[] = [];
 export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string }) {
   const pane = useViewer((state) => activeWorkspace(state).panes.find((pane) => pane.id === id)) as
@@ -156,7 +157,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       },
     }),
   );
-  if (!pane) return <Empty title="Search is unavailable" />;
+  if (!pane) return <Empty title="This search plane is gone" detail="Open the search again." />;
   const props: FileViewProps = {
     paneID: id,
     entries,
@@ -282,7 +283,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
                 { root: pane.allLocations ? undefined : pane.path, content: pane.content },
                 contentRoots,
               ).state !== 'complete'
-                ? 'No matches in the available search data'
+                ? 'No matches in the folders searched so far'
                 : 'No matching files'
             }
             detail="Expand search coverage above to see locations, exclusions and limits."
@@ -310,7 +311,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
                       ? 'Line ' + hit.anchor.line
                       : hit.anchor.kind === 'document'
                         ? 'Passage ' + (hit.anchor.block + 1)
-                        : 'Open source location'}
+                        : 'Open Source'}
               </button>
               <p>{hit.quote}</p>
               {hit.coverage === 'partial' && <span className="muted">Partially indexed</span>}
@@ -325,7 +326,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         <span>
           {search.result?.status.running
             ? 'Indexing in progress'
-            : entries.length + ' results on this page'}
+            : `${plural(entries.length, 'result')} on this page`}
           {selection.length ? ` · ${selection.length} selected` : ''}
         </span>
         <SelectionSize entries={selected} />

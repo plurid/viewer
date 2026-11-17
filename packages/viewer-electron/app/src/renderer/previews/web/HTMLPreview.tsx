@@ -3,7 +3,7 @@ import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import TextPreview from '../modules/TextPreview';
 import { editingPlane } from '../../editing/planes';
-import { Empty, Loading } from '../../ui/primitives';
+import { Failure, Loading } from '../../ui/primitives';
 import { Icon } from '../../ui/Icon';
 import { report } from '../../state/core';
 import { useHtmlPreview } from './useHtmlPreview';
@@ -95,7 +95,7 @@ export default function HTMLPreview(context: PreviewContext) {
         },
         {
           id: 'reload-html',
-          label: 'Reload HTML preview',
+          label: 'Reload HTML Preview',
           aliases: ['reload page'],
           run: reload,
         },
@@ -170,12 +170,13 @@ export default function HTMLPreview(context: PreviewContext) {
           ) : capability.status === 'loading' ? (
             <Loading label="Opening HTML preview…" />
           ) : (
-            <Empty
+            <Failure
               icon="code"
-              title="Rendered preview unavailable"
+              title="Can't show this page"
               detail={
                 capability.status === 'error' ? capability.message : 'This preview is closed.'
               }
+              onRetry={capability.status === 'error' ? reload : undefined}
             >
               <button
                 type="button"
@@ -184,9 +185,9 @@ export default function HTMLPreview(context: PreviewContext) {
                   sourceTab.current?.focus();
                 }}
               >
-                View source
+                View Source
               </button>
-            </Empty>
+            </Failure>
           ))}
       </div>
       <div

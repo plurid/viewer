@@ -2,6 +2,7 @@ import { sameCapturedItem } from '../../domain/files/entries';
 import { agentPlaneCopy, agentWorkspaceCopy } from '../../domain/agents/requests';
 import type { CapturedTarget } from '../../domain/automation/actions';
 import { isTourFile } from '../../domain/tours/tour';
+import { withoutWorkspaceDismissals } from '../../domain/suggestions/insights';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   AgentNavigation,
@@ -409,7 +410,7 @@ export class AgentBroker {
     if (target.paneID === 'none' || target.rootID === 'none') {
       const state = await this.extension?.workspaceState?.();
       if (!isEmptyAgentOrigin(target, state))
-        throw new Error('The originating workspace changed. Request a new proposal.');
+        throw new Error('The workspace this started from changed. Ask for the change again.');
       return;
     }
     await this.authorize(target.directory);
@@ -587,7 +588,9 @@ export class AgentBroker {
         const policy = this.policy();
         const active = this.activeCalls.get(actor) ?? 0;
         if (active >= (client?.budgets.maxTasks ?? 20))
-          throw new Error('This client has reached its concurrent request budget.');
+          throw new Error(
+            'This client already runs as many requests as it may. Wait for one to finish.',
+          );
         this.activeCalls.set(actor, active + 1);
         const parsed = z
           .object({ method: z.string(), params: z.unknown().optional() })
@@ -856,7 +859,10 @@ export class AgentBroker {
       value = {
         version: 1,
         settings: redactedSettings(snapshot.settings),
-        ui: snapshot.ui,
+        ui: {
+          ...snapshot.ui,
+          insightsDismissed: withoutWorkspaceDismissals(snapshot.ui.insightsDismissed),
+        },
         revision: snapshot.revision,
       };
     } else if (isToolIn(call.name, ['validate_config', 'propose_config'])) {

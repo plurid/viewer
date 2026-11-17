@@ -102,7 +102,7 @@ it('pages, jumps with original row numbers, remembers each sheet and rejects inv
     'book',
     expect.objectContaining({ sheet: 'Data', fromRow: 2500, limit: 100 }),
   );
-  expect(screen.queryByText('The reader limit was reached. Some content is not shown.')).toBeNull();
+  expect(screen.queryByText('Only the first part of this document is shown.')).toBeNull();
 });
 
 it('cancels superseded pages and prevents an older completion from replacing the selected sheet', async () => {
@@ -141,13 +141,13 @@ it('loads a cited cell row directly and keeps retry available after a page failu
     anchor: { kind: 'cells', sheet: 'Other', row: 2500, column: 1 },
   } as PreviewContext['evidence'];
   render(<OfficePreview {...current} />);
-  await screen.findByText('Office preview unavailable');
+  await screen.findByText("Can't show this document");
   expect(current.services.document).toHaveBeenLastCalledWith(
     'book',
     expect.objectContaining({ sheet: 'Other', fromRow: 2500 }),
   );
   fails = false;
-  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
   await screen.findByText('Other:2500');
   expect(screen.getByLabelText('Go to source row')).toBeTruthy();
 });

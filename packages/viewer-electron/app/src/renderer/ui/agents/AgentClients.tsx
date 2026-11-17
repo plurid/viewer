@@ -8,28 +8,30 @@ import {
 import type { AgentClient, AgentClientInput, AgentAudit } from '../../../domain/agents/clients';
 import type { ApplicationSettings } from '../../../domain/services';
 import { AgentGrants } from './AgentGrants';
-import { IconButton, PathField } from '../primitives';
+import { CopyButton, IconButton, PathField } from '../primitives';
 import { Disclosure } from '../Disclosure';
 import { errorMessage } from '../../../domain/errors';
+import { statusLabel } from '../status-labels';
 
 const descriptions = {
   metadata: [
     'Metadata and discovery',
     'Names, sizes, dates, available tools and granted workspaces.',
   ],
-  content: ['Read file contents', 'Original passages, tables, image facts and inspection results.'],
+  content: ['Read file contents', 'Text, tables and image details from the files.'],
   navigation: [
     'Navigate without review',
     'Open paths, select files, focus planes and change workspaces.',
   ],
-  propose: ['Propose changes', 'Create review tasks and suggest configuration changes.'],
-  execute: ['Unattended execution unavailable', 'Every agent command requires approval.'],
-  'terminal-read': ['Read terminal output', 'Also requires a separate terminal read grant.'],
-  'terminal-write': [
-    'Terminal input unavailable',
-    'Shell commands can permanently delete files and bypass Trash.',
-  ],
+  propose: ['Propose changes', 'Prepare file changes and settings for you to review.'],
+  execute: ['Run programs', 'Viewer asks you before every agent command.'],
+  'terminal-read': ['Read terminal output', 'Also needs a terminal grant for the folder, below.'],
+  'terminal-write': ['Type into terminals', 'Agents never type into a terminal.'],
 } as const;
+// Agents never run programs or type into terminals unreviewed: those two are not choices.
+const choosable = agentCapabilities.filter(
+  (capability) => capability !== 'execute' && capability !== 'terminal-write',
+);
 const defaults: AgentClientInput = {
   name: '',
   roots: [],
@@ -88,12 +90,24 @@ export function AgentClientSettings({
     setHistory([]);
   };
   const full = !editing && clientLimitReached(clients);
+  // why Create Client or Save Permissions is off, so the button never just sits there
+  const blocked = !enabled
+    ? 'Turn on Allow local agent clients above first.'
+    : full
+      ? undefined
+      : !draft.name.trim()
+        ? `Enter a name to ${editing ? 'save' : 'create'} the client.`
+        : !draft.roots.length
+          ? 'Choose a folder the client may use.'
+          : !draft.capabilities.length
+            ? 'Turn on at least one permission.'
+            : undefined;
   return (
     <>
       <h2>Agent clients</h2>
       <p className="settings-note">
-        Each client has its own credential, folder scope and permissions. Removing access cancels
-        its pending tasks. Private credentials and recovery files are excluded from file tools.
+        Each client has its own key, folders and permissions. Revoke stops its tasks. Agents never
+        see Viewer’s keys or recovery files.
       </p>
       {clients.map((client) => (
         <div className="settings-location agent-client-row" key={client.id}>
@@ -119,7 +133,7 @@ export function AgentClientSettings({
                     })
                   }
                 >
-                  Stop tasks
+                  Stop Tasks
                 </button>
                 <button
                   disabled={busy}
@@ -224,10 +238,10 @@ export function AgentClientSettings({
               })
             }
           >
-            Choose folder…
+            Choose Folder…
           </button>
         </div>
-        {agentCapabilities.map((cap) => (
+        {choosable.map((cap) => (
           <label className="settings-row" key={cap}>
             <span>
               {descriptions[cap][0]}
@@ -235,10 +249,7 @@ export function AgentClientSettings({
             </span>
             <input
               type="checkbox"
-              disabled={cap === 'execute' || cap === 'terminal-write'}
-              checked={
-                cap !== 'execute' && cap !== 'terminal-write' && draft.capabilities.includes(cap)
-              }
+              checked={draft.capabilities.includes(cap)}
               onChange={(e) =>
                 setDraft({
                   ...draft,
@@ -266,7 +277,7 @@ export function AgentClientSettings({
           />
         </label>
         <label className="settings-row">
-          <span>Concurrent requests and pending recipe tasks</span>
+          <span>Tasks at a time</span>
           <input
             type="number"
             min={1}
@@ -293,20 +304,22 @@ export function AgentClientSettings({
               !draft.capabilities.length
             }
           >
-            {editing ? 'Save permissions' : 'Create client'}
+            {editing ? 'Save Permissions' : 'Create Client'}
           </button>
           {editing && (
             <button type="button" onClick={() => edit()}>
-              New client
+              New Client
             </button>
           )}
         </div>
+        {!busy && blocked && <p className="settings-note">{blocked}</p>}
       </form>
       {configuration && (
         <>
           <p className="settings-note">
-            Save this configuration in your agent client. The credential is displayed once.
+            Paste this into your agent app’s MCP settings. The key is shown only once.
           </p>
+          <CopyButton copy={{ text: configuration }} label="Copy" appearance="text" />
           <textarea
             className="agent-configuration"
             aria-label="Client MCP configuration"
@@ -335,7 +348,7 @@ export function AgentClientSettings({
                 <li key={entry.id}>
                   <time>{new Date(entry.at).toLocaleString()}</time>
                   <span>
-                    {entry.tool} · {entry.status}
+                    {entry.tool} · {statusLabel(entry.status)}
                     {entry.detail && entry.tool.startsWith('review:') && (
                       <small className="muted"> {entry.detail}</small>
                     )}

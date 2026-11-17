@@ -951,9 +951,7 @@ button.markdown-link {
   font-size: var(--text-label);
   line-height: 14px;
 }
-.structured-viewer > .preview-toolbar {
-  flex-wrap: wrap;
-}
+/* one line, as every preview's toolbar: below 640 px Expand and Collapse wait in Tree actions */
 .structured-viewer > .preview-toolbar button {
   white-space: nowrap;
   flex-shrink: 0;

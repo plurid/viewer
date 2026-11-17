@@ -29,7 +29,7 @@ ranks up to four other layouts of the current mode, each with its reason.
 | **Orientation** | **Automatic** (tries portrait, then landscape; a screen size its own shape first), **Portrait** or **Landscape**           |
 | **Margin**      | 0 to 60 mm; 0 to 400 px on a screen size                                                                                   |
 | **Gap**         | 0 to 60 mm; 0 to 400 px on a screen size. Not in Booklet or Poster                                                         |
-| **Background**  | Collage and Contact sheet: **White**, **Cream**, **Grey**, **Black**, **Transparent** or a colour. Other modes: white      |
+| **Background**  | Collage and Contact sheet: **White**, **Cream**, **Gray**, **Black**, **Transparent** or a color. Other modes: white       |
 
 **Transparent** is transparent in a PNG and white on paper.
 
@@ -54,7 +54,7 @@ ranks up to four other layouts of the current mode, each with its reason.
 | --------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | Collage         | **Style**                                 | **Rows**, **Featured** (3 or more photos), **Grid**, **Strip**, **Halves** (2 photos) or **Thirds** (3 photos)           |
 | Collage         | **Photos**                                | **Fill** crops each photo to its cell; **Whole** keeps it uncropped                                                      |
-| Collage         | **Keep**                                  | With **Fill**: **Centre**, **Top**, **Bottom**, **Left** or **Right**                                                    |
+| Collage         | **Keep**                                  | With **Fill**: **Center**, **Top**, **Bottom**, **Left** or **Right**                                                    |
 | Collage         | **Direction**                             | **Rows** and **Strip** styles: **Automatic**, **Rows** or **Columns**                                                    |
 | Collage         | **Large photo**                           | **Featured** and **Thirds**: **Most pixels**, or one photo by name                                                       |
 | Contact sheet   | **Columns**                               | **Automatic**, or 2 to 10                                                                                                |
@@ -256,7 +256,7 @@ unless the page has a background; a JPEG is white there. Text uses the system sa
 | PDF output                   | 750 MB                                    |
 | Time                         | 10 minutes; 90 seconds for one image step |
 
-Cancelling stops the work at the next item. Output is published only when it is complete.
+Canceling stops the work at the next item. Output is published only when it is complete.
 
 **Related:** [Lay out photos and PDFs](../guides/layout.md) · [Nesting for cutting](nesting.md) ·
 [PDF tools](pdf.md) · [Images, audio, video and Optimize](media.md) ·

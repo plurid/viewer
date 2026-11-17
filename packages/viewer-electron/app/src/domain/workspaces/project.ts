@@ -171,6 +171,7 @@ export const folderOverrideSchema = z
     /** The lens grouping this folder when `group` is `lens`. */
     lens: z.uuid().optional(),
     columnWidth: z.number().int().min(160).max(1600).optional(),
+    previewWidth: z.number().int().min(320).max(1600).optional(),
     list: z
       .object({
         visible: z

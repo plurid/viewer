@@ -10,6 +10,14 @@ import { hashDefinition, sampleProject } from './workspace-definition-fixtures';
 import { schemas } from '../src/desktop/ipc/schemas';
 
 describe('definition command validation', () => {
+  it.each(['echo ✔\uFE0F built', 'echo ⚠\uFE0E check', 'echo 👩\u200D💻', 'echo 🏳\uFE0F\u200D🌈'])(
+    'accepts emoji presentation and joins in a definition: %j',
+    (command) => {
+      expect(
+        definitionPlaneSchema.safeParse({ kind: 'terminal', path: '.', command }).success,
+      ).toBe(true);
+    },
+  );
   it.each([
     ['echo\tcompletion', 'tabs'],
     ['echo\nsecond', 'one line'],

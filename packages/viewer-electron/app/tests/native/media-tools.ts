@@ -220,11 +220,11 @@ try {
   };
   await preview(video);
   await until(
-    () => evaluate(buttonState('Edit media…', '.quick-preview')),
+    () => evaluate(buttonState('Edit Media…', '.quick-preview')),
     (state) => state !== 'missing',
     'media edit action',
   );
-  await clickText('.quick-preview', 'Edit media…');
+  await clickText('.quick-preview', 'Edit Media…');
   await until(() => evaluate(exists('.media-editor video')), Boolean, 'linked media editor', 15000);
   await until(
     () => evaluate(countOf('.media-filmstrip img')),
@@ -238,7 +238,7 @@ try {
     (text) => text.includes('00:00.250') && text.includes('00:01.250'),
     'edited segment range',
   );
-  await clickText('.media-export-options', 'Export sequence');
+  await clickText('.media-export-options', 'Export Sequence');
   const jobs = await until(
     () => evaluate(pageCall(() => window.viewer.jobs())),
     (jobs) => jobs.some((job) => job.kind === 'convert' && job.status === 'completed'),
@@ -349,7 +349,7 @@ try {
     'decoded source image',
   );
   await input('.image-tools-options input[aria-label="Output width"]', '48');
-  await clickText('.image-tools-dialog', 'Export image');
+  await clickText('.image-tools-dialog', 'Export Image');
   const images = await until(
     () => evaluate(pageCall(() => window.viewer.jobs())),
     (jobs) =>

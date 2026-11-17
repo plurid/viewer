@@ -549,7 +549,7 @@ describe('agent removal safety', () => {
       read: () => ({ cwd: '/Granted', output: '' }),
     });
     const proposal = requests.configuration([{ path: 'settings.appearance', value: 'light' }]);
-    await expect(requests.review(proposal.id, true)).rejects.toThrow('confirmation is unavailable');
+    await expect(requests.review(proposal.id, true)).rejects.toThrow('couldn’t ask you to confirm');
     expect(f.execute).not.toHaveBeenCalled();
   });
   it('reports the native removal job outcome rather than premature command success', async () => {
@@ -948,6 +948,18 @@ describe('agent removal safety', () => {
     expect(redacted.terminals.profiles[0]!.args).toHaveLength(2);
     const executor = redacted.customActions[0]!.executor;
     expect(executor.kind === 'executable' && executor.args).toHaveLength(2);
+  });
+  it('never shows agents the roots whose workspace offer the person dismissed', async () => {
+    const f = await fixture();
+    f.settings.snapshot().ui.insightsDismissed = {
+      '/Home/code/acme-site': ['workspace.open'],
+      '/Home/Downloads': ['screenshots', 'workspace.open'],
+    };
+    const read = await f.call<{ ui: { insightsDismissed?: Record<string, string[]> } }>(
+      'read_config',
+    );
+    expect(read.ui.insightsDismissed).toEqual({ '/Home/Downloads': ['screenshots'] });
+    expect(JSON.stringify(read)).not.toContain('acme-site');
   });
   it('allows only bounded built-in commands and refuses clipboard paste', () => {
     for (const id of ['trash', 'copy-path', 'view-list', 'recipe.books', 'rename'])

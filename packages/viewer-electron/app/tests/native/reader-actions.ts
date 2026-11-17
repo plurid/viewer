@@ -274,7 +274,7 @@ try {
   );
   await d.button('Bookmarks');
   await d.fill('Bookmark name', 'Return to the poem');
-  await d.button('Add bookmark');
+  await d.button('Add Bookmark');
   await d.button('Next chapter');
   await d.button('Return to the poem');
   await until(

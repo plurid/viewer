@@ -37,7 +37,7 @@ describe('workspace definitions in Settings', () => {
   it.each([
     ['absent', 'VS Code Project Manager’s list was not found.'],
     ['off', 'VS Code Project Manager is off.'],
-    ['unreadable', 'VS Code Project Manager’s list could not be read.'],
+    ['unreadable', 'VS Code Project Manager’s list couldn’t be read.'],
     ['read', '0 VS Code projects.'],
   ] as const)('explains %s in plain sentences and omits zero counters', async (state, expected) => {
     const next = {
@@ -64,7 +64,7 @@ describe('workspace definitions in Settings', () => {
     await waitFor(() => expect(request).toHaveBeenCalledOnce());
     fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
     await waitFor(() =>
-      expect(screen.getByText('1 error remains. Fix the diagnostics below.')).toBeTruthy(),
+      expect(screen.getByText('1 error left. Fix the problems listed below.')).toBeTruthy(),
     );
     request.mockResolvedValueOnce({ ...catalog, diagnostics: [] });
     fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
@@ -87,11 +87,11 @@ describe('workspace definitions in Settings', () => {
     );
     expect(
       screen.getByText(
-        'The last valid definitions remain in effect until workspaces.jsonc is fixed.',
+        'Viewer keeps using the last definitions it read until workspaces.jsonc is fixed.',
       ),
     ).toBeTruthy();
     expect(screen.getByText('workspaces.jsonc:7 (sample/site): Unknown root token.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Allow access…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Allow Access…' }));
     await waitFor(() => expect(request).toHaveBeenLastCalledWith({ kind: 'allow-source' }));
     receive({
       type: 'workspace-definitions',
@@ -108,7 +108,7 @@ describe('workspace definitions in Settings', () => {
         ),
       ).toBeTruthy(),
     );
-    expect(screen.queryByRole('button', { name: 'Allow access…' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Allow Access…' })).toBeNull();
     view.unmount();
     expect(stop).toHaveBeenCalledOnce();
   });

@@ -101,7 +101,7 @@ describe('workspace agent navigation through existing host records', () => {
     expect(browseSession(captured.paneID, captured.directory).selection).toEqual([file.path]);
     stat.mockResolvedValue({ ...current, created: file.created + 1 });
     await expect(executeAgentNavigation(request, captured, controller, switchTo)).rejects.toThrow(
-      'selected file changed',
+      'A file the agent chose has changed',
     );
   });
 
@@ -117,7 +117,7 @@ describe('workspace agent navigation through existing host records', () => {
         controller,
         switchTo,
       ),
-    ).rejects.toThrow('destination plane changed');
+    ).rejects.toThrow('plane to open into has changed');
   });
   it('creates a root in an empty workspace and rejects a linked placement with no parent', async () => {
     const captured = target();
@@ -242,7 +242,7 @@ describe('workspace agent navigation through existing host records', () => {
     session.columnDirectory = '/shared';
     await expect(
       executeAgentNavigation({ kind: 'select-files', files: [] }, captured, controller, switchTo),
-    ).rejects.toThrow('folder changed');
+    ).rejects.toThrow('folder this request was for has changed');
     expect(session.selection).toEqual([file.path]);
   });
   it('checks every identity before publishing a selection and preserves the old selection on failure', async () => {
@@ -259,7 +259,7 @@ describe('workspace agent navigation through existing host records', () => {
         controller,
         switchTo,
       ),
-    ).rejects.toThrow('selected file changed');
+    ).rejects.toThrow('A file the agent chose has changed');
     expect(session.selection).toEqual(['/shared/Old.txt']);
     expect(session.cache.has(first.path)).toBe(false);
   });
@@ -280,7 +280,7 @@ describe('workspace agent navigation through existing host records', () => {
         controller,
         switchTo,
       );
-      const assertion = expect(running).rejects.toThrow('originating plane');
+      const assertion = expect(running).rejects.toThrow('this request was for has changed');
       if (change === 'workspace') await newWorkspace('Another');
       else if (change === 'closed') removePanes([captured.paneID]);
       else if (change === 'navigated') navigate(captured.paneID, '/other');
@@ -330,7 +330,7 @@ describe('workspace agent navigation through existing host records', () => {
         controller,
         switchTo,
       ),
-    ).rejects.toThrow('destination workspace changed');
+    ).rejects.toThrow('workspace to open into has changed');
     await expect(
       executeAgentNavigation(
         { kind: 'switch-workspace', workspace: { ...reviewed, id: 'deleted' } },
@@ -338,7 +338,7 @@ describe('workspace agent navigation through existing host records', () => {
         controller,
         switchTo,
       ),
-    ).rejects.toThrow('destination workspace changed');
+    ).rejects.toThrow('workspace to open into has changed');
     expect(switchTo).not.toHaveBeenCalled();
     await executeAgentNavigation(
       { kind: 'switch-workspace', workspace: reviewed },

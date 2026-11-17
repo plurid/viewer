@@ -108,7 +108,7 @@ function ShareDetails({
           ))}
         </ul>
       ) : (
-        <p className="muted">Viewer could not determine an address for this Mac.</p>
+        <p className="muted">Viewer couldn't find a network address for this Mac.</p>
       )}
     </>
   );
@@ -127,13 +127,13 @@ export function NetworkSharingSection({ path }: { path: string }) {
       {checking ? (
         <p role="status">Checking network sharing…</p>
       ) : snapshot.status !== 'ready' || folder?.status !== 'ready' ? (
-        <p>Viewer could not check whether this folder is shared.</p>
+        <p>Viewer couldn't check whether this folder is shared.</p>
       ) : null}
       {shares.map((share) => (
         <ShareDetails key={share.name} share={share} snapshot={snapshot} folderPath={path} />
       ))}
       <Button variant="secondary" onClick={refresh}>
-        Refresh sharing
+        Refresh Sharing
       </Button>
     </section>
   );
@@ -144,7 +144,7 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
   const [error, setError] = useState('');
   const shares = snapshot.status === 'ready' ? (folder?.shares ?? []) : [];
   return (
-    <Dialog title="Network sharing" onClose={onClose} className="network-sharing-dialog">
+    <Dialog title="Network Sharing" onClose={onClose} className="network-sharing-dialog">
       <div className="network-sharing-body">
         <p>
           Use macOS File Sharing to let another computer open this folder. Viewer opens System
@@ -175,7 +175,7 @@ export function NetworkSharingDialog({ path, onClose }: { path: string; onClose(
               <p>This folder is not shared.</p>
             )
           ) : (
-            <p>Viewer could not check whether this folder is shared.</p>
+            <p>Viewer couldn't check whether this folder is shared.</p>
           )}
         </div>
         <ol>

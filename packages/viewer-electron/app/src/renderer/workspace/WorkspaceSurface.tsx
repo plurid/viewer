@@ -31,7 +31,7 @@ import { FolderExplorer } from '../explorer/FolderExplorer';
 import { PreviewHost } from '../previews/PreviewHost';
 import { planeIsActive, PreviewActivity } from '../previews/activity';
 import { PreviewFrame } from './preview-frame';
-import { Empty } from '../ui/primitives';
+import { Empty, Loading } from '../ui/primitives';
 import { Sidebar } from '../ui/navigation/Sidebar';
 import { PlaneHeader } from './PlaneHeader';
 import { PinnedHeader } from './PinnedHeader';
@@ -84,11 +84,11 @@ function PreviewContent() {
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
   const interactive = useInteractive();
-  if (!record) return <Empty title="Preview is unavailable" />;
+  if (!record) return <Empty title="This plane is closed" />;
   if (record.type === 'note')
     return (
       <PreviewFrame activate={() => setActivePane(record.id)}>
-        <Suspense fallback={<Empty title="Opening note…" />}>
+        <Suspense fallback={<Loading label="Opening note…" />}>
           <LazyNotePlane pane={record} visible={planeIsActive(plane)} />
         </Suspense>
       </PreviewFrame>
@@ -97,7 +97,7 @@ function PreviewContent() {
   if (record.type === 'scratch')
     return (
       <PreviewFrame activate={() => setActivePane(record.id)}>
-        <Suspense fallback={<Empty title="Opening scratch plane…" />}>
+        <Suspense fallback={<Loading label="Opening scratch plane…" />}>
           <LazyScratchPlane pane={record} visible={planeIsActive(plane)} />
         </Suspense>
       </PreviewFrame>
@@ -138,10 +138,10 @@ function CheckContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'check') return <Empty title="Check unavailable" />;
+  if (pane?.type !== 'check') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening check…" />}>
+      <Suspense fallback={<Loading label="Opening check…" />}>
         <LazyCheckPlane pane={pane} active={planeIsActive(plane)} />
       </Suspense>
     </PreviewFrame>
@@ -154,11 +154,11 @@ function TaskContent() {
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
   if (pane?.type !== 'task' && pane?.type !== 'receipt')
-    return <Empty title="Task view unavailable" />;
+    return <Empty title="This plane is closed" />;
   const active = planeIsActive(plane);
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening task context…" />}>
+      <Suspense fallback={<Loading label="Opening task context…" />}>
         {pane.type === 'task' ? (
           <LazyTaskPlane pane={pane} active={active} />
         ) : (
@@ -174,10 +174,10 @@ function JournalContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'journal') return <Empty title="Journal unavailable" />;
+  if (pane?.type !== 'journal') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening Journal…" />}>
+      <Suspense fallback={<Loading label="Opening Journal…" />}>
         <LazyJournalPlane pane={pane} active={planeIsActive(plane)} />
       </Suspense>
     </PreviewFrame>
@@ -189,10 +189,10 @@ function OverviewContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'overview') return <Empty title="Overview unavailable" />;
+  if (pane?.type !== 'overview') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening Overview…" />}>
+      <Suspense fallback={<Loading label="Opening Overview…" />}>
         <LazyOverviewPlane pane={pane} />
       </Suspense>
     </PreviewFrame>
@@ -204,10 +204,10 @@ function BrowserContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'browser') return <Empty title="Browser unavailable" />;
+  if (pane?.type !== 'browser') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening browser…" />}>
+      <Suspense fallback={<Loading label="Opening browser…" />}>
         <LazyBrowserPlane pane={pane} active={planeIsActive(plane)} />
       </Suspense>
     </PreviewFrame>
@@ -218,10 +218,10 @@ function MediaContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'media') return <Empty title="Media draft unavailable" />;
+  if (pane?.type !== 'media') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening media tools…" />}>
+      <Suspense fallback={<Loading label="Opening media tools…" />}>
         <LazyMediaPlane pane={pane} active={planeIsActive(plane)} />
       </Suspense>
     </PreviewFrame>
@@ -232,10 +232,10 @@ function LayoutContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'layout') return <Empty title="Layout unavailable" />;
+  if (pane?.type !== 'layout') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening Layout…" />}>
+      <Suspense fallback={<Loading label="Opening Layout…" />}>
         <LazyLayoutPlane pane={pane} />
       </Suspense>
     </PreviewFrame>
@@ -246,10 +246,10 @@ function ServerContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'server') return <Empty title="Server unavailable" />;
+  if (pane?.type !== 'server') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening server controls…" />}>
+      <Suspense fallback={<Loading label="Opening server controls…" />}>
         <LazyServerPlane pane={pane} active={planeIsActive(plane)} />
       </Suspense>
     </PreviewFrame>
@@ -261,10 +261,10 @@ function ToolLibraryContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'tools') return <Empty title="Tool library unavailable" />;
+  if (pane?.type !== 'tools') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening tool library…" />}>
+      <Suspense fallback={<Loading label="Opening tool library…" />}>
         <LazyToolLibrary pane={pane} />
       </Suspense>
     </PreviewFrame>
@@ -276,10 +276,10 @@ function CanvasContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'canvas') return <Empty title="Canvas unavailable" />;
+  if (pane?.type !== 'canvas') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening canvas…" />}>
+      <Suspense fallback={<Loading label="Opening canvas…" />}>
         <LazyCanvasPlane pane={pane} />
       </Suspense>
     </PreviewFrame>
@@ -291,10 +291,10 @@ function ChatContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
-  if (pane?.type !== 'chat') return <Empty title="Chat unavailable" />;
+  if (pane?.type !== 'chat') return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(pane.id)}>
-      <Suspense fallback={<Empty title="Opening Chat…" />}>
+      <Suspense fallback={<Loading label="Opening Chat…" />}>
         {pane.externalSessionID ? <LazySessionPlane pane={pane} /> : <LazyChatPlane pane={pane} />}
       </Suspense>
     </PreviewFrame>
@@ -307,10 +307,10 @@ function ComparisonContent() {
     activeWorkspace(state).panes.find((item) => item.id === plane.parameters.id),
   );
   if (record?.type !== 'diff' && record?.type !== 'git-changes')
-    return <Empty title="Comparison unavailable" />;
+    return <Empty title="This plane is closed" />;
   return (
     <PreviewFrame activate={() => setActivePane(record.id)}>
-      <Suspense fallback={<Empty title="Opening comparison…" />}>
+      <Suspense fallback={<Loading label="Opening comparison…" />}>
         {record.type === 'diff' ? (
           <LazyDiffPlane pane={record} />
         ) : (
@@ -352,16 +352,16 @@ export function TerminalContent() {
             setStarted(true);
           }}
         >
-          Start terminal
+          Start Terminal
         </button>
       </Empty>
     );
   return pane?.type === 'terminal' ? (
-    <Suspense fallback={<Empty title="Opening terminal…" />}>
+    <Suspense fallback={<Loading label="Opening terminal…" />}>
       <LazyTerminalPlane pane={pane} />
     </Suspense>
   ) : (
-    <Empty title="Terminal unavailable" />
+    <Empty title="This plane is closed" />
   );
 }
 function SearchContent() {
@@ -630,10 +630,10 @@ export function WorkspaceSurface({
   );
   const renderEmpty = useCallback(
     () => (
-      <Empty title="No open planes" detail="Create a folder plane or choose a folder.">
+      <Empty title="No open planes">
         <div className="empty-actions">
           <button className="primary" disabled={!api} onClick={() => workspace.newRootFolder()}>
-            New folder plane
+            New Folder Plane
           </button>
           <button
             disabled={!api}
@@ -646,7 +646,7 @@ export function WorkspaceSurface({
                 .catch(report);
             }}
           >
-            Open folder…
+            Open Folder…
           </button>
         </div>
       </Empty>

@@ -96,8 +96,8 @@ it('shows a file, or any other folder, by its own size without measuring', () =>
   expect(start).not.toHaveBeenCalled();
 });
 
-it('says the size is unavailable when it cannot be measured', async () => {
+it('says the size is not known when it cannot be measured', async () => {
   start.mockRejectedValueOnce(new Error('Finish or cancel an existing size calculation first.'));
   render(<PreviewSize entry={entry('Slides.key')} />);
-  expect(await screen.findByText('Size unavailable')).toBeTruthy();
+  expect(await screen.findByText('Size not known')).toBeTruthy();
 });

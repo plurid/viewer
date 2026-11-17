@@ -6,10 +6,9 @@ export type DrawingResult =
 self.onmessage = async (event: MessageEvent<{ url: string }>) => {
   try {
     const response = await fetch(event.data.url);
-    if (!response.ok || !response.body)
-      throw new Error('The drawing is unavailable. Reopen the file to retry.');
+    if (!response.ok || !response.body) throw new Error("Viewer couldn't read this drawing.");
     if (Number(response.headers.get('content-length')) > DXF_MAX_BYTES)
-      throw new Error('This drawing exceeds the DXF preview limit (32 MB).');
+      throw new Error('Viewer shows drawings up to 32 MB.');
     const reader = response.body.getReader(),
       chunks: Uint8Array[] = [];
     let size = 0;
@@ -18,8 +17,7 @@ self.onmessage = async (event: MessageEvent<{ url: string }>) => {
         const { value, done } = await reader.read();
         if (done) break;
         size += value.length;
-        if (size > DXF_MAX_BYTES)
-          throw new Error('This drawing exceeds the DXF preview limit (32 MB).');
+        if (size > DXF_MAX_BYTES) throw new Error('Viewer shows drawings up to 32 MB.');
         chunks.push(value);
       }
     } finally {
@@ -36,7 +34,7 @@ self.onmessage = async (event: MessageEvent<{ url: string }>) => {
     } satisfies DrawingResult);
   } catch (error) {
     self.postMessage({
-      error: error instanceof Error ? error.message : 'The drawing could not be parsed.',
+      error: error instanceof Error ? error.message : "Viewer couldn't read this drawing.",
     } satisfies DrawingResult);
   }
 };

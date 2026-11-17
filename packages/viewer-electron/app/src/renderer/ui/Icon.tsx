@@ -83,6 +83,9 @@ const paths = {
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 8v6m0-10h.01',
   refresh: 'M20 8a8 8 0 1 0 1 7M20 3v5h-5',
   rotate: 'M20 8a8 8 0 1 0 1 7M20 3v5h-5M9 10h6v6H9z',
+  // a picture's view turned a quarter, apart from a PDF page's Rotate
+  'rotate-left': 'M9 12h11v9H9v-9ZM16 8A8 8 0 0 0 4 13m-2.5-2.5L4 13l2.5-2.5',
+  'rotate-right': 'M4 12h11v9H4v-9ZM8 8a8 8 0 0 1 12 5m2.5-2.5L20 13l-2.5-2.5',
   restore: 'm9 4-5 5 5 5M4 9h10a6 6 0 0 1 0 12h-3',
   external: 'M14 3h7v7m0-7L10 14M10 3H3v18h18v-7',
   alias: 'M4 20v-4a5 5 0 0 1 5-5h11m-5-5 5 5-5 5',

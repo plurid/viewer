@@ -48,10 +48,10 @@ export function CanvasSources({
                       ).catch(onError)
                     }
                   >
-                    Open source
+                    Open Source
                   </button>
                   <button disabled={busy} onClick={() => onRefresh(source.id)}>
-                    Refresh snapshot
+                    Refresh Snapshot
                   </button>
                 </>
               )}

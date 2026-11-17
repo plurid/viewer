@@ -38,6 +38,7 @@
     "mas:dev": "pnpm --filter viewer-electron mas:dev",
     "mas:package": "pnpm --filter viewer-electron mas:package",
     "docs:check": "pnpm --filter viewer-electron docs:check",
-    "docs:media": "pnpm --filter viewer-electron docs:media"
+    "docs:media": "pnpm --filter viewer-electron docs:media",
+    "review": "pnpm --filter viewer-electron review"
   }
 }

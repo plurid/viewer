@@ -117,7 +117,7 @@ try {
     'Generated oversized drawing.dxf',
     33 * 1024 * 1024,
     '0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n',
-    'DXF preview limit (32 MB)',
+    'Viewer shows drawings up to 32 MB.',
   );
   await sparse(
     'Generated oversized CAD.step',

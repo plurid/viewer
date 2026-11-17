@@ -3,7 +3,10 @@ import type { CommandContext } from './registry';
 import { Dialog } from '../ui/primitives';
 import { useViewer } from '../state/store';
 import { Icon } from '../ui/Icon';
+import { DestinationField } from '../ui/DestinationField';
+import { useHomeText } from '../ui/PathLabel';
 import { errorMessage } from '../../domain/errors';
+import { plural } from '../../domain/plural';
 
 /** Selection is captured before choosing a destination; confirmation runs the operation. */
 export function DestinationDialog({
@@ -21,9 +24,11 @@ export function DestinationDialog({
   const favorites = useViewer((state) => state.saved.favorites);
   const locations = useViewer((state) => state.bootstrap.locations);
   const name = kind === 'copy' ? 'Copy' : 'Move';
+  const shownError = useHomeText(error);
   return (
-    <Dialog title={`${name} to folder`} onClose={onClose}>
+    <Dialog title={`${name} to Folder`} onClose={onClose}>
       <form
+        className="dialog-form"
         onSubmit={async (event) => {
           event.preventDefault();
           setBusy(true);
@@ -46,19 +51,9 @@ export function DestinationDialog({
         <p className="muted">
           {context.selection.length === 1
             ? (context.selection[0]?.name ?? '')
-            : `${context.selection.length} selected items`}
+            : plural(context.selection.length, 'selected item')}
         </p>
-        <label className="field-label">
-          Destination
-          <input
-            autoFocus
-            data-autofocus
-            value={path}
-            onChange={(event) => setPath(event.target.value)}
-            required
-            maxLength={32768}
-          />
-        </label>
+        <DestinationField label="Destination" path={path} onChange={setPath} disabled={busy} />
         <div className="destination-options">
           {[...favorites, ...locations]
             .filter(
@@ -76,30 +71,17 @@ export function DestinationDialog({
                 {item.name}
               </button>
             ))}
-          <button
-            type="button"
-            onClick={() => {
-              void window.viewer
-                .chooseFolder()
-                .then((path) => {
-                  if (path) setPath(path);
-                })
-                .catch((error) => setError(String(error.message || error)));
-            }}
-          >
-            Choose folder…
-          </button>
         </div>
         {error && (
           <p className="error" role="alert">
-            {error}
+            {shownError}
           </p>
         )}
         <footer>
           <button type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="primary" disabled={busy || !path.trim()}>
+          <button className="primary" data-autofocus disabled={busy || !path.trim()}>
             {name}
           </button>
         </footer>

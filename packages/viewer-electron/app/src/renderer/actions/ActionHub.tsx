@@ -14,6 +14,8 @@ import { baseName } from '../../domain/workspaces/planes';
 import { planOrigin } from './commands';
 import { errorMessage } from '../../domain/errors';
 import { onWindowEvent } from '../app/window-events';
+import { plural } from '../../domain/plural';
+import { statusLabel } from '../ui/status-labels';
 const busy = (plan: ActionPlan) => ['planning', 'applying'].includes(plan.status);
 const name = (path: string) => baseName(path);
 function destinationParts(path: string) {
@@ -54,7 +56,7 @@ export function ActionHub() {
       if (!context.paneID || context.workspaceID !== activeWorkspace().id) return;
       const rootID = workspace.rootID(context.paneID);
       if (!rootID) {
-        report(new Error('The originating plane is unavailable.'));
+        report(new Error('That folder is no longer open. Open it, then choose the action again.'));
         return;
       }
       setRequest({
@@ -107,7 +109,7 @@ export function ActionHub() {
           )}
           {open && !request && (
             <Dialog
-              title={plan?.title || 'Action tasks'}
+              title={plan?.title || 'Action Tasks'}
               wide
               className="task-dialog"
               onClose={() => setOpen(false)}
@@ -117,11 +119,11 @@ export function ActionHub() {
               ) : plan ? (
                 <>
                   <div className="task-context">
-                    <button onClick={() => setSelected(undefined)}>All tasks</button>
+                    <button onClick={() => setSelected(undefined)}>All Tasks</button>
                     <span>
                       {plan.context.sources.length} selected · {planOrigin(plan.context)}
                     </span>
-                    <span>{plan.status}</span>
+                    <span>{statusLabel(plan.status)}</span>
                   </div>
                   <TaskReview key={plan.id + ':' + plan.revision} plan={plan} />
                 </>
@@ -139,10 +141,10 @@ export function ActionHub() {
                         <strong>{item.title}</strong>
                         <span>
                           {item.rows.length
-                            ? `${item.rows.length} ${item.rows.length === 1 ? 'change' : 'changes'}`
+                            ? plural(item.rows.length, 'change')
                             : `${item.context.sources.length} selected`}
                         </span>
-                        <span>{item.status}</span>
+                        <span>{statusLabel(item.status)}</span>
                       </button>
                     ))
                   )}
@@ -190,7 +192,7 @@ function ConfigureTask({
     action.current?.querySelector('button')?.focus({ preventScroll: true });
   }, []);
   return (
-    <Dialog title="Run action" onClose={onClose} className="action-config">
+    <Dialog title="Run Action" onClose={onClose} className="action-config">
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -337,10 +339,10 @@ function ConfigureTask({
             </label>
             <p className="muted">
               {provider
-                ? `${provider.name} · ${provider.model} · ${recipe?.data === 'names' ? 'filenames only' : 'local text extraction sent to this provider'}`
+                ? `${provider.name} · ${provider.model} · ${recipe?.data === 'names' ? 'sends file names only' : 'sends text read from the files'}`
                 : recipe?.kind === 'book-name'
-                  ? 'Local publication metadata. Missing fields remain unresolved.'
-                  : 'Choose a model for this action in Settings.'}
+                  ? 'Reads each book’s title and author from the file. Missing ones stay blank.'
+                  : 'Choose a model for this action in Settings → Actions.'}
             </p>
           </>
         )}
@@ -404,7 +406,7 @@ function ConfigureTask({
                   (!approved && approval !== approvalKey)))
             }
           >
-            {starting ? 'Preparing…' : 'Create proposal'}
+            {starting ? 'Preparing…' : 'Prepare Changes'}
           </button>
         </footer>
       </form>
@@ -483,7 +485,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
       )}
       {busy(plan) && (
         <Loading
-          label={plan.status === 'planning' ? 'Building proposal…' : 'Applying approved changes…'}
+          label={plan.status === 'planning' ? 'Preparing changes…' : 'Applying approved changes…'}
         />
       )}
       {!!plan.summary && <pre className="task-summary">{plan.summary}</pre>}
@@ -519,6 +521,8 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
                 if (!row || !edit) return null;
                 const issue = edit.destination === row.destination ? row.issue : undefined;
                 const destination = destinationParts(edit.destination);
+                // a new folder or a summary has no source: its own name, never its kind
+                const label = row.source?.name || name(row.destination);
                 const fullPath = editingPath === row.id;
                 return (
                   <div
@@ -533,7 +537,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
                   >
                     <input
                       type="checkbox"
-                      aria-label={`Approve ${row.source?.name || row.kind}`}
+                      aria-label={`Approve ${label}`}
                       checked={edit.approved}
                       disabled={!review || !!issue}
                       onChange={(event) =>
@@ -549,12 +553,12 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
                     <div>
                       <div className="task-source" title={row.source?.path}>
                         {row.source?.name || 'Summary export'}
-                        <span>{row.completed ? 'Completed' : issue || row.error}</span>
+                        <span>{row.completed ? 'Done' : issue || row.error}</span>
                       </div>
                       <label className="task-destination">
                         <span>{fullPath ? 'Path' : 'Name'}</span>
                         <input
-                          aria-label={`Destination for ${row.source?.name || row.kind}`}
+                          aria-label={`Destination for ${label}`}
                           disabled={!review}
                           value={fullPath ? edit.destination : destination.filename}
                           title={edit.destination}
@@ -565,7 +569,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
                               (value.includes('/') ||
                                 (destination.separator === '\\' && value.includes('\\')))
                             ) {
-                              setError('Use Edit path to change the destination folder.');
+                              setError('Use Edit Path to change the folder.');
                               return;
                             }
                             setError('');
@@ -588,17 +592,17 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
                         <span title={destination.directory}>In {destination.directory}</span>
                         {review && (
                           <button
-                            aria-label={`${fullPath ? 'Edit filename' : 'Edit path'} for ${row.source?.name || row.kind}`}
+                            aria-label={`${fullPath ? 'Edit Name' : 'Edit Path'} for ${label}`}
                             onClick={() => setEditingPath(fullPath ? undefined : row.id)}
                           >
-                            {fullPath ? 'Edit filename' : 'Edit path'}
+                            {fullPath ? 'Edit Name' : 'Edit Path'}
                           </button>
                         )}
                       </div>
                     </div>
                     <IconButton
                       icon="info"
-                      label={`Evidence for ${row.source?.name || row.kind}`}
+                      label={`Evidence for ${label}`}
                       onClick={() => setInspect(inspect === row.id ? undefined : row.id)}
                     />
                   </div>
@@ -638,7 +642,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
                 disabled={working}
                 onChange={(event) => setCheckpoint(event.target.checked)}
               />
-              Keep a content checkpoint
+              Keep a copy of the originals
             </label>
             {checkpoint && (
               <span className="muted">
@@ -652,7 +656,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
             )}
             {checkpoint && (
               <span className="muted">
-                File contents and mode. Finder tags and ACLs are not included.
+                Keeps contents and permissions, not Finder tags or ACLs.
               </span>
             )}
             {checkpoint &&
@@ -668,7 +672,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
             disabled={working}
             onClick={() => void act(() => window.viewer.actionCancel(plan.id))}
           >
-            Cancel task
+            Cancel Task
           </button>
         )}
         {['partial', 'recovery'].includes(plan.status) && (
@@ -676,7 +680,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
             disabled={working}
             onClick={() => void act(() => window.viewer.actionRecover(plan.id))}
           >
-            Review recovery
+            Review Recovery
           </button>
         )}
         {plan.undoable && (
@@ -684,7 +688,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
             disabled={working}
             onClick={() => void act(() => window.viewer.actionUndo(plan.id))}
           >
-            Undo changes
+            Undo Changes
           </button>
         )}
         {plan.summary && review && !plan.rows.length && (
@@ -697,7 +701,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
               })
             }
           >
-            Export summary…
+            Export Summary…
           </button>
         )}
         {review && !!plan.rows.length && (
@@ -717,7 +721,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
               )
             }
           >
-            {working ? 'Applying…' : `Apply ${selected} ${selected === 1 ? 'change' : 'changes'}`}
+            {working ? 'Applying…' : `Apply ${plural(selected, 'Change')}`}
           </button>
         )}
         {!busy(plan) && !plan.rows.length && !plan.summary && (
@@ -726,9 +730,9 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
       </footer>
       {exportAt && (
         <NameDialog
-          title="Export summary"
+          title="Export Summary"
           initial="Summary.md"
-          action="Review export"
+          action="Review Export"
           onClose={() => setExportAt(undefined)}
           onSubmit={(filename) =>
             window.viewer.actionExportSummary(plan.id, exportAt + '/' + filename)

@@ -359,7 +359,7 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
     screen.getByText(/Left out: Notes\.json \(not a request, drawing, photo or DXF\)/),
   ).toBeTruthy();
   // a text approval does not send pictures
-  const run = await screen.findByRole('button', { name: 'Check 4 files' });
+  const run = await screen.findByRole('button', { name: 'Check 4 Files' });
   await screen.findByText(
     /Meta may receive filenames, metadata and extracted document text; this check also sends pictures\./,
   );
@@ -372,11 +372,11 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
   );
   await waitFor(() =>
     expect(
-      (screen.getByRole('button', { name: 'Check 4 files' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Check 4 Files' }) as HTMLButtonElement).disabled,
     ).toBe(false),
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'Check 4 files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check 4 Files' }));
   await screen.findByText(
     'The bottom holes are 48 mm apart in g6-PL60-B2-2buc.dxf; Job 1042 drawing.pdf gives 50 mm.',
   );
@@ -435,12 +435,12 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
   expect(screen.getByText('g6-PL60-B2-2buc.dxf, corrected copy')).toBeTruthy();
 
   // An unresolved quantity must be reviewed before it becomes a nesting default.
-  fireEvent.click(screen.getByRole('button', { name: 'Prepare cut sheets' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Prepare Cut Sheets' }));
   expect(
-    (screen.getByRole('button', { name: 'Prepare cut sheets' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Prepare Cut Sheets' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   expect(openLayout).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Play the tour' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Play the Tour' }));
   expect(playTour).toHaveBeenCalledWith(workspace, {
     name: 'Job 1042',
     root: folder,
@@ -454,7 +454,7 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
     ),
   ).toBeTruthy();
   expect(
-    (screen.getByRole('button', { name: 'Nest and export handoff' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Nest and Export Handoff' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   // the Layout plane checks its 6 mm tab: the handoff saves that nesting, as it is
   act(() =>
@@ -470,7 +470,7 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
   expect(document.querySelector('[aria-label="Handoff"] .check-note')!.textContent).toBe(
     'A folder for the shop: 5 files as evidence, the tour pointed at them, the check record, and “Nesting of 2 parts, 6 mm” on 1 sheet.',
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Export handoff' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Export Handoff' }));
   await waitFor(() => expect(operate).toHaveBeenCalledOnce());
   const [handoff] = operate.mock.calls[0]! as [
     {
@@ -496,14 +496,14 @@ it('shows what is sent, asks for pictures, runs, and acts on the findings only w
   expect(openPath).not.toHaveBeenCalled();
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy path' })));
   expect(copyPaths).toHaveBeenCalledWith([`${folder}/Job 1042 handoff`]);
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open handoff' })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open Handoff' })));
   expect(openPath).toHaveBeenCalledWith(`${folder}/Job 1042 handoff`, {
     workspaceID: activeWorkspace().id,
     directory: true,
     activate: true,
   });
   openPath.mockRejectedValueOnce(new Error('The handoff folder is unavailable.'));
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open handoff' })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open Handoff' })));
   expect(getState().notice).toBe('The handoff folder is unavailable.');
   expect(screen.getByText(`${folder}/Job 1042 handoff`)).toBeTruthy();
 });
@@ -526,14 +526,14 @@ it('says why a check failed, and offers to run it again', async () => {
   await act(() => openCheck([folder], activeWorkspace().id));
   await waitFor(() =>
     expect(
-      (screen.getByRole('button', { name: 'Check 4 files' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Check 4 Files' }) as HTMLButtonElement).disabled,
     ).toBe(false),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Check 4 files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check 4 Files' }));
   expect((await screen.findByRole('alert')).textContent).toContain(
     'does not fit the check’s form at tour',
   );
-  expect(screen.getByRole('button', { name: 'Run again' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Run Again' })).toBeTruthy();
 });
 
 it('shows each step of a running check with its time, a cause’s readings and what was left unread', async () => {
@@ -554,11 +554,11 @@ it('shows each step of a running check with its time, a cause’s readings and w
   await act(() => openCheck([folder], activeWorkspace().id));
   await waitFor(() =>
     expect(
-      (screen.getByRole('button', { name: 'Check 4 files' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Check 4 Files' }) as HTMLButtonElement).disabled,
     ).toBe(false),
   );
   const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
-  fireEvent.click(screen.getByRole('button', { name: 'Check 4 files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check 4 Files' }));
   await waitFor(() =>
     expect(fabrication).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run' })),
   );
@@ -662,11 +662,11 @@ async function checkedAndSaved(): Promise<void> {
   await act(() => openCheck([folder], activeWorkspace().id));
   await waitFor(() =>
     expect(
-      (screen.getByRole('button', { name: 'Check 4 files' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Check 4 Files' }) as HTMLButtonElement).disabled,
     ).toBe(false),
   );
   const clock = vi.spyOn(Date, 'now').mockReturnValue(evening);
-  fireEvent.click(screen.getByRole('button', { name: 'Check 4 files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check 4 Files' }));
   await screen.findByText(
     'The bottom holes are 48 mm apart in g6-PL60-B2-2buc.dxf; Job 1042 drawing.pdf gives 50 mm.',
   );
@@ -721,7 +721,7 @@ async function exportingHandoff() {
       plan: { title: 'Job cut sheets', sheets: [{}] } as unknown as NestingTransform,
     }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Export handoff' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Export Handoff' }));
   await waitFor(() => expect(checkSession()?.handoff).toBe('job-handoff'));
 }
 
@@ -736,17 +736,17 @@ it.each(['running', 'failed', 'cancelled', 'missing destination'] as const)(
       completed: missing ? [] : [{ source: '', destination: `${folder}/Job 1042 handoff` }],
       errors: status === 'failed' ? [{ path: folder, message: 'The destination is full.' }] : [],
     });
-    expect(screen.queryByRole('button', { name: 'Open handoff' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open Handoff' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Copy path' })).toBeNull();
     expect(screen.queryByText('Saved “Job 1042 handoff”.')).toBeNull();
     expect(document.querySelector('.check-panel-footer')).toBeNull();
     expect(screen.getByRole('region', { name: 'Handoff' }).textContent).toContain(
       missing
-        ? 'The handoff completed without a destination. Check File operations.'
+        ? 'The handoff finished without a location. Check File Operations.'
         : status === 'failed'
           ? 'The destination is full.'
           : status === 'cancelled'
-            ? 'Cancelled.'
+            ? 'Canceled.'
             : 'Saving…',
     );
   },
@@ -755,24 +755,24 @@ it.each(['running', 'failed', 'cancelled', 'missing destination'] as const)(
 it('keeps the saved destination on collapse and reopening, then clears it on rerun', async () => {
   await exportingHandoff();
   const destination = `${folder}/Job 1042 handoff`;
-  const rerun = screen.getByRole('button', { name: 'Run again' });
+  const rerun = screen.getByRole('button', { name: 'Run Again' });
   rerun.focus();
   finish({ id: 'job-handoff', completed: [{ source: '', destination }] });
   expect(document.activeElement).toBe(rerun);
   expect(openPath).not.toHaveBeenCalled();
   fireEvent.click(toggle());
   expect(toggle().textContent).toContain('Handoff saved');
-  expect(screen.queryByRole('button', { name: 'Open handoff' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Open Handoff' })).toBeNull();
   fireEvent.click(toggle());
   expect(screen.getByText(destination)).toBeTruthy();
   act(() => closeCheck());
   await act(() => openCheck([folder], activeWorkspace().id));
   expect(screen.getByText(destination)).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Open handoff' })).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
+  expect(screen.getByRole('button', { name: 'Open Handoff' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Run Again' }));
   await waitFor(() => expect(checkSession()?.phase).toBe('checked'));
   expect(screen.queryByText(destination)).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Open handoff' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Open Handoff' })).toBeNull();
 });
 
 it('keeps a finished check when its panel closes, and shows it again at once while the job is unchanged', async () => {
@@ -812,7 +812,7 @@ it('keeps a finished check when its panel closes, and shows it again at once whi
   await act(() => openCheck([folder], activeWorkspace().id));
   expect(kinds()).toEqual(['open', 'run', 'correct', 'changes']);
   expect(screen.getByRole('heading', { name: 'Check Job 1042' })).toBeTruthy();
-  expect(document.querySelector('.check-since')!.textContent).toBe('Checked at 22:14 · Run again');
+  expect(document.querySelector('.check-since')!.textContent).toBe('Checked at 22:14 · Run Again');
   expect(
     screen.getByText(
       'The bottom holes are 48 mm apart in g6-PL60-B2-2buc.dxf; Job 1042 drawing.pdf gives 50 mm.',
@@ -822,13 +822,13 @@ it('keeps a finished check when its panel closes, and shows it again at once whi
   expect(screen.getByText('Saved: pitch 48.00 mm → 50.00 mm, measured again.')).toBeTruthy();
   expect(screen.getByText('g6-PL60-B2-2buc.dxf, corrected copy')).toBeTruthy();
   expect(
-    (screen.getByRole('button', { name: 'Play the tour' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Play the Tour' }) as HTMLButtonElement).disabled,
   ).toBe(false);
   expect(screen.queryByText('Sent to the model')).toBeNull();
   // one Run again, beside when it was checked, runs the same check
-  expect(screen.getAllByRole('button', { name: 'Run again' })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Run Again' })).toHaveLength(1);
   changes = [];
-  fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Run Again' }));
   await waitFor(() => expect(kinds()).toEqual(['open', 'run', 'correct', 'changes', 'run']));
   expect(fabrication).toHaveBeenLastCalledWith({
     kind: 'run',
@@ -867,7 +867,7 @@ it('says what changed since a kept check, marks its result as before, and checks
   expect(screen.getByRole('heading', { name: 'Findings from 22:14' })).toBeTruthy();
   expect(document.querySelector('.check-since')).toBeNull();
   // nothing of the old result is acted on: only Run again
-  for (const name of ['Play the tour', 'Prepare cut sheets', 'Nest and export handoff'])
+  for (const name of ['Play the Tour', 'Prepare Cut Sheets', 'Nest and Export Handoff'])
     expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
   // closed again, the palette does not give its grades as current
   act(() => closeCheck());
@@ -886,7 +886,7 @@ it('says what changed since a kept check, marks its result as before, and checks
   );
   await act(() => openCheck([folder], activeWorkspace().id));
 
-  fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Run Again' }));
   await waitFor(() =>
     expect(fabrication).toHaveBeenLastCalledWith({
       kind: 'run',
@@ -988,11 +988,11 @@ it('collapses to its title bar and a short status, from the title, and keeps tha
   fireEvent.click(toggle());
   await waitFor(() =>
     expect(
-      (screen.getByRole('button', { name: 'Check 4 files' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Check 4 Files' }) as HTMLButtonElement).disabled,
     ).toBe(false),
   );
   const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
-  fireEvent.click(screen.getByRole('button', { name: 'Check 4 files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check 4 Files' }));
   await waitFor(() =>
     expect(fabrication).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run' })),
   );
@@ -1066,7 +1066,7 @@ async function checkedWithTour(): Promise<void> {
   );
   await act(() => openCheck([folder], activeWorkspace().id));
   await act(() => runCheck());
-  await screen.findByRole('button', { name: 'Play the tour' });
+  await screen.findByRole('button', { name: 'Play the Tour' });
 }
 const atStop = () =>
   waitFor(() => expect(tourPlayback()?.status).toBe('showing'), { timeout: 2000 });
@@ -1106,7 +1106,7 @@ it('stays with the workspace it was opened in, as it was left, and closes with i
 
 it('steps out of the way while its tour plays, above the tour bar, and comes back after', async () => {
   await checkedWithTour();
-  fireEvent.click(screen.getByRole('button', { name: 'Play the tour' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Play the Tour' }));
   expect(expanded()).toBe('false');
   // focus stays in the panel, on its title bar
   expect(document.activeElement).toBe(toggle());
@@ -1125,7 +1125,7 @@ it('steps out of the way while its tour plays, above the tour bar, and comes bac
   act(() => tourControls.next());
   await waitFor(() => expect(tourPlayback()?.status).toBe('ended'));
   expect(expanded()).toBe('true');
-  fireEvent.click(screen.getByRole('button', { name: 'Play again' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Play Again' }));
   expect(expanded()).toBe('false');
   await atStop();
   // Escape stops the tour first, and the panel comes back; Escape again closes it
@@ -1139,7 +1139,7 @@ it('steps out of the way while its tour plays, above the tour bar, and comes bac
 
 it('leaves the panel as the person set it during the tour', async () => {
   await checkedWithTour();
-  fireEvent.click(screen.getByRole('button', { name: 'Play the tour' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Play the Tour' }));
   await atStop();
   // opened, then collapsed again by hand: the person's choice stands after the tour
   fireEvent.click(toggle());
@@ -1195,7 +1195,7 @@ it('nests the thickness no Layout plane has, saying which and how much, then exp
       '6 mm is not nested yet: the export nests it first on 1250 × 2500 mm sheets. To choose the sheets yourself, prepare the cut sheets and wait for Checked.',
     ),
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Nest and export handoff' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nest and Export Handoff' }));
   // the plane's own quantities and thicknesses, for the 6 mm tab only
   await waitFor(() =>
     expect(nestWithoutPlane).toHaveBeenCalledWith(
@@ -1212,7 +1212,7 @@ it('nests the thickness no Layout plane has, saying which and how much, then exp
   const status = await screen.findByText(/^Nesting 6 mm: 2 parts, 10 pieces…/);
   expect(status.textContent).toBe('Nesting 6 mm: 2 parts, 10 pieces… · 0 s');
   expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Nest and export handoff' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Nest and Export Handoff' })).toBeNull();
   // collapsed meanwhile, the title bar says so too
   fireEvent.click(toggle());
   expect(screen.getByRole('heading').textContent).toBe(
@@ -1245,12 +1245,12 @@ it('says plainly which part does not nest, and exports nothing', async () => {
   panel();
   await act(() => openCheck([folder], activeWorkspace().id));
   await act(() => runCheck());
-  fireEvent.click(screen.getByRole('button', { name: 'Nest and export handoff' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nest and Export Handoff' }));
   expect((await screen.findByRole('alert')).textContent).toBe(
     'Nesting 6 mm: g6-PL60-B2-2buc (2600 × 300 mm) does not fit a 1250 × 2500 mm sheet inside its 10 mm margin. Choose a larger sheet or more turns in the Layout plane. Nothing was exported.',
   );
   expect(operate).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: 'Nest and export handoff' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Nest and Export Handoff' })).toBeTruthy();
 
   // Cancel stops the nesting, and nothing is exported either
   vi.mocked(nestWithoutPlane).mockImplementationOnce(
@@ -1259,11 +1259,11 @@ it('says plainly which part does not nest, and exports nothing', async () => {
         signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
       ),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Nest and export handoff' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nest and Export Handoff' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
   await waitFor(() =>
     expect(screen.getByRole('alert').textContent).toBe(
-      'The nesting was cancelled. Nothing was exported.',
+      'The nesting was canceled. Nothing was exported.',
     ),
   );
   expect(operate).not.toHaveBeenCalled();
@@ -1325,7 +1325,7 @@ it('reviews the exact source and records a typed human confirmation separately f
   expect(screen.getByText('Job 1042 drawing.pdf · page 1')).toBeTruthy();
   expect(screen.getByText('Associated part: g6-PL60-B2-2buc.dxf.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: /^Save g6/ })).toBeNull();
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open source' })));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open Source' })));
   expect(openEvidence).toHaveBeenCalledWith(
     {
       path: `${folder}/Job 1042 drawing.pdf`,
@@ -1335,12 +1335,12 @@ it('reviews the exact source and records a typed human confirmation separately f
     },
     undefined,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm from source…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm from Source…' }));
   const input = screen.getByRole('textbox', { name: 'Value (mm)' }) as HTMLInputElement;
   expect(input.value).toBe('');
   expect(document.activeElement).toBe(input);
   expect(
-    (screen.getByRole('button', { name: 'Confirm value' }) as HTMLButtonElement).disabled,
+    (screen.getByRole('button', { name: 'Confirm Value' }) as HTMLButtonElement).disabled,
   ).toBe(true);
   fireEvent.change(input, { target: { value: '60' } });
   await act(async () => fireEvent.submit(input.closest('form')!));

@@ -98,7 +98,7 @@ describe('opening a template', () => {
     snapshot.revision++;
     act(() => receiveSettings(snapshot));
     const command = windowCommands(actions).find((item) => item.id === 'layout.dev')!;
-    expect(command.label).toBe('Open layout “Dev”');
+    expect(command.label).toBe('Open Layout “Dev”');
     const before = activeWorkspace().panes.length;
     await act(async () => command.run(context));
     const tiling = activeWorkspace().tiling!;

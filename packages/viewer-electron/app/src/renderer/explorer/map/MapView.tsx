@@ -35,7 +35,10 @@ import {
 } from '../../../domain/files/lens-layout';
 import { measureLocalPoint, type Point } from '../../ui/projectedResize';
 import { createLens, editLens } from '../../state/lenses';
-import { announce, report, updateFolderPresentation } from '../../state/store';
+import { announce, getState, report, updateFolderPresentation } from '../../state/store';
+import { effectiveWindowSettings } from '../../state/effective-ui';
+import { shortcutFor, shortcutGlyphs } from '../../../domain/preferences/shortcuts';
+import { plural } from '../../../domain/plural';
 import { FileIcon, Thumbnail, type FileViewProps } from '../views';
 import { useMarquee } from '../marquee';
 import { useFileReveal } from '../anchors';
@@ -203,10 +206,15 @@ export const MapView = memo(function MapView({
     void created
       .then((created) => {
         updateFolderPresentation(path, { lens: created.lens.id });
+        // the Undo key as this window has it, not a ⌘Z written into the sentence
+        const undo = shortcutGlyphs(
+          shortcutFor(effectiveWindowSettings(getState()).shortcuts, 'undo-file'),
+        );
         announce(
-          created.local
-            ? 'Created the lens “Map”, kept on this Mac because this folder cannot hold it. ⌘Z undoes it.'
-            : 'Created the lens “Map” in this folder’s .viewer folder. Your files did not move. ⌘Z undoes it.',
+          (created.local
+            ? 'Created the lens “Map” on this Mac: this folder can’t be changed.'
+            : 'Created the lens “Map”, saved with this folder.') +
+            (undo ? ` ${undo} undoes it.` : ''),
         );
       })
       .catch((error) => {
@@ -301,7 +309,7 @@ export const MapView = memo(function MapView({
               ]
             : [];
         });
-        const count = ops.length === 1 ? `“${tile.entry.name}”` : `${ops.length} items`;
+        const count = ops.length === 1 ? `“${tile.entry.name}”` : plural(ops.length, 'item');
         commit(
           ops,
           target.bare ? `Place ${count}` : `Move ${count} to “${target.name}”`,
@@ -476,7 +484,7 @@ export const MapView = memo(function MapView({
           at: [Math.max(0, tile.local[0] + dx), Math.max(0, tile.local[1] + dy)],
         })),
         'Nudge',
-        `Nudged ${tiles.length === 1 ? tiles[0]!.entry.name : `${tiles.length} items`}`,
+        `Nudged ${tiles.length === 1 ? tiles[0]!.entry.name : plural(tiles.length, 'item')}`,
       );
     },
   };

@@ -24,15 +24,15 @@ export function CheckpointControls() {
   });
   if (!open) return null;
   return (
-    <Dialog title="Content checkpoints" onClose={() => !busy && setOpen(false)}>
+    <Dialog title="Content Checkpoints" onClose={() => !busy && setOpen(false)}>
       <div className="dialog-body project-controls">
         <p className="muted">
-          {usage}. File contents and mode; Finder tags and ACLs are not included.
+          {usage && `${usage} used · `}Keeps contents and permissions, not Finder tags or ACLs.
         </p>
         {!records ? (
           <Loading />
         ) : records.length === 0 ? (
-          <p>No checkpoints. Enable one when reviewing batch changes.</p>
+          <p>No checkpoints. Choose Keep a copy of the originals when you review a batch change.</p>
         ) : (
           records.map((record) => (
             <div className="project-control-row checkpoint-record" key={record.id}>
@@ -41,6 +41,11 @@ export function CheckpointControls() {
                 <p className="muted">
                   {new Date(record.created).toLocaleString()} · {formatBytes(record.bytes)}
                 </p>
+                {record.status !== 'ready' && (
+                  <small className="muted">
+                    This copy was not finished, so it can’t be restored. Remove it.
+                  </small>
+                )}
               </div>
               <button
                 disabled={busy || record.status !== 'ready'}
@@ -63,7 +68,7 @@ export function CheckpointControls() {
                     .finally(() => setBusy(false));
                 }}
               >
-                Restore to folder…
+                Restore to Folder…
               </button>
               <button
                 disabled={busy}

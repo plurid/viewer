@@ -110,9 +110,9 @@ it.each([true, false])(
     fireEvent.click(view.getByRole('tab', { name: 'Defined (0)' }));
     expect(view.getByText(projectManagerConsentText)).toBeTruthy();
     expect(view.queryByText(/0 VS Code projects/)).toBeNull();
-    const use = view.getByRole('button', { name: 'Use VS Code projects' });
+    const use = view.getByRole('button', { name: 'Use VS Code Projects' });
     expect(use.className).toContain('primary');
-    fireEvent.click(enabled ? use : view.getByRole('button', { name: 'Don’t use' }));
+    fireEvent.click(enabled ? use : view.getByRole('button', { name: 'Don’t Use' }));
     await waitFor(() =>
       expect(f.request).toHaveBeenCalledWith({ kind: 'project-manager', enabled }),
     );
@@ -179,7 +179,7 @@ it('the muted workspace row opens Manage on Defined without taking a decision', 
       </WorkspaceContext.Provider>
     </CommandsContext.Provider>,
   );
-  const offer = view.getByRole('option', { name: 'Use VS Code Project Manager’s projects…' });
+  const offer = view.getByRole('option', { name: 'Use VS Code Project Manager’s Projects…' });
   expect(offer.className).toContain('is-muted');
   expect(view.getByText('Defined')).toBeTruthy();
   fireEvent.click(offer);
@@ -219,10 +219,10 @@ it.each(['absent', 'off', 'read'] as const)(
       expect(view.getByRole('heading', { name: 'VS Code Project Manager' })).toBeTruthy(),
     );
     expect(view.queryByText(projectManagerConsentText)).toBeNull();
-    expect(view.queryByRole('button', { name: 'Use VS Code projects' })).toBeNull();
-    expect(view.queryByRole('button', { name: 'Don’t use' })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Use VS Code Projects' })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Don’t Use' })).toBeNull();
     expect(
-      view.queryByRole('option', { name: 'Use VS Code Project Manager’s projects…' }),
+      view.queryByRole('option', { name: 'Use VS Code Project Manager’s Projects…' }),
     ).toBeNull();
     if (state === 'absent')
       expect(

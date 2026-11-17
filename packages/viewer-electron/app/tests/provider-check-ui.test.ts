@@ -18,7 +18,7 @@ it('sends no request on mount and sends one fixed-input check per explicit actio
   Object.assign(window, { viewer: { providerCheck: check } });
   render(createElement(ProviderCheck, { providerID: 'gemini', onError: vi.fn() }));
   expect(check).not.toHaveBeenCalled();
-  const button = screen.getByRole('button', { name: 'Test structured output' });
+  const button = screen.getByRole('button', { name: 'Test Structured Output' });
   fireEvent.click(button);
   fireEvent.click(button);
   expect(check).toHaveBeenCalledExactlyOnceWith({ providerID: 'gemini', kind: 'chat-schema' });
@@ -46,7 +46,7 @@ it('does not publish an old model result into its replacement check view', async
   const view = render(
     createElement(ProviderCheck, { key: 'first-model', providerID: 'gemini', onError }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Test structured output' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Test Structured Output' }));
   view.rerender(
     createElement(ProviderCheck, { key: 'second-model', providerID: 'gemini', onError }),
   );
@@ -59,5 +59,5 @@ it('does not publish an old model result into its replacement check view', async
     }),
   );
   expect(screen.queryByRole('status')).toBeNull();
-  expect(screen.getByRole('button', { name: 'Test structured output' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Test Structured Output' })).toBeTruthy();
 });

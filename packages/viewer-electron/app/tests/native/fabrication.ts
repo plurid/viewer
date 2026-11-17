@@ -1,6 +1,6 @@
 /**
  * A laser job checked end to end in the packaged app, the way a person works through it: where
- * **Check laser job…** is offered and why not, the panel's inventory and findings, its title bar,
+ * **Check Laser Job…** is offered and why not, the panel's inventory and findings, its title bar,
  * the tour on the real engine, the reviewed correction, the handoff with the nestings it makes,
  * pin/place identity, explicit evidence comparison and reversible stacks, and the check and its
  * arrangement after a cold restart. It also exercises the Layout plane's nesting without a sheet
@@ -828,22 +828,22 @@ try {
         rows.some(
           (row) =>
             row.unavailable &&
-            row.label === 'Check laser job…' &&
+            row.label === 'Check Laser Job…' &&
             !row.detail.startsWith('Viewer is still counting'),
         ),
-      'Check laser job… greyed out with why',
+      'Check Laser Job… greyed out with why',
     );
-    const greyed = shown.rows.find((row) => row.label === 'Check laser job…')!;
+    const greyed = shown.rows.find((row) => row.label === 'Check Laser Job…')!;
     assert.equal(greyed.detail, reason);
     assert.equal(greyed.selected, false, 'A greyed-out row is never chosen');
     assert.ok(
-      shown.rows.every((row) => row.unavailable || row.label !== 'Check laser job…'),
+      shown.rows.every((row) => row.unavailable || row.label !== 'Check Laser Job…'),
       'Not offered on a folder of jobs: ' + JSON.stringify(shown),
     );
     assert.equal(shown.empty, '', 'Not “No matching actions”');
     await capture('offering-why');
     // a click on it runs nothing: the palette stays, and no check opens
-    assert.ok(await page.evaluate(pageCall(clickUnavailable, 'Check laser job…')));
+    assert.ok(await page.evaluate(pageCall(clickUnavailable, 'Check Laser Job…')));
     await page.evaluate(animationFrames(2));
     assert.ok(await page.evaluate(exists('[aria-label="Search commands"]')), 'The palette stays');
     assert.equal((await panel()).open, false, 'No check opens');
@@ -856,13 +856,13 @@ try {
     const rows = await offered(
       'Check laser job',
       ({ rows }) =>
-        rows.some((row) => row.selected && !row.unavailable && row.label === 'Check laser job…'),
-      'Check laser job… offered for Job 1042',
+        rows.some((row) => row.selected && !row.unavailable && row.label === 'Check Laser Job…'),
+      'Check Laser Job… offered for Job 1042',
     );
     const offer = rows.rows.find((row) => row.selected)!;
     assert.equal(offer.detail, 'Check the 5 DXF parts in Job 1042');
     await capture('offering-job');
-    await runSelected('Check laser job…');
+    await runSelected('Check Laser Job…');
     return offer;
   });
 
@@ -893,13 +893,13 @@ try {
     ]);
     assert.ok(ready.model.includes(`Meta stub · ${model}`), ready.model);
     await wait(
-      () => page.evaluate(buttonState('Check 7 files', '.check-panel')),
+      () => page.evaluate(buttonState('Check 7 Files', '.check-panel')),
       (state) => state === 'enabled',
-      'Check 7 files is enabled',
+      'Check 7 Files is enabled',
     );
     await capture('panel-ready');
     await page.evaluate(pageCall(record, 'check', '.check-panel .check-progress span'));
-    await page.evaluate(pressButton('Check 7 files', '.check-panel'));
+    await page.evaluate(pressButton('Check 7 Files', '.check-panel'));
     const checked = await wait(
       panel,
       (state) => state.findings.length > 0 || !!state.error,
@@ -975,7 +975,7 @@ try {
       'Place preserves the mounted content',
     );
     assert.ok(await page.evaluate(pageCall(activatePane, placed.paneID)));
-    await command('Pin plane');
+    await command('Pin Plane');
     await wait(panel, (state) => state.pinned, 'the same check is pinned again');
     assert.equal(
       await page.evaluate(pageCall(checkIdentity, null)),
@@ -1008,7 +1008,7 @@ try {
       (pane) => pane.type === 'folder' && pane.path === fabrication,
     )!.id;
     const folderBefore = placements(before, [folderID]);
-    await actions.button('Review evidence', '.check-finding');
+    await actions.button('Review Evidence', '.check-finding');
     const arranging = await wait(
       spatial,
       (state) => state.workspace.tiling?.panes.length === 3,
@@ -1066,7 +1066,7 @@ try {
       { flag: 'wx' },
     );
     await capture('evidence-comparison');
-    await actions.button('Stack evidence', '.check-panel');
+    await actions.button('Stack Evidence', '.check-panel');
     const stacked = await wait(
       spatial,
       (state) => Object.values(state.stacks).some((stack) => stack.planeIDs.length === 3),
@@ -1075,7 +1075,7 @@ try {
     assert.notDeepEqual(placements(stacked, ids), comparison);
     assert.deepEqual(placements(stacked, [folderID]), folderBefore);
     await capture('evidence-stack');
-    await command('Undo arrangement');
+    await command('Undo Arrangement');
     await wait(
       spatial,
       (state) =>
@@ -1083,7 +1083,7 @@ try {
         isDeepStrictEqual(placements(state, ids), comparison),
       'one undo restores comparison geometry and removes stack membership',
     );
-    await command('Redo arrangement');
+    await command('Redo Arrangement');
     await wait(
       spatial,
       (state) =>
@@ -1091,7 +1091,7 @@ try {
         isDeepStrictEqual(placements(state, ids), placements(stacked, ids)),
       'one redo restores stack membership and geometry',
     );
-    await actions.button('Restore arrangement', '.check-panel');
+    await actions.button('Restore Arrangement', '.check-panel');
     const restored = await wait(
       spatial,
       (state) =>
@@ -1104,7 +1104,7 @@ try {
     assert.equal((await panel()).id, checkID);
     assert.equal((await panel()).pinned, true);
     assert.equal(
-      await page.evaluate(buttonState('Restore arrangement', '.check-panel')),
+      await page.evaluate(buttonState('Restore Arrangement', '.check-panel')),
       'missing',
     );
     await capture('evidence-restored');
@@ -1120,7 +1120,7 @@ try {
     const pdf = `[data-plurid-plane]:has(.plane-heading[title=${JSON.stringify(drawing)}]) .pdf-sheet canvas`;
     const shown = new Map<number, unknown>();
     const started = Date.now();
-    await page.evaluate(pressButton('Play the tour', '.check-panel'));
+    await page.evaluate(pressButton('Play the Tour', '.check-panel'));
     let state: TourState;
     do {
       state = await page.evaluate(pageCall(tourState));
@@ -1218,7 +1218,7 @@ try {
     await page.evaluate(
       pageCall(record, 'handoff', '.check-panel [aria-label="Handoff"] .check-progress span'),
     );
-    await page.evaluate(pressButton('Nest and export handoff', '.check-panel'));
+    await page.evaluate(pressButton('Nest and Export Handoff', '.check-panel'));
     const done = await wait(
       panel,
       (state) => state.handoff === 'Saved “Job 1042 handoff”.' || !!state.handoffError,
@@ -1261,7 +1261,7 @@ try {
     );
     assert.deepEqual(footer.controls, [
       { label: 'Copy path', visible: true },
-      { label: 'Open handoff', visible: true },
+      { label: 'Open Handoff', visible: true },
     ]);
     const progress = await page.evaluate(pageCall(recorded, 'handoff'));
     for (const nested of ['Nesting 3 mm: 2 parts, 16 pieces…', 'Nesting 6 mm: 3 parts, 8 pieces…'])
@@ -1362,7 +1362,7 @@ try {
       ],
     );
     const workspaceID = (await saved()).activeWorkspace;
-    await page.evaluate(pressButton('Open handoff', '.check-panel-footer'));
+    await page.evaluate(pressButton('Open Handoff', '.check-panel-footer'));
     const opened = await wait(
       saved,
       (state) => {
@@ -1388,17 +1388,17 @@ try {
       'Check laser job',
       ({ rows }) =>
         rows.some((row) => row.selected && row.detail.startsWith('Show the check from')),
-      'Check laser job… offers the kept check',
+      'Check Laser Job… offers the kept check',
     );
     const offer = rows.rows.find((row) => row.selected)!;
     assert.match(
       offer.detail,
       /^Show the check from \d{2}:\d{2}: 1 finding, 1 confirmed by Viewer$/,
     );
-    await runSelected('Check laser job…');
+    await runSelected('Check Laser Job…');
     const shown = await wait(panel, (state) => !!state.since, 'Checked at …');
     assert.equal(shown.id, checkID, 'Reopening uses the same document');
-    assert.match(shown.since, /^Checked at \d{2}:\d{2} · Run again$/);
+    assert.match(shown.since, /^Checked at \d{2}:\d{2} · Run Again$/);
     assert.equal(shown.stale, '', 'The job has not changed since');
     assert.equal(shown.correction, 'Saved: pitch 48.00 mm → 50.00 mm, measured again.');
     assert.equal(shown.handoff, 'Saved “Job 1042 handoff”.');
@@ -1414,7 +1414,7 @@ try {
 
   await step('Nesting: no sheet format, units and picking a part', async () => {
     const before = exceptions.length;
-    await page.evaluate(pressButton('Prepare cut sheets', '.check-panel'));
+    await page.evaluate(pressButton('Prepare Cut Sheets', '.check-panel'));
     const checked = await wait(
       nesting,
       (state) => state.tabs.length === 2 && state.status.includes('Checked:'),
@@ -1488,7 +1488,7 @@ try {
       assert.deepEqual(empty.problems, ['No format chosen.']);
       assert.equal(empty.placed, 0, 'No sheet is drawn');
       assert.equal(
-        await page.evaluate(buttonState('Save nesting', '.layout-plane .nesting-panel')),
+        await page.evaluate(buttonState('Save Nesting', '.layout-plane .nesting-panel')),
         'disabled',
       );
     }
@@ -1575,13 +1575,13 @@ try {
   });
 
   await step('Cold restart restores the check, pin and reversible evidence stack', async () => {
-    await actions.button('Compare evidence', '.check-panel');
+    await actions.button('Compare Evidence', '.check-panel');
     await wait(
       spatial,
       (state) => state.workspace.tiling?.panes.length === 3,
       'the evidence is compared again',
     );
-    await actions.button('Stack evidence', '.check-panel');
+    await actions.button('Stack Evidence', '.check-panel');
     const stacked = await wait(
       spatial,
       (state) => Object.values(state.stacks).some((stack) => stack.planeIDs.length === 3),
@@ -1631,7 +1631,7 @@ try {
       await page.evaluate(pageCall(activatePane, ids[0]!)),
       'The front evidence plane is mounted',
     );
-    await command('Unstack planes');
+    await command('Unstack Planes');
     await wait(
       spatial,
       (state) =>
@@ -1645,7 +1645,7 @@ try {
       'unstack after restart restores every saved return placement',
     );
     await actions.click('[data-plurid-control="pinned-collapse"]');
-    await actions.button('Compare evidence', '.check-panel');
+    await actions.button('Compare Evidence', '.check-panel');
     await wait(
       spatial,
       (state) => state.workspace.tiling?.panes.length === 3,

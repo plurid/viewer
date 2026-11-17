@@ -137,7 +137,7 @@ export function checkCommands(workspace?: WorkspaceController): CommandDefinitio
   return [
     {
       id: 'check-laser-job',
-      label: 'Check laser job…',
+      label: 'Check Laser Job…',
       group: 'Files',
       icon: 'drawing',
       aliases: [
@@ -218,7 +218,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
   return [
     {
       id: 'review-check-evidence',
-      label: 'Review evidence',
+      label: 'Review Evidence',
       group: 'Files',
       icon: 'side-by-side',
       aliases: ['compare evidence', 'inspect finding', 'show proof'],
@@ -228,7 +228,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
     },
     {
       id: 'stack-check-evidence',
-      label: 'Stack evidence',
+      label: 'Stack Evidence',
       group: 'Files',
       icon: 'copy',
       when: () => !!graded()?.evidencePaneIDs?.length,
@@ -236,7 +236,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
     },
     {
       id: 'restore-check-arrangement',
-      label: 'Restore evidence arrangement',
+      label: 'Restore Evidence Arrangement',
       group: 'Files',
       icon: 'left',
       when: () => !!graded()?.evidenceBefore,
@@ -244,7 +244,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
     },
     {
       id: 'check-cut-sheets',
-      label: 'Prepare cut sheets',
+      label: 'Prepare Cut Sheets',
       group: 'Files',
       icon: 'drawing',
       aliases: ['cut sheets', 'nest', 'nest the parts', 'nesting'],
@@ -268,7 +268,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
     },
     {
       id: 'check-tour',
-      label: 'Play the check’s tour',
+      label: 'Play the Check’s Tour',
       group: 'Files',
       icon: 'play',
       aliases: ['tour', 'play the tour', 'show the findings', 'walk through the findings'],
@@ -286,7 +286,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
     },
     {
       id: 'check-corrections',
-      label: 'Save corrected copies',
+      label: 'Save Corrected Copies',
       group: 'Files',
       icon: 'drawing',
       aliases: ['save the corrections', 'correct the dxf', 'fix the pitch', 'fix the holes'],
@@ -307,7 +307,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
     },
     {
       id: 'check-handoff',
-      label: 'Export handoff',
+      label: 'Export Handoff',
       group: 'Files',
       icon: 'share',
       aliases: ['handoff', 'export the job', 'export for the shop', 'send to the shop'],

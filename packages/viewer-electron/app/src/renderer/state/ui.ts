@@ -3,6 +3,8 @@ import { focusFiles } from '../workspace/sessions';
 import { getState, update } from './core';
 import { noteFirstRunStep } from './preferences';
 import type { ClipboardPaste } from '../../domain/files/clipboard';
+import type { FileEntry } from '../../domain/contracts';
+import { previewsAsFile } from '../../domain/previews/documents/embedded';
 
 export function quickPreview(
   paths: string | string[] | null,
@@ -33,6 +35,26 @@ export function stepQuickPreview(delta: number): void {
         index: (quick.index + delta + quick.paths.length) % quick.paths.length,
       },
     });
+}
+/**
+ * Quick Preview shows what its plane now selects, as Finder's Quick Look follows the selection:
+ * the item at the plane's cursor among them. A folder is named, as it has no preview of its own.
+ */
+export function followQuickPreview(files: readonly FileEntry[], cursor?: string): void {
+  const quick = getState().quickPreview;
+  if (!quick || !files.length) return;
+  const paths = files.map((file) => file.path);
+  const index = Math.max(0, cursor ? paths.indexOf(cursor) : 0);
+  if (index === quick.index && paths.join('\0') === quick.paths.join('\0')) return;
+  update({
+    ...getState(),
+    quickPreview: {
+      ...quick,
+      paths,
+      index,
+      folders: files.filter((file) => !previewsAsFile(file)),
+    },
+  });
 }
 /** Background discovery must not block navigation or retain stale copied items.
  * An actual Paste uses strict refresh and reports the native access failure. */

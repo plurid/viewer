@@ -120,6 +120,6 @@ describe('saving a workspace definition', () => {
     expect(f.service.entry('new-room')!.name).toBe('New room');
     await expect(
       f.service.save(workspace, ['folder', 'terminal'], true, { key: 'new-room', name: 'Again' }),
-    ).rejects.toThrow('Save to definition');
+    ).rejects.toThrow('Save to Definition');
   });
 });

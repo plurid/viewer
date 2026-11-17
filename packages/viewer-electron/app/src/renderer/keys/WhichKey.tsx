@@ -45,7 +45,7 @@ export function WhichKey({
           <>
             <span className="which-key-mode">-- {mode.toUpperCase()} --</span>
             {view.count && <kbd>{view.count}</kbd>}
-            <span>Escape leaves</span>
+            <span>Esc to exit</span>
           </>
         ) : (
           [...(view.help ? [] : prefix ? [prefix] : []), ...view.keys].map((key, index) => (

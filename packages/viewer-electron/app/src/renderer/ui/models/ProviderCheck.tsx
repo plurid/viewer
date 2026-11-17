@@ -30,7 +30,7 @@ export function ProviderCheck({
       if (mounted.current) setResult(value);
     } catch (error) {
       if (mounted.current)
-        onError(error instanceof Error ? error.message : 'The provider check failed.');
+        onError(error instanceof Error ? error.message : 'The test didn’t finish. Try again.');
     } finally {
       pending.current = false;
       if (mounted.current) setBusy(false);
@@ -40,7 +40,7 @@ export function ProviderCheck({
     <div className="settings-provider-check">
       <div className="settings-actions">
         <button disabled={busy} onClick={() => void check()}>
-          {busy ? 'Testing generation…' : 'Test structured output'}
+          {busy ? 'Testing…' : 'Test Structured Output'}
         </button>
       </div>
       <p className="settings-note">

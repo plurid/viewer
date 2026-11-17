@@ -14,8 +14,10 @@ import {
   type SettingsChange,
 } from './settings-edits';
 import { defaultSettings } from '../../../domain/services';
+import { plural } from '../../../domain/plural';
 import { errorMessage } from '../../../domain/errors';
 import { PathField } from '../primitives';
+import { PathLabel } from '../PathLabel';
 import { Disclosure } from '../Disclosure';
 import { WorkspaceDefinitionsSettings } from './WorkspaceDefinitionsSettings';
 interface Props {
@@ -154,7 +156,7 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
                 patchProfiles((profiles) => profiles.filter((profile) => profile.id !== item.id))
               }
             >
-              Remove profile
+              Remove Profile
             </ReferencedRemove>
           )}
         </Disclosure>
@@ -174,7 +176,7 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
             ])
           }
         >
-          New shell profile
+          New Shell Profile
         </button>
       </div>
       <h2>tmux</h2>
@@ -235,8 +237,8 @@ export function CustomActionSettings({
           <h3>{draft.name}</h3>
           {draft.executor.kind === 'shell' && <pre>{draft.executor.script}</pre>}
           <p className="settings-note">
-            Add this reusable shell action, then edit its name, shortcut and availability below. Its
-            first execution uses the normal action confirmation.
+            Add it, then set its name, shortcut and where it shows below. Viewer asks you before it
+            first runs.
           </p>
           <button
             onClick={() => {
@@ -246,15 +248,15 @@ export function CustomActionSettings({
               onDraftDone?.();
             }}
           >
-            Add command
+            Add Command
           </button>
           <button onClick={onDraftDone}>Dismiss</button>
         </section>
       )}
       <p className="settings-note">
-        Add commands to file actions and Commands. Executable arguments are literal: {'{directory}'}
-        , {'{path}'}, {'{name}'}, {'{extension}'}, and a standalone {'{paths}'} are supported. Shell
-        actions receive the directory as $1 and selected paths as $2 onward.
+        Add commands to file menus and Commands. Program arguments are passed as typed, with{' '}
+        {'{directory}'}, {'{path}'}, {'{name}'}, {'{extension}'} and {'{paths}'} on its own filled
+        in. A shell script receives the folder as $1 and the selected paths as $2 onward.
       </p>
       {actions.map((action) => (
         <Disclosure variant="row" className="settings-recipe" key={action.id} summary={action.name}>
@@ -434,7 +436,7 @@ export function CustomActionSettings({
             <label className="settings-row">
               <span>
                 Commands
-                <small>Command IDs in order, separated by commas. Recorded by Record macro.</small>
+                <small>Command IDs in order, separated by commas. Record Macro fills it in.</small>
               </span>
               <Field
                 label="Command sequence"
@@ -532,7 +534,7 @@ export function CustomActionSettings({
             change={(update) => patch(action.id, update)}
           />
           <button onClick={() => set((actions) => actions.filter((item) => item.id !== action.id))}>
-            Remove command
+            Remove Command
           </button>
         </Disclosure>
       ))}
@@ -555,7 +557,7 @@ export function CustomActionSettings({
             ])
           }
         >
-          New command
+          New Command
         </button>
       </div>
     </>
@@ -571,8 +573,8 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
   return (
     <>
       <p className="settings-note">
-        Settings and config.jsonc edit the same configuration. Comments are preserved. Invalid edits
-        keep the last valid configuration active.
+        Settings and config.jsonc edit the same configuration, and your comments stay. While the
+        file has a mistake, Viewer keeps using the last version it could read.
       </p>
       {config?.path && (
         <PathField
@@ -587,7 +589,7 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
         </button>
         <button
           onClick={() =>
-            run(window.viewer.configValidate(), 'Validation complete. Check diagnostics below.')
+            run(window.viewer.configValidate(), 'Checked. Any problems are listed below.')
           }
         >
           Validate
@@ -600,12 +602,12 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
       ))}
       {config?.fallback === 'last-valid' && (
         <p className="settings-error" role="alert">
-          Viewer runs on the last valid copy of config.jsonc until the file is fixed.
+          Viewer keeps using the last config.jsonc it could read until the file is fixed.
         </p>
       )}
       {config?.fallback === 'defaults' && (
         <p className="settings-error" role="alert">
-          config.jsonc and its last valid copy cannot be read. Viewer runs on its defaults and saves
+          Neither config.jsonc nor its last copy can be read. Viewer uses its defaults and saves
           nothing until config.jsonc is fixed.
         </p>
       )}
@@ -640,7 +642,9 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
       {config?.changes.length ? (
         <ul>
           {config.changes.map((path) => (
-            <li key={path}>{path}</li>
+            <li key={path}>
+              <PathLabel path={path} />
+            </li>
           ))}
         </ul>
       ) : (
@@ -648,17 +652,17 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
       )}
       <div className="settings-action-row">
         <button onClick={() => run(window.viewer.configTransfer('export'))}>
-          Export configuration
+          Export Configuration
         </button>
         <button onClick={() => run(window.viewer.configTransfer('import'))}>
-          Import configuration
+          Import Configuration
         </button>
       </div>
       <WorkspaceDefinitionsSettings />
       <h2>Reset a section</h2>
       <p className="settings-note">
-        This resets the selected configuration section. Your open planes, file operation history,
-        credentials and execution approvals are stored separately.
+        Puts the chosen section back to its defaults. Open planes, file operation history, keys and
+        approvals are kept.
       </p>
       <div className="settings-action-row">
         <ChoiceButton
@@ -685,7 +689,7 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
             ]);
           }}
         >
-          Reset section
+          Reset Section
         </button>
       </div>
     </>
@@ -699,7 +703,7 @@ export function FolderOverrideSettings({ snapshot, save }: Props) {
       variant="row"
       className="settings-recipe"
       summary="Folder views"
-      meta={count > 0 && `${count} ${count === 1 ? 'folder' : 'folders'}`}
+      meta={count > 0 && plural(count, 'folder')}
     >
       <p className="settings-note">
         A folder’s view is shared across planes, roots and workspaces. The controls above set
@@ -752,7 +756,7 @@ export function FolderOverrideSettings({ snapshot, save }: Props) {
             });
           }}
         >
-          Add folder override…
+          Add Folder Override…
         </button>
       </div>
     </Disclosure>

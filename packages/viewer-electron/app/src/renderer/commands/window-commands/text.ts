@@ -1,3 +1,4 @@
+import { plural } from '../../../domain/plural';
 import type { CommandContext, CommandDefinition } from '../registry';
 import { editingPlane } from '../../editing/planes';
 import type { WindowScopes } from './scope';
@@ -7,9 +8,7 @@ import { announce } from '../../state/store';
 /** What Save all did, said briefly. */
 export function savedText(result: { saved: number; failed: number; unnamed: number }): string {
   const parts = [
-    result.saved
-      ? `Saved ${result.saved} ${result.saved === 1 ? 'file' : 'files'}`
-      : 'Nothing to save',
+    result.saved ? `Saved ${plural(result.saved, 'file')}` : 'Nothing to save',
     result.failed ? `${result.failed} not saved` : '',
     result.unnamed
       ? `${result.unnamed} scratch ${result.unnamed === 1 ? 'plane has' : 'planes have'} no file yet`
@@ -33,7 +32,7 @@ export function textCommands({
   return [
     {
       id: 'new-scratch-plane',
-      label: 'New scratch plane',
+      label: 'New Scratch Plane',
       group: 'Text',
       icon: 'file',
       aliases: ['scratch', 'untitled', 'new text', 'note', 'buffer'],
@@ -47,7 +46,7 @@ export function textCommands({
     {
       id: 'edit-file',
       unavailable: 'Open a text preview that supports editing.',
-      label: 'Edit text',
+      label: 'Edit Text',
       group: 'Text',
       icon: 'pencil',
       aliases: ['edit', 'modify'],
@@ -69,7 +68,7 @@ export function textCommands({
     },
     {
       id: 'save-file-as',
-      label: 'Save as…',
+      label: 'Save As…',
       group: 'Text',
       icon: 'copy',
       shortcut: '⇧⌘S',
@@ -80,7 +79,7 @@ export function textCommands({
     },
     {
       id: 'save-all',
-      label: 'Save all',
+      label: 'Save All',
       group: 'Text',
       icon: 'check',
       aliases: ['wa', 'save everything'],
@@ -91,7 +90,7 @@ export function textCommands({
     },
     {
       id: 'revert-file',
-      label: 'Revert to saved…',
+      label: 'Revert to Saved…',
       group: 'Text',
       icon: 'restore',
       aliases: ['discard changes', 'undo all'],
@@ -100,7 +99,7 @@ export function textCommands({
     },
     {
       id: 'done-editing',
-      label: 'Done editing',
+      label: 'Done Editing',
       group: 'Text',
       icon: 'eye',
       aliases: ['stop editing', 'read'],

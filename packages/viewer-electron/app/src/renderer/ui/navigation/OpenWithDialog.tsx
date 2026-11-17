@@ -119,8 +119,8 @@ export function OpenWithDialog({ paths, onClose }: { paths: string[]; onClose():
               {choices.supported
                 ? query
                   ? 'No matching applications.'
-                  : 'No compatible applications found. Choose an application below.'
-                : 'Application selection is not available on this platform yet.'}
+                  : 'No apps are registered for this kind of file. Use Choose Application…'
+                : "Viewer can't list apps on this system. Use Open in Default App instead."}
             </p>
           ) : (
             applications.map((app, i) => (

@@ -202,10 +202,10 @@ it('focuses the filename and requires a distinct choice after a save conflict', 
   expect(name.selectionEnd).toBe(6);
   await screen.findByText('This folder is empty');
   fireEvent.keyDown(name, { key: 'Enter' });
-  await screen.findByText('/fixture/Report.pdf');
+  await screen.findByText('“Report.pdf” already exists in “fixture”. Replace it?');
   expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true);
   expect(dialog.mock.calls.filter(([r]) => r.kind === 'choose')).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Replace file' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
   await waitFor(() =>
     expect(dialog).toHaveBeenCalledWith({
       kind: 'choose',

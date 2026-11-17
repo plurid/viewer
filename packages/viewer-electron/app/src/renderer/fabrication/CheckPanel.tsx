@@ -61,7 +61,7 @@ function jobStatus(job: OperationJob | undefined, done: (job: OperationJob) => s
   if (!job) return 'Starting…';
   if (job.status === 'completed') return done(job);
   if (job.status === 'failed' || job.status === 'cancelled')
-    return job.errors[0]?.message ?? (job.status === 'failed' ? 'It failed.' : 'Cancelled.');
+    return job.errors[0]?.message ?? (job.status === 'failed' ? 'It failed.' : 'Canceled.');
   return job.detail ?? 'Saving…';
 }
 
@@ -114,7 +114,7 @@ function collapsedStatus(
       if (current.handoff)
         return {
           text: jobStatus(handoff, (done) =>
-            done.completed[0]?.destination ? 'Handoff saved' : 'Handoff destination unavailable',
+            done.completed[0]?.destination ? 'Handoff saved' : 'Handoff location not known',
           ),
         };
       const findings = result?.findings ?? [];
@@ -150,7 +150,7 @@ export function CheckPanelBody({
     <Panel
       className={`check-panel${embedded ? ' check-plane-panel' : ''}`}
       label={`Check ${job ?? 'laser job'}`}
-      title={job ? `Check ${job}` : 'Check laser job'}
+      title={job ? `Check ${job}` : 'Check Laser Job'}
       status={
         <>
           {status.text}
@@ -180,7 +180,7 @@ export function CheckPanelBody({
                   .catch(report)
               }
             >
-              Open handoff
+              Open Handoff
             </Button>
           </>
         )
@@ -392,7 +392,7 @@ function Permission({
           }
           onClick={() => void runCheck(current)}
         >
-          {current.phase === 'failed' ? 'Run again' : `Check ${countText(count, 'file')}`}
+          {current.phase === 'failed' ? 'Run Again' : `Check ${countText(count, 'File')}`}
         </button>
       </footer>
     </>
@@ -400,14 +400,14 @@ function Permission({
 }
 
 /**
- * When a result shown again was checked, "Checked at 22:14 · Run again", or what changed in the
+ * When a result shown again was checked, "Checked at 22:14 · Run Again", or what changed in the
  * job since, which makes it out of date: then nothing below is acted on until it runs again.
  */
 function Since({ current }: { current: CheckSession }) {
   const at = clockText(current.checked ?? Date.now());
   const again = (
     <button type="button" onClick={() => void runCheck(current)}>
-      Run again
+      Run Again
     </button>
   );
   return current.stale ? (
@@ -502,7 +502,7 @@ function Result({ current }: { current: CheckSession }) {
             playCheckTour(workspace, current);
           }}
         >
-          Play the tour
+          Play the Tour
         </button>
       </PanelSection>
       <CutSheets current={current} jobs={jobs} />
@@ -510,7 +510,7 @@ function Result({ current }: { current: CheckSession }) {
       {!shownAgain && (
         <footer className="check-actions">
           <button type="button" onClick={() => void runCheck(current)}>
-            Run again
+            Run Again
           </button>
         </footer>
       )}
@@ -533,7 +533,7 @@ function EvidenceActions({ current }: { current: CheckSession }) {
     <>
       <div className="check-evidence-actions" aria-label="Arrange evidence">
         <Button variant="secondary" disabled={!!current.stale || busy} onClick={compare}>
-          {busy ? 'Opening evidence…' : 'Compare evidence'}
+          {busy ? 'Opening evidence…' : 'Compare Evidence'}
         </Button>
         <Button
           variant="secondary"
@@ -547,7 +547,7 @@ function EvidenceActions({ current }: { current: CheckSession }) {
             }
           }}
         >
-          Stack evidence
+          Stack Evidence
         </Button>
         {current.evidenceBefore && (
           <Button
@@ -562,7 +562,7 @@ function EvidenceActions({ current }: { current: CheckSession }) {
               }
             }}
           >
-            Restore arrangement
+            Restore Arrangement
           </Button>
         )}
       </div>
@@ -629,7 +629,7 @@ function RequirementReview({
       </summary>
       <div className="check-requirement-body">
         <p className="muted check-note">
-          {source?.name ?? 'Source unavailable'} · page {claim.page}
+          {source?.name ?? 'Source not found'} · page {claim.page}
         </p>
         {claim.quote ? (
           <blockquote className="check-source-quote">{claim.quote}</blockquote>
@@ -663,7 +663,7 @@ function RequirementReview({
                 .catch((reason: unknown) => setError(errorMessage(reason)));
             }}
           >
-            Open source
+            Open Source
           </Button>
           {!reviewing && (
             <Button
@@ -678,8 +678,8 @@ function RequirementReview({
               }}
             >
               {verification.status === 'human-confirmed'
-                ? 'Edit confirmation…'
-                : 'Confirm from source…'}
+                ? 'Edit Confirmation…'
+                : 'Confirm from Source…'}
             </Button>
           )}
         </div>
@@ -719,7 +719,7 @@ function RequirementReview({
             </label>
             <div className="check-evidence-actions">
               <Button variant="primary" type="submit" disabled={disabled || !valid}>
-                {busy ? 'Confirming…' : 'Confirm value'}
+                {busy ? 'Confirming…' : 'Confirm Value'}
               </Button>
               <Button
                 variant="secondary"
@@ -814,7 +814,7 @@ function Finding({
               .finally(() => setReviewing(false));
           }}
         >
-          {reviewing ? 'Opening evidence…' : 'Review evidence'}
+          {reviewing ? 'Opening evidence…' : 'Review Evidence'}
         </Button>
       </div>
       {reviews.map(({ claim, verification }) => (
@@ -917,7 +917,7 @@ function CutSheets({ current, jobs }: { current: CheckSession; jobs: readonly Op
         disabled={!!current.stale || !parts.length || parts.some((part) => !!part.question)}
         onClick={() => void prepareCutSheets(workspace, current).catch(report)}
       >
-        Prepare cut sheets
+        Prepare Cut Sheets
       </button>
     </PanelSection>
   );
@@ -964,10 +964,7 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
       )}
       {job?.status === 'completed' && job.completed[0]?.destination ? null : current.handoff ? (
         <p className="check-note" role="status">
-          {jobStatus(
-            job,
-            () => 'The handoff completed without a destination. Check File operations.',
-          )}
+          {jobStatus(job, () => 'The handoff finished without a location. Check File Operations.')}
         </p>
       ) : current.handoffProgress ? (
         <div className="check-progress" role="status">
@@ -985,7 +982,7 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
           disabled={!!current.stale || !!hold}
           onClick={() => void exportHandoff(current)}
         >
-          {missing.length ? 'Nest and export handoff' : 'Export handoff'}
+          {missing.length ? 'Nest and Export Handoff' : 'Export Handoff'}
         </button>
       )}
       {current.handoffError && (

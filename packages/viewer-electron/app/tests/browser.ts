@@ -20,6 +20,7 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
   return result.value;
 }
 const api: ViewerAPI = {
+  remote: async () => ({ connections: [] }),
   folderHistory: () => invoke('folderHistory'),
   folderCheck: (path) => invoke('folderCheck', path),
   networkSharing: (request) => invoke('networkSharing', request),

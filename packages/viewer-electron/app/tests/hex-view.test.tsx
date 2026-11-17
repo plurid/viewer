@@ -279,7 +279,7 @@ describe('Show as hex', () => {
     await toggle();
     expect(await view.findByRole('grid', { name: 'File bytes' })).toBeTruthy();
     expect(view.queryByText('Probe content')).toBeNull();
-    await waitFor(() => expect(labels()).toEqual(['Go to offset', 'Show preview']));
+    await waitFor(() => expect(labels()).toEqual(['Go to Offset', 'Show preview']));
     await toggle();
     expect(await view.findByText('Probe content')).toBeTruthy();
   });
@@ -290,6 +290,6 @@ describe('Show as hex', () => {
     await waitFor(() => expect(labels()).toEqual(['Probe command']));
     fireEvent.click(view.getByText('Probe content'));
     expect(await view.findByRole('grid', { name: 'File bytes' })).toBeTruthy();
-    await waitFor(() => expect(labels()).toEqual(['Go to offset', 'Show preview']));
+    await waitFor(() => expect(labels()).toEqual(['Go to Offset', 'Show preview']));
   });
 });

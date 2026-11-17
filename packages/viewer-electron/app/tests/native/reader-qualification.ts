@@ -318,9 +318,9 @@ try {
           'Return from published footnote',
         );
       }
-      await evaluate(pressButton('Find in book', '.quick-preview'));
+      await evaluate(pressButton('Find in Book', '.quick-preview'));
       const query = sample.search;
-      await ui.fill('[aria-label="Search book text"]', query);
+      await ui.fill('[aria-label="Find text"]', query);
       await until(ui.text, (text) => /\d+\+? matches/.test(text), 'Published book search', 20000);
       const matches = await evaluate(countOf('.epub-search li'));
       assert.ok(matches > 0 && matches <= 200);
@@ -339,13 +339,13 @@ try {
           .includes(query.toLowerCase()),
       );
       await ui.capture(sample.name + '-search');
-      await ui.fill('[aria-label="Search book text"]', 'this-phrase-is-absent-from-the-whole-book');
+      await ui.fill('[aria-label="Find text"]', 'this-phrase-is-absent-from-the-whole-book');
       await until(
         ui.text,
         (text) => text.includes('0 matches'),
         'Rapid search owns its last query',
       );
-      await evaluate(pressButton('Find in book', '.quick-preview'));
+      await evaluate(pressButton('Find in Book', '.quick-preview'));
       const rememberedChapter = main >= 0 ? main : Math.min(1, data.chapters.length - 1);
       await ui.chapter(rememberedChapter);
       const rememberedScroll = await evaluate(pageCall(rememberScroll));

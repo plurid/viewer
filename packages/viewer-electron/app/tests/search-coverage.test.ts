@@ -37,7 +37,7 @@ it('identifies unsupported text coverage and grants narrower than the requested 
     '/Books/Some',
   ]);
   expect(coverage.reasons.join(' ')).toContain('not enabled for every location');
-  expect(coverage.reasons.join(' ')).toContain('without OCR');
+  expect(coverage.reasons.join(' ')).toContain('not scanned text');
   expect(
     indexedCoverage(result([ready]), { root: '/Books/Some', content: true }, ['/Books']).reasons,
   ).toHaveLength(1);

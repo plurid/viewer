@@ -109,7 +109,7 @@ describe('folder appearance and independent explorer sessions', () => {
     updateFolderPresentation(context.directory!, { sort: 'modified', descending: false });
     const sort = columnCommands().find((command) => command.id === 'sort.modified')!;
     expect(typeof sort.label === 'function' && sort.label(context)).toBe(
-      'Sort by date modified, descending',
+      'Sort by Date Modified, Descending',
     );
     sort.run(context);
     expect(folderPresentation(context.directory!)).toMatchObject({
@@ -124,7 +124,7 @@ describe('folder appearance and independent explorer sessions', () => {
     const context = columnContext();
     updateFolderPresentation('/fixtures', { showHidden: true });
     const hidden = folderCommands(folderActions).find((command) => command.id === 'hidden')!;
-    expect(typeof hidden.label === 'function' && hidden.label(context)).toBe('Show hidden files');
+    expect(typeof hidden.label === 'function' && hidden.label(context)).toBe('Show Hidden Files');
     hidden.run(context);
     expect(folderPresentation(context.directory!).showHidden).toBe(true);
     hidden.run(context);

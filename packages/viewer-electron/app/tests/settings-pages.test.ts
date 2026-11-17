@@ -57,7 +57,7 @@ describe('Settings pages', () => {
     expect(view.queryByRole('button', { name: 'License' })).toBeNull();
     expect(view.getByRole('heading', { level: 1 }).textContent).toBe('Browsing');
     fireEvent.click(view.getByRole('button', { name: 'Privacy' }));
-    expect(view.queryByRole('heading', { name: 'Trial and license key' })).toBeNull();
+    expect(view.queryByText(/license key holds/)).toBeNull();
   });
 
   it('keeps an event newer than the initial license status request', async () => {
@@ -108,7 +108,7 @@ describe('Settings pages', () => {
     await waitFor(() => expect(license).toHaveBeenCalledWith({ kind: 'buy' }));
     const field = view.getByRole('textbox', { name: 'License key' });
     fireEvent.change(field, { target: { value: 'wrong' } });
-    fireEvent.click(view.getByRole('button', { name: 'Save license key' }));
+    fireEvent.click(view.getByRole('button', { name: 'Save License Key' }));
     await waitFor(() =>
       expect(view.getByRole('alert').textContent).toBe(
         'This is not a valid license key for Viewer.',
@@ -116,7 +116,7 @@ describe('Settings pages', () => {
     );
     expect(view.getByRole('alert').textContent).not.toContain('code');
     fireEvent.change(field, { target: { value: 'generated valid key' } });
-    fireEvent.click(view.getByRole('button', { name: 'Save license key' }));
+    fireEvent.click(view.getByRole('button', { name: 'Save License Key' }));
     await waitFor(() => expect(complete).toBeTypeOf('function'));
     expect(view.getByRole('button', { name: 'Working…' }).hasAttribute('disabled')).toBe(true);
     expect(field.hasAttribute('disabled')).toBe(true);
@@ -124,7 +124,7 @@ describe('Settings pages', () => {
     await waitFor(() => expect(view.getByRole('status').textContent).toBe(`Licensed to ${email}`));
     expect((field as HTMLTextAreaElement).value).toBe('');
     expect(view.queryByRole('button', { name: 'Buy Viewer' })).toBeNull();
-    fireEvent.click(view.getByRole('button', { name: 'Remove license key' }));
+    fireEvent.click(view.getByRole('button', { name: 'Remove License Key' }));
     await waitFor(() => expect(view.getByRole('status').textContent).toBe('Trial: 12 days left'));
     expect(license).toHaveBeenCalledWith({ kind: 'remove' });
     act(() =>

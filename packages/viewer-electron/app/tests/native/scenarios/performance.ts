@@ -320,7 +320,7 @@ export async function profileNativeInteractions(
         before,
         'Camera profile must exercise actual rotation',
       );
-      await paletteCommand('Frame plane');
+      await paletteCommand('Frame Plane');
       await settleCamera();
       await key('Escape', 'Escape');
     }

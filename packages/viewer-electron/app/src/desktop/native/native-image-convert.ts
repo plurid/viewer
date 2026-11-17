@@ -41,15 +41,18 @@ export const nativeImageConverter: ImageConverter = {
       if (conversion === 'jpeg') data = image.toJPEG(92);
       else if (conversion === 'png') data = image.toPNG({ scaleFactor: scale });
       else {
-        const pixels = rotateBitmap(
+        // a half turn is two quarters, the picture as wide as it was
+        const half = conversion === 'rotate-180';
+        let pixels = rotateBitmap(
           image.toBitmap({ scaleFactor: scale }),
           width,
           height,
-          conversion === 'rotate-right',
+          conversion !== 'rotate-left',
         );
+        if (half) pixels = rotateBitmap(pixels, height, width, true);
         const rotated = nativeImage.createFromBitmap(Buffer.from(pixels.buffer), {
-          width: height,
-          height: width,
+          width: half ? width : height,
+          height: half ? height : width,
         });
         data = /\.jpe?g$/i.test(output) ? rotated.toJPEG(92) : rotated.toPNG();
       }

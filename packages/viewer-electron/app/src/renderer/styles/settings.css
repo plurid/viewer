@@ -1,12 +1,7 @@
 /* The Settings window and dialogs it opens. */
+/* A dialog form (ui/form-fields.css) sets its fields and gaps. */
 .command-parameters {
-  display: grid;
-  gap: 16px;
   padding: 20px;
-}
-.command-parameters > label {
-  display: grid;
-  gap: 8px;
 }
 .command-input-editor fieldset,
 .command-workflow-editor fieldset {
@@ -187,20 +182,23 @@
   color: var(--muted);
   line-height: 1.5;
 }
-.settings-folder-choice {
+.settings-folder-choice,
+.settings-found-workspaces {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 0;
   font-size: var(--text-compact);
 }
-.settings-folder-choice > span {
+.settings-folder-choice > span,
+.settings-found-workspaces > span {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--muted);
 }
-.settings-folder-choice > button {
+.settings-folder-choice > button,
+.settings-found-workspaces > button {
   flex-shrink: 0;
 }
 .settings-location small {

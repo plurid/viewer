@@ -99,9 +99,9 @@ function sharingSegments(share: NetworkShare): string[] {
 }
 export function windowsSharingAddressProblem(share: NetworkShare): string | undefined {
   if (sharingSegments(share).some((segment) => /[. ]$/.test(segment)))
-    return 'Windows addresses are unavailable because a folder or share name ends with a dot or space.';
+    return 'Windows can’t use this address because a folder or share name ends with a dot or space.';
   if (sharingSegments(share).some((segment) => /[\\/\u0000-\u001f\u007f:*?"<>|]/.test(segment)))
-    return 'Windows addresses are unavailable because a folder or share name contains a character Windows cannot use.';
+    return 'Windows can’t use this address because a folder or share name contains a character Windows can’t use.';
 }
 
 export function sharingAddresses(

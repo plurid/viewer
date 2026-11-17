@@ -83,7 +83,7 @@ export const cliCommands: readonly CLICommand[] = [
     options: [
       {
         name: 'args',
-        description: 'Arguments as a JSON object; use - to read bounded stdin.',
+        description: 'Arguments as a JSON object; use - to read them from stdin.',
         kind: 'json',
         default: '{}',
       },
@@ -211,19 +211,19 @@ export const cliCommands: readonly CLICommand[] = [
   },
   {
     name: ['inspect'],
-    description: 'Read bounded metadata for a granted file.',
+    description: 'Read metadata for a granted file.',
     arguments: [file],
     tool: 'read_metadata',
   },
   {
     name: ['read'],
-    description: 'Read bounded file content with a content grant.',
+    description: 'Read file content with a content grant.',
     arguments: [file],
     tool: 'read_content',
   },
   {
     name: ['table'],
-    description: 'Read a bounded saved-value table window.',
+    description: 'Read rows of saved table values.',
     arguments: [file],
     options: [
       offset,
@@ -343,7 +343,7 @@ export const cliCommands: readonly CLICommand[] = [
   },
   {
     name: ['git', 'diff'],
-    description: 'Read a bounded diff against a chosen base.',
+    description: 'Read a diff against a chosen base.',
     arguments: [{ ...file, optional: true }],
     options: [
       {

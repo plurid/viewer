@@ -194,7 +194,7 @@ export class ExternalTerminals {
         return { path: configured, name: path.basename(configured, '.app'), running: false };
       }
       throw new Error(
-        'The configured terminal application is unavailable. Choose another in Settings → Terminals.',
+        'Viewer can’t find the terminal app chosen in Settings → Terminals. Choose another there.',
       );
     }
     const app =

@@ -3,8 +3,14 @@ import type { MediaPane as Pane } from '../../domain/contracts';
 import type { MediaTransform } from '../../domain/operations/transforms';
 import { mediaTime, transformExtension } from '../../domain/operations/transforms';
 import { baseName, parentPath } from '../../domain/workspaces/planes';
-import { Empty, IconButton, Loading } from '../ui/primitives';
+import { Failure, IconButton, Loading, tryAgainLabel } from '../ui/primitives';
+import { plural } from '../../domain/plural';
+import { statusLabel } from '../ui/status-labels';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { DestinationField } from '../ui/DestinationField';
+import { FileNameField, fileNameError } from '../ui/FileNameField';
+import { FormField } from '../ui/FormField';
+import { useHome } from '../ui/PathLabel';
 import { report, useViewer, updatePane } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { useResource } from '../previews/useResource';
@@ -14,6 +20,7 @@ import { Timecode } from './Timecode';
 import './media.css';
 import { isActiveJob } from '../../domain/operations/jobs';
 import { errorMessage } from '../../domain/errors';
+import { homeText } from '../../domain/files/path-label';
 
 export default function MediaPlane({ pane, active }: { pane: Pane; active: boolean }) {
   const workspace = useWorkspace();
@@ -25,12 +32,14 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
     [position, setPosition] = useState(0);
   const [range, setRange] = useState({ start: 0, end: 1 });
   const [folder, setFolder] = useState(parentPath(pane.path)),
-    [name, setName] = useState(baseName(pane.path).replace(/\.[^.]+$/, '') + ' edited.mp4');
+    [name, setName] = useState(baseName(pane.path).replace(/\.[^.]+$/, '') + ' edited');
   const [separate, setSeparate] = useState(false),
     [frame, setFrame] = useState(false),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState('');
   const [jobs, setJobs] = useState<string[]>([]);
+  const home = useHome();
+  const extension = frame ? 'png' : transformExtension(draft?.plan.format ?? 'mp4');
   const player = useRef<HTMLMediaElement>(null),
     overlay = useRef<HTMLAudioElement>(null);
   const [playingSequence, setPlayingSequence] = useState(false);
@@ -66,13 +75,13 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
   const exportNotice = !jobs.length
     ? ''
     : exportFailure
-      ? `Export failed · ${exportFailure.errors[0]?.message || 'See the export details.'}`
+      ? `Export failed${exportFailure.errors[0]?.message ? ` · ${exportFailure.errors[0].message}` : ''}`
       : runningExport
-        ? `${runningExport.status === 'queued' ? 'Export queued' : 'Exporting'} · ${runningExport.detail || `${runningExport.itemsDone} / ${runningExport.itemsTotal} files`}`
+        ? `${runningExport.status === 'queued' ? 'Waiting to export' : 'Exporting'} · ${runningExport.detail || `${runningExport.itemsDone.toLocaleString('en-US')} of ${plural(runningExport.itemsTotal, 'file')}`}`
         : outputJobs.some((job) => job.status === 'cancelled')
-          ? `Export cancelled · ${destinations.length} files created`
+          ? `Export canceled · ${plural(destinations.length, 'file')} made`
           : outputJobs.length === jobs.length
-            ? `Exported ${destinations.length} ${destinations.length === 1 ? 'file' : 'files'}${destinations.length === 1 ? ' · ' + baseName(destinations[0]!) : ''}`
+            ? `Exported ${plural(destinations.length, 'file')}${destinations.length === 1 ? ' · ' + baseName(destinations[0]!) : ''}`
             : 'Preparing export…';
   const retryPlayback = () => {
     setPlaying(false);
@@ -111,15 +120,8 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
     };
   }, [granted.resource?.id, overlayGrant.resource?.id]);
   useEffect(() => {
-    if (draft)
-      setName(
-        baseName(pane.path).replace(/\.[^.]+$/, '') +
-          ' edited.' +
-          transformExtension(draft.plan.format),
-      );
-    // Only a format change supplies a new default; typing a filename keeps it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft?.plan.format, pane.path]);
+    setName(baseName(pane.path).replace(/\.[^.]+$/, '') + ' edited');
+  }, [pane.path]);
   const chooseSegment = (index: number) => {
     const segment = draft?.plan.segments[index];
     if (!segment) return;
@@ -188,7 +190,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
         id: draft.id,
         revision: session.snapshot().draft!.revision,
         destination: folder,
-        name: frame ? name.replace(/\.[^.]+$/, '') + '.png' : name,
+        name: name + '.' + extension,
         separate,
         ...(frame
           ? {
@@ -211,10 +213,15 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
   if (snapshot.loading) return <Loading label="Opening media draft…" />;
   if (!draft || snapshot.unavailable)
     return (
-      <Empty icon="warning" title="Media unavailable" detail={snapshot.error}>
+      <Failure
+        icon="warning"
+        title="Can't open this media draft"
+        detail={snapshot.error}
+        onRetry={() => void session.reload()}
+      >
         <p>
-          The saved edits are kept. After relinking or replacing files, you can apply those edits to
-          their current versions. The original draft stays saved.
+          Your edits are saved. Apply Saved Edits to Current Files uses them with the files as they
+          are now.
         </p>
         <button
           disabled={busy}
@@ -230,9 +237,8 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
               .finally(() => setBusy(false));
           }}
         >
-          Apply saved edits to current files
+          Apply Saved Edits to Current Files
         </button>
-        <button onClick={() => void session.reload()}>Reload draft</button>
         <button
           onClick={() =>
             void workspace
@@ -240,9 +246,9 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
               .catch(report)
           }
         >
-          New draft from current files
+          New Draft from Current Files
         </button>
-      </Empty>
+      </Failure>
     );
   const plan = draft.plan,
     info = sourceFile!.info;
@@ -271,9 +277,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
     },
     onError: () => {
       setPlaying(false);
-      setPlaybackError(
-        'This file could not be played. Retry playback or export it to a supported format.',
-      );
+      setPlaybackError("Viewer can't play this file. Try again, or export it as MP4 or M4A.");
     },
     onLoadedMetadata: () => {
       if (player.current) {
@@ -331,10 +335,10 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
           }}
         />
         <button disabled={busy} onClick={() => void chooseMedia('video')}>
-          Add media…
+          Add Media…
         </button>
         <button disabled={busy} onClick={() => void chooseMedia('audio')}>
-          Add audio…
+          Add Audio…
         </button>
         <span className="toolbar-spacer" />
         <span className="muted">
@@ -343,9 +347,9 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
       </div>
       {(snapshot.error || message || exportNotice) && (
         <p className="media-editor-notice" role="status">
-          {snapshot.error || message || exportNotice}
+          {homeText(snapshot.error || message || exportNotice || '', home)}
           {snapshot.error && (
-            <button onClick={() => void session.flush().catch(report)}>Retry save</button>
+            <button onClick={() => void session.flush().catch(report)}>{tryAgainLabel}</button>
           )}
         </p>
       )}
@@ -353,13 +357,12 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
         <div className="media-editor-main">
           <div className="media-editor-player">
             {granted.error || playbackError ? (
-              <Empty
+              <Failure
                 icon="warning"
-                title="Playback unavailable"
+                title="Can't play this file"
                 detail={granted.error || playbackError}
-              >
-                <button onClick={retryPlayback}>Retry playback</button>
-              </Empty>
+                onRetry={retryPlayback}
+              />
             ) : info.video ? (
               <video
                 key={granted.resource?.id}
@@ -382,7 +385,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                 preload="metadata"
                 onError={() =>
                   setPlaybackError(
-                    'The additional audio could not be played. Retry playback or choose another audio file.',
+                    "Viewer can't play the added audio. Try again, or choose another audio file.",
                   )
                 }
               />
@@ -399,7 +402,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                   void media
                     .play()
                     .catch((error) =>
-                      setPlaybackError(String(error.message || 'Playback could not start.')),
+                      setPlaybackError(String(error.message || "Playback couldn't start.")),
                     );
               }}
             >
@@ -424,7 +427,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
               </span>
             )}
             {playbackSlow && !playbackReady && (
-              <button onClick={retryPlayback}>Retry playback</button>
+              <button onClick={retryPlayback}>{tryAgainLabel}</button>
             )}
           </div>
           <SourceStrip draft={draft} source={source} active={active} onSeek={seek} />
@@ -443,7 +446,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                 })
               }
             >
-              Set in
+              Set In
             </button>
             <Timecode
               label="Out"
@@ -460,7 +463,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                 })
               }
             >
-              Set out
+              Set Out
             </button>
             <button
               disabled={plan.segments.length >= 32}
@@ -473,7 +476,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                 setSelected(plan.segments.length);
               }}
             >
-              Add segment
+              Add Segment
             </button>
           </div>
           <div className="media-range-sliders">
@@ -509,7 +512,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
           <div className="media-sequence-heading">
             <strong>Sequence</strong>
             <span className="muted">
-              {plan.segments.length} segments · {mediaTime(total)}
+              {plural(plan.segments.length, 'segment')} · {mediaTime(total)}
             </span>
             <button
               onClick={() => {
@@ -518,7 +521,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                 if (source === plan.segments[0]!.source) void player.current?.play().catch(report);
               }}
             >
-              Play sequence
+              Play Sequence
             </button>
           </div>
           <div className="media-segments" role="list" aria-label="Export sequence">
@@ -582,9 +585,8 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             ))}
           </div>
         </div>
-        <aside className="media-export-options" aria-label="Export options">
-          <label>
-            Format
+        <aside className="media-export-options dialog-form" aria-label="Export options">
+          <FormField label="Format">
             <ChoiceButton
               label="Export format"
               value={plan.format}
@@ -616,9 +618,8 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                 }));
               }}
             />
-          </label>
-          <label>
-            Quality
+          </FormField>
+          <FormField label="Quality">
             <ChoiceButton
               label="Export quality"
               value={plan.quality}
@@ -631,29 +632,30 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                 session.plan((plan) => ({ ...plan, quality: quality as MediaTransform['quality'] }))
               }
             />
-          </label>
-          <label>
-            Cut
+          </FormField>
+          <FormField label="Cut">
             <ChoiceButton
               label="Cut accuracy"
               value={plan.cut}
               choices={[
-                { value: 'exact', label: 'Exact · frame accurate' },
+                { value: 'exact', label: 'Exact' },
                 ...(plan.segments.length === 1 &&
                 ['mp4', 'mov'].includes(plan.format) &&
                 ['keep', 'mute'].includes(plan.audio.mode) &&
                 info.videoCodec === 'h264' &&
                 (!info.audio || info.audioCodec === 'aac')
-                  ? [{ value: 'keyframe', label: 'Fast · keyframe aligned' }]
+                  ? [{ value: 'keyframe', label: 'Fast' }]
                   : []),
               ]}
               onChoose={(cut) =>
                 session.plan((plan) => ({ ...plan, cut: cut as MediaTransform['cut'] }))
               }
             />
-          </label>
-          <label>
-            Audio
+          </FormField>
+          {plan.cut === 'keyframe' && (
+            <p className="muted">Fast cuts can start a few seconds early.</p>
+          )}
+          <FormField label="Audio">
             <ChoiceButton
               label="Audio treatment"
               value={plan.audio.mode}
@@ -677,13 +679,13 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                 }))
               }
             />
-          </label>
+          </FormField>
           {['mix', 'replace'].includes(plan.audio.mode) && (
             <>
               <span className="muted">{overlayFile && baseName(overlayFile.path)}</span>
-              <label>
-                Audio offset (seconds)
+              <FormField label="Audio offset (seconds)">
                 <input
+                  aria-label="Audio offset (seconds)"
                   type="number"
                   min={-86400}
                   max={86400}
@@ -696,10 +698,10 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                     }))
                   }
                 />
-              </label>
-              <label>
-                Added audio gain
+              </FormField>
+              <FormField label="Added audio gain">
                 <input
+                  aria-label="Added audio gain"
                   type="range"
                   min={0}
                   max={1}
@@ -712,11 +714,11 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                     }))
                   }
                 />
-              </label>
+              </FormField>
               {plan.audio.mode === 'mix' && (
-                <label>
-                  Original gain
+                <FormField label="Original gain">
                   <input
+                    aria-label="Original gain"
                     type="range"
                     min={0}
                     max={1}
@@ -730,11 +732,11 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                       }));
                     }}
                   />
-                </label>
+                </FormField>
               )}
             </>
           )}
-          <label className="media-export-toggle">
+          <label className="dialog-field-toggle">
             <input
               type="checkbox"
               checked={separate}
@@ -743,63 +745,45 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             Export each segment
           </label>
           {info.video && (
-            <label className="media-export-toggle">
+            <label className="dialog-field-toggle">
               <input
                 type="checkbox"
                 checked={frame}
-                onChange={(event) => {
-                  setFrame(event.target.checked);
-                  setName(
-                    name.replace(/\.[^.]+$/, '') +
-                      '.' +
-                      (event.target.checked ? 'png' : transformExtension(plan.format)),
-                  );
-                }}
+                onChange={(event) => setFrame(event.target.checked)}
               />
               Export current frame as PNG
             </label>
           )}
-          <label>
-            Filename
-            <input value={name} onChange={(event) => setName(event.target.value)} />
-          </label>
-          <label>
-            Save in
-            <div className="media-destination">
-              <input
-                aria-label="Export folder"
-                value={folder}
-                onChange={(event) => setFolder(event.target.value)}
-              />
-              <button
-                onClick={() =>
-                  void window.viewer
-                    .chooseFolder(folder)
-                    .then((value) => {
-                      if (value) setFolder(value);
-                    })
-                    .catch(report)
-                }
-              >
-                Choose…
-              </button>
-            </div>
-          </label>
-          <p className="muted">
-            Exports create new files. Compatible full clips can copy streams without re-encoding.
-          </p>
+          <FileNameField
+            value={name}
+            extension={extension}
+            onChange={setName}
+            folder={folder}
+            disabled={busy || !!runningExport}
+            numberedSuffix={separate ? ' 1' : ''}
+          />
+          <DestinationField
+            path={folder}
+            onChange={setFolder}
+            disabled={busy || !!runningExport}
+          />
+          {separate && (
+            <p className="muted">
+              File names start with {name} 1.{extension}.
+            </p>
+          )}
           <button
             className="primary"
-            disabled={busy || snapshot.saving || !name.trim() || !folder.trim()}
+            disabled={busy || snapshot.saving || !!fileNameError(name, extension, separate ? ' 1' : '') || !folder.trim()}
             onClick={() => void exportMedia()}
           >
             {busy
               ? 'Preparing…'
               : frame
-                ? 'Export frame'
+                ? 'Export Frame'
                 : separate
-                  ? 'Export segments'
-                  : 'Export sequence'}
+                  ? 'Export Segments'
+                  : 'Export Sequence'}
           </button>
           {outputJobs.flatMap((job) =>
             job.completed.flatMap((item) =>
@@ -830,19 +814,22 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             .map((job) => (
               <div className="media-export-progress" key={job.id}>
                 <span role="status">
-                  {job.status} · {job.detail || `${job.itemsDone} / ${job.itemsTotal} files`}
+                  {statusLabel(job.status)} ·{' '}
+                  {job.detail
+                    ? homeText(job.detail, home)
+                    : `${job.itemsDone.toLocaleString('en-US')} of ${plural(job.itemsTotal, 'file')}`}
                 </span>
                 {isActiveJob(job) && (
                   <>
                     <progress max={1} value={job.progress} />
                     <button onClick={() => void window.viewer.cancelJob(job.id).catch(report)}>
-                      Cancel export
+                      Cancel Export
                     </button>
                   </>
                 )}
                 {job.errors.map((error, index) => (
                   <p className="error" key={index}>
-                    {error.message}
+                    {homeText(error.message, home)}
                   </p>
                 ))}
               </div>

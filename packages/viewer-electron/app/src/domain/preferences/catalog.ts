@@ -14,23 +14,23 @@ export const planeToolbar = {
 } as const;
 /** Each plane toolbar control's row, in header order: its label, and what it shows where needed. */
 const headerControlLabels: Record<HeaderControl, readonly [string, string?]> = {
-  parent: ['Back to parent button'],
-  sidebar: ['Navigation button'],
-  back: ['Back button'],
-  forward: ['Forward button'],
-  view: ['View menu'],
+  parent: ['Back to parent'],
+  sidebar: ['Navigation'],
+  back: ['Back'],
+  forward: ['Forward'],
+  view: ['View'],
   search: ['Folder search'],
-  layout: ['Layout button'],
-  frame: ['Frame plane button'],
-  dock: ['Dock plane button'],
-  pins: ['Pinned tools', 'Pin tools for each kind of plane in “What can I do here?”.'],
-  discover: ['“What can I do here?” button'],
+  layout: ['Layout'],
+  frame: ['Frame'],
+  dock: ['Dock'],
+  pins: ['Pinned tools', 'Pin tools for each kind of plane in “What Can I Do Here?”.'],
+  discover: ['What Can I Do Here?'],
   formatTools: [
     'Every format tool',
-    'Off, the header shows a format’s main tools, such as a PDF’s page and zoom controls; the rest are in “…”.',
+    'When off, only a format’s main tools show, such as a PDF’s page and zoom controls; the rest are in “…”.',
   ],
-  actions: ['Actions menu'],
-  close: ['Close plane button'],
+  actions: ['Actions'],
+  close: ['Close'],
 };
 
 export interface SettingDefinition {
@@ -39,7 +39,7 @@ export interface SettingDefinition {
   label: string;
   detail?: string;
   section?: string;
-  /** `color`: a `#rrggbb` colour, or empty for the automatic one. */
+  /** `color`: a `#rrggbb` color, or empty for the automatic one. */
   kind: 'boolean' | 'choice' | 'number' | 'color';
   choices?: [string, string][];
   min?: number;
@@ -147,8 +147,7 @@ export const settingCatalog: SettingDefinition[] = [
     path: 'settings.fileOpening.default',
     category: 'Previews',
     label: 'Open files in',
-    detail:
-      'Automatic previews supported formats in planes, including Word and Excel documents in new settings. File type overrides can be edited in config.jsonc.',
+    detail: 'Automatic opens files Viewer can preview in a plane, and the rest in their app.',
     kind: 'choice',
     choices: [
       ['automatic', 'Automatic'],
@@ -182,8 +181,7 @@ export const settingCatalog: SettingDefinition[] = [
   {
     path: 'settings.browsing.newPlaneLocation',
     category: 'Browsing',
-    label: 'New folder planes start in',
-    detail: 'Used by the workspace + button and ⇧⌘N when planes are already open.',
+    label: 'New folder planes open at',
     kind: 'choice',
     choices: [
       ['current', 'Current folder'],
@@ -194,14 +192,13 @@ export const settingCatalog: SettingDefinition[] = [
       ['pictures', 'Pictures'],
       ['movies', 'Movies'],
       ['music', 'Music'],
-      ['custom', 'Choose folder…'],
+      ['custom', 'Other…'],
     ],
   },
   {
     path: 'settings.browsing.emptyWorkspaceLocation',
     category: 'Browsing',
-    label: 'First plane in an empty workspace starts in',
-    detail: 'Used by New folder plane when no planes are open, including + and ⇧⌘N.',
+    label: 'In an empty workspace, open at',
     kind: 'choice',
     choices: [
       ['home', 'Home'],
@@ -211,14 +208,14 @@ export const settingCatalog: SettingDefinition[] = [
       ['pictures', 'Pictures'],
       ['movies', 'Movies'],
       ['music', 'Music'],
-      ['custom', 'Choose folder…'],
+      ['custom', 'Other…'],
     ],
   },
   {
     path: 'settings.browsing.newFileExtension',
     category: 'Browsing',
     label: 'New text files are',
-    detail: 'The extension New file… starts with, and the language a new scratch plane starts in.',
+    detail: 'The extension New File… gives a file, and the language a new scratch plane starts in.',
     kind: 'choice',
     // Markdown and plain text first, then each language of the highlighting table a new file can
     // be named for: one known by file name alone, as Nginx is, would start as another language
@@ -263,15 +260,14 @@ export const settingCatalog: SettingDefinition[] = [
   {
     path: 'settings.browsing.findWorkspaces',
     category: 'Browsing',
-    label: 'Find workspaces from folders I use',
-    detail: 'Uses your private folder history. No folders are scanned at launch.',
+    label: 'Suggest workspaces from folders you open',
     kind: 'boolean',
   },
   {
     path: 'settings.browsing.confirmTrash',
     category: 'Browsing',
     label: 'Confirm before moving to Trash',
-    detail: 'When off, files go straight to the system Trash. Undo remains available.',
+    detail: 'When off, files go straight to the Trash. Undo still works.',
     kind: 'boolean',
   },
   {
@@ -287,7 +283,7 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Privacy',
     label: 'Check for updates when Viewer opens',
     detail:
-      'At most once a day, Viewer reads a small signed file from its update server. Nothing about your files is sent. Direct download only; the App Store updates its edition.',
+      'Once a day at most. Sends nothing about your files. The App Store version updates through the App Store.',
     kind: 'boolean',
   },
   {
@@ -296,7 +292,7 @@ export const settingCatalog: SettingDefinition[] = [
     section: 'Suggestions',
     label: 'Suggest actions in file menus',
     detail:
-      'Shows a few actions that fit the selection, such as Extract here for an archive, and learns from what you choose.',
+      'Shows a few actions that fit the selection, such as Extract Here for an archive, and learns from what you choose.',
     kind: 'boolean',
   },
   {
@@ -305,7 +301,7 @@ export const settingCatalog: SettingDefinition[] = [
     section: 'Suggestions',
     label: 'Let the model suggest actions',
     detail:
-      'The model you use for Ask Viewer receives the names and kinds of files in a folder, once per folder, and adds its picks to Suggested. Allow it names in Settings → Models first.',
+      'The model you use for Ask Viewer receives the names and kinds of files in a folder, once per folder, and adds its picks to Suggested. Needs Names and metadata access in Settings → Models.',
     kind: 'boolean',
   },
   {
@@ -331,7 +327,6 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Browsing',
     section: 'List columns',
     label: 'Wrap long filenames',
-    detail: 'Column edges can be dragged to resize. Double-click an edge to reset its width.',
     kind: 'boolean',
   },
   {
@@ -339,7 +334,7 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Browsing',
     section: 'Git',
     label: 'Show Git status',
-    detail: 'Read local repository status for badges and branch information. Direct build only.',
+    detail: 'Shows changed files and the current branch.',
     kind: 'boolean',
   },
   {
@@ -347,7 +342,7 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Browsing',
     section: 'Git',
     label: 'Show Git column in list view',
-    detail: 'Visible when Git status is enabled.',
+    detail: 'Needs Show Git status.',
     kind: 'boolean',
   },
   {
@@ -409,7 +404,7 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Previews',
     label: 'Dark pages',
     detail:
-      'PDF and Office pages in dark colours, photos as they are. Printing and exports keep the original.',
+      'PDF and Office pages in dark colors, photos as they are. Printing and exports keep the original.',
     kind: 'choice',
     choices: [
       ['off', 'Off'],
@@ -422,7 +417,7 @@ export const settingCatalog: SettingDefinition[] = [
     path: 'settings.previews.maxImagePixels',
     category: 'Previews',
     label: 'Image pixel limit',
-    detail: 'Larger images offer a bounded thumbnail and Open in default app.',
+    detail: 'Bigger images show a smaller copy.',
     kind: 'number',
     min: 1000000,
     max: 128000000,
@@ -434,6 +429,19 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'number',
     min: 16,
     max: 512,
+  },
+  {
+    path: 'settings.previews.modelScrollDevice',
+    category: 'Previews',
+    label: '3D scroll device',
+    detail:
+      'A mouse wheel zooms a 3D model; a trackpad scroll pans it. Automatic tells them apart.',
+    kind: 'choice',
+    choices: [
+      ['automatic', 'Automatic'],
+      ['mouse', 'Mouse'],
+      ['trackpad', 'Trackpad'],
+    ],
   },
   {
     path: 'settings.terminalFont.fontFamily',
@@ -561,24 +569,23 @@ export const settingCatalog: SettingDefinition[] = [
   {
     path: 'ui.space.color',
     category: 'Space',
-    label: 'Space colour',
+    label: 'Space color',
     detail:
-      'The colour behind the planes; Automatic follows the appearance. A workspace can have its own: Workspace look…, in the menu under its name in the title bar.',
+      'The color behind the planes; Automatic follows the appearance. A workspace can have its own: Workspace Look…, in the menu under its name in the title bar.',
     kind: 'color',
   },
   {
     path: 'ui.titlebar.visible',
     category: 'Space',
     label: 'Show title bar',
-    detail: 'Hidden (⌥⌘T), it comes back while the pointer is at the window’s top edge.',
+    detail: 'When hidden (⌥⌘T), move the pointer to the top of the window to show it.',
     kind: 'boolean',
   },
   {
     path: 'ui.space.backdrop',
     category: 'Space',
     label: 'Space background',
-    detail:
-      'Blur or clear lets you see what is behind Viewer’s window between planes; planes stay solid. Clear applies when the window next opens.',
+    detail: 'Blur and Clear show the desktop between planes. Clear applies to new windows.',
     kind: 'choice',
     choices: [
       ['opaque', 'Solid'],
@@ -590,7 +597,7 @@ export const settingCatalog: SettingDefinition[] = [
     path: 'ui.space.backdropOpacity',
     category: 'Space',
     label: 'Space background opacity (%)',
-    detail: 'How much of the space’s colour covers what is behind, when it is blurred or clear.',
+    detail: 'How much of the space’s color covers what is behind, when it is blurred or clear.',
     kind: 'number',
     min: 0,
     max: 100,
@@ -610,7 +617,7 @@ export const settingCatalog: SettingDefinition[] = [
     label,
     detail:
       key === 'voice'
-        ? 'Show Ask Viewer by voice in the title bar. Dictate remains available in Commands.'
+        ? 'Shows Ask Viewer by Voice in the title bar. Dictate stays in Commands.'
         : undefined,
     kind: 'boolean',
   })),
@@ -619,8 +626,7 @@ export const settingCatalog: SettingDefinition[] = [
     category: 'Space',
     section: 'Tiling',
     label: 'A split adds',
-    detail:
-      'Prefix % splits right and " splits down, as tmux does; prefix Space changes the layout.',
+    detail: 'After the prefix key, % splits right and " splits down, and Space changes the layout.',
     kind: 'choice',
     choices: [
       ['same', 'A plane like the active one'],
@@ -643,7 +649,7 @@ export const settingCatalog: SettingDefinition[] = [
     section: 'Tour',
     label: 'Time at each view (ms)',
     detail:
-      'Each saved view shows this long. A tour file’s stops show at least this long, longer when their captions need it. Escape stops a tour; a click in the space pauses it.',
+      'Each saved view shows this long. Stops with long captions stay longer. Esc stops a tour; a click pauses it.',
     kind: 'number',
     min: 500,
     max: 60000,

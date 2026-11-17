@@ -9,7 +9,7 @@ Reports** · **Help → Report an Issue…** · the **File operations** button i
 
 ## A folder shows nothing, or the Trash is empty
 
-- In the App Store edition, choose **Allow folder access…** and pick the folder.
+- In the App Store edition, choose **Allow Folder Access…** and pick the folder.
 - If macOS asked about a folder and you chose **Don't Allow**, turn Viewer on for it in **System
   Settings → Privacy & Security → Files & Folders**.
 - To browse the Trash, give Viewer Full Disk Access in **System Settings → Privacy & Security → Full
@@ -17,8 +17,8 @@ Reports** · **Help → Report an Issue…** · the **File operations** button i
 
 ## A file or folder is unavailable
 
-Reconnect its disk or share, then choose **Check again**. Choose **Locate file** if it moved, or
-**Find renamed file** if it was renamed in the same folder. Your unsaved edits stay attached to the
+Reconnect its disk or share, then choose **Try Again**. Choose **Locate File…** if it moved, or
+**Find Renamed File** if it was renamed in the same folder. Your unsaved edits stay attached to the
 original file.
 
 ## A preview is slow or fails
@@ -43,7 +43,7 @@ If a copy or paste to an exFAT disk fails with "Could not move the item: Operati
 use a build whose native file helper was built from the updated source. An older helper still fails
 with the same message and replaces nothing. Keep any incomplete stage the failed job names until you
 have inspected it. In the Store edition, a permission error can mean only the file was granted:
-choose **Allow folder access…**, grant its parent folder, then retry. See
+choose **Allow Folder Access…**, grant its parent folder, then retry. See
 [volume publication](../reference/file-operations.md#volumes-without-exclusive-rename).
 
 ## A window stopped working
@@ -91,7 +91,7 @@ Many network shares have no Trash, and Viewer never deletes files instead.
 
 ## A local web page stopped loading
 
-Reopen the server's controls from **⌘K** → **Local servers…**, start it if it stopped, then reload
+Reopen the server's controls from **⌘K** → **Local Servers…**, start it if it stopped, then reload
 the browser plane. Servers stay stopped after Viewer restarts until you start them.
 
 ## Viewer does not quit
@@ -117,7 +117,7 @@ and closes its browser planes.
 ## A license key is not accepted
 
 - Copy the complete key from your purchase into **Settings → License → License key**, then choose
-  **Save license key**. Line breaks are accepted; missing characters are not.
+  **Save License Key**. Line breaks are accepted; missing characters are not.
 - A key for another product is not a Viewer key. A changed or foreign signature is refused. Copy the
   original again and check that it is the key for this build's publisher.
 - No connection is needed to enter or check a key. If the error remains, contact support with the
@@ -162,8 +162,8 @@ function names are omitted. Other stack frames are counted without their paths. 
 Mac App Store editions use this report; the default needs no user, computer-name or volume lookup.
 
 Turn on **Include message text** only if you want excerpts. Message text can contain file names,
-addresses and other private text. Viewer removes what it can recognise. Read it before you share it.
-Recognised paths are reduced; code paths inside Viewer's bundle retain their diagnostic names, while
+addresses and other private text. Viewer removes what it can recognize. Read it before you share it.
+Recognized paths are reduced; code paths inside Viewer's bundle retain their diagnostic names, while
 the data folder keeps only fixed Viewer folder names. Failed privacy checks omit excerpts and name
 what could not be checked. Turning the checkbox off restores the default report. Copy copies exactly
 the displayed text.

@@ -96,7 +96,7 @@ describe('Office read-only adapters', () => {
         const inspection = await inspectFile(file, { content: true });
         expect(inspection.coverage.content).toBe('partial');
         expect(inspection.coverage.reason).toContain(
-          kind === 'word' ? 'Page layout' : 'Saved cell values',
+          kind === 'word' ? 'Page layout' : 'saved cell values',
         );
         if (kind === 'workbook')
           expect(inspection.facts.worksheets).toEqual({

@@ -1,5 +1,5 @@
 import type { SFTPAttributes, SFTPReply, SFTPRequest } from '../src/desktop/remote/sftp/codec';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { remoteLimits } from '../src/domain/remote/limits';
 import {
   decodeClientPacket,
@@ -29,7 +29,7 @@ const attrs = { permissions: 0o640, times: { atime: 12, mtime: 34 } };
 
 const requests: SFTPRequest[] = [
   { kind: 'open', path, mode: 'read', attrs: {} },
-  { kind: 'open', path, mode: 'create', attrs },
+  { kind: 'open', path, mode: 'create', attrs: { permissions: attrs.permissions } },
   { kind: 'close', handle },
   { kind: 'read', handle, offset: 0x123456789abcdef0n, length: 123 },
   { kind: 'write', handle, offset: 999n, data: Buffer.from([0, 255, 1]) },
@@ -40,7 +40,7 @@ const requests: SFTPRequest[] = [
   { kind: 'fsetstat', handle, attrs },
   { kind: 'opendir', path },
   { kind: 'readdir', handle },
-  { kind: 'mkdir', path, attrs },
+  { kind: 'mkdir', path, attrs: { permissions: attrs.permissions } },
   { kind: 'realpath', path },
   { kind: 'rename', from: path, to: bytes('/home/new') },
   { kind: 'readlink', path },
@@ -230,9 +230,18 @@ describe('SFTP v3 wire codec', () => {
     'rejects frame length %i before buffering a body',
     (length) => {
       const framer = new SFTPFramer();
-      expect(() => framer.push(new SFTPWriter().uint32(length).build(), () => {})).toThrow(
-        SFTPProtocolError,
-      );
+      const allocate = Buffer.alloc;
+      const allocation = vi.spyOn(Buffer, 'alloc').mockImplementation((size, fill, encoding) => {
+        if (size > remoteLimits.packetBytes) throw new Error('Invalid length reached allocation.');
+        return allocate(size, fill, encoding);
+      });
+      try {
+        expect(() => framer.push(new SFTPWriter().uint32(length).build(), () => {})).toThrow(
+          SFTPProtocolError,
+        );
+      } finally {
+        allocation.mockRestore();
+      }
     },
   );
 
@@ -334,7 +343,7 @@ describe('SFTP v3 wire codec', () => {
         kind: 'write',
         handle,
         offset: 0n,
-        data: Buffer.alloc(sftpBounds.stringBytes + 1),
+        data: Buffer.alloc(sftpBounds.dataBytes + 1),
       }),
     ).toThrow(SFTPProtocolError);
     expect(() => encodeReply({ kind: 'attrs', id: 1, attrs: { uid: 1 } })).toThrow(
@@ -344,7 +353,11 @@ describe('SFTP v3 wire codec', () => {
       SFTPProtocolError,
     );
     expect(() =>
-      encodeRequest(1, { kind: 'usersGroups', uids: Array(1025).fill(1), gids: [] }),
+      encodeRequest(1, {
+        kind: 'usersGroups',
+        uids: Array(sftpBounds.idNames + 1).fill(1),
+        gids: [],
+      }),
     ).toThrow(SFTPProtocolError);
   });
 
@@ -392,8 +405,8 @@ describe('SFTP v3 wire codec', () => {
 describe('listing name boundary', () => {
   it.each([
     Buffer.alloc(0),
-    bytes('.'),
-    bytes('..'),
+    bytes('./'),
+    bytes('../'),
     bytes('/'),
     bytes('a/b'),
     bytes('a\0b'),

@@ -8,7 +8,7 @@ import type {
 } from '../../../domain/agents/clients';
 import { AgentClientSettings } from '../agents/AgentClients';
 import { AgentGrants } from '../agents/AgentGrants';
-import { IconButton, PathField } from '../primitives';
+import { CopyButton, IconButton, PathField } from '../primitives';
 import { Disclosure } from '../Disclosure';
 import type { SettingsEditor } from './editor';
 
@@ -43,7 +43,7 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
       <label className="settings-row">
         <span>
           Allow local agent clients
-          <small>Turning agents on is confirmed in a system dialog.</small>
+          <small>A system dialog asks you to confirm.</small>
         </span>
         <input
           type="checkbox"
@@ -54,9 +54,8 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
       </label>
       {access?.requiresReapproval && (
         <p className="settings-note" role="status">
-          Agent access needs a new confirmation after this update. Turn it on to review the folders
-          and capabilities in a system dialog. Connections stay paused until you approve. Your saved
-          clients and credentials are kept.
+          This update needs you to confirm agent access again. Turn it on to review its folders and
+          permissions. Agents stay paused until then; your clients and keys are kept.
         </p>
       )}
       {access?.pending.enable && (
@@ -67,8 +66,7 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
       <AgentClientSettings settings={settings} enabled={!!access?.enabled} />
       <Disclosure variant="row" summary="Shared connection">
         <p className="settings-note">
-          Local MCP clients can inspect authorized folders and propose tasks. File changes require
-          your review in this app.
+          Any local MCP client can read the folders below and suggest changes for your review.
         </p>
         <h2>Authorized folders</h2>
         {access?.roots.map((root) => (
@@ -92,14 +90,14 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
         ))}
         <div className="settings-actions">
           <button disabled={!access} onClick={() => change({ kind: 'add-folder' })}>
-            Authorize folder…
+            Authorize Folder…
           </button>
         </div>
         <h2>What the connection may do</h2>
         {access && !access.capabilities.length && (
           <p className="settings-note" role="status">
-            The shared connection has no capabilities yet. Choose what it may do below; named
-            clients keep their own capability choices.
+            The shared connection can do nothing yet. Choose what it may do below; each client keeps
+            its own choices.
           </p>
         )}
         {sharedCapabilities.map(([capability, label]) => (
@@ -125,8 +123,8 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
         <AgentGrants key={agentConfig} settings={settings} roots={access?.roots ?? []} />
         <h2>Connect a client</h2>
         <p className="settings-note">
-          Keep Viewer open for proposal review. Generating a configuration makes a new token: it
-          disconnects previous credentials and revokes this connection's terminal read grants.
+          Keep Viewer open to review what agents ask for. Each new configuration has a new key: it
+          disconnects the previous one and revokes this connection’s terminal grants.
         </p>
         <div className="settings-actions">
           <button
@@ -138,9 +136,15 @@ export function AgentSettings({ editor }: { editor: SettingsEditor }) {
                 .catch((error) => setError(error.message));
             }}
           >
-            Generate MCP configuration
+            Generate MCP Configuration
           </button>
         </div>
+        {!access?.enabled ? (
+          <p className="settings-note">Turn on Allow local agent clients above first.</p>
+        ) : (
+          !access.roots.length && <p className="settings-note">Authorize a folder first.</p>
+        )}
+        {agentConfig && <CopyButton copy={{ text: agentConfig }} label="Copy" appearance="text" />}
         {agentConfig && (
           <textarea
             className="agent-configuration"

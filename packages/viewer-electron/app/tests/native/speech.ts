@@ -308,12 +308,12 @@ async function fixtureDictation(file: string) {
     await until(
       () => page.evaluate(textOf('.speech-dialog')),
       (value) =>
-        value.includes('Finish recording') ||
+        value.includes('Finish Recording') ||
         value.includes('cancelled') ||
         value.includes('denied'),
       'fixture capture starts',
     );
-    assert.ok((await page.evaluate(textOf('.speech-dialog'))).includes('Finish recording'));
+    assert.ok((await page.evaluate(textOf('.speech-dialog'))).includes('Finish Recording'));
     await until(
       async () => {
         const state = await page.evaluate(pageCall(captureState));
@@ -325,7 +325,7 @@ async function fixtureDictation(file: string) {
       20000,
     );
     await new Promise((resolve) => setTimeout(resolve, 1200));
-    await page.evaluate(pageCall(pressDialogButton, 'Finish recording'));
+    await page.evaluate(pageCall(pressDialogButton, 'Finish Recording'));
     await until(
       () => page.evaluate(exists('textarea[aria-label=Transcript]')),
       Boolean,
@@ -353,7 +353,7 @@ async function fixtureDictation(file: string) {
       );
     }
     await page.evaluate(pageCall(setTranscript, 'Open Documents'));
-    await page.evaluate(pageCall(pressDialogButton, 'Insert text'));
+    await page.evaluate(pageCall(pressDialogButton, 'Insert Text'));
     await until(
       () => page.evaluate(valueOf('input[aria-label="Ask in words"]')),
       (value) => value === 'Open Documents',

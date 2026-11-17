@@ -163,7 +163,7 @@ export class StaticRoot {
         resolve();
       },
     };
-    const cancel = () => lease.stream?.destroy(new Error('Asset request cancelled.'));
+    const cancel = () => lease.stream?.destroy(new Error('The file request was canceled.'));
     signal.addEventListener('abort', cancel, { once: true });
     this.budget.active++;
     this.leases.add(lease);
@@ -203,8 +203,7 @@ export class StaticRoot {
     try {
       let target = await this.resolve(parts, lease.signal);
       if (target.info.isDirectory()) {
-        if (capability)
-          throw new WebPreviewError(403, 'Embedded directory listings are unavailable.');
+        if (capability) throw new WebPreviewError(403, 'This preview doesn’t list folders.');
         let index;
         try {
           index = await this.resolve([...parts, 'index.html'], lease.signal);
@@ -226,7 +225,7 @@ export class StaticRoot {
       if (!target.info.isFile() || target.info.isSymbolicLink())
         throw new WebPreviewError(403, 'Only regular assets are available.');
       if (capability && !embeddedFileAllowed(target.actual))
-        throw new WebPreviewError(403, 'This asset type is unavailable in embedded HTML.');
+        throw new WebPreviewError(403, 'An HTML preview doesn’t load this kind of file.');
       const limit = capability
         ? htmlFile(target.actual)
           ? webLimits.htmlBytes

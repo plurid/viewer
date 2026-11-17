@@ -106,8 +106,8 @@ describe('a folder listing', () => {
   });
 
   it('stays available when only its watch fails', async () => {
-    // The watch's error took the place of the whole folder: "Folder unavailable" over a listing that
-    // had loaded.
+    // The watch's error took the place of the whole folder: an unreadable folder over a listing that
+    // had loaded. It says what the failure means, not the system's words for it.
     const path = `/fixtures/folder-${++folder}`;
     viewer.list.mockResolvedValueOnce({ entries: [entry('a')] });
     viewer.watch.mockImplementation(async () => {
@@ -116,7 +116,9 @@ describe('a folder listing', () => {
     const { result } = renderHook(() => useFolder(path));
     await settle();
     expect(result.current.entries.map((item) => item.name)).toEqual(['a']);
-    expect(result.current.error).toBe('Too many open files');
+    expect(result.current.error).toBe(
+      "This folder won't update by itself: Viewer can't watch it for changes.",
+    );
     expect(result.current.unavailable).toBe(false);
   });
 });

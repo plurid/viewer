@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FileEntry } from '../../../domain/contracts';
 import type { GroupFigures } from '../../../domain/fabrication/jobs';
 import { errorMessage } from '../../../domain/errors';
+import { homeText } from '../../../domain/files/path-label';
 import { boxFigures, cuttingFor, fileQuantity } from '../../../domain/fabrication/jobs';
 import { groupByThickness, thicknessText } from '../../../domain/fabrication/names';
 import { nestingAdvice } from '../../../domain/layout/nesting/advice';
@@ -42,6 +43,7 @@ import { offcutText } from '../../../domain/layout/nesting/report';
 import { verifyNest } from '../../../domain/layout/nesting/verify';
 import { changePreferences, report, useViewer } from '../../state/store';
 import { IconButton } from '../../ui/primitives';
+import { useHome } from '../../ui/PathLabel';
 import { useWorkspace } from '../../workspace/context';
 import type { FormatChoice, NestingChoices } from './NestingSettings';
 import type { SheetPicture } from './SheetView';
@@ -160,6 +162,7 @@ export function NestingPanel({
     [files],
   );
   const { files: read, configure } = useNestingFiles(drawings);
+  const home = useHome();
   const [chosen, setChosen] = useState<ReadonlyMap<string, PartChoice>>(new Map());
   const [zoom, setZoom] = useState(1);
   const [saving, setSaving] = useState<{ job?: string; error?: string; busy?: boolean }>({});
@@ -735,7 +738,7 @@ export function NestingPanel({
                 )}
                 {settled && (
                   <button type="button" onClick={search.longer}>
-                    Search longer
+                    Search Longer
                   </button>
                 )}
                 <button
@@ -744,7 +747,7 @@ export function NestingPanel({
                   disabled={!best || !!saving.busy || (verification && !verification.ok)}
                   onClick={() => void save()}
                 >
-                  Save nesting
+                  Save Nesting
                 </button>
               </div>
               {saving.error && (
@@ -754,11 +757,14 @@ export function NestingPanel({
               )}
               {job && (
                 <p className="nesting-saved">
-                  {job.status === 'running' || job.status === 'queued'
-                    ? `${Math.round((job.progress || 0) * 100)}% · ${job.detail || 'Saving…'}`
-                    : job.status === 'completed'
-                      ? `Saved ${title}.`
-                      : `${job.status}${job.errors[0] ? `: ${job.errors[0].message}` : ''}`}
+                  {homeText(
+                    job.status === 'running' || job.status === 'queued'
+                      ? `${Math.round((job.progress || 0) * 100)}% · ${job.detail || 'Saving…'}`
+                      : job.status === 'completed'
+                        ? `Saved ${title}.`
+                        : `${job.status}${job.errors[0] ? `: ${job.errors[0].message}` : ''}`,
+                    home,
+                  )}
                   {job.completed
                     .filter((item) => item.destination)
                     .map((item) => (
@@ -771,7 +777,7 @@ export function NestingPanel({
                             .catch(report)
                         }
                       >
-                        Open folder
+                        Open Folder
                       </button>
                     ))}
                 </p>
@@ -797,7 +803,7 @@ export function NestingPanel({
                 {drawings.length > 0 && (
                   <div className="nesting-status">
                     <button type="button" className="primary" disabled>
-                      Save nesting
+                      Save Nesting
                     </button>
                   </div>
                 )}
@@ -828,7 +834,7 @@ export function NestingPanel({
             </div>
             <div className="nesting-selection-actions">
               <button type="button" onClick={() => openDrawing(pickedIndex)}>
-                Open drawing
+                Open Drawing
               </button>
               <IconButton icon="close" label="Deselect" onClick={() => select(undefined)} />
             </div>

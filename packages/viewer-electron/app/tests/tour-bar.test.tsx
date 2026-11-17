@@ -138,7 +138,7 @@ it('shows the stop, its place and grade, then what changed, then the summary', a
   await act(() => vi.advanceTimersByTimeAsync(1000));
   expect(screen.getByText('End of “Job”')).toBeTruthy();
   expect(screen.getByText('2 of 3 stops shown · 1 skipped')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Play again' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Play Again' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Close tour (Esc)' }));
   expect(tourPlayback()).toBeNull();
   expect(screen.queryByRole('region')).toBeNull();
@@ -267,7 +267,7 @@ it('keeps the draft being edited when Edit stops is chosen at the end of playing
     ),
   );
   await act(() => vi.advanceTimersByTimeAsync(1000));
-  fireEvent.click(screen.getByRole('button', { name: 'Edit stops' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Stops' }));
   expect(tourPlayback()).toBeNull();
   expect(tourDraft()?.stops[0]?.caption).toBe('Edited');
 });

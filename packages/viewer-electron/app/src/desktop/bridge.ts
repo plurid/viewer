@@ -1,4 +1,8 @@
 import { realpath } from 'node:fs/promises';
+import { RemoteConnections, remoteConnectionRoot } from './remote/connections';
+import { nativeRemotePrompt } from './remote/native-prompts';
+import { remoteFeatureEnabled } from '../domain/remote/feature';
+import { createRemoteHandlers } from './ipc/remote-handlers';
 import type { DiagnosticErrorFields } from '../domain/diagnostics/failure';
 import { diagnosticFailure } from '../domain/diagnostics/failure';
 import { BackgroundFolderHistory } from './files/folder-history';
@@ -74,6 +78,7 @@ import {
 } from './transforms/image-process';
 import { MediaDocuments } from './transforms/media-documents';
 import { imageTransformSchema } from '../domain/operations/transforms';
+import { conversionTurns } from '../domain/operations/image-conversions';
 import { namedLines } from '../domain/command-line/prompt';
 import { emptySessionKeys, type SessionKeys } from '../domain/preferences/session-keys';
 import type { FileChange } from '../domain/files/changes';
@@ -265,6 +270,7 @@ export class Desktop {
   readonly mediaDocuments: MediaDocuments;
   readonly backups: PersonalBackups;
   readonly browsers = new BrowserPlanes((owner) => this.windows.get(owner)?.window);
+  readonly remote?: RemoteConnections;
   readonly fileAccess: FileAccess;
   readonly information: FileInformationService;
   readonly projects: Projects;
@@ -469,6 +475,14 @@ export class Desktop {
       {
         access: (file) => this.fileAccess.historyScope(file),
         report: (message) => this.options.diagnose?.(message),
+        mounts: () => {
+          try {
+            const mounts = macFiles().sharingMounts?.();
+            return mounts?.map((mount) => mount.path) ?? [];
+          } catch {
+            return [];
+          }
+        },
       },
     );
     this.pasteboard = new Pasteboard(this.fileAccess, this.nativeSelections);
@@ -605,42 +619,7 @@ export class Desktop {
       },
     );
     this.definedWorkspaces = new DefinedWorkspaces(dataPath);
-    const foundMounts = () => {
-      try {
-        return macFiles().sharingMounts?.();
-      } catch {
-        return undefined;
-      }
-    };
-    this.foundWorkspaces = new FoundWorkspaces(dataPath, this.home, {
-      facts: this.folderFacts,
-      state: () => this.workspaceSessions.snapshot(),
-      enabled: () => this.settings.snapshot().settings.browsing.findWorkspaces,
-      explicit: () =>
-        this.definitions?.snapshot().definitions.filter((entry) => entry.source !== 'found') ?? [],
-      aliases: () => this.workspaceSessions.folderHistory().aliases,
-      keepOnClear: (key) =>
-        !!this.workspaceSessions.findByDefinition(key) || !!this.definedWorkspaces.summary(key),
-      rekey: async (changes) => {
-        await this.definedWorkspaces.rekeyFound(changes);
-        const state = await this.workspaceSessions.rekeyFound(changes, (value) =>
-          this.storage.save(this.withPreferences(value)),
-        );
-        if (state) this.emit({ type: 'workspaces', state });
-      },
-      retained: (key) =>
-        !!this.workspaceSessions.findByDefinition(key) ||
-        Math.max(
-          this.definedWorkspaces.openedAt(key) ?? 0,
-          this.definedWorkspaces.summary(key)?.at ?? 0,
-        ) >=
-          Date.now() - foundRecentAge,
-      localVolumes: () => foundVolumeRoots(foundMounts()).localVolumes,
-      nonLocalRoots: () => foundVolumeRoots(foundMounts()).nonLocalRoots,
-      access: (folder) => !!this.fileAccess.historyScope(folder),
-      scopeRoot: (folder) => this.fileAccess.historyScopeRoot(folder),
-      emptyLocation: () => this.initialFolder(),
-    });
+    this.foundWorkspaces = this.createFoundWorkspaces(dataPath);
     this.definitions = this.createWorkspaceDefinitions(dataPath, access, (catalog) =>
       emit({ type: 'workspace-definitions', catalog }),
     );
@@ -906,17 +885,33 @@ export class Desktop {
             sources.some((source) => /\.(?:bmp|heic|heif)$/i.test(source))
           )
             return nativeImageConverter.convert(conversion, sources, output, signal);
-          const rotate = conversion === 'rotate-left' || conversion === 'rotate-right';
+          const turn = conversionTurns[conversion];
           const plan = imageTransformSchema.parse({
             kind: 'image',
-            format: conversion === 'jpeg' || (rotate && /\.jpe?g$/i.test(output)) ? 'jpeg' : 'png',
-            rotate: conversion === 'rotate-left' ? 270 : conversion === 'rotate-right' ? 90 : 0,
+            format: conversion === 'jpeg' || (turn && /\.jpe?g$/i.test(output)) ? 'jpeg' : 'png',
+            rotate: turn ?? 0,
+            // a turned photo stays as sharp as a camera saves it, not the 85 a new export gets
+            ...(turn ? { quality: 92 } : {}),
           });
           return this.transforms.execute(plan, sources, output, signal, () => {}).then(() => {});
         },
       },
       this.optimizationReviews,
     );
+    if (remoteFeatureEnabled(process.env) && !process.mas)
+      this.remote = new RemoteConnections({
+        dataPath,
+        worker: path.join(path.dirname(options.worker), 'remote-worker.cjs'),
+        helper: assetPath('viewer-askpass'),
+        backend: options.fileBackend,
+        prompt: nativeRemotePrompt((owner) =>
+          this.isAgentDriven(owner) || this.windows.get(owner)?.stopped
+            ? undefined
+            : this.windows.get(owner)?.window,
+        ),
+        event: (connections) => emit({ type: 'remote', connections }),
+        quiesce: (id) => this.operations.quiesce(remoteConnectionRoot(id)),
+      });
     this.mediaDocuments = new MediaDocuments(
       dataPath,
       this.transforms,
@@ -1468,6 +1463,7 @@ export class Desktop {
     const record = this.windows.get(owner);
     if (!record) return;
     record.stopped = true;
+    this.remote?.ownerClosed(owner);
     if (stop === 'gone') record.ready = false;
     this.flushes.released(owner);
   }
@@ -1758,12 +1754,14 @@ export class Desktop {
     window.webContents.on('render-process-gone', () => this.fabrication.stopOwner(sender));
     window.webContents.on('did-start-navigation', () => this.fabrication.stopOwner(sender));
     const stopTaskOwner = () => {
+      this.remote?.ownerClosed(sender);
       this.taskRequests.stopOwner(sender);
       this.personTaskWorkflows.stopOwner(sender);
     };
     window.webContents.on('render-process-gone', stopTaskOwner);
     window.webContents.on('did-start-navigation', stopTaskOwner);
     window.on('closed', () => {
+      this.remote?.ownerClosed(sender);
       this.speech.stopOwner(sender);
       this.fabrication.stopOwner(sender);
       this.backups.stopOwner(sender);
@@ -1855,6 +1853,7 @@ export class Desktop {
       if (
         id !== except &&
         !window.isDestroyed() &&
+        (event.type !== 'remote' || !this.isAgentDriven(id)) &&
         (role === 'viewer' || settingsEvents.includes(event.type))
       )
         sendEvent(window.webContents, event);
@@ -1931,6 +1930,7 @@ export class Desktop {
     return (this.disposal ??= this.disposeServices());
   }
   private async disposeServices(): Promise<void> {
+    await this.remote?.close();
     await this.chats.close();
     await this.reconstructions.close();
     await this.canvases.flush();
@@ -2112,6 +2112,7 @@ export class Desktop {
     });
   }
   private publishTerminalAuthority(owner: number): void {
+    if (this.isAgentDriven(owner)) this.remote?.ownerClosed(owner);
     const window = this.windows.get(owner)?.window;
     if (window && !window.isDestroyed())
       sendEvent(window.webContents, {
@@ -2232,6 +2233,44 @@ export class Desktop {
   private checkDefinitionRoot(root: string) {
     return this.definitionRootChecks.check(root);
   }
+  private createFoundWorkspaces(directory: string): FoundWorkspaces {
+    const foundMounts = () => {
+      try {
+        return macFiles().sharingMounts?.();
+      } catch {
+        return undefined;
+      }
+    };
+    return new FoundWorkspaces(directory, this.home, {
+      facts: this.folderFacts,
+      state: () => this.workspaceSessions.snapshot(),
+      enabled: () => this.settings.snapshot().settings.browsing.findWorkspaces,
+      explicit: () =>
+        this.definitions?.snapshot().definitions.filter((entry) => entry.source !== 'found') ?? [],
+      aliases: () => this.workspaceSessions.folderHistory().aliases,
+      keepOnClear: (key) =>
+        !!this.workspaceSessions.findByDefinition(key) || !!this.definedWorkspaces.summary(key),
+      rekey: async (changes) => {
+        await this.definedWorkspaces.rekeyFound(changes);
+        const state = await this.workspaceSessions.rekeyFound(changes, (value) =>
+          this.storage.save(this.withPreferences(value)),
+        );
+        if (state) this.emit({ type: 'workspaces', state });
+      },
+      retained: (key) =>
+        !!this.workspaceSessions.findByDefinition(key) ||
+        Math.max(
+          this.definedWorkspaces.openedAt(key) ?? 0,
+          this.definedWorkspaces.summary(key)?.at ?? 0,
+        ) >=
+          Date.now() - foundRecentAge,
+      localVolumes: () => foundVolumeRoots(foundMounts()).localVolumes,
+      nonLocalRoots: () => foundVolumeRoots(foundMounts()).nonLocalRoots,
+      access: (folder) => !!this.fileAccess.historyScope(folder),
+      scopeRoot: (folder) => this.fileAccess.historyScopeRoot(folder),
+      emptyLocation: () => this.initialFolder(),
+    });
+  }
   private createWorkspaceDefinitions(
     directory: string,
     access: WorkspaceDefinitionsPorts['access'],
@@ -2320,6 +2359,15 @@ export class Desktop {
     const isAgent = (owner: number) => this.isAgentDriven(owner);
     const emit = (event: DesktopEvent) => this.emit(event);
     return {
+      ...createRemoteHandlers({
+        remote: this.remote,
+        caller: (owner) => {
+          const record = this.windows.get(owner);
+          return record && !record.stopped && !record.window.isDestroyed()
+            ? { owner, role: record.role, agentDriven: this.isAgentDriven(owner) }
+            : undefined;
+        },
+      }),
       dialog: ([request], owner) => {
         const dialogs = windowDialogs(requireWindow(owner), false);
         if (!dialogs) throw new Error('The dialog window is unavailable.');

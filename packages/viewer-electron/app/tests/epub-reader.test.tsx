@@ -106,11 +106,11 @@ it('saves, renames and reopens a named bookmark at the original reading position
   fireEvent.change(screen.getByLabelText('Bookmark name'), {
     target: { value: 'Circuit reference' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Add bookmark' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add Bookmark' }));
   expect(screen.getByRole('button', { name: 'Circuit reference' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Rename bookmark Circuit reference' }));
   fireEvent.change(screen.getByLabelText('Bookmark name'), { target: { value: 'Read again' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Name' }));
   view.unmount();
   render(<EPUBPreview {...current} />);
   await screen.findByRole('link', { name: 'Footnote one' });
@@ -158,8 +158,8 @@ it('opens footnotes, returns to the reading position and highlights a book searc
   expect(screen.getByText('A copper circuit footnote.')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Back to reading position' }));
   expect(document.querySelector('.epub-chapter')!.scrollTop).toBe(234);
-  fireEvent.click(screen.getByRole('button', { name: 'Find in book' }));
-  fireEvent.change(screen.getByRole('searchbox', { name: 'Search book text' }), {
+  fireEvent.click(screen.getByRole('button', { name: 'Find in Book' }));
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Find text' }), {
     target: { value: 'copper circuit' },
   });
   await screen.findByText('2 matches');

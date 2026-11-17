@@ -236,7 +236,7 @@ try {
     (text) => text.includes('main') && text.includes('Clean'),
     'main branch label and count',
   );
-  await palette('Open worktree…');
+  await palette('Open Worktree…');
   await until(
     () => evaluate(countOf('.worktree-option')),
     (count) => count === 2,
@@ -252,7 +252,7 @@ try {
   await capture('picker-minimum-dark.png', 760, 650);
   await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await capture('picker-light.png', 1440, 900);
-  await evaluate(pressButton('Open beside', '.worktrees-dialog footer'));
+  await evaluate(pressButton('Open Beside', '.worktrees-dialog footer'));
   await until(
     () => evaluate(pageCall(branchLabels)),
     (labels) =>
@@ -274,9 +274,9 @@ try {
     both.workspaces[0]?.panes.map((pane) => pane.path).sort(),
     [mainFolder, featureFolder].sort(),
   );
-  await palette('Open worktree…');
+  await palette('Open Worktree…');
   await until(() => evaluate(exists('.worktree-option')), Boolean, 'worktree picker reopened');
-  await evaluate(pressButton('Another view beside', '.worktrees-dialog footer'));
+  await evaluate(pressButton('Another View Beside', '.worktrees-dialog footer'));
   await until(
     () => evaluate(countOf('.git-branch')),
     (count) => count === 3,
@@ -302,7 +302,7 @@ try {
     (selected) => selected === 'notes.txt',
     'selected change',
   );
-  await evaluate(pressButton('Open diff', '.git-review'));
+  await evaluate(pressButton('Open Diff', '.git-review'));
   await until(
     () => evaluate(textOf('.cm-merge-b .cm-content')),
     (text) => text.includes('Updated feature proposal'),

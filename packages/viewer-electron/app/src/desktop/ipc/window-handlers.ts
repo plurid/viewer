@@ -65,7 +65,7 @@ export function createWindowHandlers(ports: WindowPorts): WindowHandlers {
       return claimed;
     },
     newWindow: async () => {
-      if (!ports.host.newWindow) throw new Error('New windows are unavailable.');
+      if (!ports.host.newWindow) throw new Error('Viewer can’t open a new window from here.');
       await ports.host.newWindow(ports.createWorkspace());
     },
     windowButtons: ([visible], owner) => {

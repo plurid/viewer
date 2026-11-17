@@ -72,7 +72,7 @@ describe('themes', () => {
 });
 
 describe('importing', () => {
-  it('an iTerm colour preset: the terminal palette, and the shell from it', () => {
+  it('an iTerm color preset: the terminal palette, and the shell from it', () => {
     const theme = importItermColors(iterm, 'Dracula');
     expect(theme.look).toBe('dark');
     expect(theme.terminal).toMatchObject({

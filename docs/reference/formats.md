@@ -16,8 +16,8 @@ and platform limits still apply.
 | PDF                     | `.pdf`                                                                                                                                                                 | Pages, text-layer search/selection, thumbnails and outline navigation.                                                                                                                                                                                                   |
 | Books                   | `.epub`, `.fb2`                                                                                                                                                        | Chapters, local illustrations, internal links/footnotes, book search and named bookmarks. A FictionBook opens on its cover, title and authors.                                                                                                                           |
 | DjVu                    | `.djvu`, `.djv`                                                                                                                                                        | Page rendering and text-layer search.                                                                                                                                                                                                                                    |
-| PostScript and EPS      | `.ps`, `.eps`, `.epsf`, `.epsi`                                                                                                                                        | Document comments and bounded source text; labelled TIFF or EPSI embedded pictures. Pages render only on request through an installed Ghostscript, outside the Store edition.                                                                                            |
-| Illustrator             | `.ai`                                                                                                                                                                  | A file beginning with `%PDF` opens in the PDF preview and is labelled as Illustrator; older PostScript files use the PostScript preview.                                                                                                                                 |
+| PostScript and EPS      | `.ps`, `.eps`, `.epsf`, `.epsi`                                                                                                                                        | Document comments and bounded source text; labeled TIFF or EPSI embedded pictures. Pages render only on request through an installed Ghostscript, outside the Store edition.                                                                                             |
+| Illustrator             | `.ai`                                                                                                                                                                  | A file beginning with `%PDF` opens in the PDF preview and is labeled as Illustrator; older PostScript files use the PostScript preview.                                                                                                                                  |
 | Word                    | `.doc`, `.docx`, `.docm`, `.dot`, `.dotx`, `.dotm`, `.rtf`                                                                                                             | Local paginated layout; the OOXML forms also have bounded Reading view. Macros never run.                                                                                                                                                                                |
 | Excel                   | `.xls`, `.xlsx`, `.xlsm`, `.xlt`, `.xltx`, `.xltm`                                                                                                                     | Local print layout with worksheet navigation; the OOXML forms also have stored-value cell inspection.                                                                                                                                                                    |
 | PowerPoint              | `.ppt`, `.pptx`, `.pptm`, `.pps`, `.ppsx`, `.pot`, `.potx`, `.potm`                                                                                                    | Local slide layout, including supported charts, pictures and backgrounds.                                                                                                                                                                                                |
@@ -73,7 +73,7 @@ book's authorized resource, at most 8 MB and 64 million pixels each. Unsupported
 alternative text.
 
 Extraction is bounded to 32 MB of expanded text files, 300 chapters and 400,000 characters per
-chapter. Each rendered chapter is bounded to 20,000 nodes and 100 levels. Find in book searches the
+chapter. Each rendered chapter is bounded to 20,000 nodes and 100 levels. Find in Book searches the
 available sanitized chapters, including text split by inline formatting. It shows up to 200 matches
 and identifies partial coverage. Loading illustrations releases their resources when the chapter or
 preview closes. Chapter, text size and supported scroll position remain in versioned preview
@@ -86,9 +86,9 @@ chapter paths can fill it sooner. The sidebar supports opening, renaming and rem
 
 Bookmarks survive preview closure, reopen, app restart and changed source revisions. Transient
 reader coordinates still reset after a source change. A marker whose chapter path is unavailable
-stays visible and disabled with **Chapter unavailable**; Viewer never opens a guessed chapter. Saved
-coordinates are positions, not text anchors, so edited chapter content can move the passage. Adding
-or removing bookmarks does not change the original EPUB. See
+stays visible and disabled with **This chapter isn't in the book now**; Viewer never opens a guessed
+chapter. Saved coordinates are positions, not text anchors, so edited chapter content can move the
+passage. Adding or removing bookmarks does not change the original EPUB. See
 [saving a book position](../guides/previews.md#bookmark-a-place-in-a-book) for the controls.
 
 ## Email, FictionBook and saved web pages
@@ -108,8 +108,8 @@ message are not read.
   together. Remote images, stylesheets, fonts, frames and forms are removed and never load; **Remote
   images are blocked.** says when the message named any. A link keeps its address as a tooltip and
   goes nowhere.
-- Attachments are listed with their name, type and size. Viewer never opens or runs one.
-- **Save** writes an attachment beside its message, **Save to…** in a folder you choose, and **Save
+- Attachments are listed with their name, kind and size. Viewer never opens or runs one.
+- **Save** writes an attachment beside its message, **Save To…** in a folder you choose, and **Save
   All** every attachment of the message. Each save is a file operation: a name in use keeps both
   (`Invoice copy.pdf`), and **Undo** moves the saved file to the Trash. The message is read again
   for the save, and nothing is saved when it changed after it was shown. A message inside an archive
@@ -131,7 +131,7 @@ A `.mbox` folder, as Mail exports one, opens as a folder.
 identifies the PDF inside an `.ai`. For otherwise unrecognized files, the text signature must be
 `%!PS` or `%!` followed by whitespace or a line ending. A `%!TEX` comment is not PostScript.
 Detection never replaces another known file kind. The comments supply title, creator, creation date,
-page count, page or bounding-box dimensions in points and millimetres, and language level. Missing
+page count, page or bounding-box dimensions in points and millimeters, and language level. Missing
 or invalid comments stay **Unknown**. Source is capped at 4,000,000 bytes. One comment scan inspects
 at most 65,536 lines, with a 4096-byte line limit and 1024-character values; comments in nested
 documents or after binary/data blocks are excluded. Comments beyond the limits stay unknown. A
@@ -143,22 +143,22 @@ TIFF embedded pictures pass at most 32 MiB of section bytes to the existing isol
 with no disk copy, up to 100 million decoded pixels and a 4096-pixel longest output edge. EPSI
 supports 1, 2, 4 and 8-bit grayscale, up to 16 million pixels and 4,000,000 packed bytes within the
 inspection limits. An unreadable or oversized picture leaves the description and source available
-with an explanation. Pictures are labelled **Embedded preview**. WMF pictures are named and not
+with an explanation. Pictures are labeled **Embedded Preview**. WMF pictures are named and not
 drawn. Selecting a binary EPS creates no preview files or Trash items.
 
-**Render pages with Ghostscript** runs only after a click. Discovery checks only
-`/opt/homebrew/bin/gs`, `/usr/local/bin/gs` and `/opt/local/bin/gs`; there is no custom executable
-setting or `PATH` search. The click first checks Ghostscript's identity and version. Rendering uses
-the shared versioned preview cache, resource authority and cancellation. The PostScript section goes
-to standard input; the original is only read and no document copy is written. EPS pages are cropped
-to the drawing with `-dEPSCrop` only when their non-deferred bounding-box comments state dimensions
-from 1 to 14,400 points on both axes. Missing, deferred, empty, inverted, oversized or sub-point
-boxes render a full page instead, with an explanation in the preview. HiRes boxes obey the same
-limits. An unexpected discovery failure is recorded in diagnostics and shown as **Ghostscript could
-not be checked**; only an absent program gets the installation message. Safe mode, batch/no-prompt
-flags and a minimal environment are fixed. The process group runs at background priority and is
-stopped together on cancellation or a limit. An exited wrapper or a descendant holding a pipe cannot
-retain the render slot.
+**Render Pages** runs Ghostscript only after a click. Discovery checks only `/opt/homebrew/bin/gs`,
+`/usr/local/bin/gs` and `/opt/local/bin/gs`; there is no custom executable setting or `PATH` search.
+The click first checks Ghostscript's identity and version. Rendering uses the shared versioned
+preview cache, resource authority and cancellation. The PostScript section goes to standard input;
+the original is only read and no document copy is written. EPS pages are cropped to the drawing with
+`-dEPSCrop` only when their non-deferred bounding-box comments state dimensions from 1 to 14,400
+points on both axes. Missing, deferred, empty, inverted, oversized or sub-point boxes render a full
+page instead, with an explanation in the preview. HiRes boxes obey the same limits. An unexpected
+discovery failure is recorded in diagnostics and shown as **Ghostscript could not be checked**; only
+an absent program gets the installation message. Safe mode, batch/no-prompt flags and a minimal
+environment are fixed. The process group runs at background priority and is stopped together on
+cancellation or a limit. An exited wrapper or a descendant holding a pipe cannot retain the render
+slot.
 
 Input is capped at 256 MiB. **32 MiB bounds the PDF result on standard output**, not scratch space.
 The private scratch stage is monitored every 50 ms with a 64 MiB total-size limit; a burst can
@@ -180,7 +180,7 @@ book that has one does not open. The encoding its declaration names, such as Win
 The book opens on a title page with its cover, title, authors, series and annotation, then a chapter
 for each top-level section and one for its notes. Note links go to the note. Up to 300 chapters of
 400,000 characters each are read. PNG, JPEG, GIF and WebP pictures from the book show, checked by
-their bytes, at most 8 MB and 64 million pixels each and 16 MB together. **Find in book** and
+their bytes, at most 8 MB and 64 million pixels each and 16 MB together. **Find in Book** and
 bookmarks work as in an EPUB.
 
 **Saved web pages.** A `.webarchive` file, a binary or XML property list up to 64 MB, shows the page
@@ -241,7 +241,7 @@ from the first certificate to its root.
 
 - A private key in PEM, DER, OpenSSH or OpenPGP form shows its type and size, and whether a
   passphrase protects it. Its bytes never reach the preview or search, and a file holding one offers
-  neither **Source** nor **Show as hex**.
+  neither **Source** nor **Show as Hex**.
 - An OpenPGP public key shows its user IDs, keys, creation and expiry dates and fingerprints; a
   signature shows its signer, and an encrypted message the keys it is for.
 - A block Viewer does not read, such as a certificate request, shows as text.
@@ -357,7 +357,7 @@ Recognized conventional filenames include:
 - `.bashrc`, `.bash_profile`, `.zshrc`, `.zprofile`, `.zshenv` and `.profile`.
 
 Vue/Svelte files are source previews, not running components. JSON, JSONC, JSON5, YAML, YML, XML,
-property lists and map data offer a shared searchable tree with Expand all, Collapse all, copy
+property lists and map data offer a shared searchable tree with Expand All, Collapse All, copy
 path/value and retained expansion state. Alias references remain explicit; bounded parsing prevents
 recursive expansion. Invalid or oversized structures retain Source with a visible explanation. JSONL
 remains source text. Other readable files may use the bounded generic text fallback.

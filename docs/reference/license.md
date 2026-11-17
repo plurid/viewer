@@ -77,7 +77,7 @@ memory; this session refuses key entry and removal and saves nothing over that c
 links and directories stay in place too. Restore access and relaunch to retry recovery.
 
 A key this build cannot verify is never erased on a status read. A newly entered valid key replaces
-it; **Remove license key** is the only action that clears it.
+it; **Remove License Key** is the only action that clears it.
 
 Creating the first record writes once. Later writes require a changed key, status kind or days left,
 or at least an hour of advance in the saved `seen` time. Other clock observations stay in memory
@@ -86,7 +86,7 @@ between saves; opening another window or reading an unchanged status does not re
 The ended-trial reminder has no modal or delay and never disables work. Hiding it lasts for the
 current desktop process, across windows and reloads. That hidden state stays in memory. About uses
 **Licensed to**, **Trial: N days left** or **Trial ended**. The Settings page is **License**, the
-menu and palette command are **License Key…**, and **Acknowledgements** remains the third-party
+menu and palette command are **License Key…**, and **Acknowledgments** remains the third-party
 software notices.
 
 [Try Viewer and enter a key](../guides/license.md) ·

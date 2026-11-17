@@ -3,7 +3,9 @@ import type { DiscoverableCommand } from './registry';
 import { commandScore, normalize, rankCommands, type ResolvedCommand } from './registry';
 import type { Suggestion } from './suggestions';
 import type { WorkspaceChoice } from '../../domain/workspaces/definitions/query';
+import type { WorkspaceDefinition } from '../../domain/workspaces/definitions/schema';
 import { anchoredDefinitionMatch } from '../../domain/workspaces/definitions/query';
+import { plural } from '../../domain/plural';
 
 /**
  * Settings apart in the palette. Every setting is a command (window-commands/
@@ -21,12 +23,20 @@ export interface PaletteView {
 }
 
 export const moreWorkspacesID = 'palette:more-workspaces';
+/** With nothing typed, the most never-opened found workspaces that fill a short Defined list. */
+const foundFill = 3;
 
+/**
+ * Change workspace…: open workspaces, then definitions. With nothing typed, eight recently opened
+ * definitions; while fewer show, up to three found workspaces never opened fill the list, in the
+ * catalog's order, which ranks them by use.
+ */
 export function workspaceRows(
   commands: readonly ResolvedCommand[],
   choices: readonly WorkspaceChoice[],
   query: string,
   total: number,
+  catalog: readonly WorkspaceDefinition[] = [],
 ): PaletteView {
   const byID = new Map(commands.map((command) => [command.id, command]));
   const searching = !!query.trim();
@@ -35,6 +45,22 @@ export function workspaceRows(
   );
   let remaining = searching ? 50 : 8;
   const selected = matching.filter((choice) => choice.kind === 'open' || remaining-- > 0);
+  if (!searching && remaining > 0) {
+    const order = new Map(catalog.map((definition, index) => [definition.key, index]));
+    const rank = (choice: WorkspaceChoice) => order.get(choice.key) ?? catalog.length;
+    selected.push(
+      ...choices
+        .filter(
+          (choice) =>
+            choice.kind === 'defined' &&
+            choice.definition.source === 'found' &&
+            choice.recent === 0 &&
+            byID.has(choice.id),
+        )
+        .sort((a, b) => rank(a) - rank(b))
+        .slice(0, Math.min(foundFill, remaining)),
+    );
+  }
   const rows = selected.flatMap((choice) => {
     const row = byID.get(choice.id)!;
     const related = row.relatedID && byID.get(row.relatedID);
@@ -56,7 +82,7 @@ export function workspaceRows(
         ? `${matching.length - selected.length} more · keep typing`
         : undefined
       : total
-        ? `${total} defined workspaces · type to search`
+        ? `${plural(total, 'defined workspace')} · type to search`
         : undefined,
   };
 }
@@ -114,7 +140,7 @@ export function paletteRows(
     ? [
         {
           id: moreWorkspacesID,
-          label: `All ${loose.length} matching workspaces`,
+          label: `All ${plural(loose.length, 'Matching Workspace')}`,
           group: 'Workspaces',
           icon: 'dock',
           aliases: [],
@@ -329,7 +355,7 @@ function basePaletteRows(
       ? [
           {
             id: moreSettingsID,
-            label: `All ${settings.length} matching settings`,
+            label: `All ${plural(settings.length, 'Matching Setting')}`,
             group: 'Settings',
             icon: 'settings',
             aliases: [],

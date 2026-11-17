@@ -287,7 +287,7 @@ try {
     'Task camera settled',
   );
   await page.command('Emulation.setFocusEmulationEnabled', { enabled: true });
-  await actions.palette('Command line…');
+  await actions.palette('Command Line…');
   await actions.text(
     'input[aria-label="Command line"]',
     `task-new "Review the next change" --repo "${repo}" --branch feature/next --path "${path.join(root, 'Next')}" --workspace target`,

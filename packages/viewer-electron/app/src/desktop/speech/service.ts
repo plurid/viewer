@@ -95,7 +95,7 @@ export class Speech {
     if (request.kind === 'status') return this.status(owner);
     if (request.kind === 'provider-check') {
       this.settings(owner);
-      if (!this.hosted) throw new Error('Hosted speech is unavailable in this build.');
+      if (!this.hosted) throw new Error('This build of Viewer can’t use hosted speech.');
       if (this.providerChecks.has(owner))
         throw new Error('A speech provider check is already running.');
       const controller = new AbortController();
@@ -116,7 +116,7 @@ export class Speech {
       request.kind === 'provider-consent'
     ) {
       this.settings(owner);
-      if (!this.hosted) throw new Error('Hosted speech is unavailable in this build.');
+      if (!this.hosted) throw new Error('This build of Viewer can’t use hosted speech.');
       await this.hosted.request(request);
       return this.status(owner);
     }
@@ -248,7 +248,7 @@ export class Speech {
     try {
       session.preferences = await this.prefs();
       if (session.preferences.backend === 'hosted') {
-        if (!this.hosted) throw new Error('Hosted speech is unavailable in this build.');
+        if (!this.hosted) throw new Error('This build of Viewer can’t use hosted speech.');
         session.hostedProviderID = session.preferences.providerID;
         session.target = {
           kind: 'hosted',
@@ -276,7 +276,7 @@ export class Speech {
         !this.ports.human(owner) ||
         this.ports.foreground?.(owner) === false
       )
-        throw new Error('The recording was cancelled.');
+        throw new Error('The recording was canceled.');
       session.state = 'listening';
       this.ports.event(owner, { id, state: 'listening' });
       const target = session.target;

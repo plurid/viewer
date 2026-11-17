@@ -4,7 +4,7 @@ Use this guide when you do the same thing twice: save a shell line as an action,
 Viewer from your terminal, prepare reviews automatically, and, if you want them, add a model or
 connect an agent. Saved actions, typed commands, the CLI and workflows need no model or agent.
 
-**Find it:** **Settings → Actions** · **⌘K** → **Command line…** (or type `:`) and **Ask in words…**
+**Find it:** **Settings → Actions** · **⌘K** → **Command Line…** (or type `:`) and **Ask in Words…**
 (or type `>`) · type `!` for a shell command · **File → Workflows…** · **Settings → Models** and
 **Settings → Agents**
 
@@ -15,7 +15,7 @@ connect an agent. Saved actions, typed commands, the CLI and workflows need no m
    folder or column, the terminal's starting folder, a preview's parent, or Home in an empty
    workspace.
 3. Press **Return** to run. **Shift+Return** adds a line. Output appears in the panel with its
-   status and exit code; **Stop**, **Copy output** and **Open receipt** act on that run.
+   status and exit code; **Stop**, **Copy Output** and **Open Receipt** act on that run.
 
 Closing the panel keeps the command running. Open `!` again to return to its output. Use a terminal
 plane for programs that ask for input. [Terminals and command output](../reference/terminals.md)
@@ -27,10 +27,10 @@ arguments.
 
 ## Save a shell line as an action
 
-1. Press **⌘K** → **Run command…** in the folder you work in, type the line and choose **Run**.
-2. When it does what you want, open **Run command…** again, pick the line under **Recent** and
-   choose **Save as action…**. Type a **Name**, then choose **Review in Settings**.
-3. **Settings → Actions** shows the draft under **Custom commands**. Choose **Add command**.
+1. Press **⌘K** → **Run Command…** in the folder you work in, type the line and choose **Run**.
+2. When it does what you want, open **Run Command…** again, pick the line under **Recent** and
+   choose **Save as Action…**. Type a **Name**, then choose **Review in Settings**.
+3. **Settings → Actions** shows the draft under **Custom commands**. Choose **Add Command**.
 4. Open the new command to change it: **Available for** and **File extensions** say when it applies,
    and **Add parameter** asks for a part that changes between runs, such as a test name.
 
@@ -41,7 +41,7 @@ literal **Arguments** when a step needs no shell features; it is safer with unus
 
 ## Type commands
 
-Type `:` in the command palette, or choose **Command line…** in **⌘K**, to switch to the command
+Type `:` in the command palette, or choose **Command Line…** in **⌘K**, to switch to the command
 line. Try:
 
 | Line         | What it does                     |
@@ -58,7 +58,7 @@ correct it. Aliases, key bindings, modes and macros are in
 ## Open Viewer from your terminal
 
 1. Press **⌘K** → **Install Viewer CLI**. It installs `viewer` at `~/.local/bin/viewer` and never
-   replaces another file there. **Settings → Navigation → Install shell command** does the same.
+   replaces another file there. **Settings → Navigation → Install Shell Command** does the same.
 2. In a terminal, run `viewer .` to open the current folder.
 3. If your shell cannot find `viewer`, add `~/.local/bin` to your `PATH`.
 
@@ -87,18 +87,18 @@ review. [Workflows and watch rules](../reference/automation.md) shows how to wri
 A model is optional. It can answer requests in words, explore a folder, suggest names and actions,
 and identify an unknown file.
 
-1. Open **Settings → Models** and choose **Add model**. Pick the provider, or **Local endpoint** for
-   a model on your Mac or network, then choose **Set up model**.
-2. Enter the **API key** and the **Model** ID, or choose **Connect and load models** to pick from
-   the provider's list.
-3. Open **Data access**, choose what the model may read, and choose **Allow selected data**. Confirm
+1. Open **Settings → Models** and choose **Add Model**. Pick the provider, or **Local endpoint** for
+   a model on your Mac or network, then choose **Set Up Model**.
+2. Enter the **API key** and the **Model** ID, or choose **Load Models** to pick from the provider's
+   list.
+3. Open **Data access**, choose what the model may read, and choose **Allow Selected Data**. Confirm
    with **Allow** in the system dialog. [What a model may read](#what-a-model-may-read) explains the
    choices.
 
 The first model you add is the **Default for Ask Viewer**: it answers requests in words. To use
 another, choose **Use for Ask Viewer** beside it.
 
-To ask in words, press **⌘K** and type `>`, or choose **Ask in words…**, then describe what you
+To ask in words, press **⌘K** and type `>`, or choose **Ask in Words…**, then describe what you
 want, such as _show PDFs changed this week_. The model answers with a command line and what it does.
 Nothing runs yet: press **Return** to run the line as if you typed it, or **Tab** to edit it first.
 **Continue in Chat** carries the request into a Chat plane.
@@ -113,9 +113,9 @@ one before it. Until you allow one, no file data is sent.
 | Names     | **filenames and file metadata**                                                         | Ask Viewer, model suggestions, Explore this folder                       |
 | Excerpts  | **filenames, metadata and document excerpts**                                           | Explore reading inside files, identifying a file, renaming from contents |
 | Full text | **filenames, metadata and extracted document text**                                     | **Summarize…**                                                           |
-| Pictures  | **filenames, metadata, document text and pictures (photos and rendered drawing pages)** | **Check laser job…**                                                     |
+| Pictures  | **filenames, metadata, document text and pictures (photos and rendered drawing pages)** | **Check Laser Job…**                                                     |
 
-Viewer asks for a level when a feature needs one you have not allowed. **Revoke access** withdraws
+Viewer asks for a level when a feature needs one you have not allowed. **Revoke Access** withdraws
 it. Changing the model's endpoint or clearing its key revokes access too, and stops its running
 requests.
 
@@ -129,15 +129,15 @@ A coding agent on your Mac can connect to Viewer, look around the folders you al
 changes for your review.
 
 1. In **Settings → Agents**, turn on **Allow local agent clients** and confirm in the system dialog.
-2. Under **Agent clients**, type a **Name** for the client and choose **Choose folder…** for each
+2. Under **Agent clients**, type a **Name** for the client and choose **Choose Folder…** for each
    folder it may use.
 3. Turn on only what it needs: **Metadata and discovery**, **Read file contents**, **Navigate
    without review**, **Propose changes** or **Read terminal output**.
-4. Choose **Create client** and copy the configuration it shows into your agent.
+4. Choose **Create Client**, then **Copy**, and paste the configuration into your agent.
 
 An agent can never run shell commands or type into a terminal. Every change it proposes waits for
 your review, and an item it removes goes to the Trash only after you approve it. **Permissions**
-changes a client later, **Stop tasks** stops its work and **Revoke** disconnects it; **Remove** then
+changes a client later, **Stop Tasks** stops its work and **Revoke** disconnects it; **Remove** then
 clears a revoked client from the list. Read [agents and permissions](../reference/agents.md) before
 connecting one, and use [Journal](../reference/journal.md) to see what it did.
 

@@ -107,7 +107,7 @@ function checkGroups(content: string): number {
 export function prepareCanvasDrawing(content: string) {
   const entities = checkGroups(content);
   const cuts = readCutDrawing(content);
-  if (cuts.units !== 4) throw new Error('Set DXF $INSUNITS to 4 (millimetres).');
+  if (cuts.units !== 4) throw new Error('Set DXF $INSUNITS to 4 (millimeters).');
   if (
     cuts.primitives.length !== entities ||
     Object.keys(cuts.skipped).length ||

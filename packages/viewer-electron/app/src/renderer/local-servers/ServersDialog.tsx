@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { Dialog } from '../ui/primitives';
+import { PathLabel } from '../ui/PathLabel';
 import { report } from '../state/store';
 import type { WorkspaceController } from '../workspace/context';
 import { connectLocalServers, localServerSessions } from './runtime';
@@ -19,7 +20,7 @@ export function ServersDialog({
   }, [sessions]);
   const servers = sessions.all();
   return (
-    <Dialog title="Local servers" onClose={onClose} wide>
+    <Dialog title="Local Servers" onClose={onClose} wide>
       <div className="dialog-copy">
         <p>Servers keep running when their planes close. Stop one here or reopen its controls.</p>
       </div>
@@ -28,7 +29,9 @@ export function ServersDialog({
           servers.map((server) => (
             <div className="server-list-row" key={server.id}>
               <div>
-                <strong>{server.root}</strong>
+                <strong>
+                  <PathLabel path={server.root} />
+                </strong>
                 <span className="muted">{server.state === 'running' ? server.url : 'Stopped'}</span>
               </div>
               <button
@@ -37,7 +40,7 @@ export function ServersDialog({
                   onClose();
                 }}
               >
-                Show plane
+                Show Plane
               </button>
               <button
                 disabled={server.state !== 'running'}

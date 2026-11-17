@@ -6,6 +6,7 @@ import { useGitReview } from './useGitReview';
 import type { ReviewMode } from '../../domain/comparison/review';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { plural } from '../../domain/plural';
 
 export default function GitChanges({
   path,
@@ -172,7 +173,7 @@ function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
                     .catch(report)
                 }
               >
-                Open diff
+                Open Diff
               </button>
             )}
             {review.file && !review.file.problem && review.view.mode !== 'branch' && (
@@ -180,7 +181,7 @@ function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
                 disabled={review.busy}
                 onClick={() => void review.apply(review.file!.hunks.map((hunk) => hunk.id))}
               >
-                {stage} all hunks
+                {stage} All Hunks
               </button>
             )}
           </div>
@@ -204,13 +205,13 @@ function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
               />
             ) : review.error && !review.file ? (
               <Empty
-                title="Patch unavailable"
-                detail="Refresh review to load the current changes."
+                title="Can’t show this file’s changes"
+                detail="Refresh to load the current changes."
               />
             ) : !review.file ? (
               <Loading label="Reading patch…" />
             ) : review.file.problem ? (
-              <Empty title="Text hunk review unavailable" detail={review.file.problem} />
+              <Empty title="Can’t review this file by hunk" detail={review.file.problem} />
             ) : (
               review.file.hunks.map((hunk, index) => (
                 <section className="git-review-hunk" key={hunk.id} aria-label={`Hunk ${index + 1}`}>
@@ -218,7 +219,7 @@ function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
                     <code>{hunk.heading}</code>
                     {review.view.mode !== 'branch' && (
                       <button disabled={review.busy} onClick={() => void review.apply([hunk.id])}>
-                        {stage} hunk {index + 1}
+                        {stage} Hunk {index + 1}
                       </button>
                     )}
                   </header>
@@ -245,7 +246,7 @@ function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
         </div>
       </div>
       <footer className="git-review-footer">
-        {changes.length} changed {changes.length === 1 ? 'file' : 'files'}
+        {plural(changes.length, 'changed file')}
         {changes.length > 1 && ' · ⌥↑ / ⌥↓ moves between files'}
         {review.view.mode === 'branch' && ' · Includes working changes'}
       </footer>

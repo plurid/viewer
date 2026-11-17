@@ -59,6 +59,7 @@ export {
 export {
   copyPaths,
   copyText,
+  followQuickPreview,
   quickPreview,
   refreshClipboard,
   pasteClipboard,

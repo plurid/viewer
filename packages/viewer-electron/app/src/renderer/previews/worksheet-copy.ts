@@ -44,12 +44,12 @@ export async function worksheetTSV(
       signal.throwIfAborted();
       const office = data.office;
       if (office?.kind !== 'workbook' || office.page?.sheet !== sheet)
-        throw new Error('The requested worksheet is unavailable. Reopen it and try again.');
+        throw new Error("This worksheet isn't open now. Open it again, then try again.");
       const page = office.page;
       const loaded = office.sheets.find((item) => item.name === sheet && item.loaded !== false);
       if (!loaded || page.limited || loaded.mergeLimited)
         throw new Error(
-          'This worksheet preview is incomplete. Open the original to copy this range.',
+          'Only part of this worksheet is shown. Open the original to copy this range.',
         );
       rows.push(
         ...loaded.rows
@@ -74,7 +74,7 @@ export async function worksheetTSV(
       }
       if (page.nextRow === undefined || page.nextRow > range.toRow) break;
       if (page.nextRow <= fromRow)
-        throw new Error('The worksheet reader did not advance. Try again.');
+        throw new Error('Viewer stopped reading the worksheet. Try again.');
       fromRow = page.nextRow;
     } finally {
       signal.removeEventListener('abort', abort);

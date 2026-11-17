@@ -28,6 +28,7 @@ interface FolderFactsOptions {
   worker?(): OwnedWorker<FolderFactsReply>;
   now?(): number;
   report?(message: string): void;
+  mounts?(): readonly string[];
 }
 
 /** Read priority and pass budgets belong here so finding projects never blocks a command picker. */
@@ -36,7 +37,7 @@ export class FolderFacts {
   private reads: Request[] = [];
   private probes: Request[] = [];
   private blocked = new Map<string, number>();
-  private retiring = new Set<OwnedWorker<FolderFactsReply>>();
+  private retiring = new Map<OwnedWorker<FolderFactsReply>, string>();
   private active?: Request;
   private timer?: ReturnType<typeof setTimeout>;
   private serial = 0;
@@ -61,6 +62,13 @@ export class FolderFacts {
   probe(path: string, pass = this.pass()): Promise<FolderProbeResult> {
     return this.enqueue(
       { id: ++this.serial, kind: 'probe', path },
+      pass,
+    ) as Promise<FolderProbeResult>;
+  }
+
+  identity(path: string, pass = this.pass()): Promise<FolderProbeResult> {
+    return this.enqueue(
+      { id: ++this.serial, kind: 'probe', path, identityOnly: true },
       pass,
     ) as Promise<FolderProbeResult>;
   }
@@ -92,7 +100,8 @@ export class FolderFacts {
       else if (containsPath(blocked, requested)) return refuse('quarantined');
     }
     if (this.options.access && !scope) return refuse('scope');
-    if (!this.worker && this.retiring.size >= folderFactsLimits.stuckThreads) return refuse('busy');
+    const mount = this.mount(requested);
+    if (this.stuck(mount) >= folderFactsLimits.stuckThreads) return refuse('busy');
     task.scope = scope;
     this.active = task;
     try {
@@ -145,7 +154,7 @@ export class FolderFacts {
           volume,
           (this.options.now?.() ?? Date.now()) + folderFactsLimits.quarantine,
         );
-        this.retire(worker);
+        this.retire(worker, mount);
         this.finish({ ok: false, reason: 'timeout' });
       }, folderFactsLimits.timeout);
       this.worker.postMessage(task.request);
@@ -162,9 +171,26 @@ export class FolderFacts {
     this.next();
   }
 
-  private retire(worker?: OwnedWorker<FolderFactsReply>): void {
+  private mount(requested: string): string {
+    const roots = [
+      ...(this.options.mounts?.() ?? []),
+      folderVolume(requested),
+      path.parse(requested).root,
+    ];
+    return roots
+      .filter((root): root is string => !!root)
+      .map((root) => path.resolve(root))
+      .filter((root) => containsPath(root, requested))
+      .sort((a, b) => b.length - a.length)[0]!;
+  }
+
+  private stuck(mount: string): number {
+    return [...this.retiring.values()].filter((value) => value === mount).length;
+  }
+
+  private retire(worker: OwnedWorker<FolderFactsReply> | undefined, mount: string): void {
     if (!worker?.thread) return;
-    this.retiring.add(worker);
+    this.retiring.set(worker, mount);
     try {
       void worker.thread.terminate().then(
         () => this.retiring.delete(worker),
@@ -173,8 +199,10 @@ export class FolderFacts {
     } catch {
       // A failed termination retains its slot until the owned thread actually exits.
     }
-    if (this.retiring.size >= folderFactsLimits.stuckThreads)
-      this.options.report?.('Folder discovery paused: timed-out worker threads have not stopped.');
+    if (!this.closed && this.stuck(mount) >= folderFactsLimits.stuckThreads)
+      this.options.report?.(
+        'Folder discovery paused for one mount: timed-out worker threads have not stopped.',
+      );
   }
 
   close(): void {
@@ -182,6 +210,6 @@ export class FolderFacts {
     const worker = this.worker;
     this.worker = undefined;
     this.finish({ ok: false, reason: 'closed' });
-    this.retire(worker);
+    this.retire(worker, '');
   }
 }

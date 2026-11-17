@@ -11,4 +11,5 @@ __pycache__/
 SCRATCH.md
 
 packages/viewer-electron/app/assets/viewer-ocr
+packages/viewer-electron/app/assets/viewer-askpass
 packages/viewer-electron/app/assets/viewer-applications

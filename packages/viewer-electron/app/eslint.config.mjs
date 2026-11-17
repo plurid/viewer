@@ -36,6 +36,17 @@ const noFiller = [
   `TemplateElement[value.raw=${filler}]`,
   `JSXText[value=${filler}]`,
 ].map((selector) => ({ selector, message: fillerMessage }));
+// The interface speaks US English, as macOS does. A stored value such as the 'cancelled' status is
+// one word with no space, so only text that reads as a phrase is held to it; a British search
+// alias opts out with an eslint-disable comment.
+const spellingMessage = 'Use US spelling in interface text: color, center, gray, canceled.';
+const british =
+  '/\\b(colour|centre|behaviour|favourite|millimetre|centimetre|labell(ed|ing)|utilis|optimis|recognis)|\\bgrey\\b|\\s.*\\bcancell(ed|ing)\\b|\\bcancell(ed|ing)\\b.*\\s/i';
+const usSpelling = [
+  `Literal[value=${british}]`,
+  `TemplateElement[value.raw=${british}]`,
+  `JSXText[value=${british}]`,
+].map((selector) => ({ selector, message: spellingMessage }));
 // Page code is a typed function (tests/native/runtime/page-function.ts): a string escapes the type
 // check and the formatter. Every harness and tool is written this way.
 const pageCode = {
@@ -57,6 +68,7 @@ export default tseslint.config(
         importsFirst,
         ...noEmDash,
         ...noFiller,
+        ...usSpelling,
         ...removal,
       ],
     },

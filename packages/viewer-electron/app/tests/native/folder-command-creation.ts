@@ -67,7 +67,7 @@ const focusedLabel = () => document.activeElement?.getAttribute('aria-label');
 
 /** The centre of the New folder form's Create button, for a real pointer click. */
 function createButtonCentre() {
-  const dialog = document.querySelector('dialog[aria-label="New folder"]')!;
+  const dialog = document.querySelector('dialog[aria-label="New Folder"]')!;
   const button = [...dialog.querySelectorAll('button')].find(
     (button) => button.textContent.trim() === 'Create',
   )!;
@@ -109,12 +109,12 @@ try {
   await openPalette('New folder');
   await until(
     () => evaluate(textOf('.command-result[aria-selected=true]')),
-    (text) => text.includes('New folder'),
+    (text) => text.includes('New Folder'),
     'New folder command',
   );
   await evaluate(click('.command-result[aria-selected=true]'));
   await until(
-    () => evaluate(exists('dialog[aria-label="New folder"] input')),
+    () => evaluate(exists('dialog[aria-label="New Folder"] input')),
     Boolean,
     'New folder form',
   );

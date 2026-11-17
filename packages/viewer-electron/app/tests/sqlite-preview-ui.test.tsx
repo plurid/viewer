@@ -194,7 +194,7 @@ it('explains an encrypted or damaged database and tries again on request', async
   expect(await screen.findByText('Not a readable SQLite database')).toBeTruthy();
   expect(screen.getByText(/may be encrypted/)).toBeTruthy();
   reply = { kind: 'unreadable', reason: 'damaged', message: 'The database is damaged.' };
-  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
   expect(await screen.findByText('The database is damaged.')).toBeTruthy();
   expect(sqlite).toHaveBeenCalledTimes(2);
 });
@@ -213,7 +213,7 @@ it('reports a reader failure readably', async () => {
     throw new Error('This preview resource has expired.');
   });
   render(<SQLitePreview {...context} />);
-  expect(await screen.findByText('Database could not be read')).toBeTruthy();
+  expect(await screen.findByText("Can't read this database")).toBeTruthy();
   expect(screen.getByText('This preview resource has expired.')).toBeTruthy();
 });
 

@@ -27,7 +27,7 @@ On another platform these report the message shown and the rest of Viewer stays 
 | Local speech recognition                                                                  | "Local speech has not been bundled for this platform."                                                       |
 | Agent `git_status` and `git_diff`                                                         | "Contained agent Git inspection is currently available on macOS. Use the Git review plane on this platform." |
 | External terminal apps                                                                    | "External terminal adapters currently support macOS. Embedded terminals remain available."                   |
-| **Open With** application choice                                                          | "Application selection is not available on this platform yet."                                               |
+| **Open With** application choice                                                          | "Viewer can't list apps on this system. Use Open in Default App instead."                                    |
 | Printing PDFs                                                                             | "Printing PDFs requires macOS."                                                                              |
 | Finder aliases                                                                            | "Finder aliases require macOS."                                                                              |
 | Pasting a picture as a PNG                                                                | Not offered until clipboard files can take priority over picture renditions                                  |
@@ -106,7 +106,7 @@ volume acceptance remain separate from source tests and the generated-image nati
 In the Store edition, permission for one file does not grant permission to its parent folder. The
 fallback must open that folder and fails if that access is missing. **File operations** shows "Could
 not move the item: Permission denied" or "Operation not permitted". The source or complete stage
-stays available at the job's recovery path. Choose **Allow folder access…**, grant the parent
+stays available at the job's recovery path. Choose **Allow Folder Access…**, grant the parent
 folder, then retry. Viewer never broadens a single-file grant itself.
 
 ## Distribution

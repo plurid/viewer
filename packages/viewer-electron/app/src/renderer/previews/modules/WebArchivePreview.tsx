@@ -3,7 +3,7 @@ import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { useOfficeDocument } from '../useOfficeDocument';
 import { useHtmlPreview } from '../web/useHtmlPreview';
-import { Empty, Loading } from '../../ui/primitives';
+import { Failure, Loading } from '../../ui/primitives';
 import { Icon } from '../../ui/Icon';
 import './mail.css';
 
@@ -18,7 +18,7 @@ export default function WebArchivePreview(context: PreviewContext) {
   usePreviewCommands(
     context,
     useMemo(
-      () => [{ id: 'reload-web-archive', label: 'Reload saved page', run: reload }],
+      () => [{ id: 'reload-web-archive', label: 'Reload Saved Page', run: reload }],
       [reload],
     ),
   );
@@ -61,10 +61,11 @@ export default function WebArchivePreview(context: PreviewContext) {
         ) : capability.status === 'loading' ? (
           <Loading label="Opening saved page…" />
         ) : (
-          <Empty
+          <Failure
             icon="code"
-            title="The saved page could not be shown"
+            title="Can't show this saved page"
             detail={capability.status === 'error' ? capability.message : 'This preview is closed.'}
+            onRetry={capability.status === 'error' ? reload : undefined}
           />
         )}
       </div>

@@ -50,7 +50,7 @@ it('explains the native setup gate when no broker connection has been approved',
   const output = new PassThrough();
   try {
     await expect(runMCPClient(root, { input, output, token: 'fixture-token' })).rejects.toThrow(
-      'approve agent access in Settings',
+      'allow agent access in Settings',
     );
   } finally {
     input.destroy();

@@ -65,7 +65,10 @@ export function useHtmlPreview(
         const capability = htmlCapability(preview.url);
         if (!capability || capability !== preview.id) {
           release(preview);
-          accept({ status: 'error', message: 'The HTML preview address is unavailable.' });
+          accept({
+            status: 'error',
+            message: "Viewer can't show this page safely. View its source instead.",
+          });
           return;
         }
         owned = preview;

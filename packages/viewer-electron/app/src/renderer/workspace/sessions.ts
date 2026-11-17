@@ -122,6 +122,10 @@ export function selectedFiles(id: string): FileEntry[] {
   const session = sessions.get(id);
   return session?.selection.flatMap((path) => session.cache.get(path) ?? []) ?? [];
 }
+/** The item a plane's arrows last moved to, if any. */
+export function selectionCursor(id: string): string | undefined {
+  return sessions.get(id)?.cursor || undefined;
+}
 export function focusFiles(id: string): void {
   const until = performance.now() + 1500;
   const focus = () => {

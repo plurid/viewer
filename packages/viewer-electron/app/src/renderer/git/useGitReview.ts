@@ -56,7 +56,7 @@ export function useGitReview(path: string, paneID: string) {
         },
       })
       .then((result) => {
-        if (result.kind !== 'opened') throw new Error('Git review could not open.');
+        if (result.kind !== 'opened') throw new Error('Viewer couldn’t open the Git review.');
         id = result.reviewID;
         if (cancelled)
           void window.viewer.gitReview({ kind: 'release', reviewID: id }).catch(() => {});
@@ -96,7 +96,8 @@ export function useGitReview(path: string, paneID: string) {
       })
       .then((result) => {
         if (cancelled) return;
-        if (result.kind !== 'snapshot') throw new Error('Changed files are unavailable.');
+        if (result.kind !== 'snapshot')
+          throw new Error('Viewer couldn’t read the changed files. Refresh to try again.');
         setSnapshot(result.snapshot);
       })
       .catch((value) => {

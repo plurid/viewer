@@ -81,7 +81,7 @@ describe('exact unsigned file identity', () => {
       '12:18446744073709551615',
     );
     expect(() => nativeIdentityArgument('12:18446744073709552000')).toThrow(
-      'The file identity cannot be verified; inspect the item again.',
+      'Viewer can’t confirm this is the same file. Select it again.',
     );
   });
 
@@ -95,7 +95,7 @@ describe('exact unsigned file identity', () => {
       itemIdentity({ dev: 12n, ino: -2n }),
     );
     expect(() => itemIdentity({ dev: 12, ino: Number((1n << 64n) - 1n) })).toThrow(
-      'The file identity cannot be verified from rounded numbers.',
+      'Viewer can’t tell which file this is from rounded numbers.',
     );
   });
 });

@@ -4,7 +4,8 @@ import type { PreviewContext } from '../contracts';
 import { PreviewToolbar } from '../controls';
 import { usePreviewState } from '../state';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
-import { Empty, Loading } from '../../ui/primitives';
+import { Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
 import {
   FontError,
   fontByteLimit,
@@ -24,9 +25,8 @@ const sampleSizes = [16, 24, 36, 48, 72, 96];
 const defaultSize = 48;
 const pangram = 'The quick brown fox jumps over the lazy dog';
 const figures = '0123456789 .,:;!? &@#$%*+=/ ()[]{} \'"';
-const oversized =
-  'This font exceeds the preview file limit (32 MB). Open it in another app to view it.';
-const unloadable = 'The font may be damaged or use a format Viewer cannot render.';
+const oversized = 'Viewer shows fonts up to 32 MB.';
+const unloadable = "This font may be damaged, or in a format Viewer can't show.";
 
 // Each face gets its own family, so two previews of different files never share a name.
 let families = 0;
@@ -79,11 +79,26 @@ export default function FontPreview(context: PreviewContext) {
       if (face) document.fonts.delete(face);
     };
   }, [tooLarge, resource.url, signal]);
-  if (tooLarge) return <Empty icon="text" title="Font preview unavailable" detail={oversized} />;
+  if (tooLarge)
+    return (
+      <PreviewFailure
+        context={context}
+        icon="text"
+        title="Font too large to show"
+        detail={oversized}
+      />
+    );
   // a result for an earlier resource is never shown as this one's
   const current = load.status !== 'loading' && load.url === resource.url ? load : undefined;
   if (current?.status === 'failed')
-    return <Empty icon="text" title="Font could not be loaded" detail={current.detail} />;
+    return (
+      <PreviewFailure
+        context={context}
+        icon="text"
+        title="Can't load this font"
+        detail={current.detail}
+      />
+    );
   if (current?.status !== 'ready') return <Loading label="Loading font…" />;
   const size = sampleSizes.includes(storedSize) ? storedSize : defaultSize;
   const fontStyle: CSSProperties = { fontFamily: `"${current.family}"` };
@@ -141,7 +156,7 @@ export default function FontPreview(context: PreviewContext) {
               ),
           )}
         </dl>
-        {unread && <p className="muted">Font details are unavailable. {unread}</p>}
+        {unread && <p className="muted">Viewer can't read this font's details. {unread}</p>}
         <section className="font-characters" aria-label="Characters">
           <h3>
             Basic Latin and Latin-1
@@ -182,8 +197,7 @@ function formatText({ format, faces }: FontInfo): string {
 /** The file's bytes, refused past the preview limit even when it grew after it was listed. */
 async function fontBytes(url: string, signal: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
   const response = await fetch(url, { signal });
-  if (!response.ok || !response.body)
-    throw new Error('The font file is unavailable. Reopen it to retry.');
+  if (!response.ok || !response.body) throw new Error("Viewer couldn't read the font file.");
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;

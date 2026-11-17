@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Resource } from '../../../domain/contracts';
 import type { PreviewContext } from '../contracts';
-import { Empty, Loading } from '../../ui/primitives';
+import { Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
 import ImagePreview from './ImagePreview';
 import { cameraRawFormats } from '../../../domain/previews/images/rendered';
 import { PreviewToolbar } from '../controls';
@@ -41,12 +42,11 @@ export default function RenderedImagePreview(context: PreviewContext) {
   }, [resource.id, services, raw, mode]);
   if (error)
     return (
-      <Empty icon="warning" title="Preview unavailable" detail={error}>
+      <PreviewFailure context={context} icon="warning" title="Can't show this image" detail={error}>
         {raw && mode === 'raw' && (
-          <button onClick={() => setMode('camera')}>Use camera preview</button>
+          <button onClick={() => setMode('camera')}>Use Camera Preview</button>
         )}
-        {context.retry && <button onClick={context.retry}>Retry preview</button>}
-      </Empty>
+      </PreviewFailure>
     );
   if (!rendered)
     return (
@@ -73,7 +73,7 @@ export default function RenderedImagePreview(context: PreviewContext) {
             aria-pressed={mode === 'raw'}
             onClick={() => setMode(mode === 'raw' ? 'camera' : 'raw')}
           >
-            {mode === 'raw' ? 'Use camera preview' : 'Render RAW'}
+            {mode === 'raw' ? 'Use Camera Preview' : 'Render RAW'}
           </button>
         </PreviewToolbar>
       )}

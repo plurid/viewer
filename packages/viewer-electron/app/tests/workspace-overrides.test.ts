@@ -79,10 +79,10 @@ describe('a workspace override', () => {
       const value = find(id).label;
       return typeof value === 'string' ? value : value(context);
     };
-    expect(label('setting.ui.space.minimap@workspace')).toBe('This workspace: Hide minimap');
+    expect(label('setting.ui.space.minimap@workspace')).toBe('This workspace: Hide Minimap');
     await act(async () => find('setting.ui.space.minimap@workspace').run(context));
     expect(activeWorkspace().overrides).toEqual({ 'ui.space.minimap': false });
-    expect(label('setting.ui.space.minimap@workspace')).toBe('This workspace: Show minimap');
+    expect(label('setting.ui.space.minimap@workspace')).toBe('This workspace: Show Minimap');
     // the general setting is as it was
     expect(getState().saved.ui.space.minimap).toBe(true);
     expect(find('workspace-overrides-clear').when(context)).toBe(true);

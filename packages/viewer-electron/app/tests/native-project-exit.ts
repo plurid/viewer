@@ -213,7 +213,7 @@ try {
     connection = await app.connect();
     await until(
       notice,
-      (text) => text.includes('Project file is missing'),
+      (text) => text.includes('The project file was moved or deleted'),
       'clear missing-file recovery',
     );
     await evaluate(focus('.folder-explorer'));

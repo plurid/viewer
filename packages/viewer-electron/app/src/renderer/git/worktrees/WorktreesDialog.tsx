@@ -17,8 +17,10 @@ import { errorMessage } from '../../../domain/errors';
 import type { WorkspaceController } from '../../workspace/context';
 import { getState, receiveSettings, useViewer } from '../../state/store';
 import { Dialog, IconButton, PathField } from '../../ui/primitives';
+import { PathLabel } from '../../ui/PathLabel';
 import './worktrees.css';
 import { CreateWorktree } from './CreateWorktree';
+import { plural } from '../../../domain/plural';
 
 interface Inspection {
   id: string;
@@ -108,7 +110,7 @@ export function WorktreesDialog({
     void window.viewer
       .gitWorktrees({ kind: 'list', directory: target.directory })
       .then((reply) => {
-        if (reply.kind !== 'catalog') throw new Error('The worktree list could not be read.');
+        if (reply.kind !== 'catalog') throw new Error('Viewer couldn’t read the worktree list.');
         if (cancelled) {
           void window.viewer
             .gitWorktrees({ kind: 'release', catalogID: reply.catalog.id })
@@ -149,7 +151,8 @@ export function WorktreesDialog({
       void window.viewer
         .gitWorktrees({ kind: 'inspect', catalogID: catalog.id, worktreeID: id })
         .then((reply) => {
-          if (reply.kind !== 'status') throw new Error('Checkout status could not be read.');
+          if (reply.kind !== 'status')
+            throw new Error('Viewer couldn’t read this checkout’s status.');
           if (!cancelled) setInspection({ id, snapshot: reply.snapshot });
         })
         .catch((error) => {
@@ -209,7 +212,7 @@ export function WorktreesDialog({
         checkout,
         destination,
       });
-      if (result.kind !== 'created') throw new Error('The worktree could not be created.');
+      if (result.kind !== 'created') throw new Error('Viewer couldn’t create the worktree.');
       const previous = catalogRef.current;
       catalogRef.current = result.catalog;
       if (mounted.current) {
@@ -238,7 +241,7 @@ export function WorktreesDialog({
 
   return (
     <Dialog
-      title={taskMode ? 'New task from branch' : creating ? 'Create worktree' : 'Open worktree'}
+      title={taskMode ? 'New Task from Branch' : creating ? 'Create Worktree' : 'Open Worktree'}
       wide
       className="worktrees-dialog"
       onClose={() => {
@@ -273,7 +276,7 @@ export function WorktreesDialog({
               setCreating(true);
             }}
           >
-            Create worktree…
+            Create Worktree…
           </button>
         </div>
       )}
@@ -302,7 +305,7 @@ export function WorktreesDialog({
                 .finally(() => setBusy(false));
             }}
           >
-            Finish task setup
+            Finish Task Setup
           </button>
         </div>
       )}
@@ -376,18 +379,16 @@ export function WorktreesDialog({
                   }}
                 >
                   <span className="worktree-branch">{worktreeLabel(tree)}</span>
-                  <span className="worktree-location" title={tree.path}>
-                    {tree.path}
-                  </span>
+                  <PathLabel className="worktree-location" path={tree.path} />
                   <span className="worktree-state">
                     {tree.path === catalog?.currentPath
                       ? 'Current checkout'
                       : tree.bare
                         ? 'Bare'
                         : tree.prunable !== undefined
-                          ? 'Prunable'
+                          ? 'Folder missing'
                           : !tree.available
-                            ? 'Unavailable'
+                            ? 'Can’t open'
                             : 'Checkout'}
                     {tree.locked !== undefined ? ' · Locked' : ''}
                   </span>
@@ -416,7 +417,7 @@ export function WorktreesDialog({
                 ) : status?.snapshot ? (
                   <p role="status">
                     {status.snapshot.changes.length
-                      ? `${status.snapshot.changes.length} ${status.snapshot.changes.length === 1 ? 'change' : 'changes'}`
+                      ? plural(status.snapshot.changes.length, 'change')
                       : 'Clean'}
                     {status.snapshot.ahead ? ` · ${status.snapshot.ahead} ahead` : ''}
                     {status.snapshot.behind ? ` · ${status.snapshot.behind} behind` : ''}
@@ -464,7 +465,7 @@ export function WorktreesDialog({
                     void open(true);
                   }}
                 >
-                  Another view beside
+                  Another View Beside
                 </button>
               )}
               <button type="button" disabled={busy} onClick={onClose}>
@@ -478,7 +479,7 @@ export function WorktreesDialog({
                   void open();
                 }}
               >
-                {busy ? 'Opening…' : existing ? 'Show existing plane' : 'Open beside'}
+                {busy ? 'Opening…' : existing ? 'Show Existing Plane' : 'Open Beside'}
               </button>
             </footer>
           </>

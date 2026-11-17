@@ -26,7 +26,8 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
     <>
       <h2>Recipes</h2>
       <p className="settings-note">
-        Recipes appear in Commands and file actions. Every file-change proposal opens for review.
+        Recipes appear in Commands and file menus. Viewer shows each change for review before it
+        applies.
       </p>
       {settings.recipes.map((recipe) => (
         <Disclosure
@@ -156,7 +157,7 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
                   ])
                 }
               >
-                Duplicate recipe
+                Duplicate Recipe
               </button>
               {!builtInRecipes.some((item) => item.id === recipe.id) && (
                 <ReferencedRemove
@@ -168,7 +169,7 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
                     )
                   }
                 >
-                  Remove recipe
+                  Remove Recipe
                 </ReferencedRemove>
               )}
             </div>
@@ -184,7 +185,7 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
             ])
           }
         >
-          New recipe
+          New Recipe
         </button>
         <button
           onClick={() => {
@@ -198,10 +199,10 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
             URL.revokeObjectURL(url);
           }}
         >
-          Export recipes
+          Export Recipes
         </button>
         <label className="button-label">
-          Import recipes
+          Import Recipes
           <input
             type="file"
             accept="application/json,.json"
@@ -212,7 +213,10 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
                   .text()
                   .then((text) => {
                     const value: unknown = JSON.parse(text);
-                    if (!Array.isArray(value)) throw new Error('Choose a recipe JSON array.');
+                    if (!Array.isArray(value))
+                      throw new Error(
+                        'That file isn’t a list of recipes. Choose one Viewer exported.',
+                      );
                     patch('settings.recipes', [...settings.recipes, ...value]);
                   })
                   .catch((error) => setError(error.message));

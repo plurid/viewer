@@ -20,7 +20,7 @@ export function journalCommands({
     },
     {
       id: 'journal-workspace',
-      label: 'Journal for workspace',
+      label: 'Journal for Workspace',
       group: 'Workspace',
       icon: 'clock',
       aliases: ['workspace events', 'workspace logs'],
@@ -29,7 +29,7 @@ export function journalCommands({
     },
     {
       id: 'journal-plane',
-      label: 'Journal for plane',
+      label: 'Journal for Plane',
       group: 'Plane',
       icon: 'clock',
       aliases: ['plane events', 'plane logs'],

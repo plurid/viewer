@@ -589,6 +589,7 @@ static napi_value volumes(napi_env env, napi_callback_info) { Work *task = new W
 #include "pdf-printing.h"
 #include "window-fullscreen.h"
 #include "quarantine.h"
+#include "remote-prompt.h"
 static napi_value init(napi_env env, napi_value exports) {
   registerFileCoordination(env, exports);
   registerFileInformation(env, exports);
@@ -596,6 +597,7 @@ static napi_value init(napi_env env, napi_value exports) {
   registerPDFPrinting(env, exports);
   registerWindowFullscreen(env, exports);
   registerQuarantine(env, exports);
+  registerRemotePrompt(env, exports);
   napi_property_descriptor methods[] = {
     {"renameRecoveryVersion", nullptr, nullptr, nullptr, nullptr, number(env, 1), napi_default, nullptr},
     {"trashConfirmation", nullptr, trashConfirmation, nullptr, nullptr, nullptr, napi_default, nullptr},

@@ -20,13 +20,100 @@ export interface SFTPReadOptions extends SFTPStreamOptions {
 type ReadResult = { kind: 'data'; data: Buffer | undefined } | { kind: 'error'; error: unknown };
 type WriteResult = { kind: 'done' } | { kind: 'error'; error: unknown };
 
+export interface SFTPStreamActivity {
+  sent: () => void;
+  replied: () => void;
+}
+
+// Only a stream lifetime can mint request options that name a stream flow, so no other caller
+// can leave the metadata flow and its queue budget.
+const streamActivity: unique symbol = Symbol('SFTP stream activity');
+
+type SFTPStreamRequestOptions = SFTPRequestOptions & {
+  readonly [streamActivity]: SFTPStreamActivity;
+};
+
+/** The stream behind request options, when a stream lifetime made them. */
+export function sftpStreamActivity(options: SFTPRequestOptions): SFTPStreamActivity | undefined {
+  return (options as Partial<SFTPStreamRequestOptions>)[streamActivity];
+}
+
+/** Every stream on one channel, and the bytes they hold between them. */
+interface ChannelStreams {
+  streams: number;
+  reserved: number;
+}
+
+const channels = new WeakMap<SFTPClient, ChannelStreams>();
+
+/**
+ * Streams on one channel split its byte budget evenly, each within its own window. A stream that
+ * holds nothing may always take one block, so no stream waits on another and none is refused.
+ */
+class StreamBudget {
+  private held = 0;
+  private left = false;
+  private readonly channel: ChannelStreams;
+
+  constructor(client: SFTPClient) {
+    let channel = channels.get(client);
+    if (!channel) {
+      channel = { streams: 0, reserved: 0 };
+      channels.set(client, channel);
+    }
+    channel.streams++;
+    this.channel = channel;
+  }
+
+  get reserved(): number {
+    return this.held;
+  }
+
+  fits(bytes: number): boolean {
+    if (this.held === 0) return true;
+    const share = Math.min(
+      remoteLimits.readBytesPerStream,
+      Math.floor(sftpBounds.streamBytesPerChannel / this.channel.streams),
+    );
+    return (
+      this.held + bytes <= share &&
+      this.channel.reserved + bytes <= sftpBounds.streamBytesPerChannel
+    );
+  }
+
+  take(bytes: number): void {
+    this.held += bytes;
+    this.channel.reserved += bytes;
+  }
+
+  give(bytes: number): void {
+    this.held -= bytes;
+    this.channel.reserved -= bytes;
+  }
+
+  leave(): void {
+    if (this.left) return;
+    this.left = true;
+    this.channel.reserved -= this.held;
+    this.held = 0;
+    this.channel.streams--;
+  }
+}
+
 /** One clock covers the stream, so active transfers have no total or per-block deadline. */
-class StreamLifetime {
+export class SFTPStreamLifetime {
   readonly controller = new AbortController();
-  readonly request: SFTPRequestOptions = { signal: this.controller.signal, timeoutMs: null };
+  readonly request: SFTPStreamRequestOptions = {
+    signal: this.controller.signal,
+    timeoutMs: null,
+    [streamActivity]: { sent: () => this.sent(), replied: () => this.replied() },
+  };
   private timer: ReturnType<typeof setTimeout> | undefined;
   private failure: Error | undefined;
   private bytes = 0n;
+  private waiting = 0;
+  private outstanding = 0;
+  private finished = false;
   private readonly stallMs: number;
   private readonly stopped: Promise<never>;
   private stop!: (error: Error) => void;
@@ -47,7 +134,6 @@ class StreamLifetime {
     void this.stopped.catch(() => {});
     options.signal?.addEventListener('abort', this.abort, { once: true });
     if (options.signal?.aborted) this.abort();
-    else this.arm();
   }
 
   private readonly abort = (): void => {
@@ -55,7 +141,8 @@ class StreamLifetime {
   };
 
   private arm(): void {
-    clearTimeout(this.timer);
+    this.pause();
+    if (this.waiting === 0 || this.outstanding === 0 || this.finished || this.failure) return;
     this.timer = setTimeout(() => {
       const error = new SFTPError('VIEWER_REMOTE_TIMEOUT', 'The server transfer made no progress.');
       this.fail(error);
@@ -63,10 +150,27 @@ class StreamLifetime {
     }, this.stallMs);
   }
 
+  private pause(): void {
+    clearTimeout(this.timer);
+    this.timer = undefined;
+  }
+
+  private sent(): void {
+    this.outstanding++;
+    if (this.waiting > 0 && this.timer === undefined) this.arm();
+  }
+
+  private replied(): void {
+    this.outstanding--;
+    if (this.outstanding === 0) {
+      this.pause();
+    }
+  }
+
   private fail(error: Error): void {
     if (this.failure) return;
     this.failure = error;
-    clearTimeout(this.timer);
+    this.pause();
     this.controller.abort();
     this.stop(error);
   }
@@ -75,19 +179,28 @@ class StreamLifetime {
     if (this.failure) throw this.failure;
   }
 
-  async wait<T>(promise: Promise<T>): Promise<T> {
-    return Promise.race([promise, this.stopped]);
+  async wait<T>(promise: Promise<T>, server = true): Promise<T> {
+    if (server) {
+      this.waiting++;
+      this.arm();
+    }
+    try {
+      return await Promise.race([promise, this.stopped]);
+    } finally {
+      if (server && --this.waiting === 0) this.pause();
+    }
   }
 
   progress(bytes: number): void {
-    if (this.failure || bytes === 0) return;
+    if (this.failure || this.finished || bytes === 0) return;
     this.bytes += BigInt(bytes);
-    this.arm();
+    if (this.waiting > 0) this.arm();
     this.options.onProgress?.(this.bytes);
   }
 
   finish(): void {
-    clearTimeout(this.timer);
+    this.finished = true;
+    this.pause();
     this.options.signal?.removeEventListener('abort', this.abort);
     this.controller.abort();
   }
@@ -104,7 +217,7 @@ function streamShape(
     'Invalid SFTP stream chunk size.',
   );
   protocolAssert(
-    Number.isInteger(concurrency) && concurrency > 0 && concurrency <= 1024,
+    Number.isSafeInteger(concurrency) && concurrency > 0,
     'Invalid SFTP stream concurrency.',
   );
   protocolAssert(
@@ -113,7 +226,7 @@ function streamShape(
   );
   return {
     chunk,
-    concurrency: Math.min(concurrency, Math.floor(remoteLimits.readBytesPerStream / chunk)),
+    concurrency: Math.min(concurrency, remoteLimits.requestsPerChannel),
   };
 }
 
@@ -137,13 +250,13 @@ export async function* pread(
   let next = options.offset ?? 0n;
   const end = options.length === undefined ? undefined : next + options.length;
   protocolAssert(end === undefined || end <= 0xffffffffffffffffn, 'Invalid SFTP stream range.');
-  const lifetime = new StreamLifetime(client, options);
+  const lifetime = new SFTPStreamLifetime(client, options);
+  const budget = new StreamBudget(client);
   const blocks: ReadBlock[] = [];
-  let reserved = 0;
   let eof = false;
   const launch = (offset: bigint, length: number): ReadBlock => {
-    reserved += length;
-    options.onInFlight?.(reserved);
+    budget.take(length);
+    options.onInFlight?.(budget.reserved);
     return {
       offset,
       length,
@@ -164,7 +277,7 @@ export async function* pread(
           end === undefined
             ? chunk
             : Number(end - next < BigInt(chunk) ? end - next : BigInt(chunk));
-        if (reserved + length > remoteLimits.readBytesPerStream) break;
+        if (!budget.fits(length)) break;
         blocks.push(launch(next, length));
         next += BigInt(length);
       }
@@ -201,12 +314,13 @@ export async function* pread(
           );
         }
       } finally {
-        reserved -= block.length;
-        options.onInFlight?.(reserved);
+        budget.give(block.length);
+        options.onInFlight?.(budget.reserved);
       }
     }
   } finally {
     lifetime.finish();
+    budget.leave();
     options.onInFlight?.(0);
   }
 }
@@ -226,22 +340,22 @@ export async function pwrite(
   const { chunk, concurrency } = streamShape(options, client.writeChunkBytes(handle));
   const iterator =
     Symbol.asyncIterator in source ? source[Symbol.asyncIterator]() : source[Symbol.iterator]();
-  const lifetime = new StreamLifetime(client, options);
+  const lifetime = new SFTPStreamLifetime(client, options);
+  const budget = new StreamBudget(client);
   const blocks: WriteBlock[] = [];
   let offset = options.offset ?? 0n;
   const start = offset;
-  let reserved = 0;
   let sourceDone = false;
   const retire = async (): Promise<void> => {
     const block = blocks.shift()!;
     const result = await lifetime.wait(block.result);
-    reserved -= block.length;
-    options.onInFlight?.(reserved);
+    budget.give(block.length);
+    options.onInFlight?.(budget.reserved);
     if (result.kind === 'error') throw result.error;
   };
   try {
     while (true) {
-      const item = await lifetime.wait(Promise.resolve(iterator.next()));
+      const item = await lifetime.wait(Promise.resolve(iterator.next()), false);
       if (item.done) {
         sourceDone = true;
         break;
@@ -249,18 +363,16 @@ export async function pwrite(
       protocolAssert(Buffer.isBuffer(item.value), 'SFTP uploads require byte buffers.');
       for (let index = 0; index < item.value.length; index += chunk) {
         lifetime.check();
-        const data = Buffer.from(item.value.subarray(index, index + chunk));
-        while (
-          blocks.length >= concurrency ||
-          reserved + data.length > remoteLimits.readBytesPerStream
-        )
-          await retire();
+        const length = Math.min(chunk, item.value.length - index);
+        while (blocks.length >= concurrency || !budget.fits(length)) await retire();
         protocolAssert(
-          offset + BigInt(data.length) <= 0xffffffffffffffffn,
+          offset + BigInt(length) <= 0xffffffffffffffffn,
           'Invalid SFTP write range.',
         );
-        reserved += data.length;
-        options.onInFlight?.(reserved);
+        // Copied only once the block has room, so a waiting upload holds no second copy.
+        const data = Buffer.from(item.value.subarray(index, index + length));
+        budget.take(length);
+        options.onInFlight?.(budget.reserved);
         blocks.push({
           length: data.length,
           result: client
@@ -278,6 +390,7 @@ export async function pwrite(
     return offset - start;
   } finally {
     lifetime.finish();
+    budget.leave();
     // A blocked producer must not keep cancellation waiting for another source value.
     if (!sourceDone && iterator.return) {
       try {

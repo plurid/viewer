@@ -8,8 +8,8 @@ bounded and cleared.
 | Command                   | Opens                            |
 | ------------------------- | -------------------------------- |
 | **Open Journal**          | Every event                      |
-| **Journal for workspace** | Filtered to the active workspace |
-| **Journal for plane**     | Filtered to the active plane     |
+| **Journal for Workspace** | Filtered to the active workspace |
+| **Journal for Plane**     | Filtered to the active plane     |
 
 Each Journal plane keeps its own filters and reading position.
 
@@ -32,7 +32,7 @@ trace ID.
 | `started`   | started                | Info    |
 | `waiting`   | waiting for a decision | Warning |
 | `succeeded` | completed              | Info    |
-| `cancelled` | cancelled              | Info    |
+| `cancelled` | canceled               | Info    |
 | `failed`    | failed                 | Error   |
 
 An event holds its time, source, action, phase, level, workspace, plane, window, trace, task and
@@ -69,22 +69,22 @@ it, and agents have no route to read it.
 | **Local servers**          | Source **Server**    |
 | **Workspace saves**        | Source **Workspace** |
 
-The list shows 200 events at a time; **Load older events** reads the next 200. **↑**, **↓**,
-**Home** and **End** move through it. Select a row for its details: **Show trace** filters to its
-trace, **Go to plane** or **Go to workspace** opens its source when it is still open, and **Copy
-event ID** copies the ID.
+The list shows 200 events at a time; **Load Older Events** reads the next 200. **↑**, **↓**,
+**Home** and **End** move through it. Select a row for its details: **Show Trace** filters to its
+trace, **Go to Plane** or **Go to Workspace** opens its source when it is still open, and **Copy
+Event ID** copies the ID.
 
 ## Follow and pause
 
 **Following live** shows new events as they arrive. Reading older events pauses following: new
-matches then add to a count (**N new · Show latest**) without replacing the rows you are reading.
-**Paused · Resume** or **Show latest** returns to the newest events.
+matches then add to a count (**N new · Show Latest**) without replacing the rows you are reading.
+**Paused · Resume** or **Show Latest** returns to the newest events.
 
 ## Export
 
 **Export…** prepares the matching events as JSON (`{ "version": 1, "records": [...] }`) and shows
 the exact text with its count and size. It includes the internal workspace, plane and task IDs and
-nothing else beyond the event fields. **Save export…** writes it to a new file you choose; it never
+nothing else beyond the event fields. **Save Export…** writes it to a new file you choose; it never
 overwrites an existing file.
 
 | Export limit      | Value                                                        |
@@ -99,9 +99,9 @@ It does not rotate. When it is full it stops recording, says **Journal is full. 
 move history to the Trash to continue recording.**, and counts the events it could not record this
 session.
 
-**Move history to Trash…** asks for confirmation, then moves the Journal file to the Trash and
+**Move History to Trash…** asks for confirmation, then moves the Journal file to the Trash and
 starts an empty one. If the file changed outside Viewer, recording stops and the file is kept:
-**Recording is unavailable. Existing history is preserved; actions still work.**
+**Journal can’t record right now. Its history is kept, and everything else works.**
 
 **Related:** [Get back to your work](../guides/troubleshooting.md) ·
 [File operations](file-operations.md) · [Terminals and command output](terminals.md) ·

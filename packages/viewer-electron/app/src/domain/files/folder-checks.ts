@@ -28,7 +28,7 @@ export class FolderCheckBusy extends Error {
 }
 export class FolderCheckCancelled extends Error {
   constructor() {
-    super('Folder checking cancelled.');
+    super('Checking the folder was canceled.');
   }
 }
 

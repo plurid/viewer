@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry, ResourceRead } from '../../../domain/contracts';
 import type { SubtitleCue, Subtitles } from '../../../domain/previews/data/subtitles';
+import { plural } from '../../../domain/plural';
 import type { PreviewContext } from '../contracts';
 import type { ParsedText } from '../ParsedDocument';
 import {
@@ -14,9 +15,6 @@ import {
 import { ParsedDocument } from '../ParsedDocument';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
-
-const plural = (count: number, one: string, many: string) =>
-  `${count.toLocaleString()} ${count === 1 ? one : many}`;
 
 function readSubtitles(read: ResourceRead, entry: FileEntry): ParsedText<Subtitles> {
   const format = subtitleFormat(entry.extension, read.text);

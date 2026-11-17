@@ -1,28 +1,28 @@
 # PDF tools
 
-This page lists what **PDF tools…** and **Optimize…** do to PDFs, their controls and their limits.
+This page lists what **PDF Tools…** and **Optimize…** do to PDFs, their controls and their limits.
 
-Select up to 16 PDFs and choose **PDF tools…** in **⌘K**, or press **PDF tools…** in a PDF preview.
+Select up to 16 PDFs and choose **PDF Tools…** in **⌘K**, or press **PDF Tools…** in a PDF preview.
 The page list is the output plan; the preview shows the selected source page.
 
 ## Assemble pages
 
 | Task    | Control                                                                                                    |
 | ------- | ---------------------------------------------------------------------------------------------------------- |
-| Extract | Choose the **Source PDF**, type a range in **Pages to include**, such as `1-3, 8, 5`, then **Apply range** |
+| Extract | Choose the **Source PDF**, type a range in **Pages to include**, such as `1-3, 8, 5`, then **Apply Range** |
 | Merge   | Select several PDFs, or use **Add PDFs…**, then arrange their pages                                        |
 | Reorder | Select a page, then **Move page up** or **Move page down**                                                 |
 | Rotate  | Select a page, then **Rotate page clockwise** (90° each press)                                             |
-| Include | Tick each page, or use **Include all** and **Clear selection**                                             |
-| Split   | Tick **Save each included page separately**, then **Split pages**                                          |
+| Include | Tick each page, or use **Include All** and **Exclude All**                                                 |
+| Split   | Tick **Save each included page separately**, then **Split Pages**                                          |
 
 - A range keeps the order you type; `5-1` runs backwards. A page named twice is included once.
-- **Save PDF** writes one file under the name and folder you choose. **Split pages** writes
+- **Save PDF** writes one file under the name and folder you choose. **Split Pages** writes
   `Name 001.pdf`, `Name 002.pdf` and so on.
 - Page text, vectors and page geometry are kept. A new document does not keep document bookmarks,
   interactive forms or accessibility tags.
 - Signed and encrypted PDFs are refused; use an unsigned, unlocked copy.
-- **Cancel export** stops further work; outputs already completed stay.
+- **Cancel Export** stops further work; outputs already completed stay.
 
 | Limit               | Value                |
 | ------------------- | -------------------- |

@@ -9,24 +9,24 @@ choice.
 
 ## Commands
 
-**View → Group by** in a folder's menu offers **Ungroup files**, **Group by kind**, **Group by date
+**View → Group by** in a folder's menu offers **Ungroup Files**, **Group by Kind**, **Group by date
 modified** and **Group by “**_lens_**”** for each lens of the folder. The other lens commands are in
 **⌘K** and the folder's menus.
 
 | Command                                                  | Does                                                                                                              |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| **New lens…**                                            | Makes an empty lens for this folder                                                                               |
-| **Group selection…**                                     | Puts the selected items in a new group                                                                            |
-| **Move to group…**, **Move to Unsorted**                 | Places the selection by hand                                                                                      |
-| **Place automatically**                                  | Lets rules or Unsorted decide again                                                                               |
-| **New group…**, **New group inside…**                    | Adds a group, at the top level or inside the chosen group                                                         |
-| **Rename group…**, **Rules…**, **Delete group**          | Edit the chosen group; deleting moves its contents to its parent, or back to automatic placement at the top level |
-| **Select items in group**                                | Selects the group's items                                                                                         |
-| **Collapse all groups**, **Expand all groups**           | Change this person's view only                                                                                    |
-| **Rename lens…**, **Duplicate lens**, **Show lens file** | Work on the whole lens                                                                                            |
-| **Store lens in this folder**                            | Moves a lens kept on this Mac into the folder, once it can hold it                                                |
+| **New Lens…**                                            | Makes an empty lens for this folder                                                                               |
+| **Group Selection…**                                     | Puts the selected items in a new group                                                                            |
+| **Move to Group…**, **Move to Unsorted**                 | Places the selection by hand                                                                                      |
+| **Place Automatically**                                  | Lets rules or Unsorted decide again                                                                               |
+| **New Group…**, **New Group Inside…**                    | Adds a group, at the top level or inside the chosen group                                                         |
+| **Rename Group…**, **Rules…**, **Delete Group**          | Edit the chosen group; deleting moves its contents to its parent, or back to automatic placement at the top level |
+| **Select Items in Group**                                | Selects the group's items                                                                                         |
+| **Collapse All Groups**, **Expand All Groups**           | Change this person's view only                                                                                    |
+| **Rename Lens…**, **Duplicate Lens**, **Show Lens File** | Work on the whole lens                                                                                            |
+| **Store Lens in This Folder**                            | Moves a lens kept on this Mac into the folder, once it can hold it                                                |
 | **Clean up** _n_ **missing items**                       | Forgets groups and places of items no longer in the folder                                                        |
-| **Move lens to Trash…**                                  | Moves the lens file to the Trash; the files it groups stay                                                        |
+| **Move Lens to Trash…**                                  | Moves the lens file to the Trash; the files it groups stay                                                        |
 
 List, Grid and Columns show group headings. Groups nest, collapse and accept items dropped from the
 same folder. Gallery labels groups and keeps its file browsing.

@@ -641,7 +641,7 @@ async function verifyDailyFileWork(): Promise<void> {
     () =>
       evaluate(
         pageCall(
-          () => document.querySelector('dialog[open]')?.getAttribute('aria-label') === 'New folder',
+          () => document.querySelector('dialog[open]')?.getAttribute('aria-label') === 'New Folder',
         ),
       ),
     Boolean,
@@ -873,7 +873,7 @@ async function verifyDailyFileWork(): Promise<void> {
     'New plane must use the large display: ' + JSON.stringify(newPlane),
   );
   await snapshot('desktop-native-large-plane.png');
-  await paletteCommand('Close plane');
+  await paletteCommand('Close Plane');
   await until(
     () => evaluate(pageCall(planeCount)),
     (count) => count === 1,
@@ -997,7 +997,7 @@ async function verifySelectionReliability(): Promise<void> {
     (value) => value.includes(formatBytes(measured.bytes)),
     'measured folder footer',
   );
-  await paletteCommand('Get info…');
+  await paletteCommand('Get Info…');
   assert.ok(
     (await text()).includes(formatBytes(measured.bytes)),
     'File information reuses the measured folder total',
@@ -1168,7 +1168,7 @@ async function verifyFoundations(): Promise<void> {
     'parent restores its own List view',
   );
   await evaluate(clickElement('.file-scroll'));
-  await paletteCommand('Open terminal plane');
+  await paletteCommand('Open Terminal Plane');
   await until(
     () =>
       evaluate(
@@ -1212,13 +1212,13 @@ async function verifyFoundations(): Promise<void> {
   assert.ok(child.child, 'Terminal belongs to the originating root');
   assert.ok(Math.abs(child.angle - 90.1) < 0.001, 'Terminal opens at 90.1 degrees to its parent');
   await snapshot('desktop-native-terminal.png');
-  await paletteCommand('New folder plane');
+  await paletteCommand('New Folder Plane');
   await until(
     () => evaluate(pageCall(planeCount)),
     (count) => count === 2,
     'new root from terminal context',
   );
-  await paletteCommand('Open terminal plane');
+  await paletteCommand('Open Terminal Plane');
   await until(
     () =>
       evaluate(
@@ -1266,7 +1266,7 @@ async function verifyFoundations(): Promise<void> {
     ),
   );
   await delay(300);
-  await paletteCommand('Frame all planes');
+  await paletteCommand('Frame All Planes');
   await settleCamera();
   await until(
     () => evaluate(pageCall(() => document.body.textContent)),
@@ -1380,16 +1380,16 @@ async function verifyConfiguredChrome(): Promise<void> {
   await key('Escape', 'Escape');
   await tab('Space');
   const controls = [
-    'Navigation button',
-    'Back button',
-    'Forward button',
-    'View menu',
+    'Navigation',
+    'Back',
+    'Forward',
+    'View',
     'Folder search',
-    'Frame plane button',
-    'Dock plane button',
+    'Frame',
+    'Dock',
     'Pinned tools',
-    'Actions menu',
-    'Close plane button',
+    'Actions',
+    'Close',
   ];
   const preset = () =>
     settingsEvaluate(
@@ -1759,7 +1759,7 @@ async function verifyColumnWorkflows(): Promise<void> {
     'removal closes the obsolete column branch',
   );
   assert.equal(await evaluate(countOf('.file-row.is-selected')), 0);
-  assert.equal((await text()).includes('Folder unavailable'), false);
+  assert.equal((await text()).includes("Can't open this folder"), false);
   assert.equal(
     await readFile(path.join(target, 'Source', 'Note.txt'), 'utf8'),
     'Generated clipboard and drag fixture.',
@@ -2084,7 +2084,7 @@ async function verifyAnchoredPreviews(): Promise<void> {
     (value) => !value,
     'unmounted selected source row',
   );
-  await paletteCommand('Open linked plane');
+  await paletteCommand('Open Linked Plane');
   await until(
     () =>
       evaluate(
@@ -2226,7 +2226,7 @@ const endpointReadOnly = (kind: string) =>
     `[data-provider-kind=${kind}] [aria-label="Provider endpoint"]`,
   )!.readOnly;
 async function verifyGroupedMenuAndModels(): Promise<void> {
-  await paletteCommand('Dock plane');
+  await paletteCommand('Dock Plane');
   const readme = fileSelector(path.join(fixture.files, 'README.md'));
   await contextMenu(readme);
   assert.equal(await evaluate(countOf('.context-menu [data-menu-id^=view-]')), 0);
@@ -2394,14 +2394,14 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   await command('Emulation.clearDeviceMetricsOverride');
 
   await tab('Models');
-  // Add model opens the provider picker; setting one up closes it again.
+  // Add Model opens the provider picker; setting one up closes it again.
   const addModel = async () => {
     await until(
-      () => settingsEvaluate(buttonState('Add model', '.models-introduction')),
+      () => settingsEvaluate(buttonState('Add Model', '.models-introduction')),
       (state) => state === 'enabled',
-      'Add model',
+      'Add Model',
     );
-    await settingsEvaluate(pressButton('Add model', '.models-introduction'));
+    await settingsEvaluate(pressButton('Add Model', '.models-introduction'));
     await until(
       () => settingsEvaluate(exists(choiceButton('New model provider'))),
       Boolean,
@@ -2418,7 +2418,7 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
   for (const [index, kind] of ['zai', 'deepseek', 'qwen', 'gemini', 'openrouter'].entries()) {
     if (index) await addModel();
     await choose('New model provider', kind, settingsEvaluate);
-    await settingsEvaluate(pressButton('Set up model', '.settings-provider-add'));
+    await settingsEvaluate(pressButton('Set Up Model', '.settings-provider-add'));
   }
   await until(
     () => settingsEvaluate(pageCall(providerKinds)),
@@ -2462,7 +2462,7 @@ async function verifyGroupedMenuAndModels(): Promise<void> {
       Array.from(
         document.querySelectorAll<HTMLButtonElement>('[data-provider-kind=deepseek] button'),
       )
-        .find((button) => button.textContent.trim() === 'Connect and load models')!
+        .find((button) => button.textContent.trim() === 'Load Models')!
         .click(),
     ),
   );
@@ -2546,7 +2546,7 @@ async function frameModel(): Promise<ModelFramePlace> {
   return 'menu';
 }
 async function verifyModelLighting(): Promise<void> {
-  await paletteCommand('Dock plane');
+  await paletteCommand('Dock Plane');
   await click(fileSelector(path.join(fixture.files, 'Models')), 2);
   await until(text, (value) => value.includes('Lighting.step'), 'Lighting fixture folder');
   const observations: { look: string; view: number; geometry: number; blackFraction: number }[] =
@@ -2668,7 +2668,7 @@ async function settledRowInView(row: string) {
 const showToolbarPreview = () =>
   document.querySelector('.settings-toolbar-preview')!.scrollIntoView({ block: 'start' });
 async function verifyRefinements(): Promise<void> {
-  await paletteCommand('Dock plane');
+  await paletteCommand('Dock Plane');
   await settleCamera();
   const readme = path.join(fixture.files, 'README.md');
   // Preserve all pasteboard items/types, including images and rich text, without logging them.
@@ -2869,12 +2869,12 @@ async function verifyRefinements(): Promise<void> {
     );
     await closePreview();
   }
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await contextMenu(fileSelector(path.join(fixture.files, 'Models')));
-  await command('Input.insertText', { text: 'Open in another plane' });
+  await command('Input.insertText', { text: 'Open in Another Plane' });
   await key('Enter', 'Enter');
   await restoredEngine(2);
-  await paletteCommand('Dock plane');
+  await paletteCommand('Dock Plane');
   await until(
     () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState),
     (state) =>
@@ -2883,7 +2883,7 @@ async function verifyRefinements(): Promise<void> {
     'Folder opens as an independent root',
   );
   await contextMenu(fileSelector(path.join(fixture.files, 'Models', 'Triangle.stl')));
-  await command('Input.insertText', { text: 'Open in another plane' });
+  await command('Input.insertText', { text: 'Open in Another Plane' });
   await key('Enter', 'Enter');
   await restoredEngine(3);
   await until(
@@ -3032,13 +3032,13 @@ async function verifyRefinements(): Promise<void> {
   assert.equal(requestedAccess.pending.roots.length, 1);
   await snapshot('desktop-native-settings-long-path.png');
   await tab('Space');
-  await setting('Navigation button');
-  await setting('Back button');
+  await setting('Navigation');
+  await setting('Back');
   await settingsEvaluate(pageCall(showToolbarPreview));
   assert.equal(await settingsEvaluate(countOf('.settings-toolbar-preview[data-enabled=false]')), 2);
   await snapshot('desktop-native-settings-toolbar-states.png');
-  await setting('Navigation button');
-  await setting('Back button');
+  await setting('Navigation');
+  await setting('Back');
   await tab('Browsing');
   await settingsEvaluate(
     patchSettings(
@@ -3056,7 +3056,7 @@ async function verifyRefinements(): Promise<void> {
   await settingsEvaluate(
     pageCall(() =>
       document
-        .querySelector('[aria-label="New folder planes start in"]')!
+        .querySelector('[aria-label="New folder planes open at"]')!
         .closest('.settings-row')!
         .scrollIntoView({ block: 'start' }),
     ),
@@ -3213,7 +3213,7 @@ async function verifyFileQueries(): Promise<void> {
   await line('filter');
   await until(shown, (names) => names.length === 11, ':filter cleared');
   // a commander's pair: side by side, the other plane in Documents, ⌃⌘C copies there, < swaps
-  await paletteCommand('View side by side');
+  await paletteCommand('View Side by Side');
   await until(
     () => evaluate(countOf('.plane-pair')),
     (count) => count === 2,
@@ -3498,8 +3498,8 @@ async function verifyLook(): Promise<void> {
   await blur();
   // a first run is quiet: no space toolbar, and the minimap only once three planes are open
   assert.equal((await chrome()).toolbar, false);
-  await paletteCommand('Show space toolbar');
-  await paletteCommand('Turn off: Minimap only with 3 or more planes');
+  await paletteCommand('Show Space Toolbar');
+  await paletteCommand('Turn Off: Minimap only with 3 or more planes');
   await until(chrome, (now) => now.toolbar && now.minimap, 'the space toolbar and minimap shown');
   assert.deepEqual(await chrome(), { toolbar: true, minimap: true, titlebar: 'shown' });
   // ⇧⌘F: the chrome away, and back
@@ -3729,7 +3729,7 @@ async function verifySpace(): Promise<void> {
   await key('E', 'KeyE', 8);
   await until(count, (now) => now === before, 'exploded planes collapsed');
   // a template of the planes in view, opened again tiled
-  await paletteCommand('Save layout as template…');
+  await paletteCommand('Save Layout as Template…');
   await until(() => evaluate(exists('dialog[open] input')), Boolean, 'the template name dialog');
   await command('Input.insertText', { text: 'Pair' });
   await click('dialog[open] footer .primary');
@@ -4061,7 +4061,7 @@ async function verifyTextEditing(): Promise<void> {
   );
   await key('t', 'KeyT', 5);
   await until(titlebarState, (state) => state === 'shown', 'title bar shown by ⌥⌘T');
-  await paletteCommand('Workspace look…');
+  await paletteCommand('Workspace Look…');
   await until(
     () => evaluate(exists('dialog [aria-label="Ocean"]')),
     Boolean,
@@ -4075,21 +4075,21 @@ async function verifyTextEditing(): Promise<void> {
   );
   await snapshot('workspace-background.png');
   await click('dialog footer .primary');
-  await paletteCommand('Hide background grid');
+  await paletteCommand('Hide Background Grid');
   await until(
     () => evaluate(pageCall(spaceStyle, 'backgroundImage')),
     (image) => !image.includes('gradient'),
     'grid hidden',
   );
-  await paletteCommand('Show background grid');
+  await paletteCommand('Show Background Grid');
   // every setting is a command: plurid's minimap goes and comes back; always, not only from the
   // third plane as on a first run
   const minimap = () => evaluate(exists('[data-plurid-minimap]'));
-  await paletteCommand('Turn off: Minimap only with 3 or more planes');
+  await paletteCommand('Turn Off: Minimap only with 3 or more planes');
   await until(minimap, Boolean, 'the minimap shown always');
-  await paletteCommand('Hide minimap');
+  await paletteCommand('Hide Minimap');
   await until(minimap, (shown) => !shown, 'minimap hidden by its command');
-  await paletteCommand('Show minimap');
+  await paletteCommand('Show Minimap');
   await until(minimap, Boolean, 'minimap shown by its command');
   await until(
     () => evaluate(pageCall(spaceStyle, 'backgroundImage')),
@@ -4131,7 +4131,7 @@ async function verifyPublishedPlaneInput(): Promise<void> {
     assert.ok(Math.abs(actual - expected) < 2, `${label}: ${actual} vs ${expected}`);
   const roots = (count: number) =>
     until(folders, (value) => value.planes.length === count, `${count} folder planes`);
-  await paletteCommand('View side by side');
+  await paletteCommand('View Side by Side');
   await roots(2);
   await settleCamera();
   let layout = await folders();
@@ -4155,18 +4155,18 @@ async function verifyPublishedPlaneInput(): Promise<void> {
   );
   await click(`${plane(peerID)} [aria-label="Close plane"]`);
   await roots(1);
-  await paletteCommand('Full width');
+  await paletteCommand('Full Width');
   await settleCamera();
   layout = await folders();
   near(layout.planes[0].width, layout.canvas.width - 16, 'remaining plane full width');
-  await paletteCommand('Undo arrangement');
+  await paletteCommand('Undo Arrangement');
   await settleCamera();
   near((await folders()).planes[0].width, ordered[0].width, 'Undo full width');
-  await paletteCommand('Undo arrangement');
+  await paletteCommand('Undo Arrangement');
   await roots(2);
-  await paletteCommand('Undo arrangement');
+  await paletteCommand('Undo Arrangement');
   await roots(1);
-  await paletteCommand('View stacked');
+  await paletteCommand('View Stacked');
   await roots(2);
   await settleCamera();
   layout = await folders();
@@ -4235,10 +4235,10 @@ async function verifyPublishedPlaneInput(): Promise<void> {
   await until(camera, (value) => value !== before, 'Escape releases plane scrolling');
   await settleCamera();
   assert.equal(await scrollTop(), selectedScroll, 'Released sidebar must not keep scrolling');
-  await paletteCommand('Frame plane');
+  await paletteCommand('Frame Plane');
   await settleCamera();
   await click(`${top} .plane-heading`);
-  await paletteCommand('Fill workspace');
+  await paletteCommand('Fill Workspace');
   await settleCamera();
   const note = path.join(fixture.files, 'README.md');
   await click(`${top} ${fileSelector(note)}`);
@@ -4271,11 +4271,11 @@ const transformMode = () =>
 async function verifySpatialTools(): Promise<void> {
   // a first run has no space toolbar
   if (!(await evaluate(exists('[data-plurid-entity="PluridToolbar"]'))))
-    await paletteCommand('Show space toolbar');
+    await paletteCommand('Show Space Toolbar');
   await until(() => evaluate(exists('[aria-label="Rotate mode"]')), Boolean, 'the space toolbar');
   await click('[aria-label="Rotate mode"]');
   assert.equal(await evaluate(pageCall(transformMode)), 'ROTATION');
-  await paletteCommand('Finish spatial tool');
+  await paletteCommand('Finish Spatial Tool');
   assert.equal(await evaluate(pageCall(transformMode)), 'ALL');
   await paletteCommand('Translate space');
   assert.equal(await evaluate(pageCall(transformMode)), 'TRANSLATION');
@@ -4612,7 +4612,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   await click('[aria-label="Fit drawing"]');
   await evaluate(clickElement('.dxf-layer input'));
   await closePreview();
-  await preview(path.join(fixture.files, 'Broken.dxf'), 'Drawing could not be loaded');
+  await preview(path.join(fixture.files, 'Broken.dxf'), "Can't show this drawing");
   await closePreview();
   // Exercise the same module in an actual linked Plurid plane with header controls.
   await click(fileSelector(path.join(fixture.files, 'Panel.dxf')), 2);
@@ -4624,7 +4624,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   );
   // the plane's Essential header leaves the drawing grid to "…"
   await checkDrawingToolbar('.plane-module-controls .preview-toolbar > button', 28, 4);
-  await paletteCommand('Measure distance');
+  await paletteCommand('Measure Distance');
   await until(
     () => evaluate(textOf(choiceButton('Drawing tool'))),
     (value) => value === 'Distance',
@@ -4637,7 +4637,7 @@ async function verifyDrawingsAndWorkspaces(): Promise<void> {
   );
   await snapshot('desktop-native-dxf-plane.png');
   if (process.env.VIEWER_TEST_DXF_FILE) {
-    await paletteCommand('Close plane');
+    await paletteCommand('Close Plane');
     await preview(path.join(fixture.files, 'User panel.dxf'), 'Click geometry');
     await until(
       () => evaluate(exists('.dxf-viewer[data-dxf-entities="5"]')),
@@ -4872,7 +4872,7 @@ async function verifyRestoredPreviews(): Promise<void> {
     ),
   );
   const history = await evaluate(pageCall(undoDepth));
-  await paletteCommand('Consolidate repeated previews');
+  await paletteCommand('Consolidate Repeated Previews');
   await until(
     () => evaluate(pageCall(inspectedPlaneCount)),
     (count) => count === 2,
@@ -4892,13 +4892,13 @@ async function verifyRestoredPreviews(): Promise<void> {
     'Recovery keeps the active preview and its placement',
   );
   assert.equal(await evaluate(pageCall(undoDepth)), history + 1);
-  await paletteCommand('Undo arrangement');
+  await paletteCommand('Undo Arrangement');
   await until(
     () => evaluate(pageCall(inspectedPlaneCount)),
     (count) => count === 4,
     'one undo restores every consolidated preview',
   );
-  await paletteCommand('Redo arrangement');
+  await paletteCommand('Redo Arrangement');
   await until(
     () => evaluate(pageCall(inspectedPlaneCount)),
     (count) => count === 2,
@@ -4932,7 +4932,7 @@ async function verifyRestoredPreviews(): Promise<void> {
   await evaluate(pageCall(frameFirstPlane));
   await settleCamera();
   await click(fileSelector(path.join(fixture.files, 'Images', 'Color.png')));
-  await paletteCommand('Open in another plane');
+  await paletteCommand('Open in Another Plane');
   await until(
     () => evaluate(pageCall(inspectedPlaneCount)),
     (count) => count === 3,
@@ -4954,17 +4954,17 @@ async function verifyRestoredPreviews(): Promise<void> {
     Boolean,
     'commands after restoring explicit copy',
   );
-  await command('Input.insertText', { text: 'Consolidate repeated previews' });
+  await command('Input.insertText', { text: 'Consolidate Repeated Previews' });
   await until(
     () => evaluate(requiredAttribute('[aria-label="Search commands"]', 'value')),
-    (value) => value === 'Consolidate repeated previews',
+    (value) => value === 'Consolidate Repeated Previews',
     'query for unavailable consolidation after reopening an intentional copy',
   );
   assert.equal(
     await evaluate(
       pageCall(() =>
         Array.from(document.querySelectorAll('.command-result')).some((row) =>
-          row.textContent.includes('Consolidate repeated previews'),
+          row.textContent.includes('Consolidate Repeated Previews'),
         ),
       ),
     ),
@@ -5074,7 +5074,7 @@ async function verifyServiceWorkflows(): Promise<void> {
   await key('a', 'KeyA', 4, ['selectAll']);
   const editedName = '2000, J. E. Rehder, Reviewed title, Fixture Press.epub';
   await command('Input.insertText', { text: editedName });
-  await click('[aria-label="Edit path for Book.epub"]');
+  await click('[aria-label="Edit Path for Book.epub"]');
   assert.equal(
     await evaluate(requiredValue(destinationSelector)),
     path.join(documents, editedName),
@@ -5083,7 +5083,7 @@ async function verifyServiceWorkflows(): Promise<void> {
   await click(destinationSelector);
   await key('a', 'KeyA', 4, ['selectAll']);
   await command('Input.insertText', { text: plan.rows[0].destination });
-  await click('[aria-label="Edit filename for Book.epub"]');
+  await click('[aria-label="Edit Name for Book.epub"]');
   await click('[aria-label="Evidence for Book.epub"]');
   await snapshot('action-review-native.png');
   await click('.task-dialog footer .primary');
@@ -5101,7 +5101,7 @@ async function verifyServiceWorkflows(): Promise<void> {
   );
   assert.deepEqual(await inventory(), unchanged);
   await closePreview();
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await evaluate(
     patchSettings({
       path: 'settings.savedSearches',
@@ -5138,7 +5138,7 @@ async function verifyServiceWorkflows(): Promise<void> {
   await key('Enter', 'Enter');
   await until(
     text,
-    (value) => value.includes('File information'),
+    (value) => value.includes(`“${path.basename(book)}” Info`),
     'shared search result file information',
   );
   await closePreview();
@@ -5318,7 +5318,7 @@ async function verifyIndependentPreviewRevocation(): Promise<void> {
     if (settingsMode) await click('dialog [aria-label="Close"]');
     await evaluate(pageCall((id: string) => window.viewer.release(id), resource.id));
     await closePreview();
-    await paletteCommand('Parent folder');
+    await paletteCommand('Parent Folder');
   }
   console.log(
     'Preview permissions: unrelated resources/decoded UI remain usable; revoked text is disposed through the real Settings API.',
@@ -5396,22 +5396,23 @@ async function verifyStoreFileServices(): Promise<void> {
       () =>
         evaluate(
           pageCall(() =>
-            [...document.querySelectorAll('.folder-error button')].some((button) =>
-              button.textContent.includes('Allow folder access'),
+            // the unreadable folder's empty state holds the access button
+            [...document.querySelectorAll('.empty-state button')].some((button) =>
+              /allow folder access/i.test(button.textContent),
             ),
           ),
         ),
       Boolean,
       'actionable native folder access control',
     );
-    assert.ok((await text()).includes('Folder access required'));
+    assert.ok((await text()).includes('Viewer needs your permission to open this folder.'));
     assert.ok(!(await text()).includes('This folder is empty'));
     await snapshot('desktop-native-folder-access.png');
     await chmod(restricted, 0o700);
     await evaluate(pageCall(() => window.dispatchEvent(new Event('viewer:refresh'))));
     await until(
       text,
-      (value) => !value.includes('Folder access required'),
+      (value) => !value.includes('Viewer needs your permission to open this folder.'),
       'granted folder reloads',
     );
     await delay(500);
@@ -5425,7 +5426,7 @@ async function verifyStoreFileServices(): Promise<void> {
     await snapshot('desktop-native-folder-access-recovered.png');
   } finally {
     await chmod(restricted, 0o700);
-    await paletteCommand('Parent folder');
+    await paletteCommand('Parent Folder');
     await trashTemporary(restricted);
   }
   await verifyBackgroundApp();
@@ -5626,7 +5627,7 @@ async function verifyCapturedMenus(): Promise<void> {
   );
   // Frame can place a spatial header beneath the minimap's interactive dots.
   // Docking gives the captured-command check an unobstructed header.
-  await paletteCommand('Dock plane');
+  await paletteCommand('Dock Plane');
   await settleCamera();
   // The header actions resolve the current selection through the same registry.
   await click('[aria-label="Folder actions"]');
@@ -5638,7 +5639,7 @@ async function verifyCapturedMenus(): Promise<void> {
     'header menu uses selected folder',
   );
   await click('dialog [aria-label="Close"]');
-  await paletteCommand('Reveal space');
+  await paletteCommand('Reveal Space');
   await settleCamera();
 }
 
@@ -5778,7 +5779,7 @@ async function verifyRootPlanes(): Promise<void> {
   assert.equal(state.workspaces[0].panes.find((pane) => pane.id === first)?.path, fixture.files);
   const documents = path.join(fixture.files, 'Documents');
   await contextMenu(`${folder(second)} .location[title=${JSON.stringify(documents)}]`);
-  await command('Input.insertText', { text: 'Open in new root plane' });
+  await command('Input.insertText', { text: 'Open in New Root Plane' });
   await key('Enter', 'Enter');
   state = await roots(3);
   assert.equal(
@@ -5787,10 +5788,10 @@ async function verifyRootPlanes(): Promise<void> {
   );
   await key('N', 'KeyN', 12);
   await roots(4);
-  await paletteCommand('New folder plane');
+  await paletteCommand('New Folder Plane');
   state = await roots(5);
   await click(`${controls(state.workspaces[0].roots[4])} [aria-label="Folder actions"]`);
-  await command('Input.insertText', { text: 'New folder plane' });
+  await command('Input.insertText', { text: 'New Folder Plane' });
   await key('Enter', 'Enter');
   await roots(6);
   // Two additions in one React batch must retain both roots and all earlier engine IDs.
@@ -5830,11 +5831,11 @@ async function verifyRootPlanes(): Promise<void> {
   await contextMenu(
     `${folder(last)} .location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
   );
-  await command('Input.insertText', { text: 'Open in new root plane' });
+  await command('Input.insertText', { text: 'Open in New Root Plane' });
   await key('Enter', 'Enter');
   state = await roots(9);
   const previewOwner = state.workspaces[0].roots[8];
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await until(text, (value) => value.includes('Reference files.zip'), 'root parent folder');
   await click(`${folder(previewOwner)} ${fileSelector(path.join(fixture.files, 'Images'))}`, 2);
   await until(text, (value) => value.includes('Color.png'), 'root image directory');
@@ -5972,9 +5973,9 @@ async function verifyRootPlanes(): Promise<void> {
     camera,
     'Sidebar resize must not move the camera',
   );
-  await paletteCommand('Frame plane');
+  await paletteCommand('Frame Plane');
   await settleCamera();
-  await paletteCommand('Dock plane');
+  await paletteCommand('Dock Plane');
   await settleCamera();
   await command('Emulation.setDeviceMetricsOverride', {
     width: 420,
@@ -5991,7 +5992,7 @@ async function verifyRootPlanes(): Promise<void> {
   await click(`${controls(previewOwner)} [aria-label="Show plane navigation"]`);
   await snapshot('desktop-native-navigation-narrow-docked.png');
   await command('Emulation.clearDeviceMetricsOverride');
-  await paletteCommand('Reveal space');
+  await paletteCommand('Reveal Space');
   await settleCamera();
   assert.equal(await enginePlaneIDs(), topology);
   assert.deepEqual(await evaluate(pageCall(viewerJobs)), jobs);
@@ -6073,12 +6074,12 @@ async function verifyEntryAndPalette(): Promise<void> {
   );
   await settingsEvaluate(pageCall(categoryButton, 'Browsing', true));
   await until(
-    () => settingsEvaluate(exists('[aria-label="New folder planes start in"]')),
+    () => settingsEvaluate(exists('[aria-label="New folder planes open at"]')),
     Boolean,
     'new-plane folder preference',
   );
   // a choice is a searchable menu: open it, then choose the row
-  await settingsEvaluate(clickElement('[aria-label="New folder planes start in"]'));
+  await settingsEvaluate(clickElement('[aria-label="New folder planes open at"]'));
   await until(
     () => settingsEvaluate(pageCall(resultButton, 'Downloads', false)),
     Boolean,
@@ -6100,7 +6101,7 @@ async function verifyEntryAndPalette(): Promise<void> {
   );
   await until(
     () => settingsEvaluate(pageCall(bodyText)),
-    (body) => body.includes(fixture.files) && body.includes('Change folder…'),
+    (body) => body.includes(fixture.files) && body.includes('Change Folder…'),
     'custom starting folder in Settings',
   );
   await snapshot('desktop-native-new-plane-settings.png');
@@ -6134,7 +6135,7 @@ async function verifyEntryAndPalette(): Promise<void> {
   );
   await snapshot('desktop-native-empty-workspace.png');
   assert.equal(
-    await evaluate(exists('[aria-label="New folder planes start in"]')),
+    await evaluate(exists('[aria-label="New folder planes open at"]')),
     false,
     'The starting-folder preference belongs only in Settings',
   );
@@ -6194,7 +6195,7 @@ async function verifyEntryAndPalette(): Promise<void> {
   await command('Input.insertText', { text: 'no-such-command-qa' });
   await until(
     () => text(),
-    (body) => body.includes('No matching actions'),
+    (body) => body.includes('No matching commands'),
     'empty command search',
   );
   const compact = await bounds();
@@ -6494,7 +6495,7 @@ async function verify(): Promise<void> {
     return;
   }
   if (scenario === 'context-menu') {
-    await paletteCommand('Frame plane');
+    await paletteCommand('Frame Plane');
     await settleCamera();
     await verifyCapturedMenus();
     assert.deepEqual(await inventory(), untouched);
@@ -6694,7 +6695,7 @@ async function verify(): Promise<void> {
   await verifyRestoredPreviews();
   await verifyRootPlanes();
   await click('[aria-label="Show window navigation"]');
-  await paletteCommand('Frame plane');
+  await paletteCommand('Frame Plane');
   await settleCamera();
   const aids = () =>
     evaluate(
@@ -6709,8 +6710,8 @@ async function verify(): Promise<void> {
     { ...(await aids()), minimap: undefined },
     { toolbar: false, minimap: undefined, viewcube: false },
   );
-  await paletteCommand('Show space toolbar');
-  await paletteCommand('Show viewcube');
+  await paletteCommand('Show Space Toolbar');
+  await paletteCommand('Show Viewcube');
   await until(aids, (now) => now.toolbar && now.viewcube, 'the space toolbar and viewcube shown');
 
   // The first press on the title selects the engine plane before its gesture listener.
@@ -6726,7 +6727,7 @@ async function verify(): Promise<void> {
     1,
   );
   assert.equal(await evaluate(exists('[aria-label^="resize plane"]')), true);
-  await paletteCommand('Frame plane');
+  await paletteCommand('Frame Plane');
   await settleCamera();
   await verifySpatialTools();
 
@@ -6843,7 +6844,7 @@ async function verify(): Promise<void> {
   assert.equal(await evaluate(pageCall(planeBackface)), 'visible');
   await click('dialog [aria-label="Close"]');
   await click('.plane-controls [aria-label="Hide plane navigation"]');
-  await paletteCommand('Show plane navigation');
+  await paletteCommand('Show Plane Navigation');
   await until(
     () => evaluate(exists('.folder-plane .location-sidebar')),
     (value) => value,
@@ -6869,8 +6870,8 @@ async function verify(): Promise<void> {
     `.folder-plane .location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
   );
   await until(text, (value) => value.includes('Triangle.glb'), 'in-plane shortcut navigation');
-  await paletteCommand('Parent folder');
-  await paletteCommand('Hide plane navigation');
+  await paletteCommand('Parent Folder');
+  await paletteCommand('Hide Plane Navigation');
   assert.deepEqual(
     await inventory(),
     untouched,
@@ -6950,7 +6951,7 @@ async function verify(): Promise<void> {
   await contextMenu(
     '.location[title=' + JSON.stringify(path.join(fixture.files, 'Documents')) + ']',
   );
-  await command('Input.insertText', { text: 'Rename shortcut' });
+  await command('Input.insertText', { text: 'Rename Shortcut' });
   await key('Enter', 'Enter');
   await until(
     () => evaluate(valueOf('dialog input')),
@@ -6975,7 +6976,7 @@ async function verify(): Promise<void> {
     'hidden sidebar',
   );
   await click('[aria-label="Show window navigation"]');
-  await paletteCommand('Frame all planes');
+  await paletteCommand('Frame All Planes');
   await settleCamera();
   await snapshot('sidebar-native.png');
   await key('f', 'KeyF', 4);
@@ -7022,7 +7023,7 @@ async function verify(): Promise<void> {
     'Model could not be loaded',
   );
   await closePreview();
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await until(text, (value) => value.includes('Reference files.zip'), 'return to Studio');
   await click(fileSelector(path.join(fixture.files, 'Documents')), 2);
   await until(text, (value) => value.includes('Project brief.pdf'), 'documents');
@@ -7036,12 +7037,12 @@ async function verify(): Promise<void> {
   await snapshot('epub-native.png');
   await closePreview();
   await preview(path.join(fixture.files, 'Documents', 'Project brief.pdf'), 'Searchable PDF text');
-  await click('[aria-label="Search PDF"]');
-  await click('[aria-label="Search PDF text"]');
+  await click('[aria-label="Find"]');
+  await click('[aria-label="Find text"]');
   await command('Input.insertText', { text: 'Searchable' });
-  await until(text, (value) => value.includes('1 matching pages'), 'PDF text search');
+  await until(text, (value) => value.includes('Found on 1 page'), 'PDF text search');
   await closePreview();
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await until(text, (value) => value.includes('Reference files.zip'), 'Studio archive files');
   for (const extension of ['zip', 'tar', 'tar.gz']) {
     await preview(path.join(fixture.files, `Reference files.${extension}`), 'notes.md');
@@ -7073,7 +7074,7 @@ async function verify(): Promise<void> {
   await until(text, (value) => value.includes('Brushed aluminum'), 'light JSON tree');
   await snapshot('json-light.png');
   await closePreview();
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await until(
     () => evaluate(exists(fileSelector(path.join(fixture.files, 'Source')))),
     (present) => present,
@@ -7084,7 +7085,7 @@ async function verify(): Promise<void> {
   await preview(path.join(fixture.files, 'Source', 'workspace.ts'), 'export interface Workspace');
   await snapshot('code-light.png');
   await closePreview();
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await until(
     () => evaluate(exists(fileSelector(path.join(fixture.files, 'Data')))),
     (present) => present,
@@ -7097,7 +7098,7 @@ async function verify(): Promise<void> {
   await closePreview();
   await preview(path.join(fixture.files, 'Data', 'Malformed.json'), 'Invalid JSON');
   await closePreview();
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await until(
     text,
     (value) => value.includes('Reference files.zip'),
@@ -7111,7 +7112,7 @@ async function verify(): Promise<void> {
   await closePreview();
   await preview(path.join(fixture.files, 'Images', 'Reference.svg'), '800 × 600');
   await closePreview();
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await until(
     text,
     (value) => value.includes('Reference files.zip'),
@@ -7151,24 +7152,24 @@ async function verify(): Promise<void> {
   }
   await preview(
     path.join(fixture.files, 'Media', 'Malformed.mkv'),
-    'Compatibility preview unavailable',
+    "Can't convert this video to play here",
   );
   assert.equal(await evaluate(exists('.quick-preview .native-open-actions')), true);
   await snapshot('desktop-native-media-error.png');
   await evaluate(
     pageCall(() =>
       Array.from(document.querySelectorAll<HTMLButtonElement>('.quick-preview button'))
-        .find((button) => button.textContent.trim() === 'Retry conversion')!
+        .find((button) => button.textContent.trim() === 'Try Again')!
         .click(),
     ),
   );
   await until(
     text,
-    (value) => value.includes('Compatibility preview unavailable'),
+    (value) => value.includes("Can't convert this video to play here"),
     'media retry recovery',
   );
   await closePreview();
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await until(text, (value) => value.includes('Reference files.zip'), 'return after media');
 
   const source = path.join(fixture.files, 'README.md'),
@@ -7216,7 +7217,7 @@ async function verify(): Promise<void> {
     (value) => !value,
     'operations control removed after completion',
   );
-  await paletteCommand('File operations');
+  await paletteCommand('File Operations');
   await until(text, (value) => value.includes('completed'), 'explicit operation history');
   await click('[aria-label="Close operations"]');
   const renamed = await job({
@@ -7248,7 +7249,7 @@ async function verify(): Promise<void> {
     Boolean,
     'view switch retains the browsed column folder',
   );
-  await paletteCommand('Parent folder');
+  await paletteCommand('Parent Folder');
   await until(
     () => evaluate(exists(fileSelector(source))),
     Boolean,
@@ -7305,14 +7306,14 @@ async function verify(): Promise<void> {
   await paletteCommand('Models');
   await settleCamera();
   await click(fileSelector(modelFile));
-  await paletteCommand('Open in another plane');
+  await paletteCommand('Open in Another Plane');
   await until(
     () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 3,
     'intentional second view',
   );
   await settleCamera();
-  await paletteCommand('Close plane');
+  await paletteCommand('Close Plane');
   await until(
     () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 2,
@@ -7384,7 +7385,7 @@ async function verify(): Promise<void> {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await paletteCommand('Frame all planes');
+    await paletteCommand('Frame All Planes');
     await settleCamera();
     await snapshot(`user-1456x${height}.png`);
   }
@@ -7394,7 +7395,7 @@ async function verify(): Promise<void> {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await paletteCommand('Frame all planes');
+  await paletteCommand('Frame All Planes');
   await settleCamera();
   const framed = await evaluate(pageCall(framedBounds));
   for (const plane of framed.planes) {
@@ -7407,7 +7408,7 @@ async function verify(): Promise<void> {
     );
   }
   await snapshot('compact-native-initial.png');
-  await paletteCommand('Dock plane');
+  await paletteCommand('Dock Plane');
   await settleCamera();
   // docked beside the sidebar, the plane keeps its width: the model's tools give way into "…"
   // rather than widening it past the window
@@ -7440,7 +7441,7 @@ async function verify(): Promise<void> {
   await appearance('dark');
   // Closing an explorer also closes its linked preview. History restores both
   // their engine nodes and host records, including redo, without orphan tabs.
-  await paletteCommand('Reveal space');
+  await paletteCommand('Reveal Space');
   await paletteCommand('Models');
   await settleCamera();
   await click('[data-plurid-plane]:has(.folder-explorer) [aria-label="Close plane"]');
@@ -7449,26 +7450,26 @@ async function verify(): Promise<void> {
     (count) => count === 0,
     'closed linked branch',
   );
-  await paletteCommand('Undo arrangement');
+  await paletteCommand('Undo Arrangement');
   await until(
     () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 2,
     'undo closed branch',
   );
-  await paletteCommand('Redo arrangement');
+  await paletteCommand('Redo Arrangement');
   await until(
     () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 0,
     'redo closed branch',
   );
-  await paletteCommand('Undo arrangement');
+  await paletteCommand('Undo Arrangement');
   await until(
     () => evaluate(countOf('[data-viewer-plane]')),
     (count) => count === 2,
     'restore closed branch again',
   );
   // Verify real workspace switching without sharing an engine adapter.
-  await paletteCommand('New workspace');
+  await paletteCommand('New Workspace');
   await command('Input.insertText', { text: 'Second workspace' });
   await click('dialog .primary');
   await until(
@@ -7478,7 +7479,7 @@ async function verify(): Promise<void> {
   );
   const filesBeforeDelete = await inventory();
   const jobsBeforeDelete = await evaluate(pageCall(viewerJobs));
-  await paletteCommand('Delete workspace');
+  await paletteCommand('Delete Workspace');
   await until(
     text,
     (value) => value.includes('Second workspace') && value.includes('1 open plane'),
@@ -7486,7 +7487,7 @@ async function verify(): Promise<void> {
   );
   await snapshot('workspace-delete-native.png');
   await click('dialog [aria-label="Close"]');
-  await paletteCommand('Delete workspace');
+  await paletteCommand('Delete Workspace');
   await click('dialog .danger');
   await until(
     () => evaluate(textOf('.workspace-switcher')),
@@ -7503,7 +7504,7 @@ async function verify(): Promise<void> {
     jobsBeforeDelete,
     'Workspace deletion must preserve file jobs',
   );
-  await paletteCommand('Undo workspace deletion');
+  await paletteCommand('Undo Workspace Deletion');
   await until(
     () => evaluate(textOf('.workspace-switcher')),
     (value) => value.trim() === 'Second workspace',

@@ -5,6 +5,7 @@
  * fold into a booklet. DXF parts nest. A mixed selection follows its largest kind.
  */
 import { millimetres } from './plan';
+import { plural } from '../plural';
 import type { Size } from './geometry';
 import type { LayoutMode } from './modes';
 import { nUpArrangement } from './n-up';
@@ -45,9 +46,6 @@ export function pageClass(size: Size): PageClass {
 }
 /** A photo with this many pixels on its long edge prints well past A3. */
 export const posterPixels = 3000;
-
-const plural = (count: number, one: string, many = one + 's') =>
-  `${count.toLocaleString('en-US')} ${count === 1 ? one : many}`;
 
 /** The most pages of `page` an A4 sheet holds at nine tenths of their size or more. */
 export function pagesPerSheet(page: Size, margin: number, gap: number): NUpCount {

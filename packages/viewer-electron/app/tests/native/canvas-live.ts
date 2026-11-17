@@ -363,7 +363,7 @@ try {
     await main!.evaluate(
       pageCall(() =>
         [...document.querySelectorAll<HTMLButtonElement>('.canvas-message button')]
-          .find((x) => x.textContent === 'Open saved file')!
+          .find((x) => x.textContent === 'Open Saved File')!
           .click(),
       ),
     );

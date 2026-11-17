@@ -4,9 +4,11 @@ import type { ChatSummary } from '../../domain/models/chat';
 import type { TaskArea } from '../../domain/workspaces/tasks';
 import { errorMessage } from '../../domain/errors';
 import { Dialog, Empty } from '../ui/primitives';
+import { PathLabel } from '../ui/PathLabel';
 import { useWorkspace } from '../workspace/context';
 import { attachTaskReference } from '../tasks/state';
 import { activeWorkspace } from '../state/store';
+import { statusLabel } from '../ui/status-labels';
 
 export function SessionsDialog({
   area,
@@ -94,7 +96,7 @@ export function SessionsDialog({
     }
   };
   return (
-    <Dialog title={area ? 'Attach conversation' : 'Agent sessions'} onClose={onClose} wide>
+    <Dialog title={area ? 'Attach Conversation' : 'Agent Sessions'} onClose={onClose} wide>
       <div className="session-library">
         {error && (
           <p className="chat-error" role="alert">
@@ -102,13 +104,13 @@ export function SessionsDialog({
           </p>
         )}
         <p className="muted">
-          Sessions appear when an authenticated local adapter calls report_session. Status and
-          transcript are explicit reports.
+          An agent’s sessions appear here once it reports them. What they show is what the agent
+          reported.
         </p>
         {!sessions.length && !chats.length && (
           <Empty
             title="No reported sessions"
-            detail="Connect an agent through Settings → Agents, or create a Viewer chat from the task."
+            detail="Connect an agent in Settings → Agents, or start a Viewer chat from the task."
           />
         )}
         {!!sessions.length && <h3>Agent sessions</h3>}
@@ -117,10 +119,12 @@ export function SessionsDialog({
             <div>
               <strong>{session.title}</strong>
               <small>
-                {session.clientName} · reported {session.status} ·{' '}
+                {session.clientName} · reported {statusLabel(session.status).toLowerCase()} ·{' '}
                 {new Date(session.updated).toLocaleString()}
               </small>
-              <small>{session.directory}</small>
+              <small>
+                <PathLabel path={session.directory} />
+              </small>
             </div>
             <button
               disabled={busy}
@@ -135,7 +139,9 @@ export function SessionsDialog({
           <section className="task-tool-row" key={chat.id}>
             <div>
               <strong>{chat.title}</strong>
-              <small>{chat.path}</small>
+              <small>
+                <PathLabel path={chat.path} />
+              </small>
             </div>
             <button
               disabled={busy || !!chat.problem}

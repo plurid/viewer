@@ -3,6 +3,7 @@ import type { Resource } from '../../../domain/contracts';
 import type { TrashItem } from '../../../domain/files/trash';
 import { formatBytes } from '../../../domain/files/entries';
 import { PreviewHost } from '../../previews/PreviewHost';
+import { PreviewFacts } from '../../previews/PreviewFileInfo';
 import { Dialog, Empty, IconButton, Loading } from '../primitives';
 import { errorMessage } from '../../../domain/errors';
 
@@ -50,7 +51,7 @@ export function TrashPreview({
     };
   }, [item.id]);
   const step = (delta: number) => setIndex((index + delta + items.length) % items.length);
-  const footer = (size: number, label?: string) => (
+  const footer = (size: number, label?: string, details: readonly string[] = []) => (
     <>
       {restoreError && (
         <p className="error trash-message" role="alert">
@@ -58,10 +59,12 @@ export function TrashPreview({
         </p>
       )}
       <footer className="quick-preview-footer">
-        <span className="quick-preview-metadata">
-          {label && <>{label} · </>}
-          {formatBytes(size)} · {item.location}
-        </span>
+        {/* the dialog's title names the item; where it was comes last and gives way first */}
+        <PreviewFacts
+          kind={label ?? ''}
+          size={formatBytes(size)}
+          details={[...details, item.location]}
+        />
         <div className="quick-preview-actions">
           {items.length > 1 && (
             <div className="quick-preview-navigation">
@@ -85,7 +88,7 @@ export function TrashPreview({
                 .finally(() => setBusy(false));
             }}
           >
-            {item.originalPath ? 'Restore' : 'Restore to…'}
+            {item.originalPath ? 'Restore' : 'Restore To…'}
           </button>
         </div>
       </footer>
@@ -111,11 +114,13 @@ export function TrashPreview({
     >
       <div className="quick-preview">
         {error ? (
-          <Empty icon="warning" title="File unavailable" detail={error} />
+          <Empty icon="warning" title="Can't show this file" detail={error} />
         ) : resource ? (
           <PreviewHost
             resource={resource}
-            renderFooter={(loaded, module) => footer(loaded.entry.size, module.label)}
+            renderFooter={(loaded, module, _hex, details) =>
+              footer(loaded.entry.size, module.label, details)
+            }
           />
         ) : (
           <Loading label="Opening preview…" />

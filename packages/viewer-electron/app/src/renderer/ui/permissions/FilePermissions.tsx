@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ViewerAPI } from '../../../domain/contracts';
 import { Icon } from '../Icon';
+import { PathLabel } from '../PathLabel';
 import { errorMessage } from '../../../domain/errors';
 type Grant = Awaited<ReturnType<ViewerAPI['fileAccessList']>>[number];
 export function FilePermissions({ error }: { error(message: string): void }) {
@@ -44,19 +45,19 @@ export function FilePermissions({ error }: { error(message: string): void }) {
   return (
     <>
       <p className="settings-note">
-        Choose folders the App Store edition can use. Saved permissions survive relaunch. Revoking
-        stops dependent work and clears cached previews and indexed data; a separately allowed
-        parent folder may still provide access. Clipboard and drag permissions last until Quit.
+        Choose the folders Viewer may use. Saved permissions last across launches; clipboard and
+        drag permissions last until you quit. Revoking one stops its work and clears its previews
+        and index, though an allowed parent folder still gives access.
       </p>
       <div className="settings-actions">
         <button disabled={!!busy} onClick={() => void choose()}>
-          Allow a folder…
+          Allow a Folder…
         </button>
         <button
           disabled={!!busy || loading}
           onClick={() => void load().catch((value) => error(value.message))}
         >
-          Refresh permissions
+          Refresh Permissions
         </button>
       </div>
       {loading && (
@@ -74,16 +75,18 @@ export function FilePermissions({ error }: { error(message: string): void }) {
           <div className="file-permission" key={grant.path}>
             <Icon name={grant.directory ? 'folder' : 'file'} />
             <div>
-              <strong className="model-endpoint">{grant.path}</strong>
+              <strong className="model-endpoint">
+                <PathLabel path={grant.path} />
+              </strong>
               <small className="muted">
                 {grant.session && grant.status !== 'revoking'
                   ? 'Clipboard or drag permission · until Quit'
                   : grant.status === 'active'
                     ? 'In use'
                     : grant.status === 'revoking'
-                      ? 'Access stopped; revoke needs saving'
+                      ? 'Access stopped; the revoke isn’t saved yet'
                       : grant.status === 'unavailable'
-                        ? 'Location unavailable; choose it again to repair access'
+                        ? 'Folder not found; choose it again to restore access'
                         : 'Saved permission'}
               </small>
             </div>
@@ -96,7 +99,7 @@ export function FilePermissions({ error }: { error(message: string): void }) {
                   )
                 }
               >
-                Choose again…
+                Choose Again…
               </button>
               <button
                 disabled={!!busy}

@@ -94,7 +94,8 @@ export class DerivedPreviews {
         if (!item.users) item.abort.abort();
         settle();
       };
-      const cancel = () => finish(() => reject(signal.reason ?? new Error('Preview cancelled.')));
+      const cancel = () =>
+        finish(() => reject(signal.reason ?? new Error('The preview was canceled.')));
       signal.addEventListener('abort', cancel, { once: true });
       if (signal.aborted) cancel();
       item.work.then(
@@ -258,12 +259,13 @@ export class DerivedPreviews {
 
 export function rawDecoder(helper: string): Decoder {
   return async (source, mode, signal) => {
-    if (mode === 'video') throw new Error('Video compatibility previews are unavailable.');
+    if (mode === 'video')
+      throw new Error('This build of Viewer can’t convert videos to play here.');
     const bytes = await runProcessor(helper, [mode], [source.handle.fd], signal, {
       timeout: 30000,
       outputLimit: 32_000_000 + 128,
     }).catch((error: Error) => {
-      if (signal.aborted) throw signal.reason ?? new Error('RAW preview cancelled.');
+      if (signal.aborted) throw signal.reason ?? new Error('The RAW preview was canceled.');
       throw new Error(
         error.message.includes('timed out')
           ? 'RAW decoding exceeded 30 seconds. Retry or open the file in its original app.'

@@ -264,7 +264,7 @@ describe('recording folder views', () => {
         <Sidebar paneID={getState().activePane} />
       </WorkspaceContext.Provider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Recent Folders' }));
     expect(getState().saved.recents).toEqual([]);
     expect(getState().saved.visits).toEqual({});
     expect(document.activeElement?.textContent).toContain('Recent');
@@ -283,12 +283,12 @@ describe('recording folder views', () => {
     );
     const heading = screen.getByRole('button', { name: 'Recent' });
     expect(heading.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.queryByRole('button', { name: 'Clear recent folders' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear Recent Folders' })).not.toBeNull();
     fireEvent.click(heading);
     expect(heading.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByRole('button', { name: 'Clear recent folders' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear Recent Folders' })).toBeNull();
     fireEvent.click(heading);
-    expect(screen.queryByRole('button', { name: 'Clear recent folders' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear Recent Folders' })).not.toBeNull();
     expect(getState().saved.recents).toEqual(['/fixtures/Documents']);
   });
 });
@@ -332,7 +332,7 @@ describe('Go to folder suggestions', () => {
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toBe(
-        'Some folders could not be checked. Enter a folder path or try again.',
+        "Viewer couldn't check some folders. Type a path, or try again.",
       ),
     );
     expect(options()).toHaveLength(0);
@@ -421,7 +421,7 @@ describe('Go to folder suggestions', () => {
     savePatch({ recents: ['/fixtures/Documents'] });
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
     await waitFor(() => expect(options()).toHaveLength(2));
-    fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Recent Folders' }));
     expect(getState().saved.visits).toEqual({});
     expect(getState().saved.recents).toEqual([]);
     expect(options()).toHaveLength(0);
@@ -699,7 +699,7 @@ describe('palette folder results', () => {
     fireEvent.keyDown(search, { key: 'Enter' });
     await waitFor(() =>
       expect(getState().notice).toBe(
-        'This folder is no longer available. You can forget it from folder history.',
+        'This folder was moved or deleted. Choose Forget Folder to remove it from your history.',
       ),
     );
     expect(open).not.toHaveBeenCalled();
@@ -825,7 +825,7 @@ describe('palette folder results', () => {
     fireEvent.keyDown(search, { key: 'Enter' });
     await waitFor(() => expect(getState().unavailableFolder).toBe('/fixtures/Documents 0'));
     expect(getState().notice).toBe(
-      'This folder is no longer available. You can forget it from folder history.',
+      'This folder was moved or deleted. Choose Forget Folder to remove it from your history.',
     );
     act(() => forgetUnavailableFolder());
     expect(getState().saved.visits?.['/fixtures/Documents 0']).toBeUndefined();
@@ -858,7 +858,7 @@ describe('second review interaction regressions', () => {
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toContain(
-        'Some folders could not be checked.',
+        "Viewer couldn't check some folders.",
       ),
     );
     expect(options()).toHaveLength(0);
@@ -875,11 +875,11 @@ describe('second review interaction regressions', () => {
     fireEvent.keyDown(field(), { key: 'Enter' });
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toContain(
-        'Some folders could not be checked.',
+        "Viewer couldn't check some folders.",
       ),
     );
     expect((await screen.findByRole('alert')).textContent).toBe(
-      'Some folders could not be checked. Enter a folder path or try again.',
+      "Viewer couldn't check some folders. Type a path, or try again.",
     );
     expect(open).not.toHaveBeenCalled();
   });
@@ -938,9 +938,9 @@ describe('second review interaction regressions', () => {
     const visits = getState().saved.visits;
     savePatch({ recents: ['/fixtures/Documents'] });
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Recent Folders' }));
     expect(document.activeElement).toBe(field());
-    fireEvent.click(screen.getByRole('button', { name: 'Undo clear recent folders' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo Clear Recent Folders' }));
     expect(getState().saved.visits).toEqual(visits);
     expect(getState().saved.recents).toEqual(['/fixtures/Documents']);
     expect(document.activeElement).toBe(field());
@@ -1151,16 +1151,16 @@ it('expires the clear recovery and releases its paths after eight seconds', asyn
   try {
     remember('/fixtures/Documents');
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Recent Folders' }));
     expect(getState().folderRecovery).toBeDefined();
     expect(
-      (screen.getByRole('button', { name: 'Clear recent folders' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Clear Recent Folders' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(8000);
     });
     expect(getState().folderRecovery).toBeUndefined();
-    expect(screen.queryByRole('button', { name: 'Undo clear recent folders' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Undo Clear Recent Folders' })).toBeNull();
   } finally {
     vi.useRealTimers();
   }
@@ -1169,7 +1169,7 @@ it('expires the clear recovery and releases its paths after eight seconds', asyn
 it('dismisses clear recovery without restoring it and keeps dialog focus', () => {
   remember('/fixtures/Documents');
   render(<GoToFolderDialog onOpen={open} onClose={close} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Clear Recent Folders' }));
   fireEvent.click(screen.getByRole('button', { name: 'Dismiss recent folder Undo' }));
   expect(getState().folderRecovery).toBeUndefined();
   expect(getState().saved.visits).toEqual({});
@@ -1248,8 +1248,8 @@ it('returns focus to the field when the focused Undo offer expires', async () =>
   try {
     remember('/fixtures/Documents');
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Clear recent folders' }));
-    const undo = screen.getByRole('button', { name: 'Undo clear recent folders' });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Recent Folders' }));
+    const undo = screen.getByRole('button', { name: 'Undo Clear Recent Folders' });
     act(() => undo.focus());
     expect(document.activeElement).toBe(undo);
     await act(async () => {

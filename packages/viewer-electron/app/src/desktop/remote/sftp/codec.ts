@@ -5,8 +5,13 @@ export const sftpBounds = Object.freeze({
   stringBytes: remoteLimits.codecStringBytes,
   nameBytes: remoteLimits.codecNameBytes,
   extensionPairs: remoteLimits.codecExtensionPairs,
-  idNames: 1024,
-  defaultDataBytes: 32 * 1024,
+  idNames: remoteLimits.codecStringBytes / 4,
+  dataBytes: remoteLimits.packetBytes / 4,
+  defaultDataBytes: remoteLimits.readBytesPerStream / remoteLimits.requestsPerChannel,
+  queueRequests: remoteLimits.requestsPerChannel * remoteLimits.channelsPerConnection,
+  openHandles: remoteLimits.resourceGrants,
+  // Two full stream windows: one fills the wire, the other covers replies awaiting consumers.
+  streamBytesPerChannel: 2 * remoteLimits.readBytesPerStream,
 });
 
 export const sftpPacketTypes = Object.freeze({
@@ -65,6 +70,11 @@ export interface SFTPSetAttributes {
   times?: { atime: number; mtime: number };
 }
 
+/** OpenSSH ignores everything but permissions when OPEN or MKDIR creates an entry. */
+export interface SFTPCreateAttributes {
+  permissions?: number;
+}
+
 export interface SFTPName {
   filename: Buffer;
   longname: Buffer;
@@ -74,12 +84,13 @@ export interface SFTPName {
 export type SFTPOpenMode = 'read' | 'create';
 
 export type SFTPRequest =
-  | { kind: 'open'; path: Buffer; mode: SFTPOpenMode; attrs: SFTPSetAttributes }
+  | { kind: 'open'; path: Buffer; mode: SFTPOpenMode; attrs: SFTPCreateAttributes }
   | { kind: 'close' | 'fstat' | 'readdir'; handle: Buffer }
   | { kind: 'read'; handle: Buffer; offset: bigint; length: number }
   | { kind: 'write'; handle: Buffer; offset: bigint; data: Buffer }
   | { kind: 'lstat' | 'stat' | 'opendir' | 'realpath' | 'readlink'; path: Buffer }
-  | { kind: 'setstat' | 'mkdir'; path: Buffer; attrs: SFTPSetAttributes }
+  | { kind: 'setstat'; path: Buffer; attrs: SFTPSetAttributes }
+  | { kind: 'mkdir'; path: Buffer; attrs: SFTPCreateAttributes }
   | { kind: 'fsetstat'; handle: Buffer; attrs: SFTPSetAttributes }
   | { kind: 'rename'; from: Buffer; to: Buffer }
   | { kind: 'symlink'; target: Buffer; path: Buffer }
@@ -135,12 +146,18 @@ export interface SFTPUsersGroups {
   groups: readonly Buffer[];
 }
 
+// Keep this independent of encoder tables so adding an encoder cannot add wire authority.
+const approvedPacketTypes: readonly number[] = Object.freeze([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 17, 18, 19, 20, 101, 102, 103, 104, 105, 200, 201,
+]);
+
 export function protocolAssert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new SFTPProtocolError(message);
 }
 
 export class SFTPReader {
   private offset = 0;
+  private attributePairs = 0;
 
   constructor(private readonly data: Buffer) {}
 
@@ -179,6 +196,16 @@ export class SFTPReader {
   end(): void {
     protocolAssert(this.remaining === 0, 'Unexpected bytes in SFTP packet.');
   }
+
+  /**
+   * One budget per packet bounds retained Buffer views. Pairs past it are read and dropped, so a
+   * server that attaches a pair to every entry still lists.
+   */
+  keepsExtendedAttribute(): boolean {
+    if (this.attributePairs >= sftpBounds.extensionPairs) return false;
+    this.attributePairs++;
+    return true;
+  }
 }
 
 export class SFTPWriter {
@@ -186,14 +213,20 @@ export class SFTPWriter {
   private length = 0;
 
   bytes(value: Buffer): this {
-    this.length += value.length;
-    protocolAssert(this.length <= remoteLimits.packetBytes, 'Oversized SFTP packet.');
+    const length = this.length + value.length;
+    protocolAssert(length <= remoteLimits.packetBytes, 'Oversized SFTP packet.');
+    this.length = length;
     this.parts.push(value);
     return this;
   }
 
   byte(value: number): this {
     protocolAssert(Number.isInteger(value) && value >= 0 && value <= 255, 'Invalid SFTP byte.');
+    // A packet body starts with its type byte, so a body built without framing is checked too.
+    protocolAssert(
+      this.length > 0 || approvedPacketTypes.includes(value),
+      'Unapproved SFTP packet type.',
+    );
     return this.bytes(Buffer.from([value]));
   }
 
@@ -227,8 +260,24 @@ export class SFTPWriter {
   }
 }
 
-function framed(writer: SFTPWriter): Buffer {
+export function framed(writer: SFTPWriter): Buffer {
   const body = writer.build();
+  protocolAssert(body.length <= remoteLimits.packetBytes, 'Oversized SFTP packet.');
+  protocolAssert(approvedPacketTypes.includes(body[0]!), 'Unapproved SFTP packet type.');
+  if (body[0] === 200) {
+    const reader = new SFTPReader(body.subarray(5));
+    const extension = reader.string();
+    protocolAssert(
+      [
+        'statvfs@openssh.com',
+        'fsync@openssh.com',
+        'limits@openssh.com',
+        'copy-data',
+        'users-groups-by-id@openssh.com',
+      ].some((name) => extension.equals(Buffer.from(name))),
+      'Unapproved SFTP extension.',
+    );
+  }
   const length = Buffer.alloc(4);
   length.writeUInt32BE(body.length);
   return Buffer.concat([length, body]);
@@ -299,11 +348,12 @@ export function readAttributes(reader: SFTPReader): SFTPAttributes {
     attrs.mtime = reader.uint32();
   }
   if (flags & 0x80000000) {
+    // Each pair reads at least eight bytes, so the packet length bounds this loop.
     const count = reader.uint32();
-    protocolAssert(count <= sftpBounds.extensionPairs, 'Too many SFTP extended attributes.');
     const extended: SFTPExtendedAttribute[] = [];
     for (let index = 0; index < count; index++) {
-      extended.push({ type: reader.string(), data: reader.string() });
+      const pair = { type: reader.string(), data: reader.string() };
+      if (reader.keepsExtendedAttribute()) extended.push(pair);
     }
     attrs.extended = extended;
   }
@@ -354,6 +404,15 @@ function writeSetAttributes(writer: SFTPWriter, attrs: SFTPSetAttributes): void 
   writer.uint32((attrs.permissions === undefined ? 0 : 4) + (attrs.times === undefined ? 0 : 8));
   if (attrs.permissions !== undefined) writer.uint32(attrs.permissions);
   if (attrs.times !== undefined) writer.uint32(attrs.times.atime).uint32(attrs.times.mtime);
+}
+
+/** Only own permissions are encoded, so neither extra nor inherited keys reach the wire. */
+function writeCreateAttributes(writer: SFTPWriter, attrs: SFTPCreateAttributes): void {
+  protocolAssert(
+    Object.keys(attrs).every((key) => key === 'permissions'),
+    'Unsupported SFTP creation attribute.',
+  );
+  writeSetAttributes(writer, { permissions: attrs.permissions });
 }
 
 function readSetAttributes(reader: SFTPReader): SFTPSetAttributes {
@@ -424,7 +483,7 @@ export function encodeRequest(id: number, request: SFTPRequest): Buffer {
         'Unsupported SFTP open mode.',
       );
       writer.string(request.path).uint32(request.mode === 'read' ? 1 : 2 | 8 | 32);
-      writeSetAttributes(writer, request.attrs);
+      writeCreateAttributes(writer, request.attrs);
       break;
     case 'close':
     case 'fstat':
@@ -434,13 +493,16 @@ export function encodeRequest(id: number, request: SFTPRequest): Buffer {
       break;
     case 'read':
       protocolAssert(
-        request.length > 0 && request.length <= sftpBounds.stringBytes,
+        request.length > 0 && request.length <= sftpBounds.dataBytes,
         'Invalid SFTP read length.',
       );
       writer.string(request.handle).uint64(request.offset).uint32(request.length);
       break;
     case 'write':
-      writer.string(request.handle).uint64(request.offset).string(request.data);
+      writer
+        .string(request.handle)
+        .uint64(request.offset)
+        .string(request.data, sftpBounds.dataBytes);
       break;
     case 'lstat':
     case 'stat':
@@ -451,9 +513,12 @@ export function encodeRequest(id: number, request: SFTPRequest): Buffer {
       writer.string(request.path);
       break;
     case 'setstat':
-    case 'mkdir':
       writer.string(request.path);
       writeSetAttributes(writer, request.attrs);
+      break;
+    case 'mkdir':
+      writer.string(request.path);
+      writeCreateAttributes(writer, request.attrs);
       break;
     case 'fsetstat':
       writer.string(request.handle);
@@ -524,7 +589,7 @@ export function decodeClientPacket(packet: Buffer): SFTPClientPacket {
         length: reader.uint32(),
       };
       protocolAssert(
-        request.length > 0 && request.length <= sftpBounds.stringBytes,
+        request.length > 0 && request.length <= sftpBounds.dataBytes,
         'Invalid SFTP read length.',
       );
       break;
@@ -533,7 +598,7 @@ export function decodeClientPacket(packet: Buffer): SFTPClientPacket {
         kind: 'write',
         handle: reader.string(),
         offset: reader.uint64(),
-        data: reader.string(),
+        data: reader.string(sftpBounds.dataBytes),
       };
       break;
     case sftpPacketTypes.lstat:
@@ -623,7 +688,7 @@ export function encodeReply(reply: SFTPReply): Buffer {
         writer.string(reply.handle);
         break;
       case 'data':
-        writer.string(reply.data);
+        writer.string(reply.data, sftpBounds.dataBytes);
         break;
       case 'name':
         protocolAssert(reply.names.length <= remoteLimits.namesPerReply, 'Too many SFTP names.');
@@ -669,7 +734,7 @@ export function decodeReply(packet: Buffer): SFTPReply {
       protocolAssert(reply.handle.length > 0, 'Empty SFTP handle.');
       break;
     case sftpPacketTypes.data:
-      reply = { kind: 'data', id, data: reader.string() };
+      reply = { kind: 'data', id, data: reader.string(sftpBounds.dataBytes) };
       break;
     case sftpPacketTypes.name: {
       const count = reader.uint32();
@@ -745,6 +810,7 @@ export function decodeUsersGroups(data: Buffer, users: number, groups: number): 
 }
 
 export type SFTPListingName =
+  | { kind: 'skip' }
   | { kind: 'entry'; name: string; attrs: SFTPAttributes }
   | { kind: 'error'; rawName: Buffer; message: string };
 
@@ -756,10 +822,8 @@ export function decodeListingName(entry: SFTPName): SFTPListingName {
       'The server name is empty or too long.',
     );
     const name = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(entry.filename);
-    protocolAssert(
-      name !== '.' && name !== '..' && !/[/\0]/.test(name),
-      'The server name is unsafe.',
-    );
+    if (name === '.' || name === '..') return { kind: 'skip' };
+    protocolAssert(!/[/\0]/.test(name), 'The server name is unsafe.');
     return { kind: 'entry', name, attrs: entry.attrs };
   } catch {
     return {

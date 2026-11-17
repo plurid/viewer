@@ -209,7 +209,7 @@ port.on('message', (message) => {
               releaseInitialInput(
                 request.id,
                 value,
-                'Viewer: More than 65,536 characters arrived while waiting. The pending command was cancelled. Queued input was sent to the shell, which remains available.',
+                'Viewer: More than 65,536 characters arrived while waiting, so the waiting command was canceled. The typed input went to the shell, which is still running.',
               );
             } else if (wasWaiting && !input.waiting) scheduleInitialInput(request.id, value);
           } else value.process.write(request.data);

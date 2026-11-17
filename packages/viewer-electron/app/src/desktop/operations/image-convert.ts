@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { ImageConversion } from '../../domain/contracts';
+import { conversionTurns } from '../../domain/operations/image-conversions';
 
 /** Writes a new file at `output` from image `sources`; sources are only read. */
 export interface ImageConverter {
@@ -11,7 +12,7 @@ export interface ImageConverter {
   ): Promise<void>;
 }
 export const unavailableConverter: ImageConverter = {
-  convert: () => Promise.reject(new Error('Image quick actions are unavailable here.')),
+  convert: () => Promise.reject(new Error('This build of Viewer can’t convert images.')),
 };
 export { convertibleExtensions } from '../../domain/operations/image-conversions';
 /** The file a per-image conversion creates next to its source. Collisions are resolved
@@ -21,7 +22,7 @@ export function conversionOutput(source: string, conversion: ImageConversion): s
   const extension = path.extname(source);
   const stem = path.basename(source, extension);
   const name =
-    conversion === 'rotate-left' || conversion === 'rotate-right'
+    conversionTurns[conversion]
       ? `${stem} rotated${['.png', '.jpg', '.jpeg'].includes(extension.toLowerCase()) ? extension : '.png'}`
       : conversion === 'jpeg'
         ? `${stem}.jpg`

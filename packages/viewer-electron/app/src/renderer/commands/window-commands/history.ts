@@ -1,3 +1,4 @@
+import { titleCase } from '../../../domain/title-case';
 import { getState, setOperationsOpen } from '../../state/store';
 import { redoableTime, undoableTime } from '../../state/jobs';
 import { lastLensRedo, lastLensUndo, redoLens, undoLens } from '../../state/lenses';
@@ -21,7 +22,7 @@ export function historyCommands({ windowScope }: WindowScopes): CommandDefinitio
   const commands: CommandDefinition[] = [
     {
       id: 'forget-suggestions',
-      label: 'Forget learned suggestions',
+      label: 'Forget Learned Suggestions',
       group: 'Window',
       icon: 'close',
       aliases: ['clear suggestions', 'reset suggestions', 'suggested'],
@@ -31,7 +32,7 @@ export function historyCommands({ windowScope }: WindowScopes): CommandDefinitio
     },
     {
       id: 'show-hidden-insights',
-      label: 'Show hidden insights',
+      label: 'Show Hidden Insights',
       group: 'Window',
       icon: 'eye',
       aliases: ['insights', 'dismissed insights', 'restore insights'],
@@ -41,7 +42,7 @@ export function historyCommands({ windowScope }: WindowScopes): CommandDefinitio
     },
     {
       id: 'recent-operations',
-      label: 'File operations',
+      label: 'File Operations',
       group: 'Files',
       icon: 'copy',
       aliases: ['jobs', 'operations', 'progress', 'recent file operations', 'operation history'],
@@ -52,7 +53,7 @@ export function historyCommands({ windowScope }: WindowScopes): CommandDefinitio
       id: 'undo-file',
       label: () => {
         const action = latest('undo');
-        return action?.lens ? `Undo ${action.lens.label}` : 'Undo file operation';
+        return action?.lens ? titleCase(`Undo ${action.lens.label}`) : 'Undo File Operation';
       },
       group: 'Files',
       icon: 'left',
@@ -68,7 +69,7 @@ export function historyCommands({ windowScope }: WindowScopes): CommandDefinitio
       id: 'redo-file',
       label: () => {
         const action = latest('redo');
-        return action?.lens ? `Redo ${action.lens.label}` : 'Redo file operation';
+        return action?.lens ? titleCase(`Redo ${action.lens.label}`) : 'Redo File Operation';
       },
       group: 'Files',
       icon: 'right',

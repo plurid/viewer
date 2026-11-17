@@ -27,7 +27,8 @@ import {
   updatePane,
 } from '../state/store';
 import { useCommands } from '../commands/context';
-import { usePreviewControlsSlot } from './controls';
+import { PreviewCommandList, PreviewFrameContext, usePreviewControlsSlot } from './controls';
+import type { PreviewFrame } from './controls';
 import type {
   AttachmentSave,
   PreviewCommand,
@@ -49,7 +50,8 @@ import { editingPlane } from '../editing/planes';
 import { useResource } from './useResource';
 import { PreviewRecovery } from './PreviewRecovery';
 import { documentServices } from './document-cache';
-import { PreviewSize } from './PreviewSize';
+import { PreviewFileInfo } from './PreviewFileInfo';
+import { rotatedCopyRequest } from './rotation';
 import { saveAttachments } from './attachments';
 import { loadedPreviewModule, preloadPreviewModule } from './module-loading';
 import { useDarkPages } from './dark-pages';
@@ -125,7 +127,14 @@ export const PreviewHost = memo(function PreviewHost({
   paneID?: string;
   /** A workspace preview plane, whose text may be edited where it is. */
   editable?: boolean;
-  renderFooter?(resource: Resource, module: PreviewModule, hex?: HexToggle): ReactNode;
+  /** A footer of the caller's own. `details` are the facts the preview's toolbar gave it, such as
+   * an image's dimensions. */
+  renderFooter?(
+    resource: Resource,
+    module: PreviewModule,
+    hex?: HexToggle,
+    details?: readonly string[],
+  ): ReactNode;
 }) {
   const [retry, setRetry] = useState(0);
   const [activated, setActivated] = useState(active);
@@ -152,6 +161,36 @@ export const PreviewHost = memo(function PreviewHost({
     if (active) setActivated(true);
   }, [active]);
   const entry = resource?.entry;
+  // A toolbar's facts, such as an image's dimensions, shown in the footer, for this resource only.
+  const [details, setDetails] = useState<{
+    resourceID?: string;
+    values: Record<string, readonly string[]>;
+  }>({ values: {} });
+  const detailResourceID = resource?.id;
+  const registerDetails = useCallback(
+    (id: string, values: readonly string[]) => {
+      setDetails((previous) => ({
+        resourceID: detailResourceID,
+        values: {
+          ...(previous.resourceID === detailResourceID ? previous.values : {}),
+          [id]: values,
+        },
+      }));
+      return () =>
+        setDetails((previous) => {
+          if (previous.resourceID !== detailResourceID) return previous;
+          const remaining = { ...previous.values };
+          delete remaining[id];
+          return { resourceID: detailResourceID, values: remaining };
+        });
+    },
+    [detailResourceID],
+  );
+  const [previewCommands] = useState(() => new PreviewCommandList());
+  const frame = useMemo<PreviewFrame>(
+    () => ({ details: registerDetails, commands: previewCommands }),
+    [registerDetails, previewCommands],
+  );
   const owner = useViewer((state) => state.saved.activeWorkspace);
   const scopedServices = useMemo(
     () => (resource ? documentServices(services, owner, resource, signal) : services),
@@ -410,6 +449,7 @@ export const PreviewHost = memo(function PreviewHost({
   };
   const Viewer = componentFor(hexShown ? hexModule : module);
   const hex = offersHex ? { shown: hexShown, toggle: toggleHex } : undefined;
+  const facts = details.resourceID === resource.id ? Object.values(details.values).flat() : [];
   return (
     <div className="preview-host" data-preview-module={module.id}>
       {path && sourceIssue?.path === path && (
@@ -421,65 +461,76 @@ export const PreviewHost = memo(function PreviewHost({
           locate={locate}
         />
       )}
-      <div className="preview-body">
-        <ErrorBoundary key={`${resource.id}:${hexShown}`}>
-          <Suspense fallback={<Loading label={`Loading ${module.label.toLowerCase()}…`} />}>
-            <Viewer
-              key={resource.id}
-              resource={resource}
-              evidence={
-                evidence && sameSourceVersion(sourceVersion(resource.entry), evidence.version)
-                  ? evidence
-                  : undefined
-              }
-              active={active}
-              interactive={interactive}
-              signal={signal}
-              services={scopedServices}
-              look={look}
-              pages={pages}
-              toolbar={toolbar}
-              commands={commands}
-              state={viewState}
-              limits={limits}
-              reading={{ fontSize }}
-              openRelated={openRelated}
-              editing={editing}
-              optimize={!supplied ? invokeFile('optimize-files') : undefined}
-              editPDF={!supplied ? invokeFile('pdf-tools') : undefined}
-              editImage={!supplied ? invokeFile('image-tools') : undefined}
-              editMedia={
-                !supplied && workspace
-                  ? () =>
-                      void workspace
-                        .openMedia(
-                          [resource.entry.path],
-                          paneID || getState().quickPreview?.paneID || getState().activePane,
-                        )
-                        .then(() => quickPreview(null))
-                        .catch(report)
-                  : undefined
-              }
-              retry={!supplied ? () => setRetry((value) => value + 1) : undefined}
-              showHex={() => setHexFor(resource.id)}
-              saveAttachments={saveMessageAttachments}
-            />
-          </Suspense>
-        </ErrorBoundary>
-      </div>
+      <PreviewFrameContext value={frame}>
+        <div className="preview-body">
+          <ErrorBoundary key={`${resource.id}:${hexShown}`}>
+            <Suspense fallback={<Loading label={`Loading ${module.label.toLowerCase()}…`} />}>
+              <Viewer
+                key={resource.id}
+                resource={resource}
+                evidence={
+                  evidence && sameSourceVersion(sourceVersion(resource.entry), evidence.version)
+                    ? evidence
+                    : undefined
+                }
+                active={active}
+                interactive={interactive}
+                signal={signal}
+                services={scopedServices}
+                look={look}
+                pages={pages}
+                toolbar={toolbar}
+                commands={commands}
+                state={viewState}
+                limits={limits}
+                reading={{ fontSize }}
+                openRelated={openRelated}
+                editing={editing}
+                optimize={!supplied ? invokeFile('optimize-files') : undefined}
+                editPDF={!supplied ? invokeFile('pdf-tools') : undefined}
+                editImage={!supplied ? invokeFile('image-tools') : undefined}
+                rotatedCopy={
+                  !supplied
+                    ? (turn) =>
+                        void window.viewer
+                          .operate(rotatedCopyRequest(current ?? resource.entry, turn))
+                          .catch(report)
+                    : undefined
+                }
+                editMedia={
+                  !supplied && workspace
+                    ? () =>
+                        void workspace
+                          .openMedia(
+                            [resource.entry.path],
+                            paneID || getState().quickPreview?.paneID || getState().activePane,
+                          )
+                          .then(() => quickPreview(null))
+                          .catch(report)
+                    : undefined
+                }
+                retry={!supplied ? () => setRetry((value) => value + 1) : undefined}
+                showHex={() => setHexFor(resource.id)}
+                openInApp={
+                  !supplied
+                    ? () => void window.viewer.openExternal(resource.entry.path).catch(report)
+                    : undefined
+                }
+                saveAttachments={saveMessageAttachments}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        </div>
+      </PreviewFrameContext>
       {renderFooter ? (
-        renderFooter(resource, hexShown ? hexModule : module, hex)
+        renderFooter(resource, hexShown ? hexModule : module, hex, facts)
       ) : (
         <footer className="preview-info">
-          <div className="preview-file-info">
-            <span className="preview-filename" title={resource.entry.path}>
-              {(current ?? resource.entry).name}
-            </span>
-            <span className="preview-file-details">
-              <span className="separator">·</span> {hexShown ? hexModule.label : module.label}{' '}
-              <span className="separator">·</span> <PreviewSize entry={current ?? resource.entry} />
-            </span>
-          </div>
+          <PreviewFileInfo
+            entry={current ?? resource.entry}
+            kind={hexShown ? hexModule.label : module.label}
+            details={facts}
+          />
           {!supplied && (
             <IconButton
               icon="external"

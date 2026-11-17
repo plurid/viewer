@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -25,11 +26,12 @@ import {
 import { Icon, type IconName } from '../ui/Icon';
 import { HeldPreview } from '../previews/HeldPreview';
 import { useFolder } from './useFolder';
-import { Empty, Loading } from '../ui/primitives';
+import { Empty, Failure, Loading } from '../ui/primitives';
 import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
 import { useFileReveal } from './anchors';
 import type { ColumnNavigation } from './column-navigation';
 import { keepPreviewKeys, type FileModifiers } from './selection';
+import { PreviewColumn } from './PreviewColumn';
 
 import type { FolderPresentation } from '../../domain/preferences/folder-presentation';
 import { BrowserColumn } from './BrowserColumn';
@@ -142,7 +144,7 @@ export const FileRow = memo(function FileRow({
           <button
             className="folder-disclosure"
             style={{ left: 2 + (props.depths?.get(entry.path) || 0) * 18 }}
-            aria-label={props.expanded?.includes(entry.path) ? 'Collapse folder' : 'Expand folder'}
+            aria-label={`${props.expanded?.includes(entry.path) ? 'Collapse' : 'Expand'} ${entry.name}`}
             onClick={(event) => {
               event.stopPropagation();
               props.toggle?.(entry);
@@ -659,9 +661,20 @@ function Column({
       {listing.loading ? (
         <Loading />
       ) : listing.unavailable ? (
-        <Empty title="Folder unavailable" detail={listing.error}>
-          {needsFolderAccess(listing.errorCode) && <FolderAccessButton folder={path} />}
-        </Empty>
+        needsFolderAccess(listing.errorCode) ? (
+          <Failure
+            title="Can't open this folder"
+            detail="Viewer needs your permission to open this folder."
+          >
+            <FolderAccessButton folder={path} />
+          </Failure>
+        ) : (
+          <Failure
+            title="Can't open this folder"
+            detail={listing.error}
+            onRetry={listing.refresh}
+          />
+        )
       ) : (
         <ListViewCompact props={columnProps} />
       )}
@@ -753,19 +766,33 @@ export function ColumnsView({
           .find((entry) => entry.path === props.selection[0] && previewsAsFile(entry))
       : undefined;
   const directory = navigation.directory();
-  useEffect(() => {
-    const columns = [...(scroll.current?.children ?? [])] as HTMLElement[];
-    const last = selected
-      ? columns.at(-1)
-      : columns.find((column) => column.dataset.folderPath === directory);
-    if (last && scroll.current) {
-      const right = last.offsetLeft + last.offsetWidth;
-      if (right > scroll.current.scrollLeft + scroll.current.clientWidth)
-        scroll.current.scrollLeft = right - scroll.current.clientWidth;
-      else if (last.offsetLeft < scroll.current.scrollLeft)
-        scroll.current.scrollLeft = last.offsetLeft;
-    }
-  }, [navigation.trail, selected, directory]);
+  const hasPreview = !!selected;
+  // The current column stays in view, with as much of the preview as fits beside it, when the
+  // trail changes, a preview appears or the plane resizes. Another file in the same column
+  // changes neither, so the strip never moves under the pointer.
+  useLayoutEffect(() => {
+    const strip = scroll.current;
+    if (!strip) return;
+    const columns = [...strip.querySelectorAll<HTMLElement>(':scope > .file-column')];
+    const last = columns.find((column) => column.dataset.folderPath === directory);
+    if (!last) return;
+    const preview = strip.querySelector<HTMLElement>(':scope > .column-preview');
+    const reveal = () => {
+      const spare = Math.max(0, strip.clientWidth - last.offsetWidth);
+      const right = last.offsetLeft + last.offsetWidth + Math.min(preview?.offsetWidth ?? 0, spare);
+      if (right > strip.scrollLeft + strip.clientWidth)
+        strip.scrollLeft = Math.max(0, right - strip.clientWidth);
+      else if (last.offsetLeft < strip.scrollLeft) strip.scrollLeft = last.offsetLeft;
+    };
+    reveal();
+    // test documents may lack ResizeObserver; Chromium always has it
+    if (typeof ResizeObserver === 'undefined') return;
+    const resized = new ResizeObserver(reveal);
+    resized.observe(strip);
+    for (const column of columns) resized.observe(column);
+    if (preview) resized.observe(preview);
+    return () => resized.disconnect();
+  }, [navigation.trail, hasPreview, directory]);
   return (
     <div className="columns-view" ref={scroll}>
       {navigation.trail.map((folder, index) =>
@@ -784,15 +811,9 @@ export function ColumnsView({
         ),
       )}
       {selected && (
-        <div
-          className="column-preview"
-          ref={keepPreviewKeys}
-          role="region"
-          aria-label="File preview"
-          data-preview-path={selected.path}
-        >
+        <PreviewColumn folder={directory} path={selected.path}>
           <HeldPreview path={selected.path} {...activity} />
-        </div>
+        </PreviewColumn>
       )}
     </div>
   );
@@ -887,12 +908,14 @@ export function GalleryView(props: FileViewProps) {
           </div>
         ) : (
           <Empty
-            icon={selected?.directory ? 'folder' : 'image'}
+            icon={selected ? (fileFamily(selected) as IconName) : 'image'}
             title={selected?.name || 'Select a file to preview'}
             detail={
-              selected?.directory
-                ? 'Double-click to open this folder.'
-                : 'Use the filmstrip or arrow keys to explore.'
+              !selected
+                ? undefined
+                : selected.directory
+                  ? 'Double-click to open this folder.'
+                  : 'No preview for this kind of file.'
             }
           />
         )}

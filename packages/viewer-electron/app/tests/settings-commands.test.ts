@@ -90,25 +90,23 @@ describe('a command for every setting', () => {
   });
   it('toggles an on/off setting: the space toolbar, minimap and viewcube', async () => {
     // a first run is quiet: no space toolbar, the minimap automatic
-    expect(label('setting.ui.space.toolbar')).toBe('Show space toolbar');
+    expect(label('setting.ui.space.toolbar')).toBe('Show Space Toolbar');
     await act(async () => find('setting.ui.space.toolbar').run(context));
     expect(getState().saved.ui.space.toolbar).toBe(true);
-    expect(label('setting.ui.space.toolbar')).toBe('Hide space toolbar');
+    expect(label('setting.ui.space.toolbar')).toBe('Hide Space Toolbar');
     await act(async () => find('setting.ui.space.toolbar').run(context));
     expect(getState().saved.ui.space.toolbar).toBe(false);
-    expect(label('setting.ui.space.viewcube')).toBe('Show viewcube');
+    expect(label('setting.ui.space.viewcube')).toBe('Show Viewcube');
     expect(label('setting.ui.space.minimapAuto')).toBe(
-      'Turn off: Minimap only with 3 or more planes',
+      'Turn Off: Minimap only with 3 or more planes',
     );
-    expect(label('setting.ui.space.minimap')).toBe('Hide minimap');
+    expect(label('setting.ui.space.minimap')).toBe('Hide Minimap');
     await act(async () => find('setting.ui.space.minimap').run(context));
     expect(getState().saved.ui.space.minimap).toBe(false);
-    expect(label('setting.ui.space.minimap')).toBe('Show minimap');
+    expect(label('setting.ui.space.minimap')).toBe('Show Minimap');
     await act(async () => find('setting.ui.space.headerControls.back').run(context));
     expect(getState().saved.ui.space.headerControls.back).toBe(false);
-    expect(label('setting.ui.space.headerControls.back')).toBe(
-      'Turn on: Plane toolbar › Back button',
-    );
+    expect(label('setting.ui.space.headerControls.back')).toBe('Turn On: Plane toolbar › Back');
   });
   it('offers each value of a choice, the current one checked', async () => {
     expect(label('setting.ui.space.backdrop=blur')).toBe('Space background: Blur');
@@ -156,7 +154,7 @@ describe('a command for every setting', () => {
     expect(settingsPatch).toHaveBeenCalledTimes(1);
   });
   it('opens Settings at a number or a colour', async () => {
-    expect(label('setting.ui.space.backdropOpacity')).toBe('Change space background opacity (%)…');
+    expect(label('setting.ui.space.backdropOpacity')).toBe('Change Space Background Opacity (%)…');
     await act(async () => find('setting.ui.space.color').run(context));
     expect(openSettings).toHaveBeenLastCalledWith('ui.space.color');
   });

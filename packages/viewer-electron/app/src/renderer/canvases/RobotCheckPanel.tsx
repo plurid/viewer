@@ -93,7 +93,7 @@ export function RobotCheckPanel({
                 {millimetres(report.input.tolerance)} position tolerance and hard joint limits.
               </p>
               <table>
-                <caption>World-frame targets in metres; position error in millimetres</caption>
+                <caption>World-frame targets in meters; position error in millimeters</caption>
                 <thead>
                   <tr>
                     <th>Target (X, Y, Z)</th>

@@ -8,6 +8,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import MediaPreview from '../src/renderer/previews/modules/MediaPreview';
 import type { FileEntry, Resource, ResourceRead } from '../src/domain/contracts';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
+import { PreviewFrameFixture } from './support/preview-frame';
 
 vi.mock('../src/renderer/ui/navigation/NativeOpenActions', () => ({
   NativeOpenActions: () => null,
@@ -183,10 +184,15 @@ it('keeps the track on a compatibility copy', async () => {
     url: 'viewer-resource://copy/Movie.wmv.mp4',
     entry: { name: 'Movie.wmv.mp4', mime: 'video/mp4' },
   });
-  const view = render(<MediaPreview {...context} />);
+  // the label is a fact of the footer's (the Preview Bar Rule)
+  const view = render(
+    <PreviewFrameFixture>
+      <MediaPreview {...context} />
+    </PreviewFrameFixture>,
+  );
   await waitFor(() => expect(track(view.container)).toBeTruthy());
   fireEvent.error(view.container.querySelector('video')!);
-  await screen.findByText('Compatibility copy · up to 720p');
+  await screen.findByText('Playing a 720p copy');
   expect(view.container.querySelector('video')?.getAttribute('src')).toBe(
     'viewer-resource://copy/Movie.wmv.mp4',
   );

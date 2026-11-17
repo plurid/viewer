@@ -17,7 +17,7 @@ export function viewsCommands({ actions, windowScope }: WindowScopes): CommandDe
   return [
     ...slots.map((slot): CommandDefinition => ({
       id: `bookmark.save.${slot}`,
-      label: exists(String(slot)) ? `Replace view ${slot} with this one` : `Save view as ${slot}`,
+      label: exists(String(slot)) ? `Replace View ${slot} with This One` : `Save View as ${slot}`,
       group: 'Space',
       icon: 'star',
       aliases: ['bookmark', 'view', 'camera', String(slot)],
@@ -26,7 +26,7 @@ export function viewsCommands({ actions, windowScope }: WindowScopes): CommandDe
     })),
     ...slots.map((slot): CommandDefinition => ({
       id: `bookmark.${slot}`,
-      label: `Go to view ${slot}`,
+      label: `Go to View ${slot}`,
       group: 'Space',
       icon: 'eye',
       aliases: ['bookmark', 'view', 'camera', String(slot)],
@@ -39,7 +39,7 @@ export function viewsCommands({ actions, windowScope }: WindowScopes): CommandDe
       .filter((view) => !/^[1-9]$/.test(view.name))
       .map((view): CommandDefinition => ({
         id: `bookmark:${view.name}`,
-        label: `Go to view “${view.label}”`,
+        label: `Go to View “${view.label}”`,
         group: 'Space',
         icon: 'eye',
         aliases: ['bookmark', 'view', 'camera', view.label],
@@ -50,7 +50,7 @@ export function viewsCommands({ actions, windowScope }: WindowScopes): CommandDe
       })),
     {
       id: 'bookmark-save',
-      label: 'Save view…',
+      label: 'Save View…',
       group: 'Space',
       icon: 'star',
       aliases: ['bookmark', 'name view', 'camera'],
@@ -69,7 +69,7 @@ export function viewsCommands({ actions, windowScope }: WindowScopes): CommandDe
     tourActive()
       ? {
           id: 'tour',
-          label: 'Stop tour',
+          label: 'Stop Tour',
           group: 'Space',
           icon: 'pause',
           aliases: ['tour', 'present', 'stop'],
@@ -78,7 +78,7 @@ export function viewsCommands({ actions, windowScope }: WindowScopes): CommandDe
         }
       : {
           id: 'tour',
-          label: 'Tour the views',
+          label: 'Tour the Views',
           group: 'Space',
           icon: 'play',
           aliases: ['tour', 'present', 'presentation', 'slideshow'],

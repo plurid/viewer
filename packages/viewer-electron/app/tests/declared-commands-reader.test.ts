@@ -179,14 +179,66 @@ describe('declared reader review regressions', () => {
     );
   });
 
-  it('does not derive again for an unrelated line or without a cached declaration', async () => {
+  it('does not derive again for an unrelated line in a valid cached declaration list', async () => {
     const f = fixture({ '/site': { '.git': '', Procfile: 'web: serve' } });
-    await f.service.record('/site', 'unrelated');
-    expect(f.probes).toEqual([]);
     await f.service.list('/site');
     f.facts.probe.mockClear();
     await f.service.record('/site', 'unrelated');
     expect(f.facts.probe).not.toHaveBeenCalled();
+  });
+
+  it.each(['absent', 'expired', 'changed roots'] as const)(
+    'second round: records with an %s cache',
+    async (kind) => {
+      const f = fixture({ '/site': { '.git': '', Procfile: 'web: serve' } });
+      if (kind !== 'absent') await f.service.list('/site');
+      if (kind === 'expired') f.advance(10_001);
+      if (kind === 'changed roots') f.roots.push('/site');
+      await f.service.record('/site', 'serve');
+      const saved = JSON.parse(
+        await readFile(path.join(dataPath, 'declared-commands-v1.json'), 'utf8'),
+      );
+      expect(saved.roots[0].reference).toMatchObject({ source: 'Procfile', name: 'web' });
+    },
+  );
+
+  it('second round: excludes home definitions and canonical home aliases before a nearer Git boundary', async () => {
+    for (const root of ['/Users/sample', '/alias/home']) {
+      const f = fixture(
+        {
+          '/Users/sample/code': { Makefile: 'umbrella:\n\techo umbrella' },
+          '/Users/sample/code/site': { '.git': '', Procfile: 'web: serve' },
+          '/Users/sample/code/site/src': {},
+        },
+        [root],
+      );
+      const probe = f.facts.probe.getMockImplementation()!;
+      f.facts.probe.mockImplementation((folder) =>
+        probe(folder.replace('/alias/home', '/Users/sample')),
+      );
+      const directory = root + '/code/site/src';
+      expect((await f.service.list(directory)).commands).toEqual([]);
+      expect(f.probes).not.toContain('/Users/sample/code');
+    }
+    const f = fixture({ '/Users/sample': { Procfile: 'sync: sync' } });
+    expect(await f.service.list('/Users/sample')).toEqual({ commands: [] });
+    expect(f.probes).toEqual([]);
+    const probe = f.facts.probe.getMockImplementation()!;
+    f.facts.probe.mockImplementation((folder) =>
+      probe(folder === '/alias' ? '/Users/sample' : folder),
+    );
+    expect(await f.service.list('/alias')).toEqual({ commands: [] });
+    expect(f.reads).toEqual([]);
+  });
+
+  it('second round: re-derives a stale cached nonmatch after the declaration changes', async () => {
+    const f = fixture({ '/site': { '.git': '', Procfile: 'web: old' } });
+    await f.service.list('/site');
+    f.files.get('/site')!.Procfile = 'web: current';
+    f.advance(10_001);
+    await f.service.record('/site', 'current');
+    const file = path.join(dataPath, 'declared-commands-v1.json');
+    expect(JSON.parse(await readFile(file, 'utf8')).roots[0].reference.name).toBe('web');
   });
 
   it('clears the cached declaration and refreshes root recency before eviction', async () => {
@@ -282,6 +334,7 @@ describe('declared reader review regressions', () => {
       file === '/site' && !allowed ? undefined : { allows: () => true };
     const service = new DeclaredCommands({ facts: f.facts, roots: () => [], dataPath, access });
     expect(await service.list('/site')).toEqual({ commands: [] });
+    await service.record('/site', 'serve');
     expect(f.probes).toEqual([]);
     allowed = true;
     const pending = service.list('/site');

@@ -414,7 +414,7 @@ describe('Git preparation and lifetime binding', () => {
           });
         }
         const pending = f.service.start(f.request('stage-all'), 12);
-        const rejected = expect(pending).rejects.toThrow('cancelled');
+        const rejected = expect(pending).rejects.toThrow('canceled');
         await vi.waitFor(() => expect(entered).toBe(true));
         if (reason === 'plane') f.service.stop('git-job', 12);
         else if (reason === 'window') f.service.stopOwner(12);

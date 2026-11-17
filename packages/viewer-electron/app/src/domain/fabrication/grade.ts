@@ -73,7 +73,7 @@ export const lengthText = (value: number) => amount(value, 'mm');
 const axisText: Record<PitchAxis, string> = {
   x: 'along x',
   y: 'along y',
-  centre: 'centre to centre',
+  centre: 'center to center',
 };
 interface Reading {
   value: number;

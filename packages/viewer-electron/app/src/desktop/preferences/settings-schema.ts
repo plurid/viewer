@@ -34,6 +34,7 @@ import {
   folderOverrideSchema,
 } from '../actions/automation-schema';
 import { localPath, id } from '../schemas';
+import { modelScrollDevices } from '../../domain/previews/models/scroll-device';
 import { optimizationRecipeSchema } from '../../domain/operations/optimization';
 import { defaultFileOpening } from '../../domain/services';
 import { maxQueryLength } from '../../domain/search/query';
@@ -191,6 +192,7 @@ export const settingsSchema = z
         thumbnailSize: z.number().int().min(128).max(512),
         maxImagePixels: z.number().int().min(1000000).max(128000000),
         maxModelMB: z.number().int().min(16).max(512),
+        modelScrollDevice: z.enum(modelScrollDevices).default('automatic'),
         textFontSize: z.number().int().min(8).max(32).default(16),
         textLineHeight: z.number().int().min(12).max(64).default(20),
         textWordWrap: z.boolean().default(false),

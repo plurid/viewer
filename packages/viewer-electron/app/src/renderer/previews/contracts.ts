@@ -20,6 +20,7 @@ import type {
   GhostscriptStatus,
   PostScriptInspection,
 } from '../../domain/previews/documents/postscript';
+import type { ModelScrollDevice } from '../../domain/previews/models/scroll-device';
 
 /** Renderer-only capabilities: preview modules never import the workspace or explorer. */
 export interface PreviewCommand {
@@ -52,13 +53,15 @@ export interface AttachmentSave {
 /** Which of its controls a module shows in the plane header: `essential`, its main ones, each
  * other one also a command, in the plane's "…" menu; `all`, every one. */
 export type PreviewToolbarSet = 'essential' | 'all';
+/** A picture's view turned clockwise, in degrees. */
+export type QuarterTurn = 90 | 180 | 270;
 export interface PreviewContext {
   evidence?: EvidenceNavigation;
   /** Undefined shows every control: Quick Preview, galleries and tests. */
   toolbar?: PreviewToolbarSet;
   resource: Resource;
   state?: { get(key: string): unknown; set(key: string, value: unknown): void };
-  limits?: { maxImagePixels: number; maxModelMB: number };
+  limits?: { maxImagePixels: number; maxModelMB: number; modelScrollDevice?: ModelScrollDevice };
   reading?: { fontSize: number };
   active: boolean;
   interactive: boolean;
@@ -74,10 +77,16 @@ export interface PreviewContext {
   retry?(): void;
   editMedia?(): void;
   editImage?(): void;
+  /** Saves a copy of the picture turned as its view is, beside it; the picture stays as it was.
+   * Absent where the picture is not a file of its own, as in the Trash or an archive. */
+  rotatedCopy?(turn: QuarterTurn): void;
   optimize?(): void;
   editPDF?(): void;
   /** Shows the file's bytes in place of its preview, where the host offers it. */
   showHex?(): void;
+  /** Opens the file in its default app. Absent where the file is not one of its own, as an
+   * archive's entry or a message's attachment. */
+  openInApp?(): void;
   /** Saves attachments of the previewed message as files. Absent where the message is not a file
    * of its own, as inside an archive. */
   saveAttachments?(request: AttachmentSave): Promise<void>;

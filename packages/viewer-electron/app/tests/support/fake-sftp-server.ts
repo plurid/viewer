@@ -10,6 +10,7 @@ import type {
 import { once } from 'node:events';
 import path from 'node:path/posix';
 import { afterEach, expect } from 'vitest';
+import { remoteLimits } from '../../src/domain/remote/limits';
 import {
   decodeClientPacket,
   encodeReply,
@@ -20,7 +21,7 @@ import {
 } from '../../src/desktop/remote/sftp/codec';
 
 export type FakePacketFault = 'oversized' | 'truncated' | 'oversizedString' | 'tooManyNames';
-export type FakeNodeKind = 'file' | 'directory' | 'symlink';
+export type FakeNodeKind = 'file' | 'directory' | 'symlink' | 'fifo' | 'socket';
 
 export interface FakeSubtree {
   path: string;
@@ -58,6 +59,7 @@ interface FakeHandle {
   node: FakeNode;
   writable: boolean;
   cursor: number;
+  opened: 'open' | 'opendir';
   names?: readonly SFTPName[];
 }
 
@@ -88,7 +90,7 @@ const forbiddenExtensions = [
 const servers = new Set<FakeSFTPServer>();
 let assertionsInstalled = false;
 
-/** Each SFTP test file opts in, including codec-only files, so future fixtures inherit the guard. */
+/** Importing the fixture installs its guard, including for tests that do not call this helper. */
 export function assertSafeSFTPAfterEach(): void {
   if (assertionsInstalled) return;
   assertionsInstalled = true;
@@ -111,7 +113,6 @@ export class FakeSFTPServer {
   readonly errors: unknown[] = [];
   readonly extensions: ReadonlyMap<string, Buffer>;
   private readonly framer = new SFTPFramer();
-  private serial = 0;
   private sequence = 0;
   private transferred = 0;
   private initialized = false;
@@ -133,12 +134,14 @@ export class FakeSFTPServer {
         ? new Map()
         : options.extensions instanceof Map
           ? options.extensions
-          : new Map(
-              Object.entries(sftpExtensions).map(([key, name]) => [
-                name,
-                Buffer.from(key === 'statvfs' ? '2' : '1'),
-              ]),
-            );
+          : new Map([
+              ...Object.entries(sftpExtensions).map(
+                ([key, name]) => [name, Buffer.from(key === 'statvfs' ? '2' : '1')] as const,
+              ),
+              ['fstatvfs@openssh.com', Buffer.from('2')],
+              ['expand-path@openssh.com', Buffer.from('1')],
+              ['home-directory', Buffer.from('1')],
+            ]);
     this.directory('/');
     this.directory('/home');
     transport.on('data', (bytes: Buffer) => {
@@ -165,6 +168,7 @@ export class FakeSFTPServer {
     for (const timer of this.timers) clearTimeout(timer);
     this.timers.clear();
     this.transport.destroy();
+    this.assertSafePackets();
   }
 
   assertSafePackets(): void {
@@ -208,6 +212,12 @@ export class FakeSFTPServer {
     return node;
   }
 
+  special(file: string, kind: 'fifo' | 'socket'): FakeNode {
+    const node = this.makeNode(kind, (kind === 'fifo' ? 0o010000 : 0o140000) | 0o600);
+    this.nodes.set(file, node);
+    return node;
+  }
+
   bytes(file: string): Buffer {
     const { node } = this.resolve(file);
     return this.readBytes(node, 0, node.size);
@@ -224,7 +234,7 @@ export class FakeSFTPServer {
   }
 
   private resolve(input: string, follow = true, depth = 0): { path: string; node: FakeNode } {
-    if (depth > 40) throw new FakeStatus(4, 'Too many symbolic links');
+    if (depth > 40) throw new FakeStatus(2, 'No such file');
     const segments = input.split('/').filter(Boolean);
     let current = '/';
     let node = this.nodes.get('/')!;
@@ -253,6 +263,16 @@ export class FakeSFTPServer {
     return path.join(parent.path, path.basename(input));
   }
 
+  private canonical(input: string, depth = 0): string {
+    if (depth > 40) throw new FakeStatus(2, 'No such file');
+    if (input === '/') return input;
+    const destination = this.destination(input);
+    const node = this.nodes.get(destination);
+    return node?.kind === 'symlink'
+      ? this.canonical(path.resolve(path.dirname(destination), node.target!), depth + 1)
+      : destination;
+  }
+
   private filesystem(file: string): { filesystemID: bigint; readOnly: boolean } {
     const matching = (this.options.subtrees ?? [])
       .filter((tree) => tree.path === '/' || file === tree.path || file.startsWith(tree.path + '/'))
@@ -264,22 +284,33 @@ export class FakeSFTPServer {
   }
 
   private writable(file: string): void {
-    if (this.filesystem(file).readOnly) throw new FakeStatus(3, 'Read-only filesystem');
+    if (this.filesystem(file).readOnly) throw new FakeStatus(4, 'Failure');
   }
 
   private handle(bytes: Buffer, writable = false): FakeHandle {
     const handle = this.handles.get(bytes.toString('hex'));
-    if (!handle) throw new FakeStatus(4, 'Invalid handle');
-    if (writable && !handle.writable) throw new FakeStatus(3, 'Handle is read only');
+    if (!handle) throw new FakeStatus(2, 'No such file');
+    if (writable && !handle.writable) throw new FakeStatus(2, 'No such file');
     return handle;
   }
 
-  private openHandle(id: number, file: string, node: FakeNode, writable: boolean): SFTPReply {
+  private openHandle(
+    id: number,
+    file: string,
+    node: FakeNode,
+    writable: boolean,
+    opened: FakeHandle['opened'] = 'open',
+  ): SFTPReply {
     const maximum = this.options.limits?.openHandles ?? 0n;
     if (maximum !== 0n && BigInt(this.handles.size) >= maximum)
       throw new FakeStatus(4, 'Too many open handles');
-    const handle = Buffer.from(String(++this.serial));
-    this.handles.set(handle.toString('hex'), { path: file, node, writable, cursor: 0 });
+    let slot = 0;
+    const handle = Buffer.alloc(4);
+    while (true) {
+      handle.writeUInt32BE(slot++);
+      if (!this.handles.has(handle.toString('hex'))) break;
+    }
+    this.handles.set(handle.toString('hex'), { path: file, node, writable, cursor: 0, opened });
     return { kind: 'handle', id, handle };
   }
 
@@ -327,12 +358,50 @@ export class FakeSFTPServer {
     }
   }
 
-  private status(id: number, status = 0, message = ''): SFTPReply {
+  /** OpenSSH sends the fixed text for each code; only `statusOverride` supplies its own. */
+  private status(id: number, status = 0, message?: string): SFTPReply {
+    message ??=
+      [
+        'Success',
+        'End of file',
+        'No such file',
+        'Permission denied',
+        'Failure',
+        'Bad message',
+        'No connection',
+        'Connection lost',
+        'Operation unsupported',
+      ][status] ?? 'Unknown error';
     return { kind: 'status', id, status, message: Buffer.from(message), language: Buffer.alloc(0) };
   }
 
   private name(filename: Buffer, attrs: SFTPAttributes = {}): SFTPName {
     return { filename, longname: Buffer.alloc(0), attrs };
+  }
+
+  private listingName(filename: Buffer, attrs: SFTPAttributes = {}): SFTPName {
+    const kind = (attrs.permissions ?? 0o100644) & 0o170000;
+    const prefix =
+      kind === 0o040000
+        ? 'd'
+        : kind === 0o120000
+          ? 'l'
+          : kind === 0o010000
+            ? 'p'
+            : kind === 0o140000
+              ? 's'
+              : '-';
+    return {
+      filename,
+      attrs,
+      longname: Buffer.from(
+        prefix +
+          'rwxr-xr-x 1 viewer staff ' +
+          (attrs.size ?? 0n) +
+          ' Jan 1 00:00 ' +
+          filename.toString('utf8'),
+      ),
+    };
   }
 
   private receive(packet: Buffer): void {
@@ -362,12 +431,15 @@ export class FakeSFTPServer {
     }
     let reply: SFTPReply;
     try {
-      if (this.statusOverride)
-        throw new FakeStatus(this.statusOverride.status, this.statusOverride.message);
-      reply = this.execute(decoded.id, decoded.request);
+      // OpenSSH frees a valid handle's slot even when its close fails.
+      if (this.statusOverride && decoded.request.kind === 'close')
+        this.handles.delete(decoded.request.handle.toString('hex'));
+      reply = this.statusOverride
+        ? this.status(decoded.id, this.statusOverride.status, this.statusOverride.message)
+        : this.execute(decoded.id, decoded.request);
     } catch (error) {
       if (!(error instanceof FakeStatus)) throw error;
-      reply = this.status(decoded.id, error.status, error.message);
+      reply = this.status(decoded.id, error.status);
     }
     if (this.replyOverride) reply = this.replyOverride(reply, decoded.request);
     this.schedule(reply);
@@ -382,11 +454,10 @@ export class FakeSFTPServer {
           this.writable(destination);
           if (this.nodes.has(destination)) throw new FakeStatus(4, 'File exists');
           const node = this.file(destination);
-          this.setAttributes(node, request.attrs);
+          this.setAttributes(node, { permissions: (request.attrs.permissions ?? 0o666) & ~0o022 });
           return this.openHandle(id, destination, node, true);
         }
         const found = this.resolve(file);
-        if (found.node.kind !== 'file') throw new FakeStatus(4, 'Not a regular file');
         return this.openHandle(id, found.path, found.node, false);
       }
       case 'close':
@@ -450,23 +521,28 @@ export class FakeSFTPServer {
       case 'opendir': {
         const found = this.resolve(this.pathname(request.path));
         if (found.node.kind !== 'directory') throw new FakeStatus(4, 'Not a directory');
-        return this.openHandle(id, found.path, found.node, false);
+        return this.openHandle(id, found.path, found.node, false, 'opendir');
       }
       case 'readdir': {
         const handle = this.handle(request.handle);
         if (handle.node.kind !== 'directory') throw new FakeStatus(4, 'Not a directory');
         handle.names ??= [
+          this.listingName(Buffer.from('.'), this.attributes(handle.node)),
+          this.listingName(
+            Buffer.from('..'),
+            this.attributes(this.resolve(path.dirname(handle.path)).node),
+          ),
           ...[...this.nodes]
             .filter(([file]) => file !== handle.path && path.dirname(file) === handle.path)
             .map(([file, node]) =>
-              this.name(Buffer.from(path.basename(file)), this.attributes(node)),
+              this.listingName(Buffer.from(path.basename(file)), this.attributes(node)),
             ),
-          ...(this.options.hostileNames ?? []).map((name) => this.name(name)),
+          ...(this.options.hostileNames ?? []).map((name) => this.listingName(name)),
           ...Array.from({ length: this.options.directoryEntries ?? 0 }, (_, index) =>
-            this.name(Buffer.from('entry-' + index)),
+            this.listingName(Buffer.from('entry-' + index)),
           ),
         ];
-        if (handle.cursor >= handle.names.length) return this.status(id, 1, 'End of directory');
+        if (handle.cursor >= handle.names.length) return this.status(id, 1);
         const names = handle.names.slice(
           handle.cursor,
           handle.cursor + (this.options.namesPerReply ?? 100),
@@ -478,15 +554,16 @@ export class FakeSFTPServer {
         const file = this.destination(this.pathname(request.path));
         this.writable(file);
         if (this.nodes.has(file)) throw new FakeStatus(4, 'File exists');
-        this.setAttributes(this.directory(file), request.attrs);
+        // OpenSSH passes only the permissions to mkdir(2), which applies the umask.
+        this.directory(file, 0o40000 | ((request.attrs.permissions ?? 0o777) & 0o7777 & ~0o022));
         return this.status(id);
       }
       case 'realpath': {
-        const found = this.resolve(this.pathname(request.path));
+        const resolved = this.canonical(this.pathname(request.path));
         return {
           kind: 'name',
           id,
-          names: [this.name(Buffer.from(found.path), this.attributes(found.node))],
+          names: [this.name(Buffer.from(resolved))],
         };
       }
       case 'readlink': {
@@ -508,20 +585,29 @@ export class FakeSFTPServer {
         this.writable(destination);
         if (this.filesystem(source.path).filesystemID !== this.filesystem(destination).filesystemID)
           throw new FakeStatus(4, 'EXDEV: cross-device link');
-        if (this.nodes.has(destination)) throw new FakeStatus(4, 'File exists');
-        if (source.node.kind === 'directory') {
+        if (source.node.kind === 'file') {
+          if (this.nodes.has(destination)) throw new FakeStatus(4, 'File exists');
+          this.renameEvents.push('exclusive-file-publication');
+        } else {
           this.renameEvents.push('stat-destination');
-          this.options.folderRenameRace?.(this, destination);
+          try {
+            this.resolve(destination);
+            throw new FakeStatus(4, 'File exists');
+          } catch (error) {
+            if (!(error instanceof FakeStatus) || error.status !== 2) throw error;
+          }
+          if (source.node.kind === 'directory') this.options.folderRenameRace?.(this, destination);
+          // rename(2) errors as OpenSSH maps them: ENOTDIR for a folder onto a link, ENOTEMPTY.
+          // Other sources only reach here when STAT found nothing, so never onto a folder.
           const occupied = this.nodes.get(destination);
-          if (
-            occupied &&
-            (occupied.kind !== 'directory' ||
-              [...this.nodes.keys()].some((file) => file.startsWith(destination + '/')))
-          )
+          if (occupied && source.node.kind === 'directory' && occupied.kind !== 'directory')
+            throw new FakeStatus(2, 'Not a directory');
+          if (occupied && [...this.nodes.keys()].some((file) => file.startsWith(destination + '/')))
             throw new FakeStatus(4, 'Destination is not an empty directory');
-        } else this.renameEvents.push('exclusive-file-publication');
+        }
+        // EINVAL, which OpenSSH reports as a bad message.
         if (destination.startsWith(source.path + '/'))
-          throw new FakeStatus(4, 'Invalid directory move');
+          throw new FakeStatus(5, 'Invalid directory move');
         const entries = [...this.nodes].filter(
           ([file]) => file === source.path || file.startsWith(source.path + '/'),
         );
@@ -536,8 +622,8 @@ export class FakeSFTPServer {
         this.requireExtension('limits');
         const limits = this.options.limits ?? {
           packetLength: 256n * 1024n,
-          readLength: 64n * 1024n,
-          writeLength: 64n * 1024n,
+          readLength: 261120n,
+          writeLength: 261120n,
           openHandles: 256n,
         };
         return {
@@ -581,25 +667,7 @@ export class FakeSFTPServer {
       }
       case 'copyData': {
         this.requireExtension('copyData');
-        const source = this.handle(request.source);
-        const destination = this.handle(request.destination, true);
-        this.writable(destination.path);
-        if (source === destination || source.node === destination.node)
-          throw new FakeStatus(4, 'Invalid copy handles');
-        const sourceOffset = Number(request.sourceOffset);
-        const count =
-          request.length === 0n
-            ? Math.max(0, source.node.size - sourceOffset)
-            : Number(request.length);
-        if (
-          !Number.isSafeInteger(count) ||
-          count > 512 * 1024 * 1024 ||
-          request.destinationOffset > BigInt(512 * 1024 * 1024)
-        )
-          throw new FakeStatus(4, 'Fake file size limit');
-        const data = this.readBytes(source.node, sourceOffset, count);
-        this.writeBytes(destination.node, Number(request.destinationOffset), data);
-        return this.status(id);
+        return this.status(id, this.copyData(request));
       }
       case 'usersGroups': {
         this.requireExtension('usersGroups');
@@ -614,6 +682,60 @@ export class FakeSFTPServer {
         };
       }
     }
+  }
+
+  /**
+   * OpenSSH's copy-data: 64 KiB reads and writes, the status of the first failure or of an early
+   * end of file, and then OK whenever the request's length was used up. A failure or short read in
+   * the last 64 KiB therefore answers OK.
+   */
+  private copyData(request: Extract<SFTPRequest, { kind: 'copyData' }>): number {
+    const source = this.handles.get(request.source.toString('hex'));
+    const destination = this.handles.get(request.destination.toString('hex'));
+    if (
+      !source ||
+      !destination ||
+      source.opened !== 'open' ||
+      destination.opened !== 'open' ||
+      source === destination ||
+      source.path === destination.path
+    )
+      return 4;
+    const limit = BigInt(512 * 1024 * 1024);
+    if (request.sourceOffset > limit || request.destinationOffset > limit) return 4;
+    const untilEnd = request.length === 0n;
+    let remaining = untilEnd ? limit : request.length;
+    let readOffset = Number(request.sourceOffset);
+    let writeOffset = Number(request.destinationOffset);
+    let status = 8;
+    while (remaining > 0n) {
+      const length = Number(remaining < 65536n ? remaining : 65536n);
+      remaining -= BigInt(length);
+      // read(2) on a folder fails with EISDIR, which OpenSSH reports as a failure.
+      if (source.node.kind !== 'file') {
+        status = 4;
+        break;
+      }
+      const data = this.readBytes(source.node, readOffset, length);
+      if (data.length === 0) {
+        status = untilEnd ? 0 : 1;
+        break;
+      }
+      readOffset += data.length;
+      try {
+        // A handle opened only for reading fails its write with EBADF.
+        if (!destination.writable) throw new FakeStatus(2, 'Bad file descriptor');
+        this.writable(destination.path);
+        if (writeOffset + data.length > Number(limit)) throw new FakeStatus(4, 'Fake size limit');
+        this.writeBytes(destination.node, writeOffset, data);
+      } catch (error) {
+        if (!(error instanceof FakeStatus)) throw error;
+        status = error.status;
+        break;
+      }
+      writeOffset += data.length;
+    }
+    return remaining === 0n ? 0 : status;
   }
 
   private requireExtension(kind: keyof typeof sftpExtensions): void {
@@ -632,11 +754,17 @@ export class FakeSFTPServer {
     return false;
   }
 
-  releaseReplies(reverse = false): void {
-    this.holdReplies = false;
-    const replies = this.held.splice(0);
+  releaseReplies(reverse = false, count = Infinity): void {
+    this.holdReplies = Number.isFinite(count);
+    const replies = this.held.splice(0, count);
     if (reverse) replies.reverse();
     for (const reply of replies) this.enqueue(reply);
+  }
+
+  releaseReply(index: number): void {
+    const reply = this.held.splice(index, 1)[0];
+    if (!reply) throw new Error('No fake reply at that index.');
+    this.enqueue(reply);
   }
 
   private schedule(reply: SFTPReply): void {
@@ -679,12 +807,24 @@ export class FakeSFTPServer {
               this.transport.end();
               return;
             case 'oversizedString': {
-              const body = new SFTPWriter().byte(103).uint32(reply.id).uint32(65537).build();
+              const length = remoteLimits.codecStringBytes + 1;
+              const body = new SFTPWriter()
+                .byte(101)
+                .uint32(reply.id)
+                .uint32(4)
+                .uint32(length)
+                .bytes(Buffer.alloc(length))
+                .uint32(0)
+                .build();
               await this.send(new SFTPWriter().uint32(body.length).bytes(body).build());
               return;
             }
             case 'tooManyNames': {
-              const body = new SFTPWriter().byte(104).uint32(reply.id).uint32(100000).build();
+              const count = remoteLimits.namesPerReply + 1;
+              const packet = new SFTPWriter().byte(104).uint32(reply.id).uint32(count);
+              for (let index = 0; index < count; index++)
+                packet.string(Buffer.from('a')).string(Buffer.alloc(0)).uint32(0);
+              const body = packet.build();
               await this.send(new SFTPWriter().uint32(body.length).bytes(body).build());
               return;
             }
@@ -710,3 +850,5 @@ export class FakeSFTPServer {
     }
   }
 }
+
+assertSafeSFTPAfterEach();

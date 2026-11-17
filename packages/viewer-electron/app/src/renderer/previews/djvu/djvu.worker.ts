@@ -12,7 +12,7 @@ const reply = (message: DjVuReply, transfer: Transferable[] = []) =>
 
 async function open(request: Extract<DjVuRequest, { kind: 'open' }>) {
   const response = await fetch(request.url);
-  if (!response.ok) throw new Error('The file is unavailable.');
+  if (!response.ok) throw new Error("Viewer couldn't read this file.");
   if (Number(response.headers.get('content-length') ?? 0) > djvuLimits.bytes)
     throw new Error('This DjVu file is larger than 256 MB.');
   const bytes = new Uint8Array(await response.arrayBuffer());

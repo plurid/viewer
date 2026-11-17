@@ -153,7 +153,7 @@ export class WatchRules {
         this.dependencies.changed(publicRule(rule));
         return publicRule(rule);
       }
-      if (!old) throw new Error('This watch rule is unavailable.');
+      if (!old) throw new Error('This watch rule was removed.');
       if (request.kind === 'pause') {
         await this.stop(old, 'Paused by you.');
         return publicRule(old);
@@ -186,7 +186,7 @@ export class WatchRules {
     await this.dependencies.access([scope.root, scope.file, ...Object.values(scope.bindings)]);
     const root = await lstat(scope.root);
     if (!root.isDirectory() || root.isSymbolicLink() || (await realpath(scope.root)) !== scope.root)
-      throw new Error('The watched folder moved or is unavailable. Choose it again.');
+      throw new Error('The watched folder was moved or deleted. Choose it again.');
     if (!workflowUsesSelection(document.definition))
       throw new Error('A watch workflow must use a selection reference for changed files.');
     const excluded = [privateRoot, scope.file];
@@ -286,7 +286,7 @@ export class WatchRules {
         excluded.some((root) => containsPath(root, file)) ||
         (needsSelection && ((await realpath(file)) !== file || !(await lstat(file)).isFile()))
       )
-        throw new Error('A changed file moved outside the watched folder or became unavailable.');
+        throw new Error('A changed file was moved out of the watched folder or deleted.');
     }
     if (!rule.enabled || this.closed) throw new Error('This watch rule was paused.');
   }
@@ -294,7 +294,8 @@ export class WatchRules {
     if (!run.watch) return;
     await this.authorize(run);
     const recipe = this.dependencies.recipes().find((recipe) => recipe.id === id);
-    if (!recipe) throw new Error('The watched rename recipe is unavailable.');
+    if (!recipe)
+      throw new Error('The rule’s rename recipe was removed. Choose another in the rule.');
     return structuredClone(recipe);
   }
   private async scan(rule: StoredWatchRule, excluded: readonly string[]) {
@@ -362,7 +363,7 @@ export class WatchRules {
     const result = await this.dependencies.workflows.request({ kind: 'get', id: rule.runID });
     if (!result || typeof result !== 'object' || Array.isArray(result) || !('status' in result))
       throw new Error(
-        'The previous workflow receipt is unavailable. Review the rule before continuing.',
+        'Viewer has no record of the rule’s last run. Review the rule before continuing.',
       );
     if (result.status !== rule.runStatus) {
       rule.runStatus = result.status;

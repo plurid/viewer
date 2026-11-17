@@ -60,7 +60,7 @@ describe('Overview when the minimap is not there', () => {
     const row = await overviewRow(false, 'folder');
     expect(activeWorkspace().panes.length).toBeGreaterThan(0);
     expect(row?.available).toBe(false);
-    expect(row?.reason).toBe('Open Overview from the window command palette (⌘K).');
+    expect(row?.reason).toBe('Choose Overview in Commands (⌘K).');
   });
 
   it('offers Overview when only engine roots remain', async () => {
@@ -85,7 +85,7 @@ describe('Overview when the minimap is not there', () => {
     if (typeof overview.unavailable !== 'function') throw new Error('Expected a live reason.');
     docked = true;
     expect(overview.when(context)).toBe(false);
-    expect(overview.unavailable(context)).toContain('Reveal space');
+    expect(overview.unavailable(context)).toContain('Reveal Space');
     docked = false;
     changeWorkspace((space) => ({ ...space, panes: [], roots: [] }));
     expect(overview.when(context)).toBe(false);
@@ -107,10 +107,10 @@ describe('Overview when the minimap is not there', () => {
     expect(row?.reason).toBeUndefined();
   });
 
-  it('names Reveal space when a plane is docked', async () => {
+  it('names Reveal Space when a plane is docked', async () => {
     withSpace({ minimap: true, minimapAuto: false });
     const row = await overviewRow(true);
     expect(row?.available).toBe(false);
-    expect(row?.reason).toBe('A docked plane fills the window. Reveal space (⌘↵) first.');
+    expect(row?.reason).toBe('A docked plane fills the window. Choose Reveal Space (⌘↩) first.');
   });
 });

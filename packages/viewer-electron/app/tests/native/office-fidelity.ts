@@ -67,7 +67,7 @@ function viewOpacity() {
 
 const officeViewChoices = () =>
   [...document.querySelectorAll('.preview-toolbar button')].some((button) =>
-    ['Layout', 'Print layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
+    ['Layout', 'Print Layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
   );
 
 function pressToolbarButton(label: string) {

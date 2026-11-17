@@ -302,7 +302,7 @@ function window_() {
 /** Chooses the microphone, speaks, and finishes: the transcript arrives. */
 async function speak() {
   act(() => sendWindowEvent('viewer:dictate'));
-  fireEvent.click(await screen.findByRole('button', { name: 'Finish and transcribe' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Finish and Transcribe' }));
   await screen.findByText(`“${said}”`);
 }
 const layout = [
@@ -333,12 +333,12 @@ it('holds the key, shows the words, plans with Muse Spark, checks the job, then 
   expect(asked.context.folder).toBe(folder);
   expect(asked.context.commands).toContainEqual({
     id: 'check-laser-job',
-    label: 'Check laser job…',
+    label: 'Check Laser Job…',
     subject: 'Job 1042',
   });
   expect(asked.context.commands).toContainEqual({
     id: 'check-cut-sheets',
-    label: 'Prepare cut sheets',
+    label: 'Prepare Cut Sheets',
     after: ['check-laser-job'],
   });
   expect(
@@ -403,14 +403,14 @@ it('without the model’s permission, matches the words itself; without pictures
     screen.getByText('Viewer matched your words to its commands. Meta may not receive file names.'),
   ).toBeTruthy();
   await screen.findByText(
-    'Meta may not receive pictures yet. Choose Allow pictures for Meta in the check panel, then Check 3 files.',
+    'Meta may not receive pictures yet. Choose Allow pictures for Meta in the check panel, then Check 3 Files.',
   );
   expect(runCheck).not.toHaveBeenCalled();
   expect(fabrication).not.toHaveBeenCalledWith(expect.objectContaining({ kind: 'run' }));
 
   // the person allows pictures and runs the check: the plan goes on to its cut sheets
   fireEvent.click(screen.getByRole('button', { name: 'Allow pictures for Meta' }));
-  const run = await screen.findByRole('button', { name: 'Check 3 files' });
+  const run = await screen.findByRole('button', { name: 'Check 3 Files' });
   await waitFor(() => expect((run as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(run);
   await waitFor(() => expect(openLayout).toHaveBeenCalledWith(...layout));
@@ -434,7 +434,7 @@ it('keeps a step that saves files for the person’s press', async () => {
   window_();
   await speak();
   await screen.findByText('Check Job 1042, then save its corrected copies.');
-  const save = await screen.findByRole('button', { name: 'Save corrected copies' });
+  const save = await screen.findByRole('button', { name: 'Save Corrected Copies' });
   expect(
     screen.getByText('g6-PL60-B2-2buc (corrected).dxf, beside each original, which is kept'),
   ).toBeTruthy();
@@ -465,7 +465,7 @@ it('plans nothing when the speech permission refuses the recording, and leads to
   expect(audio.capture).not.toHaveBeenCalled();
   expect(promptPlan).not.toHaveBeenCalled();
   expect(fabrication).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Open speech settings' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Speech Settings' }));
   expect(window.viewer.openSettings).toHaveBeenCalledWith('settings.speech');
 });
 
@@ -473,7 +473,7 @@ it('hands the words to Ask Viewer as text', async () => {
   answer = hold();
   window_();
   await speak();
-  fireEvent.click(screen.getByRole('button', { name: 'Edit as text' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Edit as Text' }));
   expect(edit).toHaveBeenCalledWith(said);
   expect(screen.queryByRole('complementary', { name: 'Ask Viewer by voice' })).toBeNull();
 });

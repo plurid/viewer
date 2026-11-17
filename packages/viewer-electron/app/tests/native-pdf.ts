@@ -271,16 +271,16 @@ try {
   });
   await rendered(1);
   await fitted();
-  assert.equal(await connection.evaluate(pageCall(zoomLabel)), 'Fit page');
+  assert.equal(await connection.evaluate(pageCall(zoomLabel)), 'Fit Page');
   await capture('pdf-portrait-wide-dark');
   await metrics(900, 640);
   await fitted();
   await capture('pdf-portrait-compact-dark');
-  await connection.evaluate(click('[aria-label="Search PDF"]'));
+  await connection.evaluate(click('[aria-label="Find"]'));
   const searchSize = await fitted();
   assert.ok(searchSize.availableHeight < 500, 'Search row reserves its own height');
   await capture('pdf-search-compact-dark');
-  await connection.evaluate(click('[aria-label="Close PDF search"]'));
+  await connection.evaluate(click('[aria-label="Close find"]'));
   checks.push(
     'Quick Preview opens in Fit page; whole portrait page remains visible on large and compact windows and when search opens.',
   );

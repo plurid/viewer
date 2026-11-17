@@ -196,7 +196,10 @@ export class Checkpoints {
       }
     }
     const availableBytes = Math.max(0, status.budgetBytes - status.usedBytes);
-    if (bytes > availableBytes) issues.push('The checkpoint exceeds the remaining storage budget.');
+    if (bytes > availableBytes)
+      issues.push(
+        'This checkpoint needs more space than checkpoints have left. Delete an older checkpoint, then try again.',
+      );
     if (this.records.length >= 100)
       issues.push('Remove an older checkpoint before creating another.');
     return {
@@ -283,7 +286,9 @@ export class Checkpoints {
                       position += bytesRead;
                       record.bytes += bytesRead;
                       if (record.bytes > estimate.availableBytes)
-                        throw new Error('The checkpoint exceeded its storage budget.');
+                        throw new Error(
+                          'This checkpoint grew past the space checkpoints may use. Delete an older checkpoint, then try again.',
+                        );
                       const bytes = buffer.subarray(0, bytesRead);
                       hash.update(bytes);
                       let written = 0;
@@ -349,7 +354,9 @@ export class Checkpoints {
         ).save({ version: 2, entries: manifest });
         record.bytes = await this.footprint(folder);
         if (record.bytes > estimate.availableBytes)
-          throw new Error('The checkpoint exceeded its retained storage budget.');
+          throw new Error(
+            'This checkpoint grew past the space checkpoints may use. Delete an older checkpoint, then try again.',
+          );
         signal?.throwIfAborted();
         await this.access(roots);
         this.records.push(record);
@@ -414,7 +421,7 @@ export class Checkpoints {
     await this.load();
     await this.access([destination]);
     const record = this.records.find((record) => record.id === id && record.status === 'ready');
-    if (!record) throw new Error('Checkpoint is unavailable.');
+    if (!record) throw new Error('This checkpoint is no longer saved. Choose another one.');
     const info = await lstat(destination);
     if (!info.isDirectory() || info.isSymbolicLink())
       throw new Error('Choose a regular restore folder.');
@@ -424,7 +431,8 @@ export class Checkpoints {
         ? treeManifestSchema.parse(value)
         : { version: 1 as const, entries: fileListManifestSchema.parse(value) },
     ).load();
-    if (!manifest) throw new Error('The checkpoint manifest is unavailable.');
+    if (!manifest)
+      throw new Error('This checkpoint’s list of files couldn’t be read. Nothing was restored.');
     const known = new Map(manifest.entries.map((proof) => [proof.snapshot, proof]));
     if (known.size !== manifest.entries.length)
       throw new Error('Checkpoint manifest contains duplicate paths. No restore was started.');
@@ -434,7 +442,9 @@ export class Checkpoints {
       const snapshot = path.join(folder, root.slot, path.basename(root.path) || 'root');
       for (const item of await this.items(snapshot)) {
         if (++count > 10000)
-          throw new Error('Checkpoint tree changed beyond its retained item limit.');
+          throw new Error(
+            'The folder gained more items than this checkpoint can hold. Nothing was restored.',
+          );
         const key = path.relative(folder, item.file),
           proof = known.get(key);
         if (manifest.version === 1 && item.directory) continue;

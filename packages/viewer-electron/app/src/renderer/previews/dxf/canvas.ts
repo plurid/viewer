@@ -119,7 +119,7 @@ export function createDrawingCanvas(
   savedView?: DrawingView,
 ): DrawingCanvas {
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas graphics are unavailable.');
+  if (!ctx) throw new Error("Viewer couldn't draw this file.");
   let options = initial,
     hidden = new Set(initial.hiddenLayers),
     width = 1,

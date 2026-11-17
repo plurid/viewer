@@ -99,7 +99,7 @@ export class FolderHistoryChecks {
     let slot = this.slots.find((item) => !item.resolve);
     if (!slot) {
       if (this.slots.length >= folderCheckOutstandingLimit)
-        return Promise.reject(new Error('Some folders could not be checked. Try again.'));
+        return Promise.reject(new Error('Some folders couldn’t be checked. Try again.'));
       const created: Slot = {
         worker: launchWorker(this.workerPath, 'Viewer folder history', 'thread'),
       };

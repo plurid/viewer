@@ -8,7 +8,8 @@ Viewer currently browses other machines through local mounts. SSH planes need a 
 and authority boundary so a server path can never reach the Mac's filesystem. Remote transfers also
 need to preserve local operations, receipts and guarded Undo without introducing another mutation
 owner. This proposal covers the direct build and stays behind `VIEWER_REMOTE=1` until qualification.
-It records the intended architecture, not a completed transport or a qualified user flow.
+The location and transport foundations implement this boundary. Browsing and other user flows remain
+proposed until their work packages and qualification.
 
 ## Decision
 
@@ -35,9 +36,66 @@ renderer, logs, diagnostics or persistent storage. Changed host keys block conne
 override. Fixed argument construction, validated connection fields and `--` before the destination
 prevent server addresses from becoming options; no free-form SSH options are accepted.
 
-Before enabling SSH planes, update `NSLocalNetworkUsageDescription` to explain SSH connections to
-servers on the local network alongside model endpoints. Qualify the purpose text and attribution
-with spike S1. Downloads receive the quarantine attribute before publication.
+`RemoteConnections` in main owns saved records, connection states and cancellation. Construction
+does not load a record, write a file, inspect SSH configuration or connect. Records use
+`DocumentStore`, mode 0600, and unreadable records move aside before another save. Settings alone
+may save or remove an endpoint. Window IPC refuses agents and agent-driven windows, including
+read-only connection discovery. The Store edition and a disabled feature flag have no service.
+
+`RemoteControl` creates explicit masters in a private 0700 temporary folder with short socket names.
+OpenSSH first binds a master at its control path plus a 17-byte temporary suffix, so the path budget
+leaves that room inside macOS's 104-byte socket path; `/tmp` replaces a temporary folder whose path
+is too long. Literal percent signs are escaped in control and identity paths. OpenSSH expands
+`${VARIABLE}` in both with no escape, so such paths are refused. The worker owns the three lazy SFTP
+channels and schedules foreground browse requests ahead of thumbnails, at most two thumbnails at a
+time. Its main-process port exposes bounded list, stat, realpath, read and exclusive-write
+primitives; failures keep the SFTP code and the server's sanitized message. Large transfer staging
+belongs to the operations work packages. Disconnect uses an extensible `quiesceConnection(id)` and
+the remote connection prefix for Operations; it never invokes local root revocation or file
+coordination. Five minutes after the last plane, terminal or request releases a connection, its SFTP
+channels close and its master stays for ControlPersist. A request in that time checks the master
+with `-O check` and reopens channels through it. When ControlPersist has ended the master, the
+connection becomes not connected without a new sign-in or retry: a channel opened without a master
+would sign in directly. Editing a connection's name, starting folder or preferences keeps it
+connected; a new host, user, port, jump host or key disconnects it first. Quit closes all masters
+concurrently within the two-second transport budget.
+
+The Swift helper only relays a prompt and its answer. Main attaches an AppKit secure sheet to the
+requesting window through `macos-files`, using `NSSecureTextField` with a placeholder naming what
+was asked (password, passphrase, PIN or verification code); host-key questions use
+`dialog.showMessageBox`. OpenSSH's `SSH_ASKPASS_PROMPT` hint reaches the relay: `confirm` asks yes
+or no, and `none`, such as a request to touch a security key, shows a notice that closes when
+OpenSSH ends the helper. A helper that ends closes its question without ending the sign-in; choosing
+Cancel ends the sign-in. Each clicked attempt has a random token with a 120-second expiry and one
+prompt at a time. Disconnect, a closed window or agent ownership cancels it. Server text is quoted,
+its line breaks become spaces, controls, bidi and other invisible characters are removed, and it is
+capped at 2,000 characters. Inherited askpass variables and `DISPLAY` are removed. Reconnects
+receive neither token nor socket. Relay fields are redacted from diagnostic exports; answers and raw
+SSH stderr are never logged. The helper ships only in the direct build.
+
+A failed keepalive check marks a connection offline. So does a lost channel or worker when the
+master no longer answers `-O check`; while it answers, the lane's next request opens a new channel
+through it, so a server that needs a password is not asked again. Reconnects wait 2, 5, 15, 30 and
+then 60 seconds, stopping after ten attempts. A click replaces an automatic attempt. Authentication
+and changed-host-key failures stop retries. The pure exit classifier consumes bounded stderr and
+publishes only `needs-sign-in`, `host-key-changed` or `unreachable`, plus, for a changed key, the
+key type and SHA256 fingerprint OpenSSH printed. At `LogLevel=ERROR` a server's own words reach
+stderr only in a disconnect message or a channel open failure; when either is present no fingerprint
+is shown. Connection snapshots also carry when their state began. Fixtures substitute portable
+endpoints in OpenSSH 9.9
+[connection messages](https://github.com/openssh/openssh-portable/blob/V_9_9_P2/sshconnect.c),
+[authentication messages](https://github.com/openssh/openssh-portable/blob/V_9_9_P2/sshconnect2.c)
+and [resolution messages](https://github.com/openssh/openssh-portable/blob/V_9_9_P2/ssh.c). They are
+source-derived fixtures, not evidence from a real SSH session.
+
+SSH host suggestions require an explicit yes, remembered with the saved record. The reader stays
+inside `~/.ssh`, caps Include depth at four and combined bytes at 1 MiB, and excludes wildcard and
+Match hosts. It never runs SSH configuration directives. Saved-record and reader enumeration bounds
+also live in `domain/remote/limits.ts`.
+
+`NSLocalNetworkUsageDescription` names SSH servers on the local network alongside model endpoints.
+Spike S1 qualifies the purpose text and attribution. Downloads receive the quarantine attribute
+before publication.
 
 There is no connection at launch by default. Each connection has a **Connect when a plane needs it**
 opt-in, initially off. BatchMode can still cause an SSH agent, hardware key, Kerberos or Local
@@ -80,24 +138,54 @@ changes. Preview resources use SFTP range reads or a bounded private session-onl
 `connect()` before operations; readiness includes version and advertised-limit negotiation. Offsets
 and sizes use unsigned 64-bit bigints. File opens permit reading or exclusive creation. Attribute
 changes permit permissions and paired access/modification times. Extension calls check advertised
-versions; link calls require OpenSSH extension evidence for its argument ordering. Wire layouts
+versions; SYMLINK requires OpenSSH extension evidence for its argument ordering. READLINK is plain
+v3. An error status from the advertised limits extension leaves limits unspecified. Wire layouts
 follow the [v3 draft](https://www.ietf.org/archive/id/draft-ietf-secsh-filexfer-02.txt) and
 [OpenSSH protocol reference](https://github.com/openssh/openssh-portable/blob/master/PROTOCOL).
 
-The codec caps strings at 64 KiB, wire names at 4 KiB and extension/extended-attribute pairs at 128.
-Identity-name lookups allow 1,024 IDs per list. The client bounds its waiting queue and local
-open-handle budget at 1,024 each, in addition to the shared request and packet limits. Advertised
-server limits can lower packet, read, write and handle budgets. Zero server limits mean unspecified.
-`pread` and `pwrite` keep caller-owned handles, apply byte backpressure and share a progress-based
-stall clock. They default to 32 KiB blocks, lowered by server limits. Sent cancellations retain wire
-credit until a reply arrives; an undrained cancellation retires the channel after its deadline. An
-ownerless handle from a cancelled open also retires the channel. Metadata timeouts and malformed
-replies close it; protocol errors use `VIEWER_REMOTE_PROTOCOL`, cancellation uses `ABORT_ERR`.
+The codec caps metadata strings at 64 KiB, wire names at 4 KiB, DATA at 256 KiB and extension pairs
+at 128. A packet keeps at most 128 extended-attribute pairs to bound Buffer views; it reads and
+drops the rest, so a server that attaches a pair to every entry still lists. Identity IDs must fit
+in one bounded string. Handle budgets and the queue budget for requests outside streams derive from
+the shared channel and resource limits. Stream blocks skip the queue budget because each stream's
+window bounds them. Each stream is a flow and other requests form one more; flows take turns for
+wire credit, so any number of streams and a listing share a channel without refusals, and a listing
+request waits one turn per stream. Advertised limits can lower packet, read, write and handle
+budgets; an open waits for a free handle slot. Zero server limits mean unspecified. OPEN and MKDIR
+accept only creation permissions, because OpenSSH ignores other creation attributes; set times with
+FSETSTAT or SETSTAT afterwards. OpenSSH applies its umask to both. `pread` and `pwrite` keep
+caller-owned handles, apply byte backpressure and share a progress-based stall clock. Their default
+block is 128 KiB, lowered by server limits, filling the 8 MiB window at 64 requests. The clock runs
+only while waiting for outstanding wire requests, pausing for a local consumer, producer or credit
+wait. Server-side copy uses positive blocks of at most one stream window with progress and the same
+stall rules; an explicit zero length copies nothing. OpenSSH's copy-data stops at the source's end
+of file and still answers OK, so the client checks the source size with FSTAT before the first block
+and after the last: a range past the end fails with `VIEWER_REMOTE_SHORT_SOURCE`, and a source
+without a reported size with `ENOTSUP`. Queue expiry rejects only its waiter; the wire deadline
+starts when written. Sent cancellations retain wire credit until a reply arrives; an undrained
+cancellation retires the channel after its deadline. A late handle from a cancelled open is closed
+by the client. Every CLOSE reply releases its tracked generation, including failed closes and reused
+server slots. Metadata wire timeouts and malformed replies close the channel. Protocol errors use
+`VIEWER_REMOTE_PROTOCOL`, cancellation `ABORT_ERR`. Server error messages are bounded display text
+with control, format, line and paragraph separator, and default-ignorable characters stripped. Raw
+bytes remain separate; callers must branch on codes. OpenSSH is single-threaded: the listing and
+preview owners in packages 4 and 6 must LSTAT before OPEN, because opening a FIFO can block its
+channel.
 
 Names remain Buffers through decoding. `decodeListingName` exports a strict UTF-8 boundary with the
 domain's 1,024-byte name limit. Invalid names produce inert error entries without a usable child
-name. The in-memory fake server and policy scan exercise this boundary without SSH or network
-access. Transport integration and real-server qualification belong to later packages.
+name. Exact `.` and `..` entries return `skip`; an empty READDIR NAME reply is a protocol error.
+REALPATH results must be absolute; REALPATH and READLINK results reject NUL and paths over 4 KiB. A
+packet-type allowlist on framing and on each writer's first byte, the desktop/domain source scan and
+automatic fake-server assertions enforce the packet policy. The opt-in `VIEWER_TEST_SFTP_SERVER=1`
+interop test uses the system SFTP subsystem over stdio, with a deny list and a temporary-root
+request guard. SSH transport, authentication and full application qualification remain separate.
+
+This corrects design fact 12: OpenSSH's plain v3 RENAME uses link/unlink only for regular files.
+Other sources use a destination STAT, which follows links, then rename. Viewer first LSTATs the
+destination and refuses unless it is absent, preserving dangling and looping links. A destination
+created after that check can still race a non-regular source's rename, as with folder publication;
+plain v3 offers no atomic no-replace guarantee for those sources.
 
 ### Operations and concurrency
 
@@ -123,8 +211,9 @@ Failed partial transfers go to server Trash; if that fails, preserve and report 
 
 The SFTP client has no removal primitives. Do not encode `REMOVE`, `RMDIR`,
 `posix-rename@openssh.com`, `hardlink`, `lsetstat`, `TRUNC` or `APPEND`, or size/uid/gid changes in
-setstat. File creation uses exclusive creation; publication uses non-replacing rename. Policy scans
-and fake-server packet assertions must enforce the forbidden set.
+setstat. File creation uses exclusive creation; publication uses guarded plain rename with the
+non-regular-source race documented above. Policy scans and fake-server packet assertions must
+enforce the forbidden set.
 
 Resolve the SFTP home with `REALPATH(".")`. Try `<home>/.local/share/Trash/{files,info}`, then
 `<home>/.viewer-trash/{files,info}`. Candidate directories must not be links, must belong to the

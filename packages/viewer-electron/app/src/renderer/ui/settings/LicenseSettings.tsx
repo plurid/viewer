@@ -73,11 +73,11 @@ export function LicenseSettings({
           disabled={busy || !key.trim()}
           onClick={() => void run({ kind: 'enter', key })}
         >
-          {busy ? 'Working…' : 'Save license key'}
+          {busy ? 'Working…' : 'Save License Key'}
         </button>
         {status.kind === 'licensed' && (
           <button className="danger" disabled={busy} onClick={() => void run({ kind: 'remove' })}>
-            Remove license key
+            Remove License Key
           </button>
         )}
       </div>

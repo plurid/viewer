@@ -248,7 +248,8 @@ export function Sidebar({ paneID }: { paneID?: string }) {
     <aside
       className="location-sidebar"
       ref={element}
-      aria-label={paneID ? 'Plane navigation' : 'Locations'}
+      // not "Locations": that names its first section
+      aria-label={paneID ? 'Plane navigation' : 'Sidebar'}
       style={{ width: paneID ? `min(${layout.width}px, 50%)` : layout.width }}
       onFocus={() => {
         if (paneID) setActivePane(paneID);
@@ -301,7 +302,7 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                   <button
                     type="button"
                     className="sidebar-clear-recent"
-                    aria-label="Clear recent folders"
+                    aria-label="Clear Recent Folders"
                     disabled={!recents.length && !hasFolderHistory}
                     onClick={(event) => {
                       const heading =

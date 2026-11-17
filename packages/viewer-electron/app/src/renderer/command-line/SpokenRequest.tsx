@@ -128,7 +128,7 @@ export function SpokenRequest({
     <>
       {phase === 'listening' && (
         <Button variant="primary" onClick={() => void finish()}>
-          {speech.processing?.kind === 'hosted' ? 'Finish and transcribe' : 'Finish'}
+          {speech.processing?.kind === 'hosted' ? 'Finish and Transcribe' : 'Finish'}
         </Button>
       )}
       {active && !moved && (
@@ -149,7 +149,7 @@ export function SpokenRequest({
             onEdit(words);
           }}
         >
-          Edit as text
+          Edit as Text
         </Button>
       )}
     </>
@@ -188,7 +188,7 @@ export function SpokenRequest({
               void window.viewer.openSettings('settings.speech');
             }}
           >
-            Open speech settings
+            Open Speech Settings
           </button>
         </>
       ) : phase !== 'review' ? (
@@ -306,7 +306,7 @@ const stateText: Record<SpokenStepStatus['state'], string> = {
   running: 'Running',
   done: 'Done',
   press: 'Waits for you',
-  failed: 'Did not run',
+  failed: 'Didn’t run',
 };
 function Step({
   step,
@@ -350,7 +350,7 @@ function Step({
           <span className="spoken-step-text">
             {command?.available
               ? (command.detail ?? on ?? 'It changes files: Viewer runs it when you press it.')
-              : (command?.unavailable ?? 'It is not available here any more.')}
+              : (command?.unavailable ?? 'It doesn’t apply here anymore.')}
           </span>
         </span>
       )}

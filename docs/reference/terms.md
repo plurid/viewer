@@ -34,14 +34,14 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 
 - **Found workspace**: a defined workspace Viewer recognizes from folders you use. It opens one
   folder plane and shows **Found** with its root in search and Manage. Finding stays private and
-  never runs a command. _Learn:_
+  never runs a command. _In Viewer:_ **Not a Workspace** in Manage hides one. _Learn:_
   [Workspaces Viewer finds](../guides/workspaces.md#workspaces-viewer-finds)
 
 - **Open workspace**: a workspace in the saved session, with live plane records. Only open
-  workspaces appear in agent discovery. _In Viewer:_ the workspace menu and **Change workspace…**.
+  workspaces appear in agent discovery. _In Viewer:_ the workspace menu and **Change Workspace…**.
   _Learn:_ [Use several workspaces](../guides/workspaces.md#use-several-workspaces)
 - **Defined workspace**: available to search and open, with no live workspace record until opened.
-  _In Viewer:_ **Change workspace…** and the workspace matches in **⌘K**. _Learn:_
+  _In Viewer:_ **Change Workspace…** and the workspace matches in **⌘K**. _Learn:_
   [Open a defined workspace](../guides/workspaces.md#open-a-defined-workspace)
 - **Workspace definition**: the recipe in `workspaces.jsonc`, derived live from a VS Code Project
   Manager project, or found from folders you use. It names a root and planes. Command terminals
@@ -57,7 +57,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Layout template**: a saved set of plane kinds that adds planes to the current workspace. It is
   distinct from a workspace definition and a folder's `viewer.project.jsonc` project. _Learn:_
   [Space, tiling and tours](configuration.md#space-tiling-and-tours)
-- **Remembered planes**: the private snapshot kept by **Close workspace**. Reopening the definition
+- **Remembered planes**: the private snapshot kept by **Close Workspace**. Reopening the definition
   restores it; **Forget remembered planes** makes the next open use the definition. _Learn:_
   [Close and remember a workspace](../guides/workspaces.md#close-and-remember-a-workspace)
 
@@ -74,19 +74,19 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   linked plane**, **Related planes** in the header, **View linked plane** beside a file's name.
   _Learn:_ [Keep your work together](../guides/workspaces.md)
 - **Root plane**: a plane with no parent, the start of its own branch of linked planes. A file
-  opened again in another root gets a plane of its own there. _In Viewer:_ **New folder plane**
-  (**⇧⌘N**), **Open in another plane**, **Open in new root plane** in the sidebar. _Learn:_
+  opened again in another root gets a plane of its own there. _In Viewer:_ **New Folder Plane**
+  (**⇧⌘N**), **Open in Another Plane**, **Open in New Root Plane** in the sidebar. _Learn:_
   [Keep your work together](../guides/workspaces.md)
 - **Docked** and **tiled**: docked, one plane fills the window while the rest wait in the space;
   **⌘Return** switches between that plane and all of them. Tiled, the planes in view sit face-on in
-  a layout such as **Side by side** or **Grid** until **Stop tiling**. _In Viewer:_ **Dock plane**
-  and **Reveal space**; **Tile the planes in view**. _Learn:_
+  a layout such as **Side by side** or **Grid** until **Stop Tiling**. _In Viewer:_ **Dock Plane**
+  and **Reveal Space**; **Tile the Planes in View**. _Learn:_
   [Keep your work together](../guides/workspaces.md)
 - **Space** and its **camera**: the space is the surface the planes sit in, each where you put it.
   The camera is your view of it: after working inside a plane, click the background or press
-  **Escape** to move around again, and **Frame all planes** (**⌘0**) brings every plane into view. A
+  **Escape** to move around again, and **Frame All Planes** (**⌘0**) brings every plane into view. A
   saved view keeps a camera position to fly back to. _In Viewer:_ the space toolbar, minimap and
-  viewcube; **Save view…**. _Learn:_ [Keep your work together](../guides/workspaces.md)
+  viewcube; **Save View…**. _Learn:_ [Keep your work together](../guides/workspaces.md)
 - **Overview**: a popup map for navigating the space, available even when the minimap is hidden.
   **Minimap corner** chooses automatic avoidance of controls or a fixed corner for both maps. _In
   Viewer:_ **⌘K → Overview**; **Settings → Space → Minimap corner**. _Learn:_
@@ -103,7 +103,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   in it (a page, an outlined region, highlighted drawing entities, a camera view of a model) with a
   caption. A tour is a `.viewer-tour.jsonc` file beside its files and plays when opened; it never
   runs commands. A stop whose file is gone is skipped; one whose file changed opens without its
-  place. **Tour the views** tours the saved views instead. _In Viewer:_ **Record a tour**, the tour
+  place. **Tour the Views** tours the saved views instead. _In Viewer:_ **Record a Tour**, the tour
   bar, **Profile: Present**. _Learn:_
   [Show someone around: tours](../guides/workspaces.md#show-someone-around-tours)
 - **Layout of planes**: where the planes sit and how large they are. **Size & Position** sets one
@@ -117,7 +117,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Quick Preview**: a look inside the selected files over the folder, opened with **Space**. **←**
   and **→** step through the selection; **Space** or **Escape** closes it. Its footer offers
   **Edit** for text, the best **Suggested** action and **Open linked plane**. _In Viewer:_
-  **Space**, **File → Quick Preview**, **Quick preview** in **⌘K**. _Learn:_
+  **Space**, **File → Quick Preview**, **Quick Preview** in **⌘K**. _Learn:_
   [Read and inspect files](../guides/previews.md)
 - **Linked plane from a preview**: **Open linked plane** in Quick Preview, or
   **Option**-double-click on a file, keeps the file open in a plane of its own, linked to the folder
@@ -129,20 +129,22 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Lens**: a set of named groups for a folder's own items, made without moving a file. Groups can
   nest, follow rules and become regions on the Map view. A writable folder keeps its lenses in
   `.viewer/lenses/`; any other folder keeps them on this Mac. _In Viewer:_ **Lenses** in a folder's
-  header, **New lens…**, **Group by**. _Learn:_ [Lenses and Map view](lenses.md)
+  header, **New Lens…**, **Group by**. _Learn:_ [Lenses and Map view](lenses.md)
 
 ## Suggestions
 
-- **Suggested**: the actions that fit the selection, each with its reason, such as **Extract here**
+- **Suggested**: the actions that fit the selection, each with its reason, such as **Extract Here**
   for an archive. What you choose for a kind of file rises for that kind next time, and a model can
   add picks once you allow it. _In Viewer:_ **Suggested** in the right-click menu and in **⌘K**
   before you type; the best one as a button in Quick Preview. _Learn:_
   [Browse and organize](../guides/files.md)
 - **Insight**: a card above a folder's files that points out something that may need attention, such
   as old installers or five or more screenshots, with one action. The action selects the files
-  first, then opens the same command as the file menu; nothing runs by itself. _In Viewer:_ the
-  cards, **×** to hide one in that folder, **Show hidden insights**. _Learn:_
-  [Explore a folder](../guides/explore.md)
+  first, then opens the same command as the file menu; nothing runs by itself. One card offers the
+  workspace the folder belongs to when it remembers planes, opens more than a folder or is open
+  elsewhere. _In Viewer:_ the cards, **×** to hide one in that folder, **Show Hidden Insights**.
+  _Learn:_ [Explore a folder](../guides/explore.md) ·
+  [Open the workspace a folder belongs to](../guides/workspaces.md#open-the-workspace-a-folder-belongs-to)
 - **File overview**: a plane that searches the filename index for what may need a look across your
   indexed locations, such as old installers, files over 1 GB and old downloads. It reads only the
   index. _In Viewer:_ **File overview** in **⌘K**. _Learn:_ [Explore a folder](../guides/explore.md)
@@ -155,15 +157,15 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Undo** and **Redo**: **⌘Z** undoes the latest file operation or lens edit, after checking that
   its files are still as it left them; **⇧⌘Z** does it again, a file operation as a new job. Moving
   and closing planes has its own Undo, **⌥⌘Z**; Git actions and other apps' changes have none in
-  Viewer. _In Viewer:_ **Edit → Undo**, **Undo file operation**, **Undo arrangement**. _Learn:_
+  Viewer. _In Viewer:_ **Edit → Undo**, **Undo File Operation**, **Undo Arrangement**. _Learn:_
   [File operations](file-operations.md)
 - **Receipt**: Viewer's private record of work it did. An operation receipt is written before a file
   change and holds what Undo needs; a command receipt keeps a command's script, exit, times and
-  bounded output. Viewer never replays a receipt. _In Viewer:_ **File operations**, the **Command
+  bounded output. Viewer never replays a receipt. _In Viewer:_ **File Operations**, the **Command
   receipt** plane. _Learn:_ [File operations](file-operations.md) · [Terminals](terminals.md)
 - **Journal**: a bounded, private history of what Viewer did, filtered by source, severity,
   workspace, plane or time. It only records: it cannot apply, undo or replay anything. _In Viewer:_
-  **Open Journal**, **Journal for workspace**, **Journal for plane**. _Learn:_ [Journal](journal.md)
+  **Open Journal**, **Journal for Workspace**, **Journal for Plane**. _Learn:_ [Journal](journal.md)
 - **Trash rule**: Viewer never deletes your files permanently. A removal goes to the system Trash,
   where **Restore** brings it back; on a volume without a Trash it fails and the item stays. Viewer
   has no command that empties the Trash, and an agent's removal waits for your approval of the exact
@@ -171,61 +173,61 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   [Browse and organize](../guides/files.md) · [File operations](file-operations.md)
 - **Checkpoint**: a copy of files' contents and mode that Viewer keeps before it applies a reviewed
   batch change, when you ask for one. It leaves out Finder tags and ACLs, and all checkpoints share
-  a 5 GB budget by default. _In Viewer:_ **Keep a content checkpoint** or **Save a content
-  checkpoint first** in a review; **Content checkpoints…** restores one to a folder. _Learn:_
+  a 5 GB budget by default. _In Viewer:_ **Keep a copy of the originals** or **Keep a copy of the
+  originals first** in a review; **Content Checkpoints…** restores one to a folder. _Learn:_
   [Custom actions](actions.md) · [Configuration](configuration.md)
 
 ## Text, notes and tasks
 
 - **Scratch buffer**: a plane of text that is not a file yet. Viewer keeps it privately, through
-  quitting, until you save it as a file or discard it. _In Viewer:_ **New scratch plane** (**⌘T**);
+  quitting, until you save it as a file or discard it. _In Viewer:_ **New Scratch Plane** (**⌘T**);
   it shows as **Unsaved text** in **⌘K**. _Learn:_ [Make a quick change](../guides/create.md)
 - **Note**: a private document that saves as you type. It lives in Viewer's data, apart from the
   planes that show it: closing its plane keeps the note, and **Move to Trash…** in the note removes
-  it. _In Viewer:_ **New note plane**, **Notes…**. _Learn:_
+  it. _In Viewer:_ **New Note Plane**, **Notes…**. _Learn:_
   [Make a quick change](../guides/create.md)
 - **Checklist**: a note made of items you tick off; a dictated phrase becomes an unchecked item. _In
-  Viewer:_ **New checklist plane**. _Learn:_ [Make a quick change](../guides/create.md)
+  Viewer:_ **New Checklist Plane**. _Learn:_ [Make a quick change](../guides/create.md)
 - **Task area**: a named piece of work in a workspace: a folder or checkout with its notes,
   checklists, terminals, browsers, servers and conversations. Closing a tool's plane keeps it in the
-  task. _In Viewer:_ **New task area…**, **Tasks…**. _Learn:_
+  task. _In Viewer:_ **New Task Area…**, **Tasks…**. _Learn:_
   [Tasks, branches and worktrees](tasks-and-git.md)
 - **Branch task**: a task area made with a new Git branch in its own worktree, opened with its
   folder, a note, a terminal and its Git changes. The terminal starts stopped, and Git changes load
-  when you ask. _In Viewer:_ **New task from branch…**, **Create task**. _Learn:_
+  when you ask. _In Viewer:_ **New Task from Branch…**, **Create task**. _Learn:_
   [Work on a project](../guides/develop.md)
 - **Worktree**: a second checkout of a Git repository in its own folder, on its own branch, with its
   own working files and staging. Views of one worktree share them; different worktrees do not. _In
-  Viewer:_ **Open worktree…**. _Learn:_ [Tasks, branches and worktrees](tasks-and-git.md)
+  Viewer:_ **Open Worktree…**. _Learn:_ [Tasks, branches and worktrees](tasks-and-git.md)
 
 ## Commands and automation
 
 - **Declared command**: a line a folder's package scripts, Makefile targets, justfile recipes,
   Procfile entries or Deno tasks declare. Picking one fills the input; the person's **Run** runs it
   as a typed line. The nearest reachable declaration is offered; parent Make targets name their
-  folder with `make -C`. _In Viewer:_ **Run command…** and `!` in **⌘K**. _Learn:_
+  folder with `make -C`. _In Viewer:_ **Run Command…** and `!` in **⌘K**. _Learn:_
   [Declared commands](terminals.md#declared-commands)
 
-- **Command**: one thing Viewer can do, such as **Copy path**, with an id such as `copy-path`. The
+- **Command**: one thing Viewer can do, such as **Copy Path**, with an id such as `copy-path`. The
   same command runs from **⌘K**, a menu, a key, a typed line or an agent's proposal, and shows only
   where it applies. _In Viewer:_ **⌘K**, **Help → What Can I Do Here?**. _Learn:_
   [Features and where to find them](capabilities.md)
 - **Prefix key**: **⌃B**, then one more key, runs a command, as in tmux: **⌃B** then **x** closes a
-  plane. _In Viewer:_ **Show key sequences** (**⌃B** then **?**). _Learn:_
+  plane. _In Viewer:_ **Show Key Sequences** (**⌃B** then **?**). _Learn:_
   [Keyboard shortcuts](shortcuts.md)
 - **Action**: a command you make in **Settings → Actions**. It runs a built-in command, a recipe, a
   shell line, a program with literal arguments, a terminal profile, a sequence or a workflow, and
-  can ask for inputs and show only where it applies. _In Viewer:_ **Save as action…**, the
+  can ask for inputs and show only where it applies. _In Viewer:_ **Save as Action…**, the
   **Actions** menu. _Learn:_ [Make repeated work a command](../guides/automate.md)
 - **Recipe**: a prepared change to the selection, such as **Batch rename…** or **Organize files…**,
   that becomes a proposal for you to review. Some recipes ask a model. _In Viewer:_ the **Actions**
-  menu, **Action tasks…**. _Learn:_ [Custom actions and sequences](actions.md)
+  menu, **Action Tasks…**. _Learn:_ [Custom actions and sequences](actions.md)
 - **Sequence**: an action that runs commands in order, such as Test then Build, asking for its
   inputs once and stopping at the first step that fails. _In Viewer:_ **Settings → Actions**.
   _Learn:_ [Custom actions and sequences](actions.md)
 - **Workflow**: a `viewer.workflow.jsonc` file of typed steps, such as inspections, comparisons,
   copies, conversions and recipes. Running it prepares reviews: you apply each, then resume. Opening
-  a workflow never runs it. _In Viewer:_ **File → Workflows…**, **Run workflow**. _Learn:_
+  a workflow never runs it. _In Viewer:_ **File → Workflows…**, **Run Workflow**. _Learn:_
   [Workflows and watch rules](automation.md)
 - **Watch rule**: a rule that starts a workflow when new files arrive in a folder, for example to
   propose names for new scans. It prepares a review and never applies it. _In Viewer:_ **Watch a
@@ -240,28 +242,28 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 ## Models and agents
 
 - **Model**: a language model you add in **Settings → Models**, from a provider or a local endpoint.
-  It answers **Ask in words…**, chats, **Explore this folder** and model recipes; what it returns is
-  a proposal for you to review. _In Viewer:_ **Add model**, **Use for Ask Viewer**. _Learn:_
+  It answers **Ask in Words…**, chats, **Explore This Folder** and model recipes; what it returns is
+  a proposal for you to review. _In Viewer:_ **Add Model**, **Use for Ask Viewer**. _Learn:_
   [Make repeated work a command](../guides/automate.md)
 - **Model data levels**: what a model may receive from your files: **filenames and file metadata**,
   **filenames, metadata and document excerpts**, **filenames, metadata and extracted document
   text**, or **filenames, metadata, document text and pictures (photos and rendered drawing
   pages)**. Each level includes the one before; until you allow one, no file data is sent. Pictures
   come last, so an approval of text never sends a photo. _In Viewer:_ **Data access**, **Allow
-  selected data**, **Revoke access**. _Learn:_ [Explore a folder](../guides/explore.md)
+  Selected Data**, **Revoke Access**. _Learn:_ [Explore a folder](../guides/explore.md)
 - **Agent**: a program on your Mac, such as a coding assistant, that connects to Viewer with a token
   from **Settings → Agents**. It looks around, reads what it may and proposes changes; it cannot run
   programs or type into a terminal, and it removes nothing without your approval. _In Viewer:_
-  **Settings → Agents**, **Agent sessions…**. _Learn:_ [Models and agents](agents.md)
+  **Settings → Agents**, **Agent Sessions…**. _Learn:_ [Models and agents](agents.md)
 - **Agent access and folders**: agents connect only after you turn on **Allow local agent clients**
   and confirm it. Each named client, and the shared connection, has its own folders and
   capabilities; a path outside them is refused, and narrowing them stops the work in progress. _In
-  Viewer:_ **Authorize folder…**, **What the connection may do**. _Learn:_
+  Viewer:_ **Authorize Folder…**, **What the connection may do**. _Learn:_
   [Models and agents](agents.md)
 - **Proposal and review**: a proposal is a change prepared for you by a recipe, a workflow, a model
   or an agent. You review it, untick what you do not want and apply the rest; Viewer checks the
   files again first and refuses to act on a selection that changed. _In Viewer:_ **Review** in the
-  title bar, **Apply** and the count of changes, **Review proposal** in a chat. _Learn:_
+  title bar, **Apply** and the count of changes, **Review Changes** in a chat. _Learn:_
   [Custom actions and sequences](actions.md)
 
 ## Three separate permissions
@@ -270,7 +272,7 @@ Viewer asks for each on its own. None of them grants another.
 
 - **Folder access**: macOS's permission for Viewer to read a folder such as Documents, an external
   drive or a share. Full Disk Access, needed to browse the Trash, is a separate grant. _In Viewer:_
-  the macOS dialog, **Allow folder access…**, **Settings → Permissions**. _Learn:_
+  the macOS dialog, **Allow Folder Access…**, **Settings → Permissions**. _Learn:_
   [Install and update Viewer](../guides/install.md)
 - **Model data**: which data level a model may receive, for that model and endpoint. Changing its
   endpoint or clearing its key revokes it, and requests an agent starts need **Allow agent-started

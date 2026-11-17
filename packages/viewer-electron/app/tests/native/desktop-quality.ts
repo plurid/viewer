@@ -407,8 +407,8 @@ async function session(restart: boolean) {
     await until(() => evaluate(exists('.capabilities-dialog')), Boolean, 'discovery dialog');
     if (!restart) {
       await field('New file');
-      await until(() => evaluate(pageCall(listsAction, 'New file…')), Boolean, 'new file action');
-      await evaluate(pageCall(pinAction, 'New file…'));
+      await until(() => evaluate(pageCall(listsAction, 'New File…')), Boolean, 'new file action');
+      await evaluate(pageCall(pinAction, 'New File…'));
       await until(
         () => evaluate(exists('[aria-label="Move New file… earlier"]')),
         Boolean,
@@ -425,7 +425,7 @@ async function session(restart: boolean) {
       }
       await field('new floder');
       await until(
-        () => evaluate(pageCall(listsAction, 'New folder…')),
+        () => evaluate(pageCall(listsAction, 'New Folder…')),
         Boolean,
         'explicit typo suggestion',
       );
@@ -510,7 +510,7 @@ async function session(restart: boolean) {
         'search recovered',
       );
       await evaluate(pageCall(setFolderTools, ['new-file', 'missing.extension', 'new-folder']));
-    } else assert.equal(await evaluate(pageCall(firstPin)), 'New file…');
+    } else assert.equal(await evaluate(pageCall(firstPin)), 'New File…');
     await press('Done', '.capabilities-dialog');
     await settle();
     assert.equal(
@@ -522,16 +522,16 @@ async function session(restart: boolean) {
       await viewport(1280, 900);
       await appearance('dark');
       await evaluate(click('[aria-label="Commands (⌘K)"]'));
-      await command('Input.insertText', { text: 'Backup and restore' });
+      await command('Input.insertText', { text: 'Backup and Restore' });
       await until(
         () => evaluate(textOf('.command-result[aria-selected=true]')),
-        (text) => text.includes('Backup and restore'),
+        (text) => text.includes('Backup and Restore'),
         'backup command',
       );
       await evaluate(click('.command-result[aria-selected=true]'));
       await until(() => evaluate(exists('.backup-dialog')), Boolean, 'backup dialog');
       await capture('backup-start-dark-wide');
-      await press('Create backup…', '.backup-dialog');
+      await press('Create Backup…', '.backup-dialog');
       await until(() => evaluate(exists('.backup-counts')), Boolean, 'prepared snapshot');
       await geometry('backup-review-dark-wide');
       await capture('backup-review-dark-wide');

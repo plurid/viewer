@@ -17,7 +17,7 @@ export interface SQLiteLoad {
 }
 
 const unavailable = 'Database previews need the Viewer app.';
-const slow = 'The database reader is taking longer than expected. Try again.';
+const slow = 'Reading this database is taking longer than expected. Try again.';
 
 /** One read of the granted database per resource, request and attempt. A desktop read cannot
  * be cancelled, so an answer for an older one is dropped rather than shown. */

@@ -99,7 +99,7 @@ export const verbs: readonly Verb[] = [
     usage: '[path]',
     args: [0, 1],
     complete: 'path',
-    help: 'Split down: a tile below, showing the path',
+    help: 'Split Down: a tile below, showing the path',
   },
   {
     key: 'vsplit',
@@ -107,7 +107,7 @@ export const verbs: readonly Verb[] = [
     usage: '[path]',
     args: [0, 1],
     complete: 'path',
-    help: 'Split right: a tile beside, showing the path',
+    help: 'Split Right: a tile beside, showing the path',
   },
   {
     key: 'split-window',
@@ -115,7 +115,7 @@ export const verbs: readonly Verb[] = [
     usage: '[-h] [-c path]',
     flags: { h: 'switch', v: 'switch', c: 'value' },
     complete: 'path',
-    help: 'Split down, or right with -h',
+    help: 'Split Down, or Split Right with -h',
     tmux: true,
   },
   {
@@ -225,7 +225,7 @@ export const verbs: readonly Verb[] = [
     usage: '{theme}',
     args: [1, 1],
     complete: 'theme',
-    help: 'The colour theme for this appearance',
+    help: 'The color theme for this appearance',
   },
   {
     key: 'profile',

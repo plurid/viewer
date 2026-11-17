@@ -88,7 +88,7 @@ export class CanvasActions {
     if (!frame || frame.owner !== owner || frame.revision !== document.revision)
       throw new Error('Open the current canvas before running its actions.');
     const action = frame.actions.find((a) => a.id === actionID);
-    if (!action) throw new Error('This action is unavailable in the current canvas.');
+    if (!action) throw new Error('This canvas no longer has that action.');
     const input = validateCanvasActionInput(action, raw);
     const run: CanvasActionRun = {
       id: randomUUID(),
@@ -105,7 +105,7 @@ export class CanvasActions {
       started: Date.now(),
     };
     const result = new Promise<CanvasActionOutput>((resolve, reject) => {
-      const abort = () => this.cancel(document.id, 'Action cancelled.');
+      const abort = () => this.cancel(document.id, 'The action was canceled.');
       const timer = setTimeout(
         () => this.cancel(document.id, 'Action exceeded its 30-second limit.'),
         this.timeout,
@@ -174,7 +174,7 @@ export class CanvasActions {
     pending.resolve(parsed.data);
   }
   assertCurrent(id: string, runID: string) {
-    if (this.pending.get(id)?.run.id !== runID) throw new Error('This action was cancelled.');
+    if (this.pending.get(id)?.run.id !== runID) throw new Error('This action was canceled.');
   }
   commit(id: string, runID: string, signal: AbortSignal) {
     this.assertCurrent(id, runID);
@@ -205,7 +205,7 @@ export class CanvasActions {
     };
     this.recent.set(id, run);
     this.emit(pending.owner, { kind: 'settled', run: structuredClone(run) });
-    if (status !== 'completed') pending.reject(new Error(error || 'Action cancelled.'));
+    if (status !== 'completed') pending.reject(new Error(error || 'The action was canceled.'));
   }
   cancel(id: string, reason = 'You took over this canvas.') {
     const pending = this.pending.get(id);

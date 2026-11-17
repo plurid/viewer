@@ -590,7 +590,9 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
         throw new Error('This workspace action needs the desktop service.');
       const definition = definitions.entry(request.key);
       if (!definition || definition.hidden || definition.rootState === 'missing')
-        throw new Error('This workspace definition is unavailable.');
+        throw new Error(
+          'Viewer can’t find this workspace’s definition. It may have been removed from its file.',
+        );
       const open = definitionSessions.findByDefinition(request.key);
       if (open) return { kind: 'active', workspaceID: open.id };
       definitionSessions.reserveDefinition(1, request.key);

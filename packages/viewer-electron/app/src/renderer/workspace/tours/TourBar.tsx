@@ -69,8 +69,8 @@ function Ended({ playback, onEdit }: { playback: TourPlayback; onEdit?: () => vo
         {notice && <p className="tour-notice">{notice.text}</p>}
       </div>
       <div className="tour-bar-controls">
-        {onEdit && <button onClick={onEdit}>Edit stops</button>}
-        {shown > 0 && <button onClick={tourControls.restart}>Play again</button>}
+        {onEdit && <button onClick={onEdit}>Edit Stops</button>}
+        {shown > 0 && <button onClick={tourControls.restart}>Play Again</button>}
         <IconButton icon="close" label="Close tour (Esc)" onClick={stopTour} />
       </div>
     </section>

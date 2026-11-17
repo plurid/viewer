@@ -229,7 +229,7 @@ try {
     'five PDF source pages',
   );
   await field('PDF page range', '3, 1');
-  await press('Apply range');
+  await press('Apply Range');
   await evaluate(
     pageCall(clickEach, ['[aria-label="Rotate page clockwise"]', '[aria-label="Move page down"]']),
   );
@@ -282,7 +282,7 @@ try {
     'changed draft clears saved acknowledgement',
   );
   await evaluate(click('.pdf-tools-split input'));
-  await press('Split pages');
+  await press('Split Pages');
   jobs = await until(
     () => evaluate(pageCall(() => window.viewer.jobs())),
     (jobs) => jobs.length === 5 && jobs.every((job) => job.status === 'completed'),

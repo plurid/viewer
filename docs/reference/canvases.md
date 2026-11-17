@@ -21,7 +21,7 @@ local assets, sandbox, action transport, persistence and export review. Domain p
 and validation belong to the plugin package. The host does not supply a robotics solver or a pose
 checker. The [ownership decision](../adr/0015-generated-tool-host.md) defines this boundary.
 
-**Tool library** is a persistent Plurid plane, available from commands, Chat and a canvas toolbar.
+**Tool Library** is a persistent Plurid plane, available from commands, Chat and a canvas toolbar.
 It lists saved canvas documents without starting them. Each entry has a name, project, revision,
 source and asset counts and enabled state. Rename and enable changes require the current revision.
 Disabling invalidates live registrations, cancels pending work and stops the visible frame. A late
@@ -29,10 +29,10 @@ result cannot change saved inputs. Enabling permits a fresh frame; it does not r
 model request.
 
 **Duplicate** creates a new conversation and canvas with copied inputs, sources and asset
-references. It makes no model request. **Source code**, **Undo revision**, quoted alternatives and
-portable export operate on the same document; there is no separate plugin registry or executor. The
-library reads at most 1,000 documents from its own private directory. Invalid entries show an error,
-linked files are ignored, and documents open in another window cannot be changed.
+references. It makes no model request. **Show Source Code**, **Undo Revision**, quoted alternatives
+and portable export operate on the same document; there is no separate plugin registry or executor.
+The library reads at most 1,000 documents from its own private directory. Invalid entries show an
+error, linked files are ignored, and documents open in another window cannot be changed.
 
 ## Runtime API
 
@@ -133,7 +133,7 @@ result requested while the picker is open remains available for a separate revie
 
 ### Cutting DXF results
 
-`dxf` accepts ASCII DXF with `$INSUNITS` set to `4` (millimetres). Supported sections are `HEADER`,
+`dxf` accepts ASCII DXF with `$INSUNITS` set to `4` (millimeters). Supported sections are `HEADER`,
 `TABLES` and `ENTITIES`. Cuts use `LINE`, `ARC`, `CIRCLE`, `LWPOLYLINE` or planar `POLYLINE`
 entities. Polylines have zero width. Cuts must form closed outlines; hidden entities, paper-space
 entities, blocks, annotations, loose paths, duplicates and repaired gaps are refused. All geometry
@@ -185,7 +185,7 @@ Branching makes no model request. If a canvas exists, the branch gets an indepen
 with a reference to the original content revision.
 
 Applying a branch checks that original revision and retains the original's latest state. It refuses
-a content conflict. **Source conversation** navigates to the captured range; it does not
+a content conflict. **Source Conversation** navigates to the captured range; it does not
 continuously reset selection as new messages arrive.
 
 ## Storage and bounds
@@ -222,7 +222,7 @@ and full-frame mask are reviewed before a native paid-generation confirmation.
 The desktop saves intent before submission and saves the remote request ID before polling. A lost
 acknowledgment becomes `submission-unknown` and is never automatically submitted again. Restart
 resumes polling a known request. A cancellation request can still finish remotely; it is not shown
-as cancelled until the provider confirms it. Provider errors remain visible.
+as canceled until the provider confirms it. Provider errors remain visible.
 
 Only a bounded GLB result is accepted. External resources, unsupported compression and excessive
 geometry or texture allocation are rejected. Downloads are restricted to fal media hosts without

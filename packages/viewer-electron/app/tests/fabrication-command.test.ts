@@ -77,7 +77,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('Check laser job…', () => {
+describe('Check Laser Job…', () => {
   it('is not offered in a photo folder, or in one of albums', async () => {
     shown.set('/Pictures', files('/Pictures', ['Beach.jpg', 'Sea.png', 'Notes.txt']));
     expect(command.when(context('/Pictures'))).toBe(false);

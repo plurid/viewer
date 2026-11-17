@@ -69,11 +69,11 @@ export class Executions {
     private access: (files: readonly string[]) => Promise<void> = async () => {},
     /** Native first-run confirmation of each exact executor; without it nothing runs. */
     private confirm: (action: CustomAction) => Promise<void> = async () => {
-      throw new Error('Action confirmation is unavailable, so nothing was run.');
+      throw new Error('Viewer couldn’t ask you to confirm, so nothing ran.');
     },
     private confirmProfile: (profile: TerminalProfile) => Promise<void> = async (profile) => {
       if (profile.executable || profile.args.join(' ') !== '-l' || Object.keys(profile.env).length)
-        throw new Error('Shell profile confirmation is unavailable.');
+        throw new Error('Viewer couldn’t ask you to confirm the shell profile, so nothing ran.');
     },
     private validateManual: (
       owner: number,
@@ -163,20 +163,20 @@ export class Executions {
         }
       : settings.customActions.find((action) => action.id === actionID);
     if (!action || !actionAvailable(action, target))
-      throw new Error('This action is unavailable for the captured selection.');
+      throw new Error('This action doesn’t apply to the selected items.');
     const values = actionValues(action.inputs ?? [], supplied);
     const executor = action.executor;
     if (executor.kind !== 'executable' && executor.kind !== 'shell')
       throw new Error('This action must run through the command registry.');
     const cwd = await fs.realpath(absolute(target.directory));
     const original = await stat(cwd);
-    if (!original.isDirectory()) throw new Error('Action folder is unavailable.');
+    if (!original.isDirectory()) throw new Error('The action’s folder was moved or deleted.');
     for (const file of target.selection)
       if (!sameCapturedItem(await entry(file.path), file))
         throw new Error(`Selection changed: ${file.name}. Review the action again.`);
     if (profile) await this.confirmProfile(profile);
     else await this.confirm(action);
-    if (this.closed || cancelled()) throw new Error('Command cancelled before launch.');
+    if (this.closed || cancelled()) throw new Error('The command was canceled before it started.');
     const executable = await executablePath(executor.executable);
     await this.access([target.directory, cwd, ...target.selection.map((file) => file.path)]);
     if (manual) await this.validateManual(manual.owner, target);
@@ -184,7 +184,7 @@ export class Executions {
     if ((await fs.realpath(absolute(target.directory))) !== cwd || !sameItem(current, original))
       throw new Error('The command folder changed before launch. Choose the command again.');
     if (this.closed || cancelled())
-      throw new Error('Command cancelled before launch because folder access changed.');
+      throw new Error('The command was canceled before it started because folder access changed.');
     const items = executor.perItem ? target.selection : [undefined];
     if (executor.perItem && !items.length) throw new Error('Select files for per-item execution.');
     const task: ExecutionTask = {
@@ -260,7 +260,7 @@ export class Executions {
           try {
             if (launch?.terminal) {
               if (!this.runTerminal || owner === undefined)
-                throw new Error('Command terminal is unavailable.');
+                throw new Error('The command’s terminal has closed. Run the command again.');
               const controller = new AbortController();
               this.terminalControllers.set(task.id, controller);
               try {

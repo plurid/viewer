@@ -81,7 +81,7 @@ export function wordContent(
     const part = partTarget(source, relation.target),
       item = entries.get(part);
     if (!item || item.directory || !item.previewable)
-      return { ...result, warning: 'The embedded image is missing or unavailable.' };
+      return { ...result, warning: 'An embedded image is missing from this document.' };
     const override = children(types, 'Override').find(
       (node) => partTarget('', attribute(node, 'PartName') || '') === part,
     );

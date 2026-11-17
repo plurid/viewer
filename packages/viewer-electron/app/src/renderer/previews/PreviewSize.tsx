@@ -68,11 +68,15 @@ function usePackageSize(entry: FileEntry): string | undefined {
   const total = totals.get(key) ?? finished;
   if (total) return formatBytes(total.bytes) + (total.skipped ? ' (partial)' : '');
   if (own?.failed || task?.status === 'failed' || task?.status === 'cancelled')
-    return 'Size unavailable';
+    return 'Size not known';
   return 'Calculating…';
 }
 
 /** A previewed item's size: a file's, or a document package's total. */
+export function usePreviewSize(entry: FileEntry): string {
+  return usePackageSize(entry) ?? formatBytes(entry.size);
+}
+
 export function PreviewSize({ entry }: { entry: FileEntry }) {
-  return <>{usePackageSize(entry) ?? formatBytes(entry.size)}</>;
+  return <>{usePreviewSize(entry)}</>;
 }

@@ -11,7 +11,7 @@ workerPort.on('message', ({ data }) => {
     try {
       const actual = realpathSync.native(message.path);
       const files: string[] = [];
-      if (message.kind === 'probe')
+      if (message.kind === 'probe' && !message.identityOnly)
         for (const name of ['.git', 'package.json']) {
           try {
             files.push(realpathSync.native(path.join(actual, name)));
@@ -44,6 +44,6 @@ workerPort.on('message', ({ data }) => {
   const value =
     request.kind === 'read'
       ? readFolderFile(request.path, request.maxBytes, actual)
-      : probeFolder(request.path, actual, new Set(message.files ?? []));
+      : probeFolder(request.path, actual, new Set(message.files ?? []), request.identityOnly);
   workerPort.postMessage({ id: request.id, value, files: message.files });
 });

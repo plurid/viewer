@@ -125,7 +125,7 @@ function diagnosis(data: unknown, status: number): { codes: string[]; detail: st
     return {
       codes,
       detail:
-        'The selected model is unavailable or unsupported by this API. Load models in Settings → Models.',
+        'The provider doesn’t offer the selected model through this API. Load models in Settings → Models.',
     };
   if (has('context_length_exceeded') || /context.{0,40}(?:length|limit|too long)/i.test(message))
     return {
@@ -152,8 +152,7 @@ function diagnosis(data: unknown, status: number): { codes: string[]; detail: st
       codes,
       detail: 'The provider’s quota or rate limit was reached. Check usage before retrying.',
     };
-  if (status >= 500)
-    return { codes, detail: 'The provider is temporarily unavailable. Retry later.' };
+  if (status >= 500) return { codes, detail: 'The provider is busy or down. Try again later.' };
   return {
     codes,
     detail:

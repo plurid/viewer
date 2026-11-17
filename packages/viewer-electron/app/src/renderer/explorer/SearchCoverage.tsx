@@ -3,6 +3,10 @@ import { indexedCoverage } from '../../domain/search/coverage';
 import { useViewer, report } from '../state/store';
 import type { SearchBatch } from '../../domain/contracts';
 import { Disclosure } from '../ui/Disclosure';
+import { useHome } from '../ui/PathLabel';
+import { pathText } from '../../domain/files/path-label';
+import { plural } from '../../domain/plural';
+import { statusLabel } from '../ui/status-labels';
 
 export function SearchCoverage({
   result,
@@ -17,6 +21,7 @@ export function SearchCoverage({
 }) {
   const settings = useViewer((state) => state.settings.settings.search);
   const coverage = result && indexedCoverage(result, request, settings.contentRoots);
+  const home = useHome();
   return (
     <Disclosure
       variant="inline"
@@ -44,16 +49,17 @@ export function SearchCoverage({
         </p>
         {streamed && (
           <p>
-            Live folder scan · {streamed.visited.toLocaleString()} entries checked
-            {streamed.errors ? ` · ${streamed.errors.toLocaleString()} unavailable` : ''}
-            {streamed.truncated ? ' · Scan limit reached; narrow the query.' : ''}
+            Live folder scan · {plural(streamed.visited, 'item')} checked
+            {streamed.errors ? ` · ${plural(streamed.errors, 'item')} not readable` : ''}
+            {streamed.truncated ? ' · Stopped at the scan limit. Narrow the query.' : ''}
           </p>
         )}
         {cancelled && <p>The search stopped before every folder was checked.</p>}
         {coverage?.roots.map((root) => (
           <p key={root.path}>
-            {root.path} · {root.count.toLocaleString()} indexed · {root.status}
-            {root.errors ? ` · ${root.errors.toLocaleString()} unreadable` : ''}
+            {pathText(root.path, home)} · {plural(root.count, 'item')} indexed ·{' '}
+            {statusLabel(root.status)}
+            {root.errors ? ` · ${plural(root.errors, 'item')} not readable` : ''}
           </p>
         ))}
         {coverage?.reasons.map((reason) => (
@@ -66,7 +72,7 @@ export function SearchCoverage({
             : 'No configured exclusions.'}
         </p>
         <button onClick={() => void window.viewer.openSettings('search').catch(report)}>
-          Search settings…
+          Search Settings…
         </button>
       </div>
     </Disclosure>

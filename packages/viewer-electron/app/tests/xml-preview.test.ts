@@ -61,6 +61,10 @@ it.each([
 });
 
 it('bounds source size and node count', () => {
-  expect(inspectStructured(' '.repeat(1_000_001), 'xml').error).toContain('limited');
-  expect(inspectStructured('<root><a/><b/><c/></root>', 'xml', 2).error).toContain('limit');
+  expect(inspectStructured(' '.repeat(1_000_001), 'xml').error).toBe(
+    'Files over 1 MB show as text only.',
+  );
+  expect(inspectStructured('<root><a/><b/><c/></root>', 'xml', 2).error).toBe(
+    'XML this large shows as text only.',
+  );
 });

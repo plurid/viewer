@@ -35,7 +35,7 @@ export function redactCredentials(input: string): string {
       .toLowerCase()
       .replace(/[-_]/g, '');
     if (
-      !/(?:password|passwd|pwd|pass|secret|token|cookie|authorization|apikey|accesskey|privatekey)$/.test(
+      !/(?:password|passwd|pwd|pass|secret|token|cookie|authorization|apikey|accesskey|privatekey|askpassprompt|askpassanswer|askpassresponse|askpasssocket|sshaskpass|sshaskpassrequire)$/.test(
         key,
       )
     )

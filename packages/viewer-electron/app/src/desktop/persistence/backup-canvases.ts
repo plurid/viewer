@@ -62,7 +62,7 @@ export async function readCanvasBackupAssets(
   const directory = path.join(root, 'canvas-assets');
   const entry = await lstat(directory);
   if (!entry.isDirectory() || entry.isSymbolicLink())
-    throw new Error('The canvas asset folder is a link or is unavailable.');
+    throw new Error('The canvas files folder is missing or is a link, so the backup stopped.');
   const assets: BackupAsset[] = [];
   let size = 0;
   for (const [hash, bytes] of expected) {

@@ -53,7 +53,7 @@ describe('Start local server folder command', () => {
     });
     const commands = registry.list();
     const sections = contextMenuSections(commands, []);
-    expect(JSON.stringify(sections)).toContain('Start local server');
+    expect(JSON.stringify(sections)).toContain('Start Local Server');
     expect(await registry.invoke('start-local-server', {})).toBe(true);
     expect(newServer).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({

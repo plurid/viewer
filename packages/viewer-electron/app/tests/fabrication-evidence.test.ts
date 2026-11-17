@@ -262,7 +262,7 @@ it('stops a pending review when the originating workspace changes', async () => 
   const reviewing = reviewEvidence(view as unknown as WorkspaceController, current);
   await newWorkspace('Elsewhere');
   release({ kind: 'changes', id: opening.id, changes: [] });
-  await expect(reviewing).rejects.toThrow('originating workspace');
+  await expect(reviewing).rejects.toThrow('started from changed');
   expect(view.openEvidence).not.toHaveBeenCalled();
   expect(view.comparePanes).not.toHaveBeenCalled();
 });

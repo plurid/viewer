@@ -176,7 +176,7 @@ export async function extractOffice(
         window &&
         (!selected || !supported(selected) || !definitions.slice(0, 32).includes(selected))
       )
-        throw new Error('The requested worksheet is unavailable in this workbook.');
+        throw new Error('This workbook has no worksheet by that name.');
       const sheets: WorkbookSheet[] = [];
       let page: WorksheetPage | undefined;
       const budget: WorkbookBudget = {
@@ -288,7 +288,7 @@ export async function extractOffice(
         ...(page ? { page } : {}),
       };
       result.coverageReason =
-        'Saved cell values with bounded number/date formats and merged ranges. Stored values and formulas remain inspectable; formulas are not recalculated. Conditional formatting, source fonts/colors, charts, drawings and external data are omitted.';
+        'Shows saved cell values with common number and date formats, and merged cells. Formulas show as written and are not recalculated. Conditional formatting, fonts, colors, charts, drawings and external data are not shown.';
     }
     const after = await lstat(fileCoordination.path(file));
     if (

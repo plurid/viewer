@@ -16,7 +16,7 @@ image.
 | **Convert copy to JPEG**                        | `Name.jpg`                                                     |
 | **Convert copy to PNG**                         | `Name.png`                                                     |
 | **Rotated copy, left**, **Rotated copy, right** | `Name rotated.ext`; formats other than PNG and JPEG become PNG |
-| **Create PDF from images**                      | One PDF in the folder: `Name.pdf`, or `Name and others.pdf`    |
+| **Create PDF from Images**                      | One PDF in the folder: `Name.pdf`, or `Name and others.pdf`    |
 
 A convert command is not offered when every selected image is already in that format. In a mixed
 selection, such an image gets a copy beside it, such as `Shot copy.png`; the image itself is never
@@ -24,7 +24,7 @@ replaced.
 
 ## Image tools
 
-**Image tools…** in **⌘K** or an image preview exports up to 1,000 JPEG, PNG, TIFF, GIF, WebP or
+**Image Tools…** in **⌘K** or an image preview exports up to 1,000 JPEG, PNG, TIFF, GIF, WebP or
 AVIF images. HEIC previews on macOS but is not an image-tool input; use **Convert copy to JPEG**.
 
 | Choice     | Values                                                                                                  |
@@ -47,7 +47,7 @@ AVIF images. HEIC previews on macOS but is not an image-tool input; use **Conver
 
 ## Audio and video
 
-**Edit media…** opens a draft for up to 16 sources: MP4, M4V, MOV, M4A, MP3, WAV, FLAC, Ogg, OGA,
+**Edit Media…** opens a draft for up to 16 sources: MP4, M4V, MOV, M4A, MP3, WAV, FLAC, Ogg, OGA,
 Opus, AIFF, CAF, AVI, MKV, WebM, AAC, MPEG, TS and M2TS files of at most 24 hours. Use the
 filmstrip, waveform, player and **In** and **Out** to mark up to 32 segments, reorder them, add
 sources and add one audio track.
@@ -56,13 +56,13 @@ sources and add one audio track.
 | ------- | ------------------------------------------------------------------------------------------------------ |
 | Format  | **MP4 video**, **QuickTime video** (H.264 and AAC), **AAC audio** (M4A), **WAV audio**, **FLAC audio** |
 | Quality | **Smaller file**, **Balanced**, **High quality**                                                       |
-| Cut     | **Exact · frame accurate** (default), **Fast · keyframe aligned**                                      |
+| Cut     | **Exact** (default), **Fast**                                                                          |
 | Audio   | **Keep original**, **Remove audio**, **Replace audio**, **Mix with original**, with offset and gain    |
 | Output  | The whole sequence, **Export each segment**, or **Export current frame as PNG**                        |
 
-- **Fast · keyframe aligned** copies the streams without re-encoding. It is offered for one segment
-  exported as MP4 or MOV, with original or removed audio, from H.264 video with AAC or no audio. Its
-  cut points are less precise.
+- **Fast** copies the streams without re-encoding. It is offered for one segment exported as MP4 or
+  MOV, with original or removed audio, from H.264 video with AAC or no audio. It starts at the
+  keyframe before the chosen start, which can be a few seconds early.
 - Joined video takes the first segment's size and frame rate; other clips are scaled to fit inside
   it. Audio is resampled to 48 kHz stereo.
 - Video is at most 8,192 px on each edge. A frame export takes one segment and no added audio.
@@ -70,7 +70,7 @@ sources and add one audio track.
   appear once an audio source is added.
 
 Drafts keep their editing decisions and source versions privately. Closing a draft's plane keeps the
-draft. A changed or revoked source blocks further use; **New draft from current files** starts again
+draft. A changed or revoked source blocks further use; **New Draft from Current Files** starts again
 and keeps the old draft. Reloading saves pending decisions first; if saving fails, the plan stays in
 memory for another try, and a stale reload never replaces a newer edit.
 
@@ -135,10 +135,10 @@ quality; compare before saving.
 ## Playback compatibility
 
 The player first tries Chromium's own decoders. When they cannot play a file, Viewer makes a
-complete local copy with the bundled FFmpeg (**Preparing a compatible video copy…**, with
-**Cancel**), and the view says **Compatibility copy · up to 720p**. If no copy can be made,
-**Compatibility preview unavailable** offers **Retry conversion**, opening in another app and, when
-the file has sound, **Play audio only**.
+complete local copy with the bundled FFmpeg (**Converting video to play here…**, with **Cancel**),
+and the view says **Playing a 720p copy**. If no copy can be made, **Can't convert this video to
+play here** offers **Open in Default App**, **Open With…**, **Play Audio Only** when the file has
+sound, and **Try Again**.
 
 | Copy  | Format              | Limits                                              |
 | ----- | ------------------- | --------------------------------------------------- |

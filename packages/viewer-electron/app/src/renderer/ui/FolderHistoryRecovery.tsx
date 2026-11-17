@@ -32,7 +32,7 @@ export function FolderHistoryRecovery({ onEnd }: { onEnd(): void }) {
           onEnd();
         }}
       >
-        Undo clear recent folders
+        Undo Clear Recent Folders
       </button>
       <IconButton
         icon="close"

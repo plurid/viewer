@@ -83,6 +83,8 @@ const config: ForgeConfig = {
             'assets/viewer-image-preview',
           ]
         : []),
+      // SSH connections are direct-build only: the Store sandbox cannot run /usr/bin/ssh.
+      ...(process.platform === 'darwin' && channel === 'direct' ? ['assets/viewer-askpass'] : []),
     ],
     appBundleId: channel === 'direct' ? 'com.plurid.viewer' : storeConfig.bundleID,
     extendInfo: {
@@ -108,7 +110,7 @@ const config: ForgeConfig = {
       // Local profiles permit configured HTTPS LAN endpoints. macOS 15+ needs
       // this purpose text for its separate local-network authorization.
       NSLocalNetworkUsageDescription:
-        'Viewer connects to model endpoints you configure on your local network for model discovery and AI actions.',
+        'Viewer connects to SSH servers and model endpoints you choose on your local network for file browsing, terminals and AI actions.',
       ...(inputs ? { ElectronTeamID: storeConfig.teamID } : {}),
       // The App Store build would receive access to an opened file only, which Viewer's
       // folder-based access does not handle yet, so only the direct build offers Open With.
@@ -195,6 +197,11 @@ const config: ForgeConfig = {
         { entry: 'src/main.ts', config: 'vite.main.config.ts', target: 'main' },
         {
           entry: 'src/desktop/terminals/terminal-worker.ts',
+          config: 'vite.services.config.ts',
+          target: 'main',
+        },
+        {
+          entry: 'src/desktop/remote/remote-worker.ts',
           config: 'vite.services.config.ts',
           target: 'main',
         },

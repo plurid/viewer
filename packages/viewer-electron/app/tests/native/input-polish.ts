@@ -135,7 +135,7 @@ try {
     'Volumes',
     'Trash',
   ]);
-  await actions.palette('Group by kind');
+  await actions.palette('Group by Kind');
   const groups = await evaluate(
     pageCall(() =>
       [...document.querySelectorAll('.file-group-label')].map((item) => item.textContent),
@@ -254,7 +254,7 @@ try {
       evaluate(
         pageCall(() => document.querySelector('.quick-command-output [role=status]')?.textContent),
       ),
-    (value) => value === 'completed · exit 0',
+    (value) => value === 'Done',
     'Quick command completion',
   );
   const output = await evaluate(
@@ -262,7 +262,7 @@ try {
   );
   assert.match(output, /quick-command-ok/);
   assert.ok(output.includes(await realpath(folder)), 'Captured cwd is the folder');
-  assert.equal(await evaluate(exists('[aria-label="Command progress"]')), false);
+  assert.equal(await evaluate(exists('[aria-label="Command Progress"]')), false);
   await actions.capture(path.join(app.evidenceDirectory, 'quick-command.png'));
   const count = await evaluate(pageCall(async () => (await window.viewer.executionList()).length));
   await actions.key('Escape', 'Escape');

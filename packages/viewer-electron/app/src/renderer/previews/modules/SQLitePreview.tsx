@@ -18,9 +18,10 @@ import { DataTable } from '../DataTable';
 import type { TableControls } from '../DataTable';
 import { usePreviewState } from '../state';
 import { useSQLite } from '../useSQLite';
-import { Empty, Loading } from '../../ui/primitives';
+import { Empty, Failure, Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { Disclosure } from '../../ui/Disclosure';
-import { report } from '../../state/store';
 import './sqlite.css';
 
 // A `.db` file need not be SQLite: one that is not keeps the ordinary file preview.
@@ -54,7 +55,7 @@ export default function SQLitePreview(context: PreviewContext) {
     return (
       <Unavailable
         context={context}
-        title="Database could not be read"
+        title="Can't read this database"
         detail={listing.error}
         retry={reload}
       />
@@ -80,8 +81,8 @@ export default function SQLitePreview(context: PreviewContext) {
     return (
       <Unavailable
         context={context}
-        title="Database could not be read"
-        detail="The database reader returned rows instead of the table list."
+        title="Can't read this database"
+        detail="Viewer couldn't read this database's tables."
         retry={reload}
       />
     );
@@ -93,9 +94,9 @@ function unreadableTitle(reply: SQLiteUnreadable): string {
     case 'not-sqlite':
       return 'Not a readable SQLite database';
     case 'too-large':
-      return 'Database too large to preview';
+      return 'Database too large to show';
     case 'damaged':
-      return 'Database could not be read';
+      return "Can't read this database";
   }
 }
 
@@ -111,16 +112,7 @@ function Unavailable({
   retry(): void;
 }) {
   return (
-    <Empty icon="data" title={title} detail={detail}>
-      <button onClick={retry}>Try again</button>
-      <button
-        onClick={() => {
-          void window.viewer.openExternal(context.resource.entry.path).catch(report);
-        }}
-      >
-        Open in Default App
-      </button>
-    </Empty>
+    <PreviewFailure context={context} icon="data" title={title} detail={detail} onRetry={retry} />
   );
 }
 
@@ -194,12 +186,7 @@ function SQLiteDatabase({
         <span className="toolbar-spacer" />
         <span className="muted">{objectsLabel(database)}</span>
       </PreviewToolbar>
-      {database.wal && (
-        <p className="inline-warning">
-          This database uses a write-ahead log. Recent changes still in its log file may not be
-          shown.
-        </p>
-      )}
+      {database.wal && <p className="inline-warning">Recent changes may not appear yet.</p>}
       {database.limited && (
         <p className="inline-warning">
           Showing the first {sqliteLimits.objects.toLocaleString()} tables and views.
@@ -224,7 +211,7 @@ function SQLiteDatabase({
             ) : (
               <Empty
                 icon="data"
-                title={selected.kind === 'view' ? 'Views are not run' : 'Rows unavailable'}
+                title={selected.kind === 'view' ? 'Views are not run' : "Can't read these rows"}
                 detail={selected.problem ?? viewNotRun}
               >
                 <button onClick={() => setView('schema')}>Show Schema</button>
@@ -245,10 +232,6 @@ function objectsLabel(database: SQLiteTables): string {
   const parts = [plural(tables, 'table', 'tables')];
   if (views) parts.push(plural(views, 'view', 'views'));
   return parts.join(' · ');
-}
-
-function plural(count: number, one: string, many: string): string {
-  return `${count.toLocaleString()} ${count === 1 ? one : many}`;
 }
 
 function countLabel(count: SQLiteRowCount): string {
@@ -388,26 +371,26 @@ function RowsView({
   const retry = () => setAttempt((value) => value + 1);
   if (load.error)
     return (
-      <Empty icon="data" title="Rows could not be read" detail={load.error}>
-        <button onClick={retry}>Try again</button>
-      </Empty>
+      <Failure icon="data" title="Can't read these rows" detail={load.error} onRetry={retry} />
     );
   if (load.loading || !load.reply) return <Loading label="Reading rows…" />;
   if (load.reply.kind === 'unreadable')
     return (
-      <Empty icon="data" title={unreadableTitle(load.reply)} detail={load.reply.message}>
-        <button onClick={reload}>Try again</button>
-      </Empty>
+      <Failure
+        icon="data"
+        title={unreadableTitle(load.reply)}
+        detail={load.reply.message}
+        onRetry={reload}
+      />
     );
   if (!page)
     return (
-      <Empty
+      <Failure
         icon="data"
-        title="Rows could not be read"
-        detail="The database reader returned the table list instead of rows."
-      >
-        <button onClick={retry}>Try again</button>
-      </Empty>
+        title="Can't read these rows"
+        detail="Viewer couldn't read this table."
+        onRetry={retry}
+      />
     );
   const next = page.offset + page.rows.length;
   const beyond = page.more && next > sqliteLimits.offset;
@@ -415,7 +398,7 @@ function RowsView({
     <>
       {page.version !== version && (
         <p className="inline-warning">
-          The database changed after its tables were listed.{' '}
+          The database changed since its tables were listed.{' '}
           <button onClick={reload}>Reload</button>
         </p>
       )}
@@ -458,7 +441,7 @@ function RowsView({
         </button>
         {beyond && (
           <span className="muted">
-            Rows after {sqliteLimits.offset.toLocaleString()} are not previewed.
+            Rows after {sqliteLimits.offset.toLocaleString()} aren't shown.
           </span>
         )}
       </nav>
@@ -503,7 +486,7 @@ function SchemaView({ context, object }: { context: PreviewContext; object: SQLi
           renderControls={schemaControls}
         />
       ) : (
-        <p className="sqlite-note muted">No columns could be read.</p>
+        <p className="sqlite-note muted">Viewer couldn't read any columns.</p>
       )}
       {object.definition && (
         <Disclosure variant="compact" className="sqlite-definition" summary="Definition">

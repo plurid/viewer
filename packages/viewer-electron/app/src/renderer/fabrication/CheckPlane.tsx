@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { CheckPane as CheckPaneRecord } from '../../domain/contracts';
 import { errorMessage } from '../../domain/errors';
-import { Empty } from '../ui/primitives';
+import { Failure, Loading } from '../ui/primitives';
 import { activeWorkspace } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { activateCheck, checkSession, loadCheck, subscribeCheck } from './check';
@@ -49,13 +49,13 @@ export default function CheckPlane({ pane, active }: { pane: CheckPaneRecord; ac
   }, [active, available, pane.checkID]);
   if (error)
     return (
-      <Empty title="The check could not be opened" detail={error}>
-        <button type="button" onClick={() => setRetry((value) => value + 1)}>
-          Try again
-        </button>
-      </Empty>
+      <Failure
+        title="Can't open this check"
+        detail={error}
+        onRetry={() => setRetry((value) => value + 1)}
+      />
     );
-  if (!current) return <Empty title="Opening check…" />;
+  if (!current) return <Loading label="Opening check…" />;
   return (
     <div className="check-plane-content" data-viewer-check={pane.checkID}>
       <CheckPanelBody current={current} collapsed={false} embedded />

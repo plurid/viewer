@@ -98,11 +98,11 @@ it('mounts with the real store, saves range edits and keeps them when an editor 
     expect(document.querySelector('video')?.getAttribute('src')).toBe('fixture:video'),
   );
   fireEvent.error(document.querySelector('video')!);
-  await screen.findByText('Playback unavailable');
-  fireEvent.click(screen.getByRole('button', { name: 'Retry playback' }));
+  await screen.findByText("Can't play this file");
+  fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
   await waitFor(() => expect(document.querySelector('video')).toBeTruthy());
   expect(api.resource).toHaveBeenCalledTimes(3);
-  fireEvent.click(screen.getByRole('button', { name: 'Export sequence' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Export Sequence' }));
   await screen.findByText('Preparing export…');
   const job = {
     id: 'export-job',
@@ -116,7 +116,7 @@ it('mounts with the real store, saves range edits and keeps them when an editor 
     itemsTotal: 1,
   } as unknown as OperationJob;
   act(() => receiveJob(job));
-  expect(screen.getByText('Exporting · 0 / 1 files')).toBeTruthy();
+  expect(screen.getByText('Exporting · 0 of 1 file')).toBeTruthy();
   act(() =>
     receiveJob({
       ...job,
@@ -130,7 +130,7 @@ it('mounts with the real store, saves range edits and keeps them when an editor 
   expect(screen.getByText('Exported 1 file · movie edited.mp4')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Open movie edited.mp4' })).toBeTruthy();
   act(() => receiveJob({ ...job, revision: 3, status: 'cancelled' }));
-  expect(screen.getByText('Export cancelled · 0 files created')).toBeTruthy();
+  expect(screen.getByText('Export canceled · 0 files made')).toBeTruthy();
   act(() =>
     receiveJob({
       ...job,

@@ -96,7 +96,7 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
     if (this.owners.has(id) && this.owners.get(id) !== owner)
       throw new Error('This canvas is open in another window.');
     const document = await this.store(id).load();
-    if (!document) throw new Error('This canvas is unavailable.');
+    if (!document) throw new Error('Viewer can’t find this canvas. It may have been deleted.');
     for (const source of [...document.sources, ...document.history.flatMap((item) => item.sources)])
       if (source.hash !== sourceHash(source.data))
         throw new Error('A canvas source snapshot changed.');
@@ -142,7 +142,7 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
         } catch (error) {
           entries.push({
             id,
-            title: 'Tool unavailable',
+            title: 'Tool couldn’t be read',
             path: '',
             revision: 0,
             updated: 0,
@@ -507,7 +507,8 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       }
       const kept = await this.assetBytes(asset);
-      if (kept.length !== bytes.length) throw new Error('The saved asset is unavailable.');
+      if (kept.length !== bytes.length)
+        throw new Error('A file saved with this canvas is missing or incomplete.');
       await this.save(owner, this.revise(document, { assets: [...document.assets, asset] }));
       return asset;
     });

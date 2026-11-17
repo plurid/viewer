@@ -288,7 +288,7 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
             setModeName('');
           }}
         >
-          Add mode
+          Add Mode
         </button>
         {shown !== 'prefix' && shown !== 'root' && (
           <button
@@ -298,10 +298,10 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
               setTable('prefix');
             }}
           >
-            Remove mode {shown}
+            Remove Mode “{shown}”
           </button>
         )}
-        <button onClick={() => patch('settings.keymap', defaultKeymap)}>Reset prefix keys</button>
+        <button onClick={() => patch('settings.keymap', defaultKeymap)}>Reset Prefix Keys</button>
       </div>
     </>
   );

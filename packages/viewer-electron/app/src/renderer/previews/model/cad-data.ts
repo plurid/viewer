@@ -16,6 +16,17 @@ export interface CadMesh {
 }
 export type CadReply = { meshes: CadMesh[]; error?: never } | { error: string; meshes?: never };
 
+export interface CadRequest {
+  id: number;
+  buffer: ArrayBuffer;
+  extension: string;
+  /** OCCT compiled once in the window: a new worker instantiates it instead of compiling. */
+  module?: WebAssembly.Module;
+}
+
+/** `heap` is OCCT's memory in bytes after the conversion; it only grows. */
+export type CadResponse = CadReply & { id: number; heap?: number };
+
 /** Validate converter output before allocating GPU geometry. A worker owns the converter's heap. */
 export function cadMeshes(result: ImportedCad): CadMesh[] {
   if (!result.success || !result.meshes?.length)

@@ -90,7 +90,7 @@ it('offers a retry after a render failure and detects all six Office extensions'
     .mockResolvedValueOnce(child('retry'));
   render(<OfficePreview {...context} />);
   await screen.findByText('Protected document');
-  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
   await screen.findByText('Rendered retry');
   const office = previewModules.find((module) => module.id === 'office')!;
   for (const extension of ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'])

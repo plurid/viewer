@@ -10,6 +10,16 @@ import { Dialog, IconButton } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { Icon } from '../ui/Icon';
 
+/** A save over an existing file asks as macOS does, by name and folder, never by raw path. */
+function replaceQuestion(path: string, separator: string): string {
+  const parts = path.split(separator).filter(Boolean);
+  const name = parts.at(-1) ?? path;
+  const folder = parts.at(-2);
+  return folder
+    ? `“${name}” already exists in “${folder}”. Replace it?`
+    : `“${name}” already exists. Replace it?`;
+}
+
 export default function FilePicker({ prompt }: { prompt: FileDialogPrompt }) {
   const [listing, setListing] = useState<FolderListing>();
   const [pathText, setPathText] = useState(prompt.folder);
@@ -120,7 +130,9 @@ export default function FilePicker({ prompt }: { prompt: FileDialogPrompt }) {
     if (loading || busy || !listing) return;
     if (prompt.mode === 'save') {
       if (!name.trim() || /[\/\\]/.test(name)) {
-        setError('Enter a file name without path separators.');
+        setError(
+          name.trim() ? `A file name can't contain “${prompt.separator}”.` : 'Enter a file name.',
+        );
         return;
       }
       let filename = name;
@@ -231,7 +243,7 @@ export default function FilePicker({ prompt }: { prompt: FileDialogPrompt }) {
         />
         <IconButton
           icon="up"
-          label="Parent folder"
+          label="Parent Folder"
           disabled={busy || loading || !listing || listing.parent === folder}
           onClick={() => listing && navigate(listing.parent)}
         />
@@ -466,15 +478,14 @@ export default function FilePicker({ prompt }: { prompt: FileDialogPrompt }) {
         )}
         {conflict && (
           <div className="file-picker-conflict" role="alert">
-            <strong>Replace this file?</strong>
-            <p>{conflict}</p>
-            <p>The previous version will be kept in the Trash or as a recovery copy.</p>
+            <strong>{replaceQuestion(conflict, prompt.separator)}</strong>
+            <p>The current file moves to the Trash.</p>
             <div>
               <button disabled={busy} onClick={() => setConflict(undefined)}>
-                Keep existing file
+                Cancel
               </button>
               <button className="danger" disabled={busy} onClick={() => choose([conflict], true)}>
-                Replace file
+                Replace
               </button>
             </div>
           </div>
@@ -490,7 +501,7 @@ export default function FilePicker({ prompt }: { prompt: FileDialogPrompt }) {
         </button>
         <IconButton
           icon="folder-plus"
-          label="New folder"
+          label="New Folder"
           disabled={busy || loading || !listing}
           onClick={() => setNewFolder('')}
         />

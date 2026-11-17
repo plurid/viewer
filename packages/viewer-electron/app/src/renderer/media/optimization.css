@@ -18,10 +18,6 @@
   max-height: none;
   overflow: visible;
 }
-.optimize-options {
-  display: grid;
-  gap: 14px;
-}
 .optimization-main-options,
 .optimization-target,
 .optimization-review-toolbar,
@@ -32,21 +28,6 @@
   align-items: center;
   flex-wrap: wrap;
   gap: var(--gap-inline);
-}
-.optimization-main-options > label:first-child {
-  display: grid;
-  gap: 5px;
-  flex: 1 1 220px;
-}
-.optimize-options .optimization-target-toggle,
-.optimize-options .optimization-preserve {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--gap-inline);
-}
-.optimization-target input {
-  width: 100px;
 }
 .optimization-advanced,
 .optimization-recipes {
@@ -62,21 +43,8 @@
   gap: var(--gap-content);
   margin-block-start: var(--gap-content);
 }
-.optimization-advanced-fields label {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-inline);
-  flex-wrap: wrap;
-}
-.optimization-advanced-fields input[type='number'] {
-  width: 90px;
-}
 .optimization-recipe-fields {
   margin-block-start: var(--gap-content);
-}
-.optimization-recipe-fields > input {
-  flex: 1 1 180px;
-  min-width: 0;
 }
 .optimization-recipe-fields > p {
   flex-basis: 100%;
@@ -190,24 +158,9 @@
     align-items: start;
   }
 }
-.optimize-options > label {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: var(--text-compact);
-}
 .optimize-options p {
   margin: 0;
   line-height: 1.5;
-}
-.optimize-options .media-destination {
-  display: flex;
-  gap: var(--gap-inline);
-  flex-wrap: nowrap;
-  width: 100%;
-}
-.optimize-options .media-destination input {
-  flex: 1;
 }
 .optimize-scan-options {
   display: grid;

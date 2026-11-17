@@ -44,7 +44,7 @@ export function taskController(ports: {
 }): Methods {
   const area = (id: string) => {
     const value = activeWorkspace().taskAreas?.find((area) => area.id === id);
-    if (!value) throw new Error('This task area is unavailable.');
+    if (!value) throw new Error('This task area no longer exists. Open Tasks… to choose another.');
     return value;
   };
   const check = (spaceID: string) => {
@@ -149,13 +149,13 @@ export function taskController(ports: {
       const space = activeWorkspace(),
         source = space.panes.find((pane) => pane.id === target.paneID);
       if (source?.type !== 'folder' || source.path !== target.panePath)
-        throw new Error('The originating folder changed.');
+        throw new Error('The folder this started from changed. Try again from its plane.');
       if ((space.taskAreas?.length ?? 0) >= 50)
         throw new Error('A workspace supports up to 50 task areas.');
       const observed = await checkout(target.directory);
       check(space.id);
       if (activeWorkspace().panes.find((pane) => pane.id === source.id)?.path !== source.path)
-        throw new Error('The originating folder changed.');
+        throw new Error('The folder this started from changed. Try again from its plane.');
       const now = Date.now(),
         id = crypto.randomUUID();
       const value: TaskArea = {
@@ -213,7 +213,7 @@ export function taskController(ports: {
       const value = area(id),
         owner = activeWorkspace().id,
         member = value.members.find((member) => member.id === memberID);
-      if (!member) throw new Error('This tool is unavailable.');
+      if (!member) throw new Error('This tool is no longer in the task.');
       const ref = member.reference,
         key = taskReferenceKey(ref);
       const existing = activeWorkspace().panes.find(
@@ -240,7 +240,8 @@ export function taskController(ports: {
       switch (ref.kind) {
         case 'folder': {
           const source = await window.viewer.stat(ref.path);
-          if (!source.directory) throw new Error('This checkout folder is unavailable.');
+          if (!source.directory)
+            throw new Error('The checkout folder is gone. Refresh Checkout to look again.');
           if (
             ref.path === value.checkout.path &&
             value.checkout.identity &&
@@ -255,7 +256,8 @@ export function taskController(ports: {
           break;
         case 'note': {
           const result = await window.viewer.notes({ kind: 'read', id: ref.documentID });
-          if (result.kind !== 'document') throw new Error('Note unavailable.');
+          if (result.kind !== 'document')
+            throw new Error('Viewer couldn’t open this note. It may be in the Trash.');
           pane = {
             id: paneID,
             type: 'note',
@@ -271,7 +273,8 @@ export function taskController(ports: {
               kind: 'read',
               id: ref.externalSessionID,
             });
-            if (reply.kind !== 'session') throw new Error('Agent session unavailable.');
+            if (reply.kind !== 'session')
+              throw new Error('Viewer couldn’t open this agent session.');
             pane = {
               id: paneID,
               type: 'chat',
@@ -282,7 +285,7 @@ export function taskController(ports: {
             break;
           }
           const result = await window.viewer.chat({ kind: 'open', id: ref.conversationID });
-          if (Array.isArray(result)) throw new Error('Conversation unavailable.');
+          if (Array.isArray(result)) throw new Error('Viewer couldn’t open this conversation.');
           pane = {
             id: paneID,
             type: 'chat',
@@ -350,7 +353,8 @@ export function taskController(ports: {
           format: kind,
           directory: value.checkout.path,
         });
-        if (result.kind !== 'document') throw new Error('Note creation failed.');
+        if (result.kind !== 'document')
+          throw new Error('Viewer couldn’t create the note. Try again.');
         reference = {
           kind: 'note',
           path: result.document.directory,
@@ -359,7 +363,8 @@ export function taskController(ports: {
         title = result.document.title;
       } else if (kind === 'chat') {
         const document = await window.viewer.chat({ kind: 'create', paths: [value.checkout.path] });
-        if (Array.isArray(document)) throw new Error('Conversation creation failed.');
+        if (Array.isArray(document))
+          throw new Error('Viewer couldn’t start the conversation. Try again.');
         reference = { kind: 'chat', path: document.path, conversationID: document.id };
         title = 'Conversation';
       } else if (kind === 'terminal') {
@@ -440,7 +445,8 @@ export function taskController(ports: {
       if (!member) throw new Error('Attach the checkout folder first.');
       const paneID = await methods.openTaskMember(id, member.id);
       const pane = activeWorkspace().panes.find((pane) => pane.id === paneID);
-      if (pane?.type !== 'folder') throw new Error('Checkout unavailable.');
+      if (pane?.type !== 'folder')
+        throw new Error('Viewer couldn’t find the checkout. Refresh Checkout, then try again.');
       const rootID = ports.controller().rootID(paneID);
       if (!rootID) throw new Error('The checkout is still opening. Try again.');
       const target: CapturedTarget = {

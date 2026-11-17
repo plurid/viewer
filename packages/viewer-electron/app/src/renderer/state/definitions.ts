@@ -4,6 +4,7 @@ import type {
   WorkspaceDefinitionReply,
 } from '../../domain/workspaces/definitions/schema';
 import type { Workspace } from '../../domain/contracts';
+import { plural } from '../../domain/plural';
 import type { WorkspaceController } from '../workspace/context';
 import { closePlanes, rootPlanes } from '../commands/closing';
 import { prepareClose } from '../editing/unsaved';
@@ -128,7 +129,7 @@ async function open(key: string): Promise<void> {
   if (reply.closed && reply.closed.basis !== reply.definition.basis) {
     announce(
       [
-        'Remembered planes opened. Definition changed.',
+        'Opened your last planes. This workspace’s definition has changed since.',
         ...problems.map((problem) => problem.message),
       ].join('\n'),
     );
@@ -196,7 +197,10 @@ export async function closeDefinedWorkspace(
     ...(withoutMemory ? { withoutMemory } : {}),
   });
   if (reply.kind === 'close-info')
-    return { kind: 'close-info', problem: reply.problem ?? 'the memory file is unavailable' };
+    return {
+      kind: 'close-info',
+      problem: reply.problem ?? 'the file that keeps its planes can’t be read',
+    };
   if (reply.kind !== 'closed') throw new Error('The workspace could not be closed.');
   const workspaces = before.saved.workspaces.filter((item) => item.id !== id);
   let replacement = workspaces
@@ -311,7 +315,7 @@ export async function saveDefinition(
 ): Promise<WorkspaceDefinitionReply> {
   await flushState();
   const space = getState().saved.workspaces.find((item) => item.id === id);
-  if (!space) throw new Error('This workspace is no longer available.');
+  if (!space) throw new Error('This workspace was closed or deleted.');
   const order = [...(space.tiling?.panes ?? []), ...space.panes.map((pane) => pane.id)].filter(
     (value, index, all) => all.indexOf(value) === index,
   );
@@ -352,9 +356,11 @@ export async function saveDefinition(
     if (reply.skipped.length || reply.literalPaths.length)
       announce(
         [
-          reply.skipped.length ? reply.skipped.length + ' planes stay only in this workspace.' : '',
+          reply.skipped.length
+            ? `${plural(reply.skipped.length, 'plane')} ${reply.skipped.length === 1 ? 'stays' : 'stay'} only in this workspace.`
+            : '',
           reply.literalPaths.length
-            ? reply.literalPaths.length + ' paths could not use a root or Home token.'
+            ? `${plural(reply.literalPaths.length, 'path')} ${reply.literalPaths.length === 1 ? 'is' : 'are'} saved in full because ${reply.literalPaths.length === 1 ? 'it is' : 'they are'} outside the workspace folder and Home.`
             : '',
         ]
           .filter(Boolean)

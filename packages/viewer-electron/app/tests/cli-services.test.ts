@@ -290,7 +290,7 @@ it('requires native confirmation for speech setup and rechecks authority afterwa
       { kind: 'install', model: 'whisper-tiny' },
       'Generated review',
     );
-    await expect(unavailable.review(gated.id, true)).rejects.toThrow('Native confirmation');
+    await expect(unavailable.review(gated.id, true)).rejects.toThrow('couldn’t ask you to confirm');
     const rejected = requests.speech(
       { kind: 'install', model: 'whisper-tiny' },
       'Generated review',

@@ -11,12 +11,12 @@ self.onmessage = (event: MessageEvent<DifferenceInput>) => {
   const { left, right, width, height, maxPixels } = event.data;
   try {
     if (width < 1 || height < 1 || width * height * 3 > maxPixels)
-      throw new Error('The image pair exceeds the decoded comparison budget.');
+      throw new Error('These images are too large to compare here.');
     const first = new OffscreenCanvas(width, height);
     const second = new OffscreenCanvas(width, height);
     const a = first.getContext('2d');
     const b = second.getContext('2d');
-    if (!a || !b) throw new Error('Pixel comparison is unavailable.');
+    if (!a || !b) throw new Error("Viewer couldn't compare these images.");
     if (left) a.drawImage(left, 0, 0);
     if (right) b.drawImage(right, 0, 0);
     const source = a.getImageData(0, 0, width, height);

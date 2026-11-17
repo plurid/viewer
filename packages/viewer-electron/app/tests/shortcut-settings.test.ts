@@ -39,18 +39,18 @@ const show = (shortcuts: Record<string, string> = {}) => {
 
 it('records a shortcut by pressing it, and names one already in use', () => {
   const { view, patch } = show();
-  const button = view.getByRole('button', { name: 'Undo file shortcut' });
+  const button = view.getByRole('button', { name: 'Undo shortcut' });
   expect(button.textContent).toBe('⌘Z');
   fireEvent.click(button);
   press('k', { metaKey: true, code: 'KeyK' });
   expect(patch).not.toHaveBeenCalled();
-  expect(view.getByRole('alert').textContent).toBe('Used by Palette');
+  expect(view.getByRole('alert').textContent).toBe('Used by Commands…');
   press('u', { metaKey: true, ctrlKey: true, code: 'KeyU' });
   expect(patch).toHaveBeenLastCalledWith('settings.shortcuts', { 'undo-file': 'Ctrl+Cmd+U' });
 });
 it('puts a changed shortcut back to its default', () => {
   const { view, patch } = show({ 'undo-file': 'Ctrl+Cmd+U' });
-  fireEvent.click(view.getByRole('button', { name: 'Reset Undo file' }));
+  fireEvent.click(view.getByRole('button', { name: 'Reset Undo' }));
   expect(patch).toHaveBeenLastCalledWith('settings.shortcuts', {});
 });
 it('sets the prefix by pressing it', () => {

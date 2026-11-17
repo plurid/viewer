@@ -4,7 +4,9 @@ import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { pdfCanvasRatio, pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
 import type { PreviewContext } from '../contracts';
-import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { IconButton, Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { cssDPI, type DjVuReply, type DjVuRequest } from '../djvu/protocol';
 
@@ -184,46 +186,47 @@ export default function DjVuPreview(context: PreviewContext) {
       () => [
         {
           id: 'djvu-next',
-          label: 'Next DjVu page',
+          label: 'Next DjVu Page',
           aliases: ['np'],
           available: page < pages,
           run: () => setPage((value) => value + 1),
         },
         {
           id: 'djvu-previous',
-          label: 'Previous DjVu page',
+          label: 'Previous DjVu Page',
           aliases: ['pp'],
           available: page > 1 && pages > 0,
           run: () => setPage((value) => value - 1),
         },
         {
           id: 'djvu-search',
-          label: 'Search DjVu text…',
+          label: 'Find in DjVu…',
+          aliases: ['search djvu text'],
           primary: true,
           available: pages > 0,
           run: () => setSearchOpen(true),
         },
         {
           id: 'djvu-fit-page',
-          label: 'Fit DjVu page',
+          label: 'Fit DjVu Page',
           available: pages > 0,
           run: () => setZoom('page'),
         },
         {
           id: 'djvu-fit-width',
-          label: 'Fit DjVu width',
+          label: 'Fit DjVu Width',
           available: pages > 0,
           run: () => setZoom('width'),
         },
         {
           id: 'zoom-in',
-          label: 'Zoom in',
+          label: 'Zoom In',
           available: pages > 0 && scale < 4,
           run: () => setZoom(Math.min(4, Math.max(0.1, Math.round(scale * 1.25 * 100) / 100))),
         },
         {
           id: 'zoom-out',
-          label: 'Zoom out',
+          label: 'Zoom Out',
           available: pages > 0 && scale > 0.1,
           run: () => setZoom(Math.max(0.1, Math.min(4, Math.round((scale / 1.25) * 100) / 100))),
         },
@@ -232,7 +235,14 @@ export default function DjVuPreview(context: PreviewContext) {
     ),
   );
   if (error)
-    return <Empty icon="file" title="DjVu document could not be displayed" detail={error} />;
+    return (
+      <PreviewFailure
+        context={context}
+        icon="file"
+        title="Can't show this DjVu document"
+        detail={error}
+      />
+    );
   if (!pages) return <Loading label="Opening DjVu document…" />;
   return (
     <div className="pdf-viewer djvu-viewer">
@@ -266,8 +276,8 @@ export default function DjVuPreview(context: PreviewContext) {
           label="DjVu zoom"
           value={String(zoom)}
           choices={[
-            { value: 'page', label: 'Fit page' },
-            { value: 'width', label: 'Fit width' },
+            { value: 'page', label: 'Fit Page' },
+            { value: 'width', label: 'Fit Width' },
             ...[...new Set([0.5, 0.75, 1, 1.5, 2, 3, ...(typeof zoom === 'number' ? [zoom] : [])])]
               .sort((a, b) => a - b)
               .map((value) => ({ value: String(value), label: `${Math.round(value * 100)}%` })),
@@ -276,20 +286,20 @@ export default function DjVuPreview(context: PreviewContext) {
             setZoom(pdfZoom(value === 'page' || value === 'width' ? value : Number(value)))
           }
         />
-        <IconButton icon="search" label="Search text" onClick={() => setSearchOpen(true)} />
+        <IconButton icon="search" label="Find" onClick={() => setSearchOpen(true)} />
       </PreviewToolbar>
       {searchOpen && (
         <div className="search-row">
           <input
             ref={searchInput}
-            aria-label="Search DjVu text"
-            placeholder="Find in document"
+            aria-label="Find text"
+            placeholder="Find"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
           <IconButton
             icon="close"
-            label="Close search"
+            label="Close find"
             onClick={() => {
               setSearchOpen(false);
               setQuery('');
@@ -301,7 +311,7 @@ export default function DjVuPreview(context: PreviewContext) {
         <div className="pdf-search-results">
           {searching
             ? 'Searching…'
-            : `${matches.length} matching pages${pages > 2000 ? ' in the first 2,000 pages' : ''}`}
+            : `${matches.length ? `Found on ${plural(matches.length, 'page')}` : 'Not found'}${pages > 2000 ? ' in the first 2,000 pages' : ''}`}
           {matches.slice(0, 100).map((index) => (
             <button
               className={page === index ? 'selected' : ''}

@@ -108,7 +108,7 @@ it('keeps connection checks separate from recording consent and shows advisory f
   await waitFor(() =>
     expect(send).toHaveBeenCalledExactlyOnceWith({ kind: 'provider-check', id: provider.id }),
   );
-  expect(screen.getByRole('button', { name: 'Allow recordings…' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Allow Recordings…' })).toBeTruthy();
   view.rerender(
     <HostedSpeechSettings
       {...props}
@@ -149,11 +149,11 @@ it('keeps failed provider setup editable, saves only configuration fields and ne
     request: send,
   };
   const view = render(<HostedSpeechSettings {...props} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Edit provider' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Provider' }));
   fireEvent.change(screen.getByLabelText('Speech provider model'), {
     target: { value: 'edited-model' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Provider' }));
   await waitFor(() => expect(send).toHaveBeenCalledOnce());
   expect(screen.getByRole('form', { name: 'Speech provider setup' })).toBeTruthy();
   const first = send.mock.calls[0]!;
@@ -161,15 +161,15 @@ it('keeps failed provider setup editable, saves only configuration fields and ne
   if (first[0].kind === 'provider-save')
     expect(speechProviderSchema.safeParse(first[0].provider).success).toBe(true);
   send.mockResolvedValue(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Provider' }));
   await waitFor(() => expect(select).toHaveBeenCalledWith(provider.id));
   fireEvent.change(screen.getByLabelText('Speech provider API key'), {
     target: { value: 'GENERATED_SECRET' },
   });
   view.rerender(<HostedSpeechSettings {...props} selectedID={other.id} />);
   expect(screen.getByLabelText('Speech provider API key')).toHaveProperty('value', '');
-  expect(screen.getByRole('button', { name: 'Save key' })).toHaveProperty('disabled', true);
-  expect(screen.getByRole('button', { name: 'Allow recordings…' })).toHaveProperty(
+  expect(screen.getByRole('button', { name: 'Save Key' })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: 'Allow Recordings…' })).toHaveProperty(
     'disabled',
     true,
   );
@@ -204,17 +204,17 @@ it('names the hosted processor and keeps its transcript editable before insertio
         : null,
   );
   render(<DictationDialog destination="Note draft" onClose={() => {}} onUse={use} />);
-  await screen.findByRole('button', { name: 'Finish and transcribe' });
+  await screen.findByRole('button', { name: 'Finish and Transcribe' });
   expect(screen.getByText(/speech.example.test/).textContent).toContain('test-model');
   expect(screen.queryByText(/stays on this device/)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Finish and transcribe' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish and Transcribe' }));
   const transcript = await screen.findByRole('textbox', { name: 'Transcript' });
   expect(use).not.toHaveBeenCalled();
   fireEvent.change(transcript, { target: { value: 'Edited words' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Insert text' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Text' }));
   expect(use).toHaveBeenCalledWith('Edited words');
 });
-it('reviews editable words and inserts only after the person chooses Insert text', async () => {
+it('reviews editable words and inserts only after the person chooses Insert Text', async () => {
   const use = vi.fn(),
     parentKey = vi.fn();
   render(
@@ -223,15 +223,15 @@ it('reviews editable words and inserts only after the person chooses Insert text
     </div>,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
-  await screen.findByRole('button', { name: 'Finish recording' });
-  fireEvent.click(screen.getByRole('button', { name: 'Finish recording' }));
+  await screen.findByRole('button', { name: 'Finish Recording' });
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Recording' }));
   const transcript = await screen.findByRole('textbox', { name: 'Transcript' });
   expect(use).not.toHaveBeenCalled();
   fireEvent.change(transcript, { target: { value: 'Open my Documents' } });
   fireEvent.keyDown(transcript, { key: 'Enter', ctrlKey: true });
   expect(parentKey).not.toHaveBeenCalled();
   expect(use).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Insert text' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Text' }));
   expect(use).toHaveBeenCalledWith('Open my Documents');
   expect(screen.queryByRole('dialog')).toBeNull();
 });
@@ -261,7 +261,7 @@ it('stops a recording when the destination changes and cannot insert into the re
   const use = vi.fn(),
     view = render(<DictationButton target="note-1" destination="First note" onUse={use} />);
   fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
-  await screen.findByRole('button', { name: 'Finish recording' });
+  await screen.findByRole('button', { name: 'Finish Recording' });
   view.rerender(<DictationButton target="note-2" destination="Other note" onUse={use} />);
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(audio.cancel).toHaveBeenCalledOnce();
@@ -269,15 +269,15 @@ it('stops a recording when the destination changes and cannot insert into the re
 });
 it('handles focus loss, native cancellation and microphone errors without retaining a live stream', async () => {
   render(<DictationDialog destination="Ask Viewer" onClose={() => {}} onUse={() => {}} />);
-  await screen.findByRole('button', { name: 'Finish recording' });
+  await screen.findByRole('button', { name: 'Finish Recording' });
   fireEvent(window, new Event('blur'));
   expect(await screen.findByRole('alert')).toHaveProperty(
     'textContent',
     expect.stringContaining('lost focus'),
   );
   expect(audio.cancel).toHaveBeenCalledOnce();
-  fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
-  await screen.findByRole('button', { name: 'Finish recording' });
+  fireEvent.click(screen.getByRole('button', { name: 'Start Recording' }));
+  await screen.findByRole('button', { name: 'Finish Recording' });
   const begin = request.mock.calls.filter(([item]) => item.kind === 'begin').at(-1)![0];
   if (begin.kind !== 'begin') throw new Error('Expected recording');
   act(() =>

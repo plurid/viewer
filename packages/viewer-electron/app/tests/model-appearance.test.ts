@@ -42,9 +42,12 @@ it('fits the shadow rig to offset geometry and keeps lighting stable relative to
     );
     const direction = key.position.clone().sub(key.target.position).normalize();
     camera.position.set(-300, 100, -200);
+    camera.up.set(0.6, -0.8, 0);
     camera.lookAt(20, 30, 40);
     rig.update();
     scene.updateMatrixWorld(true);
+    const hemisphere = scene.children.find((node) => node instanceof THREE.HemisphereLight);
+    expect(hemisphere?.position.toArray()).toEqual(camera.up.toArray());
     expect(
       key.position.clone().sub(key.target.position).normalize().distanceTo(direction),
     ).toBeLessThan(1e-12);

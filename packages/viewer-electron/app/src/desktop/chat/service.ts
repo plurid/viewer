@@ -138,7 +138,8 @@ export class Chats {
 
   private async load(id: string): Promise<ChatDocument> {
     const document = this.documents.get(id) ?? (await this.store(id).load());
-    if (!document) throw new Error('This conversation is unavailable.');
+    if (!document)
+      throw new Error('Viewer can’t find this conversation. It may have been deleted.');
     this.documents.set(id, document);
     return document;
   }
@@ -253,7 +254,7 @@ export class Chats {
             } catch (error) {
               summaries.push({
                 id,
-                title: 'Conversation unavailable',
+                title: 'Conversation couldn’t be read',
                 path: this.store(id).file,
                 updated: 0,
                 problem: errorMessage(error),
@@ -285,7 +286,7 @@ export class Chats {
           return structuredClone(this.documents.get(document.id)!);
         }
         if (request.kind === 'open') {
-          if (!origin) throw new Error('The conversation origin is unavailable.');
+          if (!origin) throw new Error('Open conversations from a workspace window.');
           const current = this.principals.get(request.id);
           if (current && current.owner !== owner)
             throw new Error('This conversation is open in another window.');
@@ -303,7 +304,8 @@ export class Chats {
           return structuredClone(document);
         }
         if (request.kind === 'duplicate-canvas') {
-          if (!origin || !this.ports.canvases) throw new Error('The tool context is unavailable.');
+          if (!origin || !this.ports.canvases)
+            throw new Error('Open tools from a workspace window.');
           const source = await this.ports.canvases.read(owner, request.id);
           const original = await this.load(source.conversationID);
           const id = randomUUID();
@@ -385,7 +387,7 @@ export class Chats {
           return structuredClone(this.documents.get(id)!);
         }
         if (request.kind === 'canvas' || request.kind === 'import-canvas') {
-          if (!this.ports.canvases) throw new Error('Canvases are unavailable.');
+          if (!this.ports.canvases) throw new Error('This window can’t open canvases.');
           const canvas =
             request.kind === 'import-canvas'
               ? await this.ports.canvases.import(
@@ -585,7 +587,7 @@ export class Chats {
         bytes += Buffer.byteLength(text);
         if (bytes > 1024 * 1024)
           throw new Error(
-            'This request reached its inspection budget. Continue with a narrower question.',
+            'This request read as much as one request may. Ask a narrower question to continue.',
           );
         const message = this.message('tool', text);
         // Meta receives these results once, paired with their actual native tool calls.
@@ -627,7 +629,7 @@ export class Chats {
     const id = principal.document.id;
     if (step.kind.startsWith('canvas_')) {
       const canvases = this.ports.canvases;
-      if (!canvases) throw new Error('Canvases are unavailable.');
+      if (!canvases) throw new Error('This window can’t open canvases.');
       const document = await this.load(id);
       const canvas = document.canvasID
         ? await canvases.read(principal.owner, document.canvasID)
@@ -893,7 +895,7 @@ export class Chats {
         },
         null,
         async () => {
-          throw new Error('Finder tag searches are unavailable in Chat.');
+          throw new Error('Chat can’t search by Finder tag.');
         },
         async (file) => {
           await this.authorize(principal, file);

@@ -14,6 +14,7 @@ import {
   type DrawingLayer,
   type Primitive,
 } from './drawing';
+import { plural } from '../../plural';
 import {
   boundsOf,
   emptyBounds,
@@ -115,8 +116,6 @@ const close = (a: Point, b: Point, tolerance: number) =>
   Math.abs(a.x - b.x) <= tolerance &&
   Math.abs(a.y - b.y) <= tolerance &&
   Math.hypot(a.x - b.x, a.y - b.y) <= tolerance;
-const plural = (count: number, one: string, many = one + 's') =>
-  `${count.toLocaleString('en')} ${count === 1 ? one : many}`;
 
 export function extractParts(drawing: CutDrawing, options: PartsOptions, name: string): FileParts {
   const notes: string[] = [];

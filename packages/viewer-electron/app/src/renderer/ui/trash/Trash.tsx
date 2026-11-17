@@ -9,6 +9,7 @@ import {
   trashName,
 } from '../../../domain/files/trash';
 import { formatBytes } from '../../../domain/files/entries';
+import { plural } from '../../../domain/plural';
 import { activeWorkspace, getState, useViewer } from '../../state/store';
 import { useWorkspace } from '../../workspace/context';
 import { openWorkspacePath } from '../../workspace/open-path';
@@ -16,12 +17,14 @@ import { FileIcon } from '../../explorer/views';
 import { FileSelection } from '../../explorer/selection';
 import { Dialog, Empty, IconButton, Loading, PathField } from '../primitives';
 import { Icon } from '../Icon';
+import { PathLabel, useHome } from '../PathLabel';
 import { asFile, originUnavailable, trashDate } from './items';
 import { TrashMenu } from './TrashMenu';
 import { TrashPreview } from './TrashPreview';
 import { TrashInformation } from './TrashInformation';
 import { trashMenuActions } from './menu-actions';
 import { errorMessage } from '../../../domain/errors';
+import { homeText } from '../../../domain/files/path-label';
 
 export function Trash({ onClose }: { onClose(): void }) {
   const workspace = useWorkspace();
@@ -32,6 +35,7 @@ export function Trash({ onClose }: { onClose(): void }) {
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
+  const home = useHome();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -175,7 +179,7 @@ export function Trash({ onClose }: { onClose(): void }) {
     const value = await window.viewer.trashRestore(ids, destination);
     if (value.cancelled) return false;
     if (live.current) {
-      setNotice(`${value.restored} ${value.restored === 1 ? 'item restored' : 'items restored'}.`);
+      setNotice(`${plural(value.restored, 'item')} restored.`);
       selection.clear();
       await refresh();
     }
@@ -199,13 +203,13 @@ export function Trash({ onClose }: { onClose(): void }) {
       const code = (error as { code?: string }).code;
       if (code === 'ENOENT' || code === 'ENOTDIR')
         throw new Error(
-          'The original folder no longer exists. Use Restore to… to choose another folder.',
+          'The original folder no longer exists. Use Restore To… to choose another folder.',
         );
       throw error;
     }
     if (!live.current) return;
     if (!opened) {
-      setNotice('Opening the original folder was cancelled.');
+      setNotice('Opening the original folder was canceled.');
       return;
     }
     const paneID = getState().activePane;
@@ -214,11 +218,12 @@ export function Trash({ onClose }: { onClose(): void }) {
       if (activeWorkspace().id === workspaceID && paneID) workspace.focusPane(paneID);
     });
   }
-  const sortHeading = (key: TrashSortKey, label: string) => {
+  const sortHeading = (key: TrashSortKey, label: string, note?: string) => {
     const active = sortKey === key;
     const direction = sort.descending ? 'descending' : 'ascending';
     return (
       <button
+        title={note}
         aria-pressed={active}
         aria-label={
           active
@@ -306,9 +311,8 @@ export function Trash({ onClose }: { onClose(): void }) {
                 )
               }
             >
-              {selectedItems.length && selectedItems.every((item) => item.originalPath)
-                ? 'Restore'
-                : 'Restore to…'}
+              {/* with nothing selected it is Restore, not a choice of folder for no items */}
+              {selectedItems.every((item) => item.originalPath) ? 'Restore' : 'Restore To…'}
             </button>
           </div>
           <label className="trash-search">
@@ -328,16 +332,16 @@ export function Trash({ onClose }: { onClose(): void }) {
           {loading && <Loading label={`Loading ${title}…`} />}
           {(error || actionError) && (
             <p className="error trash-message" role="alert">
-              {actionError || error}
+              {homeText(actionError || error, home)}
             </p>
           )}
           {unavailable.length > 0 && (
-            <div className="trash-access" aria-label="Unavailable Trash locations">
+            <div className="trash-access" aria-label="Trash locations Viewer can't read">
               {unavailable.map((location) => (
                 <div key={location.id}>
                   <div>
                     <strong>{location.name}</strong>
-                    <p>{location.message}</p>
+                    <p>{location.message && homeText(location.message, home)}</p>
                   </div>
                   {location.canRequestAccess && (
                     <button
@@ -346,7 +350,7 @@ export function Trash({ onClose }: { onClose(): void }) {
                     >
                       {location.access === 'privacy'
                         ? 'Open Privacy Settings…'
-                        : 'Allow folder access…'}
+                        : 'Allow Folder Access…'}
                     </button>
                   )}
                 </div>
@@ -360,9 +364,9 @@ export function Trash({ onClose }: { onClose(): void }) {
                 query
                   ? 'No matching files'
                   : ancestors.length
-                    ? 'Folder is empty'
+                    ? 'This folder is empty'
                     : unavailable.length
-                      ? `${title} is unavailable`
+                      ? `Can't open ${title}`
                       : `${title} is empty`
               }
             />
@@ -373,7 +377,10 @@ export function Trash({ onClose }: { onClose(): void }) {
                 {sortHeading('name', 'Name')}
                 {sortHeading('originalPath', 'Original location')}
                 {dateKind &&
-                  sortHeading('date', dateKind === 'deleted' ? 'Date deleted' : 'Date added')}
+                  (dateKind === 'deleted'
+                    ? sortHeading('date', 'Date deleted')
+                    : // said once on the heading, not on every row: not a deletion time
+                      sortHeading('date', 'Date added', 'When it arrived in the Trash.'))}
                 {sortHeading('size', 'Size')}
               </div>
               <div
@@ -506,26 +513,18 @@ export function Trash({ onClose }: { onClose(): void }) {
                           <span>{item.name}</span>
                           {item.directory && <Icon name="right" size={12} />}
                         </span>
-                        <span
-                          className="muted"
-                          title={
-                            item.originalPath
-                              ? originalTrashFolder(item.originalPath)
-                              : originUnavailable
-                          }
-                        >
-                          {item.originalPath
-                            ? originalTrashFolder(item.originalPath)
-                            : 'Unavailable'}
-                        </span>
+                        {item.originalPath ? (
+                          <PathLabel
+                            className="muted"
+                            path={originalTrashFolder(item.originalPath)}
+                          />
+                        ) : (
+                          <span className="muted" title={originUnavailable}>
+                            Unknown
+                          </span>
+                        )}
                         {dateKind && (
-                          <span
-                            title={
-                              dateKind === 'added'
-                                ? 'macOS date added to this Trash folder, not a recorded deletion time.'
-                                : undefined
-                            }
-                          >
+                          <span>
                             {trashDate(dateKind === 'deleted' ? item.deleted : item.addedToTrash)}
                           </span>
                         )}
@@ -539,12 +538,12 @@ export function Trash({ onClose }: { onClose(): void }) {
           )}
           {snapshot?.truncated && (
             <p className="trash-message" role="status">
-              Showing the first {items.length.toLocaleString()} items. The list is incomplete.
+              Showing the first {items.length.toLocaleString('en-US')} items.
             </p>
           )}
           {notice && (
             <p className="trash-message" role="status">
-              {notice}
+              {homeText(notice, home)}
             </p>
           )}
         </div>
@@ -560,14 +559,14 @@ export function Trash({ onClose }: { onClose(): void }) {
             </div>
             {selectedItem.originalPath ? (
               <button disabled={busy} onClick={() => void action(() => openOriginal(selectedItem))}>
-                Open original folder in plane
+                Show Original Folder
               </button>
             ) : (
               <button
                 disabled={busy || !window.viewerNative}
                 onClick={() => void action(() => restore([selectedItem.id], 'choose'))}
               >
-                Restore to…
+                Restore To…
               </button>
             )}
           </section>
@@ -575,7 +574,7 @@ export function Trash({ onClose }: { onClose(): void }) {
         <footer className="trash-footer">
           <span className="muted" role="status">
             {snapshot
-              ? `${items.length.toLocaleString()} ${items.length === 1 ? 'item' : 'items'}${selected.length ? ` · ${selected.length} selected` : ''}`
+              ? `${plural(items.length, 'item')}${selected.length ? ` · ${selected.length.toLocaleString('en-US')} selected` : ''}`
               : ''}
           </span>
           <button

@@ -15,7 +15,11 @@ import type {
   FoundKeyChange,
 } from '../../domain/workspaces/found/catalog';
 import { foundDefinitions } from '../../domain/workspaces/found/catalog';
-import { candidateFolders, qualifyingRoots } from '../../domain/workspaces/found/candidates';
+import {
+  candidateFolders,
+  qualifyingRoots,
+  foundRecentAge,
+} from '../../domain/workspaces/found/candidates';
 import type { FoundRootContext } from '../../domain/workspaces/found/roots';
 import { foundKey } from '../../domain/workspaces/found/keys';
 import {
@@ -71,16 +75,12 @@ const probeSchema = z
       .strict(),
   })
   .strict();
-const referenceSchema = z
-  .object({ root: folder, source: z.string().max(100), name: z.string().min(1).max(100), at: time })
-  .strict();
-const documentSchema = z
+const currentDocumentSchema = z
   .object({
     version: z.literal(1),
     entries: z.array(entrySchema).max(1800),
     hidden: z.array(folder).max(500),
     probes: z.array(probeSchema).max(1000),
-    lastRun: z.array(referenceSchema).max(200),
     rekeys: z
       .array(z.object({ from: definitionKeySchema, to: definitionKeySchema }).strict())
       .max(1800)
@@ -90,9 +90,16 @@ const documentSchema = z
   .refine(
     (value) => new Set(value.entries.map((entry) => entry.key)).size === value.entries.length,
   );
+const documentSchema = z.preprocess((value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  // DeclaredCommands owns run recency; older finder files may still contain its obsolete slot.
+  const next = { ...value } as Record<string, unknown>;
+  delete next.lastRun;
+  return next;
+}, currentDocumentSchema);
 type FoundDocument = z.infer<typeof documentSchema>;
 export interface FoundWorkspacePorts {
-  facts: Pick<FolderFacts, 'pass' | 'probe'>;
+  facts: Pick<FolderFacts, 'pass' | 'probe'> & Partial<Pick<FolderFacts, 'identity'>>;
   state(): SavedState | undefined;
   enabled(): boolean;
   explicit(): readonly WorkspaceDefinition[];
@@ -114,7 +121,6 @@ export class FoundWorkspaces {
     entries: [],
     hidden: [],
     probes: [],
-    lastRun: [],
   };
   private listeners = new Set<() => void>();
   private loading?: Promise<void>;
@@ -123,6 +129,7 @@ export class FoundWorkspaces {
   private reconciling?: Promise<void>;
   private timer?: ReturnType<typeof setTimeout>;
   private lastPass = 0;
+  private followUps = 0;
   private epoch = 0;
   private started = false;
   private stopped = false;
@@ -133,6 +140,8 @@ export class FoundWorkspaces {
   private configured?: boolean;
   private cancellation?: AbortController;
   private remapWrite?: ReturnType<typeof setTimeout>;
+  /** The entry the latest Not a Workspace hid, and its place, for Undo. */
+  private lastHidden?: { entry: FoundEntry; index: number };
   private state: FoundCatalogState['state'] = 'loading';
   recovery?: string;
   constructor(
@@ -159,6 +168,13 @@ export class FoundWorkspaces {
       !!this.document.rekeys?.some(
         (change) => change.to === key && this.ports.retained(change.from),
       )
+    );
+  }
+  private keptOnClear(key: string): boolean {
+    const keep = (candidate: string) =>
+      this.ports.keepOnClear?.(candidate) ?? this.ports.retained(candidate);
+    return (
+      keep(key) || !!this.document.rekeys?.some((change) => change.to === key && keep(change.from))
     );
   }
   load(): Promise<void> {
@@ -300,8 +316,10 @@ export class FoundWorkspaces {
     this.cancellation?.abort();
     clearTimeout(this.timer);
     this.timer = undefined;
+    this.followUps = 0;
     this.document.entries = [];
     this.document.probes = [];
+    this.lastHidden = undefined;
     this.state = 'off';
     await this.persist();
     this.emit();
@@ -314,10 +332,11 @@ export class FoundWorkspaces {
     return this.running;
   }
   private async scan(): Promise<void> {
+    const epoch = this.epoch;
     await this.load();
-    if (this.stopped) return;
+    if (this.stopped || epoch !== this.epoch) return;
     await this.prepareWrite();
-    if (this.stopped) return;
+    if (this.stopped || epoch !== this.epoch) return;
     if (!this.ports.enabled()) {
       this.document.entries = [];
       this.document.probes = [];
@@ -330,7 +349,7 @@ export class FoundWorkspaces {
     );
     await this.reconcileKeys();
     const saved = this.ports.state();
-    if (!saved || this.stopped) return;
+    if (!saved || this.stopped || epoch !== this.epoch) return;
     const controller = new AbortController();
     this.cancellation = controller;
     const now = this.now();
@@ -357,16 +376,19 @@ export class FoundWorkspaces {
         rootAncestors(item.folder, { ...context, scopeRoot: this.ports.scopeRoot?.(item.folder) }),
       ]),
     );
+    const folders = new Set([
+      ...this.ports
+        .explicit()
+        .slice(0, 50)
+        .map((entry) => entry.root),
+      ...[...walks.values()].flatMap((walk) => [...walk].reverse()),
+    ]);
+    const known = new Set(this.document.probes.map((probe) => probe.folder));
     const pass = await probeFoundFolders({
       facts: this.ports.facts,
       records: this.document.probes,
-      folders: [
-        ...this.ports
-          .explicit()
-          .slice(0, 50)
-          .map((entry) => entry.root),
-        ...[...walks.values()].flatMap((walk) => [...walk].reverse()),
-      ],
+      folders: [...folders],
+      verify: this.document.entries.map((entry) => entry.root),
       context,
       access: this.ports.access,
       now: () => this.now(),
@@ -383,7 +405,8 @@ export class FoundWorkspaces {
           (entry) =>
             this.retained(entry.key) ||
             retainedBefore.has(entry.root) ||
-            !this.available(entry.root),
+            (!this.available(entry.root) &&
+              (entry.at >= now - foundRecentAge || this.keptOnClear(entry.key))),
         )
         .map((entry) => entry.root),
       ...decision.carried,
@@ -403,24 +426,39 @@ export class FoundWorkspaces {
     this.document.probes = [...pass.cache.values()].sort((a, b) => b.at - a.at).slice(0, 1000);
     this.state = 'ready';
     await this.persist();
-    if (previousState !== this.state || before !== JSON.stringify(this.document.entries))
-      this.emit();
+    const changed = before !== JSON.stringify(this.document.entries);
+    if (previousState !== this.state || changed) this.emit();
+    // Progress means a folder unknown before this pass was read, or the entries changed. Expired
+    // probes refreshed again are not progress. The cap stops the chain when the probe cache cannot
+    // hold every folder, because evicted folders would otherwise read as new on every pass.
+    const learned = [...pass.fresh, ...pass.missing].some((folder) => !known.has(folder));
+    const followUp =
+      this.started &&
+      !controller.signal.aborted &&
+      (pass.exhausted || decision.incomplete) &&
+      (learned || changed) &&
+      this.followUps < Math.ceil(folders.size / 300);
+    this.followUps = followUp ? this.followUps + 1 : 0;
+    if (followUp) this.schedule(Math.max(0, this.lastPass + 300_000 - this.now()));
   }
 
   private decideRoots(
     walks: ReadonlyMap<string, readonly string[]>,
     pass: FoundProbePass,
     context: FoundRootContext,
-  ): { roots: string[]; carried: Set<string> } {
+  ): { roots: string[]; carried: Set<string>; incomplete: boolean } {
     const roots: string[] = [];
     const carried = new Set<string>();
+    let incomplete = false;
     for (const [folder, walk] of walks) {
+      if (!walk.length) continue;
       const complete =
         walk.length > 0 &&
         walk.every(
           (path) => !pass.unknown.has(path) && (pass.facts.has(path) || pass.missing.has(path)),
         );
       if (!complete) {
+        incomplete = true;
         for (const entry of this.document.entries)
           if (insideRoot(entry.root, folder)) carried.add(entry.root);
         continue;
@@ -432,7 +470,7 @@ export class FoundWorkspaces {
       });
       if (root) roots.push(root);
     }
-    return { roots, carried };
+    return { roots, carried, incomplete };
   }
 
   private async settleClaims(roots: readonly string[], pass: FoundProbePass) {
@@ -528,6 +566,7 @@ export class FoundWorkspaces {
   }
   private async reconcileKeyChanges(): Promise<void> {
     await this.load();
+    await this.finishRekeys();
     const explicit = new Set(this.ports.explicit().map((entry) => entry.key));
     const taken = new Set([...explicit, ...this.document.entries.map((entry) => entry.key)]);
     const changes: FoundKeyChange[] = [];
@@ -539,9 +578,12 @@ export class FoundWorkspaces {
       return { ...entry, key };
     });
     if (changes.length) {
-      this.document.rekeys = [...(this.document.rekeys ?? []), ...changes];
+      this.document.rekeys = changes;
       await this.persist();
     }
+    await this.finishRekeys();
+  }
+  private async finishRekeys(): Promise<void> {
     if (this.document.rekeys?.length) {
       await this.ports.rekey?.(this.document.rekeys);
       delete this.document.rekeys;
@@ -555,10 +597,7 @@ export class FoundWorkspaces {
         await this.prepareWrite();
         if (
           this.retainedFile ||
-          (!this.written &&
-            !this.document.entries.length &&
-            !this.document.hidden.length &&
-            !this.document.lastRun.length)
+          (!this.written && !this.document.entries.length && !this.document.hidden.length)
         )
           return;
         const next = structuredClone(this.document);
@@ -570,7 +609,6 @@ export class FoundWorkspaces {
           }
         };
         trim(next.probes);
-        trim(next.lastRun);
         while (bytes > 1_000_000) {
           const index = next.entries.findLastIndex((entry) => !this.retained(entry.key));
           if (index < 0) {
@@ -583,7 +621,6 @@ export class FoundWorkspaces {
         }
         this.document.probes = next.probes;
         this.document.entries = next.entries;
-        this.document.lastRun = next.lastRun;
         const text = JSON.stringify(next);
         if (text === this.writtenText) return;
         await this.store.save(next);
@@ -600,14 +637,72 @@ export class FoundWorkspaces {
     clearTimeout(this.timer);
     this.timer = undefined;
     this.lastPass = 0;
-    this.document.entries = this.document.entries.filter((entry) =>
-      this.ports.keepOnClear ? this.ports.keepOnClear(entry.key) : this.retained(entry.key),
-    );
+    this.followUps = 0;
+    this.document.entries = this.document.entries.filter((entry) => this.keptOnClear(entry.key));
     this.document.probes = [];
-    this.document.lastRun = [];
+    // the entry kept for Undo is evidence from the history just cleared
+    this.lastHidden = undefined;
     this.state = this.ports.enabled() ? 'ready' : 'off';
     await this.persist();
     this.emit();
+  }
+  /**
+   * Not a Workspace: the root leaves the catalog and passes look past it, so roots inside it can be
+   * found. Hidden roots stay until shown again, through Clear recent folders and finding turned off.
+   */
+  async hide(root: string): Promise<void> {
+    await this.load();
+    const index = this.document.entries.findIndex((entry) => entry.root === root);
+    if (index >= 0) this.lastHidden = { entry: this.document.entries[index]!, index };
+    this.document.hidden = [...this.document.hidden.filter((item) => item !== root), root].slice(
+      -500,
+    );
+    await this.persist();
+    this.emit();
+    this.passAfterHiding();
+  }
+  /**
+   * Shows hidden roots again: these, or every one. Undo puts back the entry it hid, even when a pass
+   * dropped it meanwhile, so its key and place return at once; a later pass finds the others.
+   */
+  async show(roots?: readonly string[]): Promise<void> {
+    await this.load();
+    const shown = new Set(roots ?? this.document.hidden);
+    const hidden = this.document.hidden.filter((item) => !shown.has(item));
+    if (hidden.length === this.document.hidden.length) return;
+    this.document.hidden = hidden;
+    const restored = this.lastHidden;
+    const restore = () => {
+      if (
+        !restored ||
+        this.document.hidden.includes(restored.entry.root) ||
+        this.document.entries.some(
+          (entry) => entry.root === restored.entry.root || entry.key === restored.entry.key,
+        )
+      )
+        return false;
+      this.document.entries.splice(restored.index, 0, restored.entry);
+      return true;
+    };
+    if (restored && shown.has(restored.entry.root)) {
+      this.lastHidden = undefined;
+      restore();
+      // a pass that started before this decided without the root: what it mints replaces entries
+      const running = this.running;
+      if (running)
+        void running.then(async () => {
+          if (this.stopped || !restore()) return;
+          await this.persist();
+          this.emit();
+        });
+    }
+    await this.persist();
+    this.emit();
+    this.passAfterHiding();
+  }
+  private passAfterHiding(): void {
+    if (this.started && !this.stopped && this.ports.enabled())
+      this.schedule(Math.max(30_000, this.lastPass + 300_000 - this.now()));
   }
   async remap(changes: readonly FileChange[]): Promise<void> {
     await this.load();
@@ -623,33 +718,21 @@ export class FoundWorkspaces {
       folder: map(probe.folder),
       value: { ...probe.value, path: map(probe.value.path) },
     }));
-    const lastRun = this.document.lastRun.map((entry) => ({
-      ...entry,
-      root: map(entry.root),
-    }));
-    const next = { ...this.document, entries, hidden, probes, lastRun };
+    const next = { ...this.document, entries, hidden, probes };
     if (sameJSON(this.document, next)) return;
     this.epoch++;
     this.cancellation?.abort();
     this.document = next;
+    // `running` still holds the pass just cancelled. Remapped visits are not new visits, so nothing
+    // else would resume it.
+    if (this.running && this.started)
+      this.schedule(Math.max(0, this.lastPass + 300_000 - this.now()));
     clearTimeout(this.remapWrite);
     this.remapWrite = setTimeout(() => {
       this.remapWrite = undefined;
       void this.persist().catch(() => {});
-    }, 25);
+    }, 1000);
     this.emit();
-  }
-  async recordRun(
-    root: string,
-    reference: { source: string; name: string; at: number },
-  ): Promise<void> {
-    await this.load();
-    const value = referenceSchema.parse({ root, ...reference });
-    this.document.lastRun = [
-      value,
-      ...this.document.lastRun.filter((item) => item.root !== root),
-    ].slice(0, 200);
-    await this.persist();
   }
   async close(): Promise<void> {
     this.stopped = true;

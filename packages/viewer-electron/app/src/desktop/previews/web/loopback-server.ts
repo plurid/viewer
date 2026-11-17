@@ -27,16 +27,16 @@ function authorizeLoopbackRequest(
     headerCount(request, 'origin') > 1 ||
     (request.headers.origin !== undefined && request.headers.origin !== origin)
   )
-    throw new WebPreviewError(403, 'Cross-origin requests are unavailable.');
+    throw new WebPreviewError(403, 'Requests from other sites aren’t allowed.');
   const site = request.headers['sec-fetch-site'];
   if (site !== undefined && site !== 'same-origin' && site !== 'none')
-    throw new WebPreviewError(403, 'Cross-site requests are unavailable.');
+    throw new WebPreviewError(403, 'Requests from other sites aren’t allowed.');
   const referer = request.headers.referer;
   if (referer !== undefined) {
     try {
       if (new URL(referer).origin !== origin) throw new Error('Foreign referrer');
     } catch {
-      throw new WebPreviewError(403, 'Cross-site requests are unavailable.');
+      throw new WebPreviewError(403, 'Requests from other sites aren’t allowed.');
     }
   }
 }
@@ -93,7 +93,7 @@ export class LoopbackServer {
         clean();
         reject(error);
       };
-      const cancelled = () => failed(new Error('Server start cancelled.'));
+      const cancelled = () => failed(new Error('The server start was canceled.'));
       const clean = () => {
         this.server.removeListener('error', failed);
         signal.removeEventListener('abort', cancelled);
@@ -115,7 +115,7 @@ export class LoopbackServer {
     const began = Date.now();
     const abort = new AbortController();
     this.requests.add(abort);
-    const cancelled = () => abort.abort(new Error('HTTP request cancelled.'));
+    const cancelled = () => abort.abort(new Error('The HTTP request was canceled.'));
     request.once('aborted', cancelled);
     response.once('close', () => {
       if (!response.writableFinished) cancelled();
@@ -130,7 +130,7 @@ export class LoopbackServer {
         request.headers['transfer-encoding'] ||
         (request.headers['content-length'] && request.headers['content-length'] !== '0')
       )
-        throw new WebPreviewError(400, 'Request bodies are unavailable.');
+        throw new WebPreviewError(400, 'Requests with a body aren’t allowed.');
       const result = await this.reader.response(
         request.url ?? '/',
         request.method ?? '',
@@ -159,7 +159,7 @@ export class LoopbackServer {
     } catch (error) {
       if (response.destroyed || abort.signal.aborted) {
         status = response.headersSent ? status : 499;
-        problem = 'Request cancelled';
+        problem = 'Request canceled';
         response.destroy();
       } else if (response.headersSent) {
         problem = 'Response interrupted';

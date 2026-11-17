@@ -11,7 +11,7 @@ export function planeLayoutCommands({ actions, paneScope }: WindowScopes): Comma
   const commands: CommandDefinition[] = [
     ...(['move', 'resize'] as const).map((mode) => ({
       id: `plane-${mode}`,
-      label: mode === 'move' ? 'Move plane' : 'Resize plane',
+      label: mode === 'move' ? 'Move Plane' : 'Resize Plane',
       group: 'Layout',
       icon: mode === 'move' ? ('move' as const) : ('resize' as const),
       aliases:
@@ -22,7 +22,7 @@ export function planeLayoutCommands({ actions, paneScope }: WindowScopes): Comma
     })),
     {
       id: 'plane-fill',
-      label: 'Fill workspace',
+      label: 'Fill Workspace',
       group: 'Layout',
       icon: 'resize',
       aliases: ['maximize plane', 'full size', 'full width and height'],
@@ -35,7 +35,7 @@ export function planeLayoutCommands({ actions, paneScope }: WindowScopes): Comma
     for (const preset of planeSizePresets)
       commands.push({
         id: `plane-${axis}-${preset.id}`,
-        label: `${preset.label} ${axis}`,
+        label: `${preset.label} ${axis === 'width' ? 'Width' : 'Height'}`,
         group: 'Layout',
         icon: axis === 'width' ? 'side-by-side' : 'stacked',
         aliases: [

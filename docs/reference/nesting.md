@@ -15,9 +15,9 @@ references (`INSERT`, including arrays) are read from model space. Paper space, 
 hidden or frozen layers, and entities on a tilted plane are left out. Dimensions, hatches, points,
 solids and other types are left out and listed in the part's notes. Binary DXF is refused.
 
-**Units.** A drawing's `$INSUNITS` sets its unit, converted to millimetres. When the drawing does
+**Units.** A drawing's `$INSUNITS` sets its unit, converted to millimeters. When the drawing does
 not say, the drawing shows **Units not given** with a choice of every physical DXF unit,
-millimetres, centimetres, metres, inches and feet first; millimetres until you choose.
+millimeters, centimeters, meters, inches and feet first; millimeters until you choose.
 
 **Loops.** For packing, every curve is flattened to chords within 0.05 mm of the curve. Entities
 whose ends lie within 0.05 mm join into one path, in any order and direction. A path whose ends meet
@@ -54,7 +54,7 @@ open ends are 2.00 mm apart.", or "has nothing to cut" when every layer is marke
 
 | Fact        | Meaning                                                               |
 | ----------- | --------------------------------------------------------------------- |
-| Size        | The part's box as drawn, in millimetres                               |
+| Size        | The part's box as drawn, in millimeters                               |
 | Area        | Outlines less their holes; exact for lines, arcs, bulges and ellipses |
 | Cut length  | Every closed loop and open path; exact for lines, arcs and bulges     |
 | Pierces     | One per closed loop and per open path                                 |
@@ -76,16 +76,16 @@ such as a square's quarter turns, are searched once.
 
 ## Units
 
-**Units** beside the **Sheets** heading reads every length in the panel in millimetres or inches:
+**Units** beside the **Sheets** heading reads every length in the panel in millimeters or inches:
 part sizes and areas, sheet formats, edge margin, spacing, kerf, speeds (mm/min or in/min), cut
 length, offcuts, weights (kilograms or pounds), and the saved report and parts list. Values are kept
-in millimetres; a drawing's own units still come from its file, and the sheet DXFs are written in
-millimetres. Thickness stays in millimetres, as the presets and the part names give it. The choice
+in millimeters; a drawing's own units still come from its file, and the sheet DXFs are written in
+millimeters. Thickness stays in millimeters, as the presets and the part names give it. The choice
 is the Layout preference `ui.layout.units`, `mm` or `in`; see [configuration](configuration.md).
 
 | Units  | Typed and shown                               | Long lengths    | Areas           |
 | ------ | --------------------------------------------- | --------------- | --------------- |
-| **mm** | Millimetres to a hundredth                    | Metres from 1 m | m²              |
+| **mm** | Millimeters to a hundredth                    | Meters from 1 m | m²              |
 | **in** | Inches to a thousandth; sheets to a hundredth | Feet from 10 ft | in², ft² from 1 |
 
 ## Sheets
@@ -103,7 +103,7 @@ on the preset.
 
 Changing units while the formats are as they started changes them to the other unit's first format.
 With no format chosen, no sheet is drawn, the summary reads "Choose a sheet format to nest on." and
-**Save nesting** is off.
+**Save Nesting** is off.
 
 A sheet lies with its longer side along x. **Edge margin** (10 mm at first) keeps every part that
 far inside the sheet edge. **Spacing** (5 mm at first) is the least distance between any two parts,
@@ -130,7 +130,7 @@ compacts the same way each run.
 
 **Offcut.** The offcut is the largest piece one straight cut across the whole sheet takes off, the
 cut at the spacing from the parts: across the sheet past the parts' box, or along it beside them.
-Its cut side is rounded down to a whole millimetre. It is **reusable** when both its sides are at
+Its cut side is rounded down to a whole millimeter. It is **reusable** when both its sides are at
 least 300 mm, about a foot; otherwise it is **too small to keep**. Sixteen parts of 90 × 72 mm on a
 1250 × 2500 mm sheet form a block of about 310 × 380 mm and leave "Offcut 1250 × 2178 mm, reusable".
 
@@ -144,7 +144,7 @@ reads "About 4 sheets" until the true-shape result arrives.
 ## True-shape nesting
 
 Half a second after the last change, a worker starts the true-shape search; better layouts replace
-the shown one as they are found. **Stop** keeps the best so far. **Search longer** searches again,
+the shown one as they are found. **Stop** keeps the best so far. **Search Longer** searches again,
 each time for longer, from a different random start, and keeps the shown layout until it finds a
 better one. **Search** sets the time: 5, 15 (at first), 30 or 60 seconds.
 
@@ -201,7 +201,7 @@ on sheet 3: …".
 **Picking a part.** A click on a part on a sheet picks it: every copy of it lights up on every
 sheet, its row in **Parts** is marked, and **Selected part** gives its number and name, its file,
 size, holes, the pieces placed of those requested, and the sheets it is on. A click on empty sheet,
-**Esc** or **×** lets it go. A double click, **Enter** or **Open drawing** opens its DXF in a plane.
+**Esc** or **×** lets it go. A double click, **Enter** or **Open Drawing** opens its DXF in a plane.
 With a sheet focused, **←** **→** (or **↑** **↓**) step through its parts in number order, and
 **Home** and **End** pick the first and last. Picking moves nothing.
 
@@ -277,20 +277,20 @@ thick plate the pierce leaves a crater, so its parts sit further apart.
 
 ## Saved files
 
-**Save nesting** writes a new folder beside the first drawing, named for its parts: "Nesting of 3
+**Save Nesting** writes a new folder beside the first drawing, named for its parts: "Nesting of 3
 parts". It goes through file operations like any export: the folder is made in a private stage,
 published whole, and **File operations** offers Undo, which moves it to the Trash. The drawings are
 read again and must not have changed since they were nested.
 
 | File            | Contents                                                                 |
 | --------------- | ------------------------------------------------------------------------ |
-| `Sheet 1.dxf` … | One sheet each, R12 (AC1009) ASCII DXF in millimetres (`$INSUNITS` 4)    |
+| `Sheet 1.dxf` … | One sheet each, R12 (AC1009) ASCII DXF in millimeters (`$INSUNITS` 4)    |
 | `Report.pdf`    | A summary page with the tables and assumptions, then each sheet to scale |
 | `Parts.csv`     | A parts table, a blank line, then a sheets table                         |
 
 **Sheet DXF.** Each part's own entities are moved into place. Lines, arcs, circles and polylines
 with bulges stay exact, including under mirroring; ellipses and splines become polylines within 0.01
-mm. Coordinates are written to a millionth of a millimetre.
+mm. Coordinates are written to a millionth of a millimeter.
 
 | Layer       | Color | Holds                                                |
 | ----------- | ----- | ---------------------------------------------------- |
@@ -309,7 +309,7 @@ Each further page draws one sheet to scale with its margin, every part numbered,
 sheet with more than about 5,000 outlines and holes is drawn without holes and marks, and says so.
 
 The report and the parts list measure in the units chosen when the nesting was saved; the sheet DXFs
-are in millimetres whatever the units.
+are in millimeters whatever the units.
 
 **Parts.csv.** UTF-8 with a byte order mark and CRLF lines; numbers without thousands separators.
 `(mm)` columns read `(in)`, and `(mm²)` `(in²)`, in inches.
@@ -317,7 +317,7 @@ are in millimetres whatever the units.
 | Table  | Columns                                                                                                                                                                                     |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Parts  | `No.`, `Part`, `File`, `Requested`, `Placed`, `Width (mm)`, `Height (mm)`, `Area (mm²)`, `Cut length (mm)`, `Pierces`, `Cutting time each (min)`                                            |
-| Sheets | `Sheet`, `Width (mm)`, `Height (mm)`, `Parts`, `Utilisation (%)`, `Offcut width (mm)`, `Offcut length (mm)`, `Offcut reusable`, `Cut length (mm)`, `Pierces`, `Cutting time (min)`, `Price` |
+| Sheets | `Sheet`, `Width (mm)`, `Height (mm)`, `Parts`, `Utilization (%)`, `Offcut width (mm)`, `Offcut length (mm)`, `Offcut reusable`, `Cut length (mm)`, `Pierces`, `Cutting time (min)`, `Price` |
 
 **Related:** [Lay out photos and PDFs](../guides/layout.md#nest-parts-for-cutting) ·
 [Layout output](layout.md) · [Models and drawings](models.md) ·

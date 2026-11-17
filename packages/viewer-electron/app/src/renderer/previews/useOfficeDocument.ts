@@ -43,7 +43,7 @@ export function useOfficeDocument(context: PreviewContext, worksheet?: Worksheet
     const timer = setTimeout(() => {
       if (!alive) return;
       alive = false;
-      fail('The document reader is taking longer than expected. Try again.');
+      fail('Reading this document is taking longer than expected. Try again.');
       if (request) void cancel();
       else void context.services.release(context.resource.id).catch(() => {});
     }, 15000);

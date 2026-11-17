@@ -5,6 +5,7 @@ import { report } from '../state/store';
 import type { SearchBatch } from '../../domain/contracts';
 import { pathContains } from '../../domain/files/paths';
 import { queryTooLong } from '../../domain/search/query';
+import { plural } from '../../domain/plural';
 const emptyEntries: FileEntry[] = [];
 /** How often streamed results reach the view while a search runs. */
 const resultInterval = 100;
@@ -46,7 +47,7 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
       setRunning(!batch.done);
       setCoverage(batch);
       setSummary(
-        `${batch.visited.toLocaleString()} checked${batch.errors ? ` · ${batch.errors} unavailable` : ''}${batch.truncated ? ' · result limit reached' : ''}`,
+        `${plural(batch.visited, 'item')} checked${batch.errors ? ` · ${plural(batch.errors, 'item')} not readable` : ''}${batch.truncated ? ' · stopped at the result limit' : ''}`,
       );
     };
     const remove = window.viewer.onEvent((event) => {
@@ -95,9 +96,9 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
         : fallback
           ? summary
           : indexed.result?.more
-            ? 'More matches available in a search plane'
+            ? 'More matches in a search plane'
             : indexed.result?.status.running
-              ? 'Indexing in progress · results may be incomplete'
+              ? 'Still indexing: some matches may be missing'
               : 'Indexed search',
     cancel: () => {
       if (search.current) void window.viewer.cancelSearch(search.current).catch(report);

@@ -39,7 +39,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
   return [
     command({
       id: 'copy-to-pair',
-      label: (context) => `Copy to ${baseName(partner(context)?.path ?? '') || 'the other folder'}`,
+      label: (context) => `Copy to ${baseName(partner(context)?.path ?? '') || 'the Other Folder'}`,
       icon: 'copy',
       aliases: ['copy to other', 'commander', 'f5'],
       shortcut: '⌃⌘C',
@@ -48,7 +48,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
     }),
     command({
       id: 'move-to-pair',
-      label: (context) => `Move to ${baseName(partner(context)?.path ?? '') || 'the other folder'}`,
+      label: (context) => `Move to ${baseName(partner(context)?.path ?? '') || 'the Other Folder'}`,
       icon: 'move',
       aliases: ['move to other', 'commander', 'f6'],
       shortcut: '⌃⌘X',
@@ -57,7 +57,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
     }),
     command({
       id: 'swap-pair-folders',
-      label: 'Swap the pair’s folders',
+      label: 'Swap the Pair’s Folders',
       icon: 'side-by-side',
       aliases: ['swap panels', 'exchange', 'commander'],
       when: paired,
@@ -71,7 +71,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
     }),
     command({
       id: 'focus-pair',
-      label: 'The other folder of the pair',
+      label: 'The Other Folder of the Pair',
       icon: 'right',
       aliases: ['other panel', 'switch panel', 'tab', 'commander'],
       when: paired,
@@ -83,7 +83,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
     command({
       id: 'pair-sync',
       label: (context) =>
-        context.folder?.pairSync ? 'Stop following each other' : 'Follow each other into folders',
+        context.folder?.pairSync ? 'Stop Following Each Other' : 'Follow Each Other into Folders',
       icon: 'link',
       aliases: ['sync navigation', 'synchronise', 'commander'],
       when: paired,
@@ -93,7 +93,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
     }),
     command({
       id: 'pair-with',
-      label: 'Pair with…',
+      label: 'Pair With…',
       icon: 'side-by-side',
       aliases: ['pair', 'commander', 'dual pane'],
       when: (context) => paneScope(context) && !!context.folder,
@@ -104,7 +104,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
         startPlaneHints((chosen) => {
           const other = activeWorkspace().panes.find((pane) => pane.id === chosen);
           if (other?.type !== 'folder' || other.id === id)
-            announce('Pair a folder plane with another folder plane.');
+            announce('Choose another folder plane to pair with.');
           else pairPanes(id, other.id);
         });
       },
@@ -121,7 +121,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
     }),
     command({
       id: 'select-by-pattern',
-      label: 'Select by pattern…',
+      label: 'Select by Pattern…',
       icon: 'check',
       aliases: ['select group', 'glob', 'wildcard', 'commander'],
       shortcut: '⌃⌘=',
@@ -130,7 +130,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
     }),
     command({
       id: 'deselect-by-pattern',
-      label: 'Deselect by pattern…',
+      label: 'Deselect by Pattern…',
       icon: 'close',
       aliases: ['unselect group', 'glob', 'wildcard', 'commander'],
       shortcut: '⌃⌘-',

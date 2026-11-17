@@ -230,9 +230,15 @@ select {
   width: 14px;
   height: 14px;
 }
+/* Only a list whose rows line up with column headers, as List and search results, keeps a track
+ * while nothing scrolls. A Columns or Grid list shows its scroll bar once it scrolls, so its rows
+ * and their selection reach its edge. */
+:root[data-scrollbars='always'] .file-scroll {
+  scrollbar-width: auto;
+}
 :root[data-scrollbars='always']
   :is(
-    .file-scroll,
+    .file-table-content > .file-scroll,
     .pdf-scroll,
     .settings-navigation,
     .settings-page,

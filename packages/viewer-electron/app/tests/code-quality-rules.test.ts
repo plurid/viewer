@@ -84,6 +84,33 @@ describe('filler words in text', () => {
   });
 });
 
+describe('US spelling in text', () => {
+  const filePath = 'src/renderer/text-policy-fixture.tsx';
+
+  it.each([
+    ['a string', 'export const a = "Space colour";'],
+    ['a template', 'export const b = (n: number) => `${n} items centred`;'],
+    ['JSX text', 'export const C = () => <p>Light grey</p>;'],
+    ['a canceled phrase', 'export const d = "The export was cancelled.";'],
+  ])('refuses British spelling in %s', async (_kind, code) => {
+    const [result] = await eslint.lintText(code, { filePath });
+    expect(result?.messages).toContainEqual(
+      expect.objectContaining({
+        ruleId: 'no-restricted-syntax',
+        message: 'Use US spelling in interface text: color, center, gray, canceled.',
+      }),
+    );
+  });
+
+  it('allows a stored status word and US spelling', async () => {
+    const [result] = await eslint.lintText(
+      'export const a = (status: string) => status === "cancelled" ? "Canceled" : "Gray color";',
+      { filePath },
+    );
+    expect(result?.messages).toEqual([]);
+  });
+});
+
 describe('import order', () => {
   const filePath = 'src/domain/import-policy-fixture.ts';
 

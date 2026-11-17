@@ -659,7 +659,7 @@ try {
   /** Undo moves the output to the Trash, which this run refuses (AGENTS.md): it stays. */
   const undoRefused = async (job: OperationJob, file: string) => {
     assert.equal(job.undoable, true, 'The save can be undone');
-    await actions.palette('Undo file operation');
+    await actions.palette('Undo File Operation');
     const notice = await until(
       () => evaluate(textOf('.notice')),
       (text) => text.includes('Automated native tests cannot move'),
@@ -689,7 +689,7 @@ try {
       'Suggested rows',
     );
     assert.ok(
-      suggested.some((row) => row.includes('Lay out…') && row.includes('Collage of 3 photos')),
+      suggested.some((row) => row.includes('Lay Out…') && row.includes('Collage of 3 photos')),
       JSON.stringify(suggested),
     );
     await actions.click('.context-menu [data-menu-id="suggested.lay-out"]');
@@ -874,7 +874,7 @@ try {
       'Suggested rows',
     );
     assert.ok(
-      suggested.some((row) => row.includes('Nest for cutting…') && row.includes('4 DXF parts')),
+      suggested.some((row) => row.includes('Nest for Cutting…') && row.includes('4 DXF parts')),
       JSON.stringify(suggested),
     );
     await actions.click('.context-menu [data-menu-id="menu.Files"]');
@@ -914,7 +914,7 @@ try {
     const total = nested.quantities.reduce((sum, item) => sum + Number(item.value), 0);
     await capture('nesting', '.layout-plane');
     const before = new Set((await jobs()).map((job) => job.id));
-    await actions.button('Save nesting', '.nesting-panel');
+    await actions.button('Save Nesting', '.nesting-panel');
     const saved = await until(
       () => evaluate(pageCall(nestingState)),
       (value) => value.saved.startsWith('Saved') || /failed|cancelled/.test(value.saved),
@@ -964,7 +964,7 @@ try {
     assert.ok(report.length >= 1);
     assert.ok(report[0]!.text.includes('Nesting of 4 parts'), 'Report title');
     const undo = await undoRefused(job, output);
-    await actions.button('Open folder', '.nesting-panel');
+    await actions.button('Open Folder', '.nesting-panel');
     await until(
       () =>
         evaluate(

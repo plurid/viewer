@@ -3,7 +3,10 @@ import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { headerItem } from '../../workspace/header-overflow';
 import { usePreviewState } from '../state';
-import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { IconButton, Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
+import { titleCase } from '../../../domain/title-case';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import {
   createDrawingCanvas,
@@ -111,8 +114,7 @@ export default function DXFPreview(context: PreviewContext) {
       stop();
     };
     worker.onerror = () => {
-      if (!disposed && !signal.aborted)
-        setError('The drawing worker could not load this file. Reopen it to retry.');
+      if (!disposed && !signal.aborted) setError("Viewer couldn't load this drawing.");
       stop();
     };
     signal.addEventListener('abort', stop, { once: true });
@@ -139,7 +141,7 @@ export default function DXFPreview(context: PreviewContext) {
         context.state?.get('dxf.view') as DrawingView | undefined,
       );
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Drawing graphics are unavailable.');
+      setError(error instanceof Error ? error.message : "Viewer couldn't draw this file.");
     }
     return () => {
       session.current?.dispose();
@@ -163,7 +165,7 @@ export default function DXFPreview(context: PreviewContext) {
       () => [
         {
           id: 'dxf-frame',
-          label: 'Fit drawing',
+          label: 'Fit Drawing',
           aliases: ['fit dxf', 'fd'],
           primary: true,
           available: ready,
@@ -171,33 +173,33 @@ export default function DXFPreview(context: PreviewContext) {
         },
         ...(['inspect', 'distance', 'angle', 'area'] as const).map((value) => ({
           id: `dxf-${value}`,
-          label: value === 'inspect' ? 'Select drawing geometry' : `Measure ${value}`,
+          label: value === 'inspect' ? 'Select Drawing Geometry' : `Measure ${titleCase(value)}`,
           aliases: ['dxf', `drawing ${value}`],
           available: ready,
           run: () => setTool(value),
         })),
         {
           id: 'dxf-grid',
-          label: grid ? 'Hide drawing grid' : 'Show drawing grid',
+          label: grid ? 'Hide Drawing Grid' : 'Show Drawing Grid',
           available: ready,
           run: () => setGrid((value) => !value),
         },
         {
           id: 'dxf-snap',
-          label: snap ? 'Disable drawing snap' : 'Enable drawing snap',
+          label: snap ? 'Disable Drawing Snap' : 'Enable Drawing Snap',
           available: ready,
           run: () => setSnap((value) => !value),
         },
         {
           id: 'dxf-panel',
-          label: panel ? 'Hide drawing details' : 'Show drawing details',
+          label: panel ? 'Hide Drawing Details' : 'Show Drawing Details',
           aliases: ['dxf layers', 'measurements'],
           available: ready,
           run: () => setPanel((value) => !value),
         },
         {
           id: 'dxf-clear',
-          label: 'Clear drawing measurements',
+          label: 'Clear Drawing Measurements',
           available: ready && measurements.length > 0,
           run: () => setMeasurements([]),
         },
@@ -222,10 +224,10 @@ export default function DXFPreview(context: PreviewContext) {
     tool === 'inspect'
       ? 'Click geometry to select it · drag to pan · scroll to zoom'
       : tool === 'distance'
-        ? 'Pick two points · Shift temporarily disables snap'
+        ? 'Pick two points · hold ⇧ to turn off snap'
         : tool === 'angle'
           ? 'Pick first point, vertex, then last point'
-          : 'Pick boundary points · Enter or double-click to finish · Escape cancels';
+          : 'Pick boundary points · ↩ or double-click to finish · Esc cancels';
   const latest = measurements.at(-1);
   return (
     <div
@@ -287,7 +289,7 @@ export default function DXFPreview(context: PreviewContext) {
           <canvas
             ref={canvas}
             tabIndex={0}
-            aria-label="DXF drawing. Click to select or measure, drag to pan, scroll to zoom. Home fits the drawing. Enter finishes an area and Escape cancels."
+            aria-label="DXF drawing. Click to select or measure, drag to pan, scroll to zoom. Home fits the drawing. Return finishes an area and Esc cancels."
           />
           {!drawing && !error && (
             <div className="preview-overlay">
@@ -296,7 +298,12 @@ export default function DXFPreview(context: PreviewContext) {
           )}
           {error && (
             <div className="preview-overlay">
-              <Empty icon="drawing" title="Drawing could not be loaded" detail={error} />
+              <PreviewFailure
+                context={context}
+                icon="drawing"
+                title="Can't show this drawing"
+                detail={error}
+              />
             </div>
           )}
           {ready && (selected || measurements.length > 0 || draft > 0) && (
@@ -334,11 +341,7 @@ export default function DXFPreview(context: PreviewContext) {
                   })()}
                 </span>
               )}
-              {draft > 0 && (
-                <span>
-                  {draft} {draft === 1 ? 'point' : 'points'}
-                </span>
-              )}
+              {draft > 0 && <span>{plural(draft, 'point')}</span>}
             </div>
           )}
         </div>
@@ -368,12 +371,12 @@ export default function DXFPreview(context: PreviewContext) {
             </label>
             {!sourceUnit && (
               <p className="muted">
-                This file does not specify units. Choosing a unit labels its coordinates; it does
-                not rescale the drawing.
+                This file doesn't name its units. Choosing a unit labels its coordinates; the
+                drawing keeps its size.
               </p>
             )}
             <p className="muted">
-              {drawing.entities.length.toLocaleString()} entities ·{' '}
+              {plural(drawing.entities.length, 'object')} ·{' '}
               {measure(drawing.bounds.max.x - drawing.bounds.min.x)} ×{' '}
               {measure(drawing.bounds.max.y - drawing.bounds.min.y)}
             </p>
@@ -442,12 +445,12 @@ export default function DXFPreview(context: PreviewContext) {
             })}
             {measurements.length >= 100 && (
               <p className="muted">
-                100-measurement limit reached. Remove or clear measurements to continue.
+                You can keep up to 100 measurements. Remove one or choose Clear to add more.
               </p>
             )}
             {drawing.warnings.length > 0 && (
               <>
-                <strong>Preview limitations</strong>
+                <strong>Not shown</strong>
                 {drawing.warnings.map((warning) => (
                   <p className="muted" key={warning}>
                     {warning}

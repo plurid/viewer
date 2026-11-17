@@ -13,6 +13,7 @@ import {
 } from '../../domain/files/signatures';
 import { headerDetails } from '../../domain/files/binary-headers';
 import { errorMessage } from '../../domain/errors';
+import { titleCase } from '../../domain/title-case';
 import { ErrorBoundary } from '../ui/primitives';
 import { getState, report, useViewer } from '../state/store';
 import { choosePreview, previewModules } from './registry';
@@ -209,7 +210,9 @@ export function UnknownFile(context: PreviewContext) {
     <div className="unknown-file">
       <section className="unknown-file-summary" aria-label="What the file holds">
         <strong>
-          {identity ? `Looks like ${withArticle(identity.label)}` : 'Preview unavailable'}
+          {identity
+            ? `Looks like ${withArticle(identity.label)}`
+            : 'No preview for this kind of file'}
         </strong>
         {named && <p>{named}</p>}
         {details.length > 0 && (
@@ -223,7 +226,9 @@ export function UnknownFile(context: PreviewContext) {
           </dl>
         )}
         <div className="empty-actions">
-          {identity && own && <button onClick={() => show(own)}>Show as {identity.label}</button>}
+          {identity && own && (
+            <button onClick={() => show(own)}>{titleCase(`Show as ${identity.label}`)}</button>
+          )}
           {getState().bootstrap.platform === 'darwin' && (
             <button
               onClick={() => {
@@ -257,7 +262,9 @@ export function UnknownFile(context: PreviewContext) {
             </p>
             {proposed && (
               <div className="empty-actions">
-                <button onClick={() => show(proposed)}>Show as {guess.guess.kind}</button>
+                <button onClick={() => show(proposed)}>
+                  {titleCase(`Show as ${guess.guess.kind}`)}
+                </button>
               </div>
             )}
           </>
@@ -275,7 +282,7 @@ export function UnknownFile(context: PreviewContext) {
                   Review in Settings
                 </button>
               )}
-              <button onClick={ask}>Ask again</button>
+              <button onClick={ask}>Ask Again</button>
             </div>
           </>
         )}

@@ -125,7 +125,7 @@ export class SettingsService {
   private restored?: string;
   constructor(
     private dataPath: string,
-    home: string,
+    private home: string,
     private dark: () => boolean,
     private emit: (value: SettingsSnapshot) => void,
   ) {
@@ -267,6 +267,7 @@ export class SettingsService {
           : this.document.settings.appearance,
       credentials,
       systemLook,
+      home: this.home,
       config: {
         path: this.store.file,
         diagnostics: this.store.diagnostics,
@@ -439,7 +440,7 @@ export class SettingsService {
     await this.load();
     const changes = importChanges(this.document.settings, config.settings);
     if (changes.length && confirm && !(await confirm(changes)))
-      throw new Error('The import was cancelled. Nothing changed.');
+      throw new Error('The import was canceled. Nothing changed.');
     const task = this.queue
       .catch(() => {})
       .then(async () => {

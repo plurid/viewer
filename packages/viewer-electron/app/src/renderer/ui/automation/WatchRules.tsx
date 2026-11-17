@@ -94,7 +94,7 @@ export function WatchRuleControls({
           <div className="settings-actions">
             {rule.runID && (
               <button disabled={blocked} onClick={() => openRun(rule.runID!)}>
-                Open run
+                Open Run
               </button>
             )}
             {rule.enabled ? (
@@ -128,7 +128,7 @@ export function WatchRuleControls({
                   })
                 }
               >
-                Review and enable…
+                Review and Enable…
               </button>
             )}
             {!rule.enabled && (
@@ -148,7 +148,7 @@ export function WatchRuleControls({
                   })
                 }
               >
-                Remove rule
+                Remove Rule
               </button>
             )}
           </div>
@@ -222,7 +222,7 @@ export function WatchRuleControls({
                   })
                 }
               >
-                Choose folder…
+                Choose Folder…
               </button>
             </div>
             <label className="field-label">
@@ -300,7 +300,7 @@ export function WatchRuleControls({
                   !workflowUsesSelection(document.definition)
                 }
               >
-                Enable watch rule
+                Enable Watch Rule
               </button>
             </div>
           </form>

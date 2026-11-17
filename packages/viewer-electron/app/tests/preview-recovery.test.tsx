@@ -43,13 +43,13 @@ it('revalidates a renamed sibling before attaching it and leaves recovery availa
       locate={locate}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Find renamed file' }));
-  await screen.findByText('The found file changed. Check again.');
+  fireEvent.click(screen.getByRole('button', { name: 'Find Renamed File' }));
+  await screen.findByText('The file changed as Viewer found it. Try again.');
   expect(locate).not.toHaveBeenCalled();
   window.viewer.stat = vi.fn(async () => found);
-  fireEvent.click(screen.getByRole('button', { name: 'Find renamed file' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Find Renamed File' }));
   await waitFor(() => expect(locate).toHaveBeenCalledWith(found));
-  fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
   expect(retry).toHaveBeenCalledOnce();
   expect(screen.getByRole('status').textContent).toContain('last loaded version');
 });
@@ -75,11 +75,11 @@ it('revalidates synthetic creation time when attaching a recovered preview', asy
   render(
     <PreviewRecovery path={captured.path} entry={captured} retry={() => {}} locate={locate} />,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Find renamed file' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Find Renamed File' }));
   await waitFor(() => expect(locate).toHaveBeenCalledWith(latest));
   locate.mockClear();
   window.viewer.stat = vi.fn(async () => ({ ...latest, created: 3 }));
-  fireEvent.click(screen.getByRole('button', { name: 'Find renamed file' }));
-  await screen.findByText('The found file changed. Check again.');
+  fireEvent.click(screen.getByRole('button', { name: 'Find Renamed File' }));
+  await screen.findByText('The file changed as Viewer found it. Try again.');
   expect(locate).not.toHaveBeenCalled();
 });

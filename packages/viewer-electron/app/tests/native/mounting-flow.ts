@@ -241,14 +241,14 @@ try {
   checks.push(
     'Canvas DXF review shows measured 160 × 140 mm and four Ø6.5 holes; native Save creates the drawing.',
   );
-  await main!.evaluate(pressButton('Open saved file'));
+  await main!.evaluate(pressButton('Open Saved File'));
   await until(
     () => main!.evaluate(pageCall(() => !!document.querySelector('.dxf-viewer'))),
     Boolean,
     'saved DXF preview',
   );
   await capture('reopened-drawing.png');
-  checks.push('Open saved file reopens the new DXF in the native drawing preview.');
+  checks.push('Open Saved File reopens the new DXF in the native drawing preview.');
   await stop();
 
   const replyFile = path.join(root, 'supplier-reply.json');

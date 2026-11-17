@@ -71,6 +71,28 @@ a test pass. When a scenario's Quit takes more than five seconds, the harness re
 `quit-sample.txt`, a stack sample of the app, in the run's evidence folder before it terminates the
 app.
 
+## Look at every changed screen
+
+Tests prove behavior, not appearance. jsdom has no layout, and mocked widths miss wrapped labels,
+real font widths, scroll bar tracks, narrow columns and long names. A change to the interface is not
+verified until someone has looked at it in the packaged app.
+
+Before a build is handed to anyone:
+
+1. Add or update the [review scenes](review.md#add-a-scene) for every screen the change touches.
+2. Run `pnpm review`, or `pnpm review --area <name>` while you work. It captures each scene in
+   hidden native windows, never on the operator's screen, at a narrow and a wide window size, in
+   light and dark appearance, with a short and a very long file name, inside a deeply nested folder.
+3. Open the review sheet and look at every capture against its must-be-true lines and
+   [DESIGN.md](../../DESIGN.md): no wrapped labels, no layout shift on selection, fields that fill
+   their row, paths that show their end, menus clear of their button. Read the automatic findings
+   too.
+4. Fix what is wrong, then run the scenes again. When the captures are right, accept them as the
+   baseline.
+
+Whoever hands over the build owns this check, including an agent that delegated the work to other
+agents. Until it is done, report interface work as not yet seen.
+
 ## Command startup with real zsh
 
 From `packages/viewer-electron/app`, run:
@@ -310,14 +332,14 @@ VIEWER_TEST_PRESERVE=1 VIEWER_TEST_NO_REMOVAL=1 pnpm test:fabrication-native
   for Job 1042, and for SAM 3.1 with a recorded mask over the box asked about. The generated profile
   names the stub as a local Chat Completions endpoint that outlines with `sam-3.1`, and already
   allows it pictures, so no dialog is answered.
-- **What it checks.** **Check laser job…** is not offered on the folder of jobs: **⌘K** lists it
-  greyed out with why, and a click runs nothing. On Job 1042 it is offered with what it compares.
+- **What it checks.** **Check Laser Job…** is not offered on the folder of jobs: **⌘K** lists it
+  grayed out with why, and a click runs nothing. On Job 1042 it is offered with what it compares.
   The panel lists 7 files and finds one confirmed pitch, named by file, its feature outlined by SAM
   3.1. The title collapses the panel. The tour shows its 3 stops on the real engine, the drawing
   drawn with its text and feature outlined, the panel down while it plays. The correction is saved
-  beside the unchanged original. **Nest and export handoff** nests each thickness and writes the
+  beside the unchanged original. **Nest and Export Handoff** nests each thickness and writes the
   folder, its tour pointed at the `Evidence/` copies. The kept check opens again. The Layout plane
-  takes millimetres and inches, picks a part and has no sheet format without failing. **Dark pages**
+  takes millimeters and inches, picks a part and has no sheet format without failing. **Dark pages**
   turns the PDF page dark and back. The panel stays with its workspace and returns as it was left.
 - **Beside it.** A second instance runs in another generated profile.
 - **Evidence.** Each step's screenshot, the app's logs and `result.json` go to its folder under
@@ -515,7 +537,7 @@ node --import tsx tools/plugins/robotics/verify.ts --plugin /path/to/exported-pl
 ```
 
 The packager retains the portable canvas manifest, code asset, pinned meshes and raw source
-snapshots. Open the exported folder with Chat's **Open canvas…** command. The native check uses an
+snapshots. Open the exported folder with Chat's **Open Canvas…** command. The native check uses an
 isolated profile with no provider configured. It exercises both placement constraints, altered
 targets and limits, then tool management, restart and export/import. This qualifies reuse of the
 existing code. It does not claim new Meta generation or renew a paid allowance.
@@ -576,7 +598,7 @@ personal information from the public edit, while preserving the original evidenc
 
 ### Fresh provider evaluation
 
-For a manual run, select the sample files and choose **Build tool from selection**. A configured
+For a manual run, select the sample files and choose **Build Tool from Selection**. A configured
 Meta model needs the appropriate data approval. Credentials stay outside the recording.
 
 The automated entry is `tools/canvases/evaluate.mjs`, which loads `evaluate-main.ts` inside Electron

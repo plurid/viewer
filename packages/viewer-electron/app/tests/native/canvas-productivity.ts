@@ -243,7 +243,7 @@ try {
   await main.evaluate(
     pageCall(() =>
       [...document.querySelectorAll<HTMLButtonElement>('button')]
-        .find((b) => b.textContent === 'Refresh snapshot')!
+        .find((b) => b.textContent === 'Refresh Snapshot')!
         .click(),
     ),
   );

@@ -149,12 +149,14 @@ describe('reviewed address validation', () => {
   it.each(['http', 'https', 'webdav', 'davs', 'smb', 'afp', 'nfs', 'cifs', 'ftp', 'ssh', 'sftp'])(
     'rejects a password in %s URLs without returning or exposing it',
     (scheme) => {
-      expect(() => parseRemoteAddress(scheme + '://user:secret@host/files')).toThrow(
-        passwordMessage,
-      );
-      expect(() => parseRemoteAddress(scheme + '://user:sec%72et@host/files')).toThrow(
-        passwordMessage,
-      );
+      const message = ['ssh', 'sftp'].includes(scheme)
+        ? passwordMessage.replace(
+            'macOS asks for the password',
+            'Viewer asks for the password when it connects',
+          )
+        : passwordMessage;
+      expect(() => parseRemoteAddress(scheme + '://user:secret@host/files')).toThrow(message);
+      expect(() => parseRemoteAddress(scheme + '://user:sec%72et@host/files')).toThrow(message);
     },
   );
   it.each([
@@ -203,3 +205,11 @@ describe('reviewed address validation', () => {
     });
   });
 });
+
+it.each(['ssh', 'sftp', 'http', 'https', 'webdav', 'davs', 'smb', 'afp', 'nfs', 'ftp', 'cifs'])(
+  'refuses empty host labels in %s addresses',
+  (scheme) => {
+    for (const host of ['.', '..', 'a..b'])
+      expect(() => parseRemoteAddress(scheme + '://' + host + '/srv')).toThrow();
+  },
+);

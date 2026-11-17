@@ -89,7 +89,7 @@ export function NotesDialog({
           <p className="muted">
             {query
               ? 'No matching notes.'
-              : 'Create a note or checklist from the Text menu. Closing its plane keeps it here.'}
+              : 'Create one with New Note Plane or New Checklist Plane in Commands. Closing its plane keeps it here.'}
           </p>
         )}
         <div className="notes-list">

@@ -75,7 +75,7 @@ try {
   const actions = new NativeInteractions({ evaluate, command, until });
   await until(() => evaluate(exists('.folder-explorer')), Boolean, 'Folder explorer');
   assert.equal(await evaluate(exists('.operations-button')), false);
-  await actions.palette('File operations');
+  await actions.palette('File Operations');
   await until(
     () => evaluate(textOf('.operations-panel')),
     (text) => text.includes('No recent file operations.'),
@@ -83,7 +83,7 @@ try {
   );
   assert.equal(await evaluate(exists('.operations-button')), true);
   await actions.capture(path.join(app.evidenceDirectory, 'empty-operations.png'));
-  await actions.palette('File operations');
+  await actions.palette('File Operations');
   assert.equal(
     await evaluate(exists('.operations-panel')),
     false,
@@ -92,15 +92,15 @@ try {
   assert.equal(await evaluate(exists('.operations-button')), false);
 
   await evaluate(patchSettings({ path: 'ui.titlebar.operations', value: false }));
-  await actions.palette('File operations');
+  await actions.palette('File Operations');
   assert.equal(await evaluate(exists('.operations-panel')), true);
   assert.equal(await evaluate(exists('.operations-button')), false);
   await actions.click('.operations-panel [aria-label="Close operations"]');
   await evaluate(patchSettings({ path: 'ui.titlebar.operations', value: true }));
 
-  await actions.palette('New folder…');
-  await actions.text('dialog[aria-label="New folder"] input', 'History folder');
-  await actions.button('Create', 'dialog[aria-label="New folder"]');
+  await actions.palette('New Folder…');
+  await actions.text('dialog[aria-label="New Folder"] input', 'History folder');
+  await actions.button('Create', 'dialog[aria-label="New Folder"]');
   await until(
     () =>
       evaluate(
@@ -114,7 +114,7 @@ try {
     'Finished folder operation',
   );
   assert.equal(await evaluate(exists('.operations-button')), false);
-  await actions.palette('File operations');
+  await actions.palette('File Operations');
   await until(
     () => evaluate(textOf('.operations-panel')),
     (text) => text.includes('completed') && text.includes('New folder') && text.includes(folder),
@@ -156,7 +156,7 @@ try {
   await actions.key('Enter', 'Enter');
   await until(
     () => evaluate(textOf('.quick-command-output [role=status]')),
-    (text) => text === 'completed · exit 0',
+    (text) => text === 'Done',
     'Alias command completion',
   );
   assert.equal(await evaluate(textOf('.quick-command-output pre')), 'alias-from-zshrc');
@@ -167,7 +167,7 @@ try {
   await actions.key('Enter', 'Enter');
   await until(
     () => evaluate(textOf('.quick-command-output [role=status]')),
-    (text) => text === 'failed · exit 127',
+    (text) => text === 'Failed with exit code 127',
     'Profile-only startup',
   );
   assert.match(await evaluate(textOf('.quick-command-output pre')), /command not found: ll/);
@@ -176,7 +176,7 @@ try {
   await actions.key('Enter', 'Enter');
   await until(
     () => evaluate(textOf('.quick-command-output [role=status]')),
-    (text) => text === 'completed · exit 0',
+    (text) => text === 'Done',
     'Terminal output decoding',
   );
   assert.equal(await evaluate(textOf('.quick-command-output pre')), 'red\nwarning');
@@ -221,10 +221,10 @@ try {
   await actions.key('Enter', 'Enter');
   await until(
     () => evaluate(textOf('.quick-command-output [role=status]')),
-    (text) => text === 'failed · exit 7',
+    (text) => text === 'Failed with exit code 7',
     'Failed command receipt',
   );
-  await actions.button('Open receipt', '.quick-command');
+  await actions.button('Open Receipt', '.quick-command');
   await until(
     () => evaluate(exists('.receipt-scroll > .inline-warning')),
     Boolean,

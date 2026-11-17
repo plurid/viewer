@@ -1,4 +1,4 @@
-import { installApplicationMenu } from './desktop/windows/application-menu';
+import { installApplicationMenu, menuChrome } from './desktop/windows/application-menu';
 import {
   activateApplication,
   createIndependentWindow,
@@ -406,7 +406,12 @@ const trusted = (url: string) => {
 let menuBindings = '';
 function menu(): void {
   const settings = desktop?.settings.snapshot().settings;
-  const bindings = nativeMenuBindings(settings);
+  // the View menu names the focused window's chrome by its state: Hide Title Bar while it shows
+  const focused = window && !window.isDestroyed() ? window : undefined;
+  const chrome = menuChrome(
+    focused && desktop?.windowPreferences(desktop.workspaceForWindow(focused)).ui,
+  );
+  const bindings = nativeMenuBindings(settings) + JSON.stringify(chrome ?? null);
   if (bindings === menuBindings) return;
   menuBindings = bindings;
   const command = (value: string) => () => {
@@ -442,6 +447,7 @@ function menu(): void {
     () => {
       if (!headless && quit.accepting()) void reports.open().catch(reportApplicationCommandFailure);
     },
+    chrome,
   );
 }
 
@@ -525,6 +531,7 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
   windowFrames.set(createdWindow, frame);
   createdWindow.on('focus', () => {
     window = createdWindow;
+    menu();
   });
   const remember = () => rememberWindow(createdWindow);
   createdWindow.on('move', remember);
@@ -534,6 +541,10 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
   createdWindow.on('enter-full-screen', remember);
   createdWindow.on('leave-full-screen', remember);
   createdWindow.on('restore', remember);
+  // two fingers turning on the trackpad turn the picture previewed there (previews/rotation.ts)
+  createdWindow.on('rotate-gesture', (_event, rotation) =>
+    sendEvent(createdWindow.webContents, { type: 'rotate-gesture', rotation }),
+  );
   let closePending = false;
   let allowedClose = false;
   const services = desktop!;

@@ -18,15 +18,14 @@ export class PreviewWorker {
     };
     this.worker.onerror = (event) => {
       event.preventDefault();
-      this.close(new Error(`${this.name} stopped. Retry the preview.`));
+      this.close(new Error(`${this.name} stopped. Try again.`));
     };
     this.worker.onmessageerror = () =>
-      this.close(new Error(`${this.name} returned unreadable data. Retry the preview.`));
+      this.close(new Error(`${this.name} returned unreadable data. Try again.`));
   }
   request<T>(message: object, signal?: AbortSignal, transfer: Transferable[] = []): Promise<T> {
-    if (this.stopped)
-      return Promise.reject(new Error(`${this.name} has closed. Retry the preview.`));
-    if (signal?.aborted) return Promise.reject(signal.reason ?? new Error('Preview cancelled.'));
+    if (this.stopped) return Promise.reject(new Error(`${this.name} has closed. Try again.`));
+    if (signal?.aborted) return Promise.reject(signal.reason ?? new Error('Preview canceled.'));
     return new Promise((resolve, reject) => {
       const id = ++this.next;
       const finish = (error?: Error, value?: unknown) => {
@@ -36,9 +35,9 @@ export class PreviewWorker {
         if (error) reject(error);
         else resolve(value as T);
       };
-      const cancel = () => finish(signal?.reason ?? new Error('Preview cancelled.'));
+      const cancel = () => finish(signal?.reason ?? new Error('Preview canceled.'));
       const timer = setTimeout(
-        () => this.close(new Error(`${this.name} took too long. Retry the preview.`)),
+        () => this.close(new Error(`${this.name} took too long. Try again.`)),
         this.timeout,
       );
       this.pending.set(id, finish);

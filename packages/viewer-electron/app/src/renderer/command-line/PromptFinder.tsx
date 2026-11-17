@@ -127,7 +127,7 @@ export function PromptFinder({
     ? [
         {
           id: 'add-model',
-          label: 'Add a model to ask in words',
+          label: 'Add a Model to Ask in Words',
           detail: 'Settings → Models',
           icon: 'settings',
           run: () => void window.viewer.openSettings('settings.providers').catch(() => {}),
@@ -170,7 +170,7 @@ export function PromptFinder({
                 },
                 {
                   id: 'edit',
-                  label: 'Edit in the command line',
+                  label: 'Edit in the Command Line',
                   detail: 'Tab',
                   icon: 'rename',
                   run: () => onEdit(state.answer.line),
@@ -290,7 +290,7 @@ export function PromptFinder({
       <div className="palette-context">
         <span>
           {provider
-            ? `${provider.name} · Enter asks, then runs the line · Tab edits it`
+            ? `${provider.name} · ↩ asks, then runs the line · ⇥ edits it`
             : 'Ask in words with a model from Settings → Models'}
         </span>
         {!!query.trim() && <button onClick={() => onChat(query.trim())}>Continue in Chat</button>}

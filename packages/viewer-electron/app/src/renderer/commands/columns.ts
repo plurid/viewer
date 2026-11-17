@@ -1,4 +1,5 @@
 import { listColumns } from '../../domain/preferences/list-columns';
+import { titleCase } from '../../domain/title-case';
 import { normalizePreferences } from '../../domain/preferences/ui';
 import {
   changePreferences,
@@ -47,7 +48,7 @@ export function columnCommands(): CommandDefinition[] {
   return [
     {
       id: 'reset-folder-view',
-      label: 'Reset this folder’s view',
+      label: 'Reset This Folder’s View',
       group: 'View',
       icon: 'refresh',
       when: (context) => !!context.folder,
@@ -55,7 +56,7 @@ export function columnCommands(): CommandDefinition[] {
     },
     {
       id: 'folder-view-defaults',
-      label: 'Use as default folder view',
+      label: 'Use as Default Folder View',
       group: 'View',
       icon: 'settings',
       aliases: ['defaults', 'other folders'],
@@ -66,8 +67,8 @@ export function columnCommands(): CommandDefinition[] {
       id: 'group.' + group,
       label:
         group === 'none'
-          ? 'Ungroup files'
-          : 'Group by ' + (group === 'kind' ? 'kind' : 'date modified'),
+          ? 'Ungroup Files'
+          : 'Group by ' + (group === 'kind' ? 'Kind' : 'Date Modified'),
       group: 'View',
       icon: group === 'modified' ? 'clock' : group === 'kind' ? 'data' : 'list',
       when: (context) => !!context.folder,
@@ -79,8 +80,8 @@ export function columnCommands(): CommandDefinition[] {
       label: (context) => {
         const view = context.folder && folderPresentation(folderCommandPath(context)!);
         return view?.sort === key
-          ? `Sort by ${sortLabels[key]}, ${view.descending ? 'ascending' : 'descending'}`
-          : `Sort by ${sortLabels[key]}`;
+          ? `Sort by ${titleCase(sortLabels[key])}, ${view.descending ? 'Ascending' : 'Descending'}`
+          : `Sort by ${titleCase(sortLabels[key])}`;
       },
       group: 'View',
       icon: key === 'modified' || key === 'created' ? 'clock' : key === 'size' ? 'info' : 'list',
@@ -105,7 +106,7 @@ export function columnCommands(): CommandDefinition[] {
         return {
           id: 'column.' + id,
           label: (context) =>
-            `${list(context).visible[id] ? 'Hide' : 'Show'} ${column.label.toLowerCase()} column`,
+            `${list(context).visible[id] ? 'Hide' : 'Show'} ${titleCase(column.label)} Column`,
           group: 'View',
           icon: id === 'modified' || id === 'created' ? 'clock' : id === 'size' ? 'info' : 'file',
           aliases: ['columns', column.label],
@@ -120,7 +121,7 @@ export function columnCommands(): CommandDefinition[] {
     {
       id: 'wrap-file-names',
       label: (context) =>
-        list(context).wrapNames ? 'Keep filenames on one line' : 'Wrap long filenames',
+        list(context).wrapNames ? 'Keep Filenames on One Line' : 'Wrap Long Filenames',
       group: 'View',
       icon: 'rename',
       aliases: ['long names', 'wrap'],
@@ -129,7 +130,7 @@ export function columnCommands(): CommandDefinition[] {
     },
     {
       id: 'reset-list-columns',
-      label: 'Reset list columns',
+      label: 'Reset List Columns',
       group: 'View',
       icon: 'refresh',
       when: available,

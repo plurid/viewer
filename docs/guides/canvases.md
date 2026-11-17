@@ -1,6 +1,6 @@
 # Build a canvas with a conversation
 
-1. Select files and choose **Build tool from selection** from commands or their context menu. Choose
+1. Select files and choose **Build Tool from Selection** from commands or their context menu. Choose
    a configured model and approve the data it may receive.
 2. Complete the draft with the tool you need, for example: “Compare these supplier quotes. Let me
    change quantity, budget and deadline. Include a CSV export.” Send the request.
@@ -10,7 +10,7 @@
    follow-up or creating a quote branch.
 
 A canvas uses selectable HTML text, ordinary controls, SVG and JavaScript. You can also start in an
-empty Chat plane. Under **Tools**, **Source code** shows the current code and **Undo revision**
+empty Chat plane. Under **Tools**, **Show Source Code** shows the current code and **Undo Revision**
 returns to the previous design while retaining compatible inputs. **Stop** stops the page; **Tools →
 Reload** opens the saved revision again.
 
@@ -24,14 +24,14 @@ open section to close it and return focus to its heading.
 
 ## Manage your tools
 
-1. Choose **Tool library** from commands, Chat or the canvas toolbar. It opens in its own plane.
-2. Search by tool or project name, then select a row. Choose **Open tool** to run it or
+1. Choose **Tool Library** from commands, Chat or the canvas toolbar. It opens in its own plane.
+2. Search by tool or project name, then select a row. Choose **Open Tool** to run it or
    **Conversation** to ask for a change.
-3. Change **Name** and choose **Rename**. Turn off **Enable tool** to stop it and prevent actions
+3. Change **Name** and choose **Rename**. Turn off **Enable Tool** to stop it and prevent actions
    from running. The setting survives restarting Viewer.
 4. Choose **Duplicate** to start a separate conversation with a copy of the tool and its saved
    inputs. No model request is sent until you send a message.
-5. Choose **New tool…** to begin another conversation. Attach the files it should use and describe
+5. Choose **New Tool…** to begin another conversation. Attach the files it should use and describe
    the tool you need.
 
 Reopening a saved tool runs its saved code. Use **Tools → Source code** to inspect it and **Undo
@@ -42,12 +42,12 @@ revision** to restore the preceding design.
 To try a complete saved tool without configuring a model, follow
 [Try the demo project](demo-project.md).
 
-1. Choose **Open canvas…** in Chat to import an exported plugin folder, or find an existing tool in
-   **Tool library**.
+1. Choose **Open Canvas…** in Chat to import an exported plugin folder, or find an existing tool in
+   **Tool Library**.
 2. Choose **Duplicate** when you want a separate version for a new task.
 3. Open **Conversation** and describe what to change. Keep the working calculations and controls
    that already fit the task.
-4. Inspect the new revision, run its checks and use **Export canvas…** to share the resulting tool.
+4. Inspect the new revision, run its checks and use **Export Canvas…** to share the resulting tool.
 
 A plugin uses the same saved document as a canvas. Its package carries the interface, code assets,
 captured sources and inputs. Code assets appear under **Assets** and travel with exports. They run
@@ -73,14 +73,14 @@ work. Reopening the saved tool does not make a provider request.
 
 1. Open **Sources** to see the evidence snapshots used by the tool. **Open source** returns to the
    file or cited passage. **Inspect captured data** shows the data the tool received.
-2. When a file changes, choose **Refresh snapshot**. The tool receives a new snapshot and keeps your
+2. When a file changes, choose **Refresh Snapshot**. The tool receives a new snapshot and keeps your
    saved inputs. A partial label means some content was omitted or could not be read.
 3. Check calculations against the source evidence. A running preview does not verify conclusions.
    Confirm missing units, dimensions and assumptions before relying on them.
 4. Choose the tool's export action. Viewer shows its proposed filename and exact text for review.
    Choose **Save result…** and a new destination. Existing files are not replaced. If the inputs
    change during review, prepare the result again.
-5. Choose **Open saved file** to inspect the output in Viewer.
+5. Choose **Open Saved File** to inspect the output in Viewer.
 
 Tools can propose CSV, JSON, Markdown, plain text and cutting DXF results. For a DXF, Viewer shows
 the drawing and measured width, height and hole diameters. Inspect these, then choose **Save
@@ -92,12 +92,12 @@ survive restarting Viewer.
 
 ## Explore an alternative
 
-1. Select a passage in a message and choose **Ask about selection**. For a whole message, choose
-   **Ask about this…**.
+1. Select a passage in a message and choose **Ask About Selection**. For a whole message, choose
+   **Ask About This…**.
 2. Continue in the linked conversation. **Inherited context** shows the messages captured through
    that passage. Later messages in the original conversation are not added to it.
 3. Open its **Canvas** to work on an independent copy with its own inputs.
-4. Use **Compare original** in the alternative canvas, then **Apply to original** when ready.
+4. Use **Compare Original** in the alternative canvas, then **Apply to Original** when ready.
 
 Applying preserves the original canvas's latest input values. If its content has changed since
 branching, Viewer asks you to compare the versions instead of replacing that newer work. **Source
@@ -109,13 +109,13 @@ Photo reconstruction produces a mesh. An articulated model needs its own source 
 controls.
 
 1. Add a Meta model that supports object selection in **Settings → Models**.
-2. Under **3D reconstruction**, enter your separate fal API key and choose **Save key**.
-3. Drop a photo on the canvas toolbar and choose **Tools → Photo to 3D**.
-4. Choose the photo and selection model, describe the object, then choose **Find object**.
+2. Under **3D reconstruction**, enter your separate fal API key and choose **Save Key**.
+3. Drop a photo on the canvas and choose **Tools → Photo to 3D**.
+4. Choose the photo and selection model, describe the object, then choose **Find Object**.
 5. Inspect the highlighted object. If it is wrong, change the description and find it again.
 6. Choose **Generate 3D…** and review the native confirmation before sending the photo and mask to
    fal. This generation is billed to your fal account.
-7. When it finishes, choose **Show model in canvas**. Drag to orbit, scroll to zoom, and adjust the
+7. When it finishes, choose **Show Model in Canvas**. Drag to orbit, scroll to zoom, and adjust the
    lighting, wireframe and background.
 
 The result is an inferred mesh. It does not establish real dimensions or manufacturing accuracy.
@@ -125,9 +125,9 @@ does not automatically pay for another generation.
 
 ## Export and reopen
 
-Choose **Export canvas…** and a destination folder. Viewer creates a new folder containing
+Choose **Export Canvas…** and a destination folder. Viewer creates a new folder containing
 `index.html`, assets, bundled runtime libraries and `canvas.viewer.json`. To continue with the saved
-values, choose **Open canvas…** from a Chat plane and select that exported folder. Reopening does
+values, choose **Open Canvas…** from a Chat plane and select that exported folder. Reopening does
 not call a model. Exports include captured sources and inputs but grant no access to original source
 paths. Imported snapshots remain readable; refresh requires attaching the source again in a
 conversation.

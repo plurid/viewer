@@ -35,7 +35,7 @@ export function createApplicationHandlers(ports: ApplicationPorts): ApplicationH
     },
     chooseApplication: async (_args, owner) => {
       if (process.platform !== 'darwin')
-        throw new Error('Application selection is not available on this platform yet.');
+        throw new Error("Viewer can't list apps on this system. Use Open in Default App instead.");
       const application = await chooseRemembered(
         ports.fileAccess,
         ports.requireWindow(owner),

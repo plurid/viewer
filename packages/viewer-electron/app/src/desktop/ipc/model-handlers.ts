@@ -33,7 +33,7 @@ interface ModelPorts {
 export function createModelHandlers(ports: ModelPorts): ModelHandlers {
   const requireProvider = (id: string) => {
     const selected = ports.settings.snapshot().settings.providers.find((item) => item.id === id);
-    if (!selected) throw new Error('Provider is unavailable.');
+    if (!selected) throw new Error('This provider was removed. Add it again in Settings → Models.');
     return selected;
   };
   return {
@@ -59,7 +59,8 @@ export function createModelHandlers(ports: ModelPorts): ModelHandlers {
       const provider = ports.settings
         .snapshot()
         .settings.providers.find((provider) => provider.id === args[0]);
-      if (!provider) throw new Error('Provider is unavailable.');
+      if (!provider)
+        throw new Error('This provider was removed. Add it again in Settings → Models.');
       return ports.providers.models(provider);
     },
     providerCheck: ([request]) =>

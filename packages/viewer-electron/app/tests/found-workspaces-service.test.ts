@@ -50,7 +50,11 @@ async function fixture() {
     };
   });
   const ports: FoundWorkspacePorts = {
-    facts: { pass: () => ({ relaunches: 0, exhausted: false }), probe },
+    facts: {
+      pass: () => ({ relaunches: 0, exhausted: false }),
+      probe,
+      identity: (folder) => probe.getMockImplementation()!(folder),
+    },
     state: () => state,
     enabled: () => enabled,
     explicit: () => [],
@@ -114,16 +118,14 @@ it('requires evidence, bounds probes and persists no raw command text', async ()
       { count: 3, last: f.now },
     ]),
   );
+  f.state.visits[f.root] = { count: 30, last: f.now };
   f.probe.mockClear();
   await f.service.run();
   expect(f.probe.mock.calls.length).toBeLessThanOrEqual(300);
-  await f.service.recordRun(f.root, { source: 'package.json', name: 'dev', at: f.now });
   const text = await readFile(f.service.store.file, 'utf8');
   expect(Buffer.byteLength(text)).toBeLessThanOrEqual(1_000_000);
   expect(JSON.parse(text).probes.length).toBeLessThanOrEqual(1000);
-  expect(JSON.parse(text).lastRun).toEqual([
-    { root: f.root, source: 'package.json', name: 'dev', at: f.now },
-  ]);
+  expect(JSON.parse(text)).not.toHaveProperty('lastRun');
   expect(text).not.toContain('command');
 });
 
@@ -219,7 +221,7 @@ it('keeps exact large identities through persisted probes and outside renames', 
   ).toBe('1:18446744073709551600:u64');
   await f.service.close();
   const fresh = new FoundWorkspaces(f.directory, f.home, {
-    facts: { pass: () => ({ relaunches: 0, exhausted: false }), probe: f.probe },
+    facts: f.ports.facts,
     state: () => f.state,
     enabled: () => true,
     explicit: () => [],
@@ -315,27 +317,27 @@ it('protects retained unreadable metadata instead of overwriting it', async () =
   expect(f.service.recovery).toContain('protected');
 });
 
-it('keeps only two hundred run references and refuses command text fields', async () => {
+it('loads legacy run references without retaining them in found metadata', async () => {
   const f = await fixture();
+  await writeFile(
+    f.service.store.file,
+    JSON.stringify({
+      version: 1,
+      entries: [],
+      hidden: [],
+      probes: [],
+      lastRun: Array.from({ length: 200 }, (_, index) => ({
+        root: f.root + index,
+        source: 'package.json',
+        name: 'dev',
+        at: f.now,
+      })),
+    }),
+  );
   await f.service.load();
-  const save = vi.spyOn(f.service.store, 'save').mockResolvedValue();
-  for (let index = 0; index < 201; index++)
-    await f.service.recordRun(f.root + index, {
-      source: 'package.json',
-      name: 'dev',
-      at: f.now + index,
-    });
-  const last = save.mock.calls.at(-1)![0];
-  expect(last.lastRun).toHaveLength(200);
-  expect(last.lastRun[0]!.root).toBe(f.root + '200');
-  await expect(
-    f.service.recordRun(f.root, {
-      source: 'package.json',
-      name: 'dev',
-      at: f.now,
-      line: 'secret',
-    } as never),
-  ).rejects.toThrow();
+  expect(f.service.recovery).toBeUndefined();
+  await f.service.run();
+  expect(JSON.parse(await readFile(f.service.store.file, 'utf8'))).not.toHaveProperty('lastRun');
 });
 
 it('trims large probe data to the one MB bound and preserves fixed markers', async () => {
@@ -367,4 +369,55 @@ it('trims large probe data to the one MB bound and preserves fixed markers', asy
     JSON.parse(text).probes.find((probe: { folder: string }) => probe.folder === f.root).value
       .markers,
   ).toContain('package.json');
+});
+
+it('Not a Workspace hides a root, and Undo brings back its entry and key after a pass', async () => {
+  const f = await fixture();
+  await f.service.run();
+  const [definition] = f.service.snapshot().definitions;
+  expect(definition!.root).toBe(f.root);
+  const changed = vi.fn();
+  f.service.subscribe(changed);
+  await f.service.hide(f.root);
+  expect(changed).toHaveBeenCalled();
+  expect(f.service.snapshot().definitions).toEqual([]);
+  expect(f.service.snapshot().state.hidden).toBe(1);
+  expect(JSON.parse(await readFile(f.service.store.file, 'utf8')).hidden).toEqual([f.root]);
+  // a pass looks past the hidden root: its entry goes
+  await f.service.run();
+  expect(JSON.parse(await readFile(f.service.store.file, 'utf8')).entries).toEqual([]);
+  await f.service.show([f.root]);
+  expect(f.service.snapshot().definitions.map((item) => item.key)).toEqual([definition!.key]);
+  const stored = JSON.parse(await readFile(f.service.store.file, 'utf8'));
+  expect(stored.hidden).toEqual([]);
+  expect(stored.entries.map((entry: { key: string }) => entry.key)).toEqual([definition!.key]);
+});
+
+it('keeps hidden roots through Clear recent folders until every one is shown again', async () => {
+  const f = await fixture();
+  await f.service.run();
+  await f.service.hide(f.root);
+  await f.service.hide(f.home + '/code/other');
+  await f.service.clearHistory();
+  expect(f.service.snapshot().state.hidden).toBe(2);
+  await f.service.show();
+  expect(f.service.snapshot().state.hidden).toBe(0);
+  // the hidden entry was evidence from the cleared history: a later pass finds it again
+  expect(f.service.snapshot().definitions).toEqual([]);
+  await f.service.run();
+  expect(f.service.snapshot().definitions.map((item) => item.root)).toEqual([f.root]);
+});
+
+it('caps hidden roots at 500, dropping the oldest', async () => {
+  const f = await fixture();
+  const hidden = Array.from({ length: 500 }, (_, index) => f.home + '/code/hidden-' + index);
+  await writeFile(
+    f.service.store.file,
+    JSON.stringify({ version: 1, entries: [], hidden, probes: [] }),
+  );
+  await f.service.hide(f.home + '/code/hidden-500');
+  const stored = JSON.parse(await readFile(f.service.store.file, 'utf8'));
+  expect(stored.hidden).toHaveLength(500);
+  expect(stored.hidden[0]).toBe(f.home + '/code/hidden-1');
+  expect(stored.hidden.at(-1)).toBe(f.home + '/code/hidden-500');
 });

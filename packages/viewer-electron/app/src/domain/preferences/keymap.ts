@@ -464,7 +464,13 @@ const glyphs: Readonly<Record<string, string>> = {
   Right: '→',
   Up: '↑',
   Down: '↓',
+  // shortcuts name the arrows as the browser does
+  ArrowLeft: '←',
+  ArrowRight: '→',
+  ArrowUp: '↑',
+  ArrowDown: '↓',
   Enter: '↩',
+  Delete: '⌦',
   Escape: '⎋',
   Tab: '⇥',
   Backspace: '⌫',

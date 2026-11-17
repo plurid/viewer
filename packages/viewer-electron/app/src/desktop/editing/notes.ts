@@ -34,7 +34,7 @@ export class Notes {
       store = new DocumentStore(path.join(this.dataPath, 'notes', id + '.json'), (value) => {
         const document = noteSchema.parse(value);
         if (document.id !== id)
-          throw new Error('The note identity does not match its saved record.');
+          throw new Error('This note’s file belongs to another note. Nothing was changed.');
         return document;
       });
       this.stores.set(id, store);
@@ -86,10 +86,7 @@ export class Notes {
     if (request.kind === 'read') {
       if (this.trashed.has(request.id)) throw new Error('This note was moved to Trash.');
       const document = await this.store(request.id).load();
-      if (!document)
-        throw new Error(
-          'This note is unavailable. Its view can be closed without removing a document.',
-        );
+      if (!document) throw new Error('This note was deleted or can’t be read. Close its plane.');
       return { kind: 'document', document };
     }
     const work = (this.queues.get(request.id) ?? Promise.resolve())
@@ -99,9 +96,11 @@ export class Notes {
         const store = this.store(request.id),
           current = await store.load();
         if (!current)
-          throw new Error('This note is unavailable. Your draft is kept in this window.');
+          throw new Error(
+            'This note was deleted or can’t be read. Your text stays in this window.',
+          );
         if (request.kind === 'trash') {
-          if (!this.trash) throw new Error('Moving notes to Trash is unavailable.');
+          if (!this.trash) throw new Error('This build of Viewer can’t move notes to the Trash.');
           if (current.revision !== request.revision)
             throw new Error(
               'This note changed. Review its latest version before moving it to Trash.',

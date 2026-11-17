@@ -1,3 +1,4 @@
+import { plural } from '../../../domain/plural';
 import { definitionWasRemoved, maximumWorkspaces } from '../../../domain/workspaces/catalog';
 import { canCaptureDefinition } from '../../../domain/workspaces/definitions/capture';
 import type { CommandDefinition } from '../registry';
@@ -19,7 +20,7 @@ export function workspacesCommands({
   const commands: CommandDefinition[] = [
     {
       id: 'manage-workspaces',
-      label: 'Manage workspaces…',
+      label: 'Manage Workspaces…',
       group: 'Workspaces',
       icon: 'grid',
       aliases: ['all workspaces', 'browse workspaces'],
@@ -28,7 +29,7 @@ export function workspacesCommands({
     },
     {
       id: 'change-workspace',
-      label: 'Change workspace…',
+      label: 'Change Workspace…',
       group: 'Workspaces',
       icon: 'dock',
       aliases: ['cw', 'switch workspace', 'workspaces'],
@@ -38,7 +39,7 @@ export function workspacesCommands({
     },
     {
       id: 'new-workspace',
-      label: 'New workspace…',
+      label: 'New Workspace…',
       group: 'Workspaces',
       icon: 'plus',
       aliases: ['nw'],
@@ -48,7 +49,7 @@ export function workspacesCommands({
     },
     {
       id: 'rename-workspace',
-      label: 'Rename workspace…',
+      label: 'Rename Workspace…',
       group: 'Workspaces',
       icon: 'rename',
       aliases: ['rw'],
@@ -57,27 +58,30 @@ export function workspacesCommands({
     },
     {
       id: 'workspace-background',
-      label: 'Workspace look…',
+      label: 'Workspace Look…',
       group: 'Workspaces',
       icon: 'sun',
+      // eslint-disable-next-line no-restricted-syntax -- British spelling finds it too
       aliases: ['background', 'colour', 'color', 'space colour', 'look', 'override', 'wb'],
       when: workspaceScope,
       run: () => actions.workspaceDialog('background'),
     },
     {
       id: 'delete-workspace',
-      label: 'Delete workspace…',
+      label: 'Delete Workspace…',
       group: 'Workspaces',
       icon: 'trash',
       aliases: ['dw'],
-      detail: `${space.panes.length} open ${space.panes.length === 1 ? 'plane' : 'planes'} · layout only`,
+      detail: plural(space.panes.length, 'open plane'),
       when: (context) => workspaceScope(context) && !linked,
-      unavailable: linked ? 'Close it: its definition stays in workspaces.jsonc.' : undefined,
+      unavailable: linked
+        ? 'This workspace comes from a definition. Close it instead, or remove the definition with Edit Workspace Definitions.'
+        : undefined,
       run: () => actions.workspaceDialog('delete'),
     },
     {
       id: 'restore-workspace',
-      label: 'Undo workspace deletion',
+      label: 'Undo Workspace Deletion',
       group: 'Workspaces',
       icon: 'refresh',
       primary: true,
@@ -86,10 +90,10 @@ export function workspacesCommands({
     },
   ];
   for (const [id, label, kind] of [
-    ['close-workspace', 'Close workspace', 'close'],
-    ['reset-workspace', 'Reset to definition…', 'reset'],
-    ['save-workspace-definition', 'Save to definition', 'save'],
-    ['save-workspace-as-definition', 'Save as definition…', 'save-as'],
+    ['close-workspace', 'Close Workspace', 'close'],
+    ['reset-workspace', 'Reset to Definition…', 'reset'],
+    ['save-workspace-definition', 'Save to Definition', 'save'],
+    ['save-workspace-as-definition', 'Save as Definition…', 'save-as'],
   ] as const)
     commands.push({
       id,

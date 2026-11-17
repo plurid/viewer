@@ -24,7 +24,7 @@ function mount(onSubmit = vi.fn<(message: string) => Promise<void>>(async () => 
   return {
     ...view,
     field: screen.getByRole('textbox', { name: 'Commit message' }) as HTMLTextAreaElement,
-    submit: screen.getByRole('button', { name: 'Commit staged changes' }) as HTMLButtonElement,
+    submit: screen.getByRole('button', { name: 'Commit Staged Changes' }) as HTMLButtonElement,
     form: screen.getByRole('form', { name: 'Git commit' }),
     onSubmit,
     onClose,
@@ -73,7 +73,7 @@ describe('staged Git commit message dialog', () => {
     fireEvent.change(await screen.findByRole('textbox', { name: 'Commit message' }), {
       target: { value: 'First request only' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Commit staged changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Commit Staged Changes' }));
     await act(async () => {
       replace();
       finish();
@@ -82,7 +82,7 @@ describe('staged Git commit message dialog', () => {
     expect(
       (screen.getByRole('textbox', { name: 'Commit message' }) as HTMLTextAreaElement).value,
     ).toBe('');
-    expect(screen.getByRole('dialog', { name: 'Commit staged changes' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Commit Staged Changes' })).toBeTruthy();
   });
 
   it('isolates replacement requests from the same plane in the actual window dialog owner', async () => {
@@ -118,7 +118,7 @@ describe('staged Git commit message dialog', () => {
     fireEvent.change(await screen.findByRole('textbox', { name: 'Commit message' }), {
       target: { value: 'Belongs to the first request' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Commit staged changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Commit Staged Changes' }));
     view.rerender(prompt('replacement', '/fixture/other'));
     expect(
       (screen.getByRole('textbox', { name: 'Commit message' }) as HTMLTextAreaElement).value,
@@ -126,12 +126,12 @@ describe('staged Git commit message dialog', () => {
     expect(screen.getByText('/fixture/other')).toBeTruthy();
     await act(async () => finish());
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog', { name: 'Commit staged changes' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Commit Staged Changes' })).toBeTruthy();
   });
 
   it('states staged-only scope, focuses the multiline message and rejects an empty message', () => {
     const view = mount();
-    expect(screen.getByRole('dialog', { name: 'Commit staged changes' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Commit Staged Changes' })).toBeTruthy();
     expect(
       screen.getByText(
         'Commit only changes already staged in the repository containing this folder.',
@@ -234,6 +234,6 @@ describe('staged Git commit message dialog', () => {
     await act(async () => finish());
     expect(view.onClose).not.toHaveBeenCalled();
     expect(later.onClose).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog', { name: 'Commit staged changes' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Commit Staged Changes' })).toBeTruthy();
   });
 });

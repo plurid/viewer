@@ -2,10 +2,9 @@ import { getState } from '../state/store';
 import type { CommandContext, CommandDefinition } from '../commands/registry';
 import type { ActionContext } from '../../domain/services';
 import { sendWindowEvent } from '../app/window-events';
-/** Who a plan was made for: a watch rule runs as the person, and was labelled “Your selection”
- *. */
+/** Who a plan was made for: a watch rule runs as the person, and was labeled “Your selection”. */
 export function planOrigin(context: Pick<ActionContext, 'actor' | 'workspaceID'>): string {
-  if (context.actor === 'agent') return 'Agent proposal';
+  if (context.actor === 'agent') return 'From an agent';
   return context.workspaceID === 'watch-rule' ? 'Watch rule' : 'Your selection';
 }
 export function requestAction(recipeID: string, context: CommandContext): void {
@@ -38,7 +37,7 @@ export function actionCommands(): CommandDefinition[] {
     })),
     {
       id: 'describe-task',
-      label: 'Describe a task…',
+      label: 'Describe a Task…',
       group: 'Actions',
       icon: 'command' as const,
       aliases: ['ai', 'task', 'agent'],

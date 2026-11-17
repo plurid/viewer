@@ -37,7 +37,7 @@ export function RunCommandDialog({ target, onClose }: { target: CapturedTarget; 
         } catch (value) {
           report(
             new Error(
-              'The command started and its receipt is in Command history, but its task link could not be added: ' +
+              'The command started and is in Command History, but Viewer couldn’t link it to the task: ' +
                 errorMessage(value),
             ),
           );
@@ -57,7 +57,7 @@ export function RunCommandDialog({ target, onClose }: { target: CapturedTarget; 
   };
   return (
     <Dialog
-      title={saving ? 'Save command as action' : 'Run command'}
+      title={saving ? 'Save Command as Action' : 'Run Command'}
       className="run-command-dialog"
       onClose={() => {
         if (!pending.current) onClose();
@@ -111,7 +111,7 @@ export function RunCommandDialog({ target, onClose }: { target: CapturedTarget; 
         <p className="muted">
           {saving
             ? 'Review and add this command in Settings.'
-            : 'Shell syntax is supported. Commands and output are saved privately in Command history. Use a terminal for interactive programs.'}
+            : 'Shell syntax works. Commands and their output are kept in Command History. Use a terminal for interactive programs.'}
         </p>
         {!saving && (
           <DeclaredCommandList
@@ -156,7 +156,7 @@ export function RunCommandDialog({ target, onClose }: { target: CapturedTarget; 
             disabled={busy || !script.trim()}
             onClick={() => setSaving(!saving)}
           >
-            {saving ? 'Back' : 'Save as action…'}
+            {saving ? 'Back' : 'Save as Action…'}
           </button>
           <span className="toolbar-spacer" />
           <button type="button" disabled={busy} onClick={onClose}>

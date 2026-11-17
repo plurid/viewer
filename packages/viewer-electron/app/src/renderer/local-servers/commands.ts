@@ -15,7 +15,7 @@ export function localServerCommands(
   return [
     {
       id: 'start-local-server',
-      label: 'Start local server',
+      label: 'Start Local Server',
       group: 'Folder',
       icon: 'code',
       aliases: ['serve', 'http', 'website', 'web server', 'localhost'],
@@ -30,7 +30,7 @@ export function localServerCommands(
     },
     {
       id: 'local-servers',
-      label: 'Local servers…',
+      label: 'Local Servers…',
       group: 'Workspace',
       icon: 'code',
       aliases: ['running servers', 'localhost', 'server controls'],

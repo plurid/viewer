@@ -18,6 +18,7 @@ import { referencesTo } from '../../../domain/automation/references';
 import { ProviderDataPermission } from './ModelDataPermission';
 import { ProviderCheck } from './ProviderCheck';
 import { Disclosure } from '../Disclosure';
+import { plural } from '../../../domain/plural';
 
 interface ConnectionResult {
   identity: string;
@@ -102,7 +103,7 @@ export function ModelSettings({
       <div className="models-introduction">
         <p className="settings-note">Manage the models you use for Ask Viewer and actions.</p>
         <button onClick={() => setAdding((value) => !value)} aria-expanded={adding}>
-          Add model
+          Add Model
         </button>
       </div>
       {snapshot.settings.providers.length > 0 && (
@@ -154,7 +155,7 @@ export function ModelSettings({
               setAdding(false);
             }}
           >
-            Set up model
+            Set Up Model
           </button>
         </div>
       )}
@@ -181,13 +182,13 @@ export function ModelSettings({
         const status = savingKey[provider.id]
           ? 'Saving key…'
           : loading[provider.id]
-            ? 'Connecting…'
+            ? 'Loading models…'
             : (currentConnection?.message ??
               (!provider.model
                 ? 'Choose a model'
                 : !snapshot.credentials.includes(provider.id) && provider.kind !== 'local'
                   ? 'API key needed'
-                  : 'Configured · connection not checked'));
+                  : 'Set up · not checked'));
         return (
           <Disclosure
             variant="row"
@@ -227,7 +228,7 @@ export function ModelSettings({
                   label={
                     referencesTo(snapshot.settings, 'provider', provider.id).length
                       ? `${provider.name} is used by ${referencesTo(snapshot.settings, 'provider', provider.id).join(', ')}: change them to remove it`
-                      : `Remove ${provider.name} provider`
+                      : `Remove ${provider.name}`
                   }
                   disabled={!!referencesTo(snapshot.settings, 'provider', provider.id).length}
                   onClick={() =>
@@ -269,7 +270,7 @@ export function ModelSettings({
                   autoComplete="off"
                   placeholder={
                     snapshot.credentials.includes(provider.id)
-                      ? 'Stored securely'
+                      ? 'Saved'
                       : provider.kind === 'local'
                         ? 'Optional for local servers'
                         : `Paste your ${preset.name} API key`
@@ -354,12 +355,12 @@ export function ModelSettings({
                             [provider.id]: {
                               identity: connectionIdentity(provider),
                               connected: true,
-                              message: 'Connected · ' + values.length + ' model IDs available',
+                              message: `Connected · ${plural(values.length, 'model')}`,
                             },
                           }));
                           if (!values.length)
                             error(
-                              'Connected, but no compatible model IDs were returned. Enter a model ID manually.',
+                              'Connected, but the provider listed no models Viewer can use. Type a model ID instead.',
                             );
                         })
                         .catch((value: Error) => {
@@ -369,7 +370,7 @@ export function ModelSettings({
                             [provider.id]: {
                               identity: connectionIdentity(provider),
                               connected: false,
-                              message: 'Connection failed',
+                              message: 'Couldn’t connect',
                             },
                           }));
                           error(value.message);
@@ -379,7 +380,7 @@ export function ModelSettings({
                         );
                     }}
                   >
-                    {loading[provider.id] ? 'Loading models…' : 'Connect and load models'}
+                    Load Models
                   </button>
                 )}
                 {snapshot.credentials.includes(provider.id) && (
@@ -387,7 +388,7 @@ export function ModelSettings({
                     disabled={savingKey[provider.id]}
                     onClick={() => credential(provider.id, '')}
                   >
-                    Clear stored key
+                    Clear Key
                   </button>
                 )}
                 {selectedDefault?.id !== provider.id && (
@@ -402,13 +403,12 @@ export function ModelSettings({
               </div>
               {(loading[provider.id] || savingKey[provider.id]) && (
                 <p className="settings-note" role="status">
-                  {savingKey[provider.id] ? 'Saving key…' : 'Loading model IDs…'}
+                  {savingKey[provider.id] ? 'Saving key…' : 'Loading models…'}
                 </p>
               )}
               {models[provider.id]?.length ? (
                 <p className="settings-note" role="status">
-                  {models[provider.id]?.length} model IDs loaded. Choose one in the Model field
-                  above.
+                  {plural(models[provider.id]!.length, 'model')} loaded. Choose one in Model above.
                 </p>
               ) : null}
               {provider.kind === 'gemini' && (

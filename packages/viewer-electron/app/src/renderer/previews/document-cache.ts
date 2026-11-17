@@ -90,7 +90,7 @@ export class PreviewDocumentCache {
         loaded,
         new Promise<never>((_resolve, reject) => {
           aborted = () =>
-            reject(signal.reason ?? new DOMException('Preview cancelled.', 'AbortError'));
+            reject(signal.reason ?? new DOMException('Preview canceled.', 'AbortError'));
           signal.addEventListener('abort', aborted, { once: true });
           if (signal.aborted) aborted();
         }),

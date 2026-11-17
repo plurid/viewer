@@ -76,7 +76,7 @@ describe('email preview', () => {
       'Packing list.txt',
     ])
       expect(screen.getByText(text)).toBeTruthy();
-    expect(screen.getByText(/text\/plain · 2 KB/)).toBeTruthy();
+    expect(screen.getByText(/TXT · 2 KB/)).toBeTruthy();
     const frame = await waitFor(() => {
       const element = container.querySelector('iframe');
       expect(element).not.toBeNull();
@@ -169,7 +169,7 @@ describe('email preview', () => {
       throw new Error('The message headers exceed the reader limit.');
     });
     render(<MailPreview {...preview} />);
-    expect(await screen.findByText('This email could not be read')).toBeTruthy();
+    expect(await screen.findByText("Can't read this email")).toBeTruthy();
     expect(screen.getByText('The message headers exceed the reader limit.')).toBeTruthy();
   });
 });
@@ -240,7 +240,7 @@ describe('mailbox preview', () => {
       data({ mailbox: { messages: [], truncated: false } }),
     );
     render(<MailPreview {...preview} />);
-    expect(await screen.findByText('This mailbox has no messages')).toBeTruthy();
+    expect(await screen.findByText('No messages')).toBeTruthy();
   });
 });
 

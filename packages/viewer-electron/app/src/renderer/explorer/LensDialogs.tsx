@@ -15,6 +15,7 @@ import { folderPresentation, report, updateFolderPresentation } from '../state/s
 import { Dialog, NameDialog } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { plural } from '../../domain/plural';
 
 export type LensPrompt =
   | { kind: 'new-lens'; folder: string }
@@ -55,8 +56,9 @@ function showLens(folder: string, lens: string) {
   if (presentation.group !== 'lens' || presentation.lens !== lens)
     updateFolderPresentation(folder, { group: 'lens', lens });
 }
-const items = (names: readonly string[]) =>
-  names.length === 1 ? `“${names[0]}”` : `${names.length.toLocaleString()} items`;
+/** The chosen items by name, or their count; `noun` is "Item" in a Title Case dialog title. */
+const items = (names: readonly string[], noun = 'item') =>
+  names.length === 1 ? `“${names[0]}”` : plural(names.length, noun);
 
 function LensDialog({
   prompt,
@@ -105,7 +107,7 @@ function LensDialog({
     const names = prompt.names ?? [];
     return (
       <NameDialog
-        title={names.length ? `Group ${items(names)}` : 'New Group'}
+        title={names.length ? `Group ${items(names, 'Item')}` : 'New Group'}
         label="Group name"
         action={names.length ? 'Group' : 'Create'}
         maxLength={100}
@@ -184,7 +186,7 @@ function MoveDialog({
   const tree = lensGroupTree(prompt.document.lens);
   return (
     <Dialog
-      title={`Move ${items(prompt.names)} to Group`}
+      title={`Move ${items(prompt.names, 'Item')} to Group`}
       onClose={onClose}
       className="lens-move-dialog"
     >
@@ -461,10 +463,10 @@ function TrashLensDialog({
     onClose();
   };
   return (
-    <Dialog title="Move Lens to Trash?" onClose={onClose} className="trash-confirmation">
+    <Dialog title="Move this lens to the Trash?" onClose={onClose} className="trash-confirmation">
       <p className="dialog-copy">
-        Move the lens “{prompt.document.lens.name}” to the system Trash? Its groups and places go
-        with it; the items in this folder stay where they are.
+        “{prompt.document.lens.name}” and its groups will be moved to the Trash. The files in this
+        folder aren't moved.
         {prompt.document.local ? '' : ' Undo puts the lens back.'}
       </p>
       <footer>

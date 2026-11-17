@@ -109,7 +109,9 @@ export class AgentAccess {
     try {
       const before = await fileStat(source);
       if (!before.isFile() || before.size > 16000000)
-        throw new Error('The private agent approval is not a bounded regular file. It was kept.');
+        throw new Error(
+          'The saved agent approval is too large or is not a regular file. It was kept.',
+        );
       const bytes = await source.readFile();
       const after = await fileStat(source);
       const current = await lstat(this.store.file);
@@ -298,7 +300,7 @@ export class AgentAccess {
           throw new Error('The requested agent access changed. Review it again.');
         add = (change.add ?? []).map((file) => {
           const root = current.roots.find((root) => root.path === absolute(file));
-          if (!root) throw new Error('The reviewed folder is unavailable. Review it again.');
+          if (!root) throw new Error('The reviewed folder was moved or deleted. Review it again.');
           return root.canonical;
         });
       }

@@ -11,7 +11,7 @@ const post = (reply: PartsReply) => self.postMessage(reply);
 
 async function bytes(url: string): Promise<Uint8Array> {
   const response = await fetch(url);
-  if (!response.ok) throw new Error('The drawing is unavailable. Select it again.');
+  if (!response.ok) throw new Error("Viewer couldn't read this drawing. Select it again.");
   const buffer = await response.arrayBuffer();
   if (buffer.byteLength > DXF_MAX_BYTES) throw new Error('This drawing is larger than 32 MB.');
   return new Uint8Array(buffer);

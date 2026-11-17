@@ -1,6 +1,7 @@
 import {
   defaultShortcuts,
   menuShortcuts,
+  shortcutGlyphs,
   shortcutLabel,
   shortcutOwner,
 } from '../../../domain/preferences/shortcuts';
@@ -33,7 +34,7 @@ export function ShortcutSettings({ editor }: { editor: SettingsEditor }) {
                   type="button"
                   className="shortcut-reset"
                   aria-label={`Reset ${label}`}
-                  title={`Back to ${shortcut || 'none'}`}
+                  title={`Back to ${shortcutGlyphs(shortcut) || 'none'}`}
                   onClick={(event) => {
                     event.preventDefault();
                     set(id, undefined);
@@ -54,7 +55,7 @@ export function ShortcutSettings({ editor }: { editor: SettingsEditor }) {
         );
       })}
       <div className="settings-actions">
-        <button onClick={() => patch('settings.shortcuts', {})}>Reset all shortcuts</button>
+        <button onClick={() => patch('settings.shortcuts', {})}>Reset All Shortcuts</button>
       </div>
       <KeymapSettings editor={editor} />
     </>

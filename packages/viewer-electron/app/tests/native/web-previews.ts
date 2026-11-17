@@ -616,7 +616,7 @@ async function server() {
       (count) => count > 0,
       'generated server folder',
     );
-    await command(main, 'Start local server');
+    await command(main, 'Start Local Server');
     const running = await until(
       () => main!.evaluate(pageCall(localServers)),
       (rows) => rows.some((row) => row.state === 'running'),
@@ -655,7 +655,7 @@ async function server() {
     checks.push({ id: 'actual-server-start', detail: { current, linked } });
     await save();
     console.log(
-      'PASS actual-server-start: real Start local server command, linked child, loopback HTML/CSS and saved server plane.',
+      'PASS actual-server-start: real Start Local Server command, linked child, loopback HTML/CSS and saved server plane.',
     );
     assert.equal(
       (await fetch(new URL('missing?synthetic-query=not-logged', current.url))).status,
@@ -740,7 +740,7 @@ async function server() {
     assert.equal((await fetch(live.url)).status, 200);
     await command(main, 'Local servers');
     await until(() => main!.evaluate(exists('.server-list-row')), Boolean, 'local server manager');
-    await main.evaluate(pressButton('Show plane', '.server-list-row'));
+    await main.evaluate(pressButton('Show Plane', '.server-list-row'));
     await until(() => main!.evaluate(exists('.server-plane')), Boolean, 'reattached server view');
     assert.equal(
       (await main.evaluate(pageCall(localServers))).find((server) => server.state === 'running')!

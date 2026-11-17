@@ -219,7 +219,7 @@ it('resolves exact normalized names and refuses duplicate names or unavailable I
   };
   expect(selectAgentWorkspace(state, '1').id).toBe('1');
   expect(() => selectAgentWorkspace(state, 'Café')).toThrow('ambiguous');
-  expect(() => selectAgentWorkspace(state, 'missing')).toThrow('unavailable');
+  expect(() => selectAgentWorkspace(state, 'missing')).toThrow('No open workspace');
 });
 it('creates and verifies a real branch/worktree with one durable note and a stopped terminal in the selected workspace', async () => {
   const f = await fixture(),

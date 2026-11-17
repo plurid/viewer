@@ -3,11 +3,13 @@ import type { ServerPane as Pane } from '../../domain/contracts';
 import type { LocalServerAction } from '../../domain/previews/web';
 import { formatBytes } from '../../domain/files/entries';
 import { IconButton } from '../ui/primitives';
+import { PathLabel } from '../ui/PathLabel';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { connectLocalServers, localServerSessions } from './runtime';
 import { filterServerLogs, type LogStatus } from './logs';
 import './server-plane.css';
 import { useWorkspace } from '../workspace/context';
+import { plural } from '../../domain/plural';
 
 const timestamp = (value: number) => new Date(value).toLocaleTimeString();
 
@@ -83,9 +85,7 @@ export default function ServerPlane({ pane, active }: { pane: Pane; active: bool
                   ? 'Running'
                   : 'Stopped'}
         </span>
-        <span className="server-folder" title={pane.path}>
-          {pane.path}
-        </span>
+        <PathLabel className="server-folder" path={pane.path} />
         {running ? (
           <button type="button" disabled={busy} onClick={() => run('stop')}>
             Stop
@@ -245,9 +245,9 @@ export default function ServerPlane({ pane, active }: { pane: Pane; active: bool
       </div>
       <footer className="server-log-footer">
         <span>
-          {logs.length} of {snapshot.logs.length} requests
+          {logs.length} of {plural(snapshot.logs.length, 'request')}
         </span>
-        <span>Last 200 · Memory only · Paths exclude queries</span>
+        <span>Last 200 requests</span>
       </footer>
     </section>
   );

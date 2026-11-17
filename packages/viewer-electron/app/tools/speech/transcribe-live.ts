@@ -119,7 +119,7 @@ export async function transcribeWAV(
 export const jobFolderCommands: readonly SpokenCommand[] = [
   {
     id: 'check-laser-job',
-    label: 'Check laser job…',
+    label: 'Check Laser Job…',
     aliases: [
       'laser',
       'fabrication',
@@ -139,28 +139,28 @@ export const jobFolderCommands: readonly SpokenCommand[] = [
     [
       [
         'check-cut-sheets',
-        'Prepare cut sheets',
+        'Prepare Cut Sheets',
         ['cut sheets', 'nest', 'nest the parts', 'nesting'],
         'prepare its cut sheets',
         'at-once',
       ],
       [
         'check-tour',
-        'Play the check’s tour',
+        'Play the Check’s Tour',
         ['tour', 'play the tour', 'show the findings', 'walk through the findings'],
         'play its tour',
         'at-once',
       ],
       [
         'check-corrections',
-        'Save corrected copies',
+        'Save Corrected Copies',
         ['save the corrections', 'correct the dxf', 'fix the pitch', 'fix the holes'],
         'save its corrected copies',
         'press',
       ],
       [
         'check-handoff',
-        'Export handoff',
+        'Export Handoff',
         ['handoff', 'export the job', 'export for the shop', 'send to the shop'],
         'export its handoff',
         'press',
@@ -179,7 +179,7 @@ export const jobFolderCommands: readonly SpokenCommand[] = [
   })),
   {
     id: 'sort.modified',
-    label: 'Sort by date modified',
+    label: 'Sort by Date Modified',
     aliases: [],
     phrase: 'sort by date modified',
     available: true,
@@ -187,7 +187,7 @@ export const jobFolderCommands: readonly SpokenCommand[] = [
   },
   {
     id: 'select-all',
-    label: 'Select all',
+    label: 'Select All Files',
     aliases: [],
     phrase: 'select all',
     available: true,

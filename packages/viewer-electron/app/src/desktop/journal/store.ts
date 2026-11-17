@@ -77,7 +77,7 @@ export class JournalStore {
     try {
       const file = await fileStat(this.handle);
       if (!file.isFile() || file.nlink !== 1 || file.mode & 0o077 || file.size > this.limits.bytes)
-        throw new Error('Journal file is not a private bounded regular file.');
+        throw new Error('The journal’s file is too large or is not a regular file.');
       this.identity = versionIdentity(file);
       this.bytes = file.size;
       const buffer = Buffer.alloc(file.size);

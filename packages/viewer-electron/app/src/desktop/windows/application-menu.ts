@@ -4,6 +4,7 @@ import type { MenuItemConstructorOptions } from 'electron';
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { ApplicationSettings } from '../../domain/services';
+import type { UIPreferences } from '../../domain/contracts';
 import { defaultShortcuts, accelerator, menuShortcuts } from '../../domain/preferences/shortcuts';
 import { planeAlignments, planeSizePresets } from '../../domain/workspaces/plane-layout';
 import type { InstalledRelease } from '../../domain/updates/feed';
@@ -14,6 +15,32 @@ export function guide(page: string, release: InstalledRelease = installedRelease
   const ref = release.build === undefined ? 'master' : `v${release.version}`;
   return `https://github.com/plurid/viewer/blob/${ref}/docs/${page}`;
 }
+
+/** The window chrome the View menu names by its state, as the focused window has it. */
+export interface MenuChrome {
+  windowNavigation: boolean;
+  titleBar: boolean;
+  spaceToolbar: boolean;
+  minimap: boolean;
+  viewcube: boolean;
+  grid: boolean;
+}
+/** The focused window's chrome; none before a window opens, when the menu names the defaults. */
+export function menuChrome(ui: UIPreferences | undefined): MenuChrome | undefined {
+  return (
+    ui && {
+      windowNavigation: ui.sidebar.visible,
+      titleBar: ui.titlebar.visible,
+      spaceToolbar: ui.space.toolbar,
+      minimap: ui.space.minimap,
+      viewcube: ui.space.viewcube,
+      grid: ui.space.grid,
+    }
+  );
+}
+// a Mac menu says what choosing the item does: Hide Sidebar while it shows, Show Sidebar while not
+const showOrHide = (shown: boolean | undefined, name: string) =>
+  `${shown === false ? 'Show' : 'Hide'} ${name}`;
 
 /**
  * Build native menus from the same command IDs and shortcuts as the renderer. `quit` learns
@@ -26,6 +53,7 @@ export function installApplicationMenu(
   quit: (byShortcut: boolean) => void,
   licenseVisible = false,
   copyReport: () => void = () => {},
+  chrome?: MenuChrome,
 ): void {
   const quitItem: MenuItemConstructorOptions = {
     label: 'Quit Viewer',
@@ -40,7 +68,7 @@ export function installApplicationMenu(
               role: 'appMenu' as const,
               submenu: [
                 { role: 'about' as const },
-                { label: 'Acknowledgements', click: command('acknowledgements') },
+                { label: 'Acknowledgments', click: command('acknowledgements') },
                 // the App Store updates its edition
                 ...(process.mas
                   ? []
@@ -256,37 +284,38 @@ export function installApplicationMenu(
             click: command('go-to'),
           },
           {
-            label: 'Show / Hide Window Navigation',
+            label: showOrHide(chrome?.windowNavigation, 'Window Navigation'),
             accelerator: accelerator(settings?.shortcuts['toggle-sidebar'] ?? 'Cmd+Alt+S'),
             click: command('toggle-sidebar'),
           },
           {
-            label: 'Show / Hide Title Bar',
+            label: showOrHide(chrome?.titleBar, 'Title Bar'),
             accelerator: accelerator(settings?.shortcuts['toggle-titlebar'] ?? 'Cmd+Alt+T'),
             click: command('toggle-titlebar'),
           },
           // every setting is a command: the space's own chrome, here too
           {
-            label: 'Show / Hide Space Toolbar',
+            label: showOrHide(chrome?.spaceToolbar, 'Space Toolbar'),
             accelerator: accelerator(settings?.shortcuts['setting.ui.space.toolbar'] ?? ''),
             click: command('setting.ui.space.toolbar'),
           },
           {
-            label: 'Show / Hide Minimap',
+            label: showOrHide(chrome?.minimap, 'Minimap'),
             accelerator: accelerator(settings?.shortcuts['setting.ui.space.minimap'] ?? ''),
             click: command('setting.ui.space.minimap'),
           },
           {
-            label: 'Show / Hide Viewcube',
+            label: showOrHide(chrome?.viewcube, 'Viewcube'),
             accelerator: accelerator(settings?.shortcuts['setting.ui.space.viewcube'] ?? ''),
             click: command('setting.ui.space.viewcube'),
           },
           {
-            label: 'Show / Hide Background Grid',
+            label: showOrHide(chrome?.grid, 'Background Grid'),
             accelerator: accelerator(settings?.shortcuts['setting.ui.space.grid'] ?? ''),
             click: command('setting.ui.space.grid'),
           },
-          { label: 'Show / Hide Plane Navigation', click: command('plane-sidebar') },
+          // a plane's and a folder's own state lives in the window: the menu names both ways
+          { label: 'Show or Hide Plane Navigation', click: command('plane-sidebar') },
           { label: 'View Side by Side', click: command('view-side-by-side') },
           { label: 'View Stacked', click: command('view-stacked') },
           {
@@ -299,7 +328,7 @@ export function installApplicationMenu(
               ...(['width', 'height'] as const).map((axis) => ({
                 label: axis === 'width' ? 'Width' : 'Height',
                 submenu: planeSizePresets.map((preset) => ({
-                  label: `${preset.label} ${axis}`,
+                  label: `${preset.label} ${axis === 'width' ? 'Width' : 'Height'}`,
                   click: command(`plane-${axis}-${preset.id}`),
                 })),
               })),
@@ -313,7 +342,7 @@ export function installApplicationMenu(
             ],
           },
           {
-            label: 'Show / Hide Hidden Files',
+            label: 'Show or Hide Hidden Files',
             accelerator: accelerator(
               settings?.shortcuts['toggle-hidden'] ?? defaultShortcuts['toggle-hidden'] ?? '',
             ),
@@ -326,7 +355,7 @@ export function installApplicationMenu(
             click: command('frame-all'),
           },
           {
-            label: 'Dock / Reveal',
+            label: 'Dock Plane or Reveal Space',
             accelerator: accelerator(settings?.shortcuts['dock'] ?? 'Cmd+Return'),
             click: command('dock'),
           },
@@ -344,8 +373,8 @@ export function installApplicationMenu(
             ),
             click: command('redo-arrangement'),
           },
-          { label: 'Arrange Horizontally', click: command('arrange-horizontal') },
-          { label: 'Arrange Vertically', click: command('arrange-vertical') },
+          { label: 'Arrange Planes Horizontally', click: command('arrange-horizontal') },
+          { label: 'Arrange Planes Vertically', click: command('arrange-vertical') },
           { type: 'separator' },
           ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }]),
           { role: 'togglefullscreen' },

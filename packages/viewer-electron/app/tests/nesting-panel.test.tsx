@@ -159,7 +159,7 @@ it('estimates as quantities change and saves a valid nesting plan', async () => 
   expect(
     screen.getAllByRole('img', { name: /^Sheet 1 · 1250 × 2500 · \d+% used · \d+ parts$/ }),
   ).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Save nesting' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Nesting' }));
   await waitFor(() => expect(operate).toHaveBeenCalledOnce());
   const request = operate.mock.calls[0]![0];
   expect(request).toMatchObject({
@@ -257,7 +257,7 @@ it('nests one thickness at a time with the quantities given or named, and sums t
   );
 
   await waitFor(() => expect(screen.getByText(/^Checked: /)).toBeTruthy(), { timeout: 5000 });
-  fireEvent.click(screen.getByRole('button', { name: 'Save nesting' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Nesting' }));
   await waitFor(() => expect(operate).toHaveBeenCalledOnce());
   const request = operate.mock.calls[0]![0];
   expect(request.name).toBe('Nesting of 3 parts, 6 mm');
@@ -316,10 +316,10 @@ it('draws no sheet and says why when the last sheet format is removed', async ()
   expect(screen.getByText('Choose a sheet format to nest on.')).toBeTruthy();
   expect(screen.queryAllByRole('img', { name: /^Sheet / })).toHaveLength(0);
   expect(screen.queryByRole('table', { name: 'Sheet formats' })).toBeNull();
-  expect((screen.getByRole('button', { name: 'Save nesting' }) as HTMLButtonElement).disabled).toBe(
+  expect((screen.getByRole('button', { name: 'Save Nesting' }) as HTMLButtonElement).disabled).toBe(
     true,
   );
-  expect(screen.queryByRole('button', { name: 'Search longer' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Search Longer' })).toBeNull();
   // Adding a format back nests again.
   fireEvent.click(screen.getByRole('button', { name: 'Add format' }));
   fireEvent.click(await screen.findByText('1500 × 3000 mm'));
@@ -427,7 +427,7 @@ it('reads lengths in inches, with sheets in feet, and saves the plan in them', a
   fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
   await checked();
   expect(screen.getByText(/^Offcut 48 × \d+(\.\d+)? in, reusable$/)).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Save nesting' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Nesting' }));
   const operate = window.viewer.operate as ReturnType<typeof vi.fn>;
   await waitFor(() => expect(operate).toHaveBeenCalledOnce());
   const plan = validateTransform(operate.mock.calls[0]![0].transform, 3);

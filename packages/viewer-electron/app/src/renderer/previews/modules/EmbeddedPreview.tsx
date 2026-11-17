@@ -4,7 +4,7 @@ import type { Resource } from '../../../domain/contracts';
 import type { PreviewContext } from '../contracts';
 import { choosePreview, previewModules } from '../registry';
 import { preloadPreviewModule } from '../module-loading';
-import { Empty, Loading } from '../../ui/primitives';
+import { Empty, Failure, Loading } from '../../ui/primitives';
 import { NativeOpenActions } from '../../ui/navigation/NativeOpenActions';
 import { errorMessage } from '../../../domain/errors';
 import {
@@ -96,9 +96,14 @@ export default function EmbeddedPreview(context: PreviewContext) {
   if (reading.state === 'other') return <reading.Viewer {...context} />;
   if (reading.state === 'failed')
     return (
-      <Empty icon="file" title="This document could not be read" detail={reading.error}>
+      <Failure
+        icon="file"
+        title="Can't read this document"
+        detail={reading.error}
+        onRetry={context.retry}
+      >
         <NativeOpenActions path={resource.entry.path} />
-      </Empty>
+      </Failure>
     );
   const summary = embeddedSummary(format, reading.facts);
   if (reading.state === 'missing')

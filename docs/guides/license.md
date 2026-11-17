@@ -21,11 +21,11 @@ A license key works with every later version of Viewer.
 
 1. Choose **Viewer → License Key…**.
 2. Paste the complete key into **License key**. Line breaks from copying are accepted.
-3. Choose **Save license key**.
+3. Choose **Save License Key**.
 
 The page changes to **Licensed to** followed by your purchase email. Viewer checks and saves the key
 on this Mac. It works offline and is checked again when Viewer starts. To replace a key, paste the
-new one and save it. **Remove license key** clears the saved key and returns to the recorded trial
+new one and save it. **Remove License Key** clears the saved key and returns to the recorded trial
 dates.
 
 A key this build cannot verify stays saved until you replace or remove it. Unreadable license

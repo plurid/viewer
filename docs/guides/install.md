@@ -44,7 +44,7 @@ these questions can appear soon after the first launch.
 3. To browse the Trash, add Viewer to **System Settings → Privacy & Security → Full Disk Access**,
    then quit and reopen Viewer.
 
-In the App Store edition, a folder Viewer may not read yet shows **Allow folder access…**. Choose it
+In the App Store edition, a folder Viewer may not read yet shows **Allow Folder Access…**. Choose it
 and pick the folder. **Settings → Permissions** lists the folders you allowed, and **Revoke** takes
 one back.
 
@@ -104,7 +104,7 @@ caches and, when you choose them, recovery copies of reviewed changes.
 
 1. To keep your workspaces and settings, choose **Workspace → Backup and Restore…** and save a
    backup first.
-2. If you installed the shell command, choose **Settings → Navigation → Uninstall shell command…**.
+2. If you installed the shell command, choose **Settings → Navigation → Uninstall Shell Command…**.
 3. Quit Viewer with **⌘Q**.
 4. Move **Viewer** from **Applications** to the Trash.
 5. To remove its data as well, move `~/Library/Application Support/Viewer` to the Trash. In the

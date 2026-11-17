@@ -476,7 +476,7 @@ export class AgentRequests {
       return;
     }
     if (needsNativeConfirmation(proposal)) {
-      if (!this.confirm) throw new Error('Native confirmation is unavailable, so nothing was run.');
+      if (!this.confirm) throw new Error('Viewer couldn’t ask you to confirm, so nothing ran.');
       // Hold the proposal while the dialog is open so a second approval cannot race it.
       proposal.status = 'running';
       this.emit(proposal);

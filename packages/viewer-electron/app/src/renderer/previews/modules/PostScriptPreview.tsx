@@ -35,6 +35,15 @@ export default function PostScriptPreview(context: PreviewContext) {
   const [rendered, setRendered] = useState<Resource>();
   const request = useRef<string | undefined>(undefined);
   const owned = useRef<Resource | undefined>(undefined);
+  // Render Pages goes once the pages are ready; a keyboard on it moves on to the Pages view
+  const renderButton = useRef<HTMLButtonElement>(null);
+  const pagesButton = useRef<HTMLButtonElement>(null);
+  const focusPages = useRef(false);
+  useEffect(() => {
+    if (renderState !== 'finished' || !focusPages.current) return;
+    focusPages.current = false;
+    pagesButton.current?.focus();
+  }, [renderState]);
 
   useEffect(() => {
     let live = true;
@@ -46,7 +55,7 @@ export default function PostScriptPreview(context: PreviewContext) {
     setRendered(undefined);
     setRenderState('idle');
     if (!services.inspectPostscript) {
-      setError('PostScript inspection is unavailable here.');
+      setError("Viewer can't read PostScript here.");
       return;
     }
     void services
@@ -116,6 +125,7 @@ export default function PostScriptPreview(context: PreviewContext) {
       owned.current = value;
       setRendered(value);
       setView('pages');
+      focusPages.current = globalThis.document.activeElement === renderButton.current;
       setRenderState('finished');
       setMessage(`Pages rendered with ${value.derivation?.decoder ?? 'Ghostscript'}.`);
     } catch (value) {
@@ -133,7 +143,7 @@ export default function PostScriptPreview(context: PreviewContext) {
     request.current = undefined;
     if (requestID) void services.cancelDocument(resource.id, requestID);
     setRenderState('idle');
-    setMessage('PostScript rendering was cancelled.');
+    setMessage('Rendering canceled.');
   };
 
   if (error)
@@ -183,7 +193,7 @@ export default function PostScriptPreview(context: PreviewContext) {
             ))}
           </dl>
           {document.limited && (
-            <p className="muted">Some comments were outside the inspection limits.</p>
+            <p className="muted">Some comments were too far into the file to read.</p>
           )}
         </details>
         <div className="empty-actions">
@@ -192,37 +202,41 @@ export default function PostScriptPreview(context: PreviewContext) {
           </button>
           {document.preview && (
             <button aria-pressed={view === 'embedded'} onClick={() => setView('embedded')}>
-              Embedded preview
+              Embedded Preview
             </button>
           )}
-          {status.kind === 'found' && services.renderPostscript && (
+          {renderState === 'finished' && rendered && (
             <button
-              aria-pressed={renderState === 'finished' ? view === 'pages' : undefined}
-              onClick={() => {
-                if (renderState === 'running') cancel();
-                else if (renderState === 'finished') setView('pages');
-                else void render();
-              }}
+              ref={pagesButton}
+              aria-pressed={view === 'pages'}
+              onClick={() => setView('pages')}
             >
-              {renderState === 'running'
-                ? 'Cancel rendering'
-                : renderState === 'finished'
-                  ? 'Rendered pages'
-                  : 'Render pages with Ghostscript'}
+              Pages
+            </button>
+          )}
+          {/* the view buttons keep their names; rendering is its own action */}
+          {status.kind === 'found' && services.renderPostscript && renderState !== 'finished' && (
+            <button
+              ref={renderButton}
+              onClick={() => (renderState === 'running' ? cancel() : void render())}
+            >
+              {renderState === 'running' ? 'Cancel Rendering' : 'Render Pages'}
             </button>
           )}
         </div>
         {document.previewMessage && <p className="muted">{document.previewMessage}</p>}
         {document.epsCrop === 'page' && <p className="muted">{epsCropMessage}</p>}
         {document.wmf && (
-          <p className="muted">Embedded WMF preview; this picture is not displayed.</p>
+          <p className="muted">This file's preview picture is a WMF, which Viewer doesn't show.</p>
         )}
         {status.kind === 'missing' && (
-          <p className="muted">Pages can be rendered if Ghostscript is installed.</p>
+          <p className="muted">Install Ghostscript (brew install ghostscript) to show the pages.</p>
         )}
-        {status.kind === 'failed' && <p className="muted">Ghostscript could not be checked.</p>}
+        {status.kind === 'failed' && (
+          <p className="muted">Viewer couldn't check for Ghostscript.</p>
+        )}
         {status.kind === 'store' && (
-          <p className="muted">Page rendering is unavailable in the Store edition.</p>
+          <p className="muted">The App Store edition can't render pages with Ghostscript.</p>
         )}
         {message && <p role="status">{message}</p>}
       </section>

@@ -33,7 +33,7 @@ const folder = () => {
 
 it('opens a root terminal plane from anywhere, where new planes start', async () => {
   const command = find('new-terminal-plane');
-  expect(command.label).toBe('New terminal plane');
+  expect(command.label).toBe('New Terminal Plane');
   const window = { scope: 'window', workspaceID: activeWorkspace().id, selection: [] };
   expect(command.when(window as unknown as CommandContext)).toBe(true);
   await command.run(window as unknown as CommandContext);

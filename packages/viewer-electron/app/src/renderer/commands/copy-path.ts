@@ -10,7 +10,7 @@ function paths(context: CommandContext): string[] {
 }
 export const copyPathCommand: CommandDefinition = {
   id: 'copy-path',
-  label: (context) => (paths(context).length > 1 ? 'Copy paths' : 'Copy path'),
+  label: (context) => (paths(context).length > 1 ? 'Copy Paths' : 'Copy Path'),
   group: 'Files',
   icon: 'copy',
   aliases: ['copy pathname', 'copy file path', 'copy folder path'],

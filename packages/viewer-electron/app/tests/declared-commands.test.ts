@@ -7,6 +7,89 @@ import {
 import type { DeclaredCommandFile } from '../src/domain/terminals/declared-commands';
 import { validTerminalCommand, terminalCommandProblem } from '../src/domain/terminals/command-text';
 
+describe('declared commands second round', () => {
+  it('splits comma attributes outside quoted text', () => {
+    const text = [
+      '[no-cd, private]',
+      'private:',
+      '  secret',
+      '[no-cd, confirm("Proceed, please?")]',
+      'confirmation:',
+      '  wait',
+      '[linux, windows]',
+      'other:',
+      '  echo other',
+      '[doc("private, confirm, linux"), macos]',
+      'mac:',
+      '  echo mac',
+      '[doc("a ] bracket, inside"), private]',
+      'bracket:',
+      '  secret',
+      '[no-cd, unix]',
+      'dev:',
+      '  serve',
+    ].join('\n');
+    expect(
+      parseDeclaredCommands('justfile', text, [], { platform: 'darwin' }).map((item) => item.line),
+    ).toEqual(['just mac', 'just dev']);
+  });
+
+  it('keeps inline Make recipes and validates their bodies', () => {
+    expect(
+      parseDeclaredCommands(
+        'Makefile',
+        'serve:;PORT=3000 node server.js\nbuild: ; CC=clang make all',
+      ).map((item) => [item.line, item.detail]),
+    ).toEqual([
+      ['make serve', 'PORT=3000 node server.js'],
+      ['make build', 'CC=clang make all'],
+    ]);
+    expect(parseDeclaredCommands('Makefile', 'serve:;echo \u200Bhidden')).toEqual([]);
+    expect(parseDeclaredCommands('Makefile', 'serve: PORT = 3000')).toEqual([]);
+  });
+
+  it('hides lone lifecycle and manual hooks without their base scripts', () => {
+    for (const name of ['postinstall', 'pretest', 'prestart', 'postrestart', 'poststop'])
+      expect(
+        parseDeclaredCommands('package.json', JSON.stringify({ scripts: { [name]: 'echo hook' } })),
+      ).toEqual([]);
+  });
+
+  it.each([
+    'echo ✔\uFE0F built',
+    'echo ⚠\uFE0E check',
+    'echo 👩\u200D💻',
+    'echo 🏳\uFE0F\u200D🌈',
+    'echo 👩🏽\u200D💻',
+  ])('allows emoji presentation and joins in %j', (command) => {
+    expect(validTerminalCommand(command)).toBe(true);
+    expect(terminalCommandProblem(command)).toBeUndefined();
+    expect(
+      parseDeclaredCommands('package.json', JSON.stringify({ scripts: { done: command } }))[0]
+        ?.line,
+    ).toBe('npm run done');
+  });
+
+  it.each([
+    '\uFE0F',
+    'a\uFE0F',
+    'a\uFE0E',
+    '✔\uFE0F\uFE0F',
+    'a\u200Db',
+    '👩\u200Da',
+    'a\u200D👩',
+    '👩\u200D',
+    '👩\u200C💻',
+    '1\u200D2',
+    '#\u200D*',
+    '🏽\u200D💻',
+    '✔\u{E0100}',
+  ])('refuses unrelated or dangling invisible text in %j', (text) => {
+    expect(validTerminalCommand('echo ' + text)).toBe(false);
+    expect(terminalCommandProblem('echo ' + text)).toContain('invisible');
+  });
+});
+
 describe('declared command review regressions', () => {
   it('keeps pre and post words while hiding actual sibling hooks and lifecycle hooks', () => {
     const scripts = Object.fromEntries(

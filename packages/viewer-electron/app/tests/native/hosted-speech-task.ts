@@ -180,7 +180,7 @@ function scrollToEditor(): void {
 
 function saveProviderInView(): boolean {
   const rect = [...document.querySelectorAll('.speech-provider-editor button')]
-    .find((button) => button.textContent === 'Save provider')!
+    .find((button) => button.textContent === 'Save Provider')!
     .getBoundingClientRect();
   return rect.bottom <= innerHeight && rect.top >= 0;
 }
@@ -267,7 +267,7 @@ try {
           pageCall(pressIncluding, '.choice-menu button.command-result', 'Hosted provider'),
         );
         await until(() => evaluate(exists('.speech-hosted')), Boolean, 'hosted section');
-        await evaluate(pressButton('Add speech provider'));
+        await evaluate(pressButton('Add Speech Provider'));
         for (const [name, width, height] of [
           ['desktop', 1000, 760],
           ['minimum', 760, 540],
@@ -350,10 +350,10 @@ try {
         if (status.microphone === 'granted') {
           // Synthetic tone travels through the real AudioWorklet; no device is acquired.
           await evaluate(pageCall(installGeneratedTone));
-          await evaluate(pressButton('Test microphone and transcription'));
+          await evaluate(pressButton('Test Microphone and Transcription'));
           await until(
             () => evaluate(textOf('.speech-dialog')),
-            (text) => text.includes('Finish and transcribe'),
+            (text) => text.includes('Finish and Transcribe'),
             'generated recording begins',
           );
           await until(
@@ -365,7 +365,7 @@ try {
             (seconds) => seconds >= 1,
             'generated audio through worklet',
           );
-          await evaluate(pressButton('Finish and transcribe', '.speech-dialog'));
+          await evaluate(pressButton('Finish and Transcribe', '.speech-dialog'));
           await until(
             () => evaluate(valueOf('textarea[aria-label=Transcript]')),
             (value) => value === 'Generated hosted transcript',

@@ -30,8 +30,8 @@ export function imageDecoder(
     const exr = signature.subarray(0, 4).toString('hex') === '762f3101';
     const compressed = source.file.toLowerCase().endsWith('.svgz');
     const vector = compressed || source.file.toLowerCase().endsWith('.svg');
-    if (vector && !svg) throw new Error('The private SVG decoder is unavailable.');
-    if (exr && !ffmpeg) throw new Error('The private OpenEXR decoder is unavailable.');
+    if (vector && !svg) throw new Error('This build of Viewer can’t decode SVG images.');
+    if (exr && !ffmpeg) throw new Error('This build of Viewer can’t decode OpenEXR images.');
     const args = exr
       ? [
           '-nostdin',
@@ -68,7 +68,7 @@ export function imageDecoder(
       : ['image', String(size)];
     const render = async () => {
       if (embedded) {
-        if (!ffmpeg) throw new Error('The private TIFF decoder is unavailable.');
+        if (!ffmpeg) throw new Error('This build of Viewer can’t decode this TIFF image.');
         const bytes = await previewBytes(source, embedded, signal);
         if (!['49492a00', '4d4d002a'].includes(bytes.subarray(0, 4).toString('hex')))
           throw new Error('The embedded TIFF header is malformed.');
@@ -148,7 +148,7 @@ export function imageDecoder(
       return svg!(xml, size, signal);
     };
     const data = await render().catch((error: Error) => {
-      if (signal.aborted) throw signal.reason ?? new Error('Image preview cancelled.');
+      if (signal.aborted) throw signal.reason ?? new Error('The image preview was canceled.');
       throw new Error(
         error.message.includes('timed out')
           ? 'Image decoding exceeded 10 seconds. Retry or open the file in its original app.'

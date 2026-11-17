@@ -101,7 +101,7 @@ describe('agent review text', () => {
       'After Move to Trash, a system dialog asks once more. Then these 2 items go to the system Trash, where you can restore them.',
     );
     expect(reviewNote(rename)).toBe(
-      'After Run action, a system dialog asks once more. Then “Rename” runs on the selected item.',
+      'After Run Action, a system dialog asks once more. Then “Rename” runs on the selected item.',
     );
     expect(reviewNote(folder)).toContain('“New Folder” runs in this folder.');
     expect(reviewNote(proposals.configuration[0])).toContain(
@@ -112,9 +112,9 @@ describe('agent review text', () => {
       'Export saves A.png as a new file in /work/Exports. The sources and existing files are kept. No system dialog follows: this review is the approval.',
     );
     expect(proposals.speech.map(reviewButton)).toEqual([
-      'Choose model',
-      'Import model',
-      'Download model',
+      'Choose Model',
+      'Import Model',
+      'Download Model',
     ]);
     expect(reviewNote(proposals['task-workflow'][0])).toContain(
       'creates the worktree at /work/Worktrees/Feature',

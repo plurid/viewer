@@ -147,7 +147,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
     };
     const timeout = setTimeout(() => {
       if (!observationSent) {
-        setError('The canvas did not finish loading. Reload or ask the conversation to repair it.');
+        setError("The canvas didn't finish loading. Reload it, or ask the conversation to fix it.");
         observe('error', 'Canvas loading timed out.');
       }
     }, 4500);
@@ -292,7 +292,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
     void window.viewer
       .canvas({ kind: 'preview', id: pane.canvasID })
       .then((reply) => {
-        if (!reply.preview) throw new Error('The canvas preview is unavailable.');
+        if (!reply.preview) throw new Error("Viewer couldn't open the canvas preview.");
         capability = reply.preview.id;
         if (live) {
           receive(reply.document);
@@ -329,7 +329,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
   };
   if (!document)
     return error ? (
-      <Empty title="Canvas unavailable" detail={error} />
+      <Empty icon="warning" title="Can't open this canvas" detail={error} />
     ) : (
       <Loading label="Opening canvas…" />
     );
@@ -359,16 +359,16 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           Conversation
         </button>
         <span className="canvas-revision">Revision {document.revision}</span>
-        <button onClick={() => workspace.openToolLibrary(pane.id)}>Tool library</button>
+        <button onClick={() => workspace.openToolLibrary(pane.id)}>Tool Library</button>
         <ChoiceButton
           label="Canvas tools"
           value=""
           placeholder="Tools"
           disabled={busy}
           choices={[
-            { value: 'source', label: source ? 'Hide source code' : 'Source code' },
+            { value: 'source', label: source ? 'Hide Source Code' : 'Show Source Code' },
             { value: 'reload', label: 'Reload' },
-            ...(document.history.length ? [{ value: 'undo', label: 'Undo revision' }] : []),
+            ...(document.history.length ? [{ value: 'undo', label: 'Undo Revision' }] : []),
             { value: '3d', label: 'Photo to 3D' },
           ]}
           onChoose={(choice) => {
@@ -418,14 +418,14 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
             })
           }
         >
-          Export canvas…
+          Export Canvas…
         </button>
         {document.fork && (
           <>
             <button
               onClick={() => void workspace.openCanvas(document.fork!.id, pane.id).catch(fail)}
             >
-              Compare original
+              Compare Original
             </button>
             <button
               disabled={busy}
@@ -440,7 +440,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
                 })
               }
             >
-              Apply to original
+              Apply to Original
             </button>
           </>
         )}
@@ -527,9 +527,9 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
                         .openPath(asset.source!, { paneID: pane.id, linked: true, activate: true })
                         .catch(fail)
                     }
-                    aria-label={`Open source for ${asset.name}`}
+                    aria-label={`Open Source for ${asset.name}`}
                   >
-                    Open source
+                    Open Source
                   </button>
                 )}
               </li>
@@ -574,7 +574,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
                 .catch(fail)
             }
           >
-            Open saved file
+            Open Saved File
           </button>
           <span>{saved.split(/[\\/]/).at(-1)}</span>
         </div>
@@ -601,7 +601,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
               })
             }
           >
-            Review in chat
+            Review in Chat
           </button>
           <button onClick={() => setProposal('')}>Dismiss</button>
         </div>
@@ -619,9 +619,27 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           </div>
         )}
         {!enabled ? (
-          <Empty title="Tool disabled" detail="Enable it in the tool library to run it." />
+          <Empty title="Tool disabled" detail="Enable it in the Tool Library to run it.">
+            <div className="empty-actions">
+              <button onClick={() => workspace.openToolLibrary(pane.id)}>Open Tool Library</button>
+            </div>
+          </Empty>
         ) : stopped ? (
-          <Empty title="Canvas stopped" detail="Reload to run the saved revision." />
+          <Empty title="Canvas stopped" detail="Reload it to run the saved revision.">
+            <div className="empty-actions">
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void act(async () => {
+                    setStopped(false);
+                    setReload((value) => value + 1);
+                  })
+                }
+              >
+                Reload
+              </button>
+            </div>
+          </Empty>
         ) : url ? (
           <iframe
             ref={iframe}

@@ -64,7 +64,7 @@ export function OptimizationComparison({
         {candidate.format === 'pdf' ? (
           <>
             <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
-              Previous page
+              Previous Page
             </button>
             <label>
               Page{' '}
@@ -84,15 +84,15 @@ export function OptimizationComparison({
               disabled={page >= (review.pages ?? 1)}
               onClick={() => setPage((value) => value + 1)}
             >
-              Next page
+              Next Page
             </button>
           </>
         ) : (
           <button aria-pressed={actual} onClick={() => setActual((value) => !value)}>
-            {actual ? 'Fit images' : 'Actual size'}
+            {actual ? 'Fit Images' : 'Actual Size'}
           </button>
         )}
-        <button onClick={onClose}>Close review</button>
+        <button onClick={onClose}>Close Review</button>
       </div>
       {error && (
         <p className="dialog-error" role="alert">

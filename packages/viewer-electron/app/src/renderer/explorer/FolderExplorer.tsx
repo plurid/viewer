@@ -38,7 +38,8 @@ import {
 } from '../state/store';
 import { browseSession, updateBrowseSession, useBrowseField } from '../workspace/sessions';
 import { useWorkspace } from '../workspace/context';
-import { IconButton, Empty, Loading } from '../ui/primitives';
+import { IconButton, Empty, Failure, Loading, tryAgainLabel } from '../ui/primitives';
+import { plural } from '../../domain/plural';
 import { Icon } from '../ui/Icon';
 import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
 import { ColumnsView, GalleryView, GridView, ListView, type FileViewProps } from './views';
@@ -482,7 +483,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       },
     });
   });
-  if (!pane) return <Empty title="Folder is unavailable" />;
+  if (!pane) return <Empty title="This folder plane is no longer open" />;
   const viewProps: FileViewProps = {
     paneID: id,
     entries,
@@ -539,6 +540,9 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       event.dataTransfer.effectAllowed = shortcuts.length ? 'all' : 'copyMove';
     },
   };
+  // an unreadable folder says why in its empty state, with the way back; the bar above is for an
+  // error over a listing that stays
+  const unreadable = listing.unavailable && !query;
   const crumbs = path.split(/[\\/]/).filter(Boolean);
   const separator = path.includes('\\') ? '\\' : '/';
   return (
@@ -678,7 +682,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
           {filterQuery.problem}
         </p>
       )}
-      {listing.error && (
+      {listing.error && !unreadable && (
         <div className="folder-error" role="alert">
           <Icon name="warning" />
           <span>{listing.error}</span>
@@ -691,7 +695,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
               }}
             />
           ) : (
-            <button onClick={listing.refresh}>Retry</button>
+            <button onClick={listing.refresh}>{tryAgainLabel}</button>
           )}
         </div>
       )}
@@ -723,16 +727,27 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
         >
           {listing.loading && !subtree ? (
             <Loading label="Reading folder…" />
-          ) : listing.unavailable && !query ? (
-            <Empty
-              icon="warning"
-              title={
-                needsFolderAccess(listing.errorCode)
-                  ? 'Folder access required'
-                  : 'Folder unavailable'
-              }
-              detail="Use the controls above to reopen this folder."
-            />
+          ) : unreadable ? (
+            needsFolderAccess(listing.errorCode) ? (
+              <Failure
+                title="Can't open this folder"
+                detail="Viewer needs your permission to open this folder."
+              >
+                <FolderAccessButton
+                  folder={path}
+                  onGranted={(folder) => {
+                    if (folder !== path) navigate(id, folder);
+                    else listing.refresh();
+                  }}
+                />
+              </Failure>
+            ) : (
+              <Failure
+                title="Can't open this folder"
+                detail={listing.error}
+                onRetry={listing.refresh}
+              />
+            )
           ) : pane.mode === 'columns' ? (
             <ColumnsView path={path} navigation={columns} {...viewProps} />
           ) : !entries.length ? (
@@ -743,13 +758,15 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
                   ? search.running
                     ? 'Searching…'
                     : subtree && search.partial
-                      ? 'No matches in the available search data'
+                      ? 'No matches in the folders searched so far'
                       : 'No matching files'
                   : 'This folder is empty'
               }
               detail={
                 query
-                  ? 'Try a different name or include subfolders.'
+                  ? subtree
+                    ? 'Try a different name.'
+                    : 'Try a different name, or turn on Subfolders.'
                   : 'Create a folder or drop files here.'
               }
             />
@@ -779,8 +796,8 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       </div>
       <footer className="folder-status">
         <span>
-          {entries.length.toLocaleString()} {entries.length === 1 ? 'item' : 'items'}
-          {selection.length ? ` · ${selection.length} selected` : ''}
+          {plural(entries.length, 'item')}
+          {selection.length ? ` · ${selection.length.toLocaleString('en-US')} selected` : ''}
         </span>
         <SelectionSize
           entries={selected}

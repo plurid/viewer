@@ -29,13 +29,13 @@ export async function executeAgentNavigation(
       (target.panePath && pane.path !== target.panePath) ||
       controller.rootID(pane.id) !== target.rootID
     )
-      throw new Error('The originating plane or folder changed. Request a new proposal.');
+      throw new Error('The plane or folder this request was for has changed. Ask the agent again.');
     if (
       pane.type === 'folder' &&
       (pane.mode === 'columns' ? browseSession(pane.id, pane.path).columnDirectory : pane.path) !==
         target.directory
     )
-      throw new Error('The originating folder changed. Request a new proposal.');
+      throw new Error('The folder this request was for has changed. Ask the agent again.');
     return pane;
   };
   const pane = origin();
@@ -47,7 +47,7 @@ export async function executeAgentNavigation(
       destination.type !== request.pane.type ||
       (destination.type === 'search' && destination.allLocations !== request.pane.allLocations)
     )
-      throw new Error('The destination plane changed. Request a new proposal.');
+      throw new Error('The plane to open into has changed. Ask the agent again.');
     if (destination.type === 'terminal') deferTerminalStart([destination.id]);
     controller.focusPane(destination.id);
     return;
@@ -70,7 +70,7 @@ export async function executeAgentNavigation(
           ),
       )
     )
-      throw new Error('The destination workspace changed. Request a new proposal.');
+      throw new Error('The workspace to open into has changed. Ask the agent again.');
     deferTerminalStart(
       destination.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
     );
@@ -94,7 +94,7 @@ export async function executeAgentNavigation(
     origin();
     if (!sameCapturedItem(actual, expected) || actual.parent !== expected.parent)
       throw new Error(
-        'A selected file changed or is outside the captured folder. Request a new proposal.',
+        'A file the agent chose has changed or is outside its folder. Ask the agent again.',
       );
     entries.push(actual);
   }

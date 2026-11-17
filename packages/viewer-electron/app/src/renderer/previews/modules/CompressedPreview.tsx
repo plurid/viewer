@@ -5,7 +5,7 @@ import type { PreviewContext } from '../contracts';
 import { PreviewToolbar } from '../controls';
 import { choosePreview } from '../registry';
 import { preloadPreviewModule } from '../module-loading';
-import { Empty, Loading } from '../../ui/primitives';
+import { Empty, Failure, Loading } from '../../ui/primitives';
 import { NativeOpenActions } from '../../ui/navigation/NativeOpenActions';
 import { errorMessage } from '../../../domain/errors';
 import { formatBytes } from '../../../domain/files/entries';
@@ -76,9 +76,9 @@ export default function CompressedPreview(context: PreviewContext) {
   if (expansion.state === 'reading') return <Loading label="Expanding compressed file…" />;
   if (expansion.state === 'failed')
     return (
-      <Empty icon="archive" title={member} detail={expansion.error}>
+      <Failure icon="archive" title={member} detail={expansion.error} onRetry={context.retry}>
         <NativeOpenActions path={resource.entry.path} />
-      </Empty>
+      </Failure>
     );
   if (expansion.state === 'described') {
     const size = formatBytes(expansion.member.size);

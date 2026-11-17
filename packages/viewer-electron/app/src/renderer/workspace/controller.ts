@@ -127,7 +127,7 @@ export function useWorkspaceController({
             }
             if (performance.now() >= deadline)
               throw new Error(
-                'The task views did not finish opening. Reopen the retained task from Tasks.',
+                'The task’s planes didn’t finish opening. Open the task again from Tasks.',
               );
             requestAnimationFrame(attempt);
           } catch (error) {
@@ -212,7 +212,9 @@ export function useWorkspaceController({
             pane.path !== captured.panePath ||
             controller.rootID(pane.id) !== captured.rootID
           )
-            throw new Error('The originating folder changed or closed. Open worktrees again.');
+            throw new Error(
+              'The folder this started from changed or was closed. Open Worktrees again.',
+            );
           return { space, pane };
         };
         origin();
@@ -400,9 +402,9 @@ export function useWorkspaceController({
           : flattenTree(api.tree.get()).find((node) => hostID(node) === target.paneID);
         const origin = space.panes.find((pane) => pane.id === target.paneID);
         if (!rootTarget && (!parent || !origin || controller.rootID(origin.id) !== target.rootID))
-          throw new Error('The originating plane is no longer available.');
+          throw new Error('The plane this started from was closed.');
         if (target.panePath !== undefined && origin?.path !== target.panePath)
-          throw new Error('The originating folder changed.');
+          throw new Error('The folder this started from changed.');
         const pane = addTerminalPane(
           target.directory,
           profileID || getState().settings.settings.terminals.profileID,
@@ -429,7 +431,9 @@ export function useWorkspaceController({
             controller.rootID(pane.id) !== captured.rootID ||
             pane.path !== captured.panePath
           )
-            throw new Error('The originating folder changed or closed. Choose the action again.');
+            throw new Error(
+              'The folder this started from changed or was closed. Choose the action again.',
+            );
           if (space.panes.length >= 200) throw new Error('Close a plane before opening another.');
           return { api, parent };
         };
@@ -450,7 +454,7 @@ export function useWorkspaceController({
               frameWorkspace(engine, surface, [pane.id]);
             } catch (error) {
               throw new Error(
-                'Git started, but its originating folder changed before the output could open. Check the repository before running the action again.',
+                'Git started, but the folder it started from changed before the output could open. Check the repository before you run the action again.',
                 { cause: error },
               );
             }
@@ -481,7 +485,9 @@ export function useWorkspaceController({
             controller.rootID(pane.id) !== captured.rootID ||
             (captured.panePath !== undefined && captured.panePath !== pane.path)
           )
-            throw new Error('The originating folder changed or closed. Start the server again.');
+            throw new Error(
+              'The folder this started from changed or was closed. Start the server again.',
+            );
           return { api, space, pane, parent };
         };
         const work = (async () => {
@@ -672,7 +678,7 @@ export function useWorkspaceController({
         const previous = api.tree.get();
         const nodes = flattenTree(previous);
         const source = nodes.find((node) => hostID(node) === folder.id);
-        if (!source) throw new Error('The originating folder plane is no longer available.');
+        if (!source) throw new Error('The folder plane this started from was closed.');
         // Bring the pair in front of existing sheets, including a previous split.
         // Bound every rotated corner so an older plane cannot cover either half.
         const front = frontPlaneDepth(nodes);
@@ -791,7 +797,7 @@ export function useWorkspaceController({
           pending.has(parentPaneID) &&
           space.panes.some((pane) => pane.id === parentPaneID);
         if (parentPaneID && !parent && !pendingParent)
-          throw new Error('The originating plane is no longer available.');
+          throw new Error('The plane this started from was closed.');
         const type = options?.browse && entry.directory ? 'folder' : itemPlaneType(entry);
         const platform = getState().bootstrap.platform;
         const path = normalizedPanePath(entry.path, platform);
@@ -830,8 +836,7 @@ export function useWorkspaceController({
           if (options?.edit) editingPlane(existing.id)?.edit?.();
           return;
         }
-        if (parentPaneID && !parent)
-          throw new Error('The originating plane is no longer available.');
+        if (parentPaneID && !parent) throw new Error('The plane this started from was closed.');
         const linked = !!parent && !options?.another;
         const pane = addPane(entry.path, type, !linked, {
           keepSeparate: options?.another,

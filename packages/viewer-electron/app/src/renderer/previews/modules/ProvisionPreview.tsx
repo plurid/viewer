@@ -2,7 +2,9 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { PreviewContext } from '../contracts';
 import type { ProvisionDistribution } from '../../../domain/previews/data/provision';
-import { Empty, Loading } from '../../ui/primitives';
+import { Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { PreviewToolbar } from '../controls';
 import { dateText, useInspected } from '../useInspected';
 import './inspection.css';
@@ -13,8 +15,6 @@ const distributions: Readonly<Record<ProvisionDistribution, string>> = {
   'all-devices': 'Any device: in-house or Developer ID',
   store: 'App Store',
 };
-const plural = (count: number, one: string, many: string) =>
-  `${count.toLocaleString()} ${count === 1 ? one : many}`;
 const expired = (value: string | undefined, now: number) =>
   !!value && !Number.isNaN(Date.parse(value)) && Date.parse(value) < now;
 
@@ -45,7 +45,12 @@ export default function ProvisionPreview(context: PreviewContext) {
   if (inspection.status === 'loading') return <Loading label="Reading profile…" />;
   if (inspection.status === 'failed')
     return (
-      <Empty icon="warning" title="The profile could not be read" detail={inspection.message} />
+      <PreviewFailure
+        context={context}
+        icon="warning"
+        title="Can't read this profile"
+        detail={inspection.message}
+      />
     );
   const profile = inspection.file;
   const lapsed = expired(profile.expires, now);

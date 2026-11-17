@@ -71,7 +71,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.browsing.emptyWorkspaceLocation': [
     'Independent starting folder for the first plane when the workspace has no planes.',
-    'Used by the empty-workspace New folder plane button, +, and Cmd+Shift+N. There is no current folder here.',
+    'Used by the empty-workspace New Folder Plane button, +, and Cmd+Shift+N. There is no current folder here.',
   ],
   'settings.browsing.emptyWorkspacePath': [
     'Required absolute folder path when emptyWorkspaceLocation is custom. Does not affect newPlanePath.',
@@ -86,18 +86,18 @@ const descriptions: Record<string, string[]> = {
     'trimTrailingWhitespace removes spaces and tabs at line ends when a file is saved.',
   ],
   'settings.browsing.newFileExtension': [
-    'Extension, without the dot, that New file… names a file with: md, txt, json, ….',
+    'Extension, without the dot, that New File… names a file with: md, txt, json, ….',
     'A new scratch plane starts in its language, and Save As offers it when it is one of that language.',
   ],
   'settings.folders': [
     'Sparse per-folder overrides, keyed by absolute path. Omitted fields inherit the defaults.',
     'Example: "/absolute/path/Downloads": { "mode": "list", "sort": "modified", "descending": true }.',
-    'Allowed fields: mode, sort, descending, group, density, foldersFirst, showHidden, columnWidth and list.',
+    'Allowed fields: mode, sort, descending, group, density, foldersFirst, showHidden, columnWidth, previewWidth and list.',
     'list accepts visible, widths, order and wrapNames, using the same fields as ui.list.',
     'Remove a folder entry to reset its view. The override applies to that path in every workspace/root.',
   ],
   'settings.fileOpening': [
-    'Opening policy; explicit Open With and Open linked plane commands remain available.',
+    'Opening policy; explicit Open With and Open Linked Plane commands remain available.',
   ],
   'settings.fileOpening.default': [
     'automatic uses an available in-app preview, falling back to the OS association.',
@@ -154,13 +154,16 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.previews.thumbnailSize': ['Thumbnail edge length in pixels; integer 128-512.'],
   'settings.previews.maxImagePixels': [
-    'Decoded image pixel limit, not bytes. Larger images offer a bounded preview.',
+    'Decoded image pixel limit, not bytes. Larger images show a smaller copy.',
   ],
   'settings.previews.maxModelMB': ['3D preview file-size limit in megabytes.'],
+  'settings.previews.modelScrollDevice': [
+    'automatic, mouse or trackpad: a mouse wheel zooms a 3D preview, a trackpad scroll pans it.',
+  ],
   'settings.previews.darkPages': [
-    'PDF and Office previews draw pages dark with light ink; photos keep their colours.',
+    'PDF and Office previews draw pages dark with light ink; photos keep their colors.',
     'night is dark from darkPagesFrom until darkPagesUntil; system follows macOS dark mode.',
-    'The Dark pages button sets on or off. Printing, exports and PDF tools keep the original colours.',
+    'The Dark pages button sets on or off. Printing, exports and PDF tools keep the original colors.',
   ],
   'settings.previews.darkPagesFrom': [
     'When night begins for darkPages night: 24-hour local time HH:MM, such as "20:00".',
@@ -216,13 +219,13 @@ const descriptions: Record<string, string[]> = {
     'Every file-change proposal requires row review and Apply. Editing a recipe does not run it.',
   ],
   'settings.agents': [
-    'Local MCP clients use Viewer while it is running, within the granted canonical folder roots.',
+    'Local MCP clients use Viewer while it is running, inside the folders you allow.',
     'Read/configuration/command tools discover context and submit reviewed proposals.',
     'Use list_commands and explain_command to discover IDs; do not infer them from display labels.',
     'Authentication, folder scope and separate terminal-read grants are managed in Settings > Agents.',
     'Every agent command requires fresh user approval. File/folder removals name exact paths and use system Trash only.',
     'Old execution/write grants and hidden manual confirmation preferences cannot bypass removal approval.',
-    'Shell, executable, external-app and terminal-input actions are unavailable to agents; file Undo is reviewed by the user.',
+    'Agents can’t run shell, program, external-app or terminal-input actions; you review each file Undo.',
     'Approvals are separate from JSONC. Adding approval fields here cannot authorize execution or permanent deletion.',
   ],
   'settings.agents.enabled': [
@@ -248,9 +251,9 @@ const descriptions: Record<string, string[]> = {
     'Prompts (> in the palette) ask providerID\'s model to turn words into a command line; "" asks the first provider.',
   ],
   'settings.themes': [
-    'Colour themes: {id,name,look,shell,syntax,terminal}, each a map of tokens to #rrggbb colours.',
+    'Color themes: {id,name,look,shell,syntax,terminal}, each a map of tokens to #rrggbb colors.',
     'shell: space surface raised field ink muted subtle accent line selection danger. syntax: comment string keyword number function.',
-    'terminal: background foreground cursor selectionBackground and the 16 ANSI colours. What a theme leaves out is the built-in one.',
+    'terminal: background foreground cursor selectionBackground and the 16 ANSI colors. What a theme leaves out is the built-in one.',
   ],
   'settings.theme': [
     'The theme id for each appearance: {dark,light}; "" is the built-in Viewer theme.',
@@ -260,7 +263,7 @@ const descriptions: Record<string, string[]> = {
     'Built in: focus, present, full. Profile: <name> applies one; Leave profile puts back what it replaced.',
   ],
   'settings.layouts': [
-    'Layout templates: {id,name,planes,layout,main}. Save layout as template… captures the planes in view.',
+    'Layout templates: {id,name,planes,layout,main}. Save Layout as Template… captures the planes in view.',
     'planes: {kind:"folder"|"file",path} | {kind:"terminal",path,profileID?} | {kind:"scratch"} | {kind:"search",query,name,root?}.',
     'A path starting ~ is in the home folder; an empty path is the folder in view when the layout opens.',
   ],
@@ -325,7 +328,7 @@ const descriptions: Record<string, string[]> = {
     'navigation, newPlane, operations, voice and commands control its icons. voice defaults to false; keyboard commands remain available.',
   ],
   'ui.space.color': [
-    'The space’s colour as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace look…, under its name in the title bar).',
+    'The space’s color as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace Look…, under its name in the title bar).',
   ],
   'ui.space': [
     'Spatial navigation and plane chrome. Child planes retain the normal 90.1-degree parent relationship.',
@@ -356,7 +359,7 @@ const descriptions: Record<string, string[]> = {
     'Column IDs in display order; name must be first, with no duplicates. Visibility is separate.',
   ],
   'ui.layout.units': [
-    'What the Layout plane measures nesting in: "mm" or "in". Values are kept in millimetres.',
+    'What the Layout plane measures nesting in: "mm" or "in". Values are kept in millimeters.',
   ],
   'ui.recentCommands': [
     'App-managed recent command IDs for ranking. Clearing this resets the recent-action list.',
@@ -393,7 +396,7 @@ const revisedGuidance: [RegExp, string][] = [
   ],
   [
     /^([\t ]*\/\/ )The space’s colour as #rrggbb; "" follows the appearance\. A workspace may set its own \(Workspace background…\)\.(?=\r?$)/m,
-    '$1The space’s colour as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace look…, under its name in the title bar).',
+    '$1The space’s color as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace Look…, under its name in the title bar).',
   ],
   [
     /^([\t ]*\/\/ )Other kinds use instructions rather than these filename templates; keep template empty\.(?=\r?$)/m,
@@ -422,6 +425,59 @@ const revisedGuidance: [RegExp, string][] = [
   [
     /^([\t ]*\/\/ )Absolute folders available to agents after canonical-path checks; \[\] grants no folders\.(?=\r?$)/m,
     '$1Absolute folders agents may use once allowed in Settings > Agents; removing one here applies at once.',
+  ],
+  // the interface’s wording: US spelling and menu names in Title Case
+  [
+    /^([\t ]*\/\/ )Used by the empty-workspace New folder plane button, \+, and Cmd\+Shift\+N\. There is no current folder here\.(?=\r?$)/m,
+    '$1Used by the empty-workspace New Folder Plane button, +, and Cmd+Shift+N. There is no current folder here.',
+  ],
+  [
+    /^([\t ]*\/\/ )Extension, without the dot, that New file… names a file with: md, txt, json, …\.(?=\r?$)/m,
+    '$1Extension, without the dot, that New File… names a file with: md, txt, json, ….',
+  ],
+  [
+    /^([\t ]*\/\/ )Opening policy; explicit Open With and Open linked plane commands remain available\.(?=\r?$)/m,
+    '$1Opening policy; explicit Open With and Open Linked Plane commands remain available.',
+  ],
+  [
+    /^([\t ]*\/\/ )Decoded image pixel limit, not bytes\. Larger images offer a bounded preview\.(?=\r?$)/m,
+    '$1Decoded image pixel limit, not bytes. Larger images show a smaller copy.',
+  ],
+  [
+    /^([\t ]*\/\/ )PDF and Office previews draw pages dark with light ink; photos keep their colours\.(?=\r?$)/m,
+    '$1PDF and Office previews draw pages dark with light ink; photos keep their colors.',
+  ],
+  [
+    /^([\t ]*\/\/ )The Dark pages button sets on or off\. Printing, exports and PDF tools keep the original colours\.(?=\r?$)/m,
+    '$1The Dark pages button sets on or off. Printing, exports and PDF tools keep the original colors.',
+  ],
+  [
+    /^([\t ]*\/\/ )Local MCP clients use Viewer while it is running, within the granted canonical folder roots\.(?=\r?$)/m,
+    '$1Local MCP clients use Viewer while it is running, inside the folders you allow.',
+  ],
+  [
+    /^([\t ]*\/\/ )Shell, executable, external-app and terminal-input actions are unavailable to agents; file Undo is reviewed by the user\.(?=\r?$)/m,
+    '$1Agents can’t run shell, program, external-app or terminal-input actions; you review each file Undo.',
+  ],
+  [
+    /^([\t ]*\/\/ )Colour themes: \{id,name,look,shell,syntax,terminal\}, each a map of tokens to #rrggbb colours\.(?=\r?$)/m,
+    '$1Color themes: {id,name,look,shell,syntax,terminal}, each a map of tokens to #rrggbb colors.',
+  ],
+  [
+    /^([\t ]*\/\/ )terminal: background foreground cursor selectionBackground and the 16 ANSI colours\. What a theme leaves out is the built-in one\.(?=\r?$)/m,
+    '$1terminal: background foreground cursor selectionBackground and the 16 ANSI colors. What a theme leaves out is the built-in one.',
+  ],
+  [
+    /^([\t ]*\/\/ )Layout templates: \{id,name,planes,layout,main\}\. Save layout as template… captures the planes in view\.(?=\r?$)/m,
+    '$1Layout templates: {id,name,planes,layout,main}. Save Layout as Template… captures the planes in view.',
+  ],
+  [
+    /^([\t ]*\/\/ )The space’s colour as #rrggbb; "" follows the appearance\. A workspace may set its own \(Workspace look…, under its name in the title bar\)\.(?=\r?$)/m,
+    '$1The space’s color as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace Look…, under its name in the title bar).',
+  ],
+  [
+    /^([\t ]*\/\/ )What the Layout plane measures nesting in: "mm" or "in"\. Values are kept in millimetres\.(?=\r?$)/m,
+    '$1What the Layout plane measures nesting in: "mm" or "in". Values are kept in millimeters.',
   ],
 ];
 

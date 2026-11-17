@@ -4,6 +4,7 @@ import {
   searchableDefinition,
 } from '../../domain/workspaces/definitions/query';
 import { errorMessage } from '../../domain/errors';
+import { homeText } from '../../domain/files/path-label';
 import { matchesQuery, topWords, withoutTopWords } from '../../domain/search/query';
 import { savedSearchProblem, searchName, searchNameLength } from '../../domain/search/saved';
 import { useFileQuery } from '../explorer/useFileQuery';
@@ -56,8 +57,10 @@ import {
 import { palettePrefixes, type PaletteMode } from './palette-modes';
 import { clearRecentCommands } from './history';
 import { commandFolders } from './folders';
-import { suggestionsFor } from './suggestions';
+import { offerSuggestions, suggestionsFor } from './suggestions';
 import { offerToForgetFolder } from '../state/places';
+import { useShortcutGlyphs } from '../keys/hints';
+import { useWorkspaceOffer } from '../workspace/workspace-offer';
 
 /**
  * A command chosen in the palette acts on the workspace, so focus returns there, not to the title
@@ -205,6 +208,7 @@ function CommandFinder({
   const registry = useCommands();
   useCommandRevision();
   const recent = useViewer((state) => state.saved.ui.recentCommands);
+  const settingsKey = useShortcutGlyphs('settings');
   const openWorkspaces = useViewer((state) => state.saved.workspaces);
   const definitions = useViewer((state) => state.bootstrap.definitions);
   const hasDefinitions = !!definitions;
@@ -260,6 +264,10 @@ function CommandFinder({
     () => rankWorkspaceChoices(openWorkspaces, definitions?.definitions ?? [], query, visits),
     [openWorkspaces, definitions, query, visits],
   );
+  // the folder in view's workspace, as its folder card offers it
+  const offer = useWorkspaceOffer(
+    context.directory || (context.path ? parentPath(context.path) : undefined),
+  );
   // settings apart (palette-sections.ts): their own section, or `,` for them alone
   const commandView = workspaces
     ? workspaceRows(
@@ -267,13 +275,14 @@ function CommandFinder({
         workspaceChoices,
         query,
         definitions?.definitions.filter(searchableDefinition).length ?? 0,
+        definitions?.definitions,
       )
     : settings
       ? settingRows(commands, query)
       : !query.trim()
         ? withSuggested(
             paletteRows(commands, query, recent, workspaceChoices),
-            suggestionsFor(commands, context.selection),
+            [...suggestionsFor(commands, context.selection), ...offerSuggestions(commands, offer)],
             recent,
           )
         : paletteRows(commands, query, recent, workspaceChoices);
@@ -281,7 +290,7 @@ function CommandFinder({
   if (workspaces && onManageDefinitions && definitions?.projectManager.state === 'undecided') {
     commandView.rows.push({
       id: projectManagerOfferID,
-      label: 'Use VS Code Project Manager’s projects…',
+      label: 'Use VS Code Project Manager’s Projects…',
       group: 'Workspaces',
       icon: 'dock',
       aliases: [],
@@ -369,8 +378,8 @@ function CommandFinder({
         empty={
           workspaces
             ? query.trim()
-              ? `No workspace matches “${query.trim()}”. Try another name.`
-              : 'Type a workspace name to search definitions.'
+              ? `No workspace named “${query.trim()}”.`
+              : 'Type a workspace name.'
             : settings
               ? 'No matching settings'
               : undefined
@@ -432,7 +441,7 @@ function CommandFinder({
         {workspaces ? (
           <span>Current workspace: {activeWorkspace().name}</span>
         ) : settings ? (
-          <span>⌘, opens Settings</span>
+          <span>{settingsKey ? `${settingsKey} opens Settings` : ''}</span>
         ) : (
           <>
             <PalettePath directory={directory} selected={context.selection.length} />
@@ -501,12 +510,11 @@ function useSmartRows(
       let entry: FileEntry;
       try {
         entry = await window.viewer.stat(path);
-        if (folderOnly && !entry.directory) throw new Error('This folder is no longer available.');
+        if (folderOnly && !entry.directory) throw new Error('This folder was moved or deleted.');
       } catch (error) {
-        const missing =
-          /^(?:ENOENT|ENOTDIR|ENODEV|ENXIO)|^This folder is no longer available\./.test(
-            errorMessage(error),
-          );
+        const missing = /^(?:ENOENT|ENOTDIR|ENODEV|ENXIO)|^This folder was moved or deleted\./.test(
+          errorMessage(error),
+        );
         if (!folderOnly || !missing) throw error;
         offerToForgetFolder(path);
         return;
@@ -614,8 +622,8 @@ function useSmartRows(
     const kind = intent.command === 'new-folder' ? 'mkdir' : 'mkfile';
     return [
       row(intent.command, {
-        label: `${kind === 'mkdir' ? 'New folder' : 'New file'} “${name}”`,
-        detail: `:${kind === 'mkdir' ? 'mkdir' : 'touch'} ${quoteWord(name)} · ${context.directory}`,
+        label: `${kind === 'mkdir' ? 'New Folder' : 'New File'} “${name}”`,
+        detail: `:${kind === 'mkdir' ? 'mkdir' : 'touch'} ${quoteWord(name)} · ${homeText(context.directory, home)}`,
         group: 'Files',
         icon: kind === 'mkdir' ? 'folder' : 'file',
         run: async () => {
@@ -742,6 +750,7 @@ function FileFinder({
         onSelect={select}
         onClose={onClose}
         label="Find file by name"
+        listLabel="Files"
         empty={
           (indexedMode ? indexed.running : subtree ? search.running : listing.loading)
             ? 'Searching…'
@@ -756,9 +765,9 @@ function FileFinder({
           label="Search scope"
           value={scope}
           choices={[
-            { value: 'folder', label: 'This folder' },
+            { value: 'folder', label: 'This Folder' },
             { value: 'subfolders', label: 'Subfolders' },
-            { value: 'all', label: 'Indexed locations' },
+            { value: 'all', label: 'Indexed Locations' },
           ]}
           onChoose={(value) => setScope(value as typeof scope)}
         />
@@ -783,25 +792,23 @@ function FileFinder({
             onClose();
           }}
         >
-          Open results
+          Open Results
         </button>
         <button disabled={!query.trim()} onClick={() => setSaving(true)}>
-          Save search…
+          Save Search…
         </button>
         {search.running && <IconButton icon="stop" label="Cancel search" onClick={search.cancel} />}
       </div>
       {content && !contentRoots.length && (
         <p className="inline-warning">
-          Document text indexing is off. Enable it for a location in Settings → Search.
+          Document text isn’t indexed. Turn it on for a location in Settings → Search.
         </p>
       )}
       {content && indexed.result?.indexed === false && (
         <p className="inline-warning">This folder is outside the indexed locations.</p>
       )}
       {(indexed.result?.status.running || search.running) && (
-        <p className="inline-warning">
-          Indexing or search in progress · results may be incomplete.
-        </p>
+        <p className="inline-warning">Still searching…</p>
       )}
       {indexed.error && indexedMode && (
         <p className="inline-warning" role="alert">
@@ -810,7 +817,7 @@ function FileFinder({
       )}
       {saving && (
         <NameDialog
-          title="Save search"
+          title="Save Search"
           action="Save"
           initial={searchName(query)}
           maxLength={searchNameLength}

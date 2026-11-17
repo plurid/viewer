@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * ⌘K SAYS WHY: a command the query names that cannot run here is listed greyed out under the rows,
- * with the reason its definition gives, instead of "No matching actions". It is never chosen: no
+ * with the reason its definition gives, instead of "No matching commands". It is never chosen: no
  * click, arrow or Return runs it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -196,7 +196,7 @@ describe('the palette', () => {
     type('zebra crossing');
     await waitFor(() =>
       expect(view.container.querySelector('.command-empty')?.textContent).toBe(
-        'No matching actions',
+        'No matching commands',
       ),
     );
     type('Arrange');

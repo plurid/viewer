@@ -31,19 +31,23 @@ async function press(element: HTMLElement) {
   });
 }
 
-it('selects the whole path with one click', () => {
+it('selects the whole path with one click, and a copy of it is the whole path', () => {
   const view = render(<PathField path={path} />);
   const text = view.container.querySelector<HTMLElement>('.path-text')!;
-  expect(text.textContent).toBe(path);
+  expect(text.querySelector('.path-label-text')!.textContent).toBe(path);
   fireEvent.click(text);
-  expect(window.getSelection()!.toString()).toBe(path);
+  expect(text.contains(window.getSelection()!.anchorNode)).toBe(true);
+  const setData = vi.fn();
+  fireEvent.copy(text, { clipboardData: { setData } });
+  expect(setData).toHaveBeenCalledWith('text/plain', path);
 });
 
 it('copies the path as a path, says Copied, then returns', async () => {
   render(<PathField path={path} />);
   const button = screen.getByRole('button', { name: 'Copy path' });
   expect(button.getAttribute('aria-describedby')).toBeTruthy();
-  expect(document.getElementById(button.getAttribute('aria-describedby')!)!.textContent).toBe(path);
+  const described = document.getElementById(button.getAttribute('aria-describedby')!)!;
+  expect(described.querySelector('.visually-hidden')!.textContent).toBe(path);
   await press(button);
   expect(copyPaths).toHaveBeenCalledWith([path]);
   expect(writeText).not.toHaveBeenCalled();

@@ -7,7 +7,12 @@ import { reloadFolder } from '../explorer/useFolder';
 import { browseSession, updateBrowseSession } from '../workspace/sessions';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath, baseName } from '../../domain/workspaces/planes';
-import { convertibleImage, inConversionFormat } from '../../domain/operations/image-conversions';
+import {
+  conversionTurns,
+  convertibleImage,
+  inConversionFormat,
+  rotatableImage,
+} from '../../domain/operations/image-conversions';
 import {
   favorite,
   getState,
@@ -59,7 +64,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
   const commands: CommandDefinition[] = [
     {
       id: 'invert-selection',
-      label: 'Invert selection',
+      label: 'Invert Selection',
       group: 'Files',
       icon: 'check',
       aliases: ['invert', 'reverse selection', 'unselected'],
@@ -68,7 +73,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'tags',
-      label: 'Tags and comments…',
+      label: 'Tags and Comments…',
       group: 'Files',
       icon: 'tag',
       aliases: ['tags', 'labels', 'color', 'comments'],
@@ -77,7 +82,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'make-alias',
-      label: 'Make alias',
+      label: 'Make Alias',
       group: 'Files',
       icon: 'alias',
       aliases: ['alias', 'shortcut', 'link'],
@@ -170,15 +175,15 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     ...(
       [
-        ['rotate-left', 'rotate-copy-left', 'Rotated copy, left', ['rotate left', 'turn left']],
+        ['rotate-left', 'rotate-copy-left', 'Rotated Copy, Left', ['rotate left', 'turn left']],
         [
           'rotate-right',
           'rotate-copy-right',
-          'Rotated copy, right',
+          'Rotated Copy, Right',
           ['rotate right', 'turn right'],
         ],
-        ['jpeg', 'convert-jpeg', 'Convert copy to JPEG', ['jpg', 'jpeg', 'convert image']],
-        ['png', 'convert-png', 'Convert copy to PNG', ['png', 'convert image']],
+        ['jpeg', 'convert-jpeg', 'Convert Copy to JPEG', ['jpg', 'jpeg', 'convert image']],
+        ['png', 'convert-png', 'Convert Copy to PNG', ['png', 'convert image']],
       ] as const
     ).map(([conversion, id, label, aliases]) => ({
       id,
@@ -188,8 +193,11 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       aliases: [...aliases],
       // A selection already in the format is not offered it; in a mixed one, such an image gets a
       // copy beside it.
+      // A rotated copy is made as Save Rotated Copy makes one: not of a GIF or TIFF, whose other
+      // frames or pages it would drop.
       when: (context: CommandContext) =>
         images(context) &&
+        (!conversionTurns[conversion] || context.selection.every(rotatableImage)) &&
         !context.selection.every((entry) => inConversionFormat(entry, conversion)),
       run: async (context: CommandContext) => {
         await window.viewer.operate({ kind: 'convert', conversion, sources: paths(context) });
@@ -197,7 +205,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     })),
     {
       id: 'save-pdf-copy',
-      label: 'Save PDF copy',
+      label: 'Save PDF Copy',
       group: 'Quick actions',
       icon: 'pdf',
       aliases: ['pdf', 'export pdf', 'convert to pdf'],
@@ -214,7 +222,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'images-to-pdf',
-      label: 'Create PDF from images',
+      label: 'Create PDF from Images',
       group: 'Quick actions',
       icon: 'pdf',
       aliases: ['pdf', 'combine images', 'make pdf'],
@@ -232,7 +240,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'edit-selected',
-      label: 'Edit text',
+      label: 'Edit Text',
       group: 'Files',
       icon: 'rename',
       aliases: ['edit', 'modify', 'open in editor'],
@@ -245,7 +253,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'extract',
-      label: 'Extract here',
+      label: 'Extract Here',
       group: 'Files',
       icon: 'archive',
       aliases: ['unzip', 'untar', 'extract', 'extract archive', 'decompress'],
@@ -307,7 +315,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'linked',
-      label: 'Open linked plane',
+      label: 'Open Linked Plane',
       group: 'Files',
       icon: 'link',
       aliases: ['ol', 'linked'],
@@ -317,7 +325,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'quick-preview',
-      label: 'Quick preview',
+      label: 'Quick Preview',
       group: 'Files',
       icon: 'eye',
       aliases: ['qp', 'preview'],
@@ -332,10 +340,10 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'another-plane',
-      label: 'Open in another plane',
+      label: 'Open in Another Plane',
       group: 'Files',
       icon: 'planes',
-      detail: 'Independent root plane',
+      detail: 'New folder plane',
       aliases: ['another', 'copy plane', 'root plane', 'independent plane'],
       when: selected,
       run: (context) => actions.open(context.selection, true, true),
@@ -354,7 +362,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'info',
-      label: 'Get info…',
+      label: 'Get Info…',
       group: 'Files',
       icon: 'info',
       aliases: ['gi', 'properties'],
@@ -385,7 +393,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'paste',
-      label: 'Paste here',
+      label: 'Paste Here',
       group: 'Files',
       icon: 'copy',
       aliases: ['ps'],
@@ -436,7 +444,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'paste-move',
-      label: 'Move copied items here',
+      label: 'Move Copied Items Here',
       group: 'Files',
       icon: 'move',
       shortcut: '⌥⌘V',
@@ -454,7 +462,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'copy-to',
-      label: 'Copy to…',
+      label: 'Copy To…',
       group: 'Files',
       icon: 'copy',
       aliases: ['cpto'],
@@ -463,7 +471,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'move-to',
-      label: 'Move to…',
+      label: 'Move To…',
       group: 'Files',
       icon: 'move',
       aliases: ['mv'],
@@ -485,7 +493,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     {
       id: 'new-folder',
       unavailable: 'Open a folder plane to create a folder inside it.',
-      label: 'New folder…',
+      label: 'New Folder…',
       group: 'Folder',
       icon: 'folder-plus',
       aliases: ['nf', 'mkdir'],
@@ -496,7 +504,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'new-file',
-      label: 'New file…',
+      label: 'New File…',
       group: 'Folder',
       icon: 'file',
       aliases: ['touch', 'create file', 'empty file'],
@@ -505,7 +513,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'new-folder-with-selection',
-      label: 'New folder with selection…',
+      label: 'New Folder with Selection…',
       group: 'Folder',
       icon: 'folder-plus',
       aliases: ['group', 'nfs', 'folder from selection'],
@@ -520,8 +528,8 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       id: 'favorite',
       label: (context) =>
         getState().saved.favorites.some((item) => item.path === context.directory)
-          ? 'Remove folder from Favorites'
-          : 'Add folder to Favorites',
+          ? 'Remove Folder from Favorites'
+          : 'Add Folder to Favorites',
       group: 'Folder',
       icon: 'star',
       aliases: ['fav', 'star'],
@@ -535,8 +543,8 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       id: 'hidden',
       label: (context) =>
         context.folder && folderPresentation(folderCommandPath(context)!).showHidden
-          ? 'Hide hidden files'
-          : 'Show hidden files',
+          ? 'Hide Hidden Files'
+          : 'Show Hidden Files',
       group: 'Folder',
       icon: 'eye',
       aliases: ['hf'],
@@ -581,7 +589,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'search',
-      label: (context) => (context.searchOpen ? 'Close folder search' : 'Search this folder…'),
+      label: (context) => (context.searchOpen ? 'Close Folder Search' : 'Search This Folder…'),
       group: 'Navigation',
       icon: 'search',
       aliases: ['sf', 'filter'],
@@ -590,7 +598,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'path',
-      label: 'Show folder path',
+      label: 'Show Folder Path',
       group: 'Navigation',
       icon: 'folder',
       aliases: ['pa', 'breadcrumb'],
@@ -599,7 +607,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'go-to',
-      label: 'Go to folder…',
+      label: 'Go to Folder…',
       group: 'Navigation',
       icon: 'folder',
       aliases: ['gf', 'goto'],
@@ -626,7 +634,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'parent',
-      label: 'Parent folder',
+      label: 'Parent Folder',
       group: 'Navigation',
       icon: 'up',
       shortcut: '⌘↑',
@@ -636,7 +644,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'select-all',
-      label: 'Select all files',
+      label: 'Select All Files',
       group: 'Files',
       icon: 'check',
       shortcut: '⌘A',
@@ -647,7 +655,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
   for (const mode of ['list', 'grid', 'columns', 'gallery', 'map'] as ViewMode[])
     commands.push({
       id: `view-${mode}`,
-      label: `${mode.charAt(0).toUpperCase()}${mode.slice(1)} view`,
+      label: `${mode.charAt(0).toUpperCase()}${mode.slice(1)} View`,
       group: 'View',
       icon: mode,
       when: folder,

@@ -64,7 +64,50 @@ describe('native application menu dispatch', () => {
     const template = nativeMenu.buildFromTemplate.mock.calls.at(-1)![0];
     const items = template[0]!.submenu as MenuItemConstructorOptions[];
     expect(items.some((item) => item.label === 'License Key…')).toBe(visible);
-    expect(items.some((item) => item.label === 'Acknowledgements')).toBe(true);
+    expect(items.some((item) => item.label === 'Acknowledgments')).toBe(true);
+  });
+
+  it('names each View toggle by what choosing it does in the focused window', () => {
+    const view = (chrome?: Parameters<typeof installApplicationMenu>[6]) => {
+      installApplicationMenu(
+        undefined,
+        () => () => {},
+        '/generated/diagnostics.log',
+        vi.fn(),
+        false,
+        () => {},
+        chrome,
+      );
+      const template = nativeMenu.buildFromTemplate.mock.calls.at(-1)![0];
+      return (
+        template.find((item) => item.label === 'View')!.submenu as MenuItemConstructorOptions[]
+      )
+        .map((item) => item.label)
+        .filter(Boolean);
+    };
+    const shown = {
+      windowNavigation: true,
+      titleBar: true,
+      spaceToolbar: true,
+      minimap: true,
+      viewcube: true,
+      grid: true,
+    };
+    expect(view(shown)).toEqual(
+      expect.arrayContaining([
+        'Hide Window Navigation',
+        'Hide Title Bar',
+        'Hide Space Toolbar',
+        'Hide Minimap',
+        'Hide Viewcube',
+        'Hide Background Grid',
+      ]),
+    );
+    const hidden = view({ ...shown, titleBar: false, minimap: false });
+    expect(hidden).toEqual(expect.arrayContaining(['Show Title Bar', 'Show Minimap']));
+    expect(hidden).not.toContain('Hide Title Bar');
+    // no label joins two actions with a slash, as no Mac menu does
+    expect(view().filter((label) => label!.includes(' / '))).toEqual([]);
   });
 
   it('keeps the Store menu free of license and update actions', () => {

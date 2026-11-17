@@ -3,7 +3,7 @@
 This page is the grammar of the `:` command line: its lines and words, every verb, the `:set` forms,
 key bindings, named commands and requests in words.
 
-Open it with `:` in **⌘K**, **Command line…**, or prefix **:** (⌃B then :). Ordinary palette
+Open it with `:` in **⌘K**, **Command Line…**, or prefix **:** (⌃B then :). Ordinary palette
 commands work without it.
 
 ## The command line
@@ -90,9 +90,9 @@ Square brackets in a name mark letters you may leave out, as in vim: `q[uit]` an
 | `select-window`, `selectw`                              | `-t {name}`                       | The workspace named                                                                      |
 | `tabc[lose]`, `kill-window`, `killw`                    |                                   | Deletes the workspace after asking; Undo restores it                                     |
 | `rename-window`, `renamew`                              | `{name}`                          | Renames the workspace                                                                    |
-| `se[t]`                                                 | `{setting}…`                      | Changes settings; see [`:set`](#set); none opens **Search settings…**                    |
+| `se[t]`                                                 | `{setting}…`                      | Changes settings; see [`:set`](#set); none opens **Search Settings…**                    |
 | `setl[ocal]`                                            | `{setting}…`                      | Changes this workspace's own value                                                       |
-| `colo[rscheme]`, `theme`                                | `{theme}`                         | The colour theme for this appearance                                                     |
+| `colo[rscheme]`, `theme`                                | `{theme}`                         | The color theme for this appearance                                                      |
 | `profile`                                               | `{profile}`                       | Applies a setting profile                                                                |
 | `layout`, `select-layout`, `selectl`                    | `{layout}`                        | A tiling layout or a layout template                                                     |
 | `select-pane`, `selectp`                                | `-L\|-R\|-U\|-D`                  | Focuses the plane left, right, up or down                                                |
@@ -133,8 +133,8 @@ Each word is one change:
 | `opacity+=10`, `opacity-=10` | Adds to or subtracts from a number                |
 
 On/off values accept `on`, `off`, `true`, `false`, `yes`, `no`, `1` and `0`. Choices accept their
-value or label. Colours accept `#rgb`, `#rrggbb`, or `auto` to clear. Numbers are checked against
-the setting's range. A full setting path (`ui.space.grid`) works wherever a short name does.
+value or label. Colors accept `#rgb`, `#rrggbb`, or `auto` to clear. Numbers are checked against the
+setting's range. A full setting path (`ui.space.grid`) works wherever a short name does.
 
 A setting that only Settings may change opens Settings at that row instead. `:setl` changes this
 workspace's own value and works only for settings a workspace can override; `:setl grid&` removes
@@ -242,7 +242,7 @@ A line without `$` placeholders refuses words: `:Name takes no words.` A command
 **Settings → Actions** with a command name runs as `:Name` too; see [actions](actions.md). A
 sequence cannot run another custom action or named command.
 
-**Record macro** (prefix **q**) records the commands you run by key, menu or palette, up to 50, and
+**Record Macro** (prefix **q**) records the commands you run by key, menu or palette, up to 50, and
 saves them as a command sequence. It skips custom actions, the palette, Settings, **Show key
 sequences**, plane hints and agent commands. A workspace switch is recorded as `tabn Name`.
 
@@ -276,7 +276,7 @@ you review the form. [Tasks and Git](tasks-and-git.md) describes the result.
 
 ## Requests in words
 
-Type `>` in ⌘K, or choose **Ask in words…**, and describe what you want: "select the images", "hide
+Type `>` in ⌘K, or choose **Ask in Words…**, and describe what you want: "select the images", "hide
 the grid". The model set as **Default for Ask Viewer** in **Settings → Models** answers with one
 command line and one sentence. **Enter** runs the line; **Tab** puts it in the field to edit.
 

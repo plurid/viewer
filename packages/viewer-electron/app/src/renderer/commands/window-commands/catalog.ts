@@ -46,7 +46,7 @@ export function catalogCommands({
     if (resetID)
       commands.push({
         id: resetID,
-        label: 'Reset to definition…',
+        label: 'Reset to Definition…',
         detail: entry.name,
         group: 'Workspaces',
         icon: 'refresh',
@@ -94,7 +94,7 @@ export function catalogCommands({
   }
   commands.push({
     id: 'edit-workspace-definitions',
-    label: 'Edit workspace definitions',
+    label: 'Edit Workspace Definitions',
     group: 'Workspace',
     icon: 'code',
     aliases: ['workspaces.jsonc', 'defined workspaces'],
@@ -115,7 +115,7 @@ export function catalogCommands({
             : pane.type === 'journal'
               ? 'Journal'
               : pane.type === 'overview'
-                ? 'File overview'
+                ? 'File Overview'
                 : pane.type === 'layout'
                   ? paneTitle(pane)
                   : pane.type === 'scratch' || pane.type === 'note'

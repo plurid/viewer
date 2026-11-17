@@ -1,8 +1,10 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { actionValues, type ActionInput, type ActionValues } from '../../domain/automation/actions';
+import { actionValues } from '../../domain/automation/actions';
+import type { ActionInput, ActionValues } from '../../domain/automation/actions';
 import { errorMessage } from '../../domain/errors';
 import { Dialog } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { FormField } from '../ui/FormField';
 
 interface Request {
   title: string;
@@ -60,7 +62,7 @@ function Parameters({ request }: { request: Request }) {
   return (
     <Dialog title={request.title} onClose={() => request.finish(undefined)}>
       <form
-        className="command-parameters"
+        className="command-parameters dialog-form"
         onSubmit={(event) => {
           event.preventDefault();
           try {
@@ -70,23 +72,11 @@ function Parameters({ request }: { request: Request }) {
           }
         }}
       >
-        {request.inputs.map((input, index) => (
-          <label key={input.name}>
-            <span>
-              {input.label}
-              {input.required ? ' *' : ''}
-            </span>
-            {input.kind === 'choice' ? (
-              <ChoiceButton
-                label={input.label}
-                value={values[input.name] ?? ''}
-                placeholder="Choose…"
-                choices={(input.choices ?? []).map((value) => ({ value, label: value }))}
-                onChoose={(value) => setValues({ ...values, [input.name]: value })}
-              />
-            ) : input.kind === 'boolean' ? (
+        {request.inputs.map((input, index) =>
+          input.kind === 'boolean' ? (
+            // a checkbox keeps its text beside it, not above it
+            <label key={input.name} className="dialog-field-toggle">
               <input
-                aria-label={input.label}
                 type="checkbox"
                 checked={values[input.name] === 'true'}
                 data-autofocus={index === 0 || undefined}
@@ -94,20 +84,33 @@ function Parameters({ request }: { request: Request }) {
                   setValues({ ...values, [input.name]: String(event.target.checked) })
                 }
               />
-            ) : (
-              <input
-                aria-label={input.label}
-                type={input.kind === 'number' ? 'number' : 'text'}
-                step="any"
-                required={input.required}
-                maxLength={4000}
-                data-autofocus={index === 0 || undefined}
-                value={values[input.name]}
-                onChange={(event) => setValues({ ...values, [input.name]: event.target.value })}
-              />
-            )}
-          </label>
-        ))}
+              {input.label}
+            </label>
+          ) : (
+            <FormField key={input.name} label={input.label + (input.required ? ' *' : '')}>
+              {input.kind === 'choice' ? (
+                <ChoiceButton
+                  label={input.label}
+                  value={values[input.name] ?? ''}
+                  placeholder="Choose…"
+                  choices={(input.choices ?? []).map((value) => ({ value, label: value }))}
+                  onChoose={(value) => setValues({ ...values, [input.name]: value })}
+                />
+              ) : (
+                <input
+                  aria-label={input.label}
+                  type={input.kind === 'number' ? 'number' : 'text'}
+                  step="any"
+                  required={input.required}
+                  maxLength={4000}
+                  data-autofocus={index === 0 || undefined}
+                  value={values[input.name]}
+                  onChange={(event) => setValues({ ...values, [input.name]: event.target.value })}
+                />
+              )}
+            </FormField>
+          ),
+        )}
         {error && <p role="alert">{error}</p>}
         <footer>
           <button type="button" onClick={() => request.finish(undefined)}>

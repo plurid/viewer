@@ -456,7 +456,7 @@ describe('rendered image previews', () => {
     await writeFile(file, 'heic');
     resources = new Resources();
     await expect(resources.rendition((await resources.grant(file)).id)).rejects.toThrow(
-      'unavailable',
+      'can’t render this preview',
     );
   });
 });

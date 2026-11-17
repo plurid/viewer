@@ -44,7 +44,7 @@ export function gitCommands(
   return [
     {
       id: 'git-action.status',
-      label: 'Git status',
+      label: 'Git Status',
       group: 'Git',
       icon: 'list',
       aliases: ['git status', 'working tree', 'repository changes'],
@@ -54,7 +54,7 @@ export function gitCommands(
     },
     {
       id: 'git-action.log',
-      label: 'Git history',
+      label: 'Git History',
       group: 'Git',
       icon: 'clock',
       aliases: ['git log', 'commit history', 'repository history'],
@@ -64,7 +64,7 @@ export function gitCommands(
     },
     {
       id: 'git-action.stage-selected',
-      label: 'Stage selection',
+      label: 'Stage Selection',
       group: 'Git',
       icon: 'plus',
       aliases: ['git add', 'stage selected files', 'stage selected folders'],
@@ -74,7 +74,7 @@ export function gitCommands(
     },
     {
       id: 'git-action.stage-all',
-      label: 'Stage all changes in repository',
+      label: 'Stage All Changes in Repository',
       group: 'Git',
       icon: 'plus',
       aliases: ['git add --all', 'git add -A', 'stage all'],
@@ -84,7 +84,7 @@ export function gitCommands(
     },
     {
       id: 'git-action.commit',
-      label: 'Commit staged changes…',
+      label: 'Commit Staged Changes…',
       group: 'Git',
       icon: 'check',
       aliases: ['git commit', 'commit message', 'commit staged'],
@@ -94,7 +94,7 @@ export function gitCommands(
     },
     {
       id: 'git-action.pull',
-      label: 'Pull (fast-forward only)',
+      label: 'Pull (Fast-Forward Only)',
       group: 'Git',
       icon: 'down',
       aliases: ['git pull', 'git pull --ff-only', 'fetch upstream changes'],
@@ -104,7 +104,7 @@ export function gitCommands(
     },
     {
       id: 'git-action.push',
-      label: 'Push to upstream',
+      label: 'Push to Upstream',
       group: 'Git',
       icon: 'up',
       aliases: ['git push', 'push commits', 'push branch'],
@@ -114,7 +114,7 @@ export function gitCommands(
     },
     {
       id: 'git-worktrees',
-      label: 'Open worktree…',
+      label: 'Open Worktree…',
       group: 'Git',
       icon: 'folder',
       aliases: ['branches', 'git worktrees', 'checkouts', 'open branch'],
@@ -122,7 +122,7 @@ export function gitCommands(
       when: (context) => folderScope(context) && !!commands.worktrees,
       run: (context) => {
         if (!folderScope(context) || !commands.worktrees)
-          throw new Error('Choose an open repository folder with worktree browsing available.');
+          throw new Error('Choose an open folder in a Git repository.');
         commands.worktrees(captureTarget(context, actions.workspace));
       },
     },

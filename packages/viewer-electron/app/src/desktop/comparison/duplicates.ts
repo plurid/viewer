@@ -31,7 +31,10 @@ export class Duplicates {
     const abort = new AbortController();
     this.running.set(id, abort);
     const timer = setTimeout(
-      () => abort.abort(new Error('The duplicate search exceeded its time budget.')),
+      () =>
+        abort.abort(
+          new Error('The duplicate search took too long and stopped. Search a smaller folder.'),
+        ),
       300_000,
     );
     const result: DuplicateResult = {

@@ -5,7 +5,7 @@ import { DocumentStore } from '../persistence/document-store';
 import type { TrashReceipt } from '../native/macos-files';
 import { localPath } from '../schemas';
 import { containsPath } from './containment';
-import { assertLocalPath } from './local-path';
+import { assertLocalPath, requireAbsoluteLocalPath } from './local-path';
 
 const document = z
   .object({
@@ -181,8 +181,7 @@ export class FileAccess {
     this.incomingDirectories = new Map([...incoming].filter(([, grant]) => grant.directory));
   }
   async require(files: readonly string[]): Promise<void> {
-    files.forEach(assertLocalPath);
-    files.forEach((file) => localPath.parse(file));
+    files.forEach(requireAbsoluteLocalPath);
     for (const file of files)
       if (this.blocked(path.resolve(file))) throw new FileAccessRequired(file);
     if (!this.scoped) return;

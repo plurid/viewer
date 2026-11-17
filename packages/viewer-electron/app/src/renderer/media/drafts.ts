@@ -41,7 +41,7 @@ class DraftSession {
         return;
       this.publish({
         unavailable: true,
-        error: 'File access changed. Reload this draft to check its sources.',
+        error: 'File access changed. Try again to check its sources.',
       });
     });
     void this.reload();

@@ -41,7 +41,8 @@ export function TrashNoteDialog({
         id: current.id,
         revision: current.revision,
       });
-      if (reply.kind !== 'trashed') throw new Error('The note was not moved to Trash.');
+      if (reply.kind !== 'trashed')
+        throw new Error('Viewer couldn’t move the note to the Trash. Try again.');
       onTrashed?.();
       onClose();
     } catch (error) {
@@ -61,8 +62,8 @@ export function TrashNoteDialog({
       <div className="notes-library-body">
         <strong>{current?.title ?? note.title}</strong>
         <p>
-          This {note.kind === 'checklist' ? 'checklist' : 'note'} and its open views will close. Its
-          saved document goes to the system Trash.
+          This {note.kind === 'checklist' ? 'checklist' : 'note'} and its open views close, and it
+          moves to the Trash.
         </p>
         {!current && !error && <Loading label="Saving open drafts…" />}
         {error && (
@@ -75,7 +76,7 @@ export function TrashNoteDialog({
                 setRefresh((value) => value + 1);
               }}
             >
-              Review latest
+              Review Latest
             </button>
           </p>
         )}

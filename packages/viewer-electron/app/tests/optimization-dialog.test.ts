@@ -80,7 +80,7 @@ it('releases a candidate arriving after cancellation and never starts the next f
       1,
     ),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel optimization' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel Optimization' }));
   const late = candidate(files[0]!);
   await act(async () => admit(late));
   await waitFor(() =>
@@ -106,7 +106,7 @@ it('cancels jobs admitted after an export cancellation', async () => {
   await waitFor(() =>
     expect(optimization.mock.calls.some(([request]) => request.kind === 'export')).toBe(true),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel optimization' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel Optimization' }));
   await act(async () => admit({ kind: 'exported', jobs: ['late-admission'], failures: [] }));
   await waitFor(() => expect(cancelJob).toHaveBeenCalledWith('late-admission'));
 });
@@ -245,7 +245,7 @@ it('saves reusable settings without storing selected files or output folders', a
   fireEvent.change(screen.getByLabelText('Optimization recipe name'), {
     target: { value: 'Email under 2 MB' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Save recipe' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Recipe' }));
   await waitFor(() => expect(settingsPatch).toHaveBeenCalledOnce());
   const saved = settingsPatch.mock.calls[0]![0][0]!.value;
   expect(saved).toMatchObject([

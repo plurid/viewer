@@ -43,13 +43,13 @@ export async function validateGitTarget(
     !allowedTypes.includes(pane.type) ||
     pane.path !== target.panePath
   )
-    throw new Error('The originating folder or workspace changed. Run the Git action again.');
+    throw new Error('The folder or workspace this started from changed. Run the Git action again.');
   const [source, directory] = await Promise.all([
     canonical(pane.path),
     canonical(target.directory),
   ]);
   if (!containsPath(source, directory))
-    throw new Error('Choose a folder inside the originating folder plane.');
+    throw new Error('Choose a folder inside the folder plane this started from.');
   for (const file of target.selection) {
     const parent = await canonical(path.dirname(path.resolve(file.path)));
     if (!containsPath(directory, parent))
@@ -64,7 +64,7 @@ export async function bindGitTarget(
   canonical: CanonicalPath = realpath,
   allowedTypes: readonly string[] = ['folder'],
 ): Promise<CapturedTarget> {
-  if (!window) throw new Error('The originating window closed. Choose the Git action again.');
+  if (!window) throw new Error('The window this started from closed. Choose the Git action again.');
   const target = { ...structuredClone(input), originID: window.originID };
   await validateGitTarget(target, window, canonical, allowedTypes);
   return target;

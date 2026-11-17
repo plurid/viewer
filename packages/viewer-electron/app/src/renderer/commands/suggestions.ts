@@ -5,6 +5,7 @@ import {
   type SuggestionInput,
 } from '../../domain/suggestions/rules';
 import type { ModelPick } from '../../domain/suggestions/model';
+import type { WorkspaceInsight } from '../../domain/suggestions/insights';
 import { modelPicksFor } from './model-suggestions';
 import { choosePreview } from '../previews/registry';
 import { knownRepository } from '../git/status';
@@ -72,6 +73,19 @@ export function rankSuggestions(
     .sort((a, b) => b.score - a.score)
     .slice(0, options.limit ?? 3)
     .map(({ command, reason }) => ({ command, reason }));
+}
+
+/**
+ * The workspace offer for the folder in view (workspace/workspace-offer.ts) as a Suggested row: the
+ * same command as its folder card, while suggestions are on and the command applies here.
+ */
+export function offerSuggestions(
+  applicable: readonly ResolvedCommand[],
+  offer: WorkspaceInsight | undefined,
+): Suggestion[] {
+  if (!offer || !getState().settings.settings.browsing.suggestions) return [];
+  const command = applicable.find((item) => item.id === offer.command);
+  return command ? [{ command, reason: offer.reason }] : [];
 }
 
 /** The suggestions for a selection, from the person's settings and history; none when they turned

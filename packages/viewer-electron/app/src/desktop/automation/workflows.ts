@@ -107,7 +107,7 @@ export class Workflows {
         const run = await this.store(id).load();
         if (!run)
           throw new Error(
-            'A workflow run receipt is missing. Review recovery before running it again.',
+            'A workflow run’s record is missing. Review its recovery before running it again.',
           );
         this.checkSize(run);
         if (run.status === 'running') {
@@ -228,7 +228,7 @@ export class Workflows {
       return structuredClone(run);
     }
     const run = this.runs.get(request.id);
-    if (!run) throw new Error('This workflow run is unavailable.');
+    if (!run) throw new Error('Viewer has no record of this workflow run.');
     if (request.kind === 'get') return structuredClone(run);
     if (request.kind === 'remove') {
       if (this.work.has(run.id) || ['running', 'paused', 'waiting-review'].includes(run.status))
@@ -341,7 +341,9 @@ export class Workflows {
   }
   private async finishReviewed(run: WorkflowRun, record: WorkflowRecord): Promise<boolean> {
     if (!record.taskID)
-      throw new Error('The reviewed task receipt is missing. Do not replay this step.');
+      throw new Error(
+        'The record of this step’s reviewed task is missing. Don’t run this step again.',
+      );
     if (record.kind === 'recipe') {
       const plan = await this.dependencies.actions.get(record.taskID);
       if (['planning', 'review', 'applying'].includes(plan.status)) return false;
@@ -358,7 +360,7 @@ export class Workflows {
       });
     } else {
       const plan = await this.dependencies.plans.request({ kind: 'get', id: record.taskID });
-      if (Array.isArray(plan)) throw new Error('Invalid operation receipt.');
+      if (Array.isArray(plan)) throw new Error('This step’s operation record can’t be read.');
       if (['review', 'applying'].includes(plan.status)) return false;
       if (plan.status !== 'completed')
         throw new Error(
@@ -533,7 +535,7 @@ export class Workflows {
               record.status = 'failed';
               run.status = 'failed';
               record.error =
-                'The task receipt could not be recorded. Review task history before retrying.';
+                'Viewer couldn’t record the task. Check task history before you try again.';
             } else record.status = 'pending';
           }
         await this.save(run);

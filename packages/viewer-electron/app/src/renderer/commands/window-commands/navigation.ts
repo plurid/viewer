@@ -21,7 +21,7 @@ export function navigationCommands({
   const commands: CommandDefinition[] = [
     {
       id: 'clear-recent-folders',
-      label: 'Clear recent folders',
+      label: 'Clear Recent Folders',
       group: 'Navigation',
       icon: 'close',
       aliases: ['clear folder history', 'forget frequent folders'],
@@ -32,7 +32,7 @@ export function navigationCommands({
     },
     {
       id: 'new-native-window',
-      label: 'New window',
+      label: 'New Window',
       group: 'Window',
       icon: 'plus',
       aliases: ['independent window'],
@@ -41,7 +41,7 @@ export function navigationCommands({
     },
     {
       id: 'restore-window',
-      label: 'Restore normal window placement',
+      label: 'Restore Normal Window Placement',
       group: 'Window',
       icon: 'restore',
       aliases: ['drop down', 'hotkey window'],
@@ -50,13 +50,13 @@ export function navigationCommands({
     },
     ...(
       [
-        ['create', 'Create project…'],
-        ['open', 'Open project…'],
-        ['save', 'Save project'],
-        ['reload', 'Reload project…'],
+        ['create', 'Create Project…'],
+        ['open', 'Open Project…'],
+        ['save', 'Save Project'],
+        ['reload', 'Reload Project…'],
         ['close', 'Close project'],
-        ['arrangements', 'Saved arrangements…'],
-        ['bindings', 'Project folders…'],
+        ['arrangements', 'Saved Arrangements…'],
+        ['bindings', 'Project Folders…'],
       ] as [ProjectCommand, string][]
     ).map(([command, label]) => ({
       id: 'project-' + command,
@@ -88,7 +88,7 @@ export function navigationCommands({
     },
     {
       id: 'new-root-folder',
-      label: 'New folder plane',
+      label: 'New Folder Plane',
       group: 'Plane',
       icon: 'plus',
       aliases: ['np', 'new plane', 'add plane', 'root'],
@@ -118,7 +118,7 @@ export function navigationCommands({
     },
     {
       id: 'command-line',
-      label: 'Command line…',
+      label: 'Command Line…',
       group: 'App',
       icon: 'command',
       aliases: [':', 'ex', 'vim', 'command prompt'],
@@ -128,7 +128,7 @@ export function navigationCommands({
     },
     {
       id: 'ask-in-words',
-      label: 'Ask in words…',
+      label: 'Ask in Words…',
       group: 'App',
       icon: 'command',
       aliases: ['>', 'prompt', 'ai', 'model', 'natural language'],
@@ -138,7 +138,7 @@ export function navigationCommands({
     },
     {
       id: 'palette-settings',
-      label: 'Search settings…',
+      label: 'Search Settings…',
       group: 'App',
       icon: 'settings',
       aliases: ['settings', 'preferences', 'options', 'configure'],
@@ -148,7 +148,7 @@ export function navigationCommands({
     },
     {
       id: 'dictate',
-      label: 'Ask Viewer by voice…',
+      label: 'Ask Viewer by Voice…',
       group: 'App',
       icon: 'microphone',
       aliases: ['speech', 'voice', 'microphone', 'talk', 'speak', 'dictate'],
@@ -159,7 +159,7 @@ export function navigationCommands({
     },
     {
       id: 'find-file',
-      label: 'Find file…',
+      label: 'Find File…',
       group: 'Navigation',
       icon: 'search',
       aliases: ['ff', 'find'],
@@ -170,7 +170,7 @@ export function navigationCommands({
     },
     {
       id: 'choose-folder',
-      label: 'Open folder…',
+      label: 'Open Folder…',
       group: 'Navigation',
       icon: 'folder',
       aliases: ['of'],
@@ -228,7 +228,7 @@ export function navigationCommands({
     },
     {
       id: 'toggle-sidebar',
-      label: ui.sidebar.visible ? 'Hide window navigation' : 'Show window navigation',
+      label: ui.sidebar.visible ? 'Hide Window Navigation' : 'Show Window Navigation',
       group: 'View',
       icon: 'sidebar',
       aliases: ['sb', 'window sidebar'],
@@ -239,7 +239,7 @@ export function navigationCommands({
     },
     {
       id: 'toggle-titlebar',
-      label: ui.titlebar.visible ? 'Hide title bar' : 'Show title bar',
+      label: ui.titlebar.visible ? 'Hide Title Bar' : 'Show Title Bar',
       group: 'View',
       icon: 'titlebar',
       aliases: ['title bar', 'titlebar', 'chrome', 'toolbar', 'tb'],
@@ -252,8 +252,8 @@ export function navigationCommands({
       id: 'plane-sidebar',
       label: (context) =>
         context.folder?.sidebar?.visible !== false
-          ? 'Hide plane navigation'
-          : 'Show plane navigation',
+          ? 'Hide Plane Navigation'
+          : 'Show Plane Navigation',
       group: 'Plane',
       icon: 'sidebar',
       aliases: ['ps', 'sidebar', 'navigation'],
@@ -278,7 +278,7 @@ export function navigationCommands({
   ];
   commands.push({
     id: 'connect-server',
-    label: 'Connect to server…',
+    label: 'Connect to Server…',
     group: 'Navigation',
     icon: 'folder',
     aliases: ['smb', 'network share', 'mount server'],
@@ -287,7 +287,7 @@ export function navigationCommands({
   });
   commands.push({
     id: 'find-tagged',
-    label: 'Find files with tag…',
+    label: 'Find Files with Tag…',
     group: 'Navigation',
     icon: 'search',
     aliases: ['tags', 'tagged files', 'finder tag', 'label'],
@@ -302,7 +302,7 @@ export function navigationCommands({
     );
   commands.push({
     id: 'go-to',
-    label: 'Go to folder…',
+    label: 'Go to Folder…',
     group: 'Navigation',
     icon: 'folder',
     shortcut: '⌘L',

@@ -201,7 +201,7 @@ export function partsCSV(
       `Width (${units})`,
       `Height (${units})`,
       'Parts',
-      'Utilisation (%)',
+      'Utilization (%)',
       `Offcut width (${units})`,
       `Offcut length (${units})`,
       'Offcut reusable',

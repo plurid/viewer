@@ -336,7 +336,9 @@ it('does not offer a grant for an unverified Trash root', async () => {
   const trash = service(),
     value = await trash.list();
   expect(value.locations[0].canRequestAccess).toBe(false);
-  await expect(trash.requestAccess(window, value.locations[0].id)).rejects.toThrow('unavailable');
+  await expect(trash.requestAccess(window, value.locations[0].id)).rejects.toThrow(
+    'can’t reach this Trash folder',
+  );
   expect(mock.settings).not.toHaveBeenCalled();
   expect(mock.open).not.toHaveBeenCalled();
 });
@@ -458,7 +460,7 @@ it('keeps every selected item when any original destination collides', async () 
 it('requires Restore to… for an item without a proven original destination', async () => {
   const trash = service(),
     top = await trash.list();
-  await expect(trash.restore(window, [top.items[0].id], 'original')).rejects.toThrow('Restore to');
+  await expect(trash.restore(window, [top.items[0].id], 'original')).rejects.toThrow('Restore To');
   expect(mock.move).not.toHaveBeenCalled();
 });
 it('cancelling Restore to… neither grants a folder nor moves any item', async () => {

@@ -6,7 +6,9 @@ import { readBookChapter, bookNodes, searchBook } from '../epub-content';
 import { usePreviewState } from '../state';
 import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
-import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { IconButton, Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { useOfficeDocument } from '../useOfficeDocument';
 import { EPUBBookmarks } from '../EPUBBookmarks';
 import { readEPUBBookmarks } from '../../../domain/previews/documents/epub-bookmarks';
@@ -136,7 +138,7 @@ export default function EPUBPreview(context: PreviewContext) {
         destination.scrollIntoView({ block: 'center' });
         destination.focus({ preventScroll: true });
       } else if (jump.fragment)
-        setNavigationError('This link target is outside the available chapter content.');
+        setNavigationError("This link points to a part of the book that isn't shown.");
       else element.scrollTop = 0;
     }
     setJump(undefined);
@@ -147,21 +149,21 @@ export default function EPUBPreview(context: PreviewContext) {
       () => [
         {
           id: 'epub-find',
-          label: 'Find in book',
+          label: 'Find in Book',
           aliases: ['search', 'epub'],
           available: !!chapters.length,
           run: () => setFinding(true),
         },
         {
           id: 'epub-bookmarks',
-          label: 'Show bookmarks',
+          label: 'Show Bookmarks',
           aliases: ['save reading position', 'epub'],
           available: !!chapters.length,
           run: () => setMarking(true),
         },
         {
           id: 'epub-contents',
-          label: 'Show / hide contents',
+          label: contents && !marking ? 'Hide Contents' : 'Show Contents',
           available: !!chapters.length,
           run: () => {
             setContents(marking ? true : !contents);
@@ -170,13 +172,13 @@ export default function EPUBPreview(context: PreviewContext) {
         },
         {
           id: 'epub-next',
-          label: 'Next chapter',
+          label: 'Next Chapter',
           available: position < chapters.length - 1,
           run: () => setChapter(position + 1),
         },
         {
           id: 'epub-previous',
-          label: 'Previous chapter',
+          label: 'Previous Chapter',
           available: position > 0,
           run: () => setChapter(position - 1),
         },
@@ -186,9 +188,13 @@ export default function EPUBPreview(context: PreviewContext) {
   );
   if (error)
     return (
-      <Empty icon="warning" title={`${kind} could not be opened`} detail={error}>
-        <button onClick={context.retry ?? retry}>Try again</button>
-      </Empty>
+      <PreviewFailure
+        context={context}
+        icon="warning"
+        title={`Can't open this ${kind}`}
+        detail={error}
+        onRetry={context.retry ?? retry}
+      />
     );
   if (!document) return <Loading label={`Reading ${kind}…`} />;
   return (
@@ -237,7 +243,7 @@ export default function EPUBPreview(context: PreviewContext) {
           Bookmarks
         </button>
         <button aria-pressed={finding} onClick={() => setFinding(!finding)}>
-          Find in book
+          Find in Book
         </button>
         <button aria-label="Smaller text" onClick={() => setSize(Math.max(12, size - 1))}>
           A−
@@ -257,8 +263,8 @@ export default function EPUBPreview(context: PreviewContext) {
             <input
               ref={searchField}
               type="search"
-              aria-label="Search book text"
-              placeholder="Find in book"
+              aria-label="Find text"
+              placeholder="Find"
               maxLength={160}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -273,9 +279,9 @@ export default function EPUBPreview(context: PreviewContext) {
               {searchError ||
                 (query.trim()
                   ? found?.query === query
-                    ? `${found.matches.length}${found.limited ? '+' : ''} matches${document.truncated || found.limited ? ' · Partial search' : ''}`
+                    ? `${found.limited ? `${found.matches.length.toLocaleString('en-US')}+ matches` : plural(found.matches.length, 'match', 'matches')}${document.truncated || found.limited ? ' · Searched part of the book' : ''}`
                     : 'Searching…'
-                  : 'Search the available chapters')}
+                  : 'Find text in this book')}
             </span>
           </div>
           {found?.query === query && (
@@ -345,7 +351,7 @@ export default function EPUBPreview(context: PreviewContext) {
         >
           {nodes}
           {(document.truncated || content.limited) && (
-            <p className="muted">This preview reached its extraction limit.</p>
+            <p className="muted">The rest of this book isn't shown.</p>
           )}
         </article>
       </div>

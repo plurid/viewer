@@ -336,9 +336,7 @@ describe('saved server records', () => {
       sshConfig: 'allowed',
     };
     expect(remoteConnection.parse(connection)).toEqual(connection);
-    expect(
-      remoteConnection.parse({ ...base, identityFile: 'C:\\Keys\\identity' }).identityFile,
-    ).toBe('C:\\Keys\\identity');
+    expect(() => remoteConnection.parse({ ...base, identityFile: 'C:\\Keys\\identity' })).toThrow();
     expect(remoteConnection.parse({ ...base, name: 'Atelier é' }).name).toBe('Atelier é');
     expect(remoteConnection.parse({ ...base, name: "Build box (Team's 🌍)" }).name).toBe(
       "Build box (Team's 🌍)",

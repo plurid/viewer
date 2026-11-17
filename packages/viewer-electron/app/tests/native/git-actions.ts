@@ -537,7 +537,7 @@ async function palette(main: Connection, label: string) {
     'palette command ' + label,
   );
   const framePause =
-    label === 'Frame plane' ? Number(process.env.VIEWER_TEST_FRAME_PAUSE_MS ?? 0) : 0;
+    label === 'Frame Plane' ? Number(process.env.VIEWER_TEST_FRAME_PAUSE_MS ?? 0) : 0;
   assert.ok(Number.isInteger(framePause) && framePause >= 0 && framePause <= 3000);
   await main.evaluate(pageCall(runSelectedCommand, framePause));
   await until(
@@ -584,11 +584,11 @@ async function screen(main: Connection, id: string, expected: string) {
   );
 }
 async function activate(main: Connection, id: string) {
-  await palette(main, 'Frame all planes');
+  await palette(main, 'Frame All Planes');
   const selector = `[data-viewer-plane="${id}"]`;
   await until(() => main.evaluate(exists(selector)), Boolean, 'saved plane header ' + id);
   await main.evaluate(pageCall(pointerDown, selector));
-  await palette(main, 'Frame plane');
+  await palette(main, 'Frame Plane');
   let previous = '';
   let stable = 0;
   await until(
@@ -614,7 +614,7 @@ async function backToFolder(main: Connection, id: string) {
 
 async function readonlyAction(main: Connection, app: Application, kind: 'status' | 'log') {
   const before = (await observed(main)).events.length;
-  await palette(main, kind === 'status' ? 'Git status' : 'Git history');
+  await palette(main, kind === 'status' ? 'Git Status' : 'Git History');
   const state = await until(
     saved,
     (value) =>
@@ -650,7 +650,7 @@ async function readonlyAction(main: Connection, app: Application, kind: 'status'
   assert.ok(job.some(({ event }) => event.type === 'exit' && event.code === 0));
   const output = job.map(({ event }) => (event.type === 'data' ? event.data : '')).join('');
   assert.match(output, kind === 'status' ? /tracked\.txt/ : /Viewer fixture baseline/);
-  const text = await screen(main, pane.id, 'Git exited (0).');
+  const text = await screen(main, pane.id, 'Git exited with code 0.');
   const screenshot = await capture(
     main,
     app.evidenceDirectory,
@@ -676,7 +676,7 @@ async function readonlyAction(main: Connection, app: Application, kind: 'status'
 
 async function commitDialog(main: Connection, app: Application) {
   const before = (await observed(main)).events.length;
-  await palette(main, 'Commit staged changes…');
+  await palette(main, 'Commit Staged Changes…');
   await until(
     () => main.evaluate(exists('.git-commit-dialog[open] textarea')),
     Boolean,
@@ -717,7 +717,7 @@ async function commitDialog(main: Connection, app: Application) {
 }
 
 async function chatAppearance(main: Connection, app: Application) {
-  await palette(main, 'Chat about files');
+  await palette(main, 'Chat About Files');
   await until(
     () => main.evaluate(exists('.chat-composer textarea')),
     Boolean,
@@ -737,7 +737,7 @@ async function chatAppearance(main: Connection, app: Application) {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await palette(main, 'Frame plane');
+    await palette(main, 'Frame Plane');
     let previous = '';
     let stable = 0;
     const value = await until(
@@ -815,8 +815,8 @@ async function paletteAppearance(main: Connection, app: Application) {
   );
   const placeholders: Record<string, string> = {};
   for (const [command, label, expected] of [
-    ['Command line…', 'Command line', 'help'],
-    ['Ask in words…', 'Ask in words', 'Ask Viewer…'],
+    ['Command Line…', 'Command line', 'help'],
+    ['Ask in Words…', 'Ask in words', 'Ask Viewer…'],
   ]) {
     await palette(main, command);
     const selector = `input[aria-label="${label}"]`;
@@ -835,7 +835,7 @@ async function paletteAppearance(main: Connection, app: Application) {
     Boolean,
     'recent commands palette',
   );
-  await main.command('Input.insertText', { text: 'Frame plane' });
+  await main.command('Input.insertText', { text: 'Frame Plane' });
   await until(
     () => main.evaluate(exists('[aria-label="Clear recent commands"]')),
     Boolean,
@@ -849,11 +849,11 @@ async function paletteAppearance(main: Connection, app: Application) {
   );
   assert.deepEqual(
     await main.evaluate(pageCall(searchInputState)),
-    { query: 'Frame plane', focused: true },
+    { query: 'Frame Plane', focused: true },
     'Clearing recents preserves the current query and input focus.',
   );
   await main.evaluate(click('.command-palette [aria-label="Close"]'));
-  await palette(main, 'Show minimap');
+  await palette(main, 'Show Minimap');
   await until(
     () => main.evaluate(exists('[data-plurid-overlay="minimap"]')),
     Boolean,
@@ -941,7 +941,7 @@ try {
       pageCall((path: string) => window.viewer.git({ kind: 'status', path }), repository),
     );
     assert.equal(badges.kind, 'disabled', 'Background Git badges remain opt-in.');
-    await palette(main, 'Frame plane');
+    await palette(main, 'Frame Plane');
     for (const kind of ['status', 'log'] as const)
       results.push(await readonlyAction(main, app, kind));
     await commitDialog(main, app);

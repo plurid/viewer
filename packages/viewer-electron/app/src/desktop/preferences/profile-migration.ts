@@ -55,7 +55,7 @@ export function planLegacyProfileRestoration(
     return {
       patches: [],
       state,
-      warnings: ['Legacy profile values were retained because the configuration is unavailable.'],
+      warnings: ['Earlier profile values were kept because config.jsonc has errors.'],
     };
 
   const participants = new Map<AppliedProfile, Participant>();
@@ -73,7 +73,9 @@ export function planLegacyProfileRestoration(
     const profile = catalog.find((item) => item.id === before.id);
     if (!profile) {
       participant.remaining = { ...before.previous };
-      warnings.add(`Previous values for unavailable profile “${before.id}” were retained.`);
+      warnings.add(
+        `Earlier values for the profile “${before.id}” were kept because that profile no longer exists.`,
+      );
       continue;
     }
     const applied = compileProfileFields(profile.values, legacyFields).values;

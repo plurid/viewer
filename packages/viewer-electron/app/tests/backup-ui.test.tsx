@@ -69,7 +69,7 @@ it('backs up an empty workspace with retained documents without requiring a moun
       onClose={() => {}}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Create backup…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create Backup…' }));
   await waitFor(() => expect(backup).toHaveBeenCalledWith({ kind: 'prepare-export' }));
   expect(captureLayout).not.toHaveBeenCalled();
   expect(screen.getByText('1 workspace')).toBeTruthy();

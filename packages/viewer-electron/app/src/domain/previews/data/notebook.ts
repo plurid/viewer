@@ -144,10 +144,9 @@ type ImageReading = { ok: true; url: string } | { ok: false; reason: string };
 
 function imageURL(type: NotebookImageType, value: unknown, limits: NotebookLimits): ImageReading {
   const data = multiline(value).replace(/\s+/g, '');
-  if (!data || !base64.test(data))
-    return { ok: false, reason: 'An image output is not valid base64.' };
+  if (!data || !base64.test(data)) return { ok: false, reason: 'A damaged image is left out.' };
   if (data.length > limits.image)
-    return { ok: false, reason: 'An image output exceeds the preview limit.' };
+    return { ok: false, reason: 'An image too large to show is left out.' };
   return { ok: true, url: `data:${type};base64,${data}` };
 }
 
@@ -173,11 +172,18 @@ function displayOutput(data: JSONObject, limits: NotebookLimits): NotebookOutput
     const html = bounded(multiline(data['text/html']), limits.text);
     return { kind: 'html', source: html.text, truncated: html.truncated };
   }
-  const types = Object.keys(data).slice(0, 4).join(', ');
+  const types = Object.keys(data);
   return {
     kind: 'omitted',
-    reason: types ? `Output of type ${types} is not shown.` : 'An empty output is not shown.',
+    reason: types.length ? omittedReason(types) : 'An empty output is not shown.',
   };
+}
+
+// what an output is, in words: its MIME types name a format, not what a person sees
+function omittedReason(types: readonly string[]): string {
+  if (types.some((type) => type.includes('widget'))) return "An interactive widget isn't shown.";
+  if (types.some((type) => type.includes('javascript'))) return "A script's output isn't shown.";
+  return "An output Viewer can't show is left out.";
 }
 
 function readOutput(output: unknown, limits: NotebookLimits): NotebookOutput | undefined {
@@ -209,10 +215,7 @@ function readOutput(output: unknown, limits: NotebookLimits): NotebookOutput | u
     }
     default:
       return typeof output.output_type === 'string'
-        ? {
-            kind: 'omitted',
-            reason: `Output of type ${output.output_type.slice(0, 60)} is not shown.`,
-          }
+        ? { kind: 'omitted', reason: "An output Viewer can't show is left out." }
         : undefined;
   }
 }

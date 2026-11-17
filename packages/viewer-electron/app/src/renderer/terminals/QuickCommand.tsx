@@ -14,6 +14,7 @@ import {
 } from './quick-command';
 import './run-command.css';
 import { DeclaredCommandList } from './DeclaredCommandList';
+import { processOutcome } from '../ui/status-labels';
 
 export function QuickCommand({
   context,
@@ -79,7 +80,7 @@ export function QuickCommand({
         }}
       />
       <div className="quick-command-actions">
-        <span className="muted">Enter to run · Shift+Enter for a new line</span>
+        <span className="muted">↩ to run · ⇧↩ for a new line</span>
         {task?.status === 'running' ? (
           <button
             type="button"
@@ -111,13 +112,10 @@ export function QuickCommand({
       {task && (
         <section className="quick-command-output" aria-label="Command output">
           <div className="quick-command-actions">
-            <span role="status">
-              {task.status}
-              {task.exitCode !== undefined ? ` · exit ${task.exitCode}` : ''}
-            </span>
+            <span role="status">{processOutcome(task)}</span>
             <div>
               {!!task.output && (
-                <CopyButton appearance="text" label="Copy output" copy={{ text: task.output }} />
+                <CopyButton appearance="text" label="Copy Output" copy={{ text: task.output }} />
               )}
               <button
                 type="button"
@@ -126,7 +124,7 @@ export function QuickCommand({
                   workspace.openReceipt(task.id, task.directory);
                 }}
               >
-                Open receipt
+                Open Receipt
               </button>
             </div>
           </div>

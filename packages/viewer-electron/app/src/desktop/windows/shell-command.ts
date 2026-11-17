@@ -86,7 +86,7 @@ export class ShellCommand {
   }
 
   async install(): Promise<ShellCommandStatus> {
-    if (!this.available) throw new Error('Shell integration is unavailable in this build.');
+    if (!this.available) throw new Error('This build of Viewer can’t install the viewer command.');
     const existing = await this.inspect();
     if (existing) {
       if (!existing.bytes.equals(Buffer.from(this.script)))
@@ -101,7 +101,7 @@ export class ShellCommand {
   }
 
   async uninstall(): Promise<ShellCommandStatus> {
-    if (!this.available) throw new Error('Shell integration is unavailable in this build.');
+    if (!this.available) throw new Error('This build of Viewer can’t install the viewer command.');
     const before = await this.inspect();
     if (!before) return this.status();
     if (!before.bytes.equals(Buffer.from(this.script)))

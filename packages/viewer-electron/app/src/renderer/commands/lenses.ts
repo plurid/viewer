@@ -7,6 +7,7 @@ import {
   type ResolvedLens,
 } from '../../domain/files/lenses';
 import { parentPath } from '../../domain/workspaces/planes';
+import { plural } from '../../domain/plural';
 import { createLens, editLens, setCollapsedGroups, shareLens } from '../state/lenses';
 import { updateFolderPresentation } from '../state/store';
 import type { LensPrompt } from '../explorer/LensDialogs';
@@ -78,7 +79,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     })),
     {
       id: 'lens.new',
-      label: 'New lens…',
+      label: 'New Lens…',
       group: 'Lens',
       icon: 'lens',
       aliases: ['lens', 'label', 'organize', 'groups', 'virtual folders'],
@@ -88,11 +89,11 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.group-selection',
-      label: 'Group selection…',
+      label: 'Group Selection…',
       group: 'Lens',
       icon: 'lens',
       aliases: ['lens group', 'label', 'organize'],
-      detail: 'Puts the items in a lens group; they stay where they are on disk',
+      detail: 'Puts the items in a lens group',
       when: (context) =>
         plain(context) && children(context).length > 0 && (!actions.document() || !!editable()),
       run: (context) =>
@@ -105,7 +106,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.move-to-group',
-      label: 'Move to group…',
+      label: 'Move to Group…',
       group: 'Lens',
       icon: 'lens',
       aliases: ['lens', 'assign', 'label'],
@@ -143,7 +144,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.place-automatically',
-      label: 'Place automatically',
+      label: 'Place Automatically',
       group: 'Lens',
       icon: 'lens',
       aliases: ['reset place', 'rules'],
@@ -157,12 +158,12 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
           actions.folder(),
           editable()!.file,
           children(context).map((entry): LensOp => ({ kind: 'forget', name: entry.name })),
-          'Place automatically',
+          'Place Automatically',
         ),
     },
     {
       id: 'lens.new-group',
-      label: 'New group…',
+      label: 'New Group…',
       group: 'Lens',
       icon: 'plus',
       when: (context) => plain(context) && !!editable() && !context.selection.length,
@@ -171,7 +172,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.rename',
-      label: 'Rename lens…',
+      label: 'Rename Lens…',
       group: 'Lens',
       icon: 'rename',
       when: (context) => plain(context) && !!editable(),
@@ -180,7 +181,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.duplicate',
-      label: 'Duplicate lens',
+      label: 'Duplicate Lens',
       group: 'Lens',
       icon: 'copy',
       when: (context) => plain(context) && !!actions.document(),
@@ -199,17 +200,17 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
           actions.folder(),
           lens.name + ' copy',
           ops,
-          'Duplicate lens',
+          'Duplicate Lens',
         );
         updateFolderPresentation(actions.folder(), { group: 'lens', lens: created.lens.id });
       },
     },
     {
       id: 'lens.make-shared',
-      label: 'Store lens in this folder',
+      label: 'Store Lens in This Folder',
       group: 'Lens',
       icon: 'share',
-      detail: 'Moves it from this Mac into .viewer, so it travels with the folder',
+      detail: 'Saves it with the folder',
       when: (context) => plain(context) && !!actions.document()?.local && !!actions.data()?.shared,
       run: () => shareLens(actions.folder(), actions.document()!.file),
     },
@@ -217,7 +218,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
       id: 'lens.clean-missing',
       label: () => {
         const count = actions.resolved()?.missing.length ?? 0;
-        return `Clean up ${count.toLocaleString()} missing ${count === 1 ? 'item' : 'items'}`;
+        return `Clean Up ${plural(count, 'Missing Item')}`;
       },
       group: 'Lens',
       icon: 'refresh',
@@ -228,12 +229,12 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
           actions.folder(),
           editable()!.file,
           actions.resolved()!.missing.map((name): LensOp => ({ kind: 'forget', name })),
-          'Clean up missing items',
+          'Clean Up Missing Items',
         ),
     },
     {
       id: 'lens.collapse-all',
-      label: 'Collapse all groups',
+      label: 'Collapse All Groups',
       group: 'Lens',
       icon: 'up',
       when: (context) => !!context.folder && lensGroups().length > 0,
@@ -246,7 +247,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.expand-all',
-      label: 'Expand all groups',
+      label: 'Expand All Groups',
       group: 'Lens',
       icon: 'down',
       when: (context) =>
@@ -257,7 +258,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.reveal-file',
-      label: 'Show lens file',
+      label: 'Show Lens File',
       group: 'Lens',
       icon: 'external',
       when: (context) => plain(context) && !!actions.document() && !actions.document()!.local,
@@ -265,10 +266,9 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.delete',
-      label: 'Move lens to Trash…',
+      label: 'Move Lens to Trash…',
       group: 'Lens',
       icon: 'trash',
-      detail: 'Your files stay where they are',
       when: (context) => plain(context) && !!actions.document(),
       run: () =>
         actions.prompt({
@@ -279,7 +279,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.select-group',
-      label: 'Select items in group',
+      label: 'Select Items in Group',
       group: 'Lens',
       icon: 'check',
       when: (context) => !!context.lensGroup,
@@ -287,7 +287,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.rename-group',
-      label: 'Rename group…',
+      label: 'Rename Group…',
       group: 'Lens',
       icon: 'rename',
       when: (context) => !!group(context) && !!editable(),
@@ -316,7 +316,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.new-subgroup',
-      label: 'New group inside…',
+      label: 'New Group Inside…',
       group: 'Lens',
       icon: 'plus',
       when: (context) => !!group(context) && !!editable(),
@@ -330,10 +330,10 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
     },
     {
       id: 'lens.delete-group',
-      label: 'Delete group',
+      label: 'Delete Group',
       group: 'Lens',
       icon: 'close',
-      detail: 'Its items return to the parent group or Unsorted; files are not touched',
+      detail: 'Its items return to the parent group or Unsorted',
       when: (context) => !!group(context) && !!editable(),
       run: (context) => {
         const target = group(context)!;
@@ -341,7 +341,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
           actions.folder(),
           editable()!.file,
           [{ kind: 'delete-group', id: target.id }],
-          `Delete group “${target.name}”`,
+          `Delete Group “${target.name}”`,
         );
       },
     },

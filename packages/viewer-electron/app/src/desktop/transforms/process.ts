@@ -104,7 +104,7 @@ export function runProcessor(
       kill('SIGTERM');
       force ??= setTimeout(() => kill('SIGKILL'), 2000);
     };
-    const cancel = () => stop(new Error('Media task cancelled.'));
+    const cancel = () => stop(new Error('The media task was canceled.'));
     if (priorityFailed) stop(new Error('The converter could not start at background priority.'));
     const timer = setTimeout(
       () =>

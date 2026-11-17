@@ -131,6 +131,7 @@ export const findingSchema = z
           .number()
           .finite()
           .nullable()
+          // eslint-disable-next-line no-restricted-syntax -- the model reads this wording; its evaluation used it
           .describe('The value it gives: millimetres, or pieces for a quantity.'),
         quote: quote.describe('The text the value is read from, as printed.'),
         box: box.nullable().describe('The box of the quoted text.'),
@@ -151,6 +152,7 @@ export const findingSchema = z
         axis: z
           .enum(pitchAxes)
           .nullable()
+          // eslint-disable-next-line no-restricted-syntax -- the model reads this wording; its evaluation used it
           .describe('For a pitch or size: along x, along y, or centre to centre.'),
         entities: z.array(entity).max(32),
       })
@@ -187,6 +189,7 @@ export const requestPartSchema = z
     part: z.string().min(1).max(120).describe('The part as the request names it.'),
     dxf: inventoryRefSchema.nullable().describe('The DXF part it means, when one matches.'),
     quantity: pieces.nullable().describe('Pieces the request asks for.'),
+    // eslint-disable-next-line no-restricted-syntax -- the model reads this wording; its evaluation used it
     thickness: millimetres.nullable().describe('Millimetres.'),
     material: z.string().max(80).nullable(),
     quote: quote.describe('The request text these are read from, as written.'),

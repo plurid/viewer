@@ -7,6 +7,9 @@ import type { ApplicationSettings } from '../../../domain/services';
 import { sharedClientID } from '../../../domain/agents/clients';
 import { ChoiceButton } from '../ChoiceMenu';
 import { Disclosure } from '../Disclosure';
+import { PathLabel, useHome } from '../PathLabel';
+import { pathText } from '../../../domain/files/path-label';
+import { capabilityLabel } from '../status-labels';
 export function AgentGrants({
   settings,
   clientID = sharedClientID,
@@ -19,6 +22,7 @@ export function AgentGrants({
   const [grants, setGrants] = useState<ExecutionGrant[]>([]);
   const [root, setRoot] = useState(roots[0] || '');
   const [error, setError] = useState('');
+  const home = useHome();
   useEffect(() => {
     if (!roots.includes(root)) setRoot(roots[0] || '');
   }, [roots, root]);
@@ -49,22 +53,26 @@ export function AgentGrants({
     <>
       <h2>Agent permissions</h2>
       <p className="settings-note">
-        Every agent command requires approval. File removals use system Trash. Agents cannot run
-        shell scripts, executables, external apps or terminal input that could permanently delete
-        files.
+        Viewer asks you before every agent command, and removed files go to the Trash. Agents can’t
+        run scripts, programs or apps, or type into a terminal.
       </p>
       <label className="settings-row settings-wide-field">
         <span>Grant for folder</span>
         <ChoiceButton
           label="Grant for folder"
           value={root}
-          choices={roots.map((root) => ({ value: root, label: root }))}
+          choices={roots.map((root) => ({ value: root, label: pathText(root, home) }))}
           placeholder="Choose an authorized folder"
           disabled={!roots.length}
           onChoose={setRoot}
         />
       </label>
-      {root && <p className="settings-field-detail">{root}</p>}
+      {!roots.length && <p className="settings-field-detail">Add a folder above first.</p>}
+      {root && (
+        <p className="settings-field-detail">
+          <PathLabel path={root} layout="wrap" />
+        </p>
+      )}
       {root && (
         <>
           <label className="settings-row">
@@ -96,9 +104,10 @@ export function AgentGrants({
             .map((grant) => (
               <div className="settings-grant" key={grant.id}>
                 <span title={grant.root}>
-                  {grant.actionID} · {grant.capability} · {grant.root}
-                  {grant.capability !== 'terminal-read' &&
-                    ' · Inactive; approval is required each time'}
+                  {capabilityLabel(grant.capability)}
+                  {grant.actionID !== '*' && ` for “${grant.actionID}”`} in{' '}
+                  {pathText(grant.root, home)}
+                  {grant.capability !== 'terminal-read' && ' · Not used: Viewer asks each time'}
                 </span>
                 <button
                   onClick={() => {

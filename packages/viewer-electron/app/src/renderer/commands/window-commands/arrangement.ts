@@ -2,14 +2,18 @@ import { confirmClose } from '../../editing/unsaved';
 import { closePlanes, otherPlanes, rootPlanes } from '../closing';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
-import { activeWorkspace } from '../../state/store';
+import { activeWorkspace, getState } from '../../state/store';
+import { effectiveWindowSettings } from '../../state/effective-ui';
+import { shortcutFor, shortcutGlyphs, withShortcut } from '../../../domain/preferences/shortcuts';
 
 /** Why Overview is missing here, in words that name the way back. */
 export function overviewUnavailable(docked: boolean): string {
-  if (docked) return 'A docked plane fills the window. Reveal space (⌘↵) first.';
+  const shortcuts = effectiveWindowSettings(getState()).shortcuts;
+  if (docked)
+    return `A docked plane fills the window. Choose ${withShortcut('Reveal Space', shortcutGlyphs(shortcutFor(shortcuts, 'dock')))} first.`;
   const space = activeWorkspace();
   if (!space.panes.length && !space.roots.length) return 'Open a plane first.';
-  return 'Open Overview from the window command palette (⌘K).';
+  return `Choose Overview in ${withShortcut('Commands', shortcutGlyphs(shortcutFor(shortcuts, 'palette')))}.`;
 }
 
 /** Framing, docking, closing and arranging planes in space. */
@@ -35,7 +39,7 @@ export function arrangementCommands({
     },
     {
       id: 'frame-all',
-      label: 'Frame all planes',
+      label: 'Frame All Planes',
       group: 'Space',
       icon: 'frame',
       aliases: ['fa', 'fit'],
@@ -46,18 +50,18 @@ export function arrangementCommands({
     },
     {
       id: 'consolidate-previews',
-      label: 'Consolidate repeated previews',
+      label: 'Consolidate Repeated Previews',
       group: 'Space',
       icon: 'copy',
       aliases: ['duplicates', 'repeated', 'clean previews'],
-      detail: 'Close redundant views · layout only · Undo arrangement restores them',
+      detail: 'Closes duplicate planes',
       when: (context) =>
         windowScope(context) && actions.ready && actions.workspace.hasRepeatedPreviews(),
       run: actions.workspace.consolidatePreviews,
     },
     {
       id: 'frame-plane',
-      label: 'Frame plane',
+      label: 'Frame Plane',
       group: 'Plane',
       icon: 'frame',
       aliases: ['fp'],
@@ -79,7 +83,7 @@ export function arrangementCommands({
     },
     {
       id: 'view-open-plane',
-      label: 'View open plane',
+      label: 'View Open Plane',
       group: 'Files',
       icon: 'link',
       primary: true,
@@ -99,7 +103,7 @@ export function arrangementCommands({
     },
     {
       id: 'dock',
-      label: actions.workspace.isDocked() ? 'Reveal space' : 'Dock plane',
+      label: actions.workspace.isDocked() ? 'Reveal Space' : 'Dock Plane',
       group: 'Plane',
       icon: 'dock',
       aliases: ['dk'],
@@ -109,7 +113,7 @@ export function arrangementCommands({
     },
     {
       id: 'close-plane',
-      label: 'Close plane',
+      label: 'Close Plane',
       group: 'Plane',
       icon: 'close',
       aliases: ['cl'],
@@ -123,7 +127,7 @@ export function arrangementCommands({
     },
     {
       id: 'pin-plane',
-      label: 'Pin plane',
+      label: 'Pin Plane',
       group: 'Plane',
       icon: 'pin',
       aliases: ['keep visible', 'pin note', 'pin check'],
@@ -138,7 +142,7 @@ export function arrangementCommands({
     },
     {
       id: 'place-plane',
-      label: 'Place in space',
+      label: 'Place in Space',
       group: 'Plane',
       icon: 'planes',
       aliases: ['unpin plane'],
@@ -151,7 +155,7 @@ export function arrangementCommands({
     },
     {
       id: 'collapse-pinned-plane',
-      label: 'Collapse pinned plane',
+      label: 'Collapse Pinned Plane',
       group: 'Plane',
       icon: 'up',
       when: (context) =>
@@ -164,7 +168,7 @@ export function arrangementCommands({
     },
     {
       id: 'expand-pinned-plane',
-      label: 'Expand pinned plane',
+      label: 'Expand Pinned Plane',
       group: 'Plane',
       icon: 'down',
       when: (context) =>
@@ -175,7 +179,7 @@ export function arrangementCommands({
     },
     {
       id: 'stack-planes',
-      label: 'Stack selected planes',
+      label: 'Stack Selected Planes',
       group: 'Space',
       icon: 'copy',
       aliases: ['stack'],
@@ -190,7 +194,7 @@ export function arrangementCommands({
     },
     {
       id: 'unstack-planes',
-      label: 'Unstack planes',
+      label: 'Unstack Planes',
       group: 'Plane',
       icon: 'side-by-side',
       when: (context) =>
@@ -206,7 +210,7 @@ export function arrangementCommands({
     // vim's :qa and :only, unsaved text asked about first
     {
       id: 'close-all-planes',
-      label: 'Close all planes',
+      label: 'Close All Planes',
       group: 'Plane',
       icon: 'close',
       aliases: ['qa', 'close all'],
@@ -217,7 +221,7 @@ export function arrangementCommands({
     },
     {
       id: 'close-other-planes',
-      label: 'Close other planes',
+      label: 'Close Other Planes',
       group: 'Plane',
       icon: 'close',
       aliases: ['only', 'close others'],
@@ -229,7 +233,7 @@ export function arrangementCommands({
     },
     {
       id: 'undo-arrangement',
-      label: 'Undo arrangement',
+      label: 'Undo Arrangement',
       group: 'Space',
       icon: 'left',
       aliases: ['ua'],
@@ -239,7 +243,7 @@ export function arrangementCommands({
     },
     {
       id: 'redo-arrangement',
-      label: 'Redo arrangement',
+      label: 'Redo Arrangement',
       group: 'Space',
       icon: 'right',
       aliases: ['ra'],
@@ -249,7 +253,7 @@ export function arrangementCommands({
     },
     {
       id: 'arrange-horizontal',
-      label: 'Arrange planes horizontally',
+      label: 'Arrange Planes Horizontally',
       group: 'Space',
       icon: 'columns',
       aliases: ['ah'],
@@ -258,7 +262,7 @@ export function arrangementCommands({
     },
     {
       id: 'arrange-vertical',
-      label: 'Arrange planes vertically',
+      label: 'Arrange Planes Vertically',
       group: 'Space',
       icon: 'list',
       aliases: ['av'],
@@ -267,8 +271,8 @@ export function arrangementCommands({
     },
   ];
   for (const [id, label, axis, icon, splitAlias] of [
-    ['view-side-by-side', 'View side by side', 'x', 'side-by-side', 'vertical split'],
-    ['view-stacked', 'View stacked', 'y', 'stacked', 'horizontal split'],
+    ['view-side-by-side', 'View Side by Side', 'x', 'side-by-side', 'vertical split'],
+    ['view-stacked', 'View Stacked', 'y', 'stacked', 'horizontal split'],
   ] as const)
     commands.push({
       id,
@@ -292,7 +296,7 @@ export function arrangementCommands({
   for (const tool of ['rotate', 'scale', 'translate'] as const)
     commands.push({
       id: `space-${tool}`,
-      label: `${tool.charAt(0).toUpperCase() + tool.slice(1)} space`,
+      label: `${tool.charAt(0).toUpperCase() + tool.slice(1)} Space`,
       group: 'Space',
       icon: tool === 'rotate' ? 'refresh' : tool === 'scale' ? 'resize' : 'move',
       when: (context) => windowScope(context) && actions.ready && space.panes.length > 0,
@@ -300,7 +304,7 @@ export function arrangementCommands({
     });
   commands.push({
     id: 'space-done',
-    label: 'Finish spatial tool',
+    label: 'Finish Spatial Tool',
     group: 'Space',
     icon: 'check',
     primary: true,

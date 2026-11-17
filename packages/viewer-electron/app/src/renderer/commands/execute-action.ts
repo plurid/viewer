@@ -33,7 +33,12 @@ export async function executeAction(
             finish = resolve;
           });
     if (task.status !== 'completed')
-      throw new Error(task.error || `Command ${task.status}: ${action.name}`);
+      throw new Error(
+        task.error ||
+          (task.status === 'cancelled'
+            ? `“${action.name}” was canceled.`
+            : `“${action.name}” failed.`),
+      );
   } finally {
     unsubscribe();
   }

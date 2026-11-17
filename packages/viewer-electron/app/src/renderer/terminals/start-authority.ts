@@ -30,7 +30,7 @@ export function agentTerminalWork(id: string, active: boolean): void {
 }
 export function definitionRunReason(ids: readonly string[]): string | undefined {
   if (agents.size || getState()?.bootstrap.agentDriven)
-    return 'Workspace commands require a person. Wait for the agent to finish.';
+    return 'Only you can start workspace commands. Wait for the agent to finish.';
   if (ids.some((id) => runDeferred.has(id)))
     return 'An agent opened this view. Choose Shell only to start a terminal yourself.';
   return undefined;

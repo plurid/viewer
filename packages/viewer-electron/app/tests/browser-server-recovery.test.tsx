@@ -94,7 +94,7 @@ it('recovers a stopped server at the same address and clears the obsolete browse
     runtime.revision++;
     for (const listener of runtime.listeners) listener();
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Start server' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start Server' }));
   expect(runtime.action).toHaveBeenCalledWith('server', 'restart');
   act(() => {
     runtime.server = { ...runtime.server, state: 'running' };

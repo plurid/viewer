@@ -272,7 +272,7 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
         );
       return { data, extension: 'mp4', kind: 'video', decoder: 'FFmpeg 9.0.2' };
     } catch (error) {
-      if (signal.aborted) throw signal.reason ?? new Error('Video preview cancelled.');
+      if (signal.aborted) throw signal.reason ?? new Error('The video preview was canceled.');
       if (deadline.signal.aborted)
         throw new Error(
           'Local video conversion exceeded two minutes. Open the file in its original app.',

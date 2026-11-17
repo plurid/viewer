@@ -29,7 +29,7 @@ export function FolderAccessButton({
           .finally(() => setBusy(false));
       }}
     >
-      {busy ? 'Choosing folder…' : 'Allow folder access…'}
+      {busy ? 'Choosing folder…' : 'Allow Folder Access…'}
     </button>
   );
 }

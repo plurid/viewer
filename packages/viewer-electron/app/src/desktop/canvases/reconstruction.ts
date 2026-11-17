@@ -110,7 +110,7 @@ export class Reconstructions {
   }
   private async load(owner: number, id: string): Promise<ReconstructionJob> {
     let job = await this.store(id).load();
-    if (!job) throw new Error('This reconstruction is unavailable.');
+    if (!job) throw new Error('Viewer has no record of this reconstruction. Start it again.');
     await this.ports.canvases.read(owner, job.canvasID);
     if (job.state === 'submitting')
       job = await this.save({

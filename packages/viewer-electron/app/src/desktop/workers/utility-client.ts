@@ -196,7 +196,7 @@ export class UtilityClient<Methods extends WorkerMethods = WorkerMethods> {
         return;
       }
       if (signal?.aborted) {
-        reject(new Error('Task cancelled.'));
+        reject(new Error('The task was canceled.'));
         return;
       }
       const id = randomUUID();
@@ -212,7 +212,7 @@ export class UtilityClient<Methods extends WorkerMethods = WorkerMethods> {
         }
         reject(new Error(message));
       };
-      const cancel = () => fail('Task cancelled.');
+      const cancel = () => fail('The task was canceled.');
       const timer = setTimeout(() => fail('Background operation timed out.'), timeout);
       signal?.addEventListener('abort', cancel, { once: true });
       this.pending.set(id, { resolve, reject, timer, cleanup });

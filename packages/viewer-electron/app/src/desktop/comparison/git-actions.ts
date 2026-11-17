@@ -163,7 +163,7 @@ async function headText(gitDirectory: string): Promise<string> {
   try {
     const info = await fileStat(handle);
     if (!info.isFile() || info.size > 4096)
-      throw new Error('Git HEAD is not a bounded regular file.');
+      throw new Error('Git’s HEAD file is too large or is not a regular file.');
     const bytes = Buffer.alloc(4097);
     const { bytesRead } = await handle.read(bytes, 0, bytes.length, 0);
     if (bytesRead > 4096) throw new Error('Git HEAD changed while it was read.');
@@ -187,7 +187,7 @@ function branchReference(value: string): boolean {
 
 function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const cancel = () => reject(new Error('Git action cancelled before launch.'));
+    const cancel = () => reject(new Error('The Git action was canceled before it started.'));
     signal.addEventListener('abort', cancel, { once: true });
     if (signal.aborted) cancel();
     void work.then(resolve, reject).finally(() => signal.removeEventListener('abort', cancel));
@@ -242,7 +242,7 @@ export class GitActions {
 
   private check(ticket: Ticket): void {
     if (this.closed || ticket.abort.signal.aborted)
-      throw new Error('Git action cancelled before launch.');
+      throw new Error('The Git action was canceled before it started.');
   }
 
   private read(directory: string, args: readonly string[], ticket: Ticket): Promise<Buffer> {
@@ -329,7 +329,7 @@ export class GitActions {
     }
     if (Buffer.byteLength(paths.join('\0')) > 128 * 1024)
       throw new Error(
-        'The selected paths exceed Git’s argument budget. Stage the repository instead.',
+        'Too many paths are selected for one Git command. Stage the whole repository instead.',
       );
     return [...new Set(paths)];
   }
@@ -400,7 +400,7 @@ export class GitActions {
         ];
       }
       default:
-        throw new Error('This Git action is unavailable.');
+        throw new Error('Viewer doesn’t offer this Git action.');
     }
   }
 
@@ -434,7 +434,8 @@ export class GitActions {
 
   private async prepare(request: GitActionRequest, ticket: Ticket): Promise<GitActionReply> {
     boundedArgument(request.id, 'Git terminal ID', 200);
-    if (!gitActionKinds.includes(request.kind)) throw new Error('This Git action is unavailable.');
+    if (!gitActionKinds.includes(request.kind))
+      throw new Error('Viewer doesn’t offer this Git action.');
     for (const [label, value] of [
       ['columns', request.cols ?? 80],
       ['rows', request.rows ?? 24],

@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { missingDefinitionCode } from '../../domain/definitions';
-import {
-  projectDefinitionSchema,
-  projectReference,
-  type ProjectAssociation,
-  type ProjectDefinition,
-  type ProjectDocument,
-  type ProjectLayout,
-  type PortableDiffSource,
+import { projectDefinitionSchema, projectReference } from '../../domain/workspaces/project';
+import type {
+  ProjectAssociation,
+  ProjectDefinition,
+  ProjectDocument,
+  ProjectLayout,
+  PortableDiffSource,
 } from '../../domain/workspaces/project';
 import { parentPath } from '../../domain/workspaces/planes';
 import type {
@@ -41,7 +40,9 @@ import {
   getState,
   useViewer,
 } from '../state/store';
-import { Dialog, NameDialog, PathField } from '../ui/primitives';
+import { Dialog, NameDialog, PathField, tryAgainLabel } from '../ui/primitives';
+import { DestinationField } from '../ui/DestinationField';
+import { useHomeText } from '../ui/PathLabel';
 import { useWorkspace } from './context';
 import { errorMessage } from '../../domain/errors';
 import { sendWindowEvent, useWindowEvent } from '../app/window-events';
@@ -133,14 +134,14 @@ export function ProjectFileNotice() {
     <div className="bar project-file-notice" role="status">
       <span title={project.file}>
         {problem?.missing
-          ? 'Project file is missing. Your open planes are still available.'
+          ? 'The project file was moved or deleted. Your planes stay open.'
           : problem
             ? 'Project file: ' + problem.message
             : 'Project file changed on disk.'}
       </span>
       {!problem?.missing && (
         <button onClick={() => requestProject('reload')}>
-          {problem ? 'Retry…' : 'Review updated project…'}
+          {problem ? `${tryAgainLabel}…` : 'Review Updated Project…'}
         </button>
       )}
       <button onClick={() => requestProject('close')}>Close project</button>
@@ -350,6 +351,7 @@ export function ProjectControls() {
   const [naming, setNaming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const shownError = useHomeText(error);
   const operation = useRef(0);
   useEffect(() => {
     operation.current++;
@@ -463,7 +465,7 @@ export function ProjectControls() {
             Replace this workspace's open planes, folder views and layout with the saved project?
           </p>
           {project?.dirty && (
-            <p>Your private session has changes that have not been saved to the project file.</p>
+            <p>This workspace has changes you haven’t saved to the project file.</p>
           )}
           <PathField className="muted" path={reload.file} />
         </div>
@@ -482,7 +484,7 @@ export function ProjectControls() {
                 .finally(() => setBusy(false));
             }}
           >
-            Reload project
+            Reload Project
           </button>
         </footer>
       </Dialog>
@@ -490,7 +492,7 @@ export function ProjectControls() {
   if (naming && project)
     return (
       <NameDialog
-        title="Save arrangement"
+        title="Save Arrangement"
         initial=""
         action="Save"
         onClose={() => setNaming(false)}
@@ -517,53 +519,44 @@ export function ProjectControls() {
   if (!panel) return null;
   return (
     <Dialog
-      title={panel === 'bindings' ? 'Project folders' : 'Saved arrangements'}
+      title={panel === 'bindings' ? 'Project Folders' : 'Saved Arrangements'}
       onClose={() => !busy && setPanel(null)}
     >
-      <div className="dialog-body project-controls">
+      <div className="dialog-body project-controls dialog-form">
         {!project ? (
           <p>Create or open a project first.</p>
         ) : panel === 'bindings' ? (
           <>
             <p className="muted">
-              External locations are saved on this Mac. Choosing a folder authorizes that location.
+              Folder choices are saved on this Mac. Choosing a folder gives Viewer access to it.
             </p>
             {project.definition.bindings.length === 0 && (
               <p>All planes are inside the project folder.</p>
             )}
             {project.definition.bindings.map((binding) => (
-              <div className="project-control-row" key={binding.name}>
-                <div>
-                  <strong>{binding.label}</strong>
-                  <p className="muted">
-                    {project.bindings[binding.name] || 'Choose this folder to restore its planes'}
-                  </p>
-                </div>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    setBusy(true);
-                    void window.viewer
-                      .chooseFolder(project.bindings[binding.name])
-                      .then(async (path) => {
-                        if (path)
-                          await installProject(
-                            {
-                              file: project.file,
-                              root: project.root,
-                              revision: project.revision,
-                              definition: definition(project, workspace.captureLayout()),
-                            },
-                            { ...project.bindings, [binding.name]: path },
-                          );
-                      })
-                      .catch((error: Error) => setError(error.message))
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  Choose…
-                </button>
-              </div>
+              <DestinationField
+                key={binding.name}
+                label={binding.label}
+                path={project.bindings[binding.name] || ''}
+                empty="Not chosen. Planes in this folder stay closed."
+                disabled={busy}
+                onChange={async (path) => {
+                  setBusy(true);
+                  try {
+                    await installProject(
+                      {
+                        file: project.file,
+                        root: project.root,
+                        revision: project.revision,
+                        definition: definition(project, workspace.captureLayout()),
+                      },
+                      { ...project.bindings, [binding.name]: path },
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              />
             ))}
             <button
               disabled={busy}
@@ -604,7 +597,7 @@ export function ProjectControls() {
                   .finally(() => setBusy(false));
               }}
             >
-              Add external folder…
+              Add External Folder…
             </button>
           </>
         ) : (
@@ -636,13 +629,13 @@ export function ProjectControls() {
                 setNaming(true);
               }}
             >
-              Save current arrangement…
+              Save Current Arrangement…
             </button>
           </>
         )}
         {error && (
           <p role="alert" className="error">
-            {error}
+            {shownError}
           </p>
         )}
       </div>

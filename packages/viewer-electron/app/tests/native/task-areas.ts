@@ -253,10 +253,10 @@ try {
     );
   };
   await until(() => evaluate(exists('.folder-explorer')), Boolean, 'Checkout folder');
-  await palette('New task area…');
+  await palette('New Task Area…');
   await field('input[aria-label="New task name"]', 'Task delivery');
   await capture('task-create-dialog-dark');
-  await click('Create task area');
+  await click('Create Task Area');
   await until(
     saved,
     (state) => state.workspaces[0]!.taskAreas?.[0]?.name === 'Task delivery',
@@ -411,7 +411,7 @@ try {
   await focusTask();
   await click('+ Browser', '.task-plane');
   await field('input[aria-label="Task browser address"]', server.url);
-  await click('Open browser', '.task-plane');
+  await click('Open Browser', '.task-plane');
   await until(
     saved,
     (state) => state.workspaces[0]!.panes.some((pane) => pane.type === 'browser'),
@@ -478,7 +478,7 @@ try {
   await focusTask();
   await capture('task-populated-light');
   await capture('task-narrow-light', 760);
-  await click('Arrange open tools', '.task-plane');
+  await click('Arrange Open Tools', '.task-plane');
   await capture('task-arranged-light');
   checks.push(
     'Manual command runs once and its private completed receipt records stdout, cwd, times and exit code without inferring test success.',
@@ -523,7 +523,7 @@ try {
     'Cold restore keeps task references, documents and command output; no command, terminal input or server is replayed. Original reference, index and commit remain unchanged.',
   );
   await palette('Tasks…');
-  await click('Command history', '.tasks-dialog');
+  await click('Command History', '.tasks-dialog');
   await until(
     () => evaluate(countOf('.tasks-list button')),
     (count) => count === 1,
@@ -581,7 +581,9 @@ try {
   connection = await app.connect();
   await until(
     () =>
-      evaluate(pageCall(() => document.body.textContent.includes('Command receipt unavailable'))),
+      evaluate(
+        pageCall(() => document.body.textContent.includes('Can’t read this command receipt')),
+      ),
     Boolean,
     'Missing receipt recovery',
   );

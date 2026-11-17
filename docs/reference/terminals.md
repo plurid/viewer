@@ -13,11 +13,11 @@ above the input is captured on opening: the folder or active browsing column, a 
 folder, a preview's parent, or Home when no file context is active. Execution refuses a context
 whose workspace, plane or path has changed.
 
-Output streams inline with status, exit code, **Stop**, **Copy output** and **Open receipt**.
+Output streams inline with status, exit code, **Stop**, **Copy Output** and **Open Receipt**.
 Closing the palette does not cancel the command, and reopening returns to its last output. Only one
 quick command runs at a time in a window. The output buffer keeps the last 256 KiB and marks
 truncation. Interactive programs need a terminal plane. Quick commands use the same execution
-service, process cancellation and receipts as **Run command…**.
+service, process cancellation and receipts as **Run Command…**.
 
 While the draft is empty, Quick command lists [declared commands](#declared-commands) from files
 under their file names. Pick one to fill the input, then press **Return** or choose **Run**. Picking
@@ -25,14 +25,14 @@ a row never runs it.
 
 ## Run one command
 
-**Run command…** opens the **Run command** dialog for the current folder.
+**Run Command…** opens the **Run command** dialog for the current folder.
 
 | Control             | Behavior                                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------ |
 | **Command**         | One or more shell lines, up to 16,000 characters. **⌘Return** runs it.                           |
 | **Recent**          | The last 20 commands run from this window; **Clear** empties the list.                           |
-| **Run**             | Starts the command in the folder and shows it in **Command progress**.                           |
-| **Save as action…** | Names it (**Action name**), then **Review in Settings** sends a draft to **Settings → Actions**. |
+| **Run**             | Starts the command in the folder and shows it in **Command Progress**.                           |
+| **Save as Action…** | Names it (**Action name**), then **Review in Settings** sends a draft to **Settings → Actions**. |
 
 The command uses the default shell profile. **Settings → Terminals → Command startup** defaults to
 **Load shell configuration**: Viewer adds `-i` for zsh, bash and fish, preserving the profile's
@@ -42,7 +42,7 @@ own startup files, including `.zshrc` for zsh, so configured aliases and functio
 
 Choose **Use profile arguments only** to run `SHELL ARGS -c COMMAND` without adding `-i`. An
 explicit interactive-mode argument in a profile takes precedence. Other shells use only their
-profile arguments. This setting applies to quick commands and **Run command…**, and leaves saved
+profile arguments. This setting applies to quick commands and **Run Command…**, and leaves saved
 custom actions unchanged.
 
 Interactive shell startup runs in a pseudoterminal, so shell plugins can initialize job control and
@@ -50,8 +50,8 @@ terminal features. Its output is captured as plain text, with terminal control s
 line endings normalized. The command panel accepts no terminal input; stdout and stderr are
 combined. Viewer checks the folder is the same one before launch and refuses if it changed.
 
-**Command progress** shows each command's status, exit code, elapsed seconds and output, with
-**Stop**, **Open receipt** and **Copy output**. Hiding the panel leaves commands running.
+**Command Progress** shows each command's status, exit code, elapsed seconds and output, with
+**Stop**, **Open Receipt** and **Copy Output**. Hiding the panel leaves commands running.
 
 | Rule      | Behavior                                                                                                                                   |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -67,7 +67,7 @@ For a program that needs input, use a terminal plane.
 
 ## Declared commands
 
-**Run command…** lists declared commands above **Recent**. Quick command lists them while its draft
+**Run Command…** lists declared commands above **Recent**. Quick command lists them while its draft
 is empty. Rows show the literal line and muted body. Make targets also show the comment above as
 context; Procfile rows show their entry name. Parent sources show their relative path, such as
 `../../package.json`. The last matching entry you ran appears first with **Last run**. At most eight
@@ -78,7 +78,7 @@ rows appear; each is keyboard reachable. A pick fills and focuses the input. Rev
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `package.json`                        | String-valued `scripts`: `pnpm run dev`, for example. Installation and packaging lifecycle scripts are hidden. `pre<x>` and `post<x>` are hidden only when `<x>` is a script in that file or an npm lifecycle event; `preview` and `prettier` remain visible. |
 | `GNUmakefile`, `makefile`, `Makefile` | Column-zero targets: `make test`. Only the first of these filenames present in a folder is used. `.PHONY` targets lead; special, pattern, variable and assignment declarations are omitted. Includes are not followed.                                        |
-| `justfile`, `Justfile`, `.justfile`   | Public recipes without required parameters: `just dev`. Private, confirmation and recipes for other operating systems are omitted.                                                                                                                            |
+| `justfile`, `Justfile`, `.justfile`   | Public recipes without required parameters: `just dev`. Private and confirmation recipes, and recipes for other operating systems, are omitted.                                                                                                               |
 | `Procfile`                            | Named entries: the literal command after `name:`.                                                                                                                                                                                                             |
 | `deno.json`, `deno.jsonc`             | String tasks or task objects with a `command`: `deno task dev`. JSON comments and trailing commas are accepted.                                                                                                                                               |
 
@@ -97,19 +97,22 @@ Makefile uses `make -C ../.. target` to run in its folder. Parent Procfiles are 
 Each file is limited to 256 KiB and 50 entries. Names must match
 `^[A-Za-z0-9][A-Za-z0-9:._/@+-]{0,99}$`; invalid names are dropped, never quoted. Generated lines
 and command bodies must be one line of at most 1,000 characters, without controls, tabs, invisible
-formatting, default ignorable Unicode characters or unpaired surrogates. Detail and context are each
-limited to 200 characters. Discovery executes no program and follows no Makefile include. Results
-are cached in memory for ten seconds; slow or unavailable reads show no list and leave typing
-available.
+formatting, default ignorable Unicode characters or unpaired surrogates. Emoji text or presentation
+selectors are allowed immediately after an emoji character; a zero-width joiner is allowed only
+between emoji characters, including after an emoji's presentation selector. Other invisible
+characters remain forbidden. Detail and context are each limited to 200 characters. Discovery
+executes no program and follows no Makefile include. Results are cached in memory for ten seconds;
+slow or unavailable reads show no list and leave typing available.
 
-After a successful Run of a line in the cached list, the desktop re-reads the declarations in the
-background. Recording never delays the Run reply or turns a started command into a failure. For an
-exact line match it remembers only the source file relative to the real root, entry name and time in
-the private `declared-commands-v1.json` (mode 0600, at most 200 roots and 1 MiB), the sole Last run
+After a successful Run, the desktop re-reads the declarations in the background. A valid cached list
+skips this work only for a line it does not contain; an expired or absent cache is re-derived.
+Recording never delays the Run reply or turns a started command into a failure. For an exact line
+match it remembers only the source file relative to the real root, entry name and time in the
+private `declared-commands-v1.json` (mode 0600, at most 200 roots and 1 MiB), the sole Last run
 store. Found workspace storage holds no Last run references. It creates this file on the first
-recorded match, never at launch, and keeps unreadable data aside. **Clear recent folders** clears
+recorded match, never at launch, and keeps unreadable data aside. **Clear Recent Folders** clears
 these references; Undo does not restore them. They are excluded from backups, exports and agent
-discovery. This store contains no command text; running still creates the ordinary Command history
+discovery. This store contains no command text; running still creates the ordinary Command History
 receipt below.
 
 Agents and agent-driven windows cannot request these lists. Spoken plans, macros and custom actions
@@ -118,16 +121,16 @@ asks for permission.
 
 ## Command receipts
 
-Each quick command and **Run command…** run writes a private receipt in Viewer's data. **Tasks…** →
-**Command history** lists them, and **Open receipt** opens one as a plane.
+Each quick command and **Run Command…** run writes a private receipt in Viewer's data. **Tasks…** →
+**Command History** lists them, and **Open Receipt** opens one as a plane.
 
-| Field   | Content                                                                                       |
-| ------- | --------------------------------------------------------------------------------------------- |
-| Outcome | **Running**, **Finished**, **Exited N**, **Stopped**, **Failed to finish** or **Interrupted** |
-| Times   | Start and end                                                                                 |
-| Folder  | The command's working folder, with **Copy path** before it                                    |
-| Command | The literal text run                                                                          |
-| Output  | The last 256 KiB                                                                              |
+| Field   | Content                                                                                                  |
+| ------- | -------------------------------------------------------------------------------------------------------- |
+| Outcome | **Running**, **Done**, **Failed with exit code N**, **Stopped**, **Failed to finish** or **Interrupted** |
+| Times   | Start and end                                                                                            |
+| Folder  | The command's working folder, with **Copy path** before it                                               |
+| Command | The literal text run                                                                                     |
+| Output  | The last 256 KiB                                                                                         |
 
 **Export Markdown…** saves a receipt as a Markdown file. A receipt still running when Viewer quit
 reads **Interrupted**: _Viewer closed before a final outcome was recorded. The command was not
@@ -138,8 +141,8 @@ is full. Existing receipts were preserved.** Closing a receipt plane keeps the r
 
 | Command                 | Opens                                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------------- |
-| **Open terminal plane** | A terminal linked to the folder plane, starting in its folder.                        |
-| **New terminal plane**  | A root terminal plane in the folder where new planes start (**Settings → Browsing**). |
+| **Open Terminal Plane** | A terminal linked to the folder plane, starting in its folder.                        |
+| **New Terminal Plane**  | A root terminal plane in the folder where new planes start (**Settings → Browsing**). |
 
 Each terminal plane has its own shell, started from the default shell profile.
 
@@ -168,7 +171,7 @@ Editing a definition never rearranges an open workspace, and remembered planes t
 reopen. A waiting command terminal shows the definition's current command only while the plane at
 that index is still a terminal whose folder resolves to this pane's folder. **Run** runs exactly the
 command shown. Otherwise the panel says **This terminal changed in the definition.** and offers
-**Reset to definition…** and **Shell only**. **Run all** skips that terminal and shows its outcome.
+**Reset to Definition…** and **Shell only**. **Run all** skips that terminal and shows its outcome.
 
 A notice in normal flow offers **Run all N commands** for the planes still waiting for a choice.
 **Not now** hides that notice until the workspace next opens or the window reloads. Each plane keeps
@@ -218,7 +221,7 @@ report-shaped input and every DECRQSS reply are dropped while the command is pen
 ## Shell profiles
 
 **Settings → Terminals** → **Shell profiles** defines what a terminal starts. **Default shell
-profile** chooses the one used by terminal planes, **Run command…** and external terminals.
+profile** chooses the one used by terminal planes, **Run Command…** and external terminals.
 
 | Field          | Rule                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------------ |
@@ -226,7 +229,7 @@ profile** chooses the one used by terminal planes, **Run command…** and extern
 | **Executable** | A program path or name; empty uses your login shell (`$SHELL`, else `/bin/zsh`).                 |
 | Arguments      | Up to 100 literal arguments. The built-in **Login shell** profile uses `-l`.                     |
 | Environment    | Variables named `[A-Za-z_][A-Za-z0-9_]*`. `DYLD_*`, `ELECTRON_*` and `NODE_OPTIONS` are refused. |
-| Count          | 1 to 30 profiles. **New shell profile** adds one; **Remove profile** removes one.                |
+| Count          | 1 to 30 profiles. **New Shell Profile** adds one; **Remove Profile** removes one.                |
 
 The built-in login shell starts without asking. Any other profile asks **Start terminal profile
 “NAME” for the first time?** in a system dialog, showing exactly what it runs. The answer is kept

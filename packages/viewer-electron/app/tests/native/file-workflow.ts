@@ -154,7 +154,7 @@ for (let launch = 0; launch < 2; launch++) {
         'Content-only match',
         30000,
       );
-      await actions.button('Open results');
+      await actions.button('Open Results');
       const match = '.search-explorer [data-file-path=' + JSON.stringify(note) + ']';
       await until(() => evaluate(exists(match)), Boolean, 'Content result row');
       await evaluate(pageCall(doubleClick, match));
@@ -165,7 +165,7 @@ for (let launch = 0; launch < 2; launch++) {
       );
       checks.push('Browse and find a document by body text absent from its filename');
 
-      await actions.palette('Edit text');
+      await actions.palette('Edit Text');
       await actions.text('.text-editing .cm-content', draft + '\n' + original);
       await until(
         async () =>
@@ -203,7 +203,7 @@ for (let launch = 0; launch < 2; launch++) {
       );
       await actions.field('Output width', '96');
       await actions.field('Output height', '64');
-      await actions.button('Export image', '.image-tools-dialog');
+      await actions.button('Export Image', '.image-tools-dialog');
       const jobs = await until(
         () => evaluate(pageCall(listJobs)),
         (jobs) => jobs.some((job) => job.status === 'completed'),
@@ -216,7 +216,7 @@ for (let launch = 0; launch < 2; launch++) {
       assert.equal(bytes.subarray(0, 4).toString(), 'RIFF');
       assert.equal(bytes.subarray(8, 12).toString(), 'WEBP');
       outputHash = await hash(output);
-      await actions.button('Open result', '.image-tools-dialog');
+      await actions.button('Open Result', '.image-tools-dialog');
       const result = await until(
         () => evaluate(pageCall(imageSize)),
         (result) => result.width > 0,

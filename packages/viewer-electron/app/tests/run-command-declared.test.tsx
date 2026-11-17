@@ -124,7 +124,12 @@ describe('declared command picks', () => {
           name: 'build',
           line: 'pnpm run build',
         },
-        { ...commands[1]!, relativeSource: '../../../Makefile', context: 'Run the checks' },
+        {
+          ...commands[1]!,
+          relativeSource: '../../../Makefile',
+          detail: 'npm test',
+          context: 'Run the checks',
+        },
       ],
     });
     const view = render(<RunCommandDialog target={target} onClose={vi.fn()} />);
@@ -133,6 +138,7 @@ describe('declared command picks', () => {
     expect(within(group).getAllByRole('button')).toHaveLength(2);
     expect(within(group).getAllByText('vite')).toHaveLength(2);
     expect(within(list).getByRole('region', { name: '../../../Makefile' })).toBeDefined();
+    expect(within(list).getByText('Run the checks')).toBeDefined();
   });
 
   it('review regression: a pick clears an earlier error and suggestions hide while saving an action', async () => {
@@ -146,7 +152,7 @@ describe('declared command picks', () => {
     const list = await view.findByRole('region', { name: 'Declared commands' });
     fireEvent.click(within(list).getByRole('button', { name: /pnpm run dev/ }));
     expect(view.queryByRole('alert')).toBeNull();
-    fireEvent.click(view.getByRole('button', { name: 'Save as action…' }));
+    fireEvent.click(view.getByRole('button', { name: 'Save as Action…' }));
     expect(view.queryByRole('region', { name: 'Declared commands' })).toBeNull();
   });
 

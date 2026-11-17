@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import type { ScratchPane } from '../../domain/contracts';
 import { textLanguages } from '../../domain/editing/languages';
 import { Loading } from '../ui/primitives';
+import { useShortcutGlyphs } from '../keys/hints';
+import { withShortcut } from '../../domain/preferences/shortcuts';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { usePreviewControlsSlot } from '../previews/controls';
 import { getState, replacePane, report, updatePane, useViewer } from '../state/store';
@@ -35,6 +37,8 @@ export default function ScratchPlane({
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const session = useMemo(() => takeSession(pane.id) ?? crypto.randomUUID(), [pane.id]);
   const settings = useViewer((state) => effectiveWindowSettings(state).editor);
+  // ⌘S saves an untitled plane as a file, as a new document's Save… does on a Mac
+  const saveKeys = useShortcutGlyphs('save-file');
   const current = useRef(pane);
   current.current = pane;
   // a plane made active (⌘T) takes the keys once it is shown; one restored at launch does not
@@ -135,7 +139,7 @@ export default function ScratchPlane({
       {!empty && (
         <button
           className="primary"
-          title="Save As… (⌘S)"
+          title={withShortcut('Save…', saveKeys)}
           onClick={() => void saveAs().catch(report)}
         >
           Save…

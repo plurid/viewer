@@ -229,11 +229,11 @@ describe('notebook parser', () => {
     expect(first!.omittedOutputs).toBe(1);
     expect(first!.outputs).toEqual([
       { kind: 'text', source: 'stdout', text: 'twelve cha', truncated: true },
-      { kind: 'omitted', reason: 'An image output exceeds the preview limit.' },
+      { kind: 'omitted', reason: 'An image too large to show is left out.' },
     ]);
     expect(second!.outputs).toEqual([
-      { kind: 'omitted', reason: 'An image output is not valid base64.' },
-      { kind: 'omitted', reason: 'Output of type application/vnd.widget+json is not shown.' },
+      { kind: 'omitted', reason: 'A damaged image is left out.' },
+      { kind: 'omitted', reason: "An interactive widget isn't shown." },
     ]);
   });
 });

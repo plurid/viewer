@@ -173,13 +173,13 @@ const clickButton = (scope: string, label: string) =>
 function editDefinition() {
   document.querySelector<HTMLElement>('.workflow-definition summary')!.click();
   [...document.querySelectorAll<HTMLButtonElement>('.workflow-definition button')]
-    .find((button) => button.textContent === 'Edit definition')!
+    .find((button) => button.textContent === 'Edit Definition')!
     .click();
 }
 
 function cancelEditing() {
   [...document.querySelectorAll<HTMLButtonElement>('.workflow-definition button')]
-    .find((button) => button.textContent === 'Cancel editing')!
+    .find((button) => button.textContent === 'Cancel Editing')!
     .click();
   document.querySelector<HTMLElement>('.workflow-definition summary')!.click();
 }
@@ -190,10 +190,8 @@ const reviewCopy = () =>
     .click();
 
 const completedShown = () =>
-  !!document.querySelector('.workflow-run h3')?.textContent.includes('Completed') &&
-  !!document
-    .querySelector('.workflow-run-choice[aria-pressed=true]')
-    ?.textContent.includes('Completed');
+  !!document.querySelector('.workflow-run h3')?.textContent.includes('Done') &&
+  !!document.querySelector('.workflow-run-choice[aria-pressed=true]')?.textContent.includes('Done');
 
 /** Closes Workflows, then opens Related files for the paths. */
 function openRelationships(detail: { paths: string[]; paneID: string }) {
@@ -262,7 +260,7 @@ try {
   );
   assert.equal(await readFile(path.join(destination, 'Source.txt'), 'utf8').catch(() => ''), '');
   assert.deepEqual(await evaluate(pageCall(workflowRuns)), []);
-  await evaluate(pageCall(clickButton, '.workflow-definition', 'Run workflow'));
+  await evaluate(pageCall(clickButton, '.workflow-definition', 'Run Workflow'));
   const runs = await until(
     () => evaluate(pageCall(workflowRuns)),
     (runs) => runs[0]?.status === 'waiting-review',
@@ -311,7 +309,7 @@ try {
   );
   await evaluate(pageCall(sendWindowEvent, 'viewer:workflows', { context }));
   await until(() => evaluate(exists('.workflow-run')), Boolean, 'resumed run controls');
-  await evaluate(pageCall(clickButton, '.workflow-run', 'Resume workflow'));
+  await evaluate(pageCall(clickButton, '.workflow-run', 'Resume Workflow'));
   await until(
     () => evaluate(pageCall(workflowRun, id)),
     (run) => run.status === 'completed',

@@ -52,7 +52,7 @@ export function EPUBBookmarks({
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <button type="submit">{editing ? 'Save name' : 'Add bookmark'}</button>
+        <button type="submit">{editing ? 'Save Name' : 'Add Bookmark'}</button>
         {editing && (
           <button
             type="button"
@@ -62,7 +62,7 @@ export function EPUBBookmarks({
               setError('');
             }}
           >
-            Cancel rename
+            Cancel Rename
           </button>
         )}
       </form>
@@ -78,7 +78,7 @@ export function EPUBBookmarks({
               <button disabled={!available} onClick={() => open(bookmark)}>
                 {bookmark.name}
               </button>
-              {!available && <small className="muted">Chapter unavailable</small>}
+              {!available && <small className="muted">This chapter isn't in the book now</small>}
               <div className="epub-bookmark-actions">
                 <button
                   aria-label={'Rename bookmark ' + bookmark.name}

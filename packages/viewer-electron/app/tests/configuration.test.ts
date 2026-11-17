@@ -198,7 +198,16 @@ describe('authoritative JSONC configuration', () => {
       // menu items by their labels, where the menu has them
       ['Viewer > Check for Updates… checks.', 'Viewer > Check for Updates checks.'],
       ['Viewer > Quit Viewer, the Dock', 'Quit in the menu, the Dock'],
-      ['(Workspace look…, under its name in the title bar).', '(Workspace background…).'],
+      [
+        'color as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace Look…, under its name in the title bar).',
+        'colour as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace background…).',
+      ],
+      // US spelling, and menu names in Title Case
+      [
+        'space’s color as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace Look…',
+        'space’s colour as #rrggbb; "" follows the appearance. A workspace may set its own (Workspace look…',
+      ],
+      ['Open Linked Plane commands', 'Open linked plane commands'],
       // without filler
       ['instructions, not these', 'instructions rather than these'],
       ['More IDs:', 'Other useful IDs:'],
@@ -853,7 +862,7 @@ describe('importing a configuration (2026-10-20)', () => {
     const exported = path.join(root, 'export.jsonc');
     await fs.writeFile(exported, JSON.stringify(config));
     const confirm = vi.fn(async (_changes: string[]) => false);
-    await expect(service.importConfiguration(exported, confirm)).rejects.toThrow('cancelled');
+    await expect(service.importConfiguration(exported, confirm)).rejects.toThrow('canceled');
     expect(confirm.mock.calls[0]![0].join(' ')).toContain('model providers');
     expect(service.snapshot().settings.providers).toEqual([]);
     confirm.mockResolvedValue(true);

@@ -522,7 +522,7 @@ describe('action admission and local planning', () => {
   it('refuses a request it cannot admit', async () => {
     await refuses(
       planner.start({ recipeID: 'missing', context: context() }),
-      'This action recipe is unavailable.',
+      'This recipe was removed. Choose another.',
     );
     await refuses(
       planner.start({ recipeID: 'batch-rename', context: { ...context(), sources: [] } }),
@@ -1024,7 +1024,7 @@ describe('model proposals', () => {
     expect(failed.summaryInputs).toBeUndefined();
     await refuses(
       planner.exportSummary(failed.id, at('Summary.md')),
-      'This summary is unavailable.',
+      'This summary has ended. Prepare it again.',
     );
   });
 });
@@ -1156,7 +1156,7 @@ describe('applying a reviewed plan', () => {
     await planner.apply({ ...approve(plan), checkpoint: true });
     expect(await planner.get(plan.id)).toMatchObject({
       status: 'failed',
-      error: 'Checkpoints are unavailable in this build.',
+      error: 'This build of Viewer can’t keep checkpoints.',
       undoable: false,
     });
     expect((await readdir(files)).sort()).toEqual(['A.txt', 'B.txt']);

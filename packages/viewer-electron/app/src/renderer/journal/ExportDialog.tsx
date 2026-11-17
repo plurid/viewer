@@ -3,6 +3,7 @@ import type { JournalExportPreview } from '../../domain/journal/events';
 import { formatBytes } from '../../domain/files/entries';
 import { errorMessage } from '../../domain/errors';
 import { Dialog } from '../ui/primitives';
+import { plural } from '../../domain/plural';
 
 export function ExportDialog({
   preview,
@@ -23,16 +24,14 @@ export function ExportDialog({
       className="journal-export"
     >
       <p>
-        {preview.count.toLocaleString()} events · {formatBytes(preview.bytes)} · JSON
+        {plural(preview.count, 'event')} · {formatBytes(preview.bytes)} · JSON
       </p>
       <p>
-        Review the exact export below. It includes internal workspace, plane and task IDs. File
-        names, paths, Chat content and terminal output are excluded.
+        This is exactly what is saved. It holds workspace, plane and task IDs, and no file names,
+        paths, chats or terminal output.
       </p>
       {preview.truncated && (
-        <p>
-          Limited to the newest 2,000 matching events. Narrow the filters to export a smaller range.
-        </p>
+        <p>Only the newest 2,000 events. Narrow the filters to export others.</p>
       )}
       <textarea
         aria-label="Journal export preview"
@@ -65,7 +64,7 @@ export function ExportDialog({
             }
           }}
         >
-          {busy ? 'Saving…' : 'Save export…'}
+          {busy ? 'Saving…' : 'Save Export…'}
         </button>
       </footer>
     </Dialog>

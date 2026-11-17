@@ -9,6 +9,7 @@ import {
 } from '../../domain/preferences/toolbars';
 import { activeWorkspace, useViewer } from '../state/store';
 import { errorMessage } from '../../domain/errors';
+import { plural } from '../../domain/plural';
 import { useCommands, useCommandRevision } from './context';
 import { toolbarKind, saveToolbar } from './toolbar';
 import { Dialog, IconButton, PathField } from '../ui/primitives';
@@ -108,7 +109,7 @@ export function CapabilitiesDialog({
     try {
       if (await registry.run(command)) onClose();
       else {
-        setError('The target changed. Close this view and open it for the current selection.');
+        setError('The selection changed. Close this, then open it again for what is selected now.');
         setBusy(false);
       }
     } catch (error) {
@@ -128,7 +129,7 @@ export function CapabilitiesDialog({
         ? baseName(capturedPath)
         : 'Workspace';
   return (
-    <Dialog title="What can I do here?" wide className="capabilities-dialog" onClose={onClose}>
+    <Dialog title="What Can I Do Here?" wide className="capabilities-dialog" onClose={onClose}>
       <div className="dialog-body capabilities-body">
         <div className="capabilities-context">
           <strong>{targetName}</strong>
@@ -173,7 +174,7 @@ export function CapabilitiesDialog({
             <div className="capabilities-section-heading">
               <h3>{toolbarName(kind)}</h3>
               <button disabled={busy || !customized} onClick={() => void save(undefined)}>
-                Reset to defaults
+                Reset to Defaults
               </button>
             </div>
             {effectivePinned.length === 0 && (
@@ -227,19 +228,12 @@ export function CapabilitiesDialog({
           </p>
         )}
         <div className="capabilities-results" aria-label="Actions">
-          <p role="status">
-            {rows.length} actions{needle ? ' · closest matches first' : ''}
-          </p>
+          <p role="status">{plural(rows.length, 'action')}</p>
           <div className="capabilities-action-scroll" tabIndex={0} aria-label="Action list">
             {rows.length === 0 && (
               <div className="capabilities-empty" role="status">
                 <strong>{needle ? 'No matching actions' : 'No actions available here'}</strong>
-                <p>
-                  {needle
-                    ? 'Try another name or a shorter phrase.'
-                    : 'Choose a file or open a different view.'}
-                  {onlyAvailable ? ' You can also show actions for other contexts.' : ''}
-                </p>
+                {!needle && <p>Choose a file or open a different view.</p>}
                 {needle && <button onClick={() => setQuery('')}>Clear search</button>}
                 {onlyAvailable && (
                   <button onClick={() => setOnlyAvailable(false)}>Show all actions</button>
@@ -263,6 +257,7 @@ export function CapabilitiesDialog({
                   {command.shortcut && <kbd>{command.shortcut}</kbd>}
                   {kind && (
                     <button
+                      aria-label={`${pinned.includes(command.id) ? 'Unpin' : 'Pin'} ${command.label}`}
                       disabled={
                         busy || (!pinned.includes(command.id) && effectivePinned.length >= 8)
                       }
@@ -283,7 +278,11 @@ export function CapabilitiesDialog({
                       {pinned.includes(command.id) ? 'Unpin' : 'Pin'}
                     </button>
                   )}
-                  <button disabled={!command.available || busy} onClick={() => void run(command)}>
+                  <button
+                    aria-label={`Run ${command.label}`}
+                    disabled={!command.available || busy}
+                    onClick={() => void run(command)}
+                  >
                     Run
                   </button>
                 </li>
@@ -299,14 +298,14 @@ export function CapabilitiesDialog({
           summary="Keyboard and mouse"
         >
           <dl>
-            <dt>Tab · Shift+Tab</dt>
-            <dd>Move between controls. Text fields keep their editing keys.</dd>
-            <dt>Escape</dt>
-            <dd>Dismiss the current dialog or menu before changing the workspace.</dd>
+            <dt>⇥ · ⇧⇥</dt>
+            <dd>Move between controls.</dd>
+            <dt>Esc</dt>
+            <dd>Close the open menu or dialog.</dd>
             <dt>File views</dt>
             <dd>
-              Arrow keys move selection; Shift extends it. Space previews a file. Double-click opens
-              it.
+              The arrow keys move the selection; ⇧ extends it. Space previews a file. Double-click
+              opens it.
             </dd>
           </dl>
           <button
@@ -315,7 +314,7 @@ export function CapabilitiesDialog({
               showKeymapHelp();
             }}
           >
-            Show configured key sequences
+            Show Key Sequences
           </button>
         </Disclosure>
       </div>

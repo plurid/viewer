@@ -537,7 +537,8 @@ class LayoutWriter {
   }
 
   private imaging(): LayoutImaging {
-    if (!this.layout.imaging) throw new Error('Image processing is unavailable here.');
+    if (!this.layout.imaging)
+      throw new Error('This build of Viewer can’t process images for layouts.');
     return this.layout.imaging();
   }
 

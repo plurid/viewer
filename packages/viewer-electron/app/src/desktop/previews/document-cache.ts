@@ -105,7 +105,8 @@ export class DocumentCache {
         if (error) reject(error);
         else resolve(value!);
       };
-      const cancel = () => finish(signal?.reason ?? new Error('Document preview cancelled.'));
+      const cancel = () =>
+        finish(signal?.reason ?? new Error('The document preview was canceled.'));
       signal?.addEventListener('abort', cancel, { once: true });
       if (signal?.aborted) cancel();
       item.work.then(

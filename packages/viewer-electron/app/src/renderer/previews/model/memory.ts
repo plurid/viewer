@@ -1,5 +1,19 @@
 import * as THREE from 'three';
 
+const pressureListeners = new Set<() => void>();
+
+export function onModelMemoryPressure(listener: () => void): () => void {
+  pressureListeners.add(listener);
+  return () => {
+    pressureListeners.delete(listener);
+  };
+}
+
+/** A model over its decoded budget asks idle model memory to go: cached geometry, a warm worker. */
+export function releaseModelMemory(): void {
+  for (const listener of pressureListeners) listener();
+}
+
 /** Conservative decoded allocations, with shared storage counted once. File
  * size alone cannot bound expanded geometry, morph data or image textures. */
 export function modelMemory(object: THREE.Object3D) {
@@ -57,9 +71,13 @@ export function modelMemory(object: THREE.Object3D) {
 }
 export function assertModelMemory(object: THREE.Object3D, limit = 128_000_000) {
   const usage = modelMemory(object);
-  if (usage.geometryBytes > limit)
+  if (usage.geometryBytes > limit) {
+    releaseModelMemory();
     throw new Error('This model exceeds the 128 MB decoded geometry limit.');
-  if (usage.textureBytes > limit)
+  }
+  if (usage.textureBytes > limit) {
+    releaseModelMemory();
     throw new Error('This model exceeds the 128 MB decoded texture limit.');
+  }
   return usage;
 }

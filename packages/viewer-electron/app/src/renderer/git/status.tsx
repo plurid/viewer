@@ -8,6 +8,18 @@ import { pathContains } from '../../domain/files/paths';
 import { errorMessage } from '../../domain/errors';
 import { baseName, parentPath } from '../../domain/workspaces/planes';
 import { listedEntries } from '../explorer/useFolder';
+import { plural } from '../../domain/plural';
+
+/** A change's Git state in words, as the badge's name and the Git column show it. */
+export const gitStatusLabels: Readonly<Record<GitStatus, string>> = {
+  modified: 'Modified',
+  added: 'Added',
+  deleted: 'Deleted',
+  untracked: 'Untracked',
+  conflict: 'Conflict',
+  renamed: 'Renamed',
+  copied: 'Copied',
+};
 
 interface GitView {
   result: GitResult;
@@ -161,8 +173,8 @@ export function GitBadge({ entry }: { entry: FileEntry }) {
   return (
     <span
       className={`git-badge git-${status}`}
-      title={`Git: ${status}`}
-      aria-label={`Git: ${status}`}
+      title={`Git: ${gitStatusLabels[status]}`}
+      aria-label={`Git: ${gitStatusLabels[status]}`}
     >
       {gitBadge[status]}
     </span>
@@ -171,7 +183,8 @@ export function GitBadge({ entry }: { entry: FileEntry }) {
 
 export function GitColumn({ entry }: { entry: FileEntry }) {
   const view = useGitStatus(entry.parent);
-  return <span className="file-git">{view?.statuses.get(entry.path) ?? ''}</span>;
+  const status = view?.statuses.get(entry.path);
+  return <span className="file-git">{status ? gitStatusLabels[status] : ''}</span>;
 }
 
 export function GitBranch({ path, paneID }: { path: string; paneID?: string }) {
@@ -180,8 +193,9 @@ export function GitBranch({ path, paneID }: { path: string; paneID?: string }) {
   if (!view || view.result.kind === 'outside' || view.result.kind === 'disabled') return null;
   if (view.result.kind !== 'ready')
     return (
+      // the reason, such as a repository too large to read, is in the tooltip
       <span className="git-unavailable" title={view.result.message}>
-        Git unavailable
+        {view.result.kind === 'limited' ? 'Git status limited' : 'No Git status'}
       </span>
     );
   const { snapshot } = view.result;
@@ -193,7 +207,7 @@ export function GitBranch({ path, paneID }: { path: string; paneID?: string }) {
     .filter(Boolean)
     .join(' ');
   const count = snapshot.changes.length;
-  const changes = count ? `${count} ${count === 1 ? 'change' : 'changes'}` : 'Clean';
+  const changes = count ? plural(count, 'change') : 'Clean';
   return (
     <button
       className="git-branch"

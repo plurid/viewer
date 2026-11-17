@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { headerItem } from '../../workspace/header-overflow';
 import type { PreviewContext } from '../contracts';
-import { Empty } from '../../ui/primitives';
+import { Failure } from '../../ui/primitives';
 import { Icon } from '../../ui/Icon';
 import { NativeOpenActions } from '../../ui/navigation/NativeOpenActions';
 import { usePreviewState } from '../state';
@@ -64,29 +64,24 @@ export default function MediaPreview(context: PreviewContext) {
   if (requested && (!derived || cancelled)) {
     if (error || cancelled)
       return (
-        <Empty
+        <Failure
           icon="video"
-          title="Compatibility preview unavailable"
-          detail={cancelled ? 'Video conversion cancelled.' : error}
+          title={cancelled ? 'Video conversion canceled' : "Can't convert this video to play here"}
+          detail={cancelled ? undefined : error}
+          onRetry={() => {
+            setError('');
+            setDerived(undefined);
+            setCancelled(false);
+            setAttempt((value) => value + 1);
+          }}
         >
           <NativeOpenActions path={resource.entry.path} />
-          <button
-            onClick={() => {
-              setError('');
-              setDerived(undefined);
-              setCancelled(false);
-              setAttempt((value) => value + 1);
-            }}
-          >
-            Retry conversion
-          </button>
-          {audioAvailable && <button onClick={() => setAudioOnly(true)}>Play audio only</button>}
-        </Empty>
+          {audioAvailable && <button onClick={() => setAudioOnly(true)}>Play Audio Only</button>}
+        </Failure>
       );
     return (
       <div className="media-converting">
-        <Loading label="Preparing a compatible video copy…" />
-        <p className="muted">This stays on your Mac. The original is unchanged.</p>
+        <Loading label="Converting video to play here…" />
         <button
           onClick={() => {
             if (pending.current) void services.cancelDocument(resource.id, pending.current);
@@ -250,7 +245,7 @@ function MediaPlayer(
         },
         {
           id: 'media-restart',
-          label: 'Restart playback',
+          label: 'Restart Playback',
           available: ready && !error,
           run: () => {
             if (ref.current) ref.current.currentTime = 0;
@@ -262,19 +257,19 @@ function MediaPlayer(
   );
   if (error)
     return (
-      <Empty icon={audio ? 'audio' : 'video'} title="Media could not be played" detail={error}>
+      <Failure
+        icon={audio ? 'audio' : 'video'}
+        title="Can't play this file"
+        detail={error}
+        onRetry={() => {
+          setError('');
+          setReady(false);
+          setSlow(false);
+          setAttempt((value) => value + 1);
+        }}
+      >
         <NativeOpenActions path={resource.entry.path} />
-        <button
-          onClick={() => {
-            setError('');
-            setReady(false);
-            setSlow(false);
-            setAttempt((value) => value + 1);
-          }}
-        >
-          Retry
-        </button>
-      </Empty>
+      </Failure>
     );
   const props = {
     src: resource.url,
@@ -301,7 +296,7 @@ function MediaPlayer(
     onError: () =>
       onFallback
         ? onFallback()
-        : setError('Open this file in its default app or choose another player.'),
+        : setError("Viewer can't play this format. Open it in another app."),
   };
   const subtitles = !audio && !pictureUnavailable ? context.subtitles : undefined;
   const media =
@@ -324,7 +319,7 @@ function MediaPlayer(
         <PreviewToolbar context={context}>
           {context.compatible && (
             <span className="muted" {...headerItem('compatibility', 9, 'detail')}>
-              Compatibility copy · up to 720p
+              Playing a 720p copy
             </span>
           )}
           {!!subtitles?.files.length && (
@@ -340,7 +335,7 @@ function MediaPlayer(
           )}
           {context.editMedia && (
             <button {...headerItem('edit-media', 5, ['edit-media'])} onClick={context.editMedia}>
-              Edit media…
+              Edit Media…
             </button>
           )}
         </PreviewToolbar>
@@ -348,7 +343,7 @@ function MediaPlayer(
       {media}
       {ready && pictureUnavailable && (
         <p className="inline-warning" role="status">
-          No video picture is available. Audio can still play.
+          Viewer can't show this video's picture. Its sound plays.
         </p>
       )}
       {subtitles?.problem && (

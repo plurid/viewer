@@ -239,8 +239,8 @@ export function useFileDrop(directory: () => string | undefined, navigation?: Sp
           sources.length > 10000 ||
           sources.some((path) => typeof path !== 'string')
         )
-          throw new Error('The dragged file selection could not be read.');
-        if (sources.includes(destination)) throw new Error('A folder cannot be moved into itself.');
+          throw new Error("Viewer couldn't read the dragged files.");
+        if (sources.includes(destination)) throw new Error("A folder can't be moved into itself.");
         clear(true);
         void window.viewer.operate({ kind, sources, destination }).catch(report);
       } catch (error) {

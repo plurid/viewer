@@ -16,7 +16,9 @@ async function systemGit(): Promise<string> {
     .then(({ stdout }) => {
       const file = stdout.trim();
       if (!path.isAbsolute(file) || /[\0\r\n]/.test(file))
-        throw new Error('System Git is unavailable.');
+        throw new Error(
+          'Viewer can’t find Git. Install the Xcode Command Line Tools (xcode-select --install).',
+        );
       return file;
     })
     .catch((error) => {

@@ -98,9 +98,7 @@ export class OptimizationReviews implements TransformExecutor {
       process.env.VIEWER_TEST_PRESERVE !== '1' &&
       process.env.VIEWER_TEST_NO_REMOVAL !== '1'
     )
-      this.diagnose(
-        'A private optimization candidate could not be moved to Trash and was retained.',
-      );
+      this.diagnose('Viewer couldn’t move a prepared copy to the Trash, so it kept it.');
   }
   async request(raw: OptimizationRequest, owner: number): Promise<OptimizationReply> {
     const request = optimizationRequestSchema.parse(raw);
@@ -118,7 +116,7 @@ export class OptimizationReviews implements TransformExecutor {
     }
     if (request.kind === 'cancel') {
       const pending = this.pending.get(request.requestID);
-      if (pending?.owner === owner) pending.abort.abort(new Error('Optimization cancelled.'));
+      if (pending?.owner === owner) pending.abort.abort(new Error('Optimization was canceled.'));
       return;
     }
     for (const id of request.ids) {
@@ -359,7 +357,7 @@ export class OptimizationReviews implements TransformExecutor {
       sources[0] !== candidate.summary.source.path ||
       JSON.stringify(plan) !== JSON.stringify(candidate.plan)
     )
-      throw new Error('The reviewed candidate is unavailable. Prepare it again.');
+      throw new Error('The prepared copy is gone. Prepare it again.');
     await this.access([...sources, output]);
     return fileCoordination.run(
       [{ path: sources[0]!, mode: 'read', transform: true }],

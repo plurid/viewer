@@ -212,7 +212,7 @@ export class GitReviews {
       if (request.kind === 'open') return await this.open(request.target, owner, origin, signal);
       const lease = this.leases.get(request.reviewID);
       if (!lease || lease.owner !== owner)
-        throw new Error('This Git review is unavailable. Refresh it.');
+        throw new Error('This Git review is out of date. Refresh it.');
       // Admission order owns the snapshot, even when native checks finish out of
       // order. A cancelled renderer read must never replace a newer mode's list.
       const generation = request.kind === 'read' ? ++lease.generation : lease.generation;

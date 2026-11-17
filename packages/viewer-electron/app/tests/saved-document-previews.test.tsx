@@ -104,7 +104,7 @@ describe('web archive preview', () => {
       new Error('This property list holds no saved web page.'),
     );
     render(<WebArchivePreview {...preview} />);
-    expect(await screen.findByText('The saved page could not be shown')).toBeTruthy();
+    expect(await screen.findByText("Can't show this saved page")).toBeTruthy();
     expect(screen.getByText('This property list holds no saved web page.')).toBeTruthy();
   });
 });
@@ -156,6 +156,6 @@ describe('FictionBook in the book reader', () => {
     const { context: preview, services } = context('fb2', document);
     services.document.mockRejectedValueOnce(new Error('Malformed or unsupported XML.'));
     render(<EPUBPreview {...preview} />);
-    expect(await screen.findByText('FictionBook could not be opened')).toBeTruthy();
+    expect(await screen.findByText("Can't open this FictionBook")).toBeTruthy();
   });
 });

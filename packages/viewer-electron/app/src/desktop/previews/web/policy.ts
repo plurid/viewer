@@ -31,7 +31,7 @@ export function requestPath(raw: string): string[] {
   if (!pathname.startsWith('/') || pathname.startsWith('//') || pathname.length > 8192)
     throw new WebPreviewError(400, 'Invalid request path.');
   if (/%(?:2f|5c|00)/i.test(pathname))
-    throw new WebPreviewError(400, 'Encoded separators are unavailable.');
+    throw new WebPreviewError(400, 'Addresses with encoded slashes aren’t allowed.');
   let decoded: string;
   try {
     decoded = decodeURIComponent(pathname);
@@ -43,7 +43,7 @@ export function requestPath(raw: string): string[] {
   const parts = decoded.slice(1).split('/');
   if (parts.at(-1) === '') parts.pop();
   if (parts.some((part) => !part || part.startsWith('.') || part.includes(':')))
-    throw new WebPreviewError(403, 'Hidden files and traversal paths are unavailable.');
+    throw new WebPreviewError(403, 'Hidden files and paths outside the folder aren’t served.');
   return parts;
 }
 
@@ -209,7 +209,7 @@ export async function abortable<T>(work: Promise<T>, signal: AbortSignal): Promi
   signal.throwIfAborted();
   let abort!: () => void;
   const cancelled = new Promise<never>((_resolve, reject) => {
-    abort = () => reject(signal.reason ?? new Error('Request cancelled.'));
+    abort = () => reject(signal.reason ?? new Error('The request was canceled.'));
     signal.addEventListener('abort', abort, { once: true });
   });
   try {

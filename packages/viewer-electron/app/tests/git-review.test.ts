@@ -169,7 +169,7 @@ describe('Git hunk review', () => {
       fileID: file.id,
       hunks: [file.hunks[0]!.id],
     };
-    await expect(f.service.request(apply, 2)).rejects.toThrow('unavailable');
+    await expect(f.service.request(apply, 2)).rejects.toThrow('out of date');
     await writeFile(f.file, f.changed + 'external edit\n');
     await expect(f.service.request(apply, 1)).rejects.toThrow('file changed');
     await writeFile(f.file, f.changed);
@@ -218,7 +218,7 @@ describe('Git hunk review', () => {
       code: 'ENOENT',
     });
     await f.service.quiesce(f.repository);
-    await expect(f.snapshot('staged')).rejects.toThrow('unavailable');
+    await expect(f.snapshot('staged')).rejects.toThrow('out of date');
   });
 
   it('preserves no-newline markers and keeps patch headers outside opaque hunk choices', () => {

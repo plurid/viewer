@@ -39,6 +39,7 @@ export function settingsDiscovery(settings: ApplicationSettings, query: string) 
     {
       category: 'Themes',
       terms:
+        // eslint-disable-next-line no-restricted-syntax -- British spelling finds it too
         'theme colours colors accent palette dark light iterm vs code import syntax highlighting',
     },
     { category: 'Configuration', terms: 'jsonc config file validate changes import export reset' },

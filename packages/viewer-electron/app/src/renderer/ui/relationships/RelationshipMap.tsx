@@ -130,9 +130,7 @@ export function RelationshipMap({
         <p className="muted">Dashed links are inferred.</p>
       )}
       {others.length === 20 && (
-        <p className="muted">
-          Diagram shows up to 20 related files. The list includes every retained relationship.
-        </p>
+        <p className="muted">The diagram shows up to 20 related files; the list shows them all.</p>
       )}
     </div>
   );

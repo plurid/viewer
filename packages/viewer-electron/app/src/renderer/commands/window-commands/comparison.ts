@@ -21,7 +21,7 @@ export function comparisonCommands({
   return [
     {
       id: 'build-canvas',
-      label: 'Build tool from selection',
+      label: 'Build Tool from Selection',
       group: 'Files',
       icon: 'chat',
       aliases: ['canvas', 'interactive', 'agent tool', 'build app'],
@@ -34,7 +34,7 @@ export function comparisonCommands({
     },
     {
       id: 'new-chat',
-      label: 'Chat about files',
+      label: 'Chat About Files',
       group: 'Files',
       icon: 'chat',
       aliases: ['conversation', 'ask', 'model'],
@@ -53,8 +53,8 @@ export function comparisonCommands({
       label: (context) =>
         context.selection.length &&
         !(context.selection.length === 1 && context.selection[0]!.directory)
-          ? 'Explore selected items'
-          : 'Explore this folder',
+          ? 'Explore Selected Items'
+          : 'Explore This Folder',
       group: 'Files',
       icon: 'search',
       aliases: ['explore', 'agent', 'summarize', 'what is here', 'insights'],
@@ -70,7 +70,7 @@ export function comparisonCommands({
     },
     {
       id: 'compare-files',
-      label: 'Compare files',
+      label: 'Compare Files',
       group: 'Files',
       icon: 'side-by-side',
       aliases: ['diff', 'compare selected'],
@@ -102,7 +102,7 @@ export function comparisonCommands({
     },
     {
       id: 'git-changes',
-      label: 'Git changes',
+      label: 'Git Changes',
       group: 'Git',
       icon: 'list',
       aliases: ['git', 'repository', 'status'],

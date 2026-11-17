@@ -309,8 +309,8 @@ profile with one Meta provider, already allowed pictures. It enters the key in t
 Settings window, as a person does; the key is never written to a file or the log. Each run makes one
 paid check. `--effort minimal` asks for a faster answer.
 
-It records three takes in native 2880 × 1800 frames: **Check laser job…** from **⌘K** and **Check 7
-files**; the findings and the tour; the corrected copy and **Prepare cut sheets**. The model's wait
+It records three takes in native 2880 × 1800 frames: **Check Laser Job…** from **⌘K** and **Check 7
+files**; the findings and the tour; the corrected copy and **Prepare Cut Sheets**. The model's wait
 falls between the first and second takes and is not recorded. `capture.json` keeps the panel's
 findings and reader line, the progress lines it showed, the tour's stops, the correction and the
 nesting. Each take is also written as an MP4 at its recorded timing for the edit.

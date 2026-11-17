@@ -58,8 +58,8 @@ export function cliHelp(topic: readonly string[] = []): string {
     '',
     'Automation connects to the running app with VIEWER_AGENT_TOKEN from Settings → Agents.',
     'Folder, content and model permissions remain separate. A proposal is not approval.',
-    'Use viewer -- PATH for a literal filename that is also a command name.',
-    'Exit codes: 0 success, 1 service failure, 2 usage, 3 connection, 4 missing credentials, 124 timeout, 130 cancelled.',
+    'Use viewer -- PATH to open a file whose name is also a command name.',
+    'Exit codes: 0 success, 1 service failure, 2 usage, 3 connection, 4 missing credentials, 124 timeout, 130 canceled.',
     '',
   ].join('\n');
 }

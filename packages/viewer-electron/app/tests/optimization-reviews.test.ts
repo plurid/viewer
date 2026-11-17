@@ -145,7 +145,7 @@ it('rejects modified sources, tampered candidates, reused exports and revoked ca
       () => {},
       current.id,
     ),
-  ).rejects.toThrow('unavailable');
+  ).rejects.toThrow('Prepare it again');
 });
 
 it('cancels preparation and preserves its partial candidate without granting a review', async () => {
@@ -187,7 +187,7 @@ it('cancels preparation and preserves its partial candidate without granting a r
     },
     7,
   );
-  const rejected = expect(pending).rejects.toThrow('cancelled');
+  const rejected = expect(pending).rejects.toThrow('canceled');
   await ready;
   await service.request({ kind: 'cancel', requestID }, 7);
   await rejected;

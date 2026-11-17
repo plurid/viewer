@@ -125,7 +125,7 @@ describe('literal command execution', () => {
     expect(actionAvailable(action, target(root + '-other'))).toBe(false);
     await expect(
       executions.start(action.id, target(root + '-other'), { value: literal }),
-    ).rejects.toThrow('unavailable');
+    ).rejects.toThrow('doesn’t apply to the selected items');
     await expect(executions.start(action.id, target(), { other: 'unexpected' })).rejects.toThrow(
       'unknown',
     );
@@ -173,7 +173,7 @@ describe('literal command execution', () => {
     );
     cleanup.push(() => executions.close());
     const starting = executions.start('fixture', target());
-    const rejected = expect(starting).rejects.toThrow('cancelled before launch');
+    const rejected = expect(starting).rejects.toThrow('canceled before it started');
     let drained = false;
     const revoking = executions.quiesce(root).then(() => {
       drained = true;

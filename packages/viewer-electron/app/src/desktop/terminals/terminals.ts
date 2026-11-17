@@ -54,7 +54,7 @@ interface TerminalSession {
 export class Terminals {
   private commands = new TerminalCommands((message) => {
     const worker = message.kind === 'start' ? this.ensureWorker() : this.worker;
-    if (!worker) throw new Error('Command terminal worker is unavailable.');
+    if (!worker) throw new Error('This terminal has closed. Open a new terminal plane.');
     worker.postMessage(message);
   });
   private closed = false;
@@ -275,7 +275,7 @@ export class Terminals {
     assertLocalPath(program.request.cwd);
     const check = () => {
       if (this.closed || ticket.cancelled || program.signal.aborted)
-        throw new Error('Git action cancelled before launch.');
+        throw new Error('The Git action was canceled before it started.');
     };
     check();
     if (this.full()) throw new Error('Close a terminal before opening another.');
@@ -283,7 +283,8 @@ export class Terminals {
     await this.access([request.cwd]);
     check();
     const cwd = await fs.realpath(absolute(request.cwd));
-    if (!(await fs.stat(cwd)).isDirectory()) throw new Error('The Git repository is unavailable.');
+    if (!(await fs.stat(cwd)).isDirectory())
+      throw new Error('The repository’s folder no longer exists.');
     if (cwd !== request.cwd) throw new Error('The Git repository moved before launch.');
     await this.access([cwd]);
     check();
@@ -340,7 +341,8 @@ export class Terminals {
     if (this.full()) throw new Error('Close a terminal before opening another.');
     await this.access([request.cwd]);
     const cwd = await fs.realpath(absolute(request.cwd));
-    if (!(await fs.stat(cwd)).isDirectory()) throw new Error('Terminal folder is unavailable.');
+    if (!(await fs.stat(cwd)).isDirectory())
+      throw new Error('The terminal’s folder no longer exists. Choose another folder.');
     const profile =
       options.initialInput === undefined
         ? this.profile(request.profileID)

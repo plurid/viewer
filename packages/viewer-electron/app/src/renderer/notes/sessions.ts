@@ -60,7 +60,7 @@ export function initializeTaskNote(paneID: string, input: NoteDocument): void {
   retired.delete(paneID);
   const document = noteSchema.parse(input);
   if (document.text || document.revision !== 0 || document.kind !== 'note')
-    throw new Error('A new task can initialize only its blank note.');
+    throw new Error('A new task can only start with a blank note.');
   const current = sessions.get(paneID);
   if (current) {
     if (current.document.id !== document.id)
@@ -115,7 +115,7 @@ export async function loadNote(paneID: string, id: string, refresh = false): Pro
     .notes({ kind: 'read', id })
     .then((reply) => {
       if (trashedNotes.has(id)) return;
-      if (reply.kind !== 'document') throw new Error('The note could not be opened.');
+      if (reply.kind !== 'document') throw new Error('Viewer couldn’t open this note.');
       const latest = sessions.get(paneID);
       if (
         latest &&
@@ -176,7 +176,7 @@ export async function flushNote(paneID: string): Promise<void> {
       text,
     })
     .then((reply) => {
-      if (reply.kind !== 'document') throw new Error('The note could not be saved.');
+      if (reply.kind !== 'document') throw new Error('Viewer couldn’t save this note. Try again.');
       session.document = reply.document;
       if (session.title === rawTitle) session.title = reply.document.title;
       session.error = undefined;

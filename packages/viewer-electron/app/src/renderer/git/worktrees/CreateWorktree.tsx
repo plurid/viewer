@@ -79,7 +79,7 @@ export function CreateWorktree({
           disabled={busy}
           onClick={() => setMode('new')}
         >
-          New branch
+          New Branch
         </button>
         <button
           type="button"
@@ -87,7 +87,7 @@ export function CreateWorktree({
           disabled={busy}
           onClick={() => setMode('existing')}
         >
-          Existing branch
+          Existing Branch
         </button>
       </div>
       {mode === 'new' && (
@@ -107,7 +107,7 @@ export function CreateWorktree({
       )}
       {existingName && (
         <p className="worktree-create-warning">
-          That branch already exists. Choose Existing branch to use it.
+          That branch already exists. Choose Existing Branch to use it.
         </p>
       )}
       {invalidName && (
@@ -144,7 +144,7 @@ export function CreateWorktree({
             disabled={busy || (!!task && !task.name.trim())}
             onClick={() => show(occupied)}
           >
-            {task ? 'Use checkout for task' : 'Show worktree'}
+            {task ? 'Use Checkout for Task' : 'Show Worktree'}
           </button>
         </div>
       ) : (
@@ -174,7 +174,7 @@ export function CreateWorktree({
                     .catch((value) => setError(errorMessage(value)));
                 }}
               >
-                Choose parent…
+                Choose Parent…
               </button>
             </div>
           </label>
@@ -200,7 +200,7 @@ export function CreateWorktree({
           className="primary"
           disabled={busy || !valid || !!occupied || (!!task && !task.name.trim())}
         >
-          {busy ? 'Creating…' : task ? 'Create task' : 'Create and open'}
+          {busy ? 'Creating…' : task ? 'Create task' : 'Create and Open'}
         </button>
       </footer>
     </form>

@@ -29,9 +29,7 @@ export function ReconstructionSettings({
     <Disclosure
       variant="row"
       summary="3D reconstruction"
-      meta={
-        configured ? 'Meta SAM 3D Objects · fal connected' : 'Meta SAM 3D Objects · configure fal'
-      }
+      meta={configured ? 'Meta SAM 3D Objects · fal connected' : 'Meta SAM 3D Objects · set up fal'}
     >
       <p className="settings-note">
         Reconstruct a textured 3D mesh from a photo and a reviewed object mask. fal hosts this Meta
@@ -41,7 +39,7 @@ export function ReconstructionSettings({
       <label className="settings-row">
         <span>
           fal API key
-          <small>Stored using the operating system’s secure credential encryption.</small>
+          <small>Saved encrypted by macOS.</small>
         </span>
         <input
           type="password"
@@ -53,7 +51,7 @@ export function ReconstructionSettings({
       </label>
       <div className="settings-actions">
         <button disabled={busy || !key.trim()} onClick={() => void save(key.trim())}>
-          Save key
+          Save Key
         </button>
         {configured && (
           <button disabled={busy} onClick={() => void save('')}>

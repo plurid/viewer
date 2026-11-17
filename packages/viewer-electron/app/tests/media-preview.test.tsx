@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-library/react';
 import MediaPreview from '../src/renderer/previews/modules/MediaPreview';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
+import { PreviewFrameFixture } from './support/preview-frame';
 vi.mock('../src/renderer/ui/navigation/NativeOpenActions', () => ({
   NativeOpenActions: () => null,
 }));
@@ -38,9 +39,14 @@ it('automatically obtains a labelled compatible copy after a video decoder failu
   } as PreviewContext['resource'];
   const read = vi.fn(async () => rendition),
     context = compatibleContext(read);
-  const view = render(<MediaPreview {...context} />);
+  // the label is a fact of the footer's (the Preview Bar Rule)
+  const view = render(
+    <PreviewFrameFixture>
+      <MediaPreview {...context} />
+    </PreviewFrameFixture>,
+  );
   fireEvent.error(view.container.querySelector('video')!);
-  await screen.findByText('Compatibility copy · up to 720p');
+  await screen.findByText('Playing a 720p copy');
   expect(read).toHaveBeenCalledWith('source', expect.any(String));
   expect(view.container.querySelector('video')?.getAttribute('src')).toBe(rendition.url);
   view.unmount();
@@ -57,9 +63,9 @@ it('cancels conversion and releases late bytes without displaying a cancelled co
     context = compatibleContext(read);
   const view = render(<MediaPreview {...context} />);
   fireEvent.error(view.container.querySelector('video')!);
-  await screen.findByText('Preparing a compatible video copy…');
+  await screen.findByText('Converting video to play here…');
   fireEvent.click(screen.getByText('Cancel'));
-  await screen.findByText('Video conversion cancelled.');
+  await screen.findByText('Video conversion canceled');
   await act(async () =>
     finish({
       id: 'late',
@@ -90,13 +96,13 @@ it('labels audio-only decode of a video container instead of implying a working 
     video = result.container.querySelector('video')!;
   Object.defineProperty(video, 'videoWidth', { value: 640, configurable: true });
   fireEvent.loadedData(video);
-  expect(screen.queryByText('No video picture is available. Audio can still play.')).toBeNull();
+  expect(screen.queryByText("Viewer can't show this video's picture. Its sound plays.")).toBeNull();
   Object.defineProperty(video, 'videoWidth', { value: 0, configurable: true });
   fireEvent.canPlay(video);
   const audio = result.container.querySelector('audio');
   expect(audio).toBeTruthy();
   fireEvent.loadedData(audio!);
-  expect(screen.getByText('No video picture is available. Audio can still play.')).toBeTruthy();
+  expect(screen.getByText("Viewer can't show this video's picture. Its sound plays.")).toBeTruthy();
 });
 it('synchronizes native decoded state when a partial video never emits a ready event', async () => {
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
@@ -115,7 +121,7 @@ it('synchronizes native decoded state when a partial video never emits a ready e
     services: {},
   } as unknown as PreviewContext;
   const result = render(<MediaPreview {...context} />);
-  await screen.findByText('No video picture is available. Audio can still play.');
+  await screen.findByText("Viewer can't show this video's picture. Its sound plays.");
   expect(result.container.querySelector('audio')).toBeTruthy();
   expect(result.container.querySelector('.media-loading')).toBeNull();
 });

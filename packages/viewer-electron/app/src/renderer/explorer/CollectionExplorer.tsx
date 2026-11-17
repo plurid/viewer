@@ -26,6 +26,7 @@ import { useContextPublish } from './context-publish';
 import { errorMessage } from '../../domain/errors';
 import { onWindowEvent } from '../app/window-events';
 import { Disclosure } from '../ui/Disclosure';
+import { plural } from '../../domain/plural';
 export function CollectionExplorer({ id }: { id: string }) {
   const active = useViewer((state) => state.activePane);
   const pane = useViewer((state) => activeWorkspace(state).panes.find((pane) => pane.id === id)) as
@@ -220,7 +221,10 @@ export function CollectionExplorer({ id }: { id: string }) {
         .catch(report);
     },
   };
-  if (!pane || !collection) return <Empty title="Collection unavailable" />;
+  if (!pane || !collection)
+    return (
+      <Empty title="This collection is gone" detail="Open it again from Collections and Basket…." />
+    );
   return (
     <div
       className="folder-explorer collection-explorer"
@@ -237,7 +241,7 @@ export function CollectionExplorer({ id }: { id: string }) {
             ? collection.query
             : collection.kind === 'tag'
               ? 'Tagged “' + collection.tag + '”'
-              : 'Explicit collection'}
+              : 'Chosen files'}
         </span>
         <span className="toolbar-spacer" />
         <button onClick={() => setRefresh((value) => value + 1)} disabled={busy}>
@@ -247,7 +251,7 @@ export function CollectionExplorer({ id }: { id: string }) {
           disabled={!entries.length || busy}
           onClick={() => basketEntries(selected.length ? selected : entries)}
         >
-          {selected.length ? 'Add selection to basket' : 'Add collection to basket'}
+          {selected.length ? 'Add Selection to Basket' : 'Add Collection to Basket'}
         </button>
       </div>
       <FileTable paneID={id}>
@@ -256,14 +260,14 @@ export function CollectionExplorer({ id }: { id: string }) {
         ) : entries.length ? (
           <ListView {...props} />
         ) : (
-          <Empty title="No available files" />
+          <Empty title="No files to show" />
         )}
       </FileTable>
       {issues.length > 0 && (
         <Disclosure
           variant="inline"
           className="collection-issues"
-          summary={`${issues.length} unavailable ${issues.length === 1 ? 'location' : 'locations'}`}
+          summary={`${plural(issues.length, 'location')} not found`}
         >
           {issues.slice(0, 100).map((issue, index) => (
             <p className="error" key={index}>
@@ -274,14 +278,14 @@ export function CollectionExplorer({ id }: { id: string }) {
       )}
       <footer className="folder-status">
         <span>
-          {entries.length} files · {selected.length} selected
+          {plural(entries.length, 'file')} · {selected.length} selected
         </span>
         <span>
           {collection.kind === 'query'
             ? 'Smart folder · follows indexed matches'
             : collection.kind === 'tag'
               ? 'Smart folder · follows Finder tags'
-              : 'References keep files in their original folders'}
+              : 'Files stay in their own folders'}
         </span>
       </footer>
       {menu && (

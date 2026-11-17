@@ -60,7 +60,7 @@ it('closes old workers and ignores late parsing results after changing files', a
   await act(async () => pending[0]!.resolve(table('old')));
   expect(view.getByRole('status').textContent).toContain('Reading table');
   await act(async () => pending[1]!.resolve(table('current')));
-  expect(view.container.textContent).toContain('1 rows');
+  expect(view.container.textContent).toContain('1 row · 1 column');
   view.unmount();
   expect(pending[1]!.close).toHaveBeenCalledOnce();
 });
@@ -75,19 +75,17 @@ it('does not reuse a closed table reader when content changes from A to B back t
     pending[1]!.resolve(table('B'));
     pending[2]!.resolve(table('A'));
   });
-  expect(view.container.textContent).toContain('1 rows');
+  expect(view.container.textContent).toContain('1 row · 1 column');
   expect(pending[0]!.close).toHaveBeenCalledOnce();
   expect(pending[1]!.close).toHaveBeenCalledOnce();
 });
 
 it('retains an explicit recovery action after a worker failure', async () => {
   const view = render(createElement(DelimitedTable, { text: 'A', delimiter: ',' }));
-  await act(async () =>
-    pending[0]!.reject(new Error('Table processing stopped. Retry the preview.')),
-  );
-  expect(view.container.textContent).toContain('Table unavailable');
-  fireEvent.click(view.getByRole('button', { name: 'Retry table' }));
+  await act(async () => pending[0]!.reject(new Error('Table processing stopped. Try again.')));
+  expect(view.container.textContent).toContain("Can't read this table");
+  fireEvent.click(view.getByRole('button', { name: 'Try Again' }));
   await waitFor(() => expect(pending).toHaveLength(2));
   await act(async () => pending[1]!.resolve(table('recovered')));
-  expect(view.container.textContent).toContain('1 rows');
+  expect(view.container.textContent).toContain('1 row · 1 column');
 });

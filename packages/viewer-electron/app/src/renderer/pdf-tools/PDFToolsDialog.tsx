@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry } from '../../domain/contracts';
-import {
-  pdfOutput,
-  pdfPageRange,
-  type PDFDraftPage,
-  type PDFInput,
-} from '../../domain/operations/pdf-pages';
-import { Dialog, Empty, IconButton, Loading } from '../ui/primitives';
+import { pdfOutput, pdfPageRange } from '../../domain/operations/pdf-pages';
+import type { PDFDraftPage, PDFInput } from '../../domain/operations/pdf-pages';
+import { Dialog, Failure, IconButton, Loading } from '../ui/primitives';
+import { plural } from '../../domain/plural';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { DestinationField } from '../ui/DestinationField';
+import { FileNameField, fileNameError } from '../ui/FileNameField';
+import { FormField } from '../ui/FormField';
+import { useHome } from '../ui/PathLabel';
 import { report, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { PDFPagePreview } from './PDFPagePreview';
 import './pdf-tools.css';
 import { isActiveJob } from '../../domain/operations/jobs';
 import { errorMessage } from '../../domain/errors';
+import { homeText } from '../../domain/files/path-label';
 
 export function PDFToolsDialog({
   files,
@@ -38,11 +40,12 @@ export function PDFToolsDialog({
     [separate, setSeparate] = useState(false);
   const [folder, setFolder] = useState(files[0]!.parent),
     [name, setName] = useState(
-      files.length > 1 ? 'Merged.pdf' : files[0]!.name.replace(/\.pdf$/i, '') + ' edited.pdf',
+      files.length > 1 ? 'Merged' : files[0]!.name.replace(/\.pdf$/i, '') + ' edited',
     );
   const [busy, setBusy] = useState(false),
     [ids, setIDs] = useState<string[]>([]);
   const run = useRef({ cancelled: false, ids: [] as string[] });
+  const home = useHome();
   useEffect(() => {
     setIDs([]);
   }, [pages, inputs, name, folder, separate]);
@@ -50,10 +53,10 @@ export function PDFToolsDialog({
     const result = [...previous];
     for (const file of entries) {
       if (result.some((input) => input.file.path === file.path)) continue;
-      if (result.length >= 16) throw new Error('PDF tools supports up to 16 source PDFs.');
+      if (result.length >= 16) throw new Error('PDF Tools takes up to 16 PDFs at once.');
       const value = await window.viewer.pdfInspect(file.path);
       if (result.reduce((total, input) => total + input.pages, value.pages) > 1000)
-        throw new Error('PDF tools supports up to 1,000 source pages. Choose a smaller document.');
+        throw new Error('PDF Tools takes up to 1,000 pages at once. Choose a smaller document.');
       result.push({ file, ...value });
     }
     return result;
@@ -178,9 +181,7 @@ export function PDFToolsDialog({
           kind: 'convert',
           sources: output.sources.map((input) => input.file.path),
           destination: folder,
-          name: separate
-            ? name.replace(/\.pdf$/i, '') + ` ${String(index + 1).padStart(3, '0')}.pdf`
-            : name,
+          name: separate ? name + ` ${String(index + 1).padStart(3, '0')}.pdf` : name + '.pdf',
           transform: output.plan,
           expectedSources: output.sources.map((input) => ({
             path: input.file.path,
@@ -202,46 +203,47 @@ export function PDFToolsDialog({
     await Promise.all(run.current.ids.map((id) => window.viewer.cancelJob(id)));
   };
   return (
-    <Dialog wide title="PDF tools" className="pdf-tools-dialog" onClose={onClose}>
+    <Dialog wide title="PDF Tools" className="pdf-tools-dialog" onClose={onClose}>
       <div className="pdf-tools-toolbar">
         <button disabled={loading || working} onClick={() => void add()}>
           Add PDFs…
         </button>
         <span className="muted">
-          {inputs.length} {inputs.length === 1 ? 'PDF' : 'PDFs'} · {included.length} of{' '}
-          {pages.length} pages included
+          {plural(inputs.length, 'PDF')} · {included.length.toLocaleString('en-US')} of{' '}
+          {plural(pages.length, 'page')} included
         </span>
         <span className="toolbar-spacer" />
         <button
           disabled={!pages.length || working}
           onClick={() => setPages((pages) => pages.map((page) => ({ ...page, included: true })))}
         >
-          Include all
+          Include All
         </button>
         <button
           disabled={!included.length || working}
           onClick={() => setPages((pages) => pages.map((page) => ({ ...page, included: false })))}
         >
-          Clear selection
+          Exclude All
         </button>
       </div>
       {inputs.length > 0 && (
         <div className="pdf-tools-range">
-          <ChoiceButton
-            label="Source PDF"
-            value={String(source)}
-            choices={inputs.map((input, index) => ({
-              value: String(index),
-              label: input.file.name,
-            }))}
-            onChoose={(value) => {
-              const index = Number(value);
-              setSource(index);
-              setRange(`1-${inputs[index]!.pages}`);
-            }}
-          />
-          <label>
-            Pages to include{' '}
+          <FormField label="Source PDF">
+            <ChoiceButton
+              label="Source PDF"
+              value={String(source)}
+              choices={inputs.map((input, index) => ({
+                value: String(index),
+                label: input.file.name,
+              }))}
+              onChoose={(value) => {
+                const index = Number(value);
+                setSource(index);
+                setRange(`1-${inputs[index]!.pages}`);
+              }}
+            />
+          </FormField>
+          <FormField label="Pages to include">
             <input
               aria-label="PDF page range"
               value={range}
@@ -252,9 +254,9 @@ export function PDFToolsDialog({
                 if (event.key === 'Enter') applyRange();
               }}
             />
-          </label>
+          </FormField>
           <button disabled={working || loading} onClick={applyRange}>
-            Apply range
+            Apply Range
           </button>
         </div>
       )}
@@ -337,49 +339,32 @@ export function PDFToolsDialog({
               />
             </>
           ) : loading ? (
-            <Loading label="Inspecting PDFs…" />
+            <Loading label="Reading PDFs…" />
           ) : (
-            <Empty title="No PDF pages loaded" detail="Retry the inspection or add another PDF.">
-              <button onClick={() => setAttempt((value) => value + 1)}>Retry inspection</button>
-            </Empty>
+            <Failure
+              icon="pdf"
+              title="No PDF pages loaded"
+              detail="Try again, or add another PDF."
+              onRetry={() => setAttempt((value) => value + 1)}
+            />
           )}
         </div>
       </div>
-      <div className="pdf-tools-export">
-        <label>
-          Output name{' '}
-          <input
-            aria-label="PDF output name"
-            value={name}
-            disabled={working}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        <label>
-          Save in{' '}
-          <div className="media-destination">
-            <input
-              aria-label="PDF output folder"
-              value={folder}
-              disabled={working}
-              onChange={(event) => setFolder(event.target.value)}
-            />
-            <button
-              disabled={working}
-              onClick={() =>
-                void window.viewer
-                  .chooseFolder(folder)
-                  .then((value) => {
-                    if (value) setFolder(value);
-                  })
-                  .catch(report)
-              }
-            >
-              Choose…
-            </button>
-          </div>
-        </label>
-        <label className="pdf-tools-split">
+      <div className="pdf-tools-export dialog-form">
+        <FileNameField
+          value={name}
+          extension="pdf"
+          onChange={setName}
+          folder={folder}
+          disabled={working}
+          numberedSuffix={separate ? ' 001' : ''}
+        />
+        <DestinationField
+          path={folder}
+          onChange={setFolder}
+          disabled={working}
+        />
+        <label className="pdf-tools-split dialog-field-toggle">
           <input
             type="checkbox"
             checked={separate}
@@ -389,12 +374,12 @@ export function PDFToolsDialog({
           Save each included page separately
         </label>
         <p className="muted">
-          Originals stay intact. New PDFs retain page content; document bookmarks, forms and
-          accessibility tags are not retained.
+          Originals are kept. Exported PDFs lose bookmarks, forms and accessibility tags.
         </p>
+        {separate && <p className="muted">File names start with {name} 001.pdf.</p>}
         {error && (
           <p className="dialog-error" role="alert">
-            {error}
+            {homeText(error, home)}
           </p>
         )}
         {exports.length > 0 && (
@@ -402,10 +387,12 @@ export function PDFToolsDialog({
             {exports.map((job) => (
               <div key={job.id}>
                 <span>
-                  {job.status === 'running'
-                    ? `${Math.round((job.progress || 0) * 100)}% · ${job.detail || 'Exporting…'}`
-                    : job.status}
-                  {job.errors[0] ? ` · ${job.errors[0].message}` : ''}
+                  {homeText(
+                    (job.status === 'running'
+                      ? `${Math.round((job.progress || 0) * 100)}% · ${job.detail || 'Exporting…'}`
+                      : job.status) + (job.errors[0] ? ` · ${job.errors[0].message}` : ''),
+                    home,
+                  )}
                 </span>
                 {job.completed
                   .filter((item) => item.destination)
@@ -430,22 +417,24 @@ export function PDFToolsDialog({
       <footer>
         <span className="muted">
           {outputs.length
-            ? `${outputs.length} ${outputs.length === 1 ? 'PDF' : 'PDFs'} saved`
-            : separate
-              ? `${included.length} numbered PDFs`
-              : `${included.length} pages → one PDF`}
+            ? `${plural(outputs.length, 'PDF')} saved`
+            : !included.length
+              ? 'Include a page to save a PDF.'
+              : separate
+                ? `${plural(included.length, 'numbered PDF')}`
+                : `${plural(included.length, 'page')} → one PDF`}
         </span>
         <span className="toolbar-spacer" />
         <button onClick={onClose}>Close</button>
         {working ? (
-          <button onClick={() => void cancel().catch(report)}>Cancel export</button>
+          <button onClick={() => void cancel().catch(report)}>Cancel Export</button>
         ) : (
           <button
             className="primary"
-            disabled={loading || !included.length || !folder.trim() || !/\.pdf$/i.test(name.trim())}
+            disabled={loading || !included.length || !folder.trim() || !!fileNameError(name, 'pdf', separate ? ' 001' : '')}
             onClick={() => void start()}
           >
-            {separate ? 'Split pages' : 'Save PDF'}
+            {separate ? 'Split Pages' : 'Save PDF'}
           </button>
         )}
       </footer>

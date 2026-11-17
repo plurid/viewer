@@ -10,8 +10,10 @@ plane** keeps it open · **⌘K** → **Show as hex** for its bytes
 
 1. Select a file and press **Space**. [Quick Preview](../reference/terms.md#looking-at-files) opens
    over the folder.
-2. With several files selected, **←** and **→** step through them. **Space** or **Escape** closes
-   the preview.
+2. Press **↑** or **↓** to select the next or previous item in the folder; Quick Preview shows it,
+   and names a folder. In Grid and Gallery, **←** and **→** move the selection too. With several
+   files selected, **←** and **→** step through them. A text, drawing or model you clicked keeps its
+   arrow keys. **Space** or **Escape** closes the preview.
 3. To keep the file open beside its folder, choose **Open linked plane**. It becomes a
    [linked plane](../reference/terms.md#planes-and-the-space) you can read while you go on browsing.
 
@@ -24,21 +26,26 @@ a large PDF.
 A file's plane shows its main controls in the header. The rest are in the plane's **…** menu and
 **⌘K**:
 
-- A PDF shows **PDF tools…**, the page buttons, zoom, search and **Dark pages**. **Show PDF pages**,
-  **Show PDF outline** and **Print PDF…** are in **…**. **Optimize…** is under **Suggested** for a
+- A PDF shows **PDF Tools…**, the page buttons, zoom, find and **Dark pages**. **Show PDF Pages**,
+  **Show PDF Outline** and **Print PDF…** are in **…**. **Optimize…** is under **Suggested** for a
   large PDF, otherwise under **More file actions**.
-- An image shows **Image tools…**, **Fit image**, zoom and its size. **Optimize…** is in **…**.
+- An image shows **Image Tools…**, **Fit image**, zoom, **Rotate left** and **Rotate right**. Its
+  dimensions are in the footer. **Optimize…** is in **…**.
 
 To show every control in the header, open **Settings → Space → Plane toolbar** and turn on **Every
 format tool**, or choose **Buttons → Full**. Quick Preview always shows every control.
 
+At narrow widths, labeled tools can become icons, then move into **…** as space runs out. Hover an
+icon for its action name. The footer keeps one line, shortening long filenames in the middle while
+keeping their extensions. Hover the filename for the full name and file details.
+
 | File                                      | What you can do                                                                   |
 | ----------------------------------------- | --------------------------------------------------------------------------------- |
 | PDF                                       | Move through pages, show thumbnails and the outline, search the text              |
-| EPUB, FictionBook                         | Move through chapters, **Find in book**, follow footnotes and go **Back**         |
+| EPUB, FictionBook                         | Move through chapters, **Find in Book**, follow footnotes and go **Back**         |
 | Word, PowerPoint, OpenDocument, Publisher | Read the paginated **Layout**; Word also has a **Reading** view                   |
-| Excel and OpenDocument spreadsheets       | Switch sheets in **Print layout**; XLSX also has a **Sheet** grid of saved values |
-| JSON, YAML, XML, property lists, map data | Search the tree, **Expand all**, **Collapse all**, or switch to **Source**        |
+| Excel and OpenDocument spreadsheets       | Switch sheets in **Print Layout**; XLSX also has a **Sheet** grid of saved values |
+| JSON, YAML, XML, property lists, map data | Search the tree, **Expand All**, **Collapse All**, or switch to **Source**        |
 | SQLite database                           | Pick a table, page through its rows, read its definition                          |
 | Notebook                                  | Read cells and their saved outputs                                                |
 | Calendar, contacts                        | Read events by date, or contact cards                                             |
@@ -75,21 +82,31 @@ import, follow or download it.
 
 [Supported formats](../reference/formats.md) lists every format and what its preview shows.
 
+## Turn a picture
+
+1. Click the picture, then press **⌘R** to turn it right or **⌘L** to turn it left, or choose
+   **Rotate right** or **Rotate left** in its toolbar.
+2. On a trackpad, turn two fingers over the picture. It settles on the nearest quarter turn when you
+   lift them.
+3. The turn is for viewing only: the file stays as it is, and Viewer remembers the turn for it. To
+   keep a turned file, choose **Save rotated copy**. The copy is saved beside the picture as
+   `<name> rotated`.
+
 ## Read PostScript, EPS and Illustrator files
 
 1. Select a `.ps`, `.eps`, `.epsf`, `.epsi` or `.ai` file and press **Space**. The preview shows the
    kind and its **Document comments**: title, creator, creation date, pages, size and language
    level. A missing comment reads **Unknown**.
 2. Choose **Source** to read the program as text. For a binary EPS, this is only its PostScript
-   part. An **Embedded preview** is the picture saved in the EPS, not a rendering of its pages.
-3. To render pages, choose **Render pages with Ghostscript**. The button appears when Viewer finds
-   an executable in one of its three fixed installation locations. Viewer checks its identity and
+   part. An **Embedded Preview** is the picture saved in the EPS, not a rendering of its pages.
+3. To render pages, choose **Render Pages**. The button appears when Viewer finds Ghostscript as an
+   executable in one of its three fixed installation locations. Viewer checks its identity and
    version after the click, then reads the program through standard input and shows the resulting
    PDF with its version label. An EPS page is cropped to its drawing when its stated box can be
    used. Otherwise Viewer explains that rendering uses the full page.
-4. Choose **Cancel rendering** to stop. A failure leaves the document details, source and embedded
-   picture available. **Source**, **Embedded preview** and **Rendered pages** switch between the
-   available views.
+4. Choose **Cancel Rendering** to stop. A failure leaves the document details, source and embedded
+   picture available. **Source**, **Embedded Preview** and **Pages** switch between the available
+   views. Without Ghostscript, the preview says to install it with `brew install ghostscript`.
 
 With the default **Automatic** opening policy, double-click opens these files in their own app, such
 as Illustrator. **Space** and **Open linked plane** look inside them in Viewer. A `.ps` file
@@ -106,9 +123,9 @@ Ghostscript scratch, which Viewer moves to Trash under that name. The original s
 ## Read PDFs and Office documents at night
 
 1. In a PDF, or an Office document's **Layout**, choose **Dark pages** (the moon) in its toolbar, or
-   press **⌘K** and choose **Dark pages**. Pages turn dark with light text, the thumbnails too, and
-   photographs keep their colours.
-2. Choose it again, or **Light pages** in **⌘K**, to go back. The choice holds for every PDF and
+   press **⌘K** and choose **Dark Pages**. Pages turn dark with light text, the thumbnails too, and
+   photographs keep their colors.
+2. Choose it again, or **Light Pages** in **⌘K**, to go back. The choice holds for every PDF and
    Office page from then on.
 3. To have pages switch by themselves, open **Settings → Previews** and choose **Dark pages**:
    - **At night** turns pages dark from 20:00 until 07:00. Change **From** and **Until** beneath it;
@@ -118,8 +135,8 @@ Ghostscript scratch, which Viewer moves to Trash under that name. The original s
 
 Pressing **Dark pages** while **At night** or **With macOS dark mode** is chosen keeps the pages as
 you set them, and a note says how to choose the automatic mode again. A scanned page turns dark with
-the rest. Printing, **Optimize…**, **PDF tools…** and **Save PDF copy** keep the document's own
-colours.
+the rest. Printing, **Optimize…**, **PDF Tools…** and **Save PDF Copy** keep the document's own
+colors.
 
 ## Read an email and save its attachments
 
@@ -129,8 +146,8 @@ choose a message, or press the arrow keys to move through the list.
 
 Attachments are listed with their type and size, and never opened. To keep one:
 
-1. Choose **Save** beside it to save it next to the message, or **Save to…** to pick a folder.
-2. With several attachments, **Save All** saves every one next to the message, and **Save All to…**
+1. Choose **Save** beside it to save it next to the message, or **Save To…** to pick a folder.
+2. With several attachments, **Save All** saves every one next to the message, and **Save All To…**
    asks for a folder.
 3. **⌘Z** undoes a save.
 
@@ -154,7 +171,7 @@ by its bytes.
 ## Bookmark a place in a book
 
 1. In an EPUB or FictionBook, choose **Bookmarks**.
-2. Type a name, or leave it empty to use the chapter title, and choose **Add bookmark**.
+2. Type a name, or leave it empty to use the chapter title, and choose **Add Bookmark**.
 3. Choose the bookmark later to return to that place.
 
 Bookmarks are kept with the workspace, not written into the book.
@@ -165,10 +182,10 @@ An XLSX opens on its **Sheet** grid. In the grid:
 
 - Arrow keys move between cells and show each cell's saved value and formula.
 - Type an address such as `D42` in **Cell address** and choose **Go** to jump to it.
-- Drag, **Shift**-click or **Shift**-arrow to select a range, then press **⌘C**, or choose **Copy**,
-  to copy it as tab-separated text.
-- **More → Stored values** shows and copies the raw values instead of formatted ones; **Formatted
-  values** switches back.
+- Drag, **⇧**-click or **⇧**-arrow to select a range, then press **⌘C**, or choose **Copy**, to copy
+  it as tab-separated text.
+- **More → Stored Values** shows and copies the raw values instead of formatted ones; **Formatted
+  Values** switches back.
 - **⌃Page Up** and **⌃Page Down** switch sheets.
 
 [Worksheet controls](../reference/office.md#reading-and-saved-cells) lists the rest. Office layout
@@ -185,14 +202,14 @@ the start; book bookmarks stay.
 
 The preview keeps showing what it last loaded and offers three ways back:
 
-- **Check again** after you reconnect a disk or share.
-- **Locate file** to point Viewer at the file's new place.
-- **Find renamed file** when it was renamed in the same folder.
+- **Try Again** after you reconnect a disk or share.
+- **Locate File…** to point Viewer at the file's new place.
+- **Find Renamed File** when it was renamed in the same folder.
 
 ## Edit it or open it elsewhere
 
 Press **⌘E** to edit a text file in a plane; **⌘S** saves and **Done** ends editing. For anything
 Viewer does not edit, choose **Open With…** and pick another app. To share an Office or OpenDocument
-file with someone who has neither app, right-click it and choose **Save PDF copy**: the PDF holds
+file with someone who has neither app, right-click it and choose **Save PDF Copy**: the PDF holds
 every page, and every sheet of a workbook. [Make a quick change](create.md) covers the edits Viewer
 can make itself.

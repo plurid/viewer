@@ -4,12 +4,9 @@ import type { FileEntry } from '../../domain/contracts';
 import { firstRunStepsLeft } from '../../domain/preferences/first-run';
 import { keyGlyphs } from '../../domain/preferences/keymap';
 import { defaultShortcuts } from '../../domain/preferences/shortcuts';
-import {
-  folderInsights,
-  insightLimit,
-  type FolderInsight,
-  type InsightID,
-} from '../../domain/suggestions/insights';
+import type { FolderInsight, InsightID, WorkspaceInsight } from '../../domain/suggestions/insights';
+import { folderInsights, insightLimit } from '../../domain/suggestions/insights';
+import { insideRoot } from '../../domain/workspaces/found/roots';
 import {
   activeWorkspace,
   dismissFirstRunHint,
@@ -21,12 +18,14 @@ import {
 import { effectiveWindowUI } from '../state/effective-ui';
 import { useCommandRevision, useCommands } from '../commands/context';
 import type { CommandRegistry, ResolvedCommand } from '../commands/registry';
+import { useWorkspaceOffer } from '../workspace/workspace-offer';
 import { Icon, type IconName } from '../ui/Icon';
+import { PathLabel } from '../ui/PathLabel';
 import { IconButton } from '../ui/primitives';
 
 interface InsightCard {
-  insight: FolderInsight;
-  /** What the action selects and runs on: none for a command on the whole folder. */
+  insight: FolderInsight | WorkspaceInsight;
+  /** What the action selects and runs on: none for a command on the whole folder or window. */
   files: FileEntry[];
   command: ResolvedCommand;
 }
@@ -38,8 +37,27 @@ const icons: Record<InsightID, IconName> = {
   'names.copies': 'copy',
   screenshots: 'image',
   'photos.heic': 'image',
+  'workspace.open': 'dock',
 };
 const none: readonly string[] = [];
+const isWorkspace = (insight: FolderInsight): insight is WorkspaceInsight =>
+  insight.id === 'workspace.open';
+
+/**
+ * The workspace offer for this plane's folder, shown in the workspace's first folder plane inside
+ * its root alone, so planes browsing one project do not repeat it.
+ */
+function useOfferCard(paneID: string, folder: string, enabled: boolean) {
+  const offer = useWorkspaceOffer(enabled ? folder : undefined);
+  const first = useViewer(
+    (state) =>
+      !!offer &&
+      activeWorkspace(state).panes.find(
+        (pane) => pane.type === 'folder' && insideRoot(offer.root, pane.path),
+      )?.id === paneID,
+  );
+  return first ? offer : undefined;
+}
 
 /** The cards whose command applies to their files, three at most. */
 function applicable(
@@ -150,6 +168,7 @@ export const FolderInsights = memo(function FolderInsights({
   const enabled = useViewer((state) => state.settings.settings.browsing.insights);
   const home = useViewer((state) => state.bootstrap.home);
   const dismissed = useViewer((state) => state.saved.ui.insightsDismissed?.[folder]) ?? none;
+  const offer = useOfferCard(paneID, folder, enabled);
   // every insight, so one whose command does not apply leaves its place to the next
   const insights = useMemo(() => {
     if (!enabled) return [];
@@ -167,15 +186,20 @@ export const FolderInsights = memo(function FolderInsights({
       return [];
     }
   }, [enabled, folder, entries, home, dismissed]);
+  // the offer leads, after the tips, within the same three cards
+  const offered = useMemo(() => (offer ? [offer, ...insights] : insights), [offer, insights]);
   const cards = useMemo(
-    () => applicable(registry, insights, entries, paneID, folder),
+    () => applicable(registry, offered, entries, paneID, folder),
     // `revision` changes with what the plane's commands read
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [registry, revision, insights, entries, paneID, folder],
+    [registry, revision, offered, entries, paneID, folder],
   );
-  const run = ({ files, command }: InsightCard) => {
-    setActivePane(paneID);
-    select(files);
+  const run = ({ insight, files, command }: InsightCard) => {
+    // opening a workspace leaves this plane's selection as it was
+    if (insight.target !== 'window') {
+      setActivePane(paneID);
+      select(files);
+    }
     void registry.run(command).catch(report);
   };
   if (!cards.length && !tips) return null;
@@ -187,7 +211,11 @@ export const FolderInsights = memo(function FolderInsights({
           <Icon name={icons[card.insight.id]} size={16} />
           <div className="folder-insight-text">
             <strong>{card.insight.title}</strong>
-            {card.insight.detail && <span>{card.insight.detail}</span>}
+            {isWorkspace(card.insight) ? (
+              <PathLabel path={card.insight.root} />
+            ) : (
+              card.insight.detail && <span>{card.insight.detail}</span>
+            )}
           </div>
           <button type="button" onClick={() => run(card)}>
             {/* a command that asks first says so, as its menu row does */}
@@ -197,7 +225,11 @@ export const FolderInsights = memo(function FolderInsights({
             icon="close"
             label={`Dismiss ${card.insight.title}`}
             className="folder-insight-dismiss"
-            onClick={() => dismissInsight(folder, card.insight.id)}
+            onClick={() =>
+              isWorkspace(card.insight)
+                ? dismissInsight(card.insight.root, card.insight.id)
+                : dismissInsight(folder, card.insight.id)
+            }
           />
         </article>
       ))}

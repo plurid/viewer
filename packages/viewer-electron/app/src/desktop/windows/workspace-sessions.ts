@@ -238,7 +238,9 @@ export class WorkspaceSessions {
 
   create(home: string, name = 'Workspace'): string {
     if ((this.current?.workspaces.length ?? 0) >= maximumWorkspaces)
-      throw new Error(`The maximum of ${maximumWorkspaces} workspaces has been reached.`);
+      throw new Error(
+        `You can have up to ${maximumWorkspaces} workspaces. Delete one to add another.`,
+      );
     const paneID = randomUUID();
     const workspace: Workspace = {
       id: randomUUID(),
@@ -448,7 +450,8 @@ export class WorkspaceSessions {
         throw new Error('Close the other window before deleting its workspace.');
       next.delete(id);
     }
-    if (!next.has(input.activeWorkspace)) throw new Error('The active workspace is unavailable.');
+    if (!next.has(input.activeWorkspace))
+      throw new Error('The active workspace is missing from the saved workspaces.');
     const existing = new Map<string, Set<string>>();
     for (const space of this.current.workspaces) {
       const key = space.definition?.key;
@@ -477,7 +480,9 @@ export class WorkspaceSessions {
       workspaces: [...next.values()],
     };
     if (merged.workspaces.length > maximumWorkspaces)
-      throw new Error(`The maximum of ${maximumWorkspaces} workspaces has been reached.`);
+      throw new Error(
+        `You can have up to ${maximumWorkspaces} workspaces. Delete one to add another.`,
+      );
     merged.workspaceVisits = mergeWorkspaceVisits(
       merged.workspaces,
       merged.workspaceVisits,

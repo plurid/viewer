@@ -36,7 +36,7 @@ export async function inspectReviewedFile(file: string, limit: number): Promise<
   try {
     const before = await fileStat(handle);
     if (!before.isFile() || before.size > limit)
-      throw new Error('The reviewed path is not a bounded regular file. It was preserved.');
+      throw new Error('The reviewed file is too large or is not a regular file. It was kept.');
     const bytes = Buffer.alloc(before.size);
     let offset = 0;
     while (offset < bytes.length) {

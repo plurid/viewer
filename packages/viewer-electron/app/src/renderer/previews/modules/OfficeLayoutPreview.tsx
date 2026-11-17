@@ -4,7 +4,8 @@ import { useOfficeLayout } from '../useOfficeLayout';
 import { usePreviewState } from '../state';
 import { WorksheetTabs } from '../WorksheetTabs';
 import { FirstPagePicture, useFirstPagePicture } from '../FirstPagePicture';
-import { Empty, Loading } from '../../ui/primitives';
+import { Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
 import PDFPreview from './PDFPreview';
 import { officeFamily } from '../../../domain/previews/documents/layout';
 
@@ -39,8 +40,13 @@ export default function OfficeLayoutPreview(context: PreviewContext) {
         <p className="inline-warning">The first 256 worksheets are listed.</p>
       )}
       {load.error ? (
-        <Empty icon="file" title="Office layout unavailable" detail={load.error}>
-          <button onClick={load.retry}>Try again</button>
+        <PreviewFailure
+          context={context}
+          icon="file"
+          title="Can't lay out this document"
+          detail={load.error}
+          onRetry={load.retry}
+        >
           {workbook && (
             <button
               onClick={() => {
@@ -48,10 +54,10 @@ export default function OfficeLayoutPreview(context: PreviewContext) {
                 load.retry();
               }}
             >
-              First worksheet
+              First Worksheet
             </button>
           )}
-        </Empty>
+        </PreviewFailure>
       ) : (
         <div className="office-layout-stage">
           {load.resource && (

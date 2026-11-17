@@ -13,13 +13,11 @@ import type {
 import type { PreviewContext } from '../contracts';
 import type { ParsedText, SourceReader } from '../ParsedDocument';
 import { cardLimits, decodeFoldedText, readCards } from '../../../domain/previews/data/cards';
+import { plural } from '../../../domain/plural';
 import { ParsedDocument } from '../ParsedDocument';
 import { usePreviewScroll } from '../scroll';
 
 type Cards = Calendar | ContactBook;
-
-const plural = (count: number, one: string, many: string) =>
-  `${count.toLocaleString()} ${count === 1 ? one : many}`;
 
 /**
  * The bounded text read, unless it holds U+FFFD: a writer that folded inside a UTF-8 character

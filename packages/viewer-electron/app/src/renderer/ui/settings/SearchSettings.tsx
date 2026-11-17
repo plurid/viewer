@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react';
 import type { IndexStatus } from '../../../domain/services';
 import { Field } from './SettingField';
 import { IconButton, PathField } from '../primitives';
+import { useHome } from '../PathLabel';
+import { pathText } from '../../../domain/files/path-label';
 import type { SettingsEditor } from './editor';
 import { commonSearchExclusions } from '../../../domain/search/exclusions';
 import type { DesktopEvent } from '../../../domain/contracts';
 import { errorMessage } from '../../../domain/errors';
 import { followSnapshot } from '../../state/requests';
+import { plural } from '../../../domain/plural';
+import { statusLabel } from '../status-labels';
 
 /** Search scope, traversal exclusions and permission to index document contents. */
 export function SearchSettings({ editor }: { editor: SettingsEditor }) {
@@ -14,6 +18,7 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
   const settings = snapshot.settings;
   const recommended = [...new Set([...settings.search.exclusions, ...commonSearchExclusions])];
   const [index, setIndex] = useState<IndexStatus>();
+  const home = useHome();
   useEffect(
     () =>
       followSnapshot<IndexStatus | undefined, DesktopEvent>({
@@ -36,11 +41,8 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
               <PathField path={root} onError={(error) => setError(errorMessage(error))} />
               <small>
                 {status
-                  ? status.status +
-                    ' · ' +
-                    status.count.toLocaleString() +
-                    ' files' +
-                    (status.errors ? ' · ' + status.errors + ' unavailable' : '')
+                  ? `${statusLabel(status.status)} · ${plural(status.count, 'file')}` +
+                    (status.errors ? ` · ${plural(status.errors, 'file')} couldn’t be read` : '')
                   : 'Waiting to index'}
               </small>
             </span>
@@ -90,14 +92,14 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
               .catch((error) => setError(error.message));
           }}
         >
-          Add location…
+          Add Location…
         </button>
         <button
           onClick={() => {
             void window.viewer.indexRebuild().catch((error) => setError(error.message));
           }}
         >
-          Rebuild index
+          Rebuild Index
         </button>
       </div>
       <h2>Saved searches</h2>
@@ -106,7 +108,7 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
           <span>
             {search.name}
             <small>
-              {search.query} · {search.root || 'Indexed locations'}
+              {search.query} · {search.root ? pathText(search.root, home) : 'Indexed locations'}
             </small>
           </span>
           <IconButton
@@ -159,12 +161,12 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
             ])
           }
         >
-          Add common exclusions
+          Add Common Exclusions
         </button>
       </div>
       <p className="settings-note">
-        Filenames and metadata are indexed locally. Content indexing reads supported documents only
-        in the locations you enable. Offline drives retain their last results.
+        Names are indexed on this Mac. Contents are read only where Contents is on. A disconnected
+        drive keeps its last results.
       </p>
     </>
   );

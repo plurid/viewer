@@ -5,7 +5,10 @@ import Prism from 'prismjs';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { headerItem } from '../../workspace/header-overflow';
 import type { PreviewContext } from '../contracts';
-import { Empty, Loading } from '../../ui/primitives';
+import { Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { useShortcutGlyphs } from '../../keys/hints';
+import { withShortcut } from '../../../domain/preferences/shortcuts';
 import { DelimitedTable } from '../DataTable';
 import { activeWorkspace, useViewer } from '../../state/store';
 import { FileEditor } from '../../editing/FileEditor';
@@ -176,6 +179,7 @@ export default function TextPreview(context: TextPreviewProps) {
   });
   const onEditingChange = context.onEditingChange;
   useEffect(() => onEditingChange?.(!!editing), [editing, onEditingChange]);
+  const editKeys = useShortcutGlyphs('edit-file');
   const startEditing = useCallback(() => {
     onEditingChange?.(true);
     setEditing('asked');
@@ -286,7 +290,15 @@ export default function TextPreview(context: TextPreviewProps) {
         }}
       />
     );
-  if (error) return <Empty icon="warning" title="Text could not be read" detail={error} />;
+  if (error)
+    return (
+      <PreviewFailure
+        context={context}
+        icon="warning"
+        title="Can't read this file"
+        detail={error}
+      />
+    );
   if (!data) return <Loading />;
   if (data.binary) return <UnknownFile {...context} />;
   const ext = resource.entry.extension;
@@ -317,7 +329,7 @@ export default function TextPreview(context: TextPreviewProps) {
           {editable && (
             <button
               {...headerItem('edit', 3, ['edit-file'])}
-              title="Edit Text (⌘E)"
+              title={withShortcut('Edit Text', editKeys)}
               onClick={startEditing}
             >
               Edit
@@ -399,10 +411,10 @@ export default function TextPreview(context: TextPreviewProps) {
         <>
           {structured?.error && !raw && (
             <p className="inline-warning">
-              {structured.error.startsWith('Tree inspection is limited')
-                ? 'Tree unavailable'
-                : `Invalid ${ext.toUpperCase()}`}
-              : {structured.error}
+              {/* a file too large for the tree says so alone; a broken one says where */}
+              {structured.error.endsWith(' as text only.')
+                ? structured.error
+                : `Invalid ${ext.toUpperCase()}: ${structured.error}`}
             </p>
           )}
           <Code

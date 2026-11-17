@@ -26,7 +26,7 @@ default: version/build, edition and license status, macOS, available hardware de
 count/scales, language/region and bounded failure times, kinds, known classes, allowed structured
 codes and recorded code locations inside Viewer, without function names. The Mac App Store edition
 uses the same default without user, host or volume lookups. **Include message text** is optional and
-off by default; excerpts can contain private text, Viewer removes what it recognises, and you must
+off by default; excerpts can contain private text, Viewer removes what it recognizes, and you must
 read them before sharing. In the Store edition those excerpts require account, Home, computer/host
 and mounted-volume checks, including `id`, `scutil`, the Home realpath and `/Volumes`; a refused
 check is named and excerpts are omitted. Viewer sends neither version to its developer. **Copy**

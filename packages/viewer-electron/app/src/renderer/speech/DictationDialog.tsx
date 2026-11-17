@@ -9,7 +9,7 @@ export function DictationDialog({
   destination,
   held,
   autoStart = true,
-  useLabel = 'Insert text',
+  useLabel = 'Insert Text',
   maxLength = 16000,
 }: {
   onClose(): void;
@@ -60,7 +60,7 @@ export function DictationDialog({
               : speech.phase === 'transcribing'
                 ? speech.processing?.kind === 'hosted'
                   ? `Transcribing with ${speech.processing.providerName}…`
-                  : 'Transcribing on this device…'
+                  : 'Transcribing on this Mac…'
                 : speech.phase === 'review'
                   ? speech.text
                     ? 'Review your words before inserting.'
@@ -98,9 +98,8 @@ export function DictationDialog({
               ? `This recording was sent to ${speech.processing.providerName} at ${speech.processing.endpoint} using ${speech.processing.model} for transcription.`
               : `Finishing or releasing the shortcut sends this recording to ${speech.processing.providerName} at ${speech.processing.endpoint} using ${speech.processing.model}.`
             : speech.processing?.kind === 'local'
-              ? 'Audio stays in memory on this device and is transcribed locally.'
-              : 'Your Speech settings determine where this recording is transcribed.'}{' '}
-          Inserting text does not send a message or run a command.
+              ? 'Transcribed on this Mac. The audio is never saved.'
+              : 'Settings → Speech sets where this recording is transcribed.'}
         </p>
         {speech.phase === 'failed' && (
           <button
@@ -110,22 +109,22 @@ export function DictationDialog({
               void window.viewer.openSettings('settings.speech');
             }}
           >
-            Open speech settings
+            Open Speech Settings
           </button>
         )}
       </div>
       <footer>
         <button type="button" onClick={close}>
-          {active ? 'Cancel recording' : 'Cancel'}
+          {active ? 'Cancel Recording' : 'Cancel'}
         </button>
         {speech.phase === 'listening' ? (
           <button type="button" className="primary" onClick={() => void speech.finish()}>
-            {speech.processing?.kind === 'hosted' ? 'Finish and transcribe' : 'Finish recording'}
+            {speech.processing?.kind === 'hosted' ? 'Finish and Transcribe' : 'Finish Recording'}
           </button>
         ) : (
           !active && (
             <button type="button" onClick={() => void speech.start()}>
-              {speech.phase === 'review' ? 'Record again' : 'Start recording'}
+              {speech.phase === 'review' ? 'Record Again' : 'Start Recording'}
             </button>
           )
         )}

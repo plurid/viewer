@@ -1,4 +1,5 @@
 import {
+  Children,
   Component,
   useEffect,
   useId,
@@ -11,6 +12,8 @@ import {
 } from 'react';
 import type { HTMLAttributes } from 'react';
 import { Icon, type IconName } from './Icon';
+import { PathLabel, usePathCopy } from './PathLabel';
+import type { PathLabelLayout } from './PathLabel';
 import { errorMessage } from '../../domain/errors';
 import { diagnosticFailure } from '../../domain/diagnostics/failure';
 import { boundedText } from '../../domain/diagnostics/text';
@@ -114,6 +117,40 @@ export function Empty({
       {detail && <p>{detail}</p>}
       {children}
     </div>
+  );
+}
+/** The one retry label, as macOS words it, wherever failed work can run again. */
+export const tryAgainLabel = 'Try Again';
+/**
+ * Work that failed, in place of its content: what failed as the title, why and what to do next as
+ * the detail, and the actions that recover it in one row, Try Again last.
+ */
+export function Failure({
+  icon = 'warning',
+  title,
+  detail,
+  onRetry,
+  children,
+}: {
+  icon?: IconName;
+  title: string;
+  detail?: string;
+  onRetry?(): void;
+  children?: ReactNode;
+}) {
+  return (
+    <Empty icon={icon} title={title} detail={detail}>
+      {(Children.toArray(children).length > 0 || onRetry) && (
+        <div className="empty-actions">
+          {children}
+          {onRetry && (
+            <button type="button" onClick={onRetry}>
+              {tryAgainLabel}
+            </button>
+          )}
+        </div>
+      )}
+    </Empty>
   );
 }
 export function Loading({ label = 'Loading…' }: { label?: string }) {
@@ -280,9 +317,11 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: s
   }
   render() {
     return this.state.error ? (
-      <Empty icon="warning" title="This view could not load" detail={this.state.error}>
-        <button onClick={() => this.setState({ error: null })}>Try again</button>
-      </Empty>
+      <Failure
+        title="This view couldn't load"
+        detail={this.state.error}
+        onRetry={() => this.setState({ error: null })}
+      />
     ) : (
       this.props.children
     );
@@ -359,11 +398,15 @@ export function CopyButton({
     </>
   );
 }
-/** A path wraps under a long name, or keeps to one line and shows all of it on hover. */
-export type PathLayout = 'wrap' | 'line';
+/**
+ * A path wraps under a long name, or keeps to one line shortened from its start, showing all of
+ * it on hover.
+ */
+export type PathLayout = PathLabelLayout;
 /**
  * A read-only path (DESIGN.md: paths are selectable). One click selects all of it, ready for ⌘C,
- * and its button copies it as text.
+ * which copies the whole path, and its button copies it as text. It shows as a path label: home
+ * as `~`, its own name kept.
  */
 export function PathField({
   path,
@@ -379,17 +422,11 @@ export function PathField({
   onError?(error: unknown): void;
 }) {
   const id = useId();
+  const copy = usePathCopy(path);
   return (
     <span className={`path-field ${className}`} data-layout={layout}>
-      <span
-        id={id}
-        className="path-text"
-        title={layout === 'line' ? path : undefined}
-        onClick={selectWhole}
-      >
-        {path}
-      </span>
-      <CopyButton copy={{ paths: [path] }} label={label} describedBy={id} onError={onError} />
+      <PathLabel id={id} className="path-text" path={path} layout={layout} onClick={selectWhole} />
+      <CopyButton copy={copy} label={label} describedBy={id} onError={onError} />
     </span>
   );
 }

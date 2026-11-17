@@ -70,7 +70,7 @@ describe('legacy global profile restoration', () => {
     let plan = planLegacyProfileRestoration(state, snapshot);
     expect(plan.patches).toEqual([]);
     expect(plan.state).toBe(state);
-    expect(plan.warnings[0]).toContain('unavailable profile');
+    expect(plan.warnings[0]).toContain('that profile no longer exists');
     snapshot.config = {
       path: '/config.jsonc',
       diagnostics: ['Unreadable'],
@@ -80,7 +80,7 @@ describe('legacy global profile restoration', () => {
     plan = planLegacyProfileRestoration(state, snapshot);
     expect(plan.patches).toEqual([]);
     expect(plan.state).toBe(state);
-    expect(plan.warnings[0]).toContain('configuration is unavailable');
+    expect(plan.warnings[0]).toContain('config.jsonc has errors');
   });
 
   it('keeps protected and unknown prior entries without treating them as authority', () => {

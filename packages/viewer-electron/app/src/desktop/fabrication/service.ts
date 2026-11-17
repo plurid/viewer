@@ -351,7 +351,8 @@ export class FabricationChecks {
   }
   private async restore(id: string): Promise<Check> {
     const document = await this.store?.read(id);
-    if (!document) throw new Error('This saved check is unavailable. Check the job again.');
+    if (!document)
+      throw new Error('This saved check was deleted or can’t be read. Check the job again.');
     const check: Check = { ...document, owners: new Set() };
     if (check.status === 'running') {
       check.status = 'interrupted';
@@ -927,12 +928,12 @@ export class FabricationChecks {
       check.status = 'completed';
       return result;
     } catch (error) {
-      record.error = signal.aborted ? 'The check was cancelled.' : errorMessage(error);
+      record.error = signal.aborted ? 'The check was canceled.' : errorMessage(error);
       if (!this.closing) {
         check.status = signal.aborted ? 'cancelled' : 'failed';
         check.error = record.error;
       }
-      if (signal.aborted) throw new Error('The check was cancelled. Nothing was graded.');
+      if (signal.aborted) throw new Error('The check was canceled. Nothing was graded.');
       throw error;
     } finally {
       const finished = this.now();

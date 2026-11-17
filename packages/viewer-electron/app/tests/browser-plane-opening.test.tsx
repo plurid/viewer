@@ -96,7 +96,7 @@ it('does not let a delayed open reply replace a newer loaded-page event', async 
   });
   expect(screen.queryByRole('button', { name: 'Reload page' })).not.toBeNull();
   expect(screen.queryByRole('button', { name: 'Stop loading' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Open page in window' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Page in Window' }));
   expect(window.viewer.browser).toHaveBeenCalledWith({
     kind: 'action',
     id: pane.id,

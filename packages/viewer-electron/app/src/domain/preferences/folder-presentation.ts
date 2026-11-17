@@ -14,6 +14,7 @@ export interface FolderPresentation {
   /** The lens grouping this folder when `group` is `lens`. */
   lens?: string;
   columnWidth: number;
+  previewWidth?: number;
   list: UIPreferences['list'] & { order?: ListColumn[] };
 }
 export type FolderOverride = Partial<Omit<FolderPresentation, 'list'>> & {

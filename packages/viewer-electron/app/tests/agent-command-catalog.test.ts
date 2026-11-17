@@ -180,7 +180,9 @@ describe('agent window command discovery', () => {
       });
       expect(proposal.requiresUserReview).toBe(true);
       expect(requests.get(proposal.id).status).toBe('review');
-      await expect(requests.review(proposal.id, true)).rejects.toThrow('Native confirmation');
+      await expect(requests.review(proposal.id, true)).rejects.toThrow(
+        'couldn’t ask you to confirm',
+      );
       expect(requests.get(proposal.id).status).toBe('review');
       await requests.review(proposal.id, false);
       expect(requests.get(proposal.id).status).toBe('rejected');
@@ -248,11 +250,15 @@ describe('agent window command discovery', () => {
     };
     await expect(broker.authorizeProposal(proposal)).resolves.toBeUndefined();
     workspaces.activeWorkspace = 'another';
-    await expect(broker.authorizeProposal(proposal)).rejects.toThrow('workspace changed');
+    await expect(broker.authorizeProposal(proposal)).rejects.toThrow(
+      'workspace this started from changed',
+    );
     workspaces.activeWorkspace = 'empty';
     workspaces.workspaces[0]!.panes.push({ id: 'new', type: 'folder', path: allowed });
-    await expect(broker.authorizeProposal(proposal)).rejects.toThrow('workspace changed');
-    await expect(call('list_commands')).rejects.toThrow('workspace changed');
+    await expect(broker.authorizeProposal(proposal)).rejects.toThrow(
+      'workspace this started from changed',
+    );
+    await expect(call('list_commands')).rejects.toThrow('workspace this started from changed');
     expect(execute).not.toHaveBeenCalled();
   });
 });

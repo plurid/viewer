@@ -16,6 +16,8 @@ import { usePreviewScroll } from '../scroll';
 import { pdfCanvasRatio, pdfScale, pdfZoom, type PDFZoom } from '../pdf-viewport';
 import type { PreviewContext } from '../contracts';
 import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { getState, report } from '../../state/store';
 import { PDFOutline, PDFThumbnails } from '../pdf/PDFSidebar';
@@ -323,55 +325,56 @@ export default function PDFPreview(
       () => [
         {
           id: 'pdf-next',
-          label: 'Next PDF page',
+          label: 'Next PDF Page',
           aliases: ['np'],
           available: !!pdf && page < pdf.numPages,
           run: () => setPage((value) => value + 1),
         },
         {
           id: 'pdf-previous',
-          label: 'Previous PDF page',
+          label: 'Previous PDF Page',
           aliases: ['pp'],
           available: !!pdf && page > 1,
           run: () => setPage((value) => value - 1),
         },
         {
           id: 'pdf-search',
-          label: 'Search PDF text…',
-          aliases: ['sp'],
+          label: 'Find in PDF…',
+          aliases: ['sp', 'search pdf text'],
           primary: true,
           available: !!pdf,
           run: () => setSearchOpen(true),
         },
         {
           id: 'pdf-fit-page',
-          label: 'Fit PDF page',
+          label: 'Fit PDF Page',
           available: !!pdf,
           run: () => setZoom('page'),
         },
         {
           id: 'pdf-fit-width',
-          label: 'Fit PDF width',
+          label: 'Fit PDF Width',
           available: !!pdf,
           run: () => setZoom('width'),
         },
         {
           id: 'pdf-pages',
-          label: sidebar === 'pages' ? 'Hide PDF pages' : 'Show PDF pages',
+          label: sidebar === 'pages' ? 'Hide PDF Pages' : 'Show PDF Pages',
           aliases: ['thumbnails'],
           available: !!pdf,
           run: () => setSidebar(sidebar === 'pages' ? 'none' : 'pages'),
         },
         {
           id: 'pdf-outline',
-          label: sidebar === 'outline' ? 'Hide PDF outline' : 'Show PDF outline',
+          label: sidebar === 'outline' ? 'Hide PDF Outline' : 'Show PDF Outline',
           aliases: ['contents', 'table of contents', 'bookmarks'],
           available: !!pdf,
           run: () => setSidebar(sidebar === 'outline' ? 'none' : 'outline'),
         },
         {
           id: 'dark-pages',
-          label: dark ? 'Light pages' : 'Dark pages',
+          label: dark ? 'Light Pages' : 'Dark Pages',
+          // eslint-disable-next-line no-restricted-syntax -- British spelling finds it too
           aliases: ['dark mode', 'night', 'invert colours', 'invert colors'],
           available: !!pdf && !!pages,
           run: () => pages?.toggle(),
@@ -385,13 +388,13 @@ export default function PDFPreview(
         },
         {
           id: 'zoom-in',
-          label: 'Zoom in',
+          label: 'Zoom In',
           available: !!pdf && scale < 4,
           run: () => setZoom(Math.min(4, Math.max(0.1, Math.round(scale * 1.25 * 100) / 100))),
         },
         {
           id: 'zoom-out',
-          label: 'Zoom out',
+          label: 'Zoom Out',
           available: !!pdf && scale > 0.1,
           run: () => setZoom(Math.max(0.1, Math.min(4, Math.round((scale / 1.25) * 100) / 100))),
         },
@@ -399,7 +402,10 @@ export default function PDFPreview(
       [pdf, page, scale, setPage, setZoom, sidebar, setSidebar, printable, print, dark, pages],
     ),
   );
-  if (error) return <Empty icon="pdf" title="PDF could not be displayed" detail={error} />;
+  if (error)
+    return (
+      <PreviewFailure context={context} icon="pdf" title="Can't show this PDF" detail={error} />
+    );
   if (!pdf && unlock)
     return (
       <form
@@ -413,11 +419,9 @@ export default function PDFPreview(
       >
         <Empty
           icon="pdf"
-          title="This PDF is protected by a password"
+          title="Enter the password to open this PDF"
           detail={
-            unlock.incorrect
-              ? 'That password is not correct. Try again.'
-              : 'The password opens it in this view only and is not saved.'
+            unlock.incorrect ? "That password isn't correct. Try again." : "Viewer doesn't save it."
           }
         >
           <input
@@ -446,7 +450,7 @@ export default function PDFPreview(
         )}
         {context.editPDF && (
           <button {...headerItem('pdf-tools', 5, ['pdf-tools'])} onClick={context.editPDF}>
-            PDF tools…
+            PDF Tools…
           </button>
         )}
         <IconButton
@@ -480,8 +484,8 @@ export default function PDFPreview(
           label="PDF zoom"
           value={String(zoom)}
           choices={[
-            { value: 'page', label: 'Fit page' },
-            { value: 'width', label: 'Fit width' },
+            { value: 'page', label: 'Fit Page' },
+            { value: 'width', label: 'Fit Width' },
             ...[
               ...new Set([
                 0.25,
@@ -506,7 +510,7 @@ export default function PDFPreview(
         <IconButton
           {...headerItem('search', 4, ['preview.pdf-search'])}
           icon="search"
-          label="Search PDF"
+          label="Find"
           onClick={() => setSearchOpen(true)}
         />
         {every && (
@@ -549,14 +553,14 @@ export default function PDFPreview(
         <div className="search-row">
           <input
             ref={searchInput}
-            aria-label="Search PDF text"
-            placeholder="Find in PDF"
+            aria-label="Find text"
+            placeholder="Find"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
           <IconButton
             icon="close"
-            label="Close PDF search"
+            label="Close find"
             onClick={() => {
               setSearchOpen(false);
               setQuery('');
@@ -568,7 +572,7 @@ export default function PDFPreview(
         <div className="pdf-search-results">
           {searching
             ? 'Searching…'
-            : `${matches.length} matching pages${pdf.numPages > 1000 ? ' in the first 1,000 pages' : ''}`}
+            : `${matches.length ? `Found on ${plural(matches.length, 'page')}` : 'Not found'}${pdf.numPages > 1000 ? ' in the first 1,000 pages' : ''}`}
           {matches.slice(0, 100).map((index) => (
             <button
               className={page === index ? 'selected' : ''}

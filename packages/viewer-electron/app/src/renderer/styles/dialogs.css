@@ -327,18 +327,21 @@
   height: auto;
 }
 .dialog .quick-preview-footer {
-  flex: 0 0 auto;
+  flex: 0 0 56px;
+  height: 56px;
+  min-height: 56px;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 16px;
-}
-.quick-preview-metadata {
-  min-width: 0;
-  color: var(--muted);
-  font-size: var(--text-label);
+  gap: var(--gap-panel);
+  padding: var(--gap-content) var(--gap-panel);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* the facts take what the actions leave; below 96 px the actions scroll instead, the last resort */
+.quick-preview-footer > .preview-file-info {
+  flex: 1 1 0;
+  min-width: 96px;
+  font-size: var(--text-label);
+  color: var(--muted);
 }
 .quick-preview-actions,
 .quick-preview-navigation {
@@ -346,6 +349,14 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+.quick-preview-actions {
+  flex: 0 1 auto;
+  overflow-x: auto;
+}
+.quick-preview-actions > button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .quick-preview-navigation {
   gap: 2px;

@@ -83,7 +83,7 @@ export function Volumes({
                   {volume.total
                     ? `${formatBytes(volume.available)} available of ${formatBytes(volume.total)}`
                     : volume.path}
-                  {volume.readOnly ? ' · Read only' : ''}
+                  {volume.readOnly ? ' · Read-only' : ''}
                 </small>
               </button>
               {volume.ejectable && (

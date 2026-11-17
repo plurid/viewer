@@ -36,7 +36,7 @@ const show = (themes: Theme[] = []) => {
 
 it('makes a new theme from the built-in one and uses it', () => {
   const { view, patch } = show();
-  fireEvent.click(view.getByRole('button', { name: 'New theme' }));
+  fireEvent.click(view.getByRole('button', { name: 'New Theme' }));
   const [themes] = patch.mock.calls.find(([path]) => path === 'settings.themes')!.slice(1);
   expect((themes as Theme[])[0]).toMatchObject({ look: 'dark', name: 'Custom Viewer Dark' });
   expect(patch).toHaveBeenCalledWith('settings.theme', {

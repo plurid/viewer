@@ -55,7 +55,7 @@ export function importItermColors(xml: string, name: string, taken: Iterable<str
   }
   const background = colors.get('Background Color');
   const foreground = colors.get('Foreground Color');
-  if (!background || !foreground) throw new Error('This is not an iTerm colour preset.');
+  if (!background || !foreground) throw new Error('This is not an iTerm color preset.');
   const terminal: Partial<Record<TerminalToken, string>> = {
     background,
     foreground,
@@ -144,7 +144,7 @@ export function importVSCodeTheme(
   const colors = json.colors ?? {};
   const tokens = Array.isArray(json.tokenColors) ? json.tokenColors : [];
   if (!Object.keys(colors).length && !tokens.length)
-    throw new Error('This is not a VS Code colour theme.');
+    throw new Error('This is not a VS Code color theme.');
   const pick = (keys: string[]) => keys.map((key) => themeColor(colors[key])).find(Boolean);
   const shell: Theme['shell'] = {};
   for (const [token, keys] of shellKeys) {

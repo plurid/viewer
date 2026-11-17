@@ -36,7 +36,7 @@ export const overviewQueries: readonly OverviewQuery[] = [
   {
     id: 'archives.extracted',
     title: 'Archives already extracted',
-    detail: 'The folder Extract here made is beside them',
+    detail: 'The folder Extract Here made is beside them',
     query: 'ext:zip,tar,tgz,gz',
     place: 'everywhere',
     check: 'extracted',

@@ -88,7 +88,7 @@ it('matches case, whole words and patterns, and says when nothing or an invalid 
 it('replaces one match or all of them, as one undoable edit each', async () => {
   const { view, cm, field, count, handle } = await show();
   act(() => handle().find());
-  fireEvent.click(view.getByRole('button', { name: 'Toggle replace' }));
+  fireEvent.click(view.getByRole('button', { name: 'Show Replace' }));
   fireEvent.click(view.getByRole('button', { name: 'Match case' }));
   fireEvent.change(field(), { target: { value: 'alpha' } });
   fireEvent.change(view.getByRole('textbox', { name: 'Replace' }), {
@@ -96,7 +96,7 @@ it('replaces one match or all of them, as one undoable edit each', async () => {
   });
   // the buttons wait for the count: nothing to replace is no button to press
   await waitFor(() => expect(count()).toMatch(/2$/));
-  fireEvent.click(view.getByRole('button', { name: 'Replace all' }));
+  fireEvent.click(view.getByRole('button', { name: 'Replace All' }));
   await waitFor(() => expect(cm.state.sliceDoc()).toBe('omega beta omega\nAlpha gamma'));
 });
 it('closes with Escape, back to the text, with no matches left marked', async () => {

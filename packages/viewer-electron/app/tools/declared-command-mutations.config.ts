@@ -1,18 +1,9 @@
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 import base from '../vitest.config.ts';
-
-interface MutationEdit {
-  file: string;
-  before: string;
-  after: string;
-}
-
-const file = process.env.VIEWER_DECLARED_COMMAND_MUTATIONS;
-const probes: Record<string, MutationEdit[]> = file ? JSON.parse(readFileSync(file, 'utf8')) : {};
+import { declaredCommandMutationProbes } from './declared-command-mutations.ts';
 const name = process.env.VIEWER_DECLARED_COMMAND_MUTATION;
-const edits = name ? probes[name] : undefined;
+const edits = name ? declaredCommandMutationProbes[name] : undefined;
 if (name && !edits) throw new Error('Choose a known declared command mutation.');
 
 /** Source transforms keep concurrent work intact while a review removes one guard at a time. */

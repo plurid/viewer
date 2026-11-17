@@ -55,7 +55,7 @@ export function DefinitionStartPanel({
   return (
     <section
       className="definition-start-panel"
-      aria-label={`Command terminal ${plane + 1}: ${runLabel || (state === 'changed' ? 'Terminal changed' : 'Command unavailable')}`}
+      aria-label={`Command terminal ${plane + 1}: ${runLabel || (state === 'changed' ? 'Terminal changed' : 'No command to run')}`}
       aria-describedby={[command ? commandID : '', folderID].filter(Boolean).join(' ')}
       aria-busy={starting || pending}
     >
@@ -68,7 +68,7 @@ export function DefinitionStartPanel({
               ? 'Checking definition…'
               : command
                 ? 'Command not started'
-                : 'Command unavailable'
+                : 'No command to run'
         }
       >
         {state === 'changed' ? <p role="status">This terminal changed in the definition.</p> : null}
@@ -97,7 +97,7 @@ export function DefinitionStartPanel({
               disabled={starting || pending || Boolean(disabledReason)}
               onClick={onReset}
             >
-              Reset to definition…
+              Reset to Definition…
             </Button>
           ) : (
             <Button

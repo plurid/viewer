@@ -16,7 +16,7 @@ import { effectiveWindowSettings } from '../state/effective-ui';
 import { report, updatePane, useViewer } from '../state/store';
 import { registerEditingPlane, type EditorHandle } from '../editing/planes';
 import { usePreviewControlsSlot } from '../previews/controls';
-import { Empty, IconButton, Loading } from '../ui/primitives';
+import { Failure, IconButton, Loading, tryAgainLabel } from '../ui/primitives';
 import {
   changeNote,
   flushNote,
@@ -98,16 +98,14 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
   );
   if (!session)
     return error ? (
-      <Empty title="Note unavailable" detail={error}>
-        <button
-          onClick={() => {
-            setError('');
-            void loadNote(pane.id, pane.documentID).catch((error) => setError(errorMessage(error)));
-          }}
-        >
-          Retry
-        </button>
-      </Empty>
+      <Failure
+        title="Can’t open this note"
+        detail={error}
+        onRetry={() => {
+          setError('');
+          void loadNote(pane.id, pane.documentID).catch((error) => setError(errorMessage(error)));
+        }}
+      />
     ) : (
       <Loading label="Opening note…" />
     );
@@ -124,7 +122,7 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
         Source
       </button>
       <span className="muted" role="status">
-        {session.error ? 'Not saved' : changed || session.pending ? 'Saving…' : 'Saved privately'}
+        {session.error ? 'Not saved' : changed || session.pending ? 'Saving…' : 'Saved'}
       </span>
       <span className="toolbar-spacer" />
       <DictationButton
@@ -180,13 +178,13 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
       </label>
       {session.document.recoveredFrom && (
         <p className="inline-warning">
-          Another view changed the original. These edits were saved as a separate recovered note.
+          Another view changed this note, so these edits were saved as a separate note.
         </p>
       )}
       {session.error && (
         <p className="error" role="alert">
           {session.error}{' '}
-          <button onClick={() => void flushNote(pane.id).catch(report)}>Retry save</button>
+          <button onClick={() => void flushNote(pane.id).catch(report)}>{tryAgainLabel}</button>
         </p>
       )}
       {source ? (
@@ -300,7 +298,7 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
           )}
         </article>
       )}
-      {!visible && <span className="sr-only">Note remains saved while out of view.</span>}
+      {!visible && <span className="sr-only">Note stays saved while out of view.</span>}
       {trashing && <TrashNoteDialog note={session.document} onClose={() => setTrashing(false)} />}
     </div>
   );

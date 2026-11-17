@@ -46,5 +46,12 @@ Run the affected tests, types, lint and formatting. Exercise changed user flows 
 [Testing](docs/development/testing.md) distinguishes unit, browser, native and release evidence and
 explains fixture preservation.
 
+Passing tests do not show how a screen looks. A change to the interface adds or updates its
+[review scenes](docs/development/review.md#add-a-scene). Before any build reaches someone else, look
+at screenshots of every changed screen as
+[Look at every changed screen](docs/development/testing.md#look-at-every-changed-screen) describes.
+When you delegate work to other agents, verifying their result, its appearance included, stays your
+job.
+
 For a preview module, follow [the extension guide](docs/development/previews.md). For a new
 ownership rule, record the decision in an [ADR](docs/adr/README.md).

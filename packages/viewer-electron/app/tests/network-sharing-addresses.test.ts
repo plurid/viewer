@@ -41,7 +41,7 @@ it.each(['a\\b', 'a\nb', 'a\x7fb'])(
     expect(addresses[0]?.address).toBe(
       'smb://Studio-Mac.local/Top/' + encodeURIComponent(relative),
     );
-    expect(windowsSharingAddressProblem(nested)).toContain('character Windows cannot use');
+    expect(windowsSharingAddressProblem(nested)).toContain('character Windows can’t use');
   },
 );
 it('describes future guest access while the service is off, and respects the global switch', () => {

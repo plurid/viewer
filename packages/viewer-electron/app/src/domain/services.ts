@@ -20,6 +20,7 @@ import type { InspectedFile } from './previews/inspected';
 import type { OptimizationRecipe } from './operations/optimization';
 import type { FileGrouping } from './files/entries';
 import { darkPageDefaults, type DarkPageMode } from './previews/documents/dark-pages';
+import type { ModelScrollDevice } from './previews/models/scroll-device';
 export type { ProviderKind } from './models/providers';
 export interface ModelProvider {
   id: string;
@@ -107,6 +108,8 @@ export interface ApplicationSettings {
     thumbnailSize: number;
     maxImagePixels: number;
     maxModelMB: number;
+    /** What a 3D preview reads the wheel as; renderer/previews/model/wheel.ts. */
+    modelScrollDevice: ModelScrollDevice;
     textFontSize: number;
     textLineHeight: number;
     textWordWrap: boolean;
@@ -201,6 +204,8 @@ export interface SettingsSnapshot {
   /** The OS appearance, independent of the shared appearance preference. */
   systemLook?: Look;
   credentials: string[];
+  /** The home folder, which paths in Settings show as `~`: its window has no bootstrap. */
+  home?: string;
   config?: {
     path: string;
     diagnostics: string[];
@@ -450,6 +455,7 @@ export function defaultSettings(home: string): ApplicationSettings {
       thumbnailSize: 256,
       maxImagePixels: 64000000,
       maxModelMB: 256,
+      modelScrollDevice: 'automatic',
       textFontSize: 16,
       textLineHeight: 20,
       textWordWrap: false,

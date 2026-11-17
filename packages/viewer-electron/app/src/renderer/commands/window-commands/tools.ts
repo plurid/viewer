@@ -15,7 +15,7 @@ export function toolsCommands({
   const commands: CommandDefinition[] = [
     {
       id: 'tool-library',
-      label: 'Tool library',
+      label: 'Tool Library',
       group: 'Workspace',
       icon: 'command',
       aliases: ['plugins', 'generated tools', 'manage tools', 'canvases'],
@@ -25,7 +25,7 @@ export function toolsCommands({
     },
     {
       id: 'personal-backup',
-      label: 'Backup and restore…',
+      label: 'Backup and Restore…',
       group: 'Workspace',
       icon: 'file',
       aliases: ['portable', 'backup', 'restore', 'move computer'],
@@ -35,7 +35,7 @@ export function toolsCommands({
     },
     {
       id: 'capabilities',
-      label: 'What can I do here?',
+      label: 'What Can I Do Here?',
       group: 'Help',
       icon: 'help',
       aliases: ['help', 'discover', 'pin', 'customize toolbar', 'available actions'],
@@ -45,7 +45,7 @@ export function toolsCommands({
     },
     {
       id: 'related-files',
-      label: 'Related files…',
+      label: 'Related Files…',
       group: 'Files',
       icon: 'link',
       aliases: ['provenance', 'dependencies', 'source links', 'relationships'],
@@ -77,7 +77,7 @@ export function toolsCommands({
     },
     {
       id: 'add-to-basket',
-      label: 'Add to basket',
+      label: 'Add to Basket',
       group: 'Files',
       icon: 'check',
       aliases: ['collect', 'basket', 'keep selection'],
@@ -88,7 +88,7 @@ export function toolsCommands({
     },
     {
       id: 'collections',
-      label: 'Collections and basket…',
+      label: 'Collections and Basket…',
       group: 'Workspace',
       icon: 'folder',
       aliases: ['collection', 'basket', 'virtual folder'],
@@ -99,7 +99,7 @@ export function toolsCommands({
     },
     {
       id: 'basket-all-query',
-      label: 'Add all indexed matches to basket',
+      label: 'Add All Indexed Matches to Basket',
       group: 'Files',
       icon: 'search',
       aliases: ['all results', 'snapshot selection'],
@@ -121,7 +121,7 @@ export function toolsCommands({
     },
     {
       id: 'save-smart-folder',
-      label: 'Save as smart folder',
+      label: 'Save as Smart Folder',
       group: 'Files',
       icon: 'search',
       aliases: ['smart folder', 'live collection', 'saved search folder'],
@@ -149,7 +149,7 @@ export function toolsCommands({
     },
     {
       id: 'find-duplicates',
-      label: 'Find duplicates…',
+      label: 'Find Duplicates…',
       group: 'Files',
       icon: 'copy',
       aliases: ['duplicates', 'identical files', 'reclaim space'],
@@ -166,7 +166,7 @@ export function toolsCommands({
     },
     {
       id: 'compare-locations',
-      label: 'Compare locations…',
+      label: 'Compare Locations…',
       group: 'Files',
       icon: 'columns',
       aliases: ['compare folders', 'diff', 'reconcile'],
@@ -184,7 +184,7 @@ export function toolsCommands({
     },
     {
       id: 'checkpoints',
-      label: 'Content checkpoints…',
+      label: 'Content Checkpoints…',
       group: 'App',
       icon: 'file',
       aliases: ['recovery', 'snapshots', 'restore checkpoint'],
@@ -195,7 +195,7 @@ export function toolsCommands({
     },
     {
       id: 'inspect-file',
-      label: 'Inspect file…',
+      label: 'Inspect File…',
       group: 'Files',
       icon: 'file',
       aliases: ['facts', 'document metadata', 'pages', 'dimensions'],
@@ -208,7 +208,7 @@ export function toolsCommands({
     },
     {
       id: 'plane-notes',
-      label: 'Plane notes…',
+      label: 'Plane Notes…',
       group: 'Plane',
       icon: 'file',
       aliases: ['annotate', 'notes'],
@@ -220,7 +220,7 @@ export function toolsCommands({
   ];
   commands.push({
     id: 'tasks',
-    label: 'Action tasks…',
+    label: 'Action Tasks…',
     group: 'Actions',
     icon: 'command',
     aliases: ['history', 'proposals'],

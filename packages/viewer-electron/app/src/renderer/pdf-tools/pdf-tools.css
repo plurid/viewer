@@ -14,19 +14,6 @@
 .pdf-tools-toolbar .muted {
   font-size: var(--text-label);
 }
-.pdf-tools-range > .choice-button {
-  max-width: 300px;
-}
-.pdf-tools-range label {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-inline);
-  font-size: var(--text-label);
-  color: var(--muted);
-}
-.pdf-tools-range input {
-  width: 170px;
-}
 .pdf-tools-body {
   display: grid;
   grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
@@ -120,39 +107,16 @@
 .pdf-tools-page [hidden] {
   display: none;
 }
+/* A dialog form (ui/form-fields.css): the name and the folder share a row when there is room. */
 .pdf-tools-export {
   padding: var(--gap-content) var(--gap-panel);
   border-top: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(240px, 2fr);
-  gap: 10px var(--gap-panel);
 }
-.pdf-tools-export > label {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: var(--text-label);
-  color: var(--muted);
-  min-width: 0;
-}
-.pdf-tools-export input {
-  min-width: 0;
-}
-.pdf-tools-export .media-destination {
-  display: flex;
-  gap: var(--gap-inline);
-}
-.pdf-tools-export .media-destination input {
-  flex: 1;
-}
-.pdf-tools-export > .pdf-tools-split {
+.pdf-tools-export > :not(.dialog-field) {
   grid-column: 1 / -1;
-  flex-direction: row;
-  align-items: center;
 }
 .pdf-tools-export > p {
   margin: 0;
-  grid-column: 1 / -1;
   font-size: var(--text-label);
 }
 .pdf-tools-results {
@@ -177,12 +141,6 @@
   }
   .pdf-tools-body {
     grid-template-columns: minmax(180px, 44%) minmax(0, 1fr);
-  }
-  .pdf-tools-export {
-    grid-template-columns: 1fr;
-  }
-  .pdf-tools-range > .choice-button {
-    max-width: 240px;
   }
   .pdf-tools-order-actions {
     gap: 3px;

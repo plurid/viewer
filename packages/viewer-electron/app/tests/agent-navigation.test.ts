@@ -772,7 +772,7 @@ describe('reviewed MCP workspace navigation', () => {
     );
     snapshot.workspaces.find((space) => space.id === 'empty')!.panes.push(plane('changed', secret));
     await expect(call('propose_open_path', { path: files })).rejects.toThrow(
-      'originating workspace changed',
+      'workspace this started from changed',
     );
   });
   it('opens only granted paths after explicit review; rejection makes no change', async () => {

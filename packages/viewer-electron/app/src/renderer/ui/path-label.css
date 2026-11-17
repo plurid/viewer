@@ -1,0 +1,20 @@
+/* PATH LABELS (ui/PathLabel.tsx): one line fitted to its room, or the whole path wrapping. */
+.path-label {
+  position: relative;
+  min-width: 0;
+  unicode-bidi: isolate;
+}
+.path-label[data-layout='line'] {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.path-label[data-layout='wrap'] {
+  overflow-wrap: anywhere;
+}
+/* The whole path is for assistive technology only: a selection across the label copies what
+   shows, once. */
+.path-label > .path-label-whole {
+  user-select: none;
+}

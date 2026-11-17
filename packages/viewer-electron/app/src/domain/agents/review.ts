@@ -7,15 +7,15 @@ const count = (value: number) => value.toLocaleString();
 export function reviewButton(proposal: AgentProposal): string {
   switch (proposal.kind) {
     case 'command':
-      return proposal.removal === 'trash' ? 'Move to Trash' : 'Run action';
+      return proposal.removal === 'trash' ? 'Move to Trash' : 'Run Action';
     case 'configuration':
-      return 'Apply changes';
+      return 'Apply Changes';
     case 'speech':
       return proposal.speech?.kind === 'use'
-        ? 'Choose model'
+        ? 'Choose Model'
         : proposal.speech?.kind === 'import'
-          ? 'Import model'
-          : 'Download model';
+          ? 'Import Model'
+          : 'Download Model';
     case 'task-workflow':
       return 'Create task';
     case 'transform':
@@ -23,7 +23,7 @@ export function reviewButton(proposal: AgentProposal): string {
     case 'navigation':
       return proposal.title;
     case 'terminal-write':
-      return 'Run action';
+      return 'Run Action';
   }
 }
 

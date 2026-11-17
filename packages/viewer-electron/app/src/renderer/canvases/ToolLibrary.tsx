@@ -75,7 +75,7 @@ export default function ToolLibrary({ pane }: { pane: ToolLibraryPane }) {
           Refresh
         </button>
         <button disabled={busy} onClick={() => void act(() => workspace.newChat([]))}>
-          New tool…
+          New Tool…
         </button>
       </header>
       {error && (
@@ -141,7 +141,7 @@ export default function ToolLibrary({ pane }: { pane: ToolLibraryPane }) {
                   disabled={busy || !selected.available}
                   onClick={() => void act(() => workspace.openCanvas(selected.id, pane.id))}
                 >
-                  Open tool
+                  Open Tool
                 </button>
                 <button
                   disabled={busy || !selected.available}
@@ -207,7 +207,7 @@ export default function ToolLibrary({ pane }: { pane: ToolLibraryPane }) {
                     void act(() => configure(selected, selected.title, enabled));
                   }}
                 />
-                Enable tool
+                Enable Tool
               </label>
               <p className="tool-library-hint">
                 Disabling stops the tool and prevents its actions from running.

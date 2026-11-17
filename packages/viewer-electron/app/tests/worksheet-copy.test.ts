@@ -78,7 +78,7 @@ it('rejects partial extraction and selections larger than its budget', async () 
   f.document.mockResolvedValueOnce(data);
   await expect(
     worksheetTSV(f.context, 'Data', range, true, new AbortController().signal),
-  ).rejects.toThrow('incomplete');
+  ).rejects.toThrow('Only part of this worksheet');
   f.document.mockClear();
   await expect(
     worksheetTSV(f.context, 'Data', { ...range, toRow: 20000 }, true, new AbortController().signal),

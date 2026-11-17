@@ -216,10 +216,10 @@ try {
   assert.equal(tasks[0]!.exitCode, 0);
   assert.match(tasks[0]!.output, /viewer-native-command/);
   assert.equal(await evaluate(exists('.xterm')), false);
-  await run('Command progress');
+  await run('Command Progress');
   await until(
     () => evaluate(textOf('.execution-panel')),
-    (value) => value.includes('exit 0'),
+    (value) => value.includes('Done'),
     'expanded command result',
   );
   await evaluate(click('[aria-label="Hide command progress"]'));
@@ -230,7 +230,7 @@ try {
     'saved-action prompt',
   );
   await field('.run-command-dialog textarea', 'printf "saved action\\n"');
-  await press('Save as action…');
+  await press('Save as Action…');
   await field('[aria-label="Action name"]', 'Generated saved action');
   await press('Review in Settings');
   const configuration = await app.connect(true);
@@ -245,7 +245,7 @@ try {
   const draftImage = path.join(root, 'command-draft.png');
   await writeFile(draftImage, Buffer.from(draftCapture.data, 'base64'), { flag: 'wx' });
   captures.push(draftImage);
-  await configuration.evaluate(pressButton('Add command'));
+  await configuration.evaluate(pressButton('Add Command'));
   await until(
     () => configuration.evaluate(pageCall(() => window.viewer.settingsGet())),
     (snapshot) =>
@@ -253,7 +253,7 @@ try {
     'saved custom action',
   );
   assert.equal((await evaluate(pageCall(() => window.viewer.executionList()))).length, 1);
-  await run('New note plane');
+  await run('New Note Plane');
   await until(() => evaluate(exists('.note-title input')), Boolean, 'note');
   await field('.note-title input', 'Plan notes');
   await press('Source');
@@ -273,7 +273,7 @@ try {
   await capture('note-dark');
   const listed = await evaluate(pageCall(noteList));
   noteID = listed.notes.find((note) => note.title === 'Plan notes')!.id;
-  await run('Close plane');
+  await run('Close Plane');
   await until(
     () => evaluate(pageCall(() => document.querySelector('.note-plane') === null)),
     Boolean,
@@ -288,7 +288,7 @@ try {
     (value) => value === 'Decision',
     'closed note reopened',
   );
-  await run('New checklist plane');
+  await run('New Checklist Plane');
   await until(() => evaluate(exists('[aria-label="New checklist item"]')), Boolean, 'checklist');
   await field('.note-title input', 'Release checks');
   await field('[aria-label="New checklist item"]', 'Preview RAW samples');

@@ -227,7 +227,7 @@ try {
     (count) => count > 0,
     'virtualized Journal rows',
   );
-  await palette('Dock plane');
+  await palette('Dock Plane');
   await until(() => evaluate(exists('.journal-plane')), Boolean, 'docked Journal');
   await evaluate(click('.journal-event'));
   await until(() => evaluate(exists('.journal-details')), Boolean, 'event inspector');
@@ -269,7 +269,7 @@ try {
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await palette('Frame plane');
+    await palette('Frame Plane');
     await bounds();
     const image = await command<{ data: string }>('Page.captureScreenshot', {
       format: 'png',

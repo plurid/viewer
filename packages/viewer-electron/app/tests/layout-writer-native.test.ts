@@ -691,7 +691,7 @@ it.skipIf(!ready)('refuses sources, plans and work outside its limits', async ()
   await expect(attempt(picture(2))).rejects.toThrow('Phone.heic is a HEIC image.');
   await expect(attempt(picture(7))).rejects.toThrow('not in this layout');
   await expect(attempt(picture(3), { tools: { qpdf } })).rejects.toThrow(
-    'Image processing is unavailable',
+    'can’t process images for layouts',
   );
   const blank = { width: 100, height: 100, items: [] };
   expect(() =>

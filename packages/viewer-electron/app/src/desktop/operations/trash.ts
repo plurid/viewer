@@ -34,6 +34,7 @@ import { renameExclusive } from './rename-exclusive';
 import type { FileAccess } from '../files/file-access';
 import { errorMessage } from '../../domain/errors';
 import { openDialog } from '../native/dialogs';
+import { plural } from '../../domain/plural';
 
 const run = promisify(execFile);
 const limit = 4000;
@@ -270,11 +271,11 @@ export class Trash {
           path.resolve(target) !== target
         )
           throw new Error(
-            'The original location is unavailable. Use Restore to… to choose a folder.',
+            'Viewer doesn’t know where this item came from. Use Restore To… to choose a folder.',
           );
         const parent = await realpath(path.dirname(target)).catch(() => {
           throw new Error(
-            'The original folder no longer exists. Use Restore to… to choose a folder.',
+            'The original folder no longer exists. Use Restore To… to choose a folder.',
           );
         });
         if (parent !== path.dirname(target))
@@ -442,7 +443,7 @@ export class Trash {
     const location = this.#last?.snapshot.locations.find((value) => value.id === locationID);
     if (this.#closed || window.isDestroyed()) return;
     if (!root || process.platform !== 'darwin' || !location?.canRequestAccess)
-      throw new Error('This Trash location is unavailable. Refresh Trash.');
+      throw new Error('Viewer can’t reach this Trash folder now. Click Refresh, then try again.');
     if (location.access === 'privacy') {
       // A folder picker cannot grant macOS Full Disk Access. This fixed link
       // opens settings only; it neither grants access nor changes agent scopes.
@@ -505,7 +506,7 @@ export class Trash {
         type: 'warning',
         title: `Empty ${title}?`,
         message: `Empty ${title}?`,
-        detail: `Permanently erase ${before.snapshot.items.length} items, including the contents of trashed folders? This cannot be undone.`,
+        detail: `${plural(before.snapshot.items.length, 'item')} will be erased for good, including what is inside trashed folders. You can’t undo this.`,
         buttons: ['Cancel', `Empty ${title}`],
         defaultId: 0,
         cancelId: 0,
@@ -546,7 +547,7 @@ export class Trash {
   #powershell(): string {
     const system = process.env.SystemRoot;
     if (!system || !path.win32.isAbsolute(system))
-      throw new Error('Windows system tools are unavailable.');
+      throw new Error('Viewer can’t find Windows PowerShell, so it can’t use the Recycle Bin.');
     return path.win32.join(system, 'System32/WindowsPowerShell/v1.0/powershell.exe');
   }
   async #read(): Promise<ReadResult> {

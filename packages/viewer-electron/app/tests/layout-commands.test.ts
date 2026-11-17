@@ -59,7 +59,7 @@ afterEach(async () => {
 describe('Lay out…', () => {
   it('is offered for photos and PDFs, and opens the plane with the files it uses', async () => {
     const lay = command('lay-out');
-    expect(lay).toMatchObject({ label: 'Lay out…', group: 'Files' });
+    expect(lay).toMatchObject({ label: 'Lay Out…', group: 'Files' });
     expect(lay.aliases).toEqual(expect.arrayContaining(['collage', 'booklet', 'poster']));
     const selection = [file('a.jpg'), file('notes.txt'), file('Report.pdf'), file('b.HEIC')];
     expect(lay.when(context(selection))).toBe(true);
@@ -74,7 +74,7 @@ describe('Lay out…', () => {
 
   it('opens DXF parts in nesting mode from Nest for cutting…', async () => {
     const nest = command('nest-parts');
-    expect(nest.label).toBe('Nest for cutting…');
+    expect(nest.label).toBe('Nest for Cutting…');
     const parts = [file('Bracket.dxf', '/Users/a/Parts'), file('Plate.DXF', '/Users/a/Parts')];
     expect(nest.when(context(parts))).toBe(true);
     expect(nest.when(context([file('a.jpg')]))).toBe(false);
@@ -99,7 +99,7 @@ describe('Suggested', () => {
   });
   const resolved = (id: string, selection: FileEntry[]): ResolvedCommand => ({
     id,
-    label: id === 'lay-out' ? 'Lay out…' : id,
+    label: id === 'lay-out' ? 'Lay Out…' : id,
     group: 'Files',
     aliases: [],
     primary: false,

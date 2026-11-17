@@ -517,7 +517,7 @@ describe('definition commands in workspace planes', () => {
             reference: displayedDefinitionCommand(workspace, panes[0]!)!.reference,
           },
         ]),
-      ).rejects.toThrow(reason === 'agent' ? 'require a person' : 'An agent opened');
+      ).rejects.toThrow(reason === 'agent' ? 'Only you can start' : 'An agent opened');
       expect(fake.session).not.toHaveBeenCalled();
       expect(fake.start).not.toHaveBeenCalled();
       expect(fake.all).not.toHaveBeenCalled();
@@ -575,11 +575,13 @@ describe('definition commands in workspace planes', () => {
     };
     vi.mocked(window.viewer.workspaceDefinitionFile).mockResolvedValue(current);
     const view = await show(true);
-    const missing = view.getByRole('region', { name: 'Command terminal 1: Command unavailable' });
+    const missing = view.getByRole('region', { name: 'Command terminal 1: No command to run' });
     expect(missing.querySelector('code')).toBeNull();
     expect(view.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(true);
-    expect(missing.querySelector('[role="status"]')!.textContent).toContain('no longer available');
-    expect(view.queryByRole('button', { name: 'Run Command unavailable' })).toBeNull();
+    expect(missing.querySelector('[role="status"]')!.textContent).toContain(
+      'no longer in the definition',
+    );
+    expect(view.queryByRole('button', { name: 'Run No command to run' })).toBeNull();
     fireEvent.click(view.getByRole('button', { name: 'Run all 3 commands' }));
     await waitFor(() => expect(fake.all).toHaveBeenCalledOnce());
     expect(fake.all.mock.calls[0]![0].map((item) => item.plane)).toEqual([1, 2]);
@@ -791,7 +793,7 @@ describe('definition commands in workspace planes', () => {
       update({ ...getState(), bootstrap: { ...getState().bootstrap, definitions: catalog } }),
     );
     await waitFor(() =>
-      expect(view.getAllByRole('button', { name: 'Reset to definition…' })).toHaveLength(2),
+      expect(view.getAllByRole('button', { name: 'Reset to Definition…' })).toHaveLength(2),
     );
     expect(view.getAllByText('This terminal changed in the definition.')).toHaveLength(2);
     expect(view.queryByRole('button', { name: 'Run echo sample-0' })).toBeNull();
@@ -831,7 +833,7 @@ describe('definition commands in workspace planes', () => {
       update({ ...getState(), bootstrap: { ...getState().bootstrap, definitions: catalog } }),
     );
     await waitFor(() =>
-      expect(view.getByRole('button', { name: 'Reset to definition…' })).toBeDefined(),
+      expect(view.getByRole('button', { name: 'Reset to Definition…' })).toBeDefined(),
     );
     expect(view.getByText('This terminal changed in the definition.')).toBeDefined();
     expect(view.queryByRole('button', { name: 'Run echo sample-0' })).toBeNull();
@@ -862,7 +864,7 @@ describe('definition commands in workspace planes', () => {
     update({ ...getState(), bootstrap: { ...getState().bootstrap, definitions: catalog } });
     const view = await show();
     expect(view.queryByRole('button', { name: 'Run echo sample-0' })).toBeNull();
-    fireEvent.click(view.getByRole('button', { name: 'Reset to definition…' }));
+    fireEvent.click(view.getByRole('button', { name: 'Reset to Definition…' }));
     await waitFor(() =>
       expect(view.getByRole('dialog', { name: 'Reset to definition?' })).toBeDefined(),
     );

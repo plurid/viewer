@@ -135,7 +135,7 @@ it.each(['Go to folder', 'z'])(
     const rows = screen.getAllByRole('option');
     expect(rows[0]?.textContent).toContain(first);
     expect(rows[1]?.textContent).toContain(second);
-    expect(screen.queryByText(/Some folders could not be checked/)).toBeNull();
+    expect(screen.queryByText(/couldn't check some folders/)).toBeNull();
     expect(start).not.toHaveBeenCalled();
     expect(stop).not.toHaveBeenCalled();
     expect(stat).not.toHaveBeenCalled();

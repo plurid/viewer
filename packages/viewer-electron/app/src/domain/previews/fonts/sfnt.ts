@@ -73,7 +73,7 @@ interface NameRecord {
 
 const truncated = 'The font file is truncated.';
 const outside = 'A font table lies outside the file.';
-const woff2Unread = 'WOFF2 tables use Brotli compression, which this preview cannot read.';
+const woff2Unread = 'Its WOFF2 tables are compressed with Brotli.';
 
 const signatures: ReadonlyMap<string, FontFormat> = new Map([
   ['\u0000\u0001\u0000\u0000', 'truetype'],

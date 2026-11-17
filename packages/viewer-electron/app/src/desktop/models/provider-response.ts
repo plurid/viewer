@@ -17,7 +17,7 @@ export class ProviderResponseError extends Error {
 export function providerAbort(signal: AbortSignal): DOMException {
   const timeout = signal.reason instanceof DOMException && signal.reason.name === 'TimeoutError';
   return new DOMException(
-    timeout ? 'The provider request timed out.' : 'The provider request was cancelled.',
+    timeout ? 'The provider request timed out.' : 'The provider request was canceled.',
     timeout ? 'TimeoutError' : 'AbortError',
   );
 }

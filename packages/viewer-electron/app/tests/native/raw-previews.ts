@@ -151,7 +151,7 @@ function pictureShown(label?: string, prior?: string): boolean {
 const cameraRecoveryOffered = () =>
   !!document.querySelector('.quick-preview .empty-state') &&
   [...document.querySelectorAll('.quick-preview button')].some(
-    (button) => button.textContent.trim() === 'Use camera preview',
+    (button) => button.textContent.trim() === 'Use Camera Preview',
   );
 
 const app = await ownedApp(binary, profile);
@@ -253,7 +253,7 @@ try {
     'RAW failure offers camera recovery',
   );
   await capture('raw-camera-recovery');
-  await evaluate(pressButton('Use camera preview', '.quick-preview'));
+  await evaluate(pressButton('Use Camera Preview', '.quick-preview'));
   await until(() => evaluate(pageCall(pictureShown)), Boolean, 'camera image recovered');
   await key('Escape', 'Escape', 27);
   await until(
@@ -266,7 +266,7 @@ try {
   await key(' ', 'Space', 32);
   await until(
     () => evaluate(textOf('.quick-preview .empty-state')),
-    (text) => text.includes('Preview unavailable'),
+    (text) => text.includes("Can't show this image"),
     'corrupt RAW refusal',
   );
   await capture('raw-invalid');

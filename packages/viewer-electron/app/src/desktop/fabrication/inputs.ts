@@ -21,6 +21,7 @@ import { checkLimits } from '../../domain/fabrication/check';
 import { imageTransformSchema } from '../../domain/operations/transforms';
 import { emlxMessage, readMessage } from '../../domain/previews/mail/message';
 import { imageDimensions } from '../previews/image-dimensions';
+import { plural } from '../../domain/plural';
 
 type Access = (files: readonly string[]) => Promise<void>;
 
@@ -187,6 +188,6 @@ export function pagePicture(page: RenderedPage, name: string): ModelImage {
   if (Math.max(size.width, size.height) > checkLimits.pageSide)
     throw new Error(`Page ${page.page} of ${name} is larger than ${checkLimits.pageSide} px.`);
   if (page.page > page.pages)
-    throw new Error(`${name} has ${page.pages} pages, not a page ${page.page}.`);
+    throw new Error(`${name} has ${plural(page.pages, 'page')}, not a page ${page.page}.`);
   return { type, data: page.image };
 }

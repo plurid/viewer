@@ -92,7 +92,7 @@ export function contentPlaneActions({
         activeWorkspace().id !== space.id ||
         (parentID && !activeWorkspace().panes.some((pane) => pane.id === parentID))
       )
-        throw new Error('The originating workspace changed. Open media tools again.');
+        throw new Error('You switched workspaces while media tools opened. Open them again.');
       const pane = {
         id: crypto.randomUUID(),
         type: 'media' as const,
@@ -166,7 +166,7 @@ export function contentPlaneActions({
     openServer(runtimeID) {
       const sessions = localServerSessions();
       const descriptor = sessions.descriptor(runtimeID);
-      if (!descriptor) throw new Error('This server is no longer available.');
+      if (!descriptor) throw new Error('This server has stopped. Start it again from its folder.');
       const existing = activeWorkspace().panes.find(
         (pane) => pane.type === 'server' && (pane.runtimeID ?? pane.id) === runtimeID,
       );
@@ -293,7 +293,7 @@ export function contentPlaneActions({
       const owner = activeWorkspace().id;
       const result = await window.viewer.git({ kind: 'head', path: file });
       if (owner !== activeWorkspace().id) return;
-      if (result.kind !== 'head') throw new Error('Git comparison is unavailable.');
+      if (result.kind !== 'head') throw new Error('Git couldn’t compare this file with HEAD.');
       let exists = true;
       try {
         await window.viewer.stat(file);

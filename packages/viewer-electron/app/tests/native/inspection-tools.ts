@@ -284,16 +284,16 @@ try {
     'YAML inspector after grouped keyboard navigation',
   );
   const treeButton = (text: string) => evaluate(pressButton(text, '.structured-viewer'));
-  await treeButton('Expand all');
+  await treeButton('Expand All');
   await until(
     () => evaluate(textOf('.structured-viewer')),
     (text) => text.includes('one') && text.includes('↪'),
     'expanded YAML aliases',
   );
   await capture('columns-data-dark');
-  await treeButton('Collapse all');
+  await treeButton('Collapse All');
   assert.equal(await evaluate(countOf('.structured-row')), 1);
-  await treeButton('Expand all');
+  await treeButton('Expand All');
   await clickFile(css);
   await until(() => evaluate(exists('.code-scroll .token.property')), Boolean, 'CSS highlighting');
   const text = await evaluate(pageCall(codeText));
@@ -325,7 +325,7 @@ try {
   await capture('columns-data-light');
   const displayed = () =>
     evaluate(pageCall(filePaths, '[data-folder-path=' + JSON.stringify(notes) + '] .file-row'));
-  await runCommand('Ungroup files');
+  await runCommand('Ungroup Files');
   await runCommand('Sort by name');
   await until(
     displayed,
@@ -338,12 +338,12 @@ try {
     (value) => value.join('|') === [yaml, css, book].join('|'),
     'child ascending name order',
   );
-  await runCommand('Show hidden files');
+  await runCommand('Show Hidden Files');
   await until(displayed, (value) => value.includes(hidden), 'child hidden files shown');
   await capture('columns-hidden-light');
-  await runCommand('Hide hidden files');
+  await runCommand('Hide Hidden Files');
   await until(displayed, (value) => !value.includes(hidden), 'child hidden files hidden');
-  await runCommand('Reset this folder’s view');
+  await runCommand('Reset This Folder’s View');
   await until(() => evaluate(pageCall(noFolderOverride, notes)), Boolean, 'child overrides reset');
   assert.equal(
     await evaluate(pageCall(noFolderOverride, files)),
@@ -351,7 +351,7 @@ try {
     'Ancestor preferences stayed intact.',
   );
   await runCommand('Sort by size');
-  await runCommand('Use as default folder view');
+  await runCommand('Use as Default Folder View');
   await until(
     () =>
       evaluate(
@@ -375,14 +375,14 @@ try {
   );
   await until(() => evaluate(exists('.grid-scroll')), Boolean, 'child grid view');
   await runCommand('Columns view');
-  await runCommand('Parent folder');
+  await runCommand('Parent Folder');
   await until(
     () => evaluate(attributeOf('.folder-explorer', 'aria-label')),
     (value) => value === 'Folder ' + collection,
     'parent of browsed folder',
   );
   await clickFile(notes);
-  await runCommand('Search this folder…');
+  await runCommand('Search This Folder…');
   await until(
     () => evaluate(attributeOf('.folder-explorer', 'aria-label')),
     (value) => value === 'Folder ' + notes,

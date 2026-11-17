@@ -402,7 +402,7 @@ describe('private initial shell input', () => {
     expect(fake.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'data',
-        data: expect.stringContaining('pending command was cancelled'),
+        data: expect.stringContaining('waiting command was canceled'),
       }),
     );
   });

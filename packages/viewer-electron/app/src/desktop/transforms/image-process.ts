@@ -64,7 +64,7 @@ function requestImage<T>(
       if (error) reject(error);
       else resolve(value!);
     };
-    const cancel = () => settle(signal.reason ?? new Error('Image conversion cancelled.'));
+    const cancel = () => settle(signal.reason ?? new Error('Image conversion was canceled.'));
     const timer = setTimeout(
       () => settle(new Error('Image processing timed out. Its source was kept.')),
       previewSize === undefined ? 90000 : 10000,
@@ -135,7 +135,7 @@ export function layoutImageProcess(
           clearTimeout(timer);
           signal.removeEventListener('abort', cancel);
         };
-        const cancel = () => stop(signal.reason ?? new Error('Layout cancelled.'));
+        const cancel = () => stop(signal.reason ?? new Error('The layout was canceled.'));
         const timer = setTimeout(
           () => stop(new Error('Image processing timed out. Its sources were kept.')),
           90000,

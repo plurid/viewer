@@ -210,7 +210,7 @@ export class OperationPlans {
         if (request.kind === 'list')
           return structuredClone(this.plans.filter((value) => value.owner === owner));
         const plan = this.plans.find((value) => value.id === request.id && value.owner === owner);
-        if (!plan) throw new Error('This plan is unavailable to this actor.');
+        if (!plan) throw new Error('This review has ended. Prepare it again.');
         if (request.kind === 'get') return structuredClone(plan);
         if (request.kind === 'cancel') {
           for (const row of plan.rows) if (row.jobID) this.operations.cancel(row.jobID);

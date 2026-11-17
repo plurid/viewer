@@ -140,7 +140,7 @@ try {
       pageCall(
         () =>
           [...document.querySelectorAll<HTMLButtonElement>('.workflow-definition button')].find(
-            (button) => button.textContent === 'Run workflow',
+            (button) => button.textContent === 'Run Workflow',
           )!.disabled,
       ),
     ),
@@ -152,7 +152,7 @@ try {
     (rules) => !rules[0].enabled,
     'actual Pause control',
   );
-  await evaluate(pageCall(pressRuleButton, 'Review and enable…'));
+  await evaluate(pageCall(pressRuleButton, 'Review and Enable…'));
   await until(() => evaluate(pageCall(approvalOpen)), Boolean, 'explicit approval form');
   await evaluate(
     pageCall(() => document.querySelector('.watch-rule-form')!.scrollIntoView({ block: 'center' })),
@@ -172,7 +172,7 @@ try {
   await until(
     () => evaluate(pageCall(watchRules)),
     (rules) => rules[0].enabled,
-    'actual Enable watch rule control',
+    'actual Enable Watch Rule control',
   );
   evidence.push(
     'Actual renderer Pause, Review and Enable controls preserve the scope, require explicit reapproval, and leave existing files unprocessed. Initial generated scope was seeded through the real private API; native folder picking was not tested.',

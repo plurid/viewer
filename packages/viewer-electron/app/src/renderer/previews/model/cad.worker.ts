@@ -1,26 +1,60 @@
 import createOcct from 'occt-import-js';
 import wasmURL from 'occt-import-js/dist/occt-import-js.wasm?url';
-import { cadMeshes, type CadReply } from './cad-data';
+import { cadMeshes } from './cad-data';
+import type { CadRequest, CadResponse } from './cad-data';
 import { errorMessage } from '../../../domain/errors';
 
-// The worker is disposable: conversion, its WASM heap and source bytes leave together.
-self.onmessage = async (event: MessageEvent<{ buffer: ArrayBuffer; extension: string }>) => {
+type Occt = Awaited<ReturnType<typeof createOcct>>;
+
+let engine: Promise<Occt> | undefined;
+
+/** OCCT from the window's compiled module, skipping the compile a new worker would repeat. */
+function instantiated(module: WebAssembly.Module): Promise<Occt> {
+  return new Promise((resolve, reject) => {
+    createOcct({
+      instantiateWasm(imports, receive) {
+        WebAssembly.instantiate(module, imports).then(
+          (instance) => receive(instance, module),
+          reject,
+        );
+        return {};
+      },
+    }).then(resolve, reject);
+  });
+}
+
+async function compiled(): Promise<Occt> {
+  const response = await fetch(wasmURL);
+  if (!response.ok) throw new Error("The CAD converter couldn't load. Try again.");
+  return createOcct({ wasmBinary: await response.arrayBuffer() });
+}
+
+function occtEngine(module?: WebAssembly.Module): Promise<Occt> {
+  return (engine ??= (module ? instantiated(module).catch(() => compiled()) : compiled()).catch(
+    (error: unknown) => {
+      engine = undefined;
+      throw error;
+    },
+  ));
+}
+
+self.onmessage = async (event: MessageEvent<CadRequest>) => {
+  const { id, buffer, extension, module } = event.data;
+  let occt: Occt | undefined;
   try {
-    const response = await fetch(wasmURL);
-    if (!response.ok) throw new Error('The CAD preview engine is unavailable.');
-    const occt = await createOcct({ wasmBinary: await response.arrayBuffer() });
+    occt = await occtEngine(module);
     const params = {
       linearUnit: 'millimeter',
       linearDeflectionType: 'bounding_box_ratio',
       linearDeflection: 0.001,
       angularDeflection: 0.5,
     };
-    const data = new Uint8Array(event.data.buffer);
-    const result = ['iges', 'igs'].includes(event.data.extension)
+    const data = new Uint8Array(buffer);
+    const result = ['iges', 'igs'].includes(extension)
       ? occt.ReadIgesFile(data, params)
       : occt.ReadStepFile(data, params);
     const meshes = cadMeshes(result);
-    self.postMessage({ meshes } satisfies CadReply, {
+    self.postMessage({ id, meshes, heap: occt.HEAP8.length } satisfies CadResponse, {
       transfer: meshes.flatMap((mesh) => [
         mesh.positions.buffer,
         mesh.indices.buffer,
@@ -29,7 +63,9 @@ self.onmessage = async (event: MessageEvent<{ buffer: ArrayBuffer; extension: st
     });
   } catch (error) {
     self.postMessage({
-      error: errorMessage(error) || 'This CAD file could not be read.',
-    } satisfies CadReply);
+      id,
+      error: errorMessage(error) || "Couldn't read this CAD file.",
+      heap: occt?.HEAP8.length,
+    } satisfies CadResponse);
   }
 };

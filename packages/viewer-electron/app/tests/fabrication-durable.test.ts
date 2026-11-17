@@ -268,7 +268,7 @@ describe('durable fabrication checks', () => {
       { kind: 'run', id: opening.id, providerID: meta.id, pages: [await drawingPage(opening)] },
       1,
     );
-    const rejected = expect(pending).rejects.toThrow('cancelled');
+    const rejected = expect(pending).rejects.toThrow('canceled');
     await started;
     await checks.request({ kind: 'cancel', id: opening.id }, 1);
     complete(jobAnswer(opening));

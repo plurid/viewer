@@ -124,7 +124,7 @@ export function settingInput(
       return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`.toLowerCase();
     const long = /^#?([0-9a-f]{6})$/i.exec(text);
     if (long) return `#${long[1]!.toLowerCase()}`;
-    throw new LineError(`${name} is a colour as #rrggbb, or auto.`, at);
+    throw new LineError(`${name} is a color as #rrggbb, or auto.`, at);
   }
   const value = Number(text);
   if (!text.trim() || !Number.isFinite(value)) throw new LineError(`${name} is a number.`, at);

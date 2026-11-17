@@ -1,4 +1,5 @@
 import type { CheckedFolder } from './files/folder-checks';
+import type { RemoteRequest, RemoteReply, RemoteConnectionSnapshot } from './remote/contracts';
 import type { WorkspaceDefinitionSource } from './workspaces/definitions/schema';
 import type { DeclaredCommandsReply } from './terminals/declared-commands';
 import type { ObservedIdentity } from './files/item-identity';
@@ -573,6 +574,8 @@ export type OperationKind =
 export const imageConversions = [
   'rotate-left',
   'rotate-right',
+  // the turn a picture's view can save, besides the quick actions' quarters
+  'rotate-180',
   'jpeg',
   'png',
   'pdf',
@@ -715,6 +718,7 @@ export interface ArchiveListing {
   truncated: boolean;
 }
 export type DesktopEvent =
+  | { type: 'remote'; connections: RemoteConnectionSnapshot[] }
   | { type: 'terminal-authority'; agentDriven: boolean }
   | { type: 'workspace-definitions'; catalog: DefinitionCatalog }
   | { type: 'license'; status: LicenseStatus }
@@ -748,6 +752,9 @@ export type DesktopEvent =
   | { type: 'settings-focus'; path?: string }
   /** ⌘Q was pressed once: a second press within `duration` milliseconds quits. */
   | { type: 'quit-hint'; duration: number }
+  /** A trackpad's rotation over the window (macOS): degrees since the last report,
+   * counterclockwise; 0 once the fingers lift. Only the window it happened in gets it. */
+  | { type: 'rotate-gesture'; rotation: number }
   | { type: 'service-error'; service: string; message: string }
   | { type: 'agent-proposal'; proposal: AgentProposal }
   | { type: 'agent-task'; id: string; bundle: AgentTaskBundle; deadline: number }
@@ -785,6 +792,7 @@ export type DesktopEvent =
   | { type: 'flush'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
+  remote(request: RemoteRequest): Promise<RemoteReply>;
   license(request: LicenseRequest): Promise<LicenseStatus | undefined>;
   dialog(request: DialogRequest): Promise<DialogReply>;
   speech(request: SpeechRequest): Promise<SpeechReply>;

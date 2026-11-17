@@ -7,8 +7,9 @@ import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { headerItem } from '../../workspace/header-overflow';
 import { DataTable, type TableControls } from '../DataTable';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
-import { Empty, Loading } from '../../ui/primitives';
-import { report } from '../../state/store';
+import { Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { useOfficeDocument } from '../useOfficeDocument';
 import { WorksheetNavigation } from '../WorksheetNavigation';
 import { WordBlock } from '../WordBlock';
@@ -75,7 +76,7 @@ function OfficeDocument(context: PreviewContext) {
   const viewControls = (
     <>
       <button aria-pressed={mode !== 'content' || !content} onClick={() => setMode('layout')}>
-        {workbook ? 'Print layout' : 'Layout'}
+        {workbook ? 'Print Layout' : 'Layout'}
       </button>
       {content && (
         <button aria-pressed={mode === 'content'} onClick={() => setMode('content')}>
@@ -198,7 +199,7 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
       () => [
         {
           id: 'office-preview-details',
-          label: details ? 'Hide preview details' : 'Show preview details',
+          label: details ? 'Hide Preview Details' : 'Show Preview Details',
           aliases: ['coverage', 'office', 'formula'],
           available: Boolean(office),
           run: () => setDetails((value) => !value),
@@ -209,21 +210,15 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
   );
   if ((!document && error) || (document && !office))
     return (
-      <Empty
+      <PreviewFailure
+        context={context}
         icon="file"
-        title="Office preview unavailable"
-        detail={error || 'This document has no supported text or worksheets.'}
+        title="Can't show this document"
+        detail={error || 'Viewer found no text or worksheets it can show in this document.'}
+        onRetry={workbook ? retry : (context.retry ?? retry)}
       >
-        <button onClick={workbook ? retry : (context.retry ?? retry)}>Try again</button>
-        {workbook && <button onClick={firstWorksheet}>First worksheet</button>}
-        <button
-          onClick={() => {
-            void window.viewer.openExternal(context.resource.entry.path).catch(report);
-          }}
-        >
-          Open in Default App
-        </button>
-      </Empty>
+        {workbook && <button onClick={firstWorksheet}>First Worksheet</button>}
+      </PreviewFailure>
     );
   if (!document || !office)
     return <Loading label={workbook ? 'Reading worksheet rows…' : 'Reading Office document…'} />;
@@ -242,7 +237,7 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
       <span className="toolbar-spacer" />
       {filter && (
         <span className="muted office-row-count" {...headerItem('rows', 9, 'detail')}>
-          {filter.rows.toLocaleString()} rows · {filter.columns} columns
+          {plural(filter.rows, 'row')} · {plural(filter.columns, 'column')}
         </span>
       )}
       <ChoiceButton
@@ -254,17 +249,17 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
             ? [
                 {
                   value: 'formatted',
-                  label: 'Formatted values',
+                  label: 'Formatted Values',
                   detail: formatted ? 'Selected' : undefined,
                 },
                 {
                   value: 'stored',
-                  label: 'Stored values',
+                  label: 'Stored Values',
                   detail: !formatted ? 'Selected' : undefined,
                 },
               ]
             : []),
-          { value: 'details', label: details ? 'Hide preview details' : 'Show preview details' },
+          { value: 'details', label: details ? 'Hide Preview Details' : 'Show Preview Details' },
         ]}
         onChoose={(value) =>
           value === 'details'
@@ -310,8 +305,9 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
           <p>{document.coverageReason}</p>
           {office.kind === 'workbook' && !loading && !error && (
             <p>
-              {office.formulas} formula cells{page ? ' on this page' : ''} · {office.missingCached}{' '}
-              without a saved value
+              {plural(office.formulas, 'formula cell')}
+              {page ? ' on this page' : ''} · {office.missingCached.toLocaleString('en-US')} without
+              a saved value
             </p>
           )}
         </section>
@@ -319,42 +315,39 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
       {!loading && !error && (page ? page.limited : document.truncated) && (
         <p className="inline-warning">
           {page
-            ? 'Some cell values or columns exceed the preview limits.'
-            : 'The reader limit was reached. Some content is not shown.'}
+            ? 'Some long cells and columns are cut short.'
+            : 'Only the first part of this document is shown.'}
         </p>
       )}
       {!loading &&
         !error &&
         sheet?.rows.some((row) => row.cells.some((cell) => cell.formatWarning)) && (
           <p className="inline-warning">
-            Some number formats are unavailable; stored values are shown for those cells. Select a
-            cell for details.
+            Some cells show plain numbers because Viewer can't apply their format. Select a cell for
+            details.
           </p>
         )}
       {!loading && !error && sheet?.mergeLimited && (
-        <p className="inline-warning">
-          Some merged ranges or their anchor values exceed the preview limits.
-        </p>
+        <p className="inline-warning">Some merged cells are too large to show merged.</p>
       )}
       {anchor?.kind === 'cells' &&
         anchor.sheet &&
         office.kind === 'workbook' &&
         !office.sheets.some((sheet) => sheet.name === anchor.sheet) && (
-          <p className="inline-warning">
-            The referenced worksheet is outside the available preview.
-          </p>
+          <p className="inline-warning">The linked sheet isn't in this preview.</p>
         )}
       {loading ? (
         <Loading label={workbook ? 'Reading worksheet rows…' : 'Reading Office document…'} />
       ) : error ? (
-        <Empty
+        <PreviewFailure
+          context={context}
           icon="file"
-          title={workbook ? 'Worksheet page unavailable' : 'Office preview unavailable'}
+          title={workbook ? "Can't show this worksheet page" : "Can't show this document"}
           detail={error}
+          onRetry={workbook ? retry : (context.retry ?? retry)}
         >
-          <button onClick={workbook ? retry : (context.retry ?? retry)}>Try again</button>
-          {workbook && <button onClick={firstWorksheet}>First worksheet</button>}
-        </Empty>
+          {workbook && <button onClick={firstWorksheet}>First Worksheet</button>}
+        </PreviewFailure>
       ) : sheet ? (
         <DataTable
           key={sheet.name + ':' + (page?.fromRow ?? '')}

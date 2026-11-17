@@ -124,12 +124,12 @@ export class DeclaredCommands {
     if (this.ports.access && !this.ports.access(directory)) return;
     const cached = this.cache.get(path.resolve(directory));
     if (
-      !cached ||
-      cached.roots !== JSON.stringify(this.ports.roots()) ||
-      cached.at + 10_000 <= this.now()
+      cached &&
+      cached.roots === JSON.stringify(this.ports.roots()) &&
+      cached.at + 10_000 > this.now() &&
+      !this.visible(await cached.value, directory).some((item) => item.line === line)
     )
       return;
-    if (!this.visible(await cached.value, directory).some((item) => item.line === line)) return;
     const value = await this.read(directory, true);
     const matched = this.visible(value, directory).find((item) => item.line === line);
     if (!value.root || !matched || revision !== this.epoch) return;

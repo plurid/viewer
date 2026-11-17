@@ -247,4 +247,8 @@ export type WorkspaceDefinitionFileRequest =
       limit?: number;
       keys?: string[];
     }
-  | { kind: 'project-manager'; enabled: boolean };
+  | { kind: 'project-manager'; enabled: boolean }
+  /** Not a Workspace: hides a found definition's root. */
+  | { kind: 'not-a-workspace'; key: string }
+  /** Shows a hidden found root again, or every one without a root. */
+  | { kind: 'show-found'; root?: string };

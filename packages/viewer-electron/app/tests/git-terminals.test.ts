@@ -173,7 +173,7 @@ describe('human Git terminal ownership', () => {
       () => wait,
     );
     const pending = terminals.startGit(program('job'), 7);
-    const rejected = expect(pending).rejects.toThrow('cancelled');
+    const rejected = expect(pending).rejects.toThrow('canceled');
     terminals.stop('job', 7);
     release();
     await rejected;
@@ -202,7 +202,7 @@ describe('human Git terminal ownership', () => {
     abort.abort();
     await expect(
       terminals.startGit({ ...program('job'), signal: abort.signal }, 7),
-    ).rejects.toThrow('cancelled');
+    ).rejects.toThrow('canceled');
     await expect(
       terminals.startGit(
         { ...program('other'), executable: '/bin/sh' } as unknown as GitTerminalLaunch,

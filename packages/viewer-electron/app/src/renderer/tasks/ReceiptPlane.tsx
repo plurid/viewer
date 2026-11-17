@@ -2,21 +2,12 @@ import { useEffect, useState } from 'react';
 import type { ReceiptPane as Record } from '../../domain/contracts';
 import type { CommandReceipt } from '../../domain/automation/receipts';
 import { receiptMarkdown } from '../../domain/automation/receipts';
+import { processOutcome } from '../ui/status-labels';
 import { errorMessage } from '../../domain/errors';
-import { CopyButton, Empty, Loading, PathField } from '../ui/primitives';
+import { CopyButton, Failure, Loading, PathField } from '../ui/primitives';
 import './tasks.css';
 export function receiptOutcome(receipt: Pick<CommandReceipt, 'status' | 'exitCode'>): string {
-  return receipt.status === 'running'
-    ? 'Running'
-    : receipt.status === 'interrupted'
-      ? 'Interrupted'
-      : receipt.status === 'cancelled'
-        ? 'Stopped'
-        : receipt.exitCode !== undefined
-          ? 'Exited ' + receipt.exitCode
-          : receipt.status === 'failed'
-            ? 'Failed to finish'
-            : 'Finished';
+  return processOutcome(receipt);
 }
 export default function ReceiptPlane({ pane, active }: { pane: Record; active: boolean }) {
   const [receipt, setReceipt] = useState<CommandReceipt>(),
@@ -60,9 +51,11 @@ export default function ReceiptPlane({ pane, active }: { pane: Record; active: b
   };
   if (!receipt)
     return error ? (
-      <Empty title="Command receipt unavailable" detail={error}>
-        <button onClick={() => setAttempt((value) => value + 1)}>Retry</button>
-      </Empty>
+      <Failure
+        title="Can’t read this command receipt"
+        detail={error}
+        onRetry={() => setAttempt((value) => value + 1)}
+      />
     ) : (
       <Loading label="Reading command receipt…" />
     );
@@ -90,7 +83,7 @@ export default function ReceiptPlane({ pane, active }: { pane: Record; active: b
         )}
         <CopyButton
           appearance="text"
-          label="Copy output"
+          label="Copy Output"
           copy={{ text: receipt.output }}
           onError={(value) => setError(errorMessage(value))}
         />

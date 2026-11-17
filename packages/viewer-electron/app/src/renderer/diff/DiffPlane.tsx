@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { DiffPane as DiffRecord } from '../../domain/contracts';
 import type { DiffSource } from '../../domain/comparison/diff';
 import { FileEditor } from '../editing/FileEditor';
-import { Empty, Loading } from '../ui/primitives';
+import { Failure, Loading } from '../ui/primitives';
 import { updatePane } from '../state/store';
 import MergeEditor, { MergeContext, type DiffNavigation } from './MergeEditor';
 import ImageDiff from './ImageDiff';
@@ -40,9 +40,11 @@ export default function DiffPlane({ pane }: { pane: DiffRecord }) {
 
   if (session.status === 'failed')
     return (
-      <Empty title="Comparison unavailable" detail={session.error}>
-        <button onClick={() => setGeneration((value) => value + 1)}>Reload comparison</button>
-      </Empty>
+      <Failure
+        title="Can't compare these files"
+        detail={session.error}
+        onRetry={() => setGeneration((value) => value + 1)}
+      />
     );
   if (!loaded) return <Loading label="Opening comparison…" />;
   const modes = loaded.image ? imageComparisonModes : textComparisonModes;
@@ -65,7 +67,7 @@ export default function DiffPlane({ pane }: { pane: DiffRecord }) {
     <div className="diff-plane">
       <div className="diff-toolbar">
         {!editing && !loaded.image && pane.right.kind === 'file' && (
-          <button onClick={() => setEditing(true)}>Edit right file</button>
+          <button onClick={() => setEditing(true)}>Edit Right File</button>
         )}
         <ChoiceButton
           label="Comparison mode"
@@ -75,8 +77,8 @@ export default function DiffPlane({ pane }: { pane: DiffRecord }) {
         />
         {!loaded.image && (
           <>
-            <button onClick={() => navigation.current?.previous()}>Previous change</button>
-            <button onClick={() => navigation.current?.next()}>Next change</button>
+            <button onClick={() => navigation.current?.previous()}>Previous Change</button>
+            <button onClick={() => navigation.current?.next()}>Next Change</button>
           </>
         )}
       </div>

@@ -74,7 +74,7 @@ describe('PostScript preview composition and explicit rendering', () => {
     render(<PostScriptPreview {...f.context} />);
     expect(await screen.findByText(epsCropMessage)).toBeTruthy();
     expect(f.services.renderPostscript).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Render pages with Ghostscript' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Render Pages' }));
     expect(await screen.findByText('Pages rendered with Ghostscript 10.99.1.')).toBeTruthy();
     expect(screen.getByText(epsCropMessage)).toBeTruthy();
   });
@@ -84,7 +84,7 @@ describe('PostScript preview composition and explicit rendering', () => {
     expect(await screen.findByText('Two squares')).toBeTruthy();
     expect(screen.getByText('144 × 72 pt (50.8 × 25.4 mm)')).toBeTruthy();
     expect(screen.getByText('2001-01-01')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Render pages with Ghostscript' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Render Pages' })).toBeTruthy();
     expect(f.services.renderPostscript).not.toHaveBeenCalled();
     const sourceContext = children.text.mock.lastCall![0] as PreviewContext;
     expect(await sourceContext.services.read('source')).toEqual(f.document.source);
@@ -101,7 +101,9 @@ describe('PostScript preview composition and explicit rendering', () => {
     expect(
       screen.getByText('Embedded EPS preview; this is the picture saved in the file.'),
     ).toBeTruthy();
-    expect(screen.getByText('Embedded WMF preview; this picture is not displayed.')).toBeTruthy();
+    expect(
+      screen.getByText("This file's preview picture is a WMF, which Viewer doesn't show."),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Source' }));
     expect(screen.getByText('Existing text viewer')).toBeTruthy();
   });
@@ -111,13 +113,13 @@ describe('PostScript preview composition and explicit rendering', () => {
     expect(await screen.findByText('Illustrator file with a PDF inside.')).toBeTruthy();
     expect(screen.getByText('Existing PDF viewer')).toBeTruthy();
     expect(children.pdf.mock.lastCall![0].printable).toBe(false);
-    expect(screen.queryByRole('button', { name: 'Render pages with Ghostscript' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Render Pages' })).toBeNull();
     expect(f.services.renderPostscript).not.toHaveBeenCalled();
   });
   it('starts rendering only after the click and labels the resulting PDF and version', async () => {
     const f = fixture();
     render(<PostScriptPreview {...f.context} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Render pages with Ghostscript' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render Pages' }));
     expect(await screen.findByText('Pages rendered with Ghostscript 10.99.1.')).toBeTruthy();
     expect(f.services.renderPostscript).toHaveBeenCalledOnce();
     expect(children.pdf.mock.lastCall![0].resource.id).toBe('child-pdf');
@@ -132,20 +134,20 @@ describe('PostScript preview composition and explicit rendering', () => {
       new Error('Ghostscript exceeded the rendering time limit.'),
     );
     render(<PostScriptPreview {...f.context} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Render pages with Ghostscript' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Render Pages' }));
     expect(await screen.findByText('Ghostscript exceeded the rendering time limit.')).toBeTruthy();
     expect(screen.getByText('Two squares')).toBeTruthy();
     expect(screen.getByText('Existing text viewer')).toBeTruthy();
   });
   it.each([
-    [{ kind: 'missing' }, 'Pages can be rendered if Ghostscript is installed.'],
-    [{ kind: 'store' }, 'Page rendering is unavailable in the Store edition.'],
-    [{ kind: 'failed' }, 'Ghostscript could not be checked.'],
+    [{ kind: 'missing' }, 'Install Ghostscript (brew install ghostscript) to show the pages.'],
+    [{ kind: 'store' }, "The App Store edition can't render pages with Ghostscript."],
+    [{ kind: 'failed' }, "Viewer couldn't check for Ghostscript."],
   ] as const)('shows the quiet %s state with no rendering button', async (status, text) => {
     const f = fixture(status);
     render(<PostScriptPreview {...f.context} />);
     expect(await screen.findByText(text)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Render pages with Ghostscript' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Render Pages' })).toBeNull();
     expect(f.services.renderPostscript).not.toHaveBeenCalled();
   });
   it('cancels explicitly and releases a late result without replacing the description', async () => {
@@ -158,9 +160,9 @@ describe('PostScript preview composition and explicit rendering', () => {
         }),
     );
     render(<PostScriptPreview {...f.context} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Render pages with Ghostscript' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel rendering' }));
-    expect(screen.getByText('PostScript rendering was cancelled.')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Render Pages' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel Rendering' }));
+    expect(screen.getByText('Rendering canceled.')).toBeTruthy();
     await act(async () => finish(child('pdf')));
     expect(f.services.release).toHaveBeenCalledWith('child-pdf');
     expect(screen.getByText('Two squares')).toBeTruthy();
@@ -176,19 +178,22 @@ describe('PostScript preview composition and explicit rendering', () => {
         }),
     );
     render(<PostScriptPreview {...f.context} />);
-    const button = await screen.findByRole('button', { name: 'Render pages with Ghostscript' });
+    const button = await screen.findByRole('button', { name: 'Render Pages' });
     button.focus();
     fireEvent.click(button);
     expect(globalThis.document.activeElement).toBe(button);
-    expect(button.textContent).toBe('Cancel rendering');
+    expect(button.textContent).toBe('Cancel Rendering');
     fireEvent.click(button);
     expect(globalThis.document.activeElement).toBe(button);
-    expect(button.textContent).toBe('Render pages with Ghostscript');
+    expect(button.textContent).toBe('Render Pages');
     await act(async () => finish(child('pdf')));
     fireEvent.click(button);
     await act(async () => finish(child('pdf')));
-    expect(globalThis.document.activeElement).toBe(button);
-    expect(button.textContent).toBe('Rendered pages');
+    // rendering is done, so its button goes and the keyboard moves on to the Pages view
+    const pages = screen.getByRole('button', { name: 'Pages' });
+    expect(globalThis.document.activeElement).toBe(pages);
+    expect(pages.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.queryByRole('button', { name: 'Render Pages' })).toBeNull();
   });
   it('cancels on close and releases a late embedded preview', async () => {
     const f = fixture();
@@ -215,6 +220,6 @@ describe('PostScript preview composition and explicit rendering', () => {
     expect(screen.getByRole('status').textContent).toBe(
       'This PostScript file is malformed; its bytes are shown below.',
     );
-    expect(screen.queryByRole('button', { name: 'Render pages with Ghostscript' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Render Pages' })).toBeNull();
   });
 });

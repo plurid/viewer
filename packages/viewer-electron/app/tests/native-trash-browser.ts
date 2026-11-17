@@ -395,7 +395,10 @@ try {
   );
   await capture('compact-dark-no-dates', 900, 640);
   await click('[data-trash-id="' + '1'.repeat(64) + '"]');
-  assert.match(await evaluate(textOf('.trash-origin-details')), /no verified original location/);
+  assert.match(
+    await evaluate(textOf('.trash-origin-details')),
+    /doesn't know where this came from/,
+  );
   await capture('compact-dark-unknown-origin', 900, 640);
   await click('[data-trash-id="' + '1'.repeat(64) + '"]', 'right');
   await until(() => evaluate(exists('.trash-context-menu')), Boolean, 'unknown metadata menu');
@@ -406,7 +409,7 @@ try {
     'unknown metadata information',
   );
   assert.match(await evaluate(textOf('.trash-info-dialog')), /No date was recorded/);
-  assert.match(await evaluate(textOf('.trash-info-dialog')), /no verified original location/);
+  assert.match(await evaluate(textOf('.trash-info-dialog')), /doesn't know where this came from/);
   await capture('compact-dark-unknown-info', 900, 640);
   await evaluate(pressButton('Done', '.trash-info-dialog footer'));
   await evaluate(pageCall(refreshTrash, { dates: 'added' }));

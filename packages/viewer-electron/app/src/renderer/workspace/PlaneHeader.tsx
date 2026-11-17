@@ -26,7 +26,8 @@ import { GitBranch } from '../git/status';
 import { DiscoverButton, PinnedTools } from '../commands/PinnedTools';
 import { effectiveWindowUI } from '../state/effective-ui';
 import { RelatedPlanes } from './RelatedPlanes';
-import { headerItem, headerMenu, useHeaderOverflow } from './header-overflow';
+import { useShortcutGlyphs } from '../keys/hints';
+import { headerItem, headerMenu, spillMenu, useHeaderOverflow } from './header-overflow';
 
 /** The View menu's choices, which lead "…" as the View submenu once the button gives way. */
 const viewModeIDs = [
@@ -101,6 +102,8 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       : (pane?.type === 'preview' || pane?.type === 'diff') && !!pane.bufferID;
   // as this window shows them: its profile's and its workspace's own over the general settings
   const dragging = useViewer((state) => effectiveWindowUI(state).space.dragging);
+  const copyToPair = useShortcutGlyphs('copy-to-pair');
+  const moveToPair = useShortcutGlyphs('move-to-pair');
   const controls = useViewer((state) => effectiveWindowUI(state).space.headerControls);
   const registry = useCommands();
   const revision = useCommandRevision(id);
@@ -286,7 +289,9 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
             className="plane-pair"
             role="img"
             aria-label={`Paired with ${baseName(partner.path)}`}
-            title={`Paired with ${baseName(partner.path)}: ⌃⌘C copies there, ⌃⌘X moves${
+            title={`Paired with ${baseName(partner.path)}${
+              copyToPair ? `: ${copyToPair} copies there` : ''
+            }${moveToPair ? `, ${moveToPair} moves` : ''}${
               pane?.type === 'folder' && pane.pairSync ? '; they follow each other' : ''
             }`}
           >
@@ -352,7 +357,13 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           {controls.dock && (
             <IconButton
               icon="dock"
-              label={available.find((item) => item.id === 'dock')?.label ?? 'Dock plane'}
+              // a help tag in sentence case, as every header button's: the command's name is a
+              // menu item's, in Title Case
+              label={
+                available.find((item) => item.id === 'dock')?.label === 'Reveal Space'
+                  ? 'Reveal space'
+                  : 'Dock plane'
+              }
               onClick={() => run('dock')}
             />
           )}
@@ -362,7 +373,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
       {controls.discover && pane && <DiscoverButton pane={pane} scope={request.scope} />}
       {(controls.actions || lead.length > 0) && (
         <IconButton
-          {...headerMenu}
+          {...(controls.actions ? headerMenu : spillMenu)}
           icon="more"
           label={
             pane?.type === 'folder'

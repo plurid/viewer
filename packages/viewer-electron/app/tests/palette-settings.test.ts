@@ -163,7 +163,7 @@ describe('the palette’s rows', () => {
     expect(ids(view.rows).filter((id) => id.startsWith('setting.'))).toHaveLength(4);
     const more = view.rows.at(-1)!;
     expect(more.id).toBe(moreSettingsID);
-    expect(more.label).toBe('All 9 matching settings');
+    expect(more.label).toBe('All 9 Matching Settings');
   });
   it('keep a recently used setting among Recent, and list no other with no query', () => {
     expect(ids(paletteRows(commands, '', ['setting.ui.space.grid']).rows)).toEqual([

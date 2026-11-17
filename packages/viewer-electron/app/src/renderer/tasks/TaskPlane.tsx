@@ -5,10 +5,11 @@
  * FORM: Existing plane/dialog primitives; task-areas-v1, no new visual world.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance */
 import { useEffect, useMemo, useState } from 'react';
-import type { TaskPane as Record } from '../../domain/contracts';
+import type { Pane, TaskPane as Record } from '../../domain/contracts';
 import type { LocalServer } from '../../domain/previews/web';
 import type { ReceiptSummary } from '../../domain/automation/receipts';
 import { taskReference, taskReferenceKey, taskPaneTitle } from '../../domain/workspaces/tasks';
+import type { TaskReference } from '../../domain/workspaces/tasks';
 import { errorMessage } from '../../domain/errors';
 import { activeWorkspace, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
@@ -19,6 +20,45 @@ import { receiptOutcome } from './ReceiptPlane';
 import './tasks.css';
 import { SessionsDialog } from '../chat/SessionsDialog';
 import type { AgentSessionSummary } from '../../domain/agents/sessions';
+import { statusLabel } from '../ui/status-labels';
+
+/** What a task's tool is, in words: never the stored kind, such as `git-changes`. */
+const referenceKinds: Readonly<{ [Kind in TaskReference['kind']]: string }> = {
+  folder: 'Folder',
+  preview: 'Preview',
+  note: 'Note',
+  chat: 'Conversation',
+  terminal: 'Terminal',
+  'git-changes': 'Git changes',
+  diff: 'Diff',
+  browser: 'Browser',
+  server: 'Local server',
+  receipt: 'Command receipt',
+};
+/** A plane offered for attaching, by what it shows. */
+const paneKinds: Readonly<{ [Type in Pane['type']]: string }> = {
+  folder: 'Folder',
+  preview: 'Preview',
+  scratch: 'Scratch',
+  note: 'Note',
+  check: 'Check',
+  search: 'Search',
+  terminal: 'Terminal',
+  collection: 'Collection',
+  diff: 'Diff',
+  'git-changes': 'Git changes',
+  canvas: 'Canvas',
+  tools: 'Tool library',
+  chat: 'Conversation',
+  browser: 'Browser',
+  media: 'Media',
+  layout: 'Layout',
+  server: 'Local server',
+  journal: 'Journal',
+  overview: 'Overview',
+  task: 'Task',
+  receipt: 'Command receipt',
+};
 const toolNames = {
   folder: 'Folder',
   note: 'Note',
@@ -119,7 +159,9 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
     }
   };
   if (!area)
-    return <Empty title="Task area unavailable" detail="Open Tasks to choose a saved task area." />;
+    return (
+      <Empty title="This task area is gone" detail="Open Tasks… to choose a saved task area." />
+    );
   return (
     <div className="task-plane">
       <header className="task-area-summary">
@@ -147,7 +189,7 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
         <PathField className="task-checkout-path" path={area.checkout.path} />
         <p className="muted">
           {area.checkout.branch ?? 'Folder task'}
-          {area.checkout.commit ? ' · ' + area.checkout.commit.slice(0, 12) : ''} · observed{' '}
+          {area.checkout.commit ? ' · ' + area.checkout.commit.slice(0, 12) : ''} · checked{' '}
           {new Date(area.checkout.observed).toLocaleString()}
         </p>
         <div className="task-actions">
@@ -155,19 +197,19 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
             disabled={busy}
             onClick={() => void run(() => workspace.refreshTaskArea(area.id))}
           >
-            Refresh checkout
+            Refresh Checkout
           </button>
           <button disabled={busy} onClick={() => workspace.arrangeTaskArea(area.id)}>
-            Arrange open tools
+            Arrange Open Tools
           </button>
           <button disabled={busy} onClick={() => void run(() => workspace.runTaskCommand(area.id))}>
-            Run command…
+            Run Command…
           </button>
           <button disabled={busy} onClick={() => setAttaching((value) => !value)}>
-            Attach open plane…
+            Attach Open Plane…
           </button>
           <button disabled={busy} onClick={() => setConversations(true)}>
-            Attach conversation…
+            Attach Conversation…
           </button>
         </div>
       </header>
@@ -214,7 +256,7 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
               />
             </label>
             <button className="primary" disabled={busy || !url.trim()}>
-              Open browser
+              Open Browser
             </button>
           </form>
         )}
@@ -234,7 +276,7 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
               value={selected || attachable[0]?.id || ''}
               choices={attachable.map((value) => ({
                 value: value.id,
-                label: taskPaneTitle(value) + ' · ' + value.type,
+                label: taskPaneTitle(value) + ' · ' + paneKinds[value.type],
               }))}
               onChoose={setSelected}
             />
@@ -265,18 +307,20 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
                       (session) => session.id === ref.externalSessionID,
                     );
                     return session
-                      ? `Reported ${session.status} · ${new Date(session.updated).toLocaleTimeString()}`
-                      : 'Open to inspect last report';
+                      ? `Reported ${statusLabel(session.status).toLowerCase()} · ${new Date(session.updated).toLocaleTimeString()}`
+                      : 'Open to see its last report';
                   })()
                 : ref.kind === 'receipt'
                   ? receipt
                     ? receiptOutcome(receipt)
-                    : 'Open to inspect receipt'
+                    : 'Open to see the receipt'
                   : ref.kind === 'server'
-                    ? (server?.state ?? 'Open to inspect server')
+                    ? server
+                      ? statusLabel(server.state)
+                      : 'Open to see the server'
                     : live
-                      ? 'View open'
-                      : 'View closed';
+                      ? 'Plane open'
+                      : 'Plane closed';
             return (
               <section className="task-tool-row" role="listitem" key={member.id}>
                 <div>
@@ -289,7 +333,7 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
                       : ref.path}
                   </small>
                   <span className="task-tool-kind">
-                    {ref.kind} · {state}
+                    {referenceKinds[ref.kind]} · {state}
                   </span>
                 </div>
                 <button
@@ -303,10 +347,6 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
             );
           })}
         </div>
-        <p className="task-retention-note">
-          Closing a plane keeps its task link. Reopening a terminal starts a shell; commands and
-          agents are never replayed. Use a terminal for Codex or Claude.
-        </p>
       </div>
       {conversations && <SessionsDialog area={area} onClose={() => setConversations(false)} />}
     </div>

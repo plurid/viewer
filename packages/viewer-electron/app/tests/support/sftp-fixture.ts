@@ -1,4 +1,5 @@
 import type { SFTPClientOptions } from '../../src/desktop/remote/sftp/client';
+import type { Duplex } from 'node:stream';
 import type { FakeSFTPOptions } from './fake-sftp-server';
 import type { SFTPDuplexOptions } from './sftp-duplex';
 import { SFTPClient } from '../../src/desktop/remote/sftp/client';
@@ -9,9 +10,10 @@ export function sftpFixture(
   serverOptions: FakeSFTPOptions = {},
   clientOptions: SFTPClientOptions = {},
   duplexOptions: SFTPDuplexOptions = {},
-): { client: SFTPClient; server: FakeSFTPServer } {
+): { client: SFTPClient; server: FakeSFTPServer; wire: Duplex } {
   const transport = sftpDuplexPair(duplexOptions);
   return {
+    wire: transport.client,
     client: new SFTPClient(transport.client, clientOptions),
     server: new FakeSFTPServer(transport.server, serverOptions),
   };

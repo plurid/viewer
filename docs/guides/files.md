@@ -11,7 +11,7 @@ keeps its own selection.
 
 ## Go to a folder
 
-1. Press **⌘L** or **⇧⌘G** for **Go to folder…**. The current path starts selected, ready to copy
+1. Press **⌘L** or **⇧⌘G** for **Go to Folder…**. The current path starts selected, ready to copy
    with **⌘C** or extend with **End**. Untouched or empty, the field suggests folders you visit
    often and have used recently.
 2. Type part of a folder's name or path to narrow the suggestions. Near-miss spellings match too.
@@ -33,7 +33,7 @@ its folders. In the App Store edition, remembered folders whose permission is no
 unchecked and checked when you open them. The sidebar's **Recent** list keeps its newest-first
 order.
 
-Choose **Clear recent folders** in **⌘K** or **Go to folder…**, or **Clear** beside the sidebar's
+Choose **Clear Recent Folders** in **⌘K** or **Go to Folder…**, or **Clear** beside the sidebar's
 **Recent** heading, to clear both the Recent list and visit counts across windows. **Undo clear
 recent folders** restores them from the offer in the clearing window. The offer lasts eight seconds;
 dismissing it, quitting or clearing again in another window ends it. Renamed folders return under
@@ -57,11 +57,11 @@ own window. Locations, Favorites and recent folders appear on the left.
 1. Choose a location, double-click a folder, or enter a **Folder path** and press **Enter**. **⌘⇧G**
    (**Ctrl+Shift+G** on Windows/Linux) focuses the path. `~` opens Home.
 2. Type in **Filter by name…** to narrow the current folder. Press **↓** to move into the list.
-   **Show hidden files** includes names starting with a dot and, on macOS with a helper built from
+   **Show Hidden Files** includes names starting with a dot and, on macOS with a helper built from
    the current source, items with the hidden flag. **File type** limits eligible files.
 3. Select a file and choose **Open**. When multiple selection is available, use **Shift** for a
    range or **⌘** (**Ctrl**) to add an item. **⌘A** (**Ctrl+A**) selects eligible files only.
-4. When saving, enter **File name** and press **Enter** or choose **Save**. **New folder** creates a
+4. When saving, enter **File name** and press **Enter** or choose **Save**. **New Folder** creates a
    destination without leaving the dialog. Exports that require a new file refuse existing names;
    editor **Save As** asks before replacing a file and preserves its previous version.
 
@@ -80,9 +80,9 @@ system dialogs. Editor save warnings and ordinary app notices use Viewer's dialo
 | **Map**     | **⌘5** | Arranging items in space without moving the files    |
 
 The **View mode** button in the folder's header switches views too. To group items, right-click
-empty space and choose **View → Group by**, then **Group by kind** or **Group by date modified**.
+empty space and choose **View → Group by**, then **Group by Kind** or **Group by Date Modified**.
 **⌘⇧.** shows or hides hidden files. Links have kind **Alias**, including links to folders, and
-**Group by kind** places them in **Aliases** before **Folders**. They still open their targets;
+**Group by Kind** places them in **Aliases** before **Folders**. They still open their targets;
 ordinary name, date and size sorting keep their existing order.
 
 On macOS, a helper built from the current source also hides items carrying the hidden flag, such as
@@ -94,6 +94,10 @@ missing helper, or an unreadable flag, falls back to the dot-name rule without b
 **Columns** shows the path from the filesystem root to the current folder and scrolls that folder
 into view. Scroll left to reach its ancestors, or use the left and right arrow keys to follow the
 folder trail.
+
+Drag a column's right divider to resize it. The preview fills the space after the list columns and
+has its own right divider. Viewer remembers its width for that folder. A narrow plane scrolls
+horizontally while the preview keeps at least 320 px.
 
 Sizes use decimal units, as Finder shows them: 1 KB is 1,000 bytes and 1 MB is 1,000,000 bytes.
 
@@ -112,7 +116,7 @@ stays at the end.
 - Click to select. **Shift**-click selects a range; **⌘**-click adds or removes one item.
 - **⌘A** selects everything. Click empty space, or press **Escape**, to clear the selection.
 - Type the first letters of a name to jump to it.
-- **⌃⌘=** (**Select by pattern…**) selects names such as `*.jpg`; **⌃⌘-** (**Deselect by pattern…**)
+- **⌃⌘=** (**Select by Pattern…**) selects names such as `*.jpg`; **⌃⌘-** (**Deselect by Pattern…**)
   deselects them.
 
 ## Copy, move and rename
@@ -125,13 +129,13 @@ stays at the end.
 | Choose copy or move      | Hold **Option** while you drop to copy, **⌘** to move                     |
 | Rename                   | Select, press **Return**, type, press **Return**                          |
 | Duplicate                | **⌘D**                                                                    |
-| Make a folder            | **⌘N**; **⌃⌘N** (**New folder with selection…**) puts the selection in it |
-| Copy a file's full path  | **⌥⌘C** (**Copy path**)                                                   |
+| Make a folder            | **⌘N**; **⌃⌘N** (**New Folder with Selection…**) puts the selection in it |
+| Copy a file's full path  | **⌥⌘C** (**Copy Path**)                                                   |
 | Copy a path in a dialog  | Click the path to select all of it, or click the copy button beside it    |
-| See size, dates and tags | **⌘I** (**Get info…**)                                                    |
+| See size, dates and tags | **⌘I** (**Get Info…**)                                                    |
 
-With a picture and no copied files on the clipboard, **Paste here** (**⌘V**) saves and selects
-`Pasted image.png`, using a unique name when needed. **Undo file operation** moves it to the Trash.
+With a picture and no copied files on the clipboard, **Paste Here** (**⌘V**) saves and selects
+`Pasted image.png`, using a unique name when needed. **Undo File Operation** moves it to the Trash.
 
 A copy on the same disk is instant: on APFS, Viewer clones the file, so the copy shares the
 original's storage until either one changes. Copies to another disk read and write every byte.
@@ -158,29 +162,29 @@ its reason:
 
 | Selection                             | Suggested                                                               |
 | ------------------------------------- | ----------------------------------------------------------------------- |
-| A zip or tar archive                  | **Extract here**                                                        |
+| A zip or tar archive                  | **Extract Here**                                                        |
 | A PDF over 10 MB                      | **Optimize…**                                                           |
 | A JPEG or PNG photo over 3 MB         | **Images for web…**                                                     |
 | A HEIC photo                          | **Convert copy to JPEG**                                                |
-| Several photos                        | **Lay out…**, **Create PDF from images**                                |
+| Several photos                        | **Lay Out…**, **Create PDF from Images**                                |
 | Three or more photos                  | **Batch rename…**                                                       |
-| DXF drawings                          | **Nest for cutting…**                                                   |
-| A video or audio file                 | **Edit media…**; **Extract audio…** for a video                         |
-| An Office or OpenDocument file        | **Save PDF copy**                                                       |
-| A text or code file                   | **Edit text**                                                           |
-| A folder                              | **Calculate Size**; **Git changes** in a repository, with Git status on |
+| DXF drawings                          | **Nest for Cutting…**                                                   |
+| A video or audio file                 | **Edit Media…**; **Extract audio…** for a video                         |
+| An Office or OpenDocument file        | **Save PDF Copy**                                                       |
+| A text or code file                   | **Edit Text**                                                           |
+| A folder                              | **Calculate Size**; **Git Changes** in a repository, with Git status on |
 | Several items                         | **Compress to ZIP**                                                     |
-| A name ending in " copy" or "(2)"     | **Find duplicates…**                                                    |
+| A name ending in " copy" or "(2)"     | **Find Duplicates…**                                                    |
 | An installer in Downloads, a week old | **Move to Trash…**                                                      |
 
 What you choose for a kind of file rises for that kind next time: if you always rename PDFs, PDFs
 suggest it. The same suggestions appear in **⌘K** before you type, and the best one appears as a
 button in Quick Preview. Turn them off with **Settings → Browsing → Suggestions → Suggest actions in
-file menus**; **⌘K** → **Forget learned suggestions** clears what Viewer learned. A folder can also
+file menus**; **⌘K** → **Forget Learned Suggestions** clears what Viewer learned. A folder can also
 point out what needs attention, and a model can add its own picks: see
 [Explore a folder](explore.md).
 
-**Extract here** puts an archive's contents in a folder named after it, beside the archive. When the
+**Extract Here** puts an archive's contents in a folder named after it, beside the archive. When the
 archive holds one folder with everything inside, that folder's contents are the result, so you never
 get a folder inside a folder of the same name.
 
@@ -188,7 +192,7 @@ get a folder inside a folder of the same name.
 
 1. Select the files, press **⌘K** and choose **Batch rename…**.
 2. Say what changes: a **Filename template** such as `Trip {number}{extension}`, a **Prefix** or
-   **Suffix**, or **Find text** and **Replace with**. Choose **Create proposal**.
+   **Suffix**, or **Find text** and **Replace with**. Choose **Prepare Changes**.
 3. Review the old and new names. Untick any file that should keep its name, then choose **Apply 12
    changes**; the button counts the files that change.
 
@@ -198,12 +202,12 @@ and publisher.
 ## Find files
 
 1. Press **⌘F** and type part of a name. Matches appear as you type; choose one to open it.
-2. To search below the folder, choose **This folder** beside the results and change it to
-   **Subfolders**. **Indexed locations** searches every location Viewer has indexed.
+2. To search below the folder, choose **This Folder** beside the results and change it to
+   **Subfolders**. **Indexed Locations** searches every location Viewer has indexed.
 3. Add filters: `ext:pdf`, `kind:folder`, `size>10mb`, `modified<7d`. Combine them with spaces.
 4. For words inside documents, turn on **Document text**. First turn on **Contents** for the
-   location in **Settings → Search**; **Add location…** adds another.
-5. **Open results** keeps the matches in a search plane. **Save search…** keeps the query.
+   location in **Settings → Search**; **Add Location…** adds another.
+5. **Open Results** keeps the matches in a search plane. **Save Search…** keeps the query.
 
 To filter the folder you are in as you type, choose **Search this folder** (the magnifier) in the
 plane's header. **Subfolders** includes names in nested folders. For document text, use the search
@@ -216,8 +220,8 @@ filter and how to save a search.
 
 - Choose **Calculate Size** on a folder to measure it. Folders are not measured until you ask, so a
   large disk stays fast to browse.
-- **Find duplicates…** lists identical files in the selected folders.
-- **Compare locations…** shows what differs between two folders.
+- **Find Duplicates…** lists identical files in the selected folders.
+- **Compare Locations…** shows what differs between two folders.
 
 ## Trash and restore
 
@@ -225,7 +229,7 @@ filter and how to save a search.
 deletes a file for good. Closing a plane only closes its view; it never deletes files.
 
 To get a file back, choose **Trash** in the sidebar, select the item and choose **Restore**. Choose
-**Restore to…** when Viewer does not know where the file came from, which is the case for files
+**Restore To…** when Viewer does not know where the file came from, which is the case for files
 trashed by other apps. Browsing the Trash needs Full Disk Access for Viewer in **System Settings →
 Privacy & Security**.
 
@@ -242,7 +246,7 @@ Privacy & Security**.
 4. Return to Viewer. The window refreshes and shows whether the folder is shared. Choose **Copy**
    beside a Windows address, then paste it into File Explorer's address bar on the PC. Keep spaces
    in a Windows address as shown. On another Mac, use Finder's **Go → Connect to Server…** with the
-   Mac address. Wi-Fi and Ethernet addresses are labelled; VPN and virtual interfaces are omitted.
+   Mac address. Wi-Fi and Ethernet addresses are labeled; VPN and virtual interfaces are omitted.
    With IPv6 only, use the local host name address. Both computers must be on the same local
    network. If neither Wi-Fi nor Ethernet has a local network address, Viewer says that this Mac is
    not on a network beside the addresses. VPN and virtual interfaces do not dismiss that hint.
@@ -250,16 +254,16 @@ Privacy & Security**.
    space.
 
 Shared folders and the folders inside them have a **Shared** mark in file views and the sidebar.
-Inside a share, the details say **Inside the shared folder** and its name. **Get info…** (**⌘I**)
+Inside a share, the details say **Inside the shared folder** and its name. **Get Info…** (**⌘I**)
 shows the share name, registered or guest access, read-only status, the File Sharing service and
 copyable addresses under **Network sharing**. If File Sharing is off, the share still exists but
-nobody can connect. **Refresh sharing** reads its state again. Viewer also refreshes when a folder
+nobody can connect. **Refresh Sharing** reads its state again. Viewer also refreshes when a folder
 view opens and when you return to the app. Navigation reuses sharing state for at least five
 seconds. A listed share whose folder is missing is checked again during navigation, at most once a
-second, without rereading the share list. Opening **Get info…** or **Network Sharing…** and choosing
+second, without rereading the share list. Opening **Get Info…** or **Network Sharing…** and choosing
 **Refresh** checks that folder without waiting for other rows. Returning to the app also requests a
 fresh read. While checking, the window says so. If Viewer cannot read the state, it says **Viewer
-could not check whether this folder is shared.** It does not say that the folder is not shared. When
+couldn't check whether this folder is shared.** It does not say that the folder is not shared. When
 an unreadable share's real path is known, only its possible contents become unknown. If its path
 cannot be resolved, sharing state is unknown for all folders because an alias could lead elsewhere.
 Folders on a network volume are not shared by this Mac and do not acquire a **Shared** mark here.

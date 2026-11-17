@@ -100,9 +100,9 @@ it('renders the typed sample at the chosen size', async () => {
   expect(specimen.textContent).toContain('Sphinx of black quartz');
   expect(specimen.textContent).not.toContain('lazy dog');
   fireEvent.click(screen.getByRole('button', { name: 'Sample size' }));
-  const search = await screen.findByLabelText('Search Sample size');
-  fireEvent.change(search, { target: { value: '72' } });
-  fireEvent.keyDown(search, { key: 'Enter' });
+  // a short list has no search field: its rows are the menu
+  expect(screen.queryByLabelText('Search Sample size')).toBeNull();
+  fireEvent.click(await screen.findByRole('menuitem', { name: '72 px' }));
   await waitFor(() => expect(specimen.style.fontSize).toBe('72px'));
   // clearing the field restores the pangram
   fireEvent.change(field, { target: { value: '' } });
@@ -114,9 +114,9 @@ it('explains a font Chromium refuses to load', async () => {
   const bytes = fixtureFont();
   serve(bytes);
   render(<FontPreview {...fontContext('Fixture.ttf', bytes.length)} />);
-  await screen.findByText('Font could not be loaded');
+  await screen.findByText("Can't load this font");
   expect(
-    screen.getByText('The font may be damaged or use a format Viewer cannot render.'),
+    screen.getByText("This font may be damaged, or in a format Viewer can't show."),
   ).toBeTruthy();
   expect(fonts.add).not.toHaveBeenCalled();
 });
@@ -129,15 +129,15 @@ it('adds the parser reason when a refused font is also malformed', async () => {
   serve(font);
   render(<FontPreview {...fontContext('Broken.ttf', font.length)} />);
   await screen.findByText(
-    'The font may be damaged or use a format Viewer cannot render. A font table lies outside the file.',
+    "This font may be damaged, or in a format Viewer can't show. A font table lies outside the file.",
   );
 });
 
 it('refuses a font over the preview limit without reading it', () => {
   const fetch = serve(fixtureFont());
   render(<FontPreview {...fontContext('Huge.otf', 33 * 1024 * 1024)} />);
-  expect(screen.getByText('Font preview unavailable')).toBeTruthy();
-  expect(screen.getByText(/exceeds the preview file limit \(32 MB\)/)).toBeTruthy();
+  expect(screen.getByText('Font too large to show')).toBeTruthy();
+  expect(screen.getByText(/Viewer shows fonts up to 32 MB/)).toBeTruthy();
   expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -155,8 +155,8 @@ it('refuses a font that grows past the limit while it is read', async () => {
     vi.fn(async () => new Response(body)),
   );
   render(<FontPreview {...fontContext('Growing.ttf', 1024)} />);
-  await screen.findByText('Font could not be loaded');
-  expect(screen.getByText(/exceeds the preview file limit \(32 MB\)/)).toBeTruthy();
+  await screen.findByText("Can't load this font");
+  expect(screen.getByText(/Viewer shows fonts up to 32 MB/)).toBeTruthy();
   expect(sent).toBeLessThan(40);
   expect(FakeFontFace.created).toHaveLength(0);
 });
@@ -168,7 +168,7 @@ it('renders WOFF2 and says its details are unavailable', async () => {
   await screen.findByText('WOFF2');
   expect(
     screen.getByText(
-      'Font details are unavailable. WOFF2 tables use Brotli compression, which this preview cannot read.',
+      "Viewer can't read this font's details. Its WOFF2 tables are compressed with Brotli.",
     ),
   ).toBeTruthy();
   expect(fonts.add).toHaveBeenCalledWith(FakeFontFace.created[0]);

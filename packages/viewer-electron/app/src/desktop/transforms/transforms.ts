@@ -95,7 +95,7 @@ export class Transforms implements TransformExecutor {
       let entered = false;
       const cancel = () => {
         this.waiting = this.waiting.filter((value) => value !== item);
-        reject(signal.reason ?? new Error('Media inspection cancelled.'));
+        reject(signal.reason ?? new Error('Reading the media was canceled.'));
       };
       const item = {
         priority,
@@ -220,7 +220,7 @@ export class Transforms implements TransformExecutor {
   inspectImage(file: string): Promise<ImageInspection> {
     return this.work.track([file], (scope) =>
       this.sources([file], scope, async (sources) => {
-        if (!this.inspect) throw new Error('Image inspection is unavailable.');
+        if (!this.inspect) throw new Error('This build of Viewer can’t read images.');
         if (sources[0]!.size > 256_000_000) throw new Error('This image is larger than 256 MB.');
         return this.inspect(await sources[0]!.handle.readFile(), scope.signal);
       }),

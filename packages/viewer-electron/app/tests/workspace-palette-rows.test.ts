@@ -205,7 +205,7 @@ describe('workspace palette sections', () => {
     expect(choices.map((choice) => choice.key)).toEqual([viewer.key]);
     const alone = paletteRows([row('defined:' + viewer.key, 'viewer')], 'veiwer', [], choices);
     expect(alone.rows.map((item) => item.id)).toEqual([moreWorkspacesID]);
-    expect(alone.rows[0]!.label).toBe('All 1 matching workspaces');
+    expect(alone.rows[0]!.label).toBe('All 1 Matching Workspace');
     const beside = paletteRows(
       [row('veiwer-command', 'Veiwer command'), row('defined:' + viewer.key, 'viewer')],
       'veiwer',
@@ -229,7 +229,7 @@ describe('workspace palette sections', () => {
     const alone = paletteRows(commands, 'project', [], choices);
     expect(alone.rows).toHaveLength(9);
     expect(alone.rows.at(-1)!.id).toBe(moreWorkspacesID);
-    expect(alone.rows.at(-1)!.label).toBe('All 12 matching workspaces');
+    expect(alone.rows.at(-1)!.label).toBe('All 12 Matching Workspaces');
     const withCommand = paletteRows(
       [row('project-command', 'Project action'), ...commands],
       'project',

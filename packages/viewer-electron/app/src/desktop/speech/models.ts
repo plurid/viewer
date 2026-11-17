@@ -231,7 +231,7 @@ export class SpeechModels {
       return this.status();
     if (state.records.length >= 8)
       throw new Error(
-        'Speech model storage contains eight retained downloads. Review them before starting another.',
+        'Eight speech model downloads are already kept. Delete one before starting another.',
       );
     const folder = await this.folder(),
       space = await statfs(folder);
@@ -316,7 +316,7 @@ export class SpeechModels {
       }
       if (record.received !== model.bytes || hash.digest('hex') !== model.sha256)
         throw new Error(
-          'Model checksum verification failed. The unverified file was retained and was not selected.',
+          'The downloaded model doesn’t match its checksum, so Viewer didn’t select it. The file was kept.',
         );
       await handle.sync();
       const info = await fileStat(handle);
@@ -331,8 +331,8 @@ export class SpeechModels {
       record.status = signal.aborted ? 'cancelled' : 'failed';
       // Shared model status must not disclose the private path of an imported file.
       record.error = signal.aborted
-        ? 'Model setup was cancelled.'
-        : 'Model setup failed. The unverified file was retained.';
+        ? 'Model setup was canceled.'
+        : 'Model setup failed. The unchecked file was kept.';
       await this.store.save(state);
       this.changed();
       throw error;

@@ -87,7 +87,7 @@ it('releases the modal for desktop confirmation and restores the same values aft
   await act(async () => finish({ kind: 'cancelled' }));
   expect(screen.getByLabelText('Task name')).toHaveProperty('value', 'Edited task');
   expect(screen.getByLabelText('Task worktree folder')).toHaveProperty('value', initial().path);
-  expect(screen.getByRole('alert').textContent).toContain('cancelled');
+  expect(screen.getByRole('alert').textContent).toContain('Canceled');
   expect(close).not.toHaveBeenCalled();
 });
 it('shows retained output and prevents an accidental retry after partial creation', async () => {
@@ -108,10 +108,10 @@ it('shows retained output and prevents an accidental retry after partial creatio
     open = vi.fn(async () => {});
   render(<TaskRequestDialog initial={initial()} onClose={close} openFolder={open} />);
   fireEvent.click(screen.getByRole('button', { name: 'Create task…' }));
-  await screen.findByRole('button', { name: 'Open retained folder' });
+  await screen.findByRole('button', { name: 'Open Worktree Folder' });
   expect(screen.queryByRole('button', { name: 'Create task…' })).toBeNull();
   expect(screen.getByLabelText('Task worktree folder')).toHaveProperty('disabled', true);
-  fireEvent.click(screen.getByRole('button', { name: 'Open retained folder' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Worktree Folder' }));
   await waitFor(() => expect(open).toHaveBeenCalledWith('/fixtures/Ship'));
   expect(close).toHaveBeenCalledOnce();
 });

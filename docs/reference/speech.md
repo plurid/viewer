@@ -9,24 +9,24 @@ model used by Ask Viewer and chat.
 
 ## Settings
 
-| Setting                               | Values                                                                                                  |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **Transcribe with**                   | **Local Whisper** (at first) or **Hosted provider**                                                     |
-| **Local speech model**                | **Download and use**, **Import verified weights…**, **Use model**, **Cancel download**                  |
-| **Hosted provider**                   | **Use provider**, **Add speech provider**, **Edit provider**, **Remove provider**                       |
-| API key                               | **Save key**, **Clear stored key**                                                                      |
-| **Connection and model**              | **Check connection and model**                                                                          |
-| **Audio access**                      | **Allow recordings…** or **Revoke audio access**                                                        |
-| **Language**                          | **Detect language** (at first), or one of the languages below                                           |
-| **Microphone**                        | **System default** (at first), or a named input; a missing one shows **Saved microphone · unavailable** |
-| **Test microphone and transcription** | Records a test whose transcript is not saved                                                            |
+| Setting                               | Values                                                                                                    |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Transcribe with**                   | **Local Whisper** (at first) or **Hosted provider**                                                       |
+| **Local speech model**                | **Download and Use**, **Import Weights…**, **Use Model**, **Cancel Download**                             |
+| **Hosted provider**                   | **Use provider**, **Add Speech Provider**, **Edit Provider**, **Remove Provider**                         |
+| API key                               | **Save Key**, **Clear Key**                                                                               |
+| **Connection and model**              | **Check connection and model**                                                                            |
+| **Audio access**                      | **Allow Recordings…** or **Revoke Audio Access**                                                          |
+| **Language**                          | **Detect language** (at first), or one of the languages below                                             |
+| **Microphone**                        | **System default** (at first), or a named input; a missing one shows **Saved microphone · not connected** |
+| **Test Microphone and Transcription** | Records a test whose transcript is not saved                                                              |
 
 Languages: English, Romanian, German, French, Spanish, Italian, Portuguese, Dutch, Polish,
 Ukrainian, Russian, Chinese, Japanese, Korean, Arabic, Hindi, Turkish, Greek and Hungarian.
 
-Hold the **Dictate** shortcut, **⌃⇧Space** at first, in the workspace to ask Viewer by voice, and
-release it to transcribe. The microphone in the title bar and **Ask Viewer by voice…** start a
-recording that **Finish and transcribe** ends, or the microphone chosen again. **Settings →
+Hold the **Ask Viewer by Voice…** shortcut, **⌃⇧Space** at first, in the workspace to ask Viewer by
+voice, and release it to transcribe. The microphone in the title bar and **Ask Viewer by Voice…**
+start a recording that **Finish and Transcribe** ends, or the microphone chosen again. **Settings →
 Shortcuts** changes the shortcut. A missing selected microphone never switches silently to another
 device. [Ask Viewer by voice](agents.md#ask-viewer-by-voice) gives exactly what a spoken request
 sends to a model and what it may run.
@@ -45,8 +45,8 @@ Linux and Store speech acceptance remain unqualified.
 | Whisper Small · Recommended |    487,601,967 | More accurate multilingual dictation; more memory and a longer transcribe |
 
 All three are multilingual, MIT-licensed GGML weights from a pinned upstream revision. **Download
-and use** and **Import verified weights…** select a model only after its size and SHA-256 match.
-Scoped CLI and agent setup proposals keep installation and selection separate; see
+and Use** and **Import Weights…** select a model only after its size and SHA-256 match. Scoped CLI
+and agent setup proposals keep installation and selection separate; see
 [CLI speech setup](cli.md#local-speech-model-weights). Neither agents nor CLI clients can open the
 microphone or submit audio for recognition.
 
@@ -59,12 +59,12 @@ microphone or submit audio for recognition.
 - Local inference uses a separate CPU process, four threads, with a 120-second timeout and 256 KiB
   of output. The process releases model memory when it exits. There is no continuously running
   recognition worker.
-- Cancelling or closing the owner stops its work. Losing capture focus stops recording. Late
-  cancelled results cannot replace a draft. Other windows cannot finish or cancel the session.
+- Canceling or closing the owner stops its work. Losing capture focus stops recording. Late canceled
+  results cannot replace a draft. Other windows cannot finish or cancel the session.
 - Setup retains at most eight model downloads and runs at most four setup tasks. Downloads have a
   20-minute limit, pinned byte sizes and SHA-256 verification, and fetch over HTTPS from
   `huggingface.co`, `cdn-lfs.huggingface.co` and `*.hf.co` only, through at most five redirects
-  among them. Cancelled and interrupted files remain retained and cannot be used. Removal is a
+  among them. Canceled and interrupted files remain retained and cannot be used. Removal is a
   separate exact-scope Trash action.
 
 ## Hosted adapters
@@ -89,7 +89,7 @@ availability depends on the model.
 
 Each request has a 120-second deadline. Responses are bounded to 256 KiB and 48,000 transcript
 characters. There are no automatic retries, fallbacks or background uploads. Authentication and
-server errors omit response bodies and credentials. Cancelling, revoking consent, clearing a key or
+server errors omit response bodies and credentials. Canceling, revoking consent, clearing a key or
 editing a provider invalidates its active sessions and rejects late results.
 
 **Check connection and model** uses only explicit GET requests. Meta and OpenAI-compatible adapters
@@ -99,7 +99,7 @@ discovery remains unverified. A successful catalog check does not establish tran
 quality, quota or billing status and never grants audio access.
 
 Checks have a 15-second deadline and a 2 MB response limit. They reject redirects and omit provider
-error bodies. Checks are cancelled on owner closure, key/model/endpoint changes or revocation; late
+error bodies. Checks are canceled on owner closure, key/model/endpoint changes or revocation; late
 credential reads cannot trigger a request. Results last only for the current session and clear on
 provider or key edits. Audio permission remains separate.
 

@@ -38,7 +38,8 @@ export class Comparisons {
       throw error;
     }
     const timer = setTimeout(
-      () => abort.abort(new Error('Comparison exceeded its time budget.')),
+      () =>
+        abort.abort(new Error('The comparison took too long and stopped. Compare fewer files.')),
       120000,
     );
     const result: ComparisonResult = {
@@ -122,7 +123,7 @@ export class Comparisons {
           row.status = compareEntries(row.left, row.right, row.leftHash, row.rightHash);
           if (row.status === 'unknown')
             row.reason =
-              'Symlinks, special files or unavailable content require separate inspection.';
+              'Links, special files and unreadable items aren’t compared. Check them yourself.';
         } catch (error) {
           abort.signal.throwIfAborted();
           row.reason = errorMessage(error);

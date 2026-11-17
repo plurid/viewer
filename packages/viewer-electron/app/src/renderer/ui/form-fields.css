@@ -1,0 +1,166 @@
+/* FORMS (FormField.tsx, DESIGN.md's Output Form Rule): each label above its field, the small gap
+   under a label and the content gap between fields; a field fills its row. */
+.dialog-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--gap-content);
+}
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--gap-small);
+  min-width: 0;
+  width: 100%;
+}
+.dialog-field > .dialog-field-label {
+  display: block;
+  flex: none;
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+.dialog-field > input:not([type='checkbox'], [type='radio'], [type='color']),
+.dialog-field > .choice-button {
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+}
+/* A number is a compact control by nature. */
+.dialog-field > input[type='number'] {
+  width: 110px;
+  max-width: 100%;
+}
+.dialog-field-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline);
+  font-size: var(--text-compact);
+}
+.file-name-control {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--field);
+  overflow: hidden;
+}
+.file-name-control > input {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+}
+.file-name-suffix {
+  flex: 0 0 auto;
+  padding-inline: var(--gap-inline);
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--text-body);
+}
+.destination-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--gap-inline);
+  min-width: 0;
+  width: 100%;
+}
+.destination-location {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+  min-width: 0;
+  padding: var(--gap-small) var(--gap-inline);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--field);
+}
+.destination-location > svg,
+.destination-location > .copy-button {
+  flex: 0 0 auto;
+}
+.destination-identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-tight);
+  flex: 1;
+  min-width: 0;
+}
+.destination-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-body);
+}
+/* The path is a path label (ui/PathLabel.tsx): it fits itself to this line. */
+.destination-path {
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+.destination-location > .copy-button {
+  width: 1.75em;
+  height: 1.75em;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.destination-location > .copy-button:hover:where(:not(:disabled)) {
+  color: var(--ink);
+  background: var(--raised);
+}
+.dialog-field-error,
+.dialog-field-help {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-label);
+}
+.dialog-field-error {
+  color: var(--danger);
+}
+.dialog-field-help {
+  color: var(--muted);
+}
+.pdf-tools-export.dialog-form {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+}
+.pdf-tools-range .dialog-field {
+  flex: 1 1 180px;
+}
+.pdf-tools-range:has(.dialog-field) {
+  align-items: end;
+}
+.optimization-main-options > .dialog-field {
+  flex: 1 1 220px;
+}
+.optimization-recipe-fields > .dialog-field {
+  flex: 1 1 180px;
+}
+.optimization-dimension-limit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap-inline);
+}
+.image-size-controls {
+  display: grid;
+  gap: var(--gap-small);
+  min-width: 0;
+}
+.image-tools-dimensions > .dialog-field {
+  flex: 1;
+}
+.optimization-target > .dialog-field {
+  flex: 0 1 110px;
+}
+.optimization-dimension-limit > .dialog-field {
+  width: auto;
+}
+.image-tools-dialog > header > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

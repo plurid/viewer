@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Resource } from '../../domain/contracts';
 import type { MediaDraft } from '../../domain/media/documents';
 import { mediaTime } from '../../domain/operations/transforms';
+import { tryAgainLabel } from '../ui/primitives';
 
 export function SourceStrip({
   draft,
@@ -95,7 +96,7 @@ export function SourceStrip({
             ))
           ) : (
             <span className="muted">
-              {failure ? 'Frames unavailable' : 'Reading source frames…'}
+              {failure ? "Can't read the frames" : 'Reading source frames…'}
             </span>
           )}
         </div>
@@ -107,13 +108,15 @@ export function SourceStrip({
               <polygon points={points} />
             </svg>
           ) : (
-            <span className="muted">{failure ? 'Waveform unavailable' : 'Reading waveform…'}</span>
+            <span className="muted">
+              {failure ? "Can't read the waveform" : 'Reading waveform…'}
+            </span>
           )}
         </div>
       )}
       {failure && (
         <p className="inline-warning" role="status">
-          {failure} <button onClick={() => setRetry((value) => value + 1)}>Retry inspection</button>
+          {failure} <button onClick={() => setRetry((value) => value + 1)}>{tryAgainLabel}</button>
         </p>
       )}
     </div>

@@ -4,11 +4,16 @@ import type { ArchiveListing, Resource } from '../../../domain/contracts';
 import { formatBytes } from '../../../domain/files/entries';
 import type { PreviewContext } from '../contracts';
 import { PreviewHost } from '../PreviewHost';
-import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { PreviewToolbar } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
+import { IconButton, Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { Icon } from '../../ui/Icon';
 import { errorMessage } from '../../../domain/errors';
 
-export default function ArchivePreview({ resource, services, signal, active }: PreviewContext) {
+export default function ArchivePreview(context: PreviewContext) {
+  const { resource, services, signal, active } = context;
   const [listing, setListing] = useState<ArchiveListing | null>(null);
   const [error, setError] = useState('');
   const [entryError, setEntryError] = useState('');
@@ -40,12 +45,20 @@ export default function ArchivePreview({ resource, services, signal, active }: P
     estimateSize: () => 36,
     overscan: 10,
   });
-  if (error) return <Empty icon="archive" title="Archive could not be read" detail={error} />;
+  if (error)
+    return (
+      <PreviewFailure
+        context={context}
+        icon="archive"
+        title="Can't read this archive"
+        detail={error}
+      />
+    );
   if (!listing) return <Loading label="Reading archive index…" />;
   if (child)
     return (
       <div className="archive-child">
-        <div className="preview-toolbar">
+        <PreviewToolbar context={context}>
           <IconButton
             icon="left"
             label="Back to archive"
@@ -55,17 +68,16 @@ export default function ArchivePreview({ resource, services, signal, active }: P
               selected.current = null;
             }}
           />
-          <span>{child.entry.name}</span>
-        </div>
+          <span {...headerItem('archive-child', 9, 'detail')}>{child.entry.name}</span>
+        </PreviewToolbar>
         <PreviewHost resource={child} active={active} />
       </div>
     );
   return (
     <div className="archive-viewer">
-      <div className="preview-toolbar">
-        <span className="muted">
-          {listing.entries.length.toLocaleString()}{' '}
-          {listing.entries.length === 1 ? 'entry' : 'entries'}
+      <PreviewToolbar context={context}>
+        <span className="muted" {...headerItem('archive-count', 9, 'detail')}>
+          {plural(listing.entries.length, 'entry', 'entries')}
         </span>
         <span className="toolbar-spacer" />
         <input
@@ -74,10 +86,8 @@ export default function ArchivePreview({ resource, services, signal, active }: P
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Filter archive"
         />
-      </div>
-      {listing.truncated && (
-        <p className="inline-warning">The archive index is limited to 20,000 entries.</p>
-      )}
+      </PreviewToolbar>
+      {listing.truncated && <p className="inline-warning">Showing the first 20,000 entries.</p>}
       {opening && <Loading label="Opening entry…" />}
       {entryError && (
         <p className="inline-warning" role="alert">
@@ -113,7 +123,9 @@ export default function ArchivePreview({ resource, services, signal, active }: P
                   }
                 }}
                 title={
-                  entry.previewable ? 'Preview entry' : 'Folder, encrypted, or unsupported entry'
+                  entry.previewable
+                    ? entry.name
+                    : `${entry.name}: ${entry.directory ? "a folder doesn't open here" : "encrypted, or a kind Viewer can't show"}`
                 }
               >
                 <Icon name={entry.directory ? 'folder' : 'file'} />

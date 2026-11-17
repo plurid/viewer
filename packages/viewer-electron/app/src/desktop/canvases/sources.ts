@@ -18,7 +18,8 @@ export function sourceSnapshot(
   inspection: InspectionResult,
   id: string = randomUUID(),
 ): CanvasSource {
-  if (inspection.availability !== 'available') throw new Error('This source is unavailable.');
+  if (inspection.availability !== 'available')
+    throw new Error('Viewer can’t read this file. Check that it still exists, then add it again.');
   let limited = inspection.evidence.length > 12 || Object.keys(inspection.facts).length > 32;
   let budget = 48_000;
   const evidence = inspection.evidence.slice(0, 12).map((item) => {

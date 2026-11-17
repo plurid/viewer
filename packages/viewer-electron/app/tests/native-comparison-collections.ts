@@ -119,7 +119,7 @@ try {
       evaluate(
         pageCall(() => document.querySelector<HTMLElement>('.comparison-table')?.innerText || ''),
       ),
-    (text) => text.includes('Equal SHA-256') && text.includes('Only.txt'),
+    (text) => text.includes('Same contents') && text.includes('Only.txt'),
     'rendered verified content comparison',
   );
   const shot = await connection.command<{ data: string }>('Page.captureScreenshot', {
@@ -181,7 +181,7 @@ try {
   await evaluate(
     pageCall(typeInto, '.collections-body > label input', 'Retained cross-folder collection'),
   );
-  await evaluate(pageCall(pressIncluding, '.collections-body', 'Save basket as collection'));
+  await evaluate(pageCall(pressIncluding, '.collections-body', 'Save Basket as Collection'));
   await until(
     async () =>
       JSON.parse(await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8')) as SavedState,

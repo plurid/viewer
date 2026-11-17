@@ -385,7 +385,7 @@ try {
   const pending = await successful<{ id: string }>(['speech', 'install', 'whisper-tiny']);
   await until(
     () => evaluate(textOf('.agent-review-dialog')),
-    (text) => text.includes('Download model'),
+    (text) => text.includes('Download Model'),
     'Speech setup review',
   );
   for (const [name, width, height] of [
@@ -411,7 +411,7 @@ try {
   await evaluate(focus('.agent-review-dialog footer button'));
   for (const type of ['keyDown', 'keyUp'])
     await connection.command('Input.dispatchKeyEvent', { type, key: 'Tab', code: 'Tab' });
-  assert.equal(await evaluate(pageCall(focusedText)), 'Download model');
+  assert.equal(await evaluate(pageCall(focusedText)), 'Download Model');
   await successful(['review', 'cancel', pending.id]);
   await until(
     () => evaluate(exists('.agent-review-dialog')),

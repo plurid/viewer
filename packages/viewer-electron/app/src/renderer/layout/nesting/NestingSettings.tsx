@@ -171,7 +171,7 @@ export function NestingSettings({
                 type="button"
                 key={value}
                 aria-pressed={units === value}
-                title={value === 'mm' ? 'Millimetres' : 'Inches'}
+                title={value === 'mm' ? 'Millimeters' : 'Inches'}
                 onClick={() => setUnits(value)}
               >
                 {value}

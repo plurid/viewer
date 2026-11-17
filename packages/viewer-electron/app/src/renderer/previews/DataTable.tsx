@@ -25,7 +25,8 @@ import {
 } from '../../domain/previews/documents/table-selection';
 import { createTableSession } from './table-session';
 import { delimitedRows, type DelimitedPreview } from './table-data';
-import { Empty, Loading } from '../ui/primitives';
+import { Failure, Loading, tryAgainLabel } from '../ui/primitives';
+import { plural } from '../../domain/plural';
 import { copyText } from '../state/store';
 import type { PreviewContext } from './contracts';
 import { usePreviewScroll } from './scroll';
@@ -324,7 +325,7 @@ export function DataTable({
       await copyText(text);
       if (!abort.signal.aborted) setCopyStatus(`Copied ${rangeLabel(range)}`);
     } catch (error) {
-      if (!abort.signal.aborted) setCopyStatus(errorMessage(error) || 'Could not copy. Try again.');
+      if (!abort.signal.aborted) setCopyStatus(errorMessage(error) || "Couldn't copy. Try again.");
     } finally {
       if (copying.current === abort) copying.current = undefined;
       if (!abort.signal.aborted) setCopyBusy(false);
@@ -339,7 +340,7 @@ export function DataTable({
       ) : (
         <div className="preview-toolbar">
           <span className="muted">
-            {body.length.toLocaleString()} {numbered ? 'stored rows' : 'rows'} · {columns} columns
+            {plural(body.length, numbered ? 'stored row' : 'row')} · {plural(columns, 'column')}
           </span>
           <span className="toolbar-spacer" />
           {filtering && (
@@ -357,7 +358,7 @@ export function DataTable({
       )}
       {filtered?.rows === rows && filtered.query === query && filtered.error && (
         <p className="inline-warning">
-          {filtered.error} {retryFilter && <button onClick={retryFilter}>Retry table</button>}
+          {filtered.error} {retryFilter && <button onClick={retryFilter}>{tryAgainLabel}</button>}
         </p>
       )}
       {numbered && (
@@ -392,7 +393,7 @@ export function DataTable({
                   copying.current?.abort();
                   copying.current = undefined;
                   setCopyBusy(false);
-                  setCopyStatus('Copy cancelled');
+                  setCopyStatus('Copy canceled');
                 }}
               >
                 Cancel copy
@@ -768,9 +769,11 @@ export function DelimitedTable({
   if (loaded?.request !== request) return <Loading label="Reading table…" />;
   if (loaded.error)
     return (
-      <Empty icon="warning" title="Table unavailable" detail={loaded.error}>
-        <button onClick={() => setRetry((value) => value + 1)}>Retry table</button>
-      </Empty>
+      <Failure
+        title="Can't read this table"
+        detail={loaded.error}
+        onRetry={() => setRetry((value) => value + 1)}
+      />
     );
   const parsed = loaded.parsed!;
   return (

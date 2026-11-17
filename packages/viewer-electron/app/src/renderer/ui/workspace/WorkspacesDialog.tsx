@@ -11,10 +11,13 @@ import {
   linkedDefinition,
   maximumWorkspaces,
   orderedWorkspaces,
+  richDefinition,
 } from '../../../domain/workspaces/catalog';
+import { plural } from '../../../domain/plural';
 import { report, useViewer } from '../../state/store';
 import { Dialog, IconButton } from '../primitives';
 import { Icon } from '../Icon';
+import { PathLabel } from '../PathLabel';
 import { ChoiceButton } from '../ChoiceMenu';
 import { Disclosure } from '../Disclosure';
 import './workspaces.css';
@@ -249,8 +252,8 @@ export function WorkspacesDialog({
               </button>
               <span className="workspace-catalog-count" role="status">
                 {matches.length === saved.workspaces.length
-                  ? `${matches.length} workspaces`
-                  : `${matches.length} of ${saved.workspaces.length} workspaces`}
+                  ? plural(matches.length, 'workspace')
+                  : `${matches.length} of ${plural(saved.workspaces.length, 'workspace')}`}
               </span>
               {pages > 1 && (
                 <nav aria-label="Workspace pages">
@@ -279,8 +282,14 @@ export function WorkspacesDialog({
   );
 }
 
+/** A found workspace just marked Not a Workspace, which Undo shows again for a while. */
+interface HiddenFound {
+  name: string;
+  root: string;
+}
+const hiddenUndoTime = 8000;
+
 function DefinedRows({ onClose }: { onClose(): void }) {
-  const home = useViewer((state) => state.bootstrap.home);
   const catalog = useViewer((state) => state.bootstrap.definitions);
   const saved = useViewer((state) => state.saved);
   const needsAccess = catalog?.projectManager.state === 'needs-access';
@@ -289,6 +298,25 @@ function DefinedRows({ onClose }: { onClose(): void }) {
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
   const [forget, setForget] = useState<WorkspaceDefinition>();
+  const [hidden, setHidden] = useState<HiddenFound>();
+  const search = useRef<HTMLInputElement>(null);
+  const undo = useRef<HTMLButtonElement>(null);
+  const focusUndo = useRef(false);
+  useEffect(() => {
+    if (!hidden) return;
+    const timer = setTimeout(() => {
+      // Undo goes with its notice: focus it held returns to the search field
+      if (document.activeElement === undo.current) search.current?.focus();
+      setHidden(undefined);
+    }, hiddenUndoTime);
+    return () => clearTimeout(timer);
+  }, [hidden]);
+  useEffect(() => {
+    // the row left the list: keyboard focus continues on Undo once it can be pressed
+    if (!hidden || busy || !focusUndo.current) return;
+    focusUndo.current = false;
+    undo.current?.focus();
+  }, [hidden, busy]);
   const searchable = useMemo(
     () => catalog?.definitions.map((item) => ({ ...item, hidden: false })) ?? [],
     [catalog],
@@ -332,6 +360,22 @@ function DefinedRows({ onClose }: { onClose(): void }) {
       .catch(report)
       .finally(() => setBusy(false));
   };
+  const notWorkspace = (item: WorkspaceDefinition) =>
+    action(async () => {
+      receiveDefinitions(
+        await window.viewer.workspaceDefinitionFile({ kind: 'not-a-workspace', key: item.key }),
+      );
+      focusUndo.current = true;
+      setHidden({ name: item.name, root: item.root });
+    });
+  const showAgain = (row: HiddenFound) =>
+    action(async () => {
+      setHidden(undefined);
+      receiveDefinitions(
+        await window.viewer.workspaceDefinitionFile({ kind: 'show-found', root: row.root }),
+      );
+      search.current?.focus();
+    });
   return (
     <>
       {catalog?.projectManager.state === 'undecided' && (
@@ -348,6 +392,7 @@ function DefinedRows({ onClose }: { onClose(): void }) {
       )}
       <div className="workspace-catalog-controls">
         <input
+          ref={search}
           data-autofocus
           type="search"
           aria-label="Search definitions"
@@ -375,24 +420,16 @@ function DefinedRows({ onClose }: { onClose(): void }) {
         {rows.map((item) => {
           const written = catalog?.definitions.find((definition) => definition.key === item.key);
           const opened = saved.workspaces.some((space) => space.definition?.key === item.key);
+          const found = item.source === 'found';
           return (
             <li key={item.key}>
               <div className="workspace-catalog-definition">
                 <strong>{item.name}</strong>
-                <small>
-                  {item.source === 'found' && item.root.startsWith(home + '/')
-                    ? '~' + item.root.slice(home.length)
-                    : item.source === 'found'
-                      ? item.root
-                      : item.key}
-                </small>
+                <small>{found ? <PathLabel path={item.root} /> : item.key}</small>
                 <span className="workspace-catalog-badges">
-                  {item.source === 'found' && <span>Found</span>}
+                  {found && <span>Found</span>}
                   {item.remembered && !opened && <span>Remembers</span>}
-                  {(item.planes.length > 1 ||
-                    item.planes[0]?.plane.kind !== 'folder' ||
-                    !!item.tiling ||
-                    !!item.look) && <span>Rich</span>}
+                  {richDefinition(item) && <span>Rich</span>}
                   {item.curated && <span>Curated</span>}
                   {written?.hidden && <span>Hidden</span>}
                   {item.rootState === 'missing' && <span>Folder missing</span>}
@@ -416,6 +453,16 @@ function DefinedRows({ onClose }: { onClose(): void }) {
               >
                 {opened ? 'Switch' : 'Open'}
               </button>
+              {found && (
+                <button
+                  disabled={busy || opened}
+                  aria-label={`Not a Workspace: ${item.name}`}
+                  title={opened ? `Close “${item.name}” first.` : undefined}
+                  onClick={() => notWorkspace(item)}
+                >
+                  Not a Workspace
+                </button>
+              )}
               {item.remembered && !opened && (
                 <IconButton
                   icon="trash"
@@ -425,14 +472,17 @@ function DefinedRows({ onClose }: { onClose(): void }) {
                   onClick={() => setForget(item)}
                 />
               )}
-              <IconButton
-                icon="code"
-                label={`Edit workspace definitions for ${item.name}`}
-                disabled={busy}
-                onClick={() =>
-                  action(() => window.viewer.workspaceDefinitionFile({ kind: 'edit' }))
-                }
-              />
+              {/* a found workspace has no entry in workspaces.jsonc to edit */}
+              {!found && (
+                <IconButton
+                  icon="code"
+                  label={`Edit workspace definitions for ${item.name}`}
+                  disabled={busy}
+                  onClick={() =>
+                    action(() => window.viewer.workspaceDefinitionFile({ kind: 'edit' }))
+                  }
+                />
+              )}
             </li>
           );
         })}
@@ -509,7 +559,19 @@ function DefinedRows({ onClose }: { onClose(): void }) {
         >
           Edit workspace definitions
         </button>
-        <span className="workspace-catalog-count">{matches.length} definitions</span>
+        {/* the notice takes the count's place, so the footer keeps its height */}
+        <span className="workspace-catalog-count" role="status">
+          {hidden ? (
+            <span className="workspace-catalog-undo">
+              <span>Hid “{hidden.name}”</span>
+              <button ref={undo} disabled={busy} onClick={() => showAgain(hidden)}>
+                Undo
+              </button>
+            </span>
+          ) : (
+            plural(matches.length, 'definition')
+          )}
+        </span>
         {pages > 1 && (
           <nav aria-label="Definition pages">
             <IconButton

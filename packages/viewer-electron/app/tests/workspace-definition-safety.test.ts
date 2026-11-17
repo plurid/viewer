@@ -51,7 +51,7 @@ describe('definition command safety boundaries', () => {
         commands.find((command) => command.id === 'save-workspace-definition')!.aliases,
       ).toContain('sync');
       expect(commands.find((command) => command.id === 'delete-workspace')!.unavailable).toBe(
-        'Close it: its definition stays in workspaces.jsonc.',
+        'This workspace comes from a definition. Close it instead, or remove the definition with Edit Workspace Definitions.',
       );
       const adhoc = { ...scopes, space: { ...workspace, definition: undefined } };
       const saveAs = workspacesCommands(adhoc).find(

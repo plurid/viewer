@@ -14,7 +14,11 @@ export type FileKey = Pick<
   | 'target'
   | 'preventDefault'
   | 'stopPropagation'
->;
+> & {
+  /** Passed on by Quick Preview, which shows the plane's selection: its dialog would otherwise
+   * keep the plane from the keys. */
+  fromQuickPreview?: boolean;
+};
 const keyboards = new Map<string, (event: FileKey) => void>();
 
 /** File views and their chrome share input ownership, without subscribing the engine to selection. */

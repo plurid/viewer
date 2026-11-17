@@ -85,16 +85,16 @@ export class Ghostscript {
   }
 
   async variant(): Promise<string> {
-    if (this.options.store())
-      throw new Error('PostScript rendering is unavailable in the Store edition.');
+    if (this.options.store()) throw new Error('The App Store edition can’t render PostScript.');
     const executable = await this.find();
-    if (!executable) throw new Error('Pages can be rendered if Ghostscript is installed.');
+    if (!executable)
+      throw new Error('Install Ghostscript (brew install ghostscript) to show the pages.');
     return executable.key;
   }
 
   readonly decode: Decoder = async (source, mode, signal, _size, variant) => {
     if (mode !== 'postscript' || this.options.store())
-      throw new Error('PostScript rendering is unavailable here.');
+      throw new Error('This build of Viewer can’t render PostScript.');
     const executable = await this.find();
     if (!executable || executable.key !== variant)
       throw new Error('Ghostscript changed; choose Render pages again.');
@@ -172,7 +172,7 @@ export class Ghostscript {
         return { data, extension: 'pdf', kind: 'postscript', decoder: `Ghostscript ${version}` };
       });
     } catch (error) {
-      if (signal.aborted) throw new Error('PostScript rendering was cancelled.');
+      if (signal.aborted) throw new Error('PostScript rendering was canceled.');
       const message = errorMessage(error);
       const engine = version ? `Ghostscript ${version}` : 'Ghostscript';
       if (message.includes('timed out'))

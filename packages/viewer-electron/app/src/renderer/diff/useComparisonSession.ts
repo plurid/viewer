@@ -113,7 +113,7 @@ export function useComparisonSession(
         event.type === 'file-access' &&
         [...held.keys()].some((id) => event.resources?.includes(id))
       )
-        void fail(new Error('File access was revoked. Allow access and reload this comparison.'));
+        void fail(new Error('File access was turned off. Allow access, then try again.'));
     });
     void (async () => {
       const [a, b] = await Promise.all([read(left), read(right)]);

@@ -259,7 +259,7 @@ export function editLens(
 ): void {
   const document = lensSnapshot(folder)?.lenses.find((item) => item.file === file);
   if (!document) {
-    report(new Error('This lens is no longer available.'));
+    report(new Error('This lens file was moved or deleted.'));
     return;
   }
   if (!document.writable) {

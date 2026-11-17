@@ -93,11 +93,11 @@ export async function verifyMilestones(
   await settleCamera();
   await click('.git-review-file');
   await until(
-    () => evaluate(buttonState('Open diff', '.git-review')),
+    () => evaluate(buttonState('Open Diff', '.git-review')),
     (state) => state === 'enabled',
     'selected change',
   );
-  await evaluate(pressButton('Open diff', '.git-review'));
+  await evaluate(pressButton('Open Diff', '.git-review'));
   await until(
     () => evaluate(exists('.cm-merge-b .cm-content')),
     Boolean,
@@ -130,7 +130,7 @@ export async function verifyMilestones(
   await evaluate(pageCall(dockPane, rootID));
   await settleCamera();
   await click(`[data-viewer-plane="${rootID}"] .plane-heading`);
-  await paletteCommand('Chat about files');
+  await paletteCommand('Chat About Files');
   await until(() => evaluate(exists('textarea[aria-label="Chat message"]')), Boolean, 'Chat plane');
   await settleCamera();
   await click('textarea[aria-label="Chat message"]');

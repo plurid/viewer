@@ -17,7 +17,7 @@ export function layoutCommands(workspace: WorkspaceController): CommandDefinitio
   return [
     {
       id: 'lay-out',
-      label: 'Lay out…',
+      label: 'Lay Out…',
       group: 'Files',
       icon: 'gallery',
       aliases: [
@@ -45,7 +45,7 @@ export function layoutCommands(workspace: WorkspaceController): CommandDefinitio
     },
     {
       id: 'nest-parts',
-      label: 'Nest for cutting…',
+      label: 'Nest for Cutting…',
       group: 'Files',
       icon: 'drawing',
       aliases: ['nesting', 'nest', 'dxf', 'laser', 'cnc', 'cut parts', 'stock sheet'],

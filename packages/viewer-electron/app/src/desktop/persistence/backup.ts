@@ -236,7 +236,9 @@ export class PersonalBackups {
       try {
         const item = await lstat(directory);
         if (!item.isDirectory() || item.isSymbolicLink())
-          throw new Error('A private document folder is a link or is unavailable.');
+          throw new Error(
+            'A Viewer document folder is missing or is a link, so the backup stopped.',
+          );
         names = await readdir(directory);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
@@ -257,7 +259,9 @@ export class PersonalBackups {
           JSON.parse(inspected.bytes.toString('utf8')),
         );
         if (document.id !== name.slice(0, -5))
-          throw new Error('A private document’s identity does not match its file.');
+          throw new Error(
+            'A Viewer document’s file belongs to another document, so the backup stopped.',
+          );
         // The key and validator travel together; validation above determines this member’s type.
         (documents[kind] as { id: string }[]).push(document);
       }

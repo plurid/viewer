@@ -69,13 +69,15 @@ it('rejects declarations, malformed tails, entities and attributes regardless of
 });
 
 it('bounds structure, nesting and incomplete or complete token sizes', () => {
-  expect(() => chunked(Buffer.from('<root><a/><b/><c/></root>'), 7, 3)).toThrow('structure');
-  expect(() => chunked(Buffer.from('<a>'.repeat(65) + '</a>'.repeat(65)), 3)).toThrow('nesting');
+  expect(() => chunked(Buffer.from('<root><a/><b/><c/></root>'), 7, 3)).toThrow('more elements');
+  expect(() => chunked(Buffer.from('<a>'.repeat(65) + '</a>'.repeat(65)), 3)).toThrow(
+    'nests deeper',
+  );
   for (const xml of [
     '<root><!--' + 'x'.repeat(270000) + '--></root>',
     '<root label="' + 'x'.repeat(270000) + '"/>',
     '<root><![CDATA[' + 'x'.repeat(270000) + ']]></root>',
   ])
     for (const size of [65536, xml.length])
-      expect(() => chunked(Buffer.from(xml), size)).toThrow('token');
+      expect(() => chunked(Buffer.from(xml), size)).toThrow('part larger');
 });

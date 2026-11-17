@@ -19,7 +19,7 @@ export const reportDisclosure =
   "By default, the report holds Viewer version and build, edition, license status, macOS version, Mac model, chip and memory when available, display count and scales, language, region, and each failure's time, kind, class, code and location in Viewer, with no personal file names or message text.";
 
 export const reportMessageWarning =
-  'Message text can contain file names, addresses and other private text. Viewer removes what it can recognise. Read it before you share it.';
+  'Message text can contain file names, addresses and other private text. Viewer removes what it can recognize. Read it before you share it.';
 
 /** Isolated local controls avoid giving any page a callable report or log reader. */
 export function reportPage(report: string, look: ReportLook): string {

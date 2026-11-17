@@ -46,7 +46,7 @@ export function CommitDialog({ directory, onSubmit, onClose }: CommitDialogProps
   };
 
   return (
-    <Dialog title="Commit staged changes" className="git-commit-dialog" onClose={close}>
+    <Dialog title="Commit Staged Changes" className="git-commit-dialog" onClose={close}>
       <form
         aria-label="Git commit"
         aria-busy={busy}
@@ -100,7 +100,7 @@ export function CommitDialog({ directory, onSubmit, onClose }: CommitDialogProps
             disabled={busy || !valid}
             aria-keyshortcuts="Meta+Enter Control+Enter"
           >
-            {busy ? 'Starting…' : 'Commit staged changes'}
+            {busy ? 'Starting…' : 'Commit Staged Changes'}
           </button>
         </footer>
       </form>

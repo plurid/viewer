@@ -62,7 +62,7 @@ export class MediaDocuments {
   }
   private async read(id: string) {
     const draft = await this.store(id).load();
-    if (!draft) throw new Error('This media draft is unavailable.');
+    if (!draft) throw new Error('Viewer can’t find this media draft. It may have been deleted.');
     await this.current(draft);
     return draft;
   }
@@ -151,7 +151,7 @@ export class MediaDocuments {
         }
         if (request.kind === 'recover') {
           const original = await this.store(request.id).load();
-          if (!original) throw new Error('The original editing decisions are unavailable.');
+          if (!original) throw new Error('This draft’s original edits couldn’t be read.');
           const sources: MediaDraft['sources'] = [];
           for (const source of original.sources) sources.push(await this.source(source.path));
           const plan = validateTransform(original.plan, sources.length) as MediaDraft['plan'];

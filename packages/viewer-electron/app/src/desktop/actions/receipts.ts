@@ -44,7 +44,8 @@ export class CommandReceipts {
     if (!store) {
       store = new DocumentStore(path.join(this.root, 'command-receipts', id + '.json'), (value) => {
         const receipt = receiptSchema.parse(value);
-        if (receipt.id !== id) throw new Error('Receipt identity changed.');
+        if (receipt.id !== id)
+          throw new Error('This command’s record now belongs to another command.');
         return receipt;
       });
       this.stores.set(id, store);
@@ -83,7 +84,9 @@ export class CommandReceipts {
     const work = (async () => {
       const names = await this.names();
       if (!names.has(receipt.id) && names.size >= 1000)
-        throw new Error('Command receipt storage is full. Existing receipts were preserved.');
+        throw new Error(
+          'Viewer’s space for command records is full. Earlier records were kept; clear some to record more.',
+        );
       names.add(receipt.id);
       while (this.latest.has(receipt.id)) {
         const next = this.latest.get(receipt.id)!;
@@ -112,7 +115,7 @@ export class CommandReceipts {
     const request = receiptRequestSchema.parse(input);
     if (request.kind === 'summary') {
       const reply = await this.request({ kind: 'read', id: request.id });
-      if (reply.kind !== 'receipt') throw new Error('Receipt unavailable.');
+      if (reply.kind !== 'receipt') throw new Error('Viewer couldn’t read this command’s record.');
       const { command: _command, output: _output, ...summary } = reply.receipt;
       return { kind: 'summary', receipt: summary };
     }
@@ -122,7 +125,8 @@ export class CommandReceipts {
       const current = this.live.get(request.id);
       if (current) return { kind: 'receipt', receipt: current };
       const receipt = await this.store(request.id).load();
-      if (!receipt) throw new Error('This command receipt is unavailable.');
+      if (!receipt)
+        throw new Error('Viewer has no record of this command. It may have been cleared.');
       return {
         kind: 'receipt',
         receipt:
@@ -147,7 +151,7 @@ export class CommandReceipts {
           receipts.push(summary);
         }
       } catch {
-        problems.push('A command receipt could not be read and was preserved.');
+        problems.push('A command record couldn’t be read. Viewer kept it.');
       }
     }
     return { kind: 'list', receipts: receipts.sort((a, b) => b.started - a.started), problems };

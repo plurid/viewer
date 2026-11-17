@@ -38,7 +38,7 @@ export default function ImageDiff({
     const decode = async (resource: Resource | null) => {
       if (!resource) return null;
       const response = await fetch(resource.url, { signal: controller.signal });
-      if (!response.ok) throw new Error('The image resource is unavailable.');
+      if (!response.ok) throw new Error("Viewer couldn't read one of the images.");
       return createImageBitmap(await response.blob());
     };
     void Promise.allSettled([decode(left), decode(right)])
@@ -90,11 +90,11 @@ export default function ImageDiff({
   if (tooLarge)
     return (
       <Empty
-        title="Image comparison exceeds its preview budget"
-        detail="Use smaller images or raise the image pixel limit in Settings."
+        title="Images too large to compare"
+        detail="Use smaller images, or raise Image pixel limit in Settings → Previews."
       />
     );
-  if (error) return <Empty title="Image comparison unavailable" detail={error} />;
+  if (error) return <Empty title="Can't compare these images" detail={error} />;
   const image = (resource: Resource | null, overlay = false) =>
     resource ? (
       <img

@@ -1,5 +1,7 @@
 import type { FileEntry } from '../contracts';
+import type { WorkspaceOffer } from '../workspaces/offer';
 import { fileFamily, formatBytes } from '../files/entries';
+import { plural } from '../plural';
 import { archive, copyName, oldInstaller } from './rules';
 import { extractedFolderName } from '../operations/extract';
 
@@ -10,12 +12,23 @@ export type InsightID =
   | 'screenshots'
   | 'pdfs.large'
   | 'photos.heic'
-  | 'names.copies';
+  | 'names.copies'
+  | 'workspace.open';
+/** The workspace rows Change workspace… lists: a definition to open, an open workspace. */
+export type WorkspaceCommand = `defined:${string}` | `workspace:${string}`;
 /** The commands an insight's action runs, as the menus name them. */
 export type InsightCommand =
-  'trash' | 'optimize-files' | 'find-duplicates' | 'new-folder-with-selection' | 'convert-jpeg';
-/** What an insight's action runs on: its files, or the folder with nothing selected. */
-export type InsightTarget = 'files' | 'folder';
+  | 'trash'
+  | 'optimize-files'
+  | 'find-duplicates'
+  | 'new-folder-with-selection'
+  | 'convert-jpeg'
+  | WorkspaceCommand;
+/**
+ * What an insight's action runs on: its files, the folder with nothing selected, or the window, as
+ * Change workspace… does.
+ */
+export type InsightTarget = 'files' | 'folder' | 'window';
 
 /**
  * Something in a folder that may need attention, with one action. The action runs the command a
@@ -191,6 +204,73 @@ export function folderInsights(input: InsightInput): FolderInsight[] {
     .slice(0, input.limit ?? insightLimit);
 }
 
+/**
+ * The workspace offer as an insight card: dismissed by its root, wherever it shows. Its root is its
+ * detail, shown as a path label.
+ */
+export interface WorkspaceInsight extends FolderInsight {
+  id: 'workspace.open';
+  command: WorkspaceCommand;
+  target: 'window';
+  /** The root the offer belongs to, which a dismissal keeps. */
+  root: string;
+  /** Why the palette's Suggested section lists it: "Remembers 5 planes". */
+  reason: string;
+}
+const planeNouns: Readonly<Record<string, string>> = {
+  file: 'a file',
+  terminal: 'a terminal',
+  scratch: 'a scratch plane',
+  search: 'a search',
+};
+/** What opening a rich definition shows: "3 planes", "a terminal", "2 tiled planes". */
+function opens(offer: WorkspaceOffer): string {
+  const { planes, tiling, look } = offer.definition;
+  const only = planes.length === 1 ? planes[0]!.plane.kind : undefined;
+  if (only && only !== 'folder') return planeNouns[only] ?? plural(1, 'plane');
+  if (only && look && !tiling) return 'in its own look';
+  return plural(planes.length, tiling ? 'tiled plane' : 'plane');
+}
+
+/**
+ * The card for a workspace offer (domain/workspaces/offer.ts): the workspace's name and what opening
+ * it adds, its root as detail, and one action, the row Change workspace… lists for it.
+ */
+export function workspaceInsight(offer: WorkspaceOffer): WorkspaceInsight {
+  const { name, root } = offer.definition;
+  const card = {
+    id: 'workspace.open' as const,
+    target: 'window' as const,
+    command: offer.command,
+    paths: [root],
+    root,
+  };
+  if (offer.reason === 'open-elsewhere') {
+    const holder = offer.workspace.name;
+    return {
+      ...card,
+      title: holder === name ? `“${name}” is already open` : `“${name}” is open in “${holder}”`,
+      reason: holder === name ? 'Already open' : `Has “${name}” open`,
+      action: 'Switch',
+    };
+  }
+  if (offer.reason === 'remembered') {
+    const planes = plural(offer.definition.remembered!.planes, 'plane');
+    return {
+      ...card,
+      title: `“${name}” remembers ${planes}`,
+      reason: `Remembers ${planes}`,
+      action: 'Open Workspace',
+    };
+  }
+  return {
+    ...card,
+    title: `“${name}” opens ${opens(offer)}`,
+    reason: `Opens ${opens(offer)}`,
+    action: 'Open Workspace',
+  };
+}
+
 /** A folder's dismissed insight, latest folder last: two hundred folders, twenty ids each. */
 export function rememberDismissal(
   dismissed: Readonly<Record<string, readonly string[]>> | undefined,
@@ -203,4 +283,20 @@ export function rememberDismissal(
     ...Object.fromEntries(kept.map(([path, ids]) => [path, [...ids]])),
     [folder]: [...earlier.filter((item) => item !== id), id].slice(-20),
   };
+}
+
+/**
+ * Dismissals without the workspace offer's: those name definition roots, found ones included,
+ * which agents never see. Folders left with no dismissal are left out.
+ */
+export function withoutWorkspaceDismissals(
+  dismissed: Readonly<Record<string, readonly string[]>> | undefined,
+): Record<string, string[]> | undefined {
+  if (!dismissed) return dismissed;
+  return Object.fromEntries(
+    Object.entries(dismissed).flatMap(([folder, ids]) => {
+      const kept = ids.filter((id) => id !== 'workspace.open');
+      return kept.length ? [[folder, kept]] : [];
+    }),
+  );
 }

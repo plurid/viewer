@@ -15,7 +15,7 @@ import { flushCanvasWrites } from '../canvases/writes';
 const draftDelay = 250;
 
 function documentReply(reply: ChatReply): ChatDocument {
-  if (Array.isArray(reply)) throw new Error('The conversation could not be opened.');
+  if (Array.isArray(reply)) throw new Error('Viewer couldn’t open this conversation.');
   return reply;
 }
 

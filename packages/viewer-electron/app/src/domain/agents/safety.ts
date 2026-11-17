@@ -101,7 +101,7 @@ export function modelLineCommandProblem(
     if (++expanded > agentCommandExpansionLimit) return 'its expanded commands exceed the limit';
     if (!command.startsWith('custom.')) return modelBuiltinCommandProblem(command);
     const action = byID.get(command);
-    if (!action) return 'the custom action is unavailable';
+    if (!action) return 'the custom action was removed';
     const executor = action.executor;
     if (['shell', 'executable', 'terminal'].includes(executor.kind)) return 'it runs a program';
     const lines =
@@ -203,7 +203,7 @@ export function agentCommandID(id: string, actions: readonly CustomAction[]): st
       );
     if (!command.startsWith('custom.')) return agentBuiltinCommandID(command);
     const action = byID.get(command);
-    if (!action) throw new Error('The custom action is unavailable.');
+    if (!action) throw new Error('This custom action was removed.');
     const executor = action.executor;
     switch (executor.kind) {
       case 'shell':
@@ -266,7 +266,7 @@ function agentBuiltinCommandID(command: string): string {
     );
   if (command === 'undo-file')
     throw new Error(
-      'Agent file Undo can remove outputs outside the captured selection. Review it yourself in File operations.',
+      'Agent file Undo can remove outputs outside the captured selection. Review it yourself in File Operations.',
     );
   if (command === 'parent-plane' || command === 'view-open-plane')
     throw new Error('Use propose_focus_plane for an explicitly authorized destination plane.');

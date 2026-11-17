@@ -14,6 +14,7 @@ import { OpenWithDialog } from '../ui/navigation/OpenWithDialog';
 import { RenameActions } from '../actions/RenameActions';
 import { sourceVersion } from '../../domain/files/inspection';
 import { formatBytes } from '../../domain/files/entries';
+import { plural } from '../../domain/plural';
 import { untitledFileName } from '../../domain/editing/languages';
 import { calculateSize, cancelFolderSize, useFolderSize } from './sizes';
 const moveToTrash = async (context: CommandContext) => {
@@ -45,18 +46,14 @@ export function TrashContents({ context }: { context: CommandContext }) {
       if (owned) void cancelFolderSize(paths).catch(() => {});
     };
   }, [context, folders, paths]);
-  if (!folders) return null;
   const task = size?.task;
-  const counts = task
-    ? `${task.files.toLocaleString()} ${task.files === 1 ? 'file' : 'files'} in ${(task.folders || folders).toLocaleString()} ${(task.folders || folders) === 1 ? 'folder' : 'folders'}, ${formatBytes(task.bytes)}`
-    : '';
+  if (!folders || (task?.status !== 'running' && task?.status !== 'completed')) return null;
+  const counts = `${plural(task.files, 'file')} in ${plural(task.folders || folders, 'folder')}, ${formatBytes(task.bytes)}`;
   return (
     <p className="dialog-copy muted" role="status">
-      {task?.status === 'running'
+      {task.status === 'running'
         ? `Counting folder contents… ${counts}`
-        : task?.status === 'completed'
-          ? `Including folder contents: ${counts}${task.skipped ? ` (${task.skipped.toLocaleString()} unreadable)` : ''}.`
-          : `Selected folders are moved with everything inside them.`}
+        : `Including folder contents: ${counts}${task.skipped ? ` (${plural(task.skipped, 'item')} not readable)` : ''}.`}
     </p>
   );
 }
@@ -72,7 +69,7 @@ export async function groupSelection(context: CommandContext, name: string): Pro
     }),
   );
   const folder = created.status === 'completed' ? created.completed[0]?.destination : undefined;
-  if (!folder) throw new Error(created.errors[0]?.message || 'The folder was not created.');
+  if (!folder) throw new Error(created.errors[0]?.message || "Viewer couldn't create the folder.");
   await window.viewer.operate({
     kind: 'move',
     sources: context.selection.map((file) => file.path),
@@ -114,31 +111,24 @@ function TrashConfirmation({ context, onClose }: { context: CommandContext; onCl
     >
       <div className="trash-confirmation-copy">
         <p className="dialog-copy">
-          Move{' '}
           {context.selection.length === 1
-            ? `“${context.selection[0]?.name}”`
-            : `${context.selection.length} items`}{' '}
-          to the system Trash?
+            ? `“${context.selection[0]?.name}” will be moved to the Trash.`
+            : `${plural(context.selection.length, 'item')} will be moved to the Trash.`}
         </p>
         <TrashContents context={context} />
       </div>
+      {/* macOS dialogs show no keycaps: Esc cancels and Return confirms, as anywhere */}
       <footer>
-        <button
-          className="dialog-keyboard-action"
-          aria-label="Cancel"
-          aria-keyshortcuts="Escape"
-          onClick={onClose}
-        >
-          <kbd aria-hidden="true">Esc</kbd> Cancel
+        <button className="dialog-keyboard-action" aria-keyshortcuts="Escape" onClick={onClose}>
+          Cancel
         </button>
         <button
           className="danger dialog-keyboard-action"
-          aria-label="Move to Trash"
           aria-keyshortcuts="Enter"
           data-autofocus
           onClick={confirm}
         >
-          <kbd aria-hidden="true">Enter</kbd> Move to Trash
+          Move to Trash
         </button>
       </footer>
     </Dialog>
@@ -207,26 +197,28 @@ export function useFileDialogs(): {
           <NameDialog
             title={
               name.kind === 'rename'
-                ? 'Rename file'
+                ? `Rename “${name.context.selection[0]?.name ?? ''}”`
                 : name.kind === 'mkdir'
-                  ? 'New folder'
+                  ? 'New Folder'
                   : name.kind === 'mkfile'
-                    ? 'New file'
+                    ? 'New File'
                     : name.kind === 'group'
-                      ? `New folder with ${name.context.selection.length} ${name.context.selection.length === 1 ? 'item' : 'items'}`
-                      : 'Go to folder'
+                      ? `New Folder with ${plural(name.context.selection.length, 'Item')}`
+                      : 'Go to Folder'
             }
             label="Name"
             initial={
               name.kind === 'rename'
                 ? name.context.selection[0]?.name
                 : name.kind === 'group'
-                  ? 'New Folder With Items'
+                  ? // Finder's own name for a folder made from a selection
+                    'New Folder With Items'
                   : name.kind === 'mkfile'
                     ? untitledFileName(
                         effectiveWindowSettings(getState()).browsing.newFileExtension,
                       )
-                    : ''
+                    : // Finder's: a name to keep or type over, so Create is ready at once
+                      'untitled folder'
             }
             maxLength={255}
             action={name.kind === 'rename' ? 'Rename' : 'Create'}

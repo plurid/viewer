@@ -91,7 +91,7 @@ try {
   } else {
     await check('spatial list');
     await actions.capture(path.join(app.evidenceDirectory, 'spatial-list.png'));
-    await actions.palette('Dock plane');
+    await actions.palette('Dock Plane');
     await check('docked list');
     await actions.capture(path.join(app.evidenceDirectory, 'docked-list.png'));
     await actions.palette('Columns view');
@@ -106,7 +106,7 @@ try {
     );
     await actions.key('n', 'KeyN', 4);
     await until(
-      () => evaluate(exists('dialog[aria-label="New folder"]')),
+      () => evaluate(exists('dialog[aria-label="New Folder"]')),
       Boolean,
       'Command N opens New folder',
     );
@@ -138,8 +138,8 @@ try {
         ),
       ),
     );
-    assert.equal(shortcuts['New folder…'], '⌘N');
-    assert.equal(shortcuts['New folder plane'], '⇧⌘N');
+    assert.equal(shortcuts['New Folder…'], '⌘N');
+    assert.equal(shortcuts['New Folder Plane'], '⇧⌘N');
     await actions.key('Escape', 'Escape');
     await command('Emulation.setDeviceMetricsOverride', {
       width: 900,

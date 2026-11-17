@@ -1,29 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CollisionDecision, OperationKind } from '../../domain/contracts';
+import type { CollisionDecision } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files/entries';
 import { copyPaths, report, setOperationsOpen, useViewer } from '../state/store';
 import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import { Panel } from '../ui/Panel';
+import { PathLabel, useHome } from '../ui/PathLabel';
+import { homeText } from '../../domain/files/path-label';
 import { baseName } from '../../domain/workspaces/planes';
 import { dialogOpen } from '../ui/modal';
 import { isActiveJob } from '../../domain/operations/jobs';
-
-const operationLabels: Record<OperationKind, string> = {
-  copy: 'Copy',
-  move: 'Move',
-  transfer: 'Transfer',
-  duplicate: 'Duplicate',
-  alias: 'Make alias',
-  rename: 'Rename',
-  mkdir: 'New folder',
-  mkfile: 'New file',
-  trash: 'Move to Trash',
-  compress: 'Compress',
-  extract: 'Extract',
-  convert: 'Quick action',
-  rewrite: 'Save',
-};
+import { plural } from '../../domain/plural';
+import { operationLabel, statusLabel } from '../ui/status-labels';
 
 export function OperationsPanel() {
   const jobs = useViewer((state) => state.jobs);
@@ -35,6 +23,7 @@ export function OperationsPanel() {
   const finished = jobs.filter((job) => !job.dismissed && !isActiveJob(job));
   const [clearing, setClearing] = useState(false);
   const [all, setAll] = useState<Record<string, boolean>>({});
+  const home = useHome();
   const [replace, setReplace] = useState<{ id: string; path: string; applyAll: boolean } | null>(
     null,
   );
@@ -62,13 +51,12 @@ export function OperationsPanel() {
     <Panel
       ref={panel}
       className="operations-panel"
-      label="File operations"
+      label="File Operations"
       role="dialog"
-      title="File operations"
+      title="File Operations"
       actions={
         <button
           disabled={clearing || !finished.length}
-          title="Clear finished operations from this list"
           onClick={() => {
             setClearing(true);
             void window.viewer
@@ -77,7 +65,7 @@ export function OperationsPanel() {
               .finally(() => setClearing(false));
           }}
         >
-          Clear all
+          Clear Finished
         </button>
       }
       onClose={() => setOperationsOpen(false)}
@@ -107,8 +95,8 @@ export function OperationsPanel() {
                         : 'copy'
               }
             />
-            <strong>{operationLabels[job.kind]}</strong>
-            <span className="muted">{job.status}</span>
+            <strong>{operationLabel(job.kind)}</strong>
+            <span className="muted">{statusLabel(job.status)}</span>
             {isActiveJob(job) && (
               <IconButton
                 icon="close"
@@ -119,8 +107,8 @@ export function OperationsPanel() {
               />
             )}
           </div>
-          <p title={job.current || job.destination || job.sources[0]}>
-            {job.current || job.destination || job.sources[0]}
+          <p>
+            <PathLabel path={job.current || job.destination || job.sources[0] || ''} />
           </p>
           {['queued', 'running'].includes(job.status) && (
             <progress
@@ -129,11 +117,10 @@ export function OperationsPanel() {
             />
           )}
           <div className="operation-count muted">
-            {job.detail && <span>{job.detail} · </span>}
-            {job.itemsDone} / {job.itemsTotal} items{' '}
+            {job.detail && <span>{homeText(job.detail, home)} · </span>}
+            {job.itemsDone.toLocaleString('en-US')} of {plural(job.itemsTotal, 'item')}{' '}
             {job.bytesDone > 0 && `· ${formatBytes(job.bytesDone)} transferred`}
-            {job.errorCount > 0 &&
-              ` · ${job.errorCount} ${job.errorCount === 1 ? 'error' : 'errors'}`}
+            {job.errorCount > 0 && ` · ${plural(job.errorCount, 'error')}`}
           </div>
           {job.collision && (
             <div className="collision">
@@ -141,9 +128,9 @@ export function OperationsPanel() {
               <p>
                 {job.collision.replaceable === false
                   ? job.kind === 'mkdir' || job.kind === 'mkfile'
-                    ? 'A new item cannot replace an existing one.'
-                    : 'The existing item contains the source, so it cannot be replaced.'
-                  : 'Replace sends the existing item to Trash once its replacement is ready.'}
+                    ? 'A new item can’t replace an existing one.'
+                    : 'The existing item holds what you’re moving, so it can’t be replaced.'
+                  : 'Replace moves the existing item to the Trash once its replacement is ready.'}
               </p>
               <label>
                 <input
@@ -156,7 +143,7 @@ export function OperationsPanel() {
               <div className="collision-actions">
                 {[
                   ['skip', 'Skip'],
-                  ['keep-both', 'Keep both'],
+                  ['keep-both', 'Keep Both'],
                   ...(job.collision.replaceable === false ? [] : [['replace', 'Replace']]),
                 ].map(([decision, label]) => (
                   <button
@@ -183,7 +170,7 @@ export function OperationsPanel() {
           )}
           {job.errors.map((error, index) => (
             <p className="error" key={index}>
-              {baseName(error.path)}: {error.message}
+              {baseName(error.path)}: {homeText(error.message, home)}
             </p>
           ))}
           {job.recovery && (
@@ -198,7 +185,7 @@ export function OperationsPanel() {
                 .map(([label, file]) => (
                   <p key={label}>
                     <span className="muted">{label}: </span>
-                    <span>{file}</span>
+                    <PathLabel path={file!} layout="wrap" />
                   </p>
                 ))}
               <button
@@ -210,7 +197,7 @@ export function OperationsPanel() {
                   ).catch(report);
                 }}
               >
-                Copy recovery paths
+                Copy Recovery Paths
               </button>
             </div>
           )}
@@ -220,7 +207,7 @@ export function OperationsPanel() {
                 void window.viewer.undo(job.id).catch(report);
               }}
             >
-              Undo {job.kind}
+              Undo {operationLabel(job.kind)}
             </button>
           )}
         </section>
@@ -229,7 +216,7 @@ export function OperationsPanel() {
         <Dialog title="Replace existing item?" onClose={() => setReplace(null)}>
           <div className="dialog-copy">
             <p>
-              “{baseName(replace.path)}” will be sent to Trash once its replacement is ready. If the
+              “{baseName(replace.path)}” moves to the Trash once its replacement is ready. If the
               replacement fails, Viewer puts it back when it can.
             </p>
             {replace.applyAll && <p>This applies to the remaining conflicts in this operation.</p>}

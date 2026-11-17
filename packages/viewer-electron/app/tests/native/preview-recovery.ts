@@ -110,7 +110,7 @@ try {
     (text) => text.includes('last loaded version'),
     'Missing-file notice',
   );
-  await evaluate(pressButton('Find renamed file', '.preview-recovery'));
+  await evaluate(pressButton('Find Renamed File', '.preview-recovery'));
   await until(
     saved,
     (state) => state.workspaces[0]?.panes[0]?.path === renamed,
@@ -126,7 +126,7 @@ try {
   await evaluate(pageCall(windowFocus));
   await until(() => evaluate(exists('.preview-recovery')), Boolean, 'Unreachable folder notice');
   await rename(parked, files);
-  await evaluate(pressButton('Check again', '.preview-recovery'));
+  await evaluate(pressButton('Try Again', '.preview-recovery'));
   await until(
     () => evaluate(exists('.preview-recovery')),
     (shown) => !shown,
@@ -146,7 +146,7 @@ try {
   await rename(renamed, moved);
   await evaluate(pageCall(windowFocus));
   await until(() => evaluate(exists('.preview-recovery')), Boolean, 'Missing dirty file notice');
-  await evaluate(pressButton('Find renamed file', '.preview-recovery'));
+  await evaluate(pressButton('Find Renamed File', '.preview-recovery'));
   await until(
     saved,
     (state) => state.workspaces[0]?.panes.some((p) => p.type === 'preview' && p.path === moved),

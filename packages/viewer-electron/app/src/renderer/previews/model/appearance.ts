@@ -73,6 +73,7 @@ export function modelLighting(scene: THREE.Scene, camera: THREE.PerspectiveCamer
   const fillDirection = new THREE.Vector3(4, -2, 5).normalize();
   let radius = 1;
   const update = () => {
+    hemisphere.position.copy(camera.up);
     camera.updateWorldMatrix(true, false);
     local.copy(center).applyMatrix4(camera.matrixWorldInverse);
     key.target.position.copy(local);

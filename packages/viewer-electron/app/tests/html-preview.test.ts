@@ -188,10 +188,10 @@ describe('isolated HTML rendering', () => {
   it('refuses a non-private iframe grant and closes it before offering source', async () => {
     htmlPreview.mockResolvedValueOnce({ id: 'unsafe', url: 'https://example.invalid/page.html' });
     const view = render(createElement(HTMLPreview, context));
-    await view.findByText('The HTML preview address is unavailable.');
+    await view.findByText("Viewer can't show this page safely. View its source instead.");
     expect(view.container.querySelector('iframe')).toBeNull();
     expect(htmlPreviewClose).toHaveBeenCalledExactlyOnceWith('unsafe');
-    fireEvent.click(view.getByRole('button', { name: 'View source' }));
+    fireEvent.click(view.getByRole('button', { name: 'View Source' }));
     expect(view.getByRole('tab', { name: 'Source' }).getAttribute('aria-selected')).toBe('true');
     expect(view.getByLabelText('File text')).toBeTruthy();
   });
@@ -200,7 +200,7 @@ describe('isolated HTML rendering', () => {
     htmlPreview.mockRejectedValueOnce(new Error('Archived HTML has no local page to render.'));
     const view = render(createElement(HTMLPreview, { ...context, editing: undefined }));
     await view.findByText('Archived HTML has no local page to render.');
-    fireEvent.click(view.getByRole('button', { name: 'View source' }));
+    fireEvent.click(view.getByRole('button', { name: 'View Source' }));
     await waitFor(() => expect(view.getByLabelText('File text')).toBeTruthy());
     expect(view.queryByRole('button', { name: 'Edit' })).toBeNull();
     expect(view.container.querySelector('iframe')).toBeNull();
@@ -213,7 +213,7 @@ describe('isolated HTML rendering', () => {
   ])('rejects a mismatched or ambiguous page capability: $url', async (preview) => {
     htmlPreview.mockResolvedValueOnce(preview);
     const view = render(createElement(HTMLPreview, context));
-    await view.findByText('The HTML preview address is unavailable.');
+    await view.findByText("Viewer can't show this page safely. View its source instead.");
     expect(view.container.querySelector('iframe')).toBeNull();
     expect(htmlPreviewClose).toHaveBeenCalledExactlyOnceWith(preview.id);
   });

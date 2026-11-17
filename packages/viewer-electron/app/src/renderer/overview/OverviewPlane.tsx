@@ -17,6 +17,7 @@ import { report, useViewer } from '../state/store';
 import { saveCollection } from '../state/collections';
 import { useWorkspace } from '../workspace/context';
 import { Empty, IconButton } from '../ui/primitives';
+import { plural } from '../../domain/plural';
 import './overview.css';
 
 type Card =
@@ -120,7 +121,7 @@ export default function OverviewPlane({ pane }: { pane: Pane }) {
         title="Nothing indexed yet"
         detail="Overview reads the filename index. Choose the folders to index in Settings → Search."
       >
-        <button onClick={searchSettings}>Open Search settings</button>
+        <button onClick={searchSettings}>Open Search Settings</button>
       </Empty>
     );
   const found = overviewQueries.filter((item) => {
@@ -136,11 +137,11 @@ export default function OverviewPlane({ pane }: { pane: Pane }) {
       <header className="overview-toolbar">
         <span className="muted" role="status">
           {status
-            ? `${status.count.toLocaleString()} items indexed in ${status.roots.length} ${status.roots.length === 1 ? 'location' : 'locations'}${status.running ? ' · indexing' : ''}`
+            ? `${plural(status.count, 'item')} indexed in ${plural(status.roots.length, 'location')}${status.running ? ' · indexing' : ''}`
             : 'Reading the index…'}
         </span>
         <span className="overview-space" />
-        <button onClick={searchSettings}>Search settings</button>
+        <button onClick={searchSettings}>Search Settings</button>
         <IconButton
           icon="refresh"
           label="Refresh"
@@ -207,15 +208,15 @@ function OverviewCard({
         </ul>
       )}
       {card.kind === 'unindexed' && item.place !== 'everywhere' && (
-        <p>{placeName[item.place]} is not in the filename index.</p>
+        <p>{placeName[item.place]} isn't in the filename index.</p>
       )}
       {card.kind === 'failed' && <p role="alert">{card.message}</p>}
       <footer>
-        {card.kind === 'ready' && <button onClick={showAll}>Show all</button>}
+        {card.kind === 'ready' && <button onClick={showAll}>Show All</button>}
         {card.kind === 'unindexed' && (
           <>
-            <button onClick={showAll}>Search it now</button>
-            <button onClick={searchSettings}>Add to the index</button>
+            <button onClick={showAll}>Search It Now</button>
+            <button onClick={searchSettings}>Add to the Index</button>
           </>
         )}
       </footer>

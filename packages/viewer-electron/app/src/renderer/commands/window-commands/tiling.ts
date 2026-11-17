@@ -1,6 +1,7 @@
 import { effectiveWindowSettings } from '../../state/effective-ui';
 import type { Pane } from '../../../domain/contracts';
 import { parentPath } from '../../../domain/workspaces/planes';
+import { titleCase } from '../../../domain/title-case';
 import {
   nextLayout,
   resizeTile,
@@ -125,7 +126,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
   return [
     ...(['left', 'right', 'up', 'down'] as const).map((direction) => ({
       id: `tile-resize-${direction}`,
-      label: `Grow tile ${direction}`,
+      label: `Grow Tile ${titleCase(direction)}`,
       group: 'Space',
       icon: 'resize' as const,
       aliases: ['resize', 'tile'],
@@ -136,7 +137,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     })),
     command({
       id: 'tile-split-right',
-      label: 'Split right',
+      label: 'Split Right',
       icon: 'side-by-side',
       aliases: ['split', 'tile', 'tmux', 'vertical split', '%'],
       when: (context) => windowScope(context) && actions.ready && space.panes.length < 200,
@@ -144,7 +145,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     }),
     command({
       id: 'tile-split-down',
-      label: 'Split down',
+      label: 'Split Down',
       icon: 'stacked',
       aliases: ['split', 'tile', 'tmux', 'horizontal split'],
       when: (context) => windowScope(context) && actions.ready && space.panes.length < 200,
@@ -152,7 +153,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     }),
     command({
       id: 'tile-visible',
-      label: 'Tile the planes in view',
+      label: 'Tile the Planes in View',
       icon: 'grid',
       aliases: ['tile', 'tiling', 'tmux', 'arrange'],
       when: (context) => windowScope(context) && actions.ready,
@@ -169,7 +170,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     }),
     command({
       id: 'tile-next-layout',
-      label: 'Next tiling layout',
+      label: 'Next Tiling Layout',
       icon: 'grid',
       aliases: ['layout', 'tmux', 'cycle'],
       when: tiled,
@@ -187,7 +188,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     ),
     command({
       id: 'tile-swap-next',
-      label: 'Swap with the next tile',
+      label: 'Swap with the Next Tile',
       icon: 'right',
       aliases: ['swap', 'tmux'],
       when: (context) => tiled(context) && !!tiling?.panes.includes(active()),
@@ -195,7 +196,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     }),
     command({
       id: 'tile-swap-previous',
-      label: 'Swap with the previous tile',
+      label: 'Swap with the Previous Tile',
       icon: 'left',
       aliases: ['swap', 'tmux'],
       when: (context) => tiled(context) && !!tiling?.panes.includes(active()),
@@ -203,7 +204,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     }),
     command({
       id: 'tile-promote',
-      label: 'Make this the main tile',
+      label: 'Make This the Main Tile',
       icon: 'star',
       aliases: ['main', 'promote', 'tmux'],
       when: (context) => tiled(context) && !!tiling?.panes.includes(active()),
@@ -217,7 +218,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     }),
     command({
       id: 'tile-main-grow',
-      label: 'Grow the main tile',
+      label: 'Grow the Main Tile',
       icon: 'resize',
       aliases: ['resize', 'bigger', 'tmux'],
       when: tiled,
@@ -225,7 +226,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     }),
     command({
       id: 'tile-main-shrink',
-      label: 'Shrink the main tile',
+      label: 'Shrink the Main Tile',
       icon: 'resize',
       aliases: ['resize', 'smaller', 'tmux'],
       when: tiled,
@@ -233,7 +234,7 @@ export function tilingCommands({ actions, state, windowScope }: WindowScopes): C
     }),
     command({
       id: 'untile',
-      label: 'Stop tiling',
+      label: 'Stop Tiling',
       icon: 'close',
       aliases: ['untile', 'free', 'tmux'],
       when: tiled,

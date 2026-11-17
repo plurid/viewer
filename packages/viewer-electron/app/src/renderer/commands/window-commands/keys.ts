@@ -37,7 +37,7 @@ export function keysCommands({ actions, state, windowScope }: WindowScopes): Com
   return [
     {
       id: 'plane-hints',
-      label: 'Jump to plane…',
+      label: 'Jump to Plane…',
       group: 'Plane',
       icon: 'compass',
       aliases: ['hints', 'jump', 'vimium', 'pick plane'],
@@ -46,13 +46,13 @@ export function keysCommands({ actions, state, windowScope }: WindowScopes): Com
         startPlaneHints((paneID) => activate(paneID));
       },
     },
-    direction('focus-left', 'Plane to the left', 'left', 'h'),
-    direction('focus-right', 'Plane to the right', 'right', 'l'),
-    direction('focus-up', 'Plane above', 'up', 'k'),
-    direction('focus-down', 'Plane below', 'down', 'j'),
+    direction('focus-left', 'Plane to the Left', 'left', 'h'),
+    direction('focus-right', 'Plane to the Right', 'right', 'l'),
+    direction('focus-up', 'Plane Above', 'up', 'k'),
+    direction('focus-down', 'Plane Below', 'down', 'j'),
     {
       id: 'focus-next-plane',
-      label: 'Next plane',
+      label: 'Next Plane',
       group: 'Plane',
       icon: 'right',
       aliases: ['cycle', 'other plane'],
@@ -61,7 +61,7 @@ export function keysCommands({ actions, state, windowScope }: WindowScopes): Com
     },
     {
       id: 'next-workspace',
-      label: 'Next workspace',
+      label: 'Next Workspace',
       group: 'Workspaces',
       icon: 'right',
       aliases: ['nw', 'workspace'],
@@ -70,7 +70,7 @@ export function keysCommands({ actions, state, windowScope }: WindowScopes): Com
     },
     {
       id: 'previous-workspace',
-      label: 'Previous workspace',
+      label: 'Previous Workspace',
       group: 'Workspaces',
       icon: 'left',
       aliases: ['pw', 'workspace'],
@@ -79,7 +79,7 @@ export function keysCommands({ actions, state, windowScope }: WindowScopes): Com
     },
     {
       id: 'record-macro',
-      label: macroRecording() ? 'Stop recording macro' : 'Record macro',
+      label: macroRecording() ? 'Stop Recording Macro' : 'Record Macro',
       group: 'App',
       icon: 'play',
       aliases: ['macro', 'record', 'sequence', 'q'],
@@ -95,7 +95,7 @@ export function keysCommands({ actions, state, windowScope }: WindowScopes): Com
     },
     {
       id: 'keymap-help',
-      label: 'Show key sequences',
+      label: 'Show Key Sequences',
       group: 'App',
       icon: 'command',
       aliases: ['which key', 'keymap', 'prefix', 'tmux', 'keys'],

@@ -11,8 +11,8 @@ Open a file with **Space** or as a linked plane. Everything runs on your Mac; ma
 | -------------------------------------------------------------------------------------------- | ------------------------------------ |
 | `.docx`, `.docm`, `.dotx`, `.dotm`                                                           | **Layout** and **Reading**           |
 | `.doc`, `.dot`, `.rtf`, `.odt`, `.ott`, `.fodt`                                              | **Layout**                           |
-| `.xlsx`, `.xlsm`, `.xltx`, `.xltm`                                                           | **Sheet** and **Print layout**       |
-| `.xls`, `.xlt`, `.ods`, `.ots`, `.fods`                                                      | **Print layout** with worksheet tabs |
+| `.xlsx`, `.xlsm`, `.xltx`, `.xltm`                                                           | **Sheet** and **Print Layout**       |
+| `.xls`, `.xlt`, `.ods`, `.ots`, `.fods`                                                      | **Print Layout** with worksheet tabs |
 | `.ppt`, `.pptx`, `.pptm`, `.pps`, `.ppsx`, `.pot`, `.potx`, `.potm`, `.odp`, `.otp`, `.fodp` | **Layout**, one page per slide       |
 | `.odg`, `.fodg`, `.pub`, `.emf`, `.wmf`                                                      | **Layout**, as drawing pages         |
 
@@ -25,10 +25,10 @@ Open a file with **Space** or as a linked plane. Everything runs on your Mac; ma
   (`settings.fileOpening.types`); set a type to `native` to open it in its own app.
 
 Worksheet tabs support arrow keys, **Home** and **End**. In **Sheet** they sit below the grid; **All
-worksheets** appears when the tabs overflow. **Print layout** renders only the selected sheet, with
+worksheets** appears when the tabs overflow. **Print Layout** renders only the selected sheet, with
 its supported page settings and breaks.
 
-**Save PDF copy** writes `Name.pdf` beside each selected file, laid out by the same engine; a
+**Save PDF Copy** writes `Name.pdf` beside each selected file, laid out by the same engine; a
 workbook's copy holds every worksheet. A name in use asks before replacing.
 
 ## Layout fidelity
@@ -61,7 +61,7 @@ Windows/Linux qualification is still pending.
 | Layout cache    | 128 MiB, shared; open views pin their entries                  |
 | Spare engine    | 1, started for the next document; closes after 1 minute unused |
 
-Closing or cancelling a view releases its request, and reopening can reuse cached output. Protected
+Closing or canceling a view releases its request, and reopening can reuse cached output. Protected
 files and unsupported content may need another application.
 
 ## Reading and saved cells
@@ -71,10 +71,10 @@ images. It omits full pagination, floating placement, headers, footnotes and som
 features. Unsupported images have placeholders.
 
 XLSX Sheet shows original row/column addresses and saved values. Select a cell to inspect its value,
-format and saved formula. **More → Stored values** switches from supported number/date formats to
-raw values; **Formatted values** switches back. Missing cached values are identified. The reader
+format and saved formula. **More → Stored Values** switches from supported number/date formats to
+raw values; **Formatted Values** switches back. Missing cached values are identified. The reader
 does not evaluate formulas or follow external data. Calc may recalculate supported formulas in Print
-layout, so the two views can show different values.
+Layout, so the two views can show different values.
 
 Focus the grid and use arrow keys to inspect cells; Tab leaves the grid instead of visiting every
 cell. Page Up/Down moves by the visible page and loads another bounded page when needed. Home/End
@@ -97,7 +97,7 @@ range beside **Copy** and the active cell's saved value. Escape collapses a mult
 active cell. With a single cell selected, Escape continues the normal preview-close behavior.
 
 Choose **Copy** or press Control/Command + C while the grid has focus. The clipboard receives
-tab-separated values using the current **Formatted values** or **Stored values** setting. Fields
+tab-separated values using the current **Formatted Values** or **Stored Values** setting. Fields
 containing tabs, line breaks or quotes are quoted, with embedded quotes doubled. Blank cells and
 source row/column gaps remain empty fields. Merged values appear only in the upper-left cell of
 their range. Formulas are never evaluated or copied in place of values; formulas without cached

@@ -47,6 +47,7 @@ import { printedSize, sourcePieces } from './sources';
 import type { LayoutPiece, LayoutSource } from './sources';
 import type { LayoutSettings, PageSetup, PlannedMode } from './settings';
 import { baseName, parentPath } from '../workspaces/planes';
+import { plural } from '../plural';
 
 export interface LayoutResult {
   plan: LayoutTransform;
@@ -181,8 +182,6 @@ const page = (size: Size, setup: PageSetup, items: LayoutItem[]): LayoutPage => 
   items,
 });
 const percent = (value: number) => `${Math.round(value * 100)}%`;
-const plural = (count: number, one: string, many = one + 's') =>
-  `${count.toLocaleString('en-US')} ${count === 1 ? one : many}`;
 /** The most common size, near enough, of a list of sizes. */
 function typicalSize(sizes: readonly Size[]): Size {
   const counts = new Map<string, { size: Size; count: number }>();

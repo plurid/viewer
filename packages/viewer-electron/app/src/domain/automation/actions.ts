@@ -87,7 +87,7 @@ export function actionValues(inputs: readonly ActionInput[], supplied: ActionVal
       const value =
         supplied[input.name] ?? input.initial ?? (input.kind === 'boolean' ? 'false' : '');
       if (typeof value !== 'string' || value.includes('\0') || value.length > 4000)
-        throw new Error(`Enter a bounded value for ${input.label}.`);
+        throw new Error(`${input.label} must be text of at most 4,000 characters.`);
       if (input.required && !value.trim()) throw new Error(`${input.label} is required.`);
       if (value && input.kind === 'number' && !Number.isFinite(Number(value)))
         throw new Error(`${input.label} must be a number.`);

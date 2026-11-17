@@ -4,6 +4,8 @@ import { Dialog, Loading } from '../primitives';
 import { setOperationsOpen } from '../../state/store';
 import { transformDescription } from '../../../domain/operations/transforms';
 import { sendWindowEvent, useWindowEvent } from '../../app/window-events';
+import { plural } from '../../../domain/plural';
+import { operationLabel } from '../status-labels';
 export function reviewOperationPlan(plan: OperationPlan) {
   sendWindowEvent('viewer:operation-plan', plan);
 }
@@ -64,8 +66,8 @@ export function OperationReviewControls() {
       >
         <div className="dialog-body operation-review-body">
           <p className="muted">
-            {selected.length} of {plan.rows.length} changes selected. Source versions and folder
-            permissions are checked again before the queued operations start.
+            {selected.length} of {plural(plan.rows.length, 'change')} selected. Viewer checks each
+            file and folder again before it starts.
           </p>
           <div className="settings-actions">
             <button
@@ -75,7 +77,7 @@ export function OperationReviewControls() {
                 setPlan({ ...plan, rows: plan.rows.map((row) => ({ ...row, approved: true })) })
               }
             >
-              Select all changes
+              Select All
             </button>
             <button
               type="button"
@@ -84,7 +86,7 @@ export function OperationReviewControls() {
                 setPlan({ ...plan, rows: plan.rows.map((row) => ({ ...row, approved: false })) })
               }
             >
-              Clear selection
+              Deselect All
             </button>
           </div>
           {plan.rows.slice(start, start + 100).map((row) => (
@@ -98,7 +100,7 @@ export function OperationReviewControls() {
               />
               <div>
                 <strong>
-                  {row.kind} {row.source?.split('/').pop() ?? row.name}
+                  {operationLabel(row.kind)} “{row.source?.split('/').pop() ?? row.name}”
                 </strong>
                 <span className="muted">{row.source}</span>
                 {row.sources?.slice(1).map((source) => (
@@ -158,11 +160,8 @@ export function OperationReviewControls() {
               onChange={(event) => setCheckpoint(event.target.checked)}
             />
             <span>
-              Save a content checkpoint first
-              <small>
-                Files and mode within the configured retention budget. Existing destination contents
-                are included for copy plans.
-              </small>
+              Keep a copy of the originals first
+              <small>Keeps contents and permissions. A copy also keeps what it replaces.</small>
             </span>
           </label>
           {error && (
@@ -181,7 +180,7 @@ export function OperationReviewControls() {
             type="submit"
             disabled={busy || !selected.length || plan.status !== 'review'}
           >
-            Apply {selected.length} {selected.length === 1 ? 'change' : 'changes'}
+            Apply {plural(selected.length, 'Change')}
           </button>
         </footer>
       </form>

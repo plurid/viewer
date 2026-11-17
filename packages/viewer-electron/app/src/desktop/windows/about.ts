@@ -31,7 +31,7 @@ export function installAboutPanel(release: InstalledRelease, line?: string): voi
     copyright: applicationCopyright,
     credits: [
       line,
-      'Viewer is built with Electron, React and other open-source software. Choose Viewer > Acknowledgements for their licenses.',
+      'Viewer is built with Electron, React and other open-source software. Choose Viewer > Acknowledgments for their licenses.',
     ]
       .filter(Boolean)
       .join('\n\n'),

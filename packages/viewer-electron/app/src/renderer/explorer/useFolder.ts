@@ -53,6 +53,12 @@ function notify(value: Subscription) {
   value.listeners.forEach((listener) => listener());
 }
 const gone = (code?: string) => ['ENOENT', 'ENOTDIR', 'ENODEV', 'ENXIO'].includes(code ?? '');
+/** A failed watch as people read it: revoked access says what to do; a system error's text, such
+ * as too many open files, means nothing to them. The error bar's Try Again watches again. */
+const watchProblem = (message: string, code?: string) =>
+  needsFolderAccess(code)
+    ? `This folder won't update by itself. ${message}`
+    : "This folder won't update by itself: Viewer can't watch it for changes.";
 function load(path: string): void {
   const value = dataset(path);
   if (value.request) {
@@ -128,11 +134,14 @@ export function useFolder(path: string) {
             })
             .catch((error) => {
               watchFailed = true;
-              value.watchError = { message: String(error.message), code: error.code };
+              value.watchError = {
+                message: watchProblem(String(error.message), error.code),
+                code: error.code,
+              };
               if (!stopped) {
                 value.state = {
                   ...value.state,
-                  error: String(error.message),
+                  error: value.watchError.message,
                   errorCode: error.code,
                 };
                 notify(value);
@@ -167,10 +176,8 @@ export function useFolder(path: string) {
           }
           if (event.type === 'watch-error' && event.path === path) {
             watchFailed = true;
-            value.watchError = {
-              message: `Folder watching is unavailable: ${event.message}`,
-              code: event.code ?? value.state.errorCode,
-            };
+            const code = event.code ?? value.state.errorCode;
+            value.watchError = { message: watchProblem(event.message, code), code };
             value.state = {
               ...value.state,
               error: value.watchError.message,

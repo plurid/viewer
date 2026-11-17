@@ -81,13 +81,13 @@ export const Transcript = memo(function Transcript({
             setSelection(undefined);
           }}
         >
-          Ask about selection
+          Ask About Selection
         </button>
       )}
       {!messages.length && !running && (
         <div className="chat-empty">
           <strong>Ask about your files</strong>
-          <p>Ask about the attached files. Proposed changes appear for your review.</p>
+          <p>Ask about the attached files. Viewer shows any change for your review first.</p>
         </div>
       )}
       {messages.map((message) =>
@@ -101,7 +101,7 @@ export const Transcript = memo(function Transcript({
             <pre>{message.text}</pre>
             {message.links?.map((link) => (
               <button key={link.path} onClick={() => onOpen?.(link.path)}>
-                Open current file: {link.path.split('/').at(-1)}
+                Open “{link.path.split('/').at(-1)}”
               </button>
             ))}
           </Disclosure>
@@ -116,7 +116,7 @@ export const Transcript = memo(function Transcript({
             <p data-chat-text={message.id}>{message.text}</p>
             {onQuote && !!message.text.length && (
               <button
-                aria-label="Branch from this message"
+                aria-label="Ask about this message"
                 onClick={() =>
                   onQuote({
                     messageID: message.id,
@@ -125,7 +125,7 @@ export const Transcript = memo(function Transcript({
                   })
                 }
               >
-                Ask about this…
+                Ask About This…
               </button>
             )}
             {!!message.links?.length && (
@@ -141,7 +141,7 @@ export const Transcript = memo(function Transcript({
             )}
             {message.proposal && (
               <button type="button" onClick={() => onReview(message.proposal!)}>
-                Review proposal
+                Review Changes
               </button>
             )}
           </article>

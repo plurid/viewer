@@ -2,7 +2,7 @@ import { sameCapturedItem } from '../../domain/files/entries';
 import { useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import { renamedSibling } from '../../domain/previews/recovery';
-import { NameDialog } from '../ui/primitives';
+import { NameDialog, tryAgainLabel } from '../ui/primitives';
 
 export function PreviewRecovery({
   path,
@@ -24,8 +24,8 @@ export function PreviewRecovery({
     <div className="preview-recovery" role="status">
       {detail && <span>{detail} This view keeps the last loaded version.</span>}
       <div className="preview-recovery-actions">
-        <button onClick={retry}>Check again</button>
-        {locate && <button onClick={() => setChoosing(true)}>Locate file…</button>}
+        <button onClick={retry}>{tryAgainLabel}</button>
+        {locate && <button onClick={() => setChoosing(true)}>Locate File…</button>}
         {locate && entry?.identity && (
           <button
             disabled={busy}
@@ -38,18 +38,18 @@ export function PreviewRecovery({
                   const found = renamedSibling(entry, listing.entries);
                   if (!found)
                     throw new Error(
-                      'No unique renamed file was found in this folder. Use Locate file to choose its new path.',
+                      'Viewer found no single renamed file in this folder. Use Locate File… to choose it.',
                     );
                   const latest = await window.viewer.stat(found.path);
                   if (!sameCapturedItem(latest, entry))
-                    throw new Error('The found file changed. Check again.');
+                    throw new Error('The file changed as Viewer found it. Try again.');
                   await locate(latest);
                 })
                 .catch((error) => setProblem(String(error.message || error)))
                 .finally(() => setBusy(false));
             }}
           >
-            Find renamed file
+            Find Renamed File
           </button>
         )}
       </div>
@@ -60,7 +60,7 @@ export function PreviewRecovery({
       )}
       {choosing && locate && (
         <NameDialog
-          title="Locate file"
+          title="Locate File"
           label="File path"
           initial={path}
           maxLength={32768}
@@ -68,7 +68,7 @@ export function PreviewRecovery({
           onClose={() => setChoosing(false)}
           onSubmit={async (file) => {
             const target = await window.viewer.stat(file);
-            if (target.kind !== 'file') throw new Error('Choose a regular file.');
+            if (target.kind !== 'file') throw new Error('Choose a file, not a folder or alias.');
             await locate(target);
           }}
         />

@@ -100,6 +100,29 @@ function clip(value: string): string {
 }
 
 type RecipeQuote = "'" | '"' | '`';
+function recipeAttributes(line: string): string[] | undefined {
+  if (!line.startsWith('[')) return;
+  let quote: RecipeQuote | undefined;
+  let start = 1;
+  const attributes: string[] = [];
+  for (let index = 1; index < line.length; index++) {
+    const character = line[index]!;
+    if (character === '\\') {
+      index++;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = undefined;
+    } else if (character === "'" || character === '"' || character === '`') quote = character;
+    else if (character === ',' || character === ']') {
+      attributes.push(line.slice(start, index).trim());
+      start = index + 1;
+      if (character === ']')
+        return /^\s*(?:#.*)?$/.test(line.slice(start)) ? attributes : undefined;
+    }
+  }
+}
+
 function recipeHeader(line: string): { name: string; parameters: string[] } | undefined {
   let quote: RecipeQuote | undefined;
   let word = '';
@@ -208,10 +231,12 @@ export function parseDeclaredCommands(
     const platforms = new Set<string>();
     for (let index = 0; index < lines.length; index++) {
       const line = lines[index]!;
-      const attribute = /^\[([^\]]*)\]\s*(?:#.*)?$/.exec(line)?.[1]?.trim();
-      if (attribute !== undefined) {
-        privateRecipe ||= /^(?:private|confirm)(?:\b|\()/.test(attribute);
-        if (Object.hasOwn(recipePlatforms, attribute)) platforms.add(attribute);
+      const attributes = recipeAttributes(line);
+      if (attributes) {
+        for (const attribute of attributes) {
+          privateRecipe ||= /^(?:private|confirm)(?:\b|\()/.test(attribute);
+          if (Object.hasOwn(recipePlatforms, attribute)) platforms.add(attribute);
+        }
         continue;
       }
       if (!line || line.startsWith('#') || /^\s/.test(line)) continue;
@@ -271,15 +296,23 @@ export function parseDeclaredCommands(
     if (!line || /^[\s.#]/.test(line)) continue;
     const match = /^([^:]+)(?:::(?![:=])|:(?![=:]))/.exec(line);
     if (!match || /[=$%\\]/.test(match[1]!)) continue;
+    const tail = line.slice(match[0].length);
+    let semicolon = -1;
+    for (let index = 0; index < tail.length; index++) {
+      if (tail[index] === '\\') index++;
+      else if (tail[index] === ';') {
+        semicolon = index;
+        break;
+      }
+    }
+    const prerequisites = semicolon < 0 ? tail : tail.slice(0, semicolon);
     if (
-      /^\s*(?:(?:private|override|export|unexport)\s+)*[^ \t:=]+[ \t]*[:+?!]*=/.test(
-        line.slice(match[0].length),
-      )
+      /^\s*(?:(?:private|override|export|unexport)\s+)*[^ \t:=]+[ \t]*[:+?!]*=/.test(prerequisites)
     )
       continue;
     const names = match[1]!.trim().split(/\s+/);
     if (!names.every((name) => declaredCommandName(name) && !name.startsWith('.'))) continue;
-    const bodies: string[] = [];
+    const bodies: string[] = semicolon < 0 ? [] : [tail.slice(semicolon + 1).trimStart()];
     for (let next = index + 1; next < lines.length && /^\t/.test(lines[next]!); next++) {
       const body = lines[next]!.replace(/^[ \t]+/, '');
       if (body.trim()) bodies.push(body);

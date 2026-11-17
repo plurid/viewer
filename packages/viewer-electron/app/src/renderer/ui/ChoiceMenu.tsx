@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ResolvedCommand } from '../commands/registry';
+import type { IconName } from './Icon';
 import { ContextMenuResults } from './ContextMenuResults';
-import { Icon, type IconName } from './Icon';
+import { Icon } from './Icon';
 import { layerContainer, useAnchoredLayer } from './Popover';
 
 export interface Choice {
@@ -13,11 +14,16 @@ export interface Choice {
   aliases?: readonly string[];
 }
 
+/** A label as it reads inside a sentence: “Speech language” becomes “speech language”; “PDF zoom” stays. */
+const inSentence = (label: string) =>
+  /^\p{Lu}\p{Lu}/u.test(label) ? label : label.charAt(0).toLocaleLowerCase() + label.slice(1);
+
 /**
- * Choices use the searchable menu: the context menu's keyboard-first search over a
- * list of values, the current one checked, in place of a native dropdown. Its end lines up with
- * the button's, it shows about five rows and scrolls the rest, and inside a modal dialog it opens
- * in that dialog's top layer. Not a command: nothing here reaches the command catalog or agents.
+ * Choices share the context menu's list, the current value checked and active. Up to eight are
+ * just the list, with type-ahead, as a native menu; more get a search field. Its end lines up
+ * with the button's, below or above it, never over it, so a second press reaches the button.
+ * Inside a modal dialog it opens in that dialog's top layer. Nothing here reaches the command
+ * catalog or agents.
  */
 export function ChoiceMenu({
   label,
@@ -38,7 +44,7 @@ export function ChoiceMenu({
   onChoose(value: string): void;
   onClose(): void;
 }) {
-  // under the button, its end lined up with the button's, or above it when the window ends first
+  // beside the button, under it or above it but never over it, its end lined up with the button's
   const layer = useAnchoredLayer({
     anchor,
     align: 'end',
@@ -49,7 +55,7 @@ export function ChoiceMenu({
     id: 'choice:' + choice.value,
     label: choice.label,
     detail: choice.detail,
-    // no group: the search field already names the choice, a heading would repeat it
+    // no group: the button already names the choice, a heading would repeat it
     group: '',
     icon: choice.value === value ? 'check' : undefined,
     aliases: [choice.value, ...(choice.aliases ?? [])],
@@ -68,7 +74,10 @@ export function ChoiceMenu({
       onKeyDown={(event) => {
         layer.onKeyDown(event);
         event.stopPropagation();
-        if (event.key === 'Tab') onClose();
+        if (event.key === 'Tab') {
+          event.preventDefault();
+          onClose();
+        }
       }}
     >
       <ContextMenuResults
@@ -76,7 +85,12 @@ export function ChoiceMenu({
         recent={[]}
         focused
         blankIcons
-        searchLabel={label}
+        searchable={choices.length > 8}
+        searchLabel={inSentence(label)}
+        listLabel={label}
+        empty="No matching choices"
+        none="No choices"
+        currentID={'choice:' + value}
         onClose={onClose}
         onSelect={(command) => {
           onClose();
@@ -88,7 +102,7 @@ export function ChoiceMenu({
   );
 }
 
-/** A button naming the current choice, which opens its searchable menu below it. */
+/** A button naming the current choice: a press opens its menu, the next press closes it. */
 export function ChoiceButton({
   label,
   value,
@@ -111,6 +125,7 @@ export function ChoiceButton({
 }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
+  const id = useId();
   const current = choices.find((choice) => choice.value === value);
   const show = () => setOpen(true);
   return (
@@ -119,6 +134,10 @@ export function ChoiceButton({
         ref={button}
         type="button"
         className={'choice-button' + (className ? ' ' + className : '')}
+        // Named by its label, then the choice it shows, “Image output format WebP”, so a voice
+        // command can say the words it shows: naming itself first reads its `aria-label`.
+        id={id}
+        aria-labelledby={`${id} ${id}-value`}
         aria-label={label}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -137,7 +156,7 @@ export function ChoiceButton({
         }}
       >
         {icon && <Icon name={icon} size={15} />}
-        <span className={current ? undefined : 'choice-placeholder'}>
+        <span id={`${id}-value`} className={current ? undefined : 'choice-placeholder'}>
           {current?.label ?? placeholder ?? value}
         </span>
         <Icon name="down" size={10} />

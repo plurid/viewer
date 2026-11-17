@@ -145,9 +145,9 @@ try {
   assert.equal(opened.definition.id, definition.id);
   checks.push('Project file read, root/child restoration and dormant imported terminal.');
   await evaluate(pageCall(dispatch, 'viewer:notes', 'preview'));
-  await dialog('Plane notes');
+  await dialog('Plane Notes');
   await evaluate(pageCall(typeNote, 'Generated durable note.'));
-  await click('Save notes');
+  await click('Save Notes');
   await evaluate(pageCall(dispatch, 'viewer:project', 'save'));
   await until(
     async () =>
@@ -165,7 +165,7 @@ try {
     'Rendered note editor, explicit save, portable parent/docking export and comment preservation.',
   );
   await evaluate(pageCall(dispatch, 'viewer:inspect', file));
-  await dialog('Inspect file');
+  await dialog('Inspect File');
   await until(
     () => evaluate(textOf('dialog .inspection-facts')),
     (value) => value.toLowerCase().includes('bytes'),
@@ -193,12 +193,12 @@ try {
     await writeFile(path.join(evidenceDirectory, name + '.png'), Buffer.from(shot.data, 'base64'));
   };
   await evaluate(pageCall(dispatch, 'viewer:project', 'arrangements'));
-  await dialog('Saved arrangements');
+  await dialog('Saved Arrangements');
   await capture('arrangements');
   await click('Done');
   await evaluate(patchSettings({ path: 'settings.appearance', value: 'light' }));
   await evaluate(pageCall(dispatch, 'viewer:notes', 'preview'));
-  await dialog('Plane notes');
+  await dialog('Plane Notes');
   await capture('notes-light');
   await click('Cancel');
   await connection.command('Emulation.setDeviceMetricsOverride', {
@@ -208,7 +208,7 @@ try {
     mobile: false,
   });
   await evaluate(pageCall(dispatch, 'viewer:project', 'arrangements'));
-  await dialog('Saved arrangements');
+  await dialog('Saved Arrangements');
   await capture('arrangements-compact-light');
   await click('Done');
   await connection.command('Emulation.clearDeviceMetricsOverride');
@@ -227,7 +227,7 @@ try {
   await capture('project-file-notice');
   await evaluate(clickElement('.project-file-notice button'));
   await dialog('Reload project?');
-  await click('Reload project');
+  await click('Reload Project');
   await until(
     () =>
       evaluate(
@@ -255,7 +255,7 @@ try {
   evaluate = connection.evaluate;
   await until(() => evaluate(countOf('.folder-explorer')), Boolean, 'cold project');
   await evaluate(pageCall(dispatch, 'viewer:notes', 'preview'));
-  await dialog('Plane notes');
+  await dialog('Plane Notes');
   assert.equal(
     await evaluate(
       pageCall(() => document.querySelector<HTMLTextAreaElement>('dialog textarea')!.value),

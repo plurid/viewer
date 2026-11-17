@@ -3,6 +3,7 @@ import type { FileRelation, RelationshipsResult } from '../../../domain/files/re
 import { sameSourceVersion } from '../../../domain/files/inspection';
 import { useWorkspace } from '../../workspace/context';
 import { Dialog, Loading, PathField } from '../primitives';
+import { PathLabel } from '../PathLabel';
 import { Disclosure } from '../Disclosure';
 import { RelationshipMap } from './RelationshipMap';
 import { relationshipBasis as basis } from './relationship-labels';
@@ -43,7 +44,8 @@ export function RelationshipControls() {
     void window.viewer
       .relationships({ kind: 'read', file, content })
       .then((value) => {
-        if (!value || !('relations' in value)) throw new Error('Related files are unavailable.');
+        if (!value || !('relations' in value))
+          throw new Error('Viewer couldn’t read this file’s related files.');
         if (alive) setResult(value);
       })
       .catch((error) => {
@@ -76,12 +78,12 @@ export function RelationshipControls() {
   const currentFiles = new Map(result?.files.map((file) => [file.path, file]) ?? []);
   const status = (node: FileRelation['from']) => {
     const current = currentFiles.get(node.path);
-    if (!current || current.status === 'unavailable') return 'Unavailable';
+    if (!current || current.status === 'unavailable') return 'Missing';
     return !node.version || !current.version
-      ? 'Current version unverified'
+      ? 'Not checked'
       : sameSourceVersion(node.version, current.version)
         ? 'Metadata unchanged'
-        : 'Changed since record';
+        : 'Changed since';
   };
   const open = async (path: string) => {
     await workspace.openPath(path, { paneID: origin, linked: !!origin });
@@ -90,7 +92,7 @@ export function RelationshipControls() {
   return (
     <Dialog
       wide
-      title="Related files"
+      title="Related Files"
       className="relationships-dialog"
       onClose={() => !busy && setFile(undefined)}
     >
@@ -128,7 +130,7 @@ export function RelationshipControls() {
         {result && (
           <>
             {!result.relations.length && (
-              <p className="muted">No retained relationships for this file.</p>
+              <p className="muted">No related files recorded for this file.</p>
             )}
             {result.reasons.map((reason) => (
               <p className="muted" key={reason}>
@@ -152,19 +154,21 @@ export function RelationshipControls() {
                             {index === 0 ? 'From: ' : 'To: '}
                             {filename(node.path)}
                           </button>
-                          <small className="muted">{node.path}</small>
+                          <small className="muted">
+                            <PathLabel path={node.path} />
+                          </small>
                           <small
                             className={
-                              status(node) === 'Changed since record' ? 'inline-warning' : 'muted'
+                              status(node) === 'Changed since' ? 'inline-warning' : 'muted'
                             }
                           >
                             {status(node)}
                           </small>
                           <button
-                            disabled={busy || status(node) === 'Unavailable'}
+                            disabled={busy || status(node) === 'Missing'}
                             onClick={() => void perform(() => open(node.path))}
                           >
-                            Open in plane
+                            Open in Plane
                           </button>
                         </div>
                       ))}
@@ -183,7 +187,7 @@ export function RelationshipControls() {
                           })
                         }
                       >
-                        Remove note
+                        Remove Note
                       </button>
                     )}
                   </div>
@@ -245,7 +249,7 @@ export function RelationshipControls() {
               />
             </label>
             <button type="submit" disabled={busy || !target.trim() || !note.trim()}>
-              Save relationship note
+              Save Note
             </button>
           </form>
         </Disclosure>

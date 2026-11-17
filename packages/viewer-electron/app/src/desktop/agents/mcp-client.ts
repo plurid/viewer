@@ -38,7 +38,7 @@ export async function runMCPClient(
   }
   if (!connection)
     throw new Error(
-      'Viewer’s agent connection is unavailable. Open Viewer and approve agent access in Settings → Agents.',
+      'Can’t connect to Viewer. Open Viewer and allow agent access in Settings → Agents.',
     );
   // a closed connection is never retried: its socket is gone or going
   if (connection.closed)

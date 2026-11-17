@@ -214,7 +214,7 @@ async function session(restart: boolean) {
     await evaluate(click('.optimization-target-toggle input'));
     await input('Target size', '300');
     await input('Optimization recipe name', 'Images under 300 kB');
-    await press('Save recipe');
+    await press('Save Recipe');
     await until(
       () => evaluate(textOf('.optimization-recipes summary')),
       (text) => text.includes('Images under 300 kB'),

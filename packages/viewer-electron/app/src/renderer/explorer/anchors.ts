@@ -40,5 +40,5 @@ export function useFileReveal(
 }
 export async function revealFile(owner: string, path: string): Promise<string> {
   for (const reveal of views.get(owner) || []) if (await reveal(path)) return fileSelector(path);
-  throw new Error('The originating file is no longer visible in this view.');
+  throw new Error('That file is no longer shown in this view.');
 }

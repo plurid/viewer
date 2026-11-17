@@ -58,7 +58,7 @@ export function BrowserColumn({
         aria-valuemin={160}
         aria-valuemax={1600}
         aria-valuenow={preferences.columnWidth}
-        title="Drag to resize; Option resizes all columns; double-click to fit names"
+        title="Drag to resize, ⌥-drag to resize all columns, double-click to fit names"
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={(event) => {
           const column = element.current!;

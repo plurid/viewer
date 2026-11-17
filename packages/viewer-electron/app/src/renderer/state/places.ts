@@ -118,7 +118,11 @@ export function undoClearRecentFolders(): void {
 }
 
 export function offerToForgetFolder(path: string): void {
-  report(new Error('This folder is no longer available. You can forget it from folder history.'));
+  report(
+    new Error(
+      'This folder was moved or deleted. Choose Forget Folder to remove it from your history.',
+    ),
+  );
   update({ ...getState(), unavailableFolder: path });
 }
 

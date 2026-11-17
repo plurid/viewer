@@ -162,7 +162,7 @@ describe('existing worktree picker', () => {
       'Review images',
     );
     expect(close).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Finish task setup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Finish Task Setup' }));
     await waitFor(() => expect(close).toHaveBeenCalledOnce());
     expect(api.mock.calls.filter(([request]) => request.kind === 'create')).toHaveLength(1);
     expect(newTask).toHaveBeenCalledOnce();
@@ -194,8 +194,8 @@ describe('existing worktree picker', () => {
         : previous(request),
     );
     mount();
-    await screen.findByRole('button', { name: 'Create worktree…' });
-    fireEvent.click(screen.getByRole('button', { name: 'Create worktree…' }));
+    await screen.findByRole('button', { name: 'Create Worktree…' });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Worktree…' }));
     fireEvent.change(screen.getByLabelText('New branch name'), {
       target: { value: 'invalid branch' },
     });
@@ -203,7 +203,7 @@ describe('existing worktree picker', () => {
       screen.getByText('Remove spaces or unsupported symbols; for example, feature/my-task.'),
     ).toBeTruthy();
     expect(
-      (screen.getByRole('button', { name: 'Create and open' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Create and Open' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     fireEvent.change(screen.getByLabelText('New branch name'), {
       target: { value: 'feature/fast' },
@@ -214,7 +214,7 @@ describe('existing worktree picker', () => {
     fireEvent.change(screen.getByLabelText('Worktree destination'), {
       target: { value: '/fixture/custom-destination' },
     });
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create and open' })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create and Open' })));
     expect(api).toHaveBeenCalledWith({
       kind: 'create',
       catalogID: catalog.id,
@@ -230,14 +230,14 @@ describe('existing worktree picker', () => {
     mount();
     await act(async () => {});
     expect(screen.getByRole('option', { name: /main.*Current checkout/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Show existing plane' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Another view beside' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show Existing Plane' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Another View Beside' })).toBeTruthy();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Find worktree' }), {
       target: { value: 'feature' },
     });
     expect(screen.getAllByRole('option')).toHaveLength(1);
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Clean'));
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open beside' })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open Beside' })));
     expect(open).toHaveBeenCalledWith(
       target,
       { catalogID: catalog.id, worktreeID: catalog.worktrees[1]!.id },
@@ -249,10 +249,10 @@ describe('existing worktree picker', () => {
   it('keeps unavailable checkout selection inspectable while refusing to open it', async () => {
     mount();
     await act(async () => {});
-    fireEvent.click(screen.getByRole('option', { name: /missing.*Unavailable/ }));
+    fireEvent.click(screen.getByRole('option', { name: /missing.*Can’t open/ }));
     expect(screen.getByText('This checkout is missing.')).toBeTruthy();
     expect(
-      (screen.getByRole('button', { name: 'Open beside' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Open Beside' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(open).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Find worktree' }), {
@@ -266,7 +266,7 @@ describe('existing worktree picker', () => {
     const view = mount();
     await act(async () => {});
     fireEvent.click(screen.getByRole('option', { name: /feature.*Checkout/ }));
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open beside' })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open Beside' })));
     expect(screen.getByRole('alert').textContent).toContain('registration changed');
     expect(close).not.toHaveBeenCalled();
     view.unmount();

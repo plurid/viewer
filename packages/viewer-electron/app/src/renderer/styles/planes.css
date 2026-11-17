@@ -147,6 +147,9 @@
   gap: 4px;
   border: none;
   min-height: 0;
+  height: 28px;
+  flex: 0 0 auto;
+  overflow: visible;
   white-space: nowrap;
 }
 .plane-module-controls .preview-toolbar > * {

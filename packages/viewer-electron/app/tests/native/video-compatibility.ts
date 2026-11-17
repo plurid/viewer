@@ -97,7 +97,7 @@ function compatiblePicture() {
       !!v &&
       v.readyState >= 2 &&
       v.videoWidth > 0 &&
-      document.querySelector('.quick-preview')!.textContent.includes('Compatibility copy') &&
+      document.querySelector('.quick-preview')!.textContent.includes('Playing a 720p copy') &&
       !document.querySelector('.media-loading'),
     width: v?.videoWidth ?? 0,
     height: v?.videoHeight ?? 0,
@@ -277,7 +277,7 @@ try {
   await preview(path.join(files, 'Broken.mkv'));
   await until(
     () => evaluate(textOf('.quick-preview .empty-state')),
-    (text) => text.includes('Compatibility preview unavailable'),
+    (text) => text.includes("Can't convert this video to play here"),
     'corrupt video refusal',
   );
   await capture('video-invalid');

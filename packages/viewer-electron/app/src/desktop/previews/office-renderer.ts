@@ -134,7 +134,7 @@ class OfficeEngine {
       this.fail(
         new Error(
           outer.aborted
-            ? 'Office layout preview cancelled.'
+            ? 'The Office layout preview was canceled.'
             : 'Office layout exceeded 45 seconds. Try Reading or Sheet view, or retry the layout.',
         ),
       );

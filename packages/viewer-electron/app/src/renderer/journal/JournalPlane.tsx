@@ -32,6 +32,7 @@ import { JournalSession } from './session';
 import { JournalEvents, journalPlaneName } from './JournalEvents';
 import { EventDetails } from './EventDetails';
 import { ExportDialog } from './ExportDialog';
+import { plural } from '../../domain/plural';
 import './journal.css';
 
 const presets: { value: string; label: string; filter: JournalFilter }[] = [
@@ -261,7 +262,7 @@ export default function JournalPlane({ pane, active }: { pane: Pane; active: boo
           {following
             ? 'Following live'
             : snapshot.unseen
-              ? `${snapshot.unseen} new · Show latest`
+              ? `${snapshot.unseen} new · Show Latest`
               : 'Paused · Resume'}
         </button>
         <button
@@ -335,14 +336,14 @@ export default function JournalPlane({ pane, active }: { pane: Pane; active: boo
       {page && (page.status.state !== 'ready' || page.status.dropped > 0) && (
         <p className="journal-notice" role="status">
           {page.status.state === 'full'
-            ? 'Journal is full. Export events, then move history to the Trash to continue recording. '
+            ? 'Journal is full. Export its events, then move its history to the Trash to record again. '
             : page.status.state === 'unavailable'
-              ? 'Recording is unavailable. Existing history is preserved; actions still work. '
+              ? 'Journal can’t record right now. Its history is kept, and everything else works. '
               : page.status.state === 'clearing'
-                ? 'Waiting for the history decision. '
+                ? 'Waiting for your choice about the history. '
                 : ''}
           {page.status.dropped > 0
-            ? `${page.status.dropped.toLocaleString()} events were not recorded this session.`
+            ? `${plural(page.status.dropped, 'event')} ${page.status.dropped === 1 ? 'wasn’t' : 'weren’t'} recorded this session.`
             : ''}
         </p>
       )}
@@ -378,7 +379,7 @@ export default function JournalPlane({ pane, active }: { pane: Pane; active: boo
                 void session.older();
               }}
             >
-              Load older events
+              Load Older Events
             </button>
           )}
         </div>
@@ -400,10 +401,9 @@ export default function JournalPlane({ pane, active }: { pane: Pane; active: boo
       <footer className="journal-footer">
         <span aria-live="polite">
           {page
-            ? `${page.records.length.toLocaleString()} of ${page.matched.toLocaleString()} events`
+            ? `${page.records.length.toLocaleString()} of ${plural(page.matched, 'event')}`
             : 'Opening local history'}
         </span>
-        <span>Local only · No file contents or credentials</span>
         <button
           type="button"
           disabled={busy || !page || page.status.state === 'clearing'}
@@ -416,13 +416,13 @@ export default function JournalPlane({ pane, active }: { pane: Pane; active: boo
             });
           }}
         >
-          Move history to Trash…
+          Move History to Trash…
         </button>
       </footer>
       {preview && <ExportDialog preview={preview} onClose={() => setPreview(undefined)} />}
       {naming && (
         <NameDialog
-          title="Save Journal filters"
+          title="Save Journal Filters"
           action="Save"
           maxLength={80}
           onClose={() => setNaming(false)}

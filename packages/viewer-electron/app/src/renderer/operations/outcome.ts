@@ -2,7 +2,7 @@ import { settledJob } from '../state/jobs';
 
 export class OperationCancelled extends Error {
   constructor() {
-    super('The file operation was cancelled.');
+    super('The file operation was canceled.');
   }
 }
 

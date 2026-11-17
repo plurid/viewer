@@ -38,5 +38,32 @@ export function useTitlebar(visible: boolean) {
     };
     later();
   }, []);
+  // Dragging the window by its bar is the system's move: the page sees no pointer events, so the
+  // bar's own pointerleave never comes after a drop (onto another display, say) and the bar stayed.
+  // While revealed, any movement outside the bar, leaving the window or losing focus hides it.
+  useEffect(() => {
+    if (state !== 'revealed') return;
+    // one countdown per departure: restarting it on every move would hide the bar only once the
+    // pointer stopped
+    let leaving = false;
+    const away = () => {
+      if (leaving) return;
+      leaving = true;
+      conceal();
+    };
+    const outside = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('.app-titlebar, .titlebar-reveal')) leaving = false;
+      else away();
+    };
+    document.addEventListener('pointermove', outside, true);
+    document.documentElement.addEventListener('pointerleave', away);
+    window.addEventListener('blur', away);
+    return () => {
+      document.removeEventListener('pointermove', outside, true);
+      document.documentElement.removeEventListener('pointerleave', away);
+      window.removeEventListener('blur', away);
+    };
+  }, [state, conceal]);
   return { state, reveal, conceal };
 }

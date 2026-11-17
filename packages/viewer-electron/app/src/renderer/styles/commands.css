@@ -249,8 +249,12 @@
   flex-shrink: 0;
   color: var(--muted);
 }
-/* A choice menu shows about five rows and scrolls the rest. */
+/* A choice list of up to eight shows every row, as a native menu does; a searchable one shows
+   about five rows and scrolls the rest. Either way it scrolls within the room beside its button. */
 .choice-menu .command-results {
+  max-height: calc(34px * 8 + 10px);
+}
+.choice-menu .command-search-field + .command-results {
   max-height: calc(34px * 5.5 + 10px);
 }
 .choice-menu .command-result-text small {

@@ -757,6 +757,11 @@
   overflow-wrap: anywhere;
   margin: 0;
 }
+/* A one-line path label fits the column's width, not its own: it shortens instead of running off. */
+.relationship-files small {
+  justify-self: stretch;
+  min-width: 0;
+}
 .relationship-map {
   max-height: 420px;
   overflow: auto;

@@ -69,6 +69,15 @@ export interface NativeRenameFailure extends NodeJS.ErrnoException {
   renameRecovery?: NativeRenameRecovery;
 }
 export interface MacFiles {
+  /** A secure sheet on the window whose content view is `handle`; null when cancelled. */
+  remotePrompt?(
+    id: string,
+    handle: Buffer,
+    title: string,
+    prompt: string,
+    placeholder: string,
+  ): Promise<string | null>;
+  cancelRemotePrompt?(id: string): void;
   /** Older helpers must never enter reservation publication with path-based cleanup. */
   readonly renameRecoveryVersion?: number;
   /** Public AppKit transition notifications, read only for a live owned NSView handle. */

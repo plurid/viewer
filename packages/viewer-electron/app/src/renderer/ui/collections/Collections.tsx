@@ -16,6 +16,7 @@ import { errorMessage } from '../../../domain/errors';
 import { maxQueryLength } from '../../../domain/search/query';
 import { useWindowEvent } from '../../app/window-events';
 import { Disclosure } from '../Disclosure';
+import { plural } from '../../../domain/plural';
 /** Every basket reference stays reachable, however many there are. */
 function BasketList({ paths, busy }: { paths: string[]; busy: boolean }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -92,15 +93,15 @@ export function CollectionControls() {
     setName('');
   };
   return (
-    <Dialog wide title="Collections and basket" onClose={() => !busy && setOpen(false)}>
+    <Dialog wide title="Collections and Basket" onClose={() => !busy && setOpen(false)}>
       <div className="dialog-body collections-body">
         <div className="project-control-row">
-          <strong>Basket · {basket.length} files</strong>
+          <strong>Basket · {plural(basket.length, 'file')}</strong>
           <button
             disabled={busy || !basket.length}
             onClick={() => removeFromBasket(basket.map((item) => item.path))}
           >
-            Clear basket
+            Clear Basket
           </button>
         </div>
         <BasketList paths={basket.map((item) => item.path)} busy={busy} />
@@ -111,7 +112,7 @@ export function CollectionControls() {
               void run(async () => {
                 const root = await window.viewer.chooseFolder();
                 if (!root) return;
-                await prepareOperationReview('Copy basket files', [
+                await prepareOperationReview('Copy Basket Files', [
                   {
                     kind: 'copy',
                     sources: basket.map((item) => item.path),
@@ -123,7 +124,7 @@ export function CollectionControls() {
               })
             }
           >
-            Review copy…
+            Review Copy…
           </button>
           <button
             disabled={busy || !basket.length}
@@ -131,7 +132,7 @@ export function CollectionControls() {
               void run(async () => {
                 const root = await window.viewer.chooseFolder();
                 if (!root) return;
-                await prepareOperationReview('Move basket files', [
+                await prepareOperationReview('Move Basket Files', [
                   {
                     kind: 'move',
                     sources: basket.map((item) => item.path),
@@ -143,7 +144,7 @@ export function CollectionControls() {
               })
             }
           >
-            Review move…
+            Review Move…
           </button>
           <button
             disabled={busy || !basket.length}
@@ -155,7 +156,7 @@ export function CollectionControls() {
               })
             }
           >
-            Refresh source versions
+            Check Files Again
           </button>
         </div>
         <label className="field-label">
@@ -173,7 +174,7 @@ export function CollectionControls() {
               }
             }}
           >
-            Save basket as collection
+            Save Basket as Collection
           </button>
         </div>
         <Disclosure variant="compact" summary="New query collection">
@@ -199,7 +200,7 @@ export function CollectionControls() {
                 })
               }
             >
-              Choose folder…
+              Choose Folder…
             </button>
             <label className="review-checkpoint">
               <input
@@ -219,7 +220,7 @@ export function CollectionControls() {
                 }
               }}
             >
-              Save query collection
+              Save Query Collection
             </button>
           </div>
         </Disclosure>
@@ -230,7 +231,7 @@ export function CollectionControls() {
               <strong>{collection.name}</strong>
               <small>
                 {collection.kind === 'explicit'
-                  ? collection.sources.length + ' references'
+                  ? plural(collection.sources.length, 'file')
                   : collection.kind === 'tag'
                     ? 'Tagged “' + collection.tag + '”'
                     : collection.query}
@@ -244,7 +245,7 @@ export function CollectionControls() {
                   setOpen(false);
                 }}
               >
-                Open plane
+                Open Plane
               </button>
               <button
                 disabled={busy}

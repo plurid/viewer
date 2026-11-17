@@ -169,9 +169,7 @@ export class Resources {
       0,
     );
     if (data.length > 64 * 1024 * 1024 || held + data.length > 128 * 1024 * 1024)
-      throw new Error(
-        'The comparison resource budget is full. Close a comparison before opening another.',
-      );
+      throw new Error('Too many comparisons are open. Close one before opening another.');
     const id = randomUUID();
     const resource: Resource = {
       id,
@@ -420,7 +418,7 @@ export class Resources {
   }
   documentSource(id: string): string {
     const grant = this.get(id);
-    if (!grant.file) throw new Error('Nested document extraction is unavailable.');
+    if (!grant.file) throw new Error('Viewer can’t open a document inside this file here.');
     // a package's saved picture is all Viewer reads of it
     if (grant.bundle) throw new Error('Viewer reads only the saved picture of a document package.');
     return grant.file;
@@ -520,7 +518,7 @@ export class Resources {
   }
   cancelDocument(id: string, requestID: string): void {
     const request = this.documentRequests.get(requestID);
-    if (request?.resource === id) request.abort.abort(new Error('Document page cancelled.'));
+    if (request?.resource === id) request.abort.abort(new Error('Reading the page was canceled.'));
   }
   read(id: string, requested = MAX_READ): Promise<ResourceRead> {
     return this.work.track(this.paths(id), () =>
@@ -699,7 +697,8 @@ export class Resources {
     if (!postscriptFormats.some((extension) => extension === grantExtension(this.get(id))))
       return Promise.reject(new Error('Choose a PostScript, EPS or Illustrator file.'));
     const postscript = this.postscript;
-    if (!postscript) return Promise.reject(new Error('PostScript rendering is unavailable here.'));
+    if (!postscript)
+      return Promise.reject(new Error('This build of Viewer can’t render PostScript.'));
     return this.documentRead(id, requestID, async (file, signal, format) => {
       const variant = await postscript.renderer.variant();
       signal.throwIfAborted();
@@ -778,7 +777,7 @@ export class Resources {
           : mode === 'postscript'
             ? this.postscript?.cache
             : this.derived;
-    if (!decoder) return Promise.reject(new Error('The local preview decoder is unavailable.'));
+    if (!decoder) return Promise.reject(new Error('This build of Viewer can’t decode this file.'));
     return this.documentRead(id, requestID, async (file, signal, format) => {
       const lease = await decoder.read(file, mode, signal, 4096, variant, format);
       return this.derivedChild(id, lease, signal);
@@ -806,7 +805,7 @@ export class Resources {
   private async renderFile(id: string, scope: AbortSignal): Promise<Resource> {
     const grant = this.get(id);
     if (!grant.file) throw new Error('Rendered previews need a file on disk.');
-    if (!this.render) throw new Error('Rendered previews are unavailable here.');
+    if (!this.render) throw new Error('This build of Viewer can’t render this preview.');
     await this.access([grant.file]);
     const deadline = new AbortController();
     const signal = AbortSignal.any([scope, this.signal(id), deadline.signal]);
@@ -858,7 +857,7 @@ export class Resources {
         [...held].reduce((total, bytes) => total + bytes.length, 0) + data.length >
           128 * 1024 * 1024)
     )
-      throw new Error('The preview resource budget is full. Close a preview and try again.');
+      throw new Error('Too many previews are open. Close one, then try again.');
     const childID = randomUUID();
     const resource: Resource = {
       dimensions: imageDimensions(data),
@@ -887,7 +886,10 @@ export class Resources {
     return this.work
       .track(this.paths(new URL(request.url).hostname), (scope) => this.respond(request, scope))
       .catch(
-        () => new Response('File is unavailable or this resource has expired.', { status: 404 }),
+        () =>
+          new Response('The file was moved or deleted, or this preview has expired.', {
+            status: 404,
+          }),
       );
   }
   private async respond(request: Request, scope: PreviewScope): Promise<Response> {
@@ -986,7 +988,7 @@ export class Resources {
       else {
         const stream = opened!.createReadStream({ start, end, autoClose: true });
         const held = claim;
-        const cancelled = () => stream.destroy(new Error('File access was cancelled.'));
+        const cancelled = () => stream.destroy(new Error('File access was canceled.'));
         held?.signal?.addEventListener('abort', cancelled, { once: true });
         stream.on('error', () => {});
         const streams = this.streams.get(url.hostname) ?? new Map<Readable, string>();
@@ -1004,7 +1006,9 @@ export class Resources {
       opened = undefined; // The stream now owns and closes the descriptor, including cancellation.
       return new Response(body, { status: partial ? 206 : 200, headers });
     } catch {
-      return new Response('File is unavailable or this resource has expired.', { status: 404 });
+      return new Response('The file was moved or deleted, or this preview has expired.', {
+        status: 404,
+      });
     } finally {
       await opened?.close();
       await claim?.release();

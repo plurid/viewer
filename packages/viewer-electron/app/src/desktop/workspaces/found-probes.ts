@@ -2,7 +2,7 @@ import type { FolderProbe, FolderProbeResult } from '../../domain/workspaces/fol
 import type { FoundRootContext } from '../../domain/workspaces/found/roots';
 import { allowedFoundFolder } from '../../domain/workspaces/found/roots';
 import { foundPathHash } from '../../domain/workspaces/found/keys';
-import { itemIdentity } from '../../domain/files/item-identity';
+import { itemIdentity, sameIdentity } from '../../domain/files/item-identity';
 import { folderMarkerNames } from '../../domain/workspaces/folder-facts';
 import type { FolderFacts } from './folder-facts';
 
@@ -14,9 +14,10 @@ export interface FoundProbeRecord {
   value: FoundProbeValue;
 }
 interface ProbeInput {
-  facts: Pick<FolderFacts, 'pass' | 'probe'>;
+  facts: Pick<FolderFacts, 'pass' | 'probe'> & Partial<Pick<FolderFacts, 'identity'>>;
   records: readonly FoundProbeRecord[];
   folders: readonly string[];
+  verify?: readonly string[];
   context: FoundRootContext;
   access?(folder: string): boolean;
   now(): number;
@@ -28,6 +29,7 @@ export interface FoundProbePass {
   fresh: Set<string>;
   missing: Set<string>;
   unknown: Set<string>;
+  readonly exhausted: boolean;
   read(folder: string, force?: boolean): Promise<boolean>;
 }
 const week = 7 * 86_400_000;
@@ -133,5 +135,47 @@ export async function probeFoundFolders(input: ProbeInput): Promise<FoundProbePa
     if (input.signal.aborted || reads >= 300 || pass.exhausted) break;
     await read(folder);
   }
-  return { cache, facts, fresh, missing, unknown, read };
+  // Identity-only checks catch swaps while marker bodies remain cached. They share the same budget.
+  for (const folder of new Set(input.verify)) {
+    if (input.signal.aborted || reads >= 300 || pass.exhausted) break;
+    const previous = facts.get(folder);
+    if (!previous || fresh.has(folder) || !allowed(folder)) continue;
+    reads++;
+    let result: FolderProbeResult | undefined;
+    try {
+      result = await interrupted(
+        input.facts.identity?.(folder, pass) ?? input.facts.probe(folder, pass),
+        input.signal,
+      );
+    } catch {
+      unknown.add(folder);
+      continue;
+    }
+    if (!result || input.signal.aborted) break;
+    if (!result.ok) {
+      if (result.reason === 'missing' || result.reason === 'not-regular') {
+        missing.add(folder);
+        cache.delete(folder);
+        facts.delete(folder);
+      } else unknown.add(folder);
+      continue;
+    }
+    if (
+      result.path !== previous.path ||
+      !sameIdentity(itemIdentity(result.identity), previous.identity)
+    ) {
+      if (!(await read(folder, true))) unknown.add(folder);
+    }
+  }
+  return {
+    cache,
+    facts,
+    fresh,
+    missing,
+    unknown,
+    read,
+    get exhausted() {
+      return reads >= 300 || pass.exhausted;
+    },
+  };
 }

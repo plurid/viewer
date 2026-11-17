@@ -10,7 +10,7 @@ import {
   workspaceShells,
 } from '../../state/definitions';
 import { getState } from '../../state/store';
-import { Dialog } from '../primitives';
+import { Dialog, tryAgainLabel } from '../primitives';
 import { errorMessage } from '../../../domain/errors';
 import { flushState } from '../../state/persistence';
 
@@ -110,10 +110,10 @@ export function DefinitionDialog({
       : kind === 'reset'
         ? 'Reset to definition?'
         : kind === 'save-as'
-          ? 'Save as definition'
+          ? 'Save as Definition'
           : confirmingSave
             ? 'Save over definition?'
-            : 'Save to definition';
+            : 'Save to Definition';
   const submit = async () => {
     setBusy(true);
     setError('');
@@ -176,7 +176,7 @@ export function DefinitionDialog({
                 </>
               )}
               {memoryProblem
-                ? 'Viewer cannot remember its planes: ' +
+                ? 'Viewer can’t remember its planes: ' +
                   memoryProblem +
                   '. It opens from its definition next time.'
                 : 'Viewer remembers its planes for next time.'}
@@ -237,6 +237,9 @@ export function DefinitionDialog({
               </p>
             </>
           )}
+          {kind === 'reset' && ready && !definition && (
+            <p className="muted">Its definition was removed, so there is nothing to reset to.</p>
+          )}
           {error && (
             <p className="error" role="alert">
               {error}
@@ -255,14 +258,14 @@ export function DefinitionDialog({
             disabled={!ready || busy || (kind === 'reset' && !definition)}
           >
             {kind === 'close'
-              ? 'Close workspace'
+              ? 'Close Workspace'
               : kind === 'reset'
-                ? 'Reset to definition'
+                ? 'Reset to Definition'
                 : kind === 'save-as'
-                  ? 'Save definition'
+                  ? 'Save Definition'
                   : confirmingSave
-                    ? 'Save over definition'
-                    : 'Retry save'}
+                    ? 'Save over Definition'
+                    : tryAgainLabel}
           </button>
         </footer>
       </form>

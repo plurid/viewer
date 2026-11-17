@@ -183,7 +183,7 @@ try {
         'Renamed document notice',
       );
       assert.equal(await position(), retainedPosition, 'Retained position while renamed');
-      await press('Find renamed file');
+      await press('Find Renamed File');
       await until(
         async () =>
           JSON.parse(
@@ -210,7 +210,7 @@ try {
       );
       assert.equal(await position(), retainedPosition, 'Retained position while unavailable');
       await rename(parked, files);
-      await press('Check again');
+      await press('Try Again');
       await until(
         () => evaluate(exists('.preview-recovery')),
         (shown) => !shown,
@@ -259,8 +259,7 @@ try {
       await until(
         text,
         (value) =>
-          value.includes('EPUB could not be opened') ||
-          value.includes('Office preview unavailable'),
+          value.includes("Can't open this EPUB") || value.includes("Can't show this document"),
         'Interrupted external save is explicit',
       );
       await writeFile(renamed, edited);

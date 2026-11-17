@@ -7,6 +7,8 @@ import { Panel, PanelSection } from '../ui/Panel';
 import { Button, CopyButton, PathField } from '../ui/primitives';
 import { useWorkspace } from '../workspace/context';
 import { useWindowEvent } from '../app/window-events';
+import { plural } from '../../domain/plural';
+import { processOutcome } from '../ui/status-labels';
 import { observeQuickCommands, quickCommandSnapshot, subscribeQuickCommand } from './quick-command';
 export function ExecutionPanel() {
   const workspace = useWorkspace();
@@ -51,11 +53,11 @@ export function ExecutionPanel() {
   return (
     <Panel
       className="execution-panel"
-      label="Command progress"
+      label="Command Progress"
       title={
         running
-          ? `${running} command${running === 1 ? '' : 's'} running`
-          : tasks.at(-1)!.title + ': ' + tasks.at(-1)!.status
+          ? `${plural(running, 'command')} running`
+          : tasks.at(-1)!.title + ': ' + processOutcome(tasks.at(-1)!)
       }
       collapsed={!expanded}
       onCollapsedChange={(collapsed) => setExpanded(!collapsed)}
@@ -69,8 +71,7 @@ export function ExecutionPanel() {
             title={task.title}
             meta={
               <>
-                {task.status}
-                {task.exitCode !== undefined ? ` · exit ${task.exitCode}` : ''}
+                {processOutcome(task)}
                 {task.started !== undefined
                   ? ` · ${Math.max(0, Math.round(((task.ended ?? now) - task.started) / 1000))}s`
                   : ''}
@@ -92,11 +93,11 @@ export function ExecutionPanel() {
             {task.truncated && <p role="status">Showing the last 256 KiB of output.</p>}
             {task.command && (
               <button onClick={() => workspace.openReceipt(task.id, task.directory)}>
-                Open receipt
+                Open Receipt
               </button>
             )}
             {!!task.output && (
-              <CopyButton appearance="text" label="Copy output" copy={{ text: task.output }} />
+              <CopyButton appearance="text" label="Copy Output" copy={{ text: task.output }} />
             )}
             {task.output && <pre>{task.output}</pre>}
           </PanelSection>

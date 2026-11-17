@@ -114,11 +114,11 @@ that creation time was hashed. This makes a missing creation-time requirement di
 changed current descendant. Other descendants keep their own identity checks.
 
 Older records remain readable. A synthetic record or descendant proof lacking creation time cannot
-authorize Undo: "Cannot undo because this older record does not include the file creation time."
-Unmarked rounded identities retain the exact-identity refusal. Safe older proofs and earlier exact
-version 2 proofs without synthetic files remain verifiable. A current safe tree that acquires a
-synthetic empty descendant is reported as changed contents, not as an older record. Exceeding the
-proof item limit also reports changed contents.
+authorize Undo: "Can’t undo: this older record doesn’t include the file’s creation time." Unmarked
+rounded identities retain the exact-identity refusal. Safe older proofs and earlier exact version 2
+proofs without synthetic files remain verifiable. A current safe tree that acquires a synthetic
+empty descendant is reported as changed contents, not as an older record. Exceeding the proof item
+limit also reports changed contents.
 
 Large or synthetic proof records require this format. An older strict reader can set those records
 aside as unreadable on downgrade; safe records keep the earlier layout and their Undo history. A

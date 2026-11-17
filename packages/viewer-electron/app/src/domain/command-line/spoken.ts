@@ -258,11 +258,27 @@ export function spokenText(steps: readonly Pick<SpokenStep, 'phrase'>[]): string
   const text = steps.map((step) => step.phrase).join(', then ');
   return text && text.charAt(0).toUpperCase() + text.slice(1) + '.';
 }
-/** A label as a plan says it: "Frame all planes" is "frame all planes"; "PDF tools…" keeps its
- * capitals. */
+// names keep their capitals inside a sentence: "Move to Trash" is "move to Trash"
+const properWords = new Set(['I', 'Finder', 'Trash', 'Viewer', 'Git', 'Favorites']);
+const properPhrases: readonly [RegExp, string][] = [
+  [/\bquick look\b/gi, 'Quick Look'],
+  [/\bVS code\b/g, 'VS Code'],
+];
+/** A label as a plan says it, as menus title it: "Frame All Planes" is "frame all planes";
+ * "PDF Tools…" is "PDF tools", "Move to Trash" keeps Trash. */
 export function labelPhrase(label: string): string {
-  const text = label.replace(/…$/, '').trim();
-  return /^\p{Lu}{2}/u.test(text) ? text : text.charAt(0).toLocaleLowerCase() + text.slice(1);
+  const text = label
+    .replace(/…$/, '')
+    .trim()
+    .split(' ')
+    .map((word) =>
+      // an acronym or a name such as macOS keeps its capitals
+      /^\p{Lu}{2}|\p{Ll}\p{Lu}/u.test(word) || properWords.has(word)
+        ? word
+        : word.charAt(0).toLocaleLowerCase() + word.slice(1),
+    )
+    .join(' ');
+  return properPhrases.reduce((phrase, [pattern, name]) => phrase.replace(pattern, name), text);
 }
 
 /** Words that carry no command: "please check this job for me" is "check job". */

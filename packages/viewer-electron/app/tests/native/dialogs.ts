@@ -111,7 +111,7 @@ try {
   checks.push('current directory selection resolves through the desktop API');
 
   await chooseFolder();
-  await page.evaluate(click('.viewer-file-picker [aria-label="New folder"]'));
+  await page.evaluate(click('.viewer-file-picker [aria-label="New Folder"]'));
   await type('[aria-label="New folder name"]', 'Exports');
   await page.evaluate(pressButton('Create', '.file-picker-new-folder'));
   await until(

@@ -109,7 +109,7 @@ function documentSourceChoice(text: string, added?: Set<string>): string {
 
 export interface WorkspaceDefinitionsPorts {
   found?: Pick<FoundWorkspaces, 'load' | 'snapshot' | 'subscribe' | 'configure' | 'recovery'> &
-    Partial<Pick<FoundWorkspaces, 'available' | 'reconcileKeys'>>;
+    Partial<Pick<FoundWorkspaces, 'available' | 'reconcileKeys' | 'hide' | 'show'>>;
   access(files: readonly string[]): Promise<void>;
   settings(): SettingsSnapshot['settings'];
   emit(catalog: DefinitionCatalog): void;
@@ -184,6 +184,19 @@ export class WorkspaceDefinitions {
     await this.ports.found?.reconcileKeys?.();
     await this.reload();
   }
+  /** Not a Workspace: a found definition's root leaves the catalog. */
+  async hideFound(key: string): Promise<void> {
+    const definition = this.entry(key);
+    if (definition?.source !== 'found' || !this.ports.found?.hide)
+      throw new Error('Viewer no longer finds this workspace.');
+    await this.ports.found.hide(definition.root);
+    await this.reload();
+  }
+  /** Shows a hidden root again, or every hidden root. */
+  async showFound(root?: string): Promise<void> {
+    await this.ports.found?.show?.(root === undefined ? undefined : [root]);
+    await this.reload();
+  }
   load(): Promise<void> {
     return (this.loading ??= (async () => {
       await this.ports.memory?.load();
@@ -201,7 +214,10 @@ export class WorkspaceDefinitions {
       await this.configuration.schema(schema);
       if (!this.stopped) {
         this.configuration.watch(() => this.schedule());
-        this.stopVolumes = this.ports.watchVolumes?.(() => this.refreshRoots());
+        this.stopVolumes = this.ports.watchVolumes?.(() => {
+          this.publishRoots();
+          this.refreshRoots();
+        });
       }
     })());
   }
@@ -295,7 +311,7 @@ export class WorkspaceDefinitions {
               source: 'projects.json',
               level: 'note',
               message:
-                'VS Code Project Manager is temporarily unavailable. The last valid projects remain in effect.',
+                'Viewer couldn’t read VS Code Project Manager’s projects just now. It keeps using the last projects it read.',
             });
             this.schedule();
           } else {
@@ -307,7 +323,7 @@ export class WorkspaceDefinitions {
           diagnostics.push({
             source: 'projects.json',
             level: 'error',
-            message: `${errorMessage(error)}${this.projects ? ' The last valid projects remain in effect.' : ''}`,
+            message: `${errorMessage(error)}${this.projects ? ' Viewer keeps using the last projects it read.' : ''}`,
           });
       }
     }
@@ -396,7 +412,10 @@ export class WorkspaceDefinitions {
   }
   async checkRoot(key: string): Promise<DefinitionRootState> {
     const entry = this.entry(key);
-    if (!entry) throw new Error('This workspace definition is unavailable.');
+    if (!entry)
+      throw new Error(
+        'Viewer can’t find this workspace’s definition. It may have been removed from its file.',
+      );
     if (entry.source === 'found' && this.ports.found?.available?.(entry.root) === false)
       return 'unknown';
     if (this.rootState(entry.root) === 'present') return 'present';
@@ -615,7 +634,7 @@ export class WorkspaceDefinitions {
             'The project source changed. Validate workspace definitions before saving.',
           );
         if (create && Object.hasOwn(current.workspaces, key))
-          throw new Error('This key already exists. Use Save to definition.');
+          throw new Error('This key already exists. Use Save to Definition.');
         const resolved = resolveCatalog({
           file: current,
           projects: source.enabled ? (this.projects?.projects ?? []) : [],
@@ -666,7 +685,10 @@ export class WorkspaceDefinitions {
             planes: [],
           };
         }
-        if (!definition) throw new Error('This workspace definition is unavailable.');
+        if (!definition)
+          throw new Error(
+            'Viewer can’t find this workspace’s definition. It may have been removed from its file.',
+          );
         result = captureDefinition({
           workspace: create ? { ...workspace, definition: undefined } : workspace,
           order,

@@ -61,7 +61,7 @@ afterEach(async () => {
 
 it('retains file selection and mode, stages only the chosen hunk and navigates files by keyboard', async () => {
   const view = render(<GitChanges path="/fixture" paneID="review" />);
-  await screen.findByRole('button', { name: 'Stage hunk 1' });
+  await screen.findByRole('button', { name: 'Stage Hunk 1' });
   fireEvent.keyDown(screen.getByRole('region', { name: 'Git review' }), {
     key: 'ArrowDown',
     altKey: true,
@@ -69,7 +69,7 @@ it('retains file selection and mode, stages only the chosen hunk and navigates f
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith(expect.objectContaining({ kind: 'file', fileID: 'second' })),
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Stage hunk 1' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Stage Hunk 1' }));
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith({
       kind: 'apply',
@@ -80,13 +80,13 @@ it('retains file selection and mode, stages only the chosen hunk and navigates f
   );
   fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
   fireEvent.click(await screen.findByRole('menuitem', { name: 'Staged' }));
-  await screen.findByRole('button', { name: 'Unstage hunk 1' });
+  await screen.findByRole('button', { name: 'Unstage Hunk 1' });
   expect(activeWorkspace().panes.find((pane) => pane.id === 'review')).toMatchObject({
     review: { mode: 'staged', selectedPath: 'b.txt' },
   });
   view.unmount();
   render(<GitChanges path="/fixture" paneID="review" />);
-  await screen.findByRole('button', { name: 'Unstage hunk 1' });
+  await screen.findByRole('button', { name: 'Unstage Hunk 1' });
   expect(api.mock.calls.filter(([request]) => request.kind === 'file').at(-1)?.[0]).toMatchObject({
     fileID: 'second',
   });

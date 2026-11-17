@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { readFile, writeFile } from 'node:fs/promises';
-import type { Pane } from '../src/domain/contracts';
+import type { Pane, SavedState } from '../src/domain/contracts';
 import type { FoundWorkspacePorts } from '../src/desktop/workspaces/found-workspaces';
 import { FoundWorkspaces } from '../src/desktop/workspaces/found-workspaces';
 import { probeFoundFolders, foundProbeExpiry } from '../src/desktop/workspaces/found-probes';
@@ -57,7 +57,7 @@ async function fixture() {
   const identities = new Map<string, bigint>();
   const roots = new Set<string>();
   const retained = new Set<string>();
-  const state = stateSchema.parse({
+  const state: SavedState = stateSchema.parse({
     version: 13,
     workspaces: [sampleWorkspace()],
     activeWorkspace: 'open',
@@ -676,4 +676,138 @@ it('a person turning finding off clears probes and preserves the loaded hide lis
   expect(off.entries).toEqual([]);
   expect(off.probes).toEqual([]);
   expect(off.hidden).toEqual(document.hidden);
+});
+it('Clear also cancels a pass waiting before its probe controller exists', async () => {
+  const f = await fixture();
+  f.add();
+  f.state.workspaces = [spaceAt(f.root)];
+  let release!: () => void;
+  let entered!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reconcile = f.service.reconcileKeys.bind(f.service);
+  vi.spyOn(f.service, 'reconcileKeys').mockImplementation(async () => {
+    entered();
+    await gate;
+    await reconcile();
+  });
+  const running = f.service.run();
+  await waiting;
+  f.state.visits = {};
+  await f.service.clearHistory();
+  release();
+  await running;
+  expect(f.probe).not.toHaveBeenCalled();
+  expect(f.service.snapshot().definitions).toEqual([]);
+});
+it('Clear keeps the old link while a new key is waiting for its owners', async () => {
+  const f = await fixture();
+  f.add();
+  await f.service.run();
+  const key = f.service.snapshot().definitions[0]!.key;
+  f.retained.add(key);
+  f.ports.keepOnClear = (candidate) => f.retained.has(candidate);
+  f.ports.explicit = () => [sampleDefinition(key, { root: f.home + '/other' })];
+  let release!: () => void;
+  let entered!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  f.ports.rekey = async (changes) => {
+    entered();
+    await gate;
+    for (const change of changes) {
+      f.retained.delete(change.from);
+      f.retained.add(change.to);
+    }
+  };
+  const repairing = f.service.reconcileKeys();
+  await waiting;
+  await f.service.clearHistory();
+  release();
+  await repairing;
+  expect(f.service.snapshot().definitions).toMatchObject([{ root: f.root }]);
+});
+
+it('finishes an older key handoff before handling another explicit collision', async () => {
+  const f = await fixture();
+  f.add();
+  await f.service.run();
+  const definition = f.service.snapshot().definitions[0]!;
+  const workspace = {
+    ...spaceAt(f.root),
+    definition: { key: definition.key, basis: definition.basis, source: 'found' as const },
+  };
+  const memory = new DefinedWorkspaces(f.directory + '/memory');
+  services.push(memory);
+  await memory.remember(workspace, f.state);
+  const sessions = new WorkspaceSessions();
+  sessions.seed({ ...f.state, workspaces: [workspace] });
+  sessions.open(1, f.home);
+  f.ports.state = () => sessions.snapshot();
+  f.ports.retained = (key) => !!sessions.findByDefinition(key) || !!memory.summary(key);
+  const explicit = [sampleDefinition(definition.key, { root: f.home + '/other' })];
+  f.ports.explicit = () => explicit;
+  f.ports.rekey = async () => {
+    throw new Error('try later');
+  };
+  await expect(f.service.reconcileKeys()).rejects.toThrow('try later');
+  const pending = JSON.parse(await readFile(f.service.store.file, 'utf8'));
+  const intermediate = pending.entries[0].key;
+  explicit.push(sampleDefinition(intermediate, { root: f.home + '/another' }));
+  f.ports.rekey = async (changes) => {
+    await memory.rekeyFound(changes);
+    await sessions.rekeyFound(changes, async () => {});
+  };
+  await f.service.reconcileKeys();
+  const current = f.service.snapshot().definitions[0]!;
+  expect(current.key).not.toBe(intermediate);
+  expect(memory.get(current.key)?.workspace.id).toBe(workspace.id);
+  expect(sessions.findByDefinition(current.key)?.id).toBe(workspace.id);
+});
+it('publishes unknown for a known found root when the volume signal removes its mount', async () => {
+  const f = await fixture();
+  let mounted = true;
+  let changed!: () => void;
+  const definition = sampleDefinition('on-disk', {
+    source: 'found',
+    root: '/Volumes/Work/sample',
+    rootState: 'unknown',
+  });
+  const checkRoot = vi.fn(async () => ({ directory: true }));
+  const service = new WorkspaceDefinitions(f.directory + '/volumes', f.home, {
+    found: {
+      load: async () => {},
+      configure: async () => {},
+      subscribe: () => () => {},
+      snapshot: () => ({
+        definitions: [definition],
+        state: { state: 'ready', count: 1, hidden: 0 },
+      }),
+      available: () => mounted,
+    },
+    settings: () => defaultSettings(f.home),
+    access: async () => {},
+    checkRoot,
+    emit: () => {},
+    watchVolumes: (callback) => {
+      changed = callback;
+      return () => {};
+    },
+  });
+  services.push(service);
+  await service.load();
+  expect(await service.checkRoot(definition.key)).toBe('present');
+  checkRoot.mockClear();
+  mounted = false;
+  changed();
+  expect(service.entry(definition.key)?.rootState).toBe('unknown');
+  expect(checkRoot).not.toHaveBeenCalled();
 });

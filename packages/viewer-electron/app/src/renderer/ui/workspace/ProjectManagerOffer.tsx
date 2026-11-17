@@ -11,14 +11,14 @@ export function ProjectManagerOffer({
   onChoose(enabled: boolean): void;
 }) {
   return (
-    <section className="workspace-project-manager-offer" aria-label="Use VS Code projects">
+    <section className="workspace-project-manager-offer" aria-label="Use VS Code Projects">
       <p>{projectManagerConsentText}</p>
       <div>
         <Button variant="primary" disabled={busy} onClick={() => onChoose(true)}>
-          Use VS Code projects
+          Use VS Code Projects
         </Button>
         <Button variant="secondary" disabled={busy} onClick={() => onChoose(false)}>
-          Don’t use
+          Don’t Use
         </Button>
       </div>
     </section>

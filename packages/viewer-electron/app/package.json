@@ -58,7 +58,8 @@
     "mas:dev": "tsx tools/mas.ts dev",
     "mas:package": "tsx tools/mas.ts distribution",
     "docs:check": "node --import tsx tools/docs/check.ts",
-    "docs:media": "node --import tsx tools/docs/capture.ts"
+    "docs:media": "node --import tsx tools/docs/capture.ts",
+    "review": "node --import tsx tools/review/main.ts"
   },
   "devDependencies": {
     "@electron-forge/cli": "8.0.1",

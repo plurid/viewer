@@ -107,7 +107,7 @@ describe('Git terminal handoff', () => {
     expect(session.exited).toBe(true);
     expect(fake.terminals[0]!.output).toEqual([
       'clean\r\n',
-      '\r\nGit exited (0). Close this plane to finish.',
+      '\r\nGit exited with code 0. Close this plane to finish.',
     ]);
     expect(startShell).not.toHaveBeenCalled();
     fake.terminals[0]!.input?.('do not execute');

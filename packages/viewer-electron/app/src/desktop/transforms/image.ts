@@ -75,9 +75,30 @@ export async function previewSvg(root: string, input: Buffer, size: number): Pro
   if (output.length > 32_000_000) throw new Error('SVG preview exceeds the 32 MB output limit.');
   return output;
 }
-/** A deliberately small EXIF reader: only descriptive ASCII IFD0 tags survive
- * the default policy. GPS, device serials and opaque nested metadata do not. */
-export function imageCredits(exif?: Buffer): Record<string, string> {
+/** The descriptive ASCII tags the default policy keeps: who made the picture and what it shows. */
+const creditTags: Readonly<Record<number, string>> = {
+  270: 'ImageDescription',
+  315: 'Artist',
+  33432: 'Copyright',
+};
+/** When the picture was taken, kept with it too: the date photos sort by. */
+const captureTags: Readonly<Record<number, string>> = {
+  36867: 'DateTimeOriginal',
+  36881: 'OffsetTimeOriginal',
+  37521: 'SubSecTimeOriginal',
+};
+/** The EXIF sub-IFD's pointer in IFD0. */
+const exifPointer = 34665;
+/**
+ * A deliberately small EXIF reader: only the named ASCII tags of IFD0, and of the EXIF sub-IFD
+ * when `nested` names some, survive the default policy. GPS, device serials and opaque nested
+ * metadata do not.
+ */
+function exifText(
+  exif: Buffer | undefined,
+  names: Readonly<Record<number, string>>,
+  nested = false,
+): Record<string, string> {
   const result: Record<string, string> = {};
   if (!exif || exif.length > 1_000_000) return result;
   try {
@@ -88,28 +109,38 @@ export function imageCredits(exif?: Buffer): Record<string, string> {
     const u32 = (offset: number) =>
       little ? exif.readUInt32LE(start + offset) : exif.readUInt32BE(start + offset);
     if (u16(2) !== 42) return result;
-    const offset = u32(4),
-      count = Math.min(256, u16(offset));
-    for (let index = 0; index < count; index++) {
-      const item = offset + 2 + index * 12,
-        tag = u16(item),
+    const directory = (offset: number, visit: (tag: number, item: number) => void) => {
+      const count = Math.min(256, u16(offset));
+      for (let index = 0; index < count; index++) {
+        const item = offset + 2 + index * 12;
+        visit(u16(item), item);
+      }
+    };
+    const read = (tag: number, item: number) => {
+      const name = names[tag],
         type = u16(item + 2),
         length = u32(item + 4);
-      const name = (
-        { 270: 'ImageDescription', 315: 'Artist', 33432: 'Copyright' } as Record<number, string>
-      )[tag];
-      if (!name || type !== 2 || length > 4096 || !length) continue;
+      if (!name || type !== 2 || length > 4096 || !length) return;
       const value = length <= 4 ? item + 8 : u32(item + 8);
-      if (start + value + length > exif.length) continue;
+      if (start + value + length > exif.length) return;
       result[name] = exif
         .toString('utf8', start + value, start + value + length)
         .replace(/\0.*$/s, '');
-    }
+    };
+    let sub: number | undefined;
+    directory(u32(4), (tag, item) => {
+      if (tag === exifPointer) sub = u32(item + 8);
+      else if (!nested) read(tag, item);
+    });
+    if (nested && sub !== undefined) directory(sub, read);
   } catch {
     /* malformed optional metadata is omitted */
   }
   return result;
 }
+export const imageCredits = (exif?: Buffer) => exifText(exif, creditTags);
+/** When a photo was taken, as its EXIF says: kept by the default policy with the credits. */
+export const imageCaptureTime = (exif?: Buffer) => exifText(exif, captureTags, true);
 export function safeImageXmp(bytes?: Buffer): string | undefined {
   if (!bytes || bytes.length > 1_000_000) return;
   const text = bytes.toString('utf8');
@@ -187,7 +218,12 @@ export async function transformImage(
   else if (plan.metadata === 'safe') {
     image = image.keepIccProfile();
     const credits = imageCredits(metadata.exif);
-    if (Object.keys(credits).length) image = image.withExif({ IFD0: credits });
+    const taken = imageCaptureTime(metadata.exif);
+    if (Object.keys(credits).length || Object.keys(taken).length)
+      image = image.withExif({
+        ...(Object.keys(credits).length ? { IFD0: credits } : {}),
+        ...(Object.keys(taken).length ? { IFD2: taken } : {}),
+      });
     const xmp = safeImageXmp(metadata.xmp);
     if (xmp) image = image.withXmp(xmp);
   }
@@ -233,7 +269,7 @@ export async function inspectImage(root: string, input: Buffer): Promise<ImageIn
   const swapped = [5, 6, 7, 8].includes(metadata.orientation || 0);
   const width = (swapped ? metadata.height : metadata.width) || 0,
     height = (swapped ? metadata.width : metadata.height) || 0;
-  if (!width || !height) throw new Error('The image dimensions are unavailable.');
+  if (!width || !height) throw new Error('Viewer couldn’t read this image’s size.');
   return {
     width,
     height,

@@ -210,6 +210,6 @@ it('says a damaged document could not be read', async () => {
   );
   services.read.mockResolvedValue({ text: '', binary: true, truncated: false });
   render(<EmbeddedPreview {...context} />);
-  await screen.findByText('This document could not be read');
+  await screen.findByText("Can't read this document");
   expect(screen.getByText('ZIP directory was not found.')).toBeTruthy();
 });

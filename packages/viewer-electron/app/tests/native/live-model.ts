@@ -212,10 +212,10 @@ try {
   );
   assert.equal(await evaluate(pageCall(permissionOf, provider.id)), null);
   await stage('discovering-models');
-  await controls.button('Connect and load models', '.settings-provider[open]');
+  await controls.button('Load Models', '.settings-provider[open]');
   const status = await until(
     () => settingsWindow.evaluate(textOf('.settings-provider[open] .model-summary')),
-    (text) => text.includes('Connected') || text.includes('Connection failed'),
+    (text) => text.includes('Connected') || text.includes('Couldn’t connect'),
     'Live model discovery',
     30000,
   );
@@ -262,7 +262,7 @@ try {
     endpoint: provider.endpoint,
     data: 'Generated folder path, filenames and metadata only. No file contents or agent access.',
   });
-  await controls.button('Allow selected data', '.settings-provider[open]');
+  await controls.button('Allow Selected Data', '.settings-provider[open]');
   const permission = await until(
     () => evaluate(pageCall(permissionOf, provider.id)),
     (value) => value?.level === 'names',
@@ -308,7 +308,7 @@ try {
   checks.push({ name: 'Unavailable remote model', detail: failed });
   await settingsWindow.evaluate(pageCall(setProviderModel, provider.id, provider.model));
   await stage('revoking-test-permission');
-  await controls.button('Revoke access', '.settings-provider[open]');
+  await controls.button('Revoke Access', '.settings-provider[open]');
   await until(
     () => evaluate(pageCall(permissionOf, provider.id)),
     (value) => value === null,

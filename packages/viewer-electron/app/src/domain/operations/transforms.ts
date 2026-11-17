@@ -11,6 +11,7 @@ import {
 } from '../fabrication/handoff';
 import { mailAttachmentSchema } from '../previews/mail/attachments';
 import type { MailAttachmentPlan } from '../previews/mail/attachments';
+import { plural } from '../plural';
 const seconds = z.number().finite().min(0).max(86400);
 const source = z.number().int().min(0).max(15);
 const dimension = z.number().int().min(1).max(32768);
@@ -235,8 +236,8 @@ function transformParts(plan: TransformPlan): string[] {
     );
     return [
       'PDF',
-      `${plan.pages.length} pages in order: ${pages.join(', ')}`,
-      'creates a new document; bookmarks, forms and document tags are not retained',
+      `${plural(plan.pages.length, 'page')} in order: ${pages.join(', ')}`,
+      'creates a new document; bookmarks, forms and document tags are not kept',
     ];
   }
   if (plan.kind === 'pdf')

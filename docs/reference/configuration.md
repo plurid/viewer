@@ -6,8 +6,8 @@ Settings changes it.
 ## The file
 
 Settings and `config.jsonc` edit the same configuration. **Settings → Configuration** shows the
-file's path and has **Open config.jsonc**, **Validate**, **Export configuration**, **Import
-configuration** and **Reset a section**.
+file's path and has **Open config.jsonc**, **Validate**, **Export Configuration**, **Import
+Configuration** and **Reset a section**.
 
 | Item                | Value                                                                                |
 | ------------------- | ------------------------------------------------------------------------------------ |
@@ -54,11 +54,11 @@ Folder keys are absolute paths. `~`, environment variables and shell expressions
 | The file removed while Viewer runs                 | Keeps the current settings, offers **Restore config.jsonc** and writes the file again with the next change                                                                    |
 | The file missing at launch, its last copy valid    | Restores the file from the last valid copy and says so                                                                                                                        |
 | A setting changed elsewhere since a window read it | Refuses the write: "This setting changed in another window or config.jsonc. Review its current value."                                                                        |
-| **Import configuration**                           | Validates the whole file first; asks before changing agent access, model providers, program actions, terminal profiles or risky key lines                                     |
+| **Import Configuration**                           | Validates the whole file first; asks before changing agent access, model providers, program actions, terminal profiles or risky key lines                                     |
 | **Reset a section**                                | Puts back the defaults of **Browsing**, **Folder views**, **File opening**, **Previews**, **Terminals**, **Custom commands**, **Shortcuts**, **Search** or **Action recipes** |
 
 Risky key lines are bindings and sequences that type into a terminal, move files to the Trash,
-rename files or close with `!` and drop unsaved text. A cancelled import changes nothing.
+rename files or close with `!` and drop unsaved text. A canceled import changes nothing.
 
 A workspace window may change only its own presentation: `ui`, `settings.folders`,
 `settings.toolbars`, `settings.appearance`, `settings.browsing` (except `confirmTrash`),
@@ -134,6 +134,7 @@ overrides, changes their view and resets them.
 | `foldersFirst` | Boolean                                                                   |
 | `showHidden`   | Boolean                                                                   |
 | `columnWidth`  | 160 to 1600                                                               |
+| `previewWidth` | 320 to 1600: the Columns preview's width, which fills any room beyond it  |
 | `list`         | `visible`, `widths`, `order` and `wrapNames`, as in `ui.list`             |
 
 ## File opening
@@ -152,28 +153,31 @@ files open in planes.
 
 Shown in **Settings → Previews**.
 
-| Setting                            | Default    | Values                                                                                            | Settings label         |
-| ---------------------------------- | ---------- | ------------------------------------------------------------------------------------------------- | ---------------------- |
-| `settings.previews.thumbnailSize`  | `256`      | 128 to 512 px; Settings offers 128, 256, 384 and 512                                              | **Thumbnail size**     |
-| `settings.previews.maxImagePixels` | `64000000` | 1,000,000 to 128,000,000                                                                          | **Image pixel limit**  |
-| `settings.previews.maxModelMB`     | `256`      | 16 to 512                                                                                         | **3D file limit (MB)** |
-| `settings.previews.textFontSize`   | `16`       | 8 to 32 px                                                                                        | **Text size**          |
-| `settings.previews.textLineHeight` | `20`       | 12 to 64 px                                                                                       | **Text line height**   |
-| `settings.previews.textWordWrap`   | `false`    | Boolean                                                                                           | **Wrap preview text**  |
-| `settings.previews.darkPages`      | `off`      | `off` (**Off**), `on` (**On**), `night` (**At night**), `system` (**With macOS dark mode**)       | **Dark pages**         |
-| `settings.previews.darkPagesFrom`  | `20:00`    | 24-hour local time, `HH:MM` from `00:00` to `23:59`                                               | **Dark pages → From**  |
-| `settings.previews.darkPagesUntil` | `07:00`    | The same; earlier than `darkPagesFrom`, the night passes midnight; equal to it, there is no night | **Dark pages → Until** |
+| Setting                               | Default     | Values                                                                                            | Settings label         |
+| ------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------- | ---------------------- |
+| `settings.previews.thumbnailSize`     | `256`       | 128 to 512 px; Settings offers 128, 256, 384 and 512                                              | **Thumbnail size**     |
+| `settings.previews.maxImagePixels`    | `64000000`  | 1,000,000 to 128,000,000                                                                          | **Image pixel limit**  |
+| `settings.previews.maxModelMB`        | `256`       | 16 to 512                                                                                         | **3D file limit (MB)** |
+| `settings.previews.modelScrollDevice` | `automatic` | `automatic` (**Automatic**), `mouse` (**Mouse**), `trackpad` (**Trackpad**)                       | **3D scroll device**   |
+| `settings.previews.textFontSize`      | `16`        | 8 to 32 px                                                                                        | **Text size**          |
+| `settings.previews.textLineHeight`    | `20`        | 12 to 64 px                                                                                       | **Text line height**   |
+| `settings.previews.textWordWrap`      | `false`     | Boolean                                                                                           | **Wrap preview text**  |
+| `settings.previews.darkPages`         | `off`       | `off` (**Off**), `on` (**On**), `night` (**At night**), `system` (**With macOS dark mode**)       | **Dark pages**         |
+| `settings.previews.darkPagesFrom`     | `20:00`     | 24-hour local time, `HH:MM` from `00:00` to `23:59`                                               | **Dark pages → From**  |
+| `settings.previews.darkPagesUntil`    | `07:00`     | The same; earlier than `darkPagesFrom`, the night passes midnight; equal to it, there is no night | **Dark pages → Until** |
 
-A larger image offers a bounded thumbnail and **Open in default app**. These limits never change
-source files.
+A bigger image shows a smaller copy. These limits never change source files.
+
+`modelScrollDevice` sets how a 3D preview reads the wheel: a mouse wheel zooms, a trackpad's
+two-finger scroll pans, and `automatic` tells them apart. See [models](models.md#controls).
 
 `darkPages` draws PDF and Office pages dark, with light text, in previews, Quick Preview and the
-pages sidebar. Photographs keep their colours; a scanned page or a drawing on white turns dark with
+pages sidebar. Photographs keep their colors; a scanned page or a drawing on white turns dark with
 the page. `night` is dark from `darkPagesFrom` until `darkPagesUntil` and switches as either time
 passes. `system` follows the macOS appearance, which **Auto** in **System Settings → Appearance**
 switches at sunset. The **Dark pages** button in a page preview sets `on` or `off`, and replaces
-`night` or `system` with that choice. Printing, **Optimize…**, **PDF tools…**, exports and saved
-copies keep the document's own colours. A configuration without these fields uses the defaults.
+`night` or `system` with that choice. Printing, **Optimize…**, **PDF Tools…**, exports and saved
+copies keep the document's own colors. A configuration without these fields uses the defaults.
 
 ## Editor
 
@@ -224,7 +228,7 @@ Shown in **Settings → Space**.
 | `settings.tour.dwell`           | `3000`            | 500 to 60,000 ms                                                                                                                                                                 | **Tour → Time at each view (ms)**          |
 | `settings.tour.duration`        | `900`             | 100 to 10,000 ms                                                                                                                                                                 | **Tour → Flight time (ms)**                |
 | `settings.tour.loop`            | `true`            | Boolean                                                                                                                                                                          | **Tour → Start again after the last view** |
-| `settings.layouts`              | `[]`              | Up to 50 templates                                                                                                                                                               | **Save layout as template…** command       |
+| `settings.layouts`              | `[]`              | Up to 50 templates                                                                                                                                                               | **Save Layout as Template…** command       |
 
 A layout template is `{id, name, planes, layout, main}`. `id` is lowercase letters, digits and `-`,
 up to 100. `planes` holds 1 to 30 items: `{kind: "folder" | "file", path}`,
@@ -238,7 +242,7 @@ is 0.2 to 0.8.
 Definitions also include [found workspaces](#found-workspaces), recognized from folders you use.
 
 `<data>/workspaces.jsonc` defines whole workspaces separately from the open records in
-`viewer-state-v1.json`. **Edit workspace definitions** creates a commented starter only when the
+`viewer-state-v1.json`. **Edit Workspace Definitions** creates a commented starter only when the
 file is absent. A symbolic link is allowed. `workspaces.schema.json` beside it provides editor
 validation. The starter leaves the Project Manager choice commented out until you decide. The file
 is JSONC with comments and trailing commas. This example explicitly enables the source:
@@ -271,8 +275,8 @@ is JSONC with comments and trailing commas. This example explicitly enables the 
 - `false`: do not use the list. Viewer stops reading and drops its plain definitions; open
   workspaces stay open.
 
-The choice appears in **Manage workspaces… → Defined** and **Change workspace…** when an undecided
-list exists. **Use VS Code projects**, **Don’t use**, and the **Use VS Code Project Manager
+The choice appears in **Manage Workspaces… → Defined** and **Change Workspace…** when an undecided
+list exists. **Use VS Code Projects**, **Don’t Use**, and the **Use VS Code Project Manager
 projects** switch in **Settings → Configuration → Workspace definitions** save the choice in this
 file, keeping comments. An explicit choice creates the starter when the file is absent. No offer
 appears at launch. If a sandbox refuses the existence check, Viewer still offers the choice and
@@ -289,7 +293,7 @@ counts disabled entries and reads each project independently. Each enabled local
 folder plane at `rootPath`, plus one per extra `paths` entry. Project `tags` become aliases. Both
 files reload within about one second after an editor saves them.
 
-In the Store edition, **Use VS Code projects** or turning the switch on asks for a folder grant only
+In the Store edition, **Use VS Code Projects** or turning the switch on asks for a folder grant only
 after saving the choice. If access is declined, **Allow access…** in **Settings → Configuration →
 Workspace definitions** asks again so replacement source files remain readable. Ungranted roots have
 an unknown state, not a missing state; opening their folder planes uses the existing access
@@ -361,7 +365,7 @@ refuse the newer saved-state file.
 
 ### Saving and remembered planes
 
-**Save to definition** edits only the current key through the existing JSONC file, preserving
+**Save to Definition** edits only the current key through the existing JSONC file, preserving
 comments on unchanged planes and bytes outside the entry. An outside edit causes one retry against
 the new document. A symbolic link is written through to its target, even when that file does not yet
 exist; a missing target folder is refused. Invalid JSONC, invalid entries and duplicate keys must be
@@ -376,7 +380,7 @@ written plane index and resolved folder. A changed definition or a removed comma
 over definition**. A command is never reassigned to a different folder. Name, aliases, look, curated
 and hidden remain as written.
 
-**Save as definition…** creates one entry and links the open workspace to it. Its proposed key uses
+**Save as Definition…** creates one entry and links the open workspace to it. Its proposed key uses
 the project owning most panes, with ties going to the shorter root, or the workspace name's slug.
 The common folder supplies a standalone root. A key already written in the file is refused.
 
@@ -385,7 +389,7 @@ most recently closed workspaces, then drops the oldest while above 16 MB. Per-ke
 kept separately in that file. Snapshots include preview positions and history; they do not count as
 open workspaces or enter backups or agent discovery. An unreadable file is moved aside before any
 new memory is written. **Forget remembered planes** removes a snapshot and keeps its recency.
-**Reset to definition…** forgets the snapshot after editor-close prompts succeed.
+**Reset to Definition…** forgets the snapshot after editor-close prompts succeed.
 
 If a workspace alone exceeds 16 MB, Close asks before closing without remembering it. If an
 unreadable memory file cannot be moved aside, Viewer protects it and still opens definitions fresh,
@@ -398,40 +402,52 @@ after the desktop accepts the operation.
 workspaces from folders I use**. It uses the person’s own history, not another app’s data. Turning
 it off stops passes and clears entries and probes while keeping hidden roots.
 
+**Not a Workspace** in **Manage Workspaces… → Defined** adds a found root to the hidden list: 500
+roots at most, the oldest dropped first. A hidden root leaves the catalog, and passes look past it,
+so roots inside it can be found. Undo restores its entry and key. Below the switch, Settings shows
+`12 found · 2 hidden` and **Show Hidden Again**, which empties the list. Clear recent folders and
+turning finding off keep the list. Only the person's requests change it; agent requests are refused.
+
 The private `found-workspaces-v1.json` has version `1`, mode 0600 and a 1 MB limit. Search keeps 200
 ordinary findings, plus retained roots. Entries linked open or opened or remembered within 90 days
 rank first and do not count toward that cap. The file holds at most 1,800 entries, 500 hidden roots,
-1,000 probes and 200 last-run references. References contain a source file name, command name and
-time, with no command text. It is first written when something is found, hidden or run. Launch only
-reads existing metadata. Recovery and a pending setting-off rewrite wait for the first background
-pass or a person’s change. An unreadable regular file moves aside then; a file that cannot be
-preserved stays protected.
+1,000 probes. Declared-command run recency lives separately in `declared-commands-v1.json`. The
+found file is first written when something is found or hidden. Launch only reads existing metadata.
+Recovery and a pending setting-off rewrite wait for the first background pass or a person’s change.
+An unreadable regular file moves aside then; a file that cannot be preserved stays protected.
 
 Finding starts ten seconds after folder history is prepared. A new visit outside known roots
 schedules a pass after thirty seconds, with passes at least five minutes apart. Saving unchanged
-history schedules no pass. Each pass uses at most 300 bounded probes. Cached probes refresh oldest
-first on staggered six-to-seven-day deadlines. Expired observations remain as a fallback while
-refreshing, and incomplete ancestry keeps previous entries instead of choosing an inner root.
-Unchanged metadata causes no write. Git folders, Git files, workspace markers and language manifests
-determine roots within sixteen ancestors. An outer Git folder yields when it would absorb two or
-more inner Git folders. Home and standard home folders are boundaries, compared without case.
+history schedules no pass. A pass that uses up its budget or leaves ancestry incomplete schedules
+another five minutes later if it read a folder it did not know or changed an entry. The follow-ups
+stop at the first pass without such progress, or once they could have read every candidate folder,
+at 300 per pass. A Viewer move that cancels a pass schedules another at the same spacing. Each pass
+uses at most 300 bounded requests, including identity checks of cached roots. A changed identity
+triggers a fresh probe, so keys follow folder swaps. Marker probes refresh oldest first on staggered
+six-to-seven-day deadlines. Expired observations remain as a fallback while refreshing, and
+incomplete ancestry keeps previous entries instead of choosing an inner root. Unchanged metadata
+causes no write. Git folders, Git files, workspace markers and language manifests determine roots
+within sixteen ancestors. An outer Git folder yields when it would absorb two or more inner Git
+repositories Viewer has seen. Home and standard home folders are boundaries, compared without case.
 Non-local volumes, Library, hidden folders, dependency trees and package bundles are excluded.
 Build-output names such as `out` and `target` are excluded beneath a recognized project; they may
 name a project itself. Unknown new volumes stay out. Previously found roots on unplugged local
-volumes remain with an unknown folder state.
+volumes remain with an unknown folder state for ninety days from their last activity, or while
+linked open or remembering planes.
 
 Found keys derive from the home-relative root through the definition slug rules, keeping the last
 eight segments and fitting the 200-character limit. Lossy segments and collisions include a
 deterministic path hash. Existing keys are reserved before minting another. Explicit keys win
 collisions; Viewer re-keys the found entry and carries its links and remembered planes. A root’s
 name uses its last two segments and the role-word rule; up to three manifest names become aliases.
-Viewer moves preserve keys. For an outside rename, fresh probes verify the identity claim and
-recheck the old path before carrying its key.
+Viewer moves preserve keys; the file is written once moves pause for a second, or at quit. For an
+outside rename, fresh probes verify the identity claim and recheck the old path before carrying its
+key.
 
 Found definitions have one folder plane and never supply ROOT token references. Explicit sources win
-for the same root, including known realpath aliases. **Clear recent folders** clears entries, probes
-and run references, retaining entries linked open or remembering planes, whatever the memory’s age.
-Undo restores visits so the finder can recognize those folders again. Unchanged paths and explicit
+for the same root, including known realpath aliases. **Clear Recent Folders** clears entries and
+probes, retaining entries linked open or remembering planes, whatever the memory’s age. Undo
+restores visits so the finder can recognize those folders again. Unchanged paths and explicit
 definitions give the same deterministic keys. Hidden roots remain. This document is excluded from
 backups, project exports and agents. Store probes use active access scopes without asking. A granted
 scope root may itself be a project root; the walk never goes above it.
@@ -440,7 +456,7 @@ scope root may itself be a project root; the walk never goes above it.
 
 A tour is a JSONC file whose name ends in `.viewer-tour.jsonc`; the part before it names the tour.
 Opening it plays it. It opens files and moves the camera, and never runs commands, workflows or
-model requests. A named agent client that opens one waits for your review. **Save tour** writes it
+model requests. A named agent client that opens one waits for your review. **Save Tour** writes it
 with comments; later saves keep them and refuse to replace a version someone else saved.
 
 ```jsonc
@@ -642,17 +658,17 @@ Shown in **Settings → Themes**.
 | `settings.theme`    | `{"dark": "", "light": ""}` | A theme ID for each appearance; `""` is the built-in theme     |
 | `settings.profiles` | `[]`                        | Up to 30 `{id, name, values}`                                  |
 
-A theme's `look` is `dark` or `light`. Colours are `#rgb`, `#rrggbb` or `#rrggbbaa`; a token a theme
-leaves out keeps the built-in colour.
+A theme's `look` is `dark` or `light`. Colors are `#rgb`, `#rrggbb` or `#rrggbbaa`; a token a theme
+leaves out keeps the built-in color.
 
 | Group      | Tokens                                                                                                                                                                                                                                                                                                                                          |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `shell`    | `space`, `surface`, `raised`, `field`, `ink`, `muted`, `subtle`, `accent`, `line`, `selection`, `danger`, `selectionMuted`, `mediaStage`, `overlay`, `familyDocument`, `familyArchive`, `tagGray`, `tagGreen`, `tagPurple`, `tagBlue`, `tagYellow`, `tagRed`, `tagOrange`, `imageRegion`, `shadowColor`, `softShadowColor`, `strongShadowColor` |
 | `syntax`   | `comment`, `string`, `keyword`, `number`, `function`, `selector`, `property`, `attribute`, `operator`                                                                                                                                                                                                                                           |
-| `terminal` | `background`, `foreground`, `cursor`, `selectionBackground`, and the 16 ANSI colours `black` to `white` and `brightBlack` to `brightWhite`                                                                                                                                                                                                      |
+| `terminal` | `background`, `foreground`, `cursor`, `selectionBackground`, and the 16 ANSI colors `black` to `white` and `brightBlack` to `brightWhite`                                                                                                                                                                                                       |
 | `metrics`  | `fontFamily`, `density` (`compact`, `comfortable`), `radius` (0 to 16)                                                                                                                                                                                                                                                                          |
 
-Settings imports an iTerm `.itermcolors` preset or a VS Code colour theme as a new theme.
+Settings imports an iTerm `.itermcolors` preset or a VS Code color theme as a new theme.
 
 ## Other settings
 
@@ -685,11 +701,11 @@ Space** and **Settings → Browsing → List columns** unless marked.
 | `ui.sidebar.labels`         | `{}`                                                                                    | Path to a display label of up to 200 characters                                                                                                                                                  | None                                                                      |
 | `ui.titlebar.visible`       | `true`                                                                                  | Boolean; hidden, it returns while the pointer is at the top edge                                                                                                                                 | **Show title bar**                                                        |
 | `ui.titlebar.navigation`    | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Title bar icons → Window navigation**                                   |
-| `ui.titlebar.newPlane`      | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Title bar icons → New folder plane**                                    |
-| `ui.titlebar.operations`    | `true`                                                                                  | Boolean; shown when there are file operations                                                                                                                                                    | **Title bar icons → File operations**                                     |
+| `ui.titlebar.newPlane`      | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Title bar icons → New Folder Plane**                                    |
+| `ui.titlebar.operations`    | `true`                                                                                  | Boolean; shown when there are file operations                                                                                                                                                    | **Title bar icons → File Operations**                                     |
 | `ui.titlebar.voice`         | `false`                                                                                 | Boolean                                                                                                                                                                                          | **Title bar icons → Microphone**                                          |
 | `ui.titlebar.commands`      | `true`                                                                                  | Boolean; **⌘K** works when hidden                                                                                                                                                                | **Title bar icons → Commands**                                            |
-| `ui.space.color`            | `""`                                                                                    | `#rrggbb`; `""` follows the appearance                                                                                                                                                           | **Space colour**                                                          |
+| `ui.space.color`            | `""`                                                                                    | `#rrggbb`; `""` follows the appearance                                                                                                                                                           | **Space color**                                                           |
 | `ui.space.backdrop`         | `opaque`                                                                                | `opaque` (**Solid**), `blur`, `clear`; `clear` applies when the window next opens                                                                                                                | **Space background**                                                      |
 | `ui.space.backdropOpacity`  | `60`                                                                                    | 0 to 100 %                                                                                                                                                                                       | **Space background opacity (%)**                                          |
 | `ui.space.opening`          | `face-on`                                                                               | `face-on` (**Face the plane**), `pair` (**Show linked pair**), `dock` (**Dock the plane**)                                                                                                       | **When opening a plane**                                                  |
@@ -703,21 +719,21 @@ Space** and **Settings → Browsing → List columns** unless marked.
 | `ui.space.dragging`         | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Drag planes by their title**                                            |
 | `ui.space.resizing`         | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Show resize handles**                                                   |
 | `ui.space.origin`           | `false`                                                                                 | Boolean                                                                                                                                                                                          | **Show transform origin**                                                 |
-| `ui.space.headerControls.*` | Essential: all `true` except `layout`, `discover`, `formatTools`                        | `parent`, `sidebar`, `back`, `forward`, `view`, `search`, `layout`, `frame`, `dock`, `pins`, `discover` (**What can I do here?**), `formatTools` (every format tool), `actions` (**…**), `close` | **Plane toolbar**; **Buttons** sets them all to **Essential** or **Full** |
+| `ui.space.headerControls.*` | Essential: all `true` except `layout`, `discover`, `formatTools`                        | `parent`, `sidebar`, `back`, `forward`, `view`, `search`, `layout`, `frame`, `dock`, `pins`, `discover` (**What Can I Do Here?**), `formatTools` (every format tool), `actions` (**…**), `close` | **Plane toolbar**; **Buttons** sets them all to **Essential** or **Full** |
 | `ui.list.visible.*`         | `modified`, `kind`, `size` on; `created`, `extension`, `git` off                        | Boolean per column; Name always shows                                                                                                                                                            | **List columns**, **Git → Show Git column in list view**                  |
 | `ui.list.widths.*`          | `name` 0, `modified` 160, `created` 160, `kind` 96, `extension` 80, `size` 95, `git` 80 | `name` 0 (fill) or up to 1600; others 60 to 600 px                                                                                                                                               | Drag a column edge                                                        |
 | `ui.list.order`             | Absent                                                                                  | Column IDs, `name` first, no repeats                                                                                                                                                             | Drag a column                                                             |
 | `ui.list.wrapNames`         | `false`                                                                                 | Boolean                                                                                                                                                                                          | **Wrap long filenames**                                                   |
-| `ui.layout.units`           | `mm`                                                                                    | `mm` or `in`: what the Layout plane's nesting measures in; values stay in millimetres                                                                                                            | **Units** in the nesting panel                                            |
+| `ui.layout.units`           | `mm`                                                                                    | `mm` or `in`: what the Layout plane's nesting measures in; values stay in millimeters                                                                                                            | **Units** in the nesting panel                                            |
 | `ui.recentCommands`         | `[]`                                                                                    | App-managed, up to 30 command IDs                                                                                                                                                                | None                                                                      |
-| `ui.suggestionHistory`      | Absent                                                                                  | App-managed: up to 40 kinds of file, 8 command IDs each                                                                                                                                          | **Forget learned suggestions** command                                    |
-| `ui.insightsDismissed`      | Absent                                                                                  | App-managed: up to 200 folders, 20 insight IDs each                                                                                                                                              | **Show hidden insights** command                                          |
+| `ui.suggestionHistory`      | Absent                                                                                  | App-managed: up to 40 kinds of file, 8 command IDs each                                                                                                                                          | **Forget Learned Suggestions** command                                    |
+| `ui.insightsDismissed`      | Absent                                                                                  | App-managed: up to 200 folders or workspace roots, 20 insight IDs each                                                                                                                           | **Show Hidden Insights** command                                          |
 | `ui.firstRunHint`           | Absent; `{ "used": [] }` in a new profile                                               | App-managed: `used` lists `palette` and `quick-preview`; `retired` once both are used or the tips are closed                                                                                     | None                                                                      |
 
 Overview opens while the space is shown even when `ui.space.minimap` is `false` or `minimapAuto`
 hides the minimap. Closing Overview restores the configured visibility.
 
-A workspace can set its own space colour with the **Workspace look…** command.
+A workspace can set its own space color with the **Workspace Look…** command.
 
 A hidden plane toolbar button keeps its command in the plane's **…** menu and **⌘K**. With
 `formatTools` off, a preview plane shows its format's main tools, such as a PDF's page, zoom and
@@ -730,22 +746,22 @@ search controls; the rest are its commands in **…**. Quick Preview shows every
 
 | Rule ID               | Suggests                   | When                                                         |
 | --------------------- | -------------------------- | ------------------------------------------------------------ |
-| `archive.extract`     | **Extract here**           | Every selected file is a `.zip`, `.tar`, `.tar.gz` or `.tgz` |
+| `archive.extract`     | **Extract Here**           | Every selected file is a `.zip`, `.tar`, `.tar.gz` or `.tgz` |
 | `pdf.large.optimize`  | **Optimize…**              | Every selected file is a PDF over 10 MB                      |
 | `heic.jpeg`           | **Convert copy to JPEG**   | Every selected file is HEIC or HEIF                          |
 | `photo.large.web`     | **Images for web…**        | Every selected file is a JPEG or PNG over 3 MB               |
 | `downloads.installer` | **Move to Trash**          | DMG or PKG files in Home's Downloads, more than 7 days old   |
-| `names.copy`          | **Find duplicates…**       | A name ends in ` copy`, ` copy 2` or ` (1)`                  |
-| `images.pdf`          | **Create PDF from images** | Two or more images                                           |
-| `photos.layout`       | **Lay out…**               | Two or more images                                           |
-| `drawings.nest`       | **Nest for cutting…**      | DXF files                                                    |
-| `media.edit`          | **Edit media…**            | All video or all audio                                       |
-| `text.edit`           | **Edit text**              | One text or code file                                        |
-| `office.pdf`          | **Save PDF copy**          | Office and OpenDocument files                                |
+| `names.copy`          | **Find Duplicates…**       | A name ends in ` copy`, ` copy 2` or ` (1)`                  |
+| `images.pdf`          | **Create PDF from Images** | Two or more images                                           |
+| `photos.layout`       | **Lay Out…**               | Two or more images                                           |
+| `drawings.nest`       | **Nest for Cutting…**      | DXF files                                                    |
+| `media.edit`          | **Edit Media…**            | All video or all audio                                       |
+| `text.edit`           | **Edit Text**              | One text or code file                                        |
+| `office.pdf`          | **Save PDF Copy**          | Office and OpenDocument files                                |
 | `images.rename`       | **Batch rename…**          | Three or more images                                         |
 | `books.rename`        | **Rename as book…**        | PDFs and EPUBs, with a model ready                           |
-| `folder.git`          | **Git changes**            | One folder that Git status shows is in a repository          |
-| `folder.explore`      | **Explore this folder**    | One folder, with a model ready                               |
+| `folder.git`          | **Git Changes**            | One folder that Git status shows is in a repository          |
+| `folder.explore`      | **Explore This Folder**    | One folder, with a model ready                               |
 | `video.audio`         | **Extract audio…**         | One video                                                    |
 | `folder.size`         | **Calculate Size**         | One folder                                                   |
 | `items.compress`      | **Compress to ZIP**        | Two or more items                                            |
@@ -758,22 +774,28 @@ learned suggestions** clears it.
 **Suggested**. Once per folder it receives the folder's name, up to 12 kinds of file with up to 8
 names each, and the IDs and labels of the commands that apply to them. It needs the names permission
 in **Settings → Models**. Its picks last for the session, at most two per kind. IDs it was not
-offered, **Move to Trash** and **Describe a task…** are never shown.
+offered, **Move to Trash** and **Describe a Task…** are never shown.
 
 `settings.browsing.insights` shows up to three insight cards above a folder's files, from the
 folder's listing alone. Hidden files take no part.
 
-| Insight ID             | Shows when                                                                    | Action                     |
-| ---------------------- | ----------------------------------------------------------------------------- | -------------------------- |
-| `downloads.installers` | DMG or PKG files in Home's Downloads are more than 7 days old                 | **Move to Trash**          |
-| `archives.extracted`   | A `.zip`, `.tar`, `.tar.gz` or `.tgz` has a folder of the same name beside it | **Move to Trash**          |
-| `pdfs.large`           | PDFs over 10 MB                                                               | **Optimize**               |
-| `names.copies`         | Two or more names end in ` copy`, ` copy 2` or ` (1)`                         | **Find duplicates**        |
-| `screenshots`          | Five or more screenshots or screen recordings                                 | **Put in a folder**        |
-| `photos.heic`          | Three or more HEIC or HEIF photos                                             | **Convert copies to JPEG** |
+| Insight ID             | Shows when                                                                    | Action                         |
+| ---------------------- | ----------------------------------------------------------------------------- | ------------------------------ |
+| `downloads.installers` | DMG or PKG files in Home's Downloads are more than 7 days old                 | **Move to Trash**              |
+| `archives.extracted`   | A `.zip`, `.tar`, `.tar.gz` or `.tgz` has a folder of the same name beside it | **Move to Trash**              |
+| `pdfs.large`           | PDFs over 10 MB                                                               | **Optimize**                   |
+| `names.copies`         | Two or more names end in ` copy`, ` copy 2` or ` (1)`                         | **Find duplicates**            |
+| `screenshots`          | Five or more screenshots or screen recordings                                 | **Put in a folder**            |
+| `photos.heic`          | Three or more HEIC or HEIF photos                                             | **Convert copies to JPEG**     |
+| `workspace.open`       | Its workspace remembers planes, opens more than a folder or is open elsewhere | **Open Workspace**, **Switch** |
 
-`ui.insightsDismissed` records the insights hidden in each folder. **⌘K** → **Show hidden insights**
-clears it.
+`workspace.open` is the workspace offer. It reads the catalog, not the listing, and leads the cards
+in the first folder plane inside the innermost definition root holding the folder. It never shows in
+the workspace linked to that definition or mostly inside its root.
+
+`ui.insightsDismissed` records the insights hidden in each folder, and `workspace.open` under the
+root it was hidden for. **⌘K** → **Show Hidden Insights** clears it. Agents' configuration reads
+leave out the `workspace.open` entries.
 
 `ui.firstRunHint` holds the tips a new profile shows above its first folder: **Space**, **⌘K** and
 dragging a plane by its title. Only a new configuration starts it; a profile made before it has none
@@ -784,7 +806,7 @@ and never shows the tips.
 A profile is a named set of presentation values applied at once. It is not a separate data profile
 or an access grant. A window resolves the shared settings, then its workspace's default profile,
 then a chosen profile, then its own local choices. Folder overrides refine browsing after that.
-**Workspace look…** changes one workspace; Settings changes shared values.
+**Workspace Look…** changes one workspace; Settings changes shared values.
 
 ```jsonc
 {
@@ -803,7 +825,7 @@ then a chosen profile, then its own local choices. Folder overrides refine brows
 | `id`     | Lowercase letters, digits and `-`, up to 100; `focus`, `present` and `full` are reserved                                                                                                                                                                              |
 | `values` | Up to 100 paths from `ui.sidebar`, `ui.titlebar`, `ui.space`, `ui.list`, `settings.appearance`, `settings.browsing` (except `restoreSession` and `confirmTrash`), `settings.editor`, `settings.terminalFont`, `settings.tiling`, `settings.tour` and `settings.theme` |
 | Built in | **Focus** hides the title bar, navigation, space toolbar, minimap, viewcube and grid; **Present** also hides plane headers; **Full** shows them all, with every plane toolbar button                                                                                  |
-| Commands | **Profile: _name_** applies one; **Leave profile** puts back what it replaced; **Focus mode** (**⇧⌘F**) toggles **Focus**                                                                                                                                             |
+| Commands | **Profile: _name_** applies one; **Leave Profile** puts back what it replaced; **Focus Mode** (**⇧⌘F**) toggles **Focus**                                                                                                                                             |
 
 A missing profile keeps its reference and shows a diagnostic; it never rewrites the shared
 configuration. Profiles cannot hold credentials, provider permissions, agent scopes or process

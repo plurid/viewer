@@ -6,6 +6,9 @@ const serverPathBytes = 4096;
 /** Shared bounds keep transport, desktop policy and presentation in agreement. */
 export const remoteLimits = Object.freeze({
   connections: 8,
+  savedConnections: 256,
+  sshConfigEntries: 4096,
+  promptSockets: 32,
   channelsPerConnection: 3,
   requestsPerChannel: 64,
   readBytesPerStream: 8 * MiB,
@@ -43,7 +46,10 @@ export const remoteLimits = Object.freeze({
   reconnectAttempts: 10,
   idleBrowseMs: 5 * minute,
   controlPersistSeconds: 600,
+  /** macOS `sun_path`, terminating NUL included. */
   controlPathBytes: 104,
+  /** OpenSSH binds a master at `<ControlPath>.<16 random characters>` before renaming it. */
+  controlTemporarySuffixBytes: 17,
   quitTimeoutMs: 2 * second,
   connectionIDMinCharacters: 6,
   connectionIDMaxCharacters: 16,

@@ -8,29 +8,26 @@ import { errorMessage } from '../../../domain/errors';
 import { Button, PathField, Row } from '../primitives';
 import { projectManagerConsentText } from '../workspace/ProjectManagerOffer';
 import { Disclosure } from '../Disclosure';
+import { plural } from '../../../domain/plural';
 
 function sourceStatus(source: ProjectManagerState): string {
-  if (source.state === 'undecided') return 'The project list has not been read.';
+  if (source.state === 'undecided') return 'Viewer hasn’t read the project list.';
   if (source.state === 'absent') return 'VS Code Project Manager’s list was not found.';
   if (source.state === 'off') return 'VS Code Project Manager is off.';
   if (source.state === 'needs-access')
     return 'Allow access to read VS Code Project Manager’s list.';
   const counts =
     [
-      `${source.projects} VS Code ${source.projects === 1 ? 'project' : 'projects'}`,
-      ...(source.missing
-        ? [`${source.missing} ${source.missing === 1 ? 'folder' : 'folders'} missing`]
-        : []),
+      plural(source.projects, 'VS Code project'),
+      ...(source.missing ? [`${plural(source.missing, 'folder')} missing`] : []),
       ...(source.disabled ? [`${source.disabled} disabled`] : []),
       ...(source.remote ? [`${source.remote} remote`] : []),
-      ...(source.duplicateKeys
-        ? [`${source.duplicateKeys} duplicate ${source.duplicateKeys === 1 ? 'key' : 'keys'}`]
-        : []),
+      ...(source.duplicateKeys ? [plural(source.duplicateKeys, 'duplicate key')] : []),
     ].join(', ') + '.';
   if (source.state === 'unreadable')
     return (
-      'VS Code Project Manager’s list could not be read.' +
-      (source.projects ? ` The last valid list remains in effect. ${counts}` : '')
+      'VS Code Project Manager’s list couldn’t be read.' +
+      (source.projects ? ` Viewer keeps using the last list it read. ${counts}` : '')
     );
   return counts;
 }
@@ -69,7 +66,7 @@ export function WorkspaceDefinitionsSettings() {
         const errors = next.diagnostics.filter((issue) => issue.level === 'error').length;
         setMessage(
           errors
-            ? `${errors} ${errors === 1 ? 'error remains' : 'errors remain'}. Fix the diagnostics below.`
+            ? `${plural(errors, 'error')} left. Fix the problems listed below.`
             : 'No errors found.',
         );
       }
@@ -83,8 +80,7 @@ export function WorkspaceDefinitionsSettings() {
     <>
       <h2>Workspace definitions</h2>
       <p className="settings-note">
-        Search definitions by name in Change workspace. Only opened workspaces join your workspace
-        list.
+        Find a definition by name in Change Workspace…. Only workspaces you open join your list.
       </p>
       {catalog && (
         <PathField
@@ -103,7 +99,7 @@ export function WorkspaceDefinitionsSettings() {
       </div>
       {catalog?.file.state === 'last-valid' && (
         <p className="settings-error" role="status">
-          The last valid definitions remain in effect until workspaces.jsonc is fixed.
+          Viewer keeps using the last definitions it read until workspaces.jsonc is fixed.
         </p>
       )}
       {catalog && (
@@ -143,7 +139,7 @@ export function WorkspaceDefinitionsSettings() {
               disabled={busy}
               onClick={() => void run({ kind: 'allow-source' })}
             >
-              Allow access…
+              Allow Access…
             </Button>
           )}
           {!!catalog.diagnostics.length && (

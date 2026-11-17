@@ -272,15 +272,16 @@ function furtherPitch(
 function shiftFor(still: Hole, moved: Hole, axis: PitchAxis, change: number): Point {
   const dx = moved.centre.x - still.centre.x,
     dy = moved.centre.y - still.centre.y;
+  // eslint-disable-next-line no-restricted-syntax -- the stored axis value, not interface text
   if (axis === 'centre') {
     const length = Math.hypot(dx, dy);
-    if (length <= written) throw new Error('The two holes share a centre.');
+    if (length <= written) throw new Error('The two holes share a center.');
     return { x: (dx / length) * change, y: (dy / length) * change };
   }
   const along = axis === 'x' ? dx : dy;
   if (Math.abs(along) <= written)
     throw new Error(
-      `Holes ${still.number} and ${moved.number} share their ${axis} position; set the pitch along the other axis or centre to centre.`,
+      `Holes ${still.number} and ${moved.number} share their ${axis} position; set the pitch along the other axis or center to center.`,
     );
   const signed = Math.sign(along) * change;
   return axis === 'x' ? { x: signed, y: 0 } : { x: 0, y: signed };

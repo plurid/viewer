@@ -82,7 +82,7 @@ describe('Git action origin', () => {
       if (change === 'root') space.roots = [];
       if (change === 'closed') window.alive = false;
       await expect(validateGitTarget(bound, window, canonical), change).rejects.toThrow(
-        'originating folder',
+        'folder or workspace this started from',
       );
     }
   });
@@ -117,7 +117,7 @@ describe('Git action origin', () => {
     space.roots.push('other');
     space.panes.push({ id: 'other', type: 'folder', path: '/other' });
     await expect(bindGitTarget({ ...target, rootID: 'other' }, window, canonical)).rejects.toThrow(
-      'originating',
+      'this started from',
     );
     space.panes.push({ id: 'child', type: 'folder', path: '/fixture/child' });
     const child = {
@@ -126,11 +126,11 @@ describe('Git action origin', () => {
       panePath: '/fixture/child',
       directory: '/fixture/child',
     };
-    await expect(bindGitTarget(child, window, canonical)).rejects.toThrow('originating');
+    await expect(bindGitTarget(child, window, canonical)).rejects.toThrow('this started from');
     window.owners = { child: 'folder' };
     await expect(bindGitTarget(child, window, canonical)).resolves.toMatchObject(child);
     await expect(bindGitTarget({ ...child, rootID: 'other' }, window, canonical)).rejects.toThrow(
-      'originating',
+      'this started from',
     );
   });
 });

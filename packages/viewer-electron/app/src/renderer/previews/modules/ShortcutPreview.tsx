@@ -4,7 +4,8 @@ import type { ShortcutFacts } from '../../../domain/previews/data/shortcuts';
 import { isBinaryPlist } from '../../../domain/previews/data/plist';
 import { readShortcut, shortcutLimit } from '../../../domain/previews/data/shortcuts';
 import { errorMessage } from '../../../domain/errors';
-import { Empty, Loading } from '../../ui/primitives';
+import { Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
 import { report } from '../../state/store';
@@ -76,7 +77,7 @@ export default function ShortcutPreview(context: PreviewContext) {
         },
         {
           id: 'view-source',
-          label: source ? 'Show shortcut' : 'Show source',
+          label: source ? 'Show Shortcut' : 'Show Source',
           aliases: ['vs'],
           available: textual,
           run: () => setSource((value) => !value),
@@ -89,7 +90,12 @@ export default function ShortcutPreview(context: PreviewContext) {
   if (reading.status === 'failed')
     return (
       <div className="inspection-viewer">
-        <Empty icon="link" title="The shortcut could not be read" detail={reading.message} />
+        <PreviewFailure
+          context={context}
+          icon="link"
+          title="Can't read this shortcut"
+          detail={reading.message}
+        />
       </div>
     );
   const facts = reading.shortcut;

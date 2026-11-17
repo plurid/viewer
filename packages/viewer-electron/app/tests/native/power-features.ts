@@ -386,7 +386,7 @@ try {
     assert.equal(allowed.status, 'resolved');
 
     await main.evaluate(pageCall(clickFileRow, file));
-    await palette('Chat about files');
+    await palette('Chat About Files');
     await until(
       () => main.evaluate(exists('[aria-label="Chat message"]')),
       Boolean,

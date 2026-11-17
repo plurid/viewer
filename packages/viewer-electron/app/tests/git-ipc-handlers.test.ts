@@ -159,7 +159,7 @@ describe('Git IPC ownership', () => {
     view.window.workspaceID = 'another';
     await expect(
       view.handlers.gitAction([{ id: 'action', kind: 'status', target: view.target }], 17),
-    ).rejects.toThrow('originating');
+    ).rejects.toThrow('this started from');
     expect(view.actions.start).not.toHaveBeenCalled();
     expect(view.observedAt).not.toHaveBeenCalled();
   });
@@ -172,7 +172,7 @@ describe('Git IPC ownership', () => {
     ).resolves.toMatchObject({ kind: 'opened' });
     await expect(
       view.handlers.gitAction([{ id: 'action', kind: 'status', target: view.target }], 17),
-    ).rejects.toThrow('originating');
+    ).rejects.toThrow('this started from');
     expect(view.reviews.request).toHaveBeenCalledWith(
       { kind: 'open', target: { ...view.target, originID: 'desktop-owner' } },
       17,

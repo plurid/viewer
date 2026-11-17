@@ -104,7 +104,7 @@ export class GitWorktrees {
     await this.ports.access([administration]);
     const admin = await lstat(administration);
     if (!admin.isDirectory() || admin.isSymbolicLink())
-      throw new Error('The worktree administration folder is unavailable.');
+      throw new Error('Git’s folder for this worktree is missing.');
     const after = await lstat(location);
     if (identityOf(before) !== identityOf(after) || (await realpath(location)) !== actual)
       throw new Error('The worktree folder changed while reading it.');
@@ -170,7 +170,7 @@ export class GitWorktrees {
   private async list(directory: string, owner: string): Promise<WorktreeCatalog> {
     const registry = await this.reader.worktrees(directory);
     const common = await lstat(registry.commonDirectory);
-    if (!common.isDirectory()) throw new Error('Git repository administration is unavailable.');
+    if (!common.isDirectory()) throw new Error('This repository’s Git folder is missing.');
     const entries = new Map<string, RegisteredWorktree>();
     const worktrees: GitWorktree[] = [];
     for (let offset = 0; offset < registry.worktrees.length; offset += 8) {
@@ -185,7 +185,7 @@ export class GitWorktrees {
                 available: false,
                 problem: record.bare
                   ? 'A bare repository has no working files.'
-                  : 'This registration is prunable; its folder is unavailable.',
+                  : 'Folder missing. Git still lists this worktree, but its folder is gone.',
               },
               registration: { record },
             };
@@ -283,10 +283,10 @@ export class GitWorktrees {
       !lease.sourceID
     )
       throw new Error('The worktree list expired or belongs to another window. Refresh it.');
-    if (!this.ports.validateTarget) throw new Error('Worktree creation is unavailable.');
+    if (!this.ports.validateTarget) throw new Error('This build of Viewer can’t create worktrees.');
     await this.ports.validateTarget(owner, request.target);
     if ((await realpath(request.target.directory)) !== (await realpath(lease.source)))
-      throw new Error('The originating folder differs from this worktree list. Refresh it.');
+      throw new Error('This worktree list belongs to another folder. Refresh it.');
     await this.resolve(request.catalogID, lease.sourceID, ownerID);
     if ([...this.writes.values()].some((write) => write.repository === lease.repository))
       throw new Error('A worktree is already being created for this repository.');

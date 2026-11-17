@@ -69,7 +69,7 @@ it('shows complete configured identities and the effective default without conne
   );
   const entries = document.querySelectorAll('.model-summary');
   expect(entries[0]!.textContent).toContain('Researcha-complete-model-name');
-  expect(entries[0]!.textContent).toContain('Configured · connection not checked');
+  expect(entries[0]!.textContent).toContain('Set up · not checked');
   expect(entries[0]!.textContent).toContain('Default for Ask');
   expect(services.providerModels).not.toHaveBeenCalled();
   expect(services.providerCredential).not.toHaveBeenCalled();
@@ -81,11 +81,11 @@ it('shows complete configured identities and the effective default without conne
   ]);
 });
 
-it('provides an explicit Add model setup flow without changing existing provider IDs', () => {
+it('provides an explicit Add Model setup flow without changing existing provider IDs', () => {
   const { snapshot, save, services } = setup();
-  fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add Model' }));
   fireEvent.change(screen.getByLabelText('New model provider'), { target: { value: 'local' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Set up model' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Set Up Model' }));
   const patch = save.mock.calls[0]![0](snapshot)[0]!;
   expect(patch.path).toBe('settings.providers');
   expect(patch.value).toEqual([
@@ -98,8 +98,8 @@ it('provides an explicit Add model setup flow without changing existing provider
 it('reports an explicit connection result and ignores a completion for a replaced model', async () => {
   const { snapshot, save, services, view, error } = setup();
   const first = document.querySelector('.settings-provider')! as HTMLElement;
-  fireEvent.click(within(first).getByRole('button', { name: 'Connect and load models' }));
-  await within(first).findByText('Connected · 1 model IDs available');
+  fireEvent.click(within(first).getByRole('button', { name: 'Load Models' }));
+  await within(first).findByText('Connected · 1 model');
   let finish!: (values: string[]) => void;
   services.providerModels.mockImplementationOnce(
     () =>
@@ -107,7 +107,7 @@ it('reports an explicit connection result and ignores a completion for a replace
         finish = resolve;
       }),
   );
-  fireEvent.click(within(first).getByRole('button', { name: 'Connect and load models' }));
+  fireEvent.click(within(first).getByRole('button', { name: 'Load Models' }));
   const changed = {
     ...snapshot,
     settings: {
@@ -120,7 +120,7 @@ it('reports an explicit connection result and ignores a completion for a replace
   };
   view.rerender(<ModelSettings snapshot={changed} save={save} error={error} />);
   await act(async () => finish(['old-model']));
-  expect(first.querySelector('.model-summary')!.textContent).toContain('connection not checked');
+  expect(first.querySelector('.model-summary')!.textContent).toContain('not checked');
   expect(first.querySelector('.model-summary')!.textContent).not.toContain('Connected');
   expect(error).toHaveBeenLastCalledWith('');
 });

@@ -346,7 +346,7 @@ try {
       await choose(connection, 'Broken');
       await until(
         () => connection.evaluate(textOf('.office-viewer .empty-state')),
-        (text) => text.includes('Worksheet page unavailable'),
+        (text) => text.includes("Can't show this worksheet page"),
         'malformed worksheet refusal',
       );
       assert.equal(await connection.evaluate(exists('.worksheet-navigation')), false);
@@ -357,7 +357,7 @@ try {
       const errorPath = path.join(root, 'page-error-dark.png');
       await writeFile(errorPath, Buffer.from(errorShot.data, 'base64'), { flag: 'wx' });
       captures.push(errorPath);
-      await connection.evaluate(pressButton('First worksheet', '.empty-state'));
+      await connection.evaluate(pressButton('First Worksheet', '.empty-state'));
       await ready(connection, 1, 'Measurements');
       await choose(connection, 'Empty');
       await ready(connection, 1, 'Empty');
@@ -367,7 +367,7 @@ try {
         ),
       );
       checks.push(
-        'External worksheet targets fail without being fetched; First worksheet recovers and true empty sheets remain explicit.',
+        'External worksheet targets fail without being fetched; First Worksheet recovers and true empty sheets remain explicit.',
       );
     },
   );

@@ -19,7 +19,7 @@ export function sidebarCommands({
   const commands: CommandDefinition[] = [
     {
       id: 'shortcut-open',
-      label: 'Open folder',
+      label: 'Open Folder',
       group: 'Sidebar',
       icon: 'folder',
       when: shortcut,
@@ -32,7 +32,7 @@ export function sidebarCommands({
     },
     {
       id: 'shortcut-new-root',
-      label: 'Open in new root plane',
+      label: 'Open in New Root Plane',
       group: 'Sidebar',
       icon: 'planes',
       aliases: ['np', 'root'],
@@ -46,7 +46,7 @@ export function sidebarCommands({
     },
     {
       id: 'shortcut-rename',
-      label: 'Rename shortcut…',
+      label: 'Rename Shortcut…',
       group: 'Sidebar',
       icon: 'rename',
       aliases: ['rn'],
@@ -73,7 +73,7 @@ export function sidebarCommands({
     },
     {
       id: 'shortcut-hide',
-      label: 'Hide location',
+      label: 'Hide Location',
       group: 'Sidebar',
       icon: 'eye',
       when: (context) => shortcut(context) && context.sidebar!.section === 'locations',
@@ -87,8 +87,8 @@ export function sidebarCommands({
       id: 'section-collapse',
       label: (context) =>
         state.saved.ui.sidebar.collapsed.includes(context.sidebar!.section)
-          ? 'Expand section'
-          : 'Collapse section',
+          ? 'Expand Section'
+          : 'Collapse Section',
       group: 'Sidebar',
       icon: 'down',
       when: sidebar,
@@ -107,7 +107,7 @@ export function sidebarCommands({
   for (const direction of [-1, 1]) {
     commands.push({
       id: `section-${direction < 0 ? 'up' : 'down'}`,
-      label: `Move section ${direction < 0 ? 'up' : 'down'}`,
+      label: `Move Section ${direction < 0 ? 'Up' : 'Down'}`,
       group: 'Sidebar',
       icon: direction < 0 ? 'up' : 'down',
       when: (context) =>
@@ -135,7 +135,7 @@ export function sidebarCommands({
           );
     commands.push({
       id: `shortcut-${direction < 0 ? 'up' : 'down'}`,
-      label: `Move shortcut ${direction < 0 ? 'up' : 'down'}`,
+      label: `Move Shortcut ${direction < 0 ? 'Up' : 'Down'}`,
       group: 'Sidebar',
       icon: direction < 0 ? 'up' : 'down',
       when: (context) => {

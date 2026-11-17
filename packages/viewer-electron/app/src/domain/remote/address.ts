@@ -33,8 +33,14 @@ export interface UnknownConnectionAddress {
 export type RemoteAddress =
   SFTPAddress | ShareAddress | WebDAVAddress | SavedConnectionAddress | UnknownConnectionAddress;
 
-const passwordMessage =
-  'Viewer does not keep passwords in addresses. Enter the address without it; macOS asks for the password.';
+function passwordMessage(input: string): string {
+  const provider = /^(ssh|sftp):/i.test(input)
+    ? 'Viewer asks for the password when it connects'
+    : 'macOS asks for the password';
+  return (
+    'Viewer does not keep passwords in addresses. Enter the address without it; ' + provider + '.'
+  );
+}
 const urlSchemes = new Set([
   'file',
   'javascript',
@@ -82,7 +88,9 @@ function networkAddress(input: string, webdav: boolean): ShareAddress | WebDAVAd
   } catch {
     throw new Error('Enter a complete server address.');
   }
-  if (url.password) throw new Error(passwordMessage);
+  if (url.password) throw new Error(passwordMessage(input));
+  if (url.hostname === '.' || url.hostname === '..' || url.hostname.includes('..'))
+    throw new Error('Enter a server host without empty labels.');
   if (!url.host || (url.port && (Number(url.port) < 1 || Number(url.port) > 65535)))
     throw new Error('Enter a server host and a port from 1 to 65535.');
   return webdav
@@ -98,14 +106,15 @@ function parseAddress(input: string, savedNames: readonly string[] = []): Remote
   const authority = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^/?#]*)/.exec(address)?.[1];
   if (authority !== undefined) {
     const at = authority.lastIndexOf('@');
-    if (at !== -1 && authority.slice(0, at).includes(':')) throw new Error(passwordMessage);
     let decoded: string;
     try {
       decoded = decodeURIComponent(authority);
     } catch {
       throw new Error('Enter a complete server address.');
     }
-    if (/[\p{Cf}\p{Default_Ignorable_Code_Point}]/u.test(decoded))
+    if (at !== -1 && decodeURIComponent(authority.slice(0, at)).includes(':'))
+      throw new Error(passwordMessage(address));
+    if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u.test(decoded))
       throw new Error('Use a server user and host without invisible characters.');
   }
   if (!address || !validRemoteUnicode(input) || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(input))
@@ -157,6 +166,8 @@ export function parseRemoteAddress(
     return parseAddress(input, savedNames);
   } catch (error) {
     if (error instanceof ZodError) {
+      if (error.issues.some((issue) => issue.message.includes('too long')))
+        throw new Error('The server path or file name is too long.');
       const name = !input.includes('/') && !input.includes('@') && !input.includes(':');
       throw new Error(
         name

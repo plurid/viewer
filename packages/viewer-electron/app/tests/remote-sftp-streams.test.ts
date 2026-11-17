@@ -17,8 +17,8 @@ describe('bounded pipelined SFTP streams', () => {
     const size = 100_000_000;
     const expected = createHash('sha256');
     function* source(): Generator<Buffer> {
-      for (let offset = 0; offset < size; offset += 65536) {
-        const chunk = Buffer.alloc(Math.min(size - offset, 65536));
+      for (let offset = 0; offset < size; offset += 131072) {
+        const chunk = Buffer.alloc(Math.min(size - offset, 131072));
         for (let index = 0; index < chunk.length; index++)
           chunk[index] = ((offset + index) * 31 + Math.floor((offset + index) / 257)) & 255;
         expected.update(chunk);
@@ -30,8 +30,8 @@ describe('bounded pipelined SFTP streams', () => {
     let writePeak = 0;
     expect(
       await pwrite(client, upload, source(), {
-        chunkBytes: 65536,
-        concurrency: 128,
+        chunkBytes: 131072,
+        concurrency: 1024,
         onProgress: (bytes) => {
           expect(bytes > writeProgress).toBe(true);
           writeProgress = bytes;
@@ -50,8 +50,8 @@ describe('bounded pipelined SFTP streams', () => {
     let readProgress = 0n;
     let readPeak = 0;
     for await (const chunk of pread(client, download, {
-      chunkBytes: 65536,
-      concurrency: 128,
+      chunkBytes: 131072,
+      concurrency: 1024,
       length: BigInt(size),
       onProgress: (bytes) => {
         expect(bytes > readProgress).toBe(true);
@@ -72,6 +72,78 @@ describe('bounded pipelined SFTP streams', () => {
     expect(readPeak).toBe(remoteLimits.readBytesPerStream);
     await client.close(download);
   }, 30000);
+
+  it.each([5, 8])(
+    'shares one channel between %i full streams and a listing without refusing either',
+    async (count) => {
+      const { client, server } = sftpFixture();
+      const content = Buffer.alloc(3 * remoteLimits.readBytesPerStream + 1);
+      for (let index = 0; index < content.length; index++) content[index] = (index * 7) & 255;
+      const expected = createHash('sha256').update(content).digest('hex');
+      server.file('/home/source', content);
+      await client.connect();
+      const handles = await Promise.all(
+        Array.from({ length: count }, () => client.open(b('/home/source'), 'read')),
+      );
+      server.holdReplies = true;
+      let finished = 0;
+      const streams = handles.map(async (handle) => {
+        const hash = createHash('sha256');
+        for await (const chunk of pread(client, handle)) hash.update(chunk);
+        finished++;
+        return hash.digest('hex');
+      });
+      await sftpTurn();
+      // The first two streams fill the channel's byte budget with full windows; every later
+      // stream may still take one block, and nothing is refused.
+      expect(client.stats).toMatchObject({
+        inFlight: remoteLimits.requestsPerChannel,
+        queued: remoteLimits.requestsPerChannel + count - 2,
+      });
+      const started = server.packets.length;
+      const listing = (async () => {
+        const folder = await client.opendir(b('/home'));
+        const names: string[] = [];
+        let page = await client.readdir(folder);
+        while (page) {
+          names.push(...page.map((entry) => entry.filename.toString()));
+          page = await client.readdir(folder);
+        }
+        await client.close(folder);
+        return { names, finished };
+      })();
+      await sftpTurn();
+      server.releaseReplies();
+      expect(await Promise.all(streams)).toEqual(Array(count).fill(expected));
+      const listed = await listing;
+      expect(listed.names).toEqual(['.', '..', 'source']);
+      // Flows take turns for credit, so the listing ends before any full stream does.
+      expect(listed.finished).toBe(0);
+      const kinds = server.packets.slice(started).map((packet) => packet.request?.kind);
+      const gaps: number[] = [];
+      let reads = 0;
+      for (const kind of kinds) {
+        if (kind === 'read') reads++;
+        else if (gaps.length < 4) {
+          gaps.push(reads);
+          reads = 0;
+        }
+      }
+      expect(kinds.filter((kind) => kind !== 'read').slice(0, 4)).toEqual([
+        'opendir',
+        'readdir',
+        'readdir',
+        'close',
+      ]);
+      // A listing request waits at most one turn per stream, plus the replies ahead of the last one.
+      expect(gaps[0]).toBeLessThanOrEqual(count);
+      for (const gap of gaps.slice(1))
+        expect(gap).toBeLessThanOrEqual(remoteLimits.requestsPerChannel + count);
+      expect(client.connected).toBe(true);
+      expect(client.stats).toMatchObject({ inFlight: 0, queued: 0 });
+      for (const handle of handles) await client.close(handle);
+    },
+  );
 
   it('fills short reads in order, supports byte ranges and reads to EOF without a known length', async () => {
     const { client, server } = sftpFixture({ shortReadBytes: 7, reorderReplies: true });
@@ -142,7 +214,11 @@ describe('bounded pipelined SFTP streams', () => {
   });
 
   it('owns queued upload bytes when an input iterator reuses its buffer', async () => {
-    const { client, server } = sftpFixture({ reorderReplies: true });
+    const { client, server } = sftpFixture(
+      { reorderReplies: true },
+      {},
+      { highWaterMark: 1024, writeDelayMs: 2 },
+    );
     await client.connect();
     const handle = await client.open(b('/home/reused'), 'create');
     function* source(): Generator<Buffer> {

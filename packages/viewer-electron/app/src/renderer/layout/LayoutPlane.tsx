@@ -18,7 +18,9 @@ import { sourceVersion } from '../../domain/files/inspection';
 import { isActiveJob } from '../../domain/operations/jobs';
 import { baseName } from '../../domain/workspaces/planes';
 import { errorMessage } from '../../domain/errors';
-import { Empty, IconButton, Loading, Row } from '../ui/primitives';
+import { homeText } from '../../domain/files/path-label';
+import { useHome } from '../ui/PathLabel';
+import { Empty, Failure, IconButton, Loading, Row } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { report, updatePane, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
@@ -85,6 +87,7 @@ function initialSettings(
 
 export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
   const workspace = useWorkspace();
+  const home = useHome();
   const jobs = useViewer((state) => state.jobs);
   const [read, setRead] = useState<ReadSelection>();
   const [progress, setProgress] = useState({ done: 0, total: pane.sources.length });
@@ -162,9 +165,11 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
 
   if (failure)
     return (
-      <Empty icon="warning" title="The files could not be read" detail={failure}>
-        <button onClick={() => setAttempt((value) => value + 1)}>Try again</button>
-      </Empty>
+      <Failure
+        title="Can't read these files"
+        detail={failure}
+        onRetry={() => setAttempt((value) => value + 1)}
+      />
     );
   if (!read || !settings || !pictures)
     return (
@@ -382,12 +387,14 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
               {exports.map((job) => (
                 <div className="layout-job" key={job.id} aria-live="polite">
                   <span role="status">
-                    {isActiveJob(job)
-                      ? `${Math.round((job.progress ?? 0) * 100)}% · ${job.detail || 'Saving…'}`
-                      : job.status === 'completed'
-                        ? 'Saved'
-                        : job.status}
-                    {job.errors[0] ? ` · ${job.errors[0].message}` : ''}
+                    {homeText(
+                      (isActiveJob(job)
+                        ? `${Math.round((job.progress ?? 0) * 100)}% · ${job.detail || 'Saving…'}`
+                        : job.status === 'completed'
+                          ? 'Saved'
+                          : job.status) + (job.errors[0] ? ` · ${job.errors[0].message}` : ''),
+                      home,
+                    )}
                   </span>
                   {isActiveJob(job) && (
                     <button onClick={() => void window.viewer.cancelJob(job.id).catch(report)}>

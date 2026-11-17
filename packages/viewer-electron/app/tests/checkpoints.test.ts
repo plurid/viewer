@@ -194,7 +194,9 @@ describe('reviewed content checkpoints', () => {
     const record = await service.create('First', [file]);
     budget = record.bytes + 1;
     expect(await service.estimate([file])).toMatchObject({ supported: false, availableBytes: 1 });
-    await expect(service.create('Second', [file])).rejects.toThrow('budget');
+    await expect(service.create('Second', [file])).rejects.toThrow(
+      'needs more space than checkpoints have left',
+    );
     expect((await service.list()).records).toHaveLength(1);
     if (removalBlocked('checkpoint budget reclamation', [path.join(root, 'Private', record.id)])) {
       await expect(service.remove(record.id)).rejects.toMatchObject({

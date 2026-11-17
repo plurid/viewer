@@ -104,7 +104,10 @@ export class AgentClients {
     await this.load();
     if (id === sharedClientID) return;
     const client = this.records.find((client) => client.id === id && !client.revoked);
-    if (!client) throw new Error('This agent client is revoked or unavailable.');
+    if (!client)
+      throw new Error(
+        'This agent client was revoked or removed. Create a new one in Settings → Agents.',
+      );
     return publicClient(client);
   }
   async require(capability: AgentCapability, id = this.actor()): Promise<AgentClient | undefined> {

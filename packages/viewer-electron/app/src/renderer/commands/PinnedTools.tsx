@@ -38,7 +38,7 @@ export function PinnedTools({ pane, scope }: ToolbarProps) {
                   command?.unavailable ??
                   (command
                     ? label
-                    : 'Missing action. Open “What can I do here?” to repair this pin.')
+                    : 'This action no longer exists. Unpin it in What Can I Do Here?')
                 }
                 disabled={!command?.available}
                 onClick={() => {

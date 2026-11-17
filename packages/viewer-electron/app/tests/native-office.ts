@@ -349,7 +349,7 @@ async function checkError() {
     });
     await until(
       () => connection!.evaluate(textOf('.preview-host')),
-      (text) => text.includes('Office preview unavailable'),
+      (text) => text.includes("Can't show this document"),
       'unreadable Office recovery',
     );
     assert.equal(

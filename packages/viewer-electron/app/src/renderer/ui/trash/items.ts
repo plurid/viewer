@@ -36,4 +36,4 @@ export type MenuAction = {
   run(): void;
 };
 export const originUnavailable =
-  'Viewer has no verified original location for this item. Use Restore to… to choose a folder.';
+  "Viewer doesn't know where this came from. Use Restore To… to pick a folder.";

@@ -11,7 +11,7 @@ target or a nesting quantity.
 
 ## What a check reads
 
-**Check laser job…** reads the selected files when one of them is a DXF or DWG file. Otherwise it
+**Check Laser Job…** reads the selected files when one of them is a DXF or DWG file. Otherwise it
 reads a job folder: the one selected, or the folder shown when nothing is selected. A job folder is
 read with the files of the folders in it, one level down, so parts kept in `DXF/` are read.
 
@@ -80,24 +80,24 @@ the check again first."
 
 | Command                   | ID                  | Does                                                              |
 | ------------------------- | ------------------- | ----------------------------------------------------------------- |
-| **Prepare cut sheets**    | `check-cut-sheets`  | Opens the Nesting plane on the job's parts, as the panel's button |
-| **Play the check’s tour** | `check-tour`        | Plays the tour, as **Play the tour**                              |
-| **Save corrected copies** | `check-corrections` | Saves each proposed [correction](#correction) not saved yet       |
-| **Export handoff**        | `check-handoff`     | Exports the [handoff](#handoff), nesting first what is not nested |
+| **Prepare Cut Sheets**    | `check-cut-sheets`  | Opens the Nesting plane on the job's parts, as the panel's button |
+| **Play the Check’s Tour** | `check-tour`        | Plays the tour, as **Play the Tour**                              |
+| **Save Corrected Copies** | `check-corrections` | Saves each proposed [correction](#correction) not saved yet       |
+| **Export Handoff**        | `check-handoff`     | Exports the [handoff](#handoff), nesting first what is not nested |
 
 ### By voice
 
 Said over Job 1042, "Check this job and prepare the cut sheets" checks it, then opens its cut sheets
 once it is graded ([Ask Viewer by voice](../guides/speech.md#ask-viewer-by-voice)).
 
-- **The check.** The panel opens as **Check laser job…** opens it, and the check runs at once when
+- **The check.** The panel opens as **Check Laser Job…** opens it, and the check runs at once when
   its model may already receive pictures. Otherwise the step says "Meta may not receive pictures
-  yet. Choose Allow pictures for Meta in the check panel, then Check 7 files." and waits for that
+  yet. Choose Allow pictures for Meta in the check panel, then Check 7 Files." and waits for that
   check.
 - **No answer paid twice.** A check of the job already open, running or graded, is waited for, not
   started again. A kept check unchanged since is graded already; one changed since runs again.
-- **What follows.** **Prepare cut sheets** and **Play the check’s tour** run once the check is
-  graded. **Save corrected copies** and **Export handoff** save files, so they wait for the person's
+- **What follows.** **Prepare Cut Sheets** and **Play the Check’s Tour** run once the check is
+  graded. **Save Corrected Copies** and **Export Handoff** save files, so they wait for the person's
   press.
 - **Another job.** "Check job 1043" over Job 1042 runs nothing until the person chooses the job that
   is there: "Job 1043 is not here. Job 1042 is."
@@ -110,12 +110,12 @@ One request goes to the model, with the instructions, the input as text, then th
 order the input numbers them. The answer is held to `fabricationAnswerSchema` with a strict
 `json_schema`.
 
-| File    | Sent as                                                                                                                                              |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Request | Its subject, date, plain text up to 20,000 characters and attachment names, read with the message preview's parser. Addresses are left out           |
-| Drawing | Each page drawn by pdf.js at 2048 px on its longer side, as a JPEG, with each run of text and its box on the page                                    |
-| Photo   | A JPEG of at most 1600 px on its longer side, turned upright, without EXIF, GPS, XMP or a colour profile. HEIC goes through the preview helper first |
-| DXF     | Viewer's [measurement](#measurement) and what its name gives. The drawing itself is not sent                                                         |
+| File    | Sent as                                                                                                                                             |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Request | Its subject, date, plain text up to 20,000 characters and attachment names, read with the message preview's parser. Addresses are left out          |
+| Drawing | Each page drawn by pdf.js at 2048 px on its longer side, as a JPEG, with each run of text and its box on the page                                   |
+| Photo   | A JPEG of at most 1600 px on its longer side, turned upright, without EXIF, GPS, XMP or a color profile. HEIC goes through the preview helper first |
+| DXF     | Viewer's [measurement](#measurement) and what its name gives. The drawing itself is not sent                                                        |
 
 The model sees each file by its ref and name, never its folder. Every file is read only while it is
 the version the check listed; a page drawn from another version is refused with "Job 1042
@@ -176,14 +176,14 @@ them itself and never picks one silently.
   pieces” does not give 5 pieces." A disagreement the model already found is not raised twice.
 - **Agree.** Thicknesses agree within 0.05 mm. Quantities agree when they are the same count, or one
   is the other times the separate pieces the drawing holds.
-- **Used.** **Prepare cut sheets** takes the verified request's value, else the verified drawing's,
+- **Used.** **Prepare Cut Sheets** takes the verified request's value, else the verified drawing's,
   else an explicit file-name fallback when no document value is claimed, and says which: "4 pieces ·
   6 mm, both from the request", or "4 pieces, from the request · 6 mm, from the file name (“g6”)"
   when they differ. Parts the request lists apart that are one drawing, such as a left and a right,
   add up.
 - **Unverified.** Each row must pass source verification or explicit human confirmation before
   quantities are added or thicknesses enter nesting. An unsupported document value remains
-  unresolved; the file name does not silently override it. **Prepare cut sheets** and handoff
+  unresolved; the file name does not silently override it. **Prepare Cut Sheets** and handoff
   validation refuse unresolved quantities and thicknesses.
 
 **Unread.** When the job has a request, what the answer leaves unread in it is a finding of its own,
@@ -218,9 +218,9 @@ part the value is about. The page opens fitted to both: the feature outlined, th
   model's `box` stands in, shown as **“50” in a box from Muse Spark**. Text is never sent to SAM.
 - **Feature.** The finding's `feature` box goes to SAM 3.1 as an object prompt in whole pixels of
   the picture the model read. The mask SAM returns, laid over the box SAM found, is traced around
-  its largest region and labelled **outline from SAM 3.1**, with SAM's confidence. When SAM gives
-  none, the model's feature box stands in, labelled **box from Muse Spark**, with SAM's reason in
-  the check record. Another provider's box is labelled for it, such as **box from Gemini**.
+  its largest region and labeled **outline from SAM 3.1**, with SAM's confidence. When SAM gives
+  none, the model's feature box stands in, labeled **box from Muse Spark**, with SAM's reason in the
+  check record. Another provider's box is labeled for it, such as **box from Gemini**.
 - **Who outlines.** SAM runs on the provider that read the job, at its own endpoint and under the
   same `images` approval. Meta answers with SAM 3.1. A **Local endpoint** outlines when **Outlines
   with SAM** names the SAM model its server also answers on `/responses`, such as `sam-3.1`, as SAM
@@ -255,14 +255,14 @@ folders. This portable record contains:
 
 ## Handoff
 
-**Export handoff** saves `<job> handoff`, such as "Job 1042 handoff", in the job's folder, through
+**Export Handoff** saves `<job> handoff`, such as "Job 1042 handoff", in the job's folder, through
 **File operations**: it is made in a private stage, published whole, and Undo applies. When a
-thickness of the job's parts has no nesting yet, the button reads **Nest and export handoff** and
+thickness of the job's parts has no nesting yet, the button reads **Nest and Export Handoff** and
 [nests it first](#cut-sheets-the-export-nests).
 
 | Item                    | Holds                                                                                                                                                    |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Cut sheets/`           | Each thickness's nesting of the job's parts, as **Save nesting** writes it: the one a Layout plane checked, else the one the export nested               |
+| `Cut sheets/`           | Each thickness's nesting of the job's parts, as **Save Nesting** writes it: the one a Layout plane checked, else the one the export nested               |
 | `Evidence/`             | A copy of every file of the check and of each corrected copy, each with its date                                                                         |
 | `Job.viewer-tour.jsonc` | The check's tour, its stops pointed at the copies in `Evidence/`, so it plays wherever the folder goes; each copy has its stop's recorded bytes and date |
 | `Check record.json`     | The [check record](#the-check-record)                                                                                                                    |
@@ -282,7 +282,7 @@ A thickness no nesting covers is grouped as the Layout plane's tabs group the cu
 "6 mm is not nested yet: the export nests it first on 1250 × 2500 mm sheets. To choose the sheets
 yourself, prepare the cut sheets and wait for Checked."
 
-- **As the plane starts it.** Viewer nests it without a plane, as **Prepare cut sheets** opens it:
+- **As the plane starts it.** Viewer nests it without a plane, as **Prepare Cut Sheets** opens it:
   the same reading of each drawing, the quantities and thicknesses the cut sheets list, the
   [sheet](nesting.md#sheets), margin, spacing, turns and cutting values a tab starts with, the same
   [search](nesting.md#true-shape-nesting) and the same exact check.
@@ -302,7 +302,7 @@ Nothing is exported when a nesting stops:
 | A drawing that cannot be read       | "g6-PL60-B2-2buc.dxf could not be read for nesting: This drawing is larger than 32 MB. Nothing was exported."                                                                                |
 | A drawing without an outline        | "g6-PL60-B2-2buc.dxf holds no outline to nest. Nothing was exported."                                                                                                                        |
 | A layout that fails its exact check | "Nesting 6 mm did not pass its check: … Nothing was exported."                                                                                                                               |
-| **Cancel**                          | "The nesting was cancelled. Nothing was exported."                                                                                                                                           |
+| **Cancel**                          | "The nesting was canceled. Nothing was exported."                                                                                                                                            |
 
 ## The panel's title bar
 
@@ -311,17 +311,18 @@ collapse, expand, place in space and close controls. Check and note instances ca
 previews, scratch buffers, terminals, browser views and other runtime views stay in space. Notes and
 scratch buffers retain their shared preview route; pin eligibility is checked per instance.
 
-**Review evidence** resolves captured source references and versions under the originating folder
-and workspace. It opens the selected drawing and DXF first, then related context, waits for each
-plane and lays them out to read. No arrangement happens on check completion. **Stack evidence** is
-an optional compact view. **Restore arrangement** restores the affected evidence geometry while
-leaving other planes in place. Comparisons reject a partial selection of another stack.
+**Review Evidence** resolves captured source references and versions under the folder the check
+started from and workspace. It opens the selected drawing and DXF first, then related context, waits
+for each plane and lays them out to read. No arrangement happens on check completion. **Stack
+Evidence** is an optional compact view. **Restore Arrangement** restores the affected evidence
+geometry while leaving other planes in place. Comparisons reject a partial selection of another
+stack.
 
 Pins, stack membership and previous placements persist with layouts. Arrangement Undo and Redo
 restore stack metadata together with its geometry. A narrow window collapses the pinned check for
 comparison; expanded pins reserve space beside the readable evidence area.
 
-**Play the tour** collapses the panel, so the plane each stop shows is in view, and opens it again
+**Play the Tour** collapses the panel, so the plane each stop shows is in view, and opens it again
 when the tour ends or stops. **Play again** collapses it again. Once you open or collapse it during
 the tour, it stays as you left it. **Esc** stops the tour first.
 
@@ -331,13 +332,13 @@ Closing the plane detaches its view. The desktop retains the check across restar
 paid result and operation relationships. Reopening reads the saved document and checks source
 identities without making a model request.
 
-**Check laser job…** on the same folder or files compares the job with what the check read, each
+**Check Laser Job…** on the same folder or files compares the job with what the check read, each
 file by its size, date and identity, then shows the kept check at once:
 
 | The job   | The panel shows                                                                                                                                                                                                                                                          |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Unchanged | The findings, tour, cut sheets, handoff and each saved correction, under "Checked at 22:14 · Run again". **Run again** asks the model again                                                                                                                              |
-| Changed   | "g6-PL60-B2-2buc.dxf changed since the check at 22:14. The findings below are from before." The result is dimmed under **Findings from 22:14**, and its tour, corrections, cut sheets and handoff wait for **Run again**, which lists the job as it is now and checks it |
+| Unchanged | The findings, tour, cut sheets, handoff and each saved correction, under "Checked at 22:14 · Run Again". **Run Again** asks the model again                                                                                                                              |
+| Changed   | "g6-PL60-B2-2buc.dxf changed since the check at 22:14. The findings below are from before." The result is dimmed under **Findings from 22:14**, and its tour, corrections, cut sheets and handoff wait for **Run Again**, which lists the job as it is now and checks it |
 
 - **What counts.** A file changed, one added that the check would read, and one gone. A corrected
   copy the check saved is not a change.
@@ -394,14 +395,14 @@ values and search.
 - **By thickness** lists each thickness with its sheets, pieces, time and cost, and **All** sums
   them. The shown thickness is live. Another thickness shows its last finished search while nothing
   it nests has changed, otherwise its box estimate as **About 2 sheets**.
-- **Save nesting** saves the shown thickness, named for it: "Nesting of 3 parts, 6 mm".
+- **Save Nesting** saves the shown thickness, named for it: "Nesting of 3 parts, 6 mm".
 
 ## Measurement
 
 Viewer measures a DXF on the entities its preview draws, so every value names the entity numbers the
 preview highlights.
 
-- **Units.** The drawing's `$INSUNITS` is converted to millimetres. A drawing that does not give its
+- **Units.** The drawing's `$INSUNITS` is converted to millimeters. A drawing that does not give its
   units, or gives a code Viewer does not know, is not measured: "The drawing does not give its units
   ($INSUNITS), so it is not measured."
 - **What is measured.** Lines, polylines, circles, arcs, ellipses and splines on visible layers.
@@ -410,19 +411,19 @@ preview highlights.
 - **Loops.** Ends closer than 0.05 mm join, in any order and direction. A loop at an even depth is
   an outline; a loop inside an outline is a hole when it is round, otherwise a cut-out such as a
   slot.
-- **Round.** Circles, and arcs that share a centre and radius, give their centre and diameter
+- **Round.** Circles, and arcs that share a center and radius, give their center and diameter
   exactly. Any other loop is round when every point lies within 0.01 mm of one fitted circle and no
   chord between its points falls more than 0.01 mm inside it, so a polygon is not a hole. A hole
-  drawn with lines, a spline or an ellipse is marked as fitted. Two round loops with the same centre
+  drawn with lines, a spline or an ellipse is marked as fitted. Two round loops with the same center
   and size are one hole.
-- **Hole numbers** follow reading order: rows from the top, each from the left. Centres within 0.05
+- **Hole numbers** follow reading order: rows from the top, each from the left. Centers within 0.05
   mm in y share a row; within 0.05 mm in x, a column.
-- **Pitch** is centre to centre along x, along y, or straight between the centres. Viewer gives it
+- **Pitch** is center to center along x, along y, or straight between the centers. Viewer gives it
   between two named holes, and between neighbours: along x within each row and along y within each
   column.
 - **Size** is the box of the outlines.
 
-The summary a model reads gives millimetres to the thousandth, the entity numbers of every outline
+The summary a model reads gives millimeters to the thousandth, the entity numbers of every outline
 and hole, and no paths. It lists up to 200 holes and 400 pitches, and says when it lists fewer.
 
 ## Answer and grading
@@ -493,7 +494,7 @@ quantity. A bare number or an ambiguous passage does not establish the requireme
 to geometry comparison, not to changing the source's stated value.
 
 For a scanned page or unsupported expression, the person can inspect the cited source and enter a
-value in **Confirm from source…**. The desktop validates its unit and current source identity and
+value in **Confirm from Source…**. The desktop validates its unit and current source identity and
 records the confirmation time. **Human confirmed** remains distinct from **Source verified**.
 Confirmation regrades the saved answer without another model request. The association between a
 source passage and the selected physical feature still requires review.
@@ -531,8 +532,8 @@ A confirmed pitch finding with a proposal becomes a reviewed transform of kind `
 | `from`     | An entity of the hole that stays                                                                                                |
 | `to`       | An entity of the hole whose pitch is set; it moves                                                                              |
 | `axis`     | `x`, `y` or `centre`                                                                                                            |
-| `target`   | The pitch to set, in millimetres: the accepted source-verified or human-confirmed requirement                                   |
-| `measured` | The pitch as reviewed, in millimetres                                                                                           |
+| `target`   | The pitch to set, in millimeters: the accepted source-verified or human-confirmed requirement                                   |
+| `measured` | The pitch as reviewed, in millimeters                                                                                           |
 | `move`     | Entities of further holes that move with `to`, such as its column                                                               |
 | `also`     | Further pitches the same move sets, each `from`, `to`, `axis`, `target` and `measured`: for [one cause](#one-cause-one-finding) |
 
@@ -564,7 +565,7 @@ identity and hash before accepting it.
 
 ## Samples and evaluation
 
-`pnpm playground` writes `fabrication/Job 1042/`: five AutoCAD 2010 DXF parts in millimetres named
+`pnpm playground` writes `fabrication/Job 1042/`: five AutoCAD 2010 DXF parts in millimeters named
 in the convention, a one-page dimensioned drawing and the request with the drawing attached. The
 base plate's DXF puts its holes 48 mm apart where the drawing gives 50 mm. `fabrication/Evaluation/`
 holds about forty generated parts and `Truth.json`, which gives each part's thickness, quantity,
@@ -664,17 +665,17 @@ drawing page or photo: the answer may have 12 stops, and the instructions ask fo
 makes them again. Photos go through Viewer's image processor, in this process: without it built,
 leave out J1, J4 and J7.
 
-| Measure            | How                                                                                                                                                                                                                                                                                                                                            |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Found              | A finding of the planted problem's kind that names its DXF or, naming none, its part. A missing DXF is found by any finding without a DXF that names the part; an open count by a quantity finding. A finding of one cause counts once                                                                                                         |
-| Unread             | Viewer's findings of what Muse Spark did not read from the request, counted apart: neither found nor false. A planted problem they name is marked so in the missed list                                                                                                                                                                        |
-| Recall             | Found over planted, for each kind and in all, with how many were confirmed and how many got the grade expected: confirmed, or unverified for a missing DXF and an open count                                                                                                                                                                   |
-| False findings     | Findings of no planted problem, by job, by the model or Viewer, and by grade. A second finding of a found problem is a duplicate, not false                                                                                                                                                                                                    |
-| Quotes             | Whether each quote appears on the page it names. Presence alone does not verify the value's numeric role, units or association with the part                                                                                                                                                                                                   |
-| Request            | The parts the model listed from the request, with the right quantity, thickness and DXF                                                                                                                                                                                                                                                        |
-| Schema and retries | Attempts, and why each failed: schema, JSON, incomplete, HTTP, timeout or network, with where the answer missed the schema                                                                                                                                                                                                                     |
-| Outlines           | Text and features apart, by intersection over union: a quoted text's box against the page's text runs and labelled text, a feature's outline against the drawing's pieces and holes and the photo's part and holes, a hole as the circle in its box; the model's boxes the same way; and how often the box stood in for SAM, with SAM's reason |
-| Calls              | Each call's time, and its tokens and cost when the reply reports them                                                                                                                                                                                                                                                                          |
+| Measure            | How                                                                                                                                                                                                                                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Found              | A finding of the planted problem's kind that names its DXF or, naming none, its part. A missing DXF is found by any finding without a DXF that names the part; an open count by a quantity finding. A finding of one cause counts once                                                                                                        |
+| Unread             | Viewer's findings of what Muse Spark did not read from the request, counted apart: neither found nor false. A planted problem they name is marked so in the missed list                                                                                                                                                                       |
+| Recall             | Found over planted, for each kind and in all, with how many were confirmed and how many got the grade expected: confirmed, or unverified for a missing DXF and an open count                                                                                                                                                                  |
+| False findings     | Findings of no planted problem, by job, by the model or Viewer, and by grade. A second finding of a found problem is a duplicate, not false                                                                                                                                                                                                   |
+| Quotes             | Whether each quote appears on the page it names. Presence alone does not verify the value's numeric role, units or association with the part                                                                                                                                                                                                  |
+| Request            | The parts the model listed from the request, with the right quantity, thickness and DXF                                                                                                                                                                                                                                                       |
+| Schema and retries | Attempts, and why each failed: schema, JSON, incomplete, HTTP, timeout or network, with where the answer missed the schema                                                                                                                                                                                                                    |
+| Outlines           | Text and features apart, by intersection over union: a quoted text's box against the page's text runs and labeled text, a feature's outline against the drawing's pieces and holes and the photo's part and holes, a hole as the circle in its box; the model's boxes the same way; and how often the box stood in for SAM, with SAM's reason |
+| Calls              | Each call's time, and its tokens and cost when the reply reports them                                                                                                                                                                                                                                                                         |
 
 The drawing pages are drawn in Node, not by the app's renderer. pdf.js draws them at 2048 px on the
 longer side as JPEGs at the same quality, with text runs from the same code, but:

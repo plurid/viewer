@@ -139,18 +139,18 @@ describe('the commands', () => {
   const find = (id: string) => windowCommands(actions).find((command) => command.id === id)!;
   it('hide and show the title bar with ⌥⌘T', async () => {
     expect(defaultShortcuts['toggle-titlebar']).toBe('Cmd+Alt+T');
-    expect(find('toggle-titlebar').label).toBe('Hide title bar');
+    expect(find('toggle-titlebar').label).toBe('Hide Title Bar');
     await act(async () => find('toggle-titlebar').run(context));
     expect(getState().saved.ui.titlebar.visible).toBe(false);
-    expect(find('toggle-titlebar').label).toBe('Show title bar');
+    expect(find('toggle-titlebar').label).toBe('Show Title Bar');
   });
   it('hide and show the grid', async () => {
-    expect(find('setting.ui.space.grid').label).toBe('Hide background grid');
+    expect(find('setting.ui.space.grid').label).toBe('Hide Background Grid');
     await act(async () => find('setting.ui.space.grid').run(context));
     expect(getState().saved.ui.space.grid).toBe(false);
   });
   it("choose the workspace's background", async () => {
-    expect(find('workspace-background').label).toBe('Workspace look…');
+    expect(find('workspace-background').label).toBe('Workspace Look…');
     await find('workspace-background').run(context);
     expect(actions.workspaceDialog).toHaveBeenCalledWith('background');
   });
@@ -189,14 +189,50 @@ describe('a hidden title bar', () => {
     act(() => vi.advanceTimersByTime(800));
     expect(result.current.state).toBe('hidden');
   });
+  it('hides after a window drag, when the pointer next moves outside the bar', () => {
+    vi.useFakeTimers();
+    const bar = Object.assign(document.createElement('header'), { className: 'app-titlebar' });
+    const space = document.createElement('main');
+    document.body.append(bar, space);
+    const { result } = renderHook(() => useTitlebar(false));
+    // the drag starts on the bar; the system moves the window and the bar never sees a leave
+    act(() => result.current.reveal());
+    act(() => {
+      bar.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+    });
+    act(() => vi.advanceTimersByTime(800));
+    expect(result.current.state).toBe('revealed');
+    // continuous movement outside starts one countdown, not one per move
+    act(() => {
+      space.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+    });
+    act(() => vi.advanceTimersByTime(400));
+    act(() => {
+      space.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+    });
+    act(() => vi.advanceTimersByTime(400));
+    expect(result.current.state).toBe('hidden');
+    bar.remove();
+    space.remove();
+  });
+  it('hides when the window loses focus while the bar is revealed', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useTitlebar(false));
+    act(() => result.current.reveal());
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    act(() => vi.advanceTimersByTime(800));
+    expect(result.current.state).toBe('hidden');
+  });
 });
 
 describe('the colour field', () => {
-  it('offers the automatic colour, swatches for the look and a colour of your own', () => {
+  it('offers the automatic color, swatches for the look and a color of your own', () => {
     const onChange = vi.fn();
     const view = render(
       createElement(ColorField, {
-        label: 'Space colour',
+        label: 'Space color',
         value: '',
         look: 'dark',
         automatic: 'Automatic',
@@ -208,7 +244,7 @@ describe('the colour field', () => {
     );
     fireEvent.click(view.getByRole('button', { name: 'Ocean' }));
     expect(onChange).toHaveBeenLastCalledWith('#0f2633');
-    fireEvent.change(view.getByLabelText('Custom colour'), { target: { value: '#abcdef' } });
+    fireEvent.change(view.getByLabelText('Custom color'), { target: { value: '#abcdef' } });
     expect(onChange).toHaveBeenLastCalledWith('#abcdef');
     fireEvent.click(view.getByRole('button', { name: 'Automatic' }));
     expect(onChange).toHaveBeenLastCalledWith('');

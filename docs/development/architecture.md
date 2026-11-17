@@ -81,7 +81,7 @@ replay of commands or agent input.
 
 Fabrication check planes hold a private document ID. `desktop/fabrication/check-store.ts` persists
 the document; `desktop/fabrication/service.ts` owns its lifecycle and execution authority. Closing a
-view detaches its owner without cancelling the run. Reopening reads the saved result. Interrupted
+view detaches its owner without canceling the run. Reopening reads the saved result. Interrupted
 runs never restart through workspace restoration. `domain/fabrication/requirements.ts` separates
 source verification and explicit human confirmation from model claims and measured geometry.
 

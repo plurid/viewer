@@ -200,7 +200,7 @@ describe('the Overview plane', () => {
       linked: true,
       activate: true,
     });
-    fireEvent.click(within(card).getByRole('button', { name: 'Show all' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Show All' }));
     expect(newSearch).toHaveBeenCalledWith('is:file size>1gb', 'Files over 1 GB', undefined, true);
     // never more than one page of matches per card
     for (const [request] of indexedQuery.mock.calls) expect(request.limit).toBe(200);
@@ -211,8 +211,8 @@ describe('the Overview plane', () => {
     await act(async () => {});
     expect(screen.getByText(/^No matches: /).textContent).toContain('Screenshots on the Desktop');
     const installers = screen.getByText('Old installers').closest('article')!;
-    expect(installers.textContent).toContain('Downloads is not in the filename index.');
-    fireEvent.click(within(installers).getByRole('button', { name: 'Search it now' }));
+    expect(installers.textContent).toContain("Downloads isn't in the filename index.");
+    fireEvent.click(within(installers).getByRole('button', { name: 'Search It Now' }));
     expect(newSearch).toHaveBeenCalledWith(
       'ext:dmg,pkg modified>7d',
       'Old installers',
@@ -228,7 +228,7 @@ describe('the Overview plane', () => {
     expect(card.textContent).toContain('1 · 5 KB');
     expect(within(card).getByRole('button', { name: 'Trip.zip' })).toBeTruthy();
     expect(within(card).queryByRole('button', { name: 'Kept.zip' })).toBeNull();
-    fireEvent.click(within(card).getByRole('button', { name: 'Show all' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Show All' }));
     const collection = getState()
       .saved.workspaces.flatMap((space) => space.collections ?? [])
       .find((item) => item.name === 'Archives already extracted');
@@ -245,17 +245,17 @@ describe('the Overview plane', () => {
     mount();
     await act(async () => {});
     expect(screen.getByText('Nothing indexed yet')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Open Search settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Search Settings' }));
     expect(window.viewer.openSettings).toHaveBeenCalledWith('settings.search');
   });
 
-  it('is saved with the workspace as File overview', () => {
+  it('is saved with the workspace as File Overview', () => {
     const restored = stateSchema.parse(getState().saved);
     const saved = restored.workspaces
       .flatMap((space) => space.panes)
       .find((item) => item.id === pane.id);
     expect(saved).toEqual(pane);
-    expect(paneTitle(pane)).toBe('File overview');
+    expect(paneTitle(pane)).toBe('File Overview');
     expect(activeWorkspace().panes.some((item) => item.id === pane.id)).toBe(true);
   });
 });

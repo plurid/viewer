@@ -327,7 +327,7 @@ export async function loadCheck(
   }
   const reply = await ask({ kind: 'read', id });
   if (!stillCurrent()) return;
-  if (reply.kind !== 'saved') throw new Error('The saved check is unavailable.');
+  if (reply.kind !== 'saved') throw new Error("Viewer couldn't open the saved check.");
   const found = sessions.get(key);
   // A local page-rendering step may precede the desktop run. Its existing request owns completion.
   const preparing = drawing.has(id) && found && ['drawing', 'asking'].includes(found.phase);
@@ -537,7 +537,7 @@ export async function runCheck(current = session): Promise<void> {
       progress: undefined,
       since: undefined,
       error: abort.signal.aborted
-        ? 'The check was cancelled. Nothing was graded.'
+        ? 'The check was canceled. Nothing was graded.'
         : errorMessage(error),
     });
   } finally {
@@ -670,7 +670,7 @@ export async function reviewEvidence(
           workspace.rootID(parent) !== root))
     )
       throw new Error(
-        'The originating workspace or folder changed. Open the evidence there again.',
+        'The workspace or folder this check started from changed. Open the evidence there again.',
       );
   };
   valid();
@@ -688,7 +688,7 @@ export async function reviewEvidence(
   }
   valid();
   if (ids.length < 2)
-    throw new Error('This finding needs at least two available sources for a comparison.');
+    throw new Error('Comparing needs at least two of this finding’s sources open.');
   await workspace.whenPanesReady(ids);
   valid();
   const captured = workspace.captureLayout();
@@ -964,7 +964,7 @@ async function nestMissing(
       handoffProgress: undefined,
       handoffSince: undefined,
       handoffError: abort.signal.aborted
-        ? 'The nesting was cancelled. Nothing was exported.'
+        ? 'The nesting was canceled. Nothing was exported.'
         : `${errorMessage(error)} Nothing was exported.`,
     });
     return false;

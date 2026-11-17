@@ -203,7 +203,7 @@ describe('append-only operation log', () => {
     await appendFile(logFile(value.job.id), 'not json\n{"t":"intent","intent":null}\n');
     const { receipts, notices } = await new OperationLog(data).load();
     expect(receipts).toEqual([]);
-    expect(notices[0]).toContain('kept at');
+    expect(notices[0]).toContain('kept the record at');
     const names = await readdir(path.join(data, 'operation-journal-v2'));
     expect(names.some((name) => name.includes('.unreadable-'))).toBe(true);
   });

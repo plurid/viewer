@@ -139,7 +139,7 @@ describe('comparison resource and editor lifetime', () => {
     await waitFor(() => expect(view.container.querySelector('.cm-mergeView')).not.toBeNull());
     expect(view.container.textContent).toContain('Original');
     expect(view.container.textContent).toContain('Changed');
-    expect(view.container.textContent).not.toContain('This file is not edited here');
+    expect(view.container.textContent).not.toContain("Can't edit this file here");
   });
 
   it('retains text, selection and undo through an unrelated rename without reopening sources', async () => {

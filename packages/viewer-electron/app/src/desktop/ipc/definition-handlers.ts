@@ -27,7 +27,7 @@ interface DefinitionPorts {
     | 'setProjectManager'
     | 'refreshSourceOffer'
   > &
-    Partial<Pick<WorkspaceDefinitions, 'prepareKeys'>>;
+    Partial<Pick<WorkspaceDefinitions, 'prepareKeys' | 'hideFound' | 'showFound'>>;
   memory: Pick<DefinedWorkspaces, 'get' | 'remember' | 'forget' | 'problem'>;
   sessions: Pick<
     WorkspaceSessions,
@@ -87,14 +87,14 @@ export function createDefinitionHandlers(
         const key = workspace.definition?.key;
         if (request.kind === 'save-as') {
           if (key && !definitionWasRemoved(workspace, ports.definitions.snapshot()))
-            throw new Error('This workspace already has a definition. Use Save to definition.');
+            throw new Error('This workspace already has a definition. Use Save to Definition.');
           const proposed = ports.definitions.proposal(workspace);
           if (request.key === undefined && request.name === undefined)
             return { kind: 'proposal', ...proposed };
           if (!request.key || !request.name) throw new Error('Enter a key and name.');
           const existing = ports.sessions.findByDefinition(request.key);
           if (existing)
-            throw new Error('This key is already open. Use Save to definition in that workspace.');
+            throw new Error('This key is already open. Use Save to Definition in that workspace.');
           if (ports.sessions.reserveDefinition(owner, request.key) !== owner)
             throw new Error('This definition is being opened in another window.');
           human(owner);
@@ -138,7 +138,10 @@ export function createDefinitionHandlers(
         }
         if (request.kind === 'reset') {
           const definition = ports.definitions.entry(key);
-          if (!definition) throw new Error('This workspace definition is unavailable.');
+          if (!definition)
+            throw new Error(
+              'Viewer can’t find this workspace’s definition. It may have been removed from its file.',
+            );
           await ports.memory.forget(key);
           return { kind: 'reset', definition: structuredClone(definition) };
         }
@@ -152,7 +155,9 @@ export function createDefinitionHandlers(
       }
       let definition = ports.definitions.entry(request.key);
       if (!definition || definition.hidden)
-        throw new Error('This workspace definition is unavailable.');
+        throw new Error(
+          'Viewer can’t find this workspace’s definition. It may have been removed from its file.',
+        );
       if (definition.rootState === 'missing')
         throw new Error('The root folder for this workspace is missing.');
       if (definition.rootState === 'unknown') {
@@ -161,7 +166,9 @@ export function createDefinitionHandlers(
           throw new Error('The root folder for this workspace is missing.');
         definition = ports.definitions.entry(request.key);
         if (!definition || definition.hidden)
-          throw new Error('This workspace definition is unavailable.');
+          throw new Error(
+            'Viewer can’t find this workspace’s definition. It may have been removed from its file.',
+          );
         if (definition.root !== root)
           throw new Error('This definition changed while its root was checked. Open it again.');
       }
@@ -194,6 +201,12 @@ export function createDefinitionHandlers(
       human(owner);
       if (request.kind === 'project-manager')
         await ports.definitions.setProjectManager(request.enabled, () => human(owner));
+      if (request.kind === 'not-a-workspace') {
+        // an open workspace linked to it would lose its definition: it is closed first
+        const open = ports.sessions.findByDefinition(request.key);
+        if (open) throw new Error(`Close “${open.name}” first.`);
+        await ports.definitions.hideFound?.(request.key);
+      } else if (request.kind === 'show-found') await ports.definitions.showFound?.(request.root);
       if (request.kind === 'edit') {
         const file = await ports.definitions.edit();
         const error = await shell.openPath(file);
@@ -214,7 +227,7 @@ export function createDefinitionHandlers(
       ) {
         human(owner);
         if (ports.definitions.snapshot().projectManager.enabled !== true)
-          throw new Error('Choose Use VS Code projects before allowing access.');
+          throw new Error('Choose Use VS Code Projects before allowing access.');
         const window = ports.window(owner);
         if (!window) throw new Error('This window has closed.');
         await chooseRemembered(

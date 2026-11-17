@@ -148,7 +148,7 @@ export function useKeySequences(
         consume(event);
         const step = sequence.feed(name, performance.now());
         if (step === 'cancelled') end();
-        else showMode(step === 'unbound' ? 'Not bound' : undefined);
+        else showMode(step === 'unbound' ? 'No action for this key' : undefined);
         return;
       }
       if (sequence.repeating()) {
@@ -200,7 +200,12 @@ export function useKeySequences(
       else if (step === 'unbound') {
         clearTimeout(showing);
         clearTimeout(ending);
-        publish({ active: true, shown: true, keys: [...pressed, name], message: 'Not bound' });
+        publish({
+          active: true,
+          shown: true,
+          keys: [...pressed, name],
+          message: 'No action for this key',
+        });
         ending = setTimeout(end, 900);
       } else end();
     };

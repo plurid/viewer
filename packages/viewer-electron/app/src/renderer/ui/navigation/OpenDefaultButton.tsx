@@ -46,7 +46,6 @@ export function OpenDefaultButton({
   return (
     <button
       className="open-default-button"
-      title={label}
       disabled={busy}
       onClick={() => {
         onOpen?.();

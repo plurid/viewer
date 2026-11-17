@@ -29,7 +29,7 @@ Store edition and an unconfigured build have no License page. See the
 
 ## Folder access
 
-In the App Store edition, use **Allow folder access…** or Settings → Permissions when macOS
+In the App Store edition, use **Allow Folder Access…** or Settings → Permissions when macOS
 authorization is missing. Selecting a parent folder authorizes its descendants. Cancelling the
 picker leaves the current folder in place. A saved location that was moved, removed or became
 unavailable may need to be selected again.
@@ -94,7 +94,7 @@ stack frames are counted without paths. The Mac App Store default needs no ident
 lookup.
 
 **Include message text** is off by default. Excerpts can contain file names, addresses and other
-private text. Viewer removes what it can recognise; read them before sharing. Recognised paths are
+private text. Viewer removes what it can recognize; read them before sharing. Recognized paths are
 reduced, bundle code names are retained and the data folder keeps only fixed Viewer folder names.
 Failed privacy checks are named and excerpts are omitted. Turning the checkbox off restores the
 default report. Viewer sends neither version to its developer and adds no settings, file listings,

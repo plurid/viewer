@@ -24,7 +24,7 @@ it needs.
 | Photos, HEIC, PSD, SVG and 21 camera RAW formats           | Zoom, pan, render RAW, crop, resize and convert            |
 | 42 video and audio formats                                 | Play them, through a local copy when Chromium cannot       |
 | 3D models, STEP and IGES parts, DXF drawings               | Turn the model, measure it, choose its units               |
-| Code, Markdown, JSON, YAML, CSV, SQLite, notebooks         | Read with syntax colours, trees, filtered tables and cells |
+| Code, Markdown, JSON, YAML, CSV, SQLite, notebooks         | Read with syntax colors, trees, filtered tables and cells  |
 | Email, mailboxes and saved web pages                       | Read messages and pages offline, and save attachments      |
 | Fonts, certificates, keys, torrents, provisioning profiles | Try a font, check a certificate chain, list a torrent      |
 | ZIP and TAR archives, and the app packages built on ZIP    | Browse and preview inside without extracting               |
@@ -62,7 +62,7 @@ arrangement back.
 | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | **⌘K** finds any command by what you want to do.                                         | **Suggested** offers the next step for what you selected.                       |
 
-Viewer suggests **Extract here** for an archive, **Optimize** for a large PDF and **Convert** for
+Viewer suggests **Extract Here** for an archive, **Optimize** for a large PDF and **Convert** for
 HEIC photos, and learns what you choose. Cards above a folder point out old installers, likely
 duplicates and piles of screenshots. [Explore a folder](docs/guides/explore.md)
 
@@ -117,7 +117,7 @@ change they propose waits for your review.
 
 | ![A model's answer to Explore this folder, with the files it names](docs/media/explore.png) | ![File overview cards across a Home folder](docs/media/overview.png) |
 | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **Explore this folder** says what it holds and links the files.                             | **File overview** finds what needs attention across your Home.       |
+| **Explore This Folder** says what it holds and links the files.                             | **File overview** finds what needs attention across your Home.       |
 
 [Make repeated work a command](docs/guides/automate.md)
 

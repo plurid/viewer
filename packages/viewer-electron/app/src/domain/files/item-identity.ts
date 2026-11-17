@@ -19,13 +19,13 @@ export interface StatIdentity {
 const maximum = (1n << 64n) - 1n;
 const safeMaximum = BigInt(Number.MAX_SAFE_INTEGER);
 export const olderIdentityMessage =
-  'Cannot undo because this older record does not have an exact file identity.';
+  'Can’t undo: this older record doesn’t say exactly which file it changed.';
 export const olderCreationMessage =
-  'Cannot undo because this older record does not include the file creation time.';
+  'Can’t undo: this older record doesn’t include the file’s creation time.';
 
 function unsigned(value: IdentityComponent): bigint {
   if (typeof value === 'number' && (!Number.isSafeInteger(value) || value < 0))
-    throw new Error('The file identity cannot be verified from rounded numbers.');
+    throw new Error('Viewer can’t tell which file this is from rounded numbers.');
   const exact = BigInt(value);
   if (exact < -(1n << 63n) || exact > maximum)
     throw new Error('The file identity is outside the unsigned 64-bit range.');
@@ -161,7 +161,7 @@ export function sameDevice(a: StatIdentity, b: StatIdentity): boolean {
 /** The native protocol predates the exact-large suffix but has always used exact strings. */
 export function nativeIdentityArgument(value: string): string {
   const identity = readItemIdentity(value);
-  if (!identity) throw new Error('The file identity cannot be verified; inspect the item again.');
+  if (!identity) throw new Error('Viewer can’t confirm this is the same file. Select it again.');
   return identity.replace(/:u64$/, '');
 }
 

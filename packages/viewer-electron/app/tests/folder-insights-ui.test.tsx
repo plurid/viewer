@@ -6,8 +6,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { FileEntry } from '../src/domain/contracts';
+import type { FileEntry, FolderPane } from '../src/domain/contracts';
 import type { SettingsPatch, SettingsSnapshot } from '../src/domain/services';
+import type {
+  DefinitionCatalog,
+  WorkspaceDefinition,
+} from '../src/domain/workspaces/definitions/schema';
+import { sampleDefinition } from './workspace-definition-fixtures';
 import { FolderExplorer } from '../src/renderer/explorer/FolderExplorer';
 import { CommandsContext } from '../src/renderer/commands/context';
 import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
@@ -127,11 +132,15 @@ afterEach(async () => {
   resetPreferences();
 });
 
-function mount() {
-  const paneID = activeWorkspace().panes[0]!.id;
+function mount(paneID = activeWorkspace().panes[0]!.id) {
   const registry = new CommandRegistry();
   const workspace = new Proxy({}, { get: () => vi.fn() }) as WorkspaceController;
-  const actions = { workspace, ready: true, tool: null } as unknown as WindowActions;
+  const actions = {
+    workspace,
+    ready: true,
+    tool: null,
+    switchWorkspace: vi.fn(async () => {}),
+  } as unknown as WindowActions;
   const context = (): CommandContext => ({
     scope: 'window',
     workspaceID: activeWorkspace().id,
@@ -146,8 +155,11 @@ function mount() {
       ...programCommands(workspace, async () => false, undefined, undefined, undefined, {
         optimizeFiles,
       }).filter((command) => command.id === 'optimize-files'),
-      ...windowCommands(actions).filter((command) =>
-        ['find-duplicates', 'show-hidden-insights'].includes(command.id),
+      ...windowCommands(actions).filter(
+        (command) =>
+          ['find-duplicates', 'show-hidden-insights'].includes(command.id) ||
+          command.id.startsWith('defined:') ||
+          command.id.startsWith('workspace:'),
       ),
     ],
   });
@@ -158,7 +170,7 @@ function mount() {
       </WorkspaceContext.Provider>
     </CommandsContext.Provider>,
   );
-  return { view, registry, paneID };
+  return { view, registry, paneID, actions };
 }
 const strip = () => screen.getByRole('region', { name: 'Insights' });
 const titles = () =>
@@ -290,7 +302,7 @@ describe('the insight strip', () => {
     expect(selection(paneID)).toEqual([]);
     fireEvent.click(screen.getByRole('button', { name: 'Put in a folder…' }));
     expect(selection(paneID)).toHaveLength(5);
-    expect(await screen.findByRole('dialog', { name: 'New folder with 5 items' })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: 'New Folder with 5 Items' })).toBeTruthy();
   });
 
   it('keeps a dismissed card hidden in its folder until Show hidden insights', async () => {
@@ -313,7 +325,7 @@ describe('the insight strip', () => {
       expect.any(Number),
     );
     const [command] = show();
-    expect(command?.label).toBe('Show hidden insights');
+    expect(command?.label).toBe('Show Hidden Insights');
     await act(async () => {
       await registry.run(command!);
     });
@@ -335,6 +347,154 @@ describe('the insight strip', () => {
     });
     const { view } = mount();
     // listed: the status line counts the items
+    await waitFor(() =>
+      expect(view.container.querySelector('.folder-status')!.textContent).toContain(
+        `${listing.length} items`,
+      ),
+    );
+    expect(screen.queryByRole('region', { name: 'Insights' })).toBeNull();
+  });
+});
+
+describe('the workspace offer card', () => {
+  const root = downloads;
+  const definition = (): WorkspaceDefinition => {
+    const base = sampleDefinition('sample/inbox', { root, name: 'inbox' });
+    return { ...base, remembered: { at: now, basis: base.basis, planes: 5 } };
+  };
+  const folderPane = (id: string, path: string): FolderPane => ({
+    id,
+    type: 'folder',
+    path,
+    mode: 'list',
+    sort: 'name',
+    descending: false,
+    showHidden: false,
+    history: [path],
+    historyIndex: 0,
+  });
+  /** The catalog holds the definition, and the workspace also browses outside its root. */
+  function offering(extra: FolderPane[] = [folderPane('desktop', home + '/Desktop')]) {
+    const catalog: DefinitionCatalog = {
+      revision: 1,
+      file: { path: '/data/workspaces.jsonc', state: 'absent' },
+      projectManager: {
+        path: '/source/projects.json',
+        state: 'off',
+        enabled: false,
+        projects: 0,
+        missing: 0,
+        disabled: 0,
+        remote: 0,
+        duplicateKeys: 0,
+      },
+      definitions: [definition()],
+      diagnostics: [],
+    };
+    const state = getState();
+    update({
+      ...state,
+      bootstrap: { ...state.bootstrap, definitions: catalog },
+      saved: {
+        ...state.saved,
+        workspaces: state.saved.workspaces.map((space) =>
+          space.id === state.saved.activeWorkspace
+            ? { ...space, panes: [...space.panes, ...extra] }
+            : space,
+        ),
+      },
+    });
+  }
+  const offerCard = () =>
+    strip().querySelector<HTMLElement>('[data-insight="workspace.open"]') ?? undefined;
+
+  it('leads the cards after the tips, within three, naming the root', async () => {
+    savePatch({ ui: { ...getState().saved.ui, firstRunHint: { used: [] } } });
+    offering();
+    mount();
+    await waitFor(() => expect(offerCard()).toBeTruthy());
+    const cards = within(strip()).getAllByRole('article');
+    expect(cards[0]!.getAttribute('aria-label')).toBe('Tips');
+    expect(cards[1]).toBe(offerCard());
+    expect(cards.slice(1).map((card) => card.querySelector('strong')!.textContent)).toEqual([
+      '“inbox” remembers 5 planes',
+      '2 installers older than a week',
+      '1 archive already extracted',
+    ]);
+    // the root as a path label: home as ~, the whole path for the tooltip
+    const label = offerCard()!.querySelector('.path-label')!;
+    expect(label.getAttribute('title')).toBe(root);
+    expect(label.querySelector('.path-label-text')!.textContent).toBe('~/Downloads');
+  });
+
+  it('opens the definition without touching the selection', async () => {
+    offering();
+    const workspaceDefinitions = vi.fn(async () => ({ kind: 'elsewhere' as const }));
+    Object.assign(window.viewer, { workspaceDefinitions });
+    const { paneID } = mount();
+    await waitFor(() => expect(offerCard()).toBeTruthy());
+    updateBrowseSession(paneID, downloads, { selection: [downloads + '/Scan.pdf'] });
+    fireEvent.click(within(offerCard()!).getByRole('button', { name: 'Open Workspace' }));
+    await waitFor(() =>
+      expect(workspaceDefinitions).toHaveBeenCalledWith({ kind: 'open', key: 'sample/inbox' }),
+    );
+    expect(selection(paneID)).toEqual([downloads + '/Scan.pdf']);
+  });
+
+  it('is dismissed for its root until Show hidden insights', async () => {
+    offering();
+    const { registry } = mount();
+    await waitFor(() => expect(offerCard()).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss “inbox” remembers 5 planes' }));
+    expect(offerCard()).toBeUndefined();
+    expect(getState().saved.ui.insightsDismissed).toEqual({ [root]: ['workspace.open'] });
+    // the folder's own cards fill the place
+    expect(titles()).toEqual([
+      '2 installers older than a week',
+      '1 archive already extracted',
+      '1 PDF over 10 MB',
+    ]);
+    const [show] = registry.list({ ids: ['show-hidden-insights'], scope: 'window' });
+    await act(async () => {
+      await registry.run(show!);
+    });
+    expect(offerCard()).toBeTruthy();
+  });
+
+  it('shows in the first folder plane inside the root only', async () => {
+    // two planes of four inside the root: the workspace is not mostly in it
+    offering([
+      folderPane('desktop', home + '/Desktop'),
+      folderPane('photos', downloads + '/Photos'),
+      folderPane('documents', home + '/Documents'),
+    ]);
+    mount('photos');
+    await waitFor(() => expect(strip()).toBeTruthy());
+    expect(offerCard()).toBeUndefined();
+    cleanup();
+    mount();
+    await waitFor(() => expect(offerCard()).toBeTruthy());
+  });
+
+  it('stays away while insights are off and when the workspace is mostly in the root', async () => {
+    offering([]);
+    mount();
+    await waitFor(() => expect(strip()).toBeTruthy());
+    expect(offerCard()).toBeUndefined();
+    cleanup();
+    offering();
+    const { settings } = getState();
+    update({
+      ...getState(),
+      settings: {
+        ...settings,
+        settings: {
+          ...settings.settings,
+          browsing: { ...settings.settings.browsing, insights: false },
+        },
+      },
+    });
+    const { view } = mount();
     await waitFor(() =>
       expect(view.container.querySelector('.folder-status')!.textContent).toContain(
         `${listing.length} items`,

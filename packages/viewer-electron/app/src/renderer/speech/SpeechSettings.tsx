@@ -8,9 +8,9 @@ import {
 } from '../../domain/speech/recognition';
 import { errorMessage } from '../../domain/errors';
 import { DictationDialog } from './DictationDialog';
-import { Loading } from '../ui/primitives';
+import { Loading, tryAgainLabel } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
-import { defaultShortcuts } from '../../domain/preferences/shortcuts';
+import { defaultShortcuts, shortcutGlyphs } from '../../domain/preferences/shortcuts';
 import { useMicrophones } from './devices';
 import { formatBytes } from '../../domain/files/entries';
 import './speech.css';
@@ -22,6 +22,15 @@ const descriptions: Record<string, string> = {
   'whisper-base': 'A small multilingual model for everyday dictation.',
   'whisper-small':
     'More accurate multilingual dictation. Uses more memory and takes longer to transcribe.',
+};
+// what macOS lets Viewer do with the microphone, and the way on when it says no
+const microphoneAccess: Readonly<Record<SpeechStatus['microphone'], string>> = {
+  'not-determined': 'macOS asks for the microphone the first time you record. Its names show then.',
+  granted: 'Viewer can use the microphone.',
+  denied:
+    'Viewer can’t use the microphone. Allow it in System Settings → Privacy & Security → Microphone.',
+  restricted: 'This Mac doesn’t allow apps to use the microphone.',
+  unknown: 'macOS asks for the microphone the first time you record.',
 };
 export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { shortcut?: string }) {
   const [status, setStatus] = useState<SpeechStatus>();
@@ -76,12 +85,19 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
   if (!status)
     return error ? (
       <p className="error" role="alert">
-        {error} <button onClick={() => void refresh()}>Retry</button>
+        {error} <button onClick={() => void refresh()}>{tryAgainLabel}</button>
       </p>
     ) : (
       <Loading label="Reading speech settings…" />
     );
   const active = status.setup.filter((task) => task.state === 'running');
+  const ready =
+    status.preferences.backend === 'hosted'
+      ? !!status.hosted?.providers.some(
+          (provider) =>
+            provider.id === status.preferences.providerID && provider.hasKey && provider.allowed,
+        )
+      : !!status.models.selected && status.models.runtime.recognitionAvailable;
   const model = (item: SpeechModel & { installed: boolean; selected: boolean }) => {
     const record = status.models.records.findLast((record) => record.model === item.id);
     const task = active.find((task) => task.model === item.id);
@@ -109,7 +125,9 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
             />
             <p className="settings-note" role="status">
               {record?.status === 'downloading'
-                ? `Downloaded ${formatBytes(record.received)} of ${formatBytes(item.bytes)}. Verifying before use.`
+                ? record.received < item.bytes
+                  ? `Downloaded ${formatBytes(record.received)} of ${formatBytes(item.bytes)}…`
+                  : 'Checking the download…'
                 : 'Preparing model…'}
             </p>
           </>
@@ -126,7 +144,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
               disabled={busy}
               onClick={() => void request({ kind: 'cancel-setup', id: task.id })}
             >
-              Cancel download
+              Cancel Download
             </button>
           ) : (
             <>
@@ -141,7 +159,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
                   })
                 }
               >
-                {item.selected ? 'Selected' : item.installed ? 'Use model' : 'Download and use'}
+                {item.selected ? 'Selected' : item.installed ? 'Use Model' : 'Download and Use'}
               </button>
               {!item.installed && (
                 <button
@@ -149,7 +167,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
                   disabled={busy}
                   onClick={() => void request({ kind: 'setup', action: 'import', model: item.id })}
                 >
-                  Import verified weights…
+                  Import Weights…
                 </button>
               )}
             </>
@@ -199,8 +217,8 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
         <>
           <h2>Local speech model</h2>
           <p className="settings-note">
-            Download weights once, or import the matching GGML file. Viewer checks the pinned size
-            and checksum. Cancelled downloads are retained and cannot be used.
+            Download a model once, or import its GGML file. Viewer checks its size and checksum. A
+            canceled download can’t be used.
           </p>
           {status.models.models.map(model)}
         </>
@@ -236,7 +254,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
                 ? [
                     {
                       value: status.preferences.microphone,
-                      label: 'Saved microphone · unavailable',
+                      label: 'Saved microphone · not connected',
                     },
                   ]
                 : []),
@@ -245,44 +263,36 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
           />
         </label>
       </div>
-      <p className="settings-note">
-        Microphone access:{' '}
-        {status.microphone === 'not-determined' ? 'not requested yet' : status.microphone}. Device
-        names become available after microphone access is granted. A missing selected microphone
-        never silently switches to another device.
-      </p>
+      <p className="settings-note">{microphoneAccess[status.microphone]}</p>
       <p className="settings-note">
         {shortcut ? (
           <>
-            Hold <kbd>{shortcut}</kbd> in the workspace to ask Viewer by voice, and release it to
-            transcribe. Viewer shows what it heard and what it will do.
+            Hold <kbd>{shortcutGlyphs(shortcut)}</kbd> in the workspace to ask Viewer by voice, and
+            release it to transcribe. Viewer shows what it heard and what it will do.
           </>
         ) : (
-          'Choose a Dictate shortcut in Settings → Shortcuts, or use the microphone in the title bar.'
+          'Choose a key for Ask Viewer by Voice… in Settings → Shortcuts, or use the microphone in the title bar.'
         )}{' '}
         Each recording is limited to 60 seconds.
       </p>
       <button
         type="button"
         className="settings-reset"
-        disabled={
-          busy ||
-          (status.preferences.backend === 'hosted'
-            ? !status.hosted?.providers.some(
-                (provider) =>
-                  provider.id === status.preferences.providerID &&
-                  provider.hasKey &&
-                  provider.allowed,
-              )
-            : !status.models.selected || !status.models.runtime.recognitionAvailable)
-        }
+        disabled={busy || !ready}
         onClick={() => setTesting(true)}
       >
-        Test microphone and transcription
+        Test Microphone and Transcription
       </button>
+      {!ready && (
+        <p className="settings-note">
+          {status.preferences.backend === 'hosted'
+            ? 'To test, choose a provider with a saved key and allowed recordings.'
+            : 'To test, download a speech model first.'}
+        </p>
+      )}
       {testing && (
         <DictationDialog
-          destination="Speech test · the transcript will not be saved"
+          destination="Speech test · not saved"
           useLabel="Done"
           onClose={() => {
             setTesting(false);

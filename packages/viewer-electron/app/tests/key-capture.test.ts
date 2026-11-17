@@ -104,11 +104,12 @@ it('shows modifiers in the Mac’s order', () => {
 });
 it('finds what has a shortcut already, and names commands in words', () => {
   const settings = defaultSettings('/fixtures');
-  expect(shortcutOwner(settings, 'Cmd+K', 'go-to')).toBe('Palette');
+  expect(shortcutOwner(settings, 'Cmd+K', 'go-to')).toBe('Commands…');
   expect(shortcutOwner(settings, 'Cmd+K', 'palette')).toBeUndefined();
   expect(shortcutOwner(settings, 'Ctrl+B', 'palette')).toBe('Prefix key');
   expect(shortcutOwner(settings, 'Ctrl+Cmd+Y', 'palette')).toBeUndefined();
-  expect(shortcutLabel('undo-file')).toBe('Undo file');
-  expect(shortcutLabel('bookmark.3')).toBe('Go to view 3');
-  expect(shortcutLabel('bookmark.save.3')).toBe('Save view as 3');
+  expect(shortcutLabel('undo-file')).toBe('Undo');
+  expect(shortcutLabel('toggle-hidden')).toBe('Show or Hide Hidden Files');
+  expect(shortcutLabel('bookmark.3')).toBe('Go to View 3');
+  expect(shortcutLabel('bookmark.save.3')).toBe('Save View as 3');
 });

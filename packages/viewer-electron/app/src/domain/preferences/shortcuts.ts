@@ -1,4 +1,5 @@
 import type { ApplicationSettings } from '../services';
+import { keyGlyphs } from './keymap';
 export const defaultShortcuts: Record<string, string> = {
   palette: 'Cmd+K',
   dictate: 'Ctrl+Shift+Space',
@@ -54,6 +55,16 @@ export const defaultShortcuts: Record<string, string> = {
     ]),
   ),
 };
+/**
+ * A picture's own keys, as Preview's: they turn the picture that has the keyboard
+ * (renderer/previews/keys.ts), and the window's command for the same chord, as ⌘L's Go to
+ * Folder…, answers everywhere else. Settings lists them with the rest.
+ */
+export const previewShortcuts: Readonly<Record<string, string>> = {
+  'image-rotate-left': 'Cmd+L',
+  'image-rotate-right': 'Cmd+R',
+};
+export const isPreviewShortcut = (id: string) => Object.hasOwn(previewShortcuts, id);
 /** Second bindings kept for Finder habits, alongside the primary shortcut. */
 export const alternateShortcuts: Readonly<Record<string, string>> = { 'go-to': 'Cmd+Shift+G' };
 /** Menu accelerators handled only by the native menu: the renderer must not also run
@@ -188,16 +199,115 @@ export function accelerator(value: string): string | undefined {
     )
     .join('+');
 }
-/** A shortcut's command in words: `undo-file` → "Undo file", `bookmark.3` → "Go to view 3". */
+// a saved shortcut's parts as keyGlyphs names them, whatever case and spelling it was saved in
+const glyphNames: Readonly<Record<string, string>> = {
+  cmd: 'Cmd',
+  ctrl: 'Ctrl',
+  alt: 'Alt',
+  shift: 'Shift',
+  enter: 'Enter',
+  backspace: 'Backspace',
+  delete: 'Delete',
+  escape: 'Escape',
+  space: 'Space',
+  tab: 'Tab',
+  arrowup: 'Up',
+  arrowdown: 'Down',
+  arrowleft: 'Left',
+  arrowright: 'Right',
+};
+/** A shortcut as a Mac menu shows it: `Cmd+Shift+N` → `⇧⌘N`, `Cmd+ArrowUp` → `⌘↑`; none → "". */
+export function shortcutGlyphs(value: string): string {
+  if (!value) return '';
+  return keyGlyphs(
+    shortcutParts(value)
+      .map((part) => glyphNames[part] ?? (/^f\d+$/.test(part) ? part.toUpperCase() : part))
+      .join('+'),
+  );
+}
+/** A command's shortcut as saved, else its default; "" when it has none or was cleared. */
+export function shortcutFor(
+  shortcuts: Readonly<Record<string, string>> | undefined,
+  id: string,
+): string {
+  return shortcuts?.[id] ?? builtInShortcut(id) ?? '';
+}
+/** A command's own shortcut before any change, if it has one. */
+function builtInShortcut(id: string): string | undefined {
+  return defaultShortcuts[id] ?? menuShortcuts[id] ?? previewShortcuts[id];
+}
+/** A control's name with its key, as a tooltip shows it: "Edit Text (⌘E)", or the name alone. */
+export function withShortcut(label: string, glyphs: string): string {
+  return glyphs ? `${label} (${glyphs})` : label;
+}
+// Each shortcut's command by the name its menu item and palette row show. A command whose label
+// follows its state (Hide Title Bar, Show Title Bar) is named for both.
+const shortcutNames: Readonly<Record<string, string>> = {
+  palette: 'Commands…',
+  dictate: 'Ask Viewer by Voice…',
+  'find-file': 'Find File…',
+  'new-root-folder': 'New Folder Plane',
+  settings: 'Settings…',
+  'frame-all': 'Frame All Planes',
+  dock: 'Dock Plane',
+  'toggle-sidebar': 'Show or Hide Window Navigation',
+  'toggle-titlebar': 'Show or Hide Title Bar',
+  'go-to': 'Go to Folder…',
+  'open-selection': 'Open Selection',
+  parent: 'Parent Folder',
+  // DESIGN.md names this command in these words
+  'parent-plane': 'Back to parent plane',
+  'close-plane': 'Close Plane',
+  back: 'Back',
+  forward: 'Forward',
+  copy: 'Copy',
+  'copy-path': 'Copy Path',
+  cut: 'Cut',
+  paste: 'Paste',
+  'paste-move': 'Move Copied Items Here',
+  'select-all': 'Select All',
+  info: 'Get Info',
+  duplicate: 'Duplicate',
+  trash: 'Move to Trash',
+  'new-folder': 'New Folder…',
+  'new-folder-with-selection': 'New Folder with Selection…',
+  'view-list': 'View as List',
+  'view-grid': 'View as Grid',
+  'view-columns': 'View as Columns',
+  'view-gallery': 'View as Gallery',
+  'view-map': 'View as Map',
+  'toggle-hidden': 'Show or Hide Hidden Files',
+  'new-scratch-plane': 'New Scratch Plane',
+  'edit-file': 'Edit Text',
+  'save-file': 'Save',
+  'save-file-as': 'Save As…',
+  'focus-mode': 'Focus Mode',
+  'copy-to-pair': 'Copy to the Other Folder',
+  'move-to-pair': 'Move to the Other Folder',
+  'select-by-pattern': 'Select by Pattern…',
+  'deselect-by-pattern': 'Deselect by Pattern…',
+  'choose-folder': 'Open Folder…',
+  'undo-file': 'Undo',
+  'redo-file': 'Redo',
+  'undo-arrangement': 'Undo Arrangement',
+  'redo-arrangement': 'Redo Arrangement',
+  'image-rotate-left': 'Rotate Picture Left',
+  'image-rotate-right': 'Rotate Picture Right',
+};
+/** A shortcut's command by its menu name: `undo-file` → "Undo", `bookmark.3` → "Go to View 3". */
 export function shortcutLabel(id: string): string {
   const view = /^bookmark\.(save\.)?(\d)$/.exec(id);
-  if (view) return view[1] ? `Save view as ${view[2]}` : `Go to view ${view[2]}`;
+  if (view) return view[1] ? `Save View as ${view[2]}` : `Go to View ${view[2]}`;
+  const named = shortcutNames[id] ?? shortcutNames[commandShortcutID(id)];
+  if (named) return named;
   const words = shortcutCommandID(id).replace(/[-.]/g, ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 /**
- * What already answers a chord, other than `except`: a built-in or menu shortcut,
+ * What already answers a chord, other than `except`: a built-in or menu shortcut, a picture's,
  * a recipe's, a custom action's, or the prefix. Settings says so rather than saving a conflict.
+ * Two built-ins that share a chord as shipped, a picture's and a window command's as ⌘L, are no
+ * conflict while both keep it: each answers in its own place.
  */
 export function shortcutOwner(
   settings: ApplicationSettings,
@@ -205,10 +315,19 @@ export function shortcutOwner(
   except: string,
 ): string | undefined {
   const wanted = shortcutKey(value);
+  const shipped = (id: string, shortcut: string) => {
+    const own = builtInShortcut(id);
+    return !!own && shortcutKey(own) === wanted && shortcutKey(shortcut) === wanted;
+  };
   const owners: [string, string, string][] = [
-    ...Object.entries({ ...defaultShortcuts, ...menuShortcuts, ...settings.shortcuts }).map(
-      ([id, shortcut]): [string, string, string] => [id, shortcut, shortcutLabel(id)],
-    ),
+    ...Object.entries({
+      ...defaultShortcuts,
+      ...menuShortcuts,
+      ...previewShortcuts,
+      ...settings.shortcuts,
+    })
+      .filter(([id, shortcut]) => !(shipped(id, shortcut) && shipped(except, value)))
+      .map(([id, shortcut]): [string, string, string] => [id, shortcut, shortcutLabel(id)]),
     ...Object.entries(alternateShortcuts).map(([id, shortcut]): [string, string, string] => [
       `${id}:alternate`,
       shortcut,

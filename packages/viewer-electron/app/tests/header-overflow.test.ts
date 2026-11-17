@@ -13,6 +13,7 @@ import {
   headerItem,
   headerMenu,
   pinnedItem,
+  settleHeader,
   spillHeader,
   titleMinimum,
   useHeaderOverflow,
@@ -45,6 +46,21 @@ describe('spillHeader', () => {
     const items = [item('pins', 6, 33), item('layout', 8, 33)];
     expect(spillHeader(10, items)).toEqual(['layout']);
     expect(spillHeader(10, items, 33)).toEqual(['layout', 'pins']);
+  });
+});
+
+describe('settleHeader', () => {
+  const items = [item('back', 3, 33), item('discover', 9, 33), item('git', 8, 120)];
+  it('sends away only what does not fit, however little room is left', () => {
+    // 4 px to spare after Discover goes: Git stays
+    expect(settleHeader(29, items, new Set())).toEqual(['discover']);
+  });
+  it('brings back what is away only with a few pixels to spare', () => {
+    const away = new Set(['discover', 'git']);
+    // Git would fit again with 2 px to spare: it waits
+    expect(settleHeader(31, items, away)).toEqual(['discover', 'git']);
+    expect(settleHeader(20, items, away)).toEqual(['discover']);
+    expect(settleHeader(-20, items, away)).toEqual([]);
   });
 });
 

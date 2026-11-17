@@ -158,7 +158,7 @@ try {
     'image source decoded',
   );
   await capture('images-for-web-dark');
-  await press('Export image', '.image-tools-dialog');
+  await press('Export Image', '.image-tools-dialog');
   await completed(1);
   await press('Close', '.image-tools-dialog');
   await choose('Photo.png');
@@ -170,7 +170,7 @@ try {
     'batch review',
   );
   assert.deepEqual(await evaluate(pageCall(fieldValues, ['Output width'])), ['']);
-  await press('Export 2 images', '.image-tools-dialog');
+  await press('Export 2 Images', '.image-tools-dialog');
   await completed(2);
   await press('Close', '.image-tools-dialog');
   await choose('Manual.pdf');
@@ -202,7 +202,7 @@ try {
     'audio preset format',
   );
   await capture('extract-audio-dark');
-  await press('Export sequence', '.media-export-options');
+  await press('Export Sequence', '.media-export-options');
   const jobs = await completed(4);
   assert.ok(
     jobs.flatMap((job) => job.completed).some((item) => item.destination?.endsWith('.m4a')),

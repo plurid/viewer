@@ -4,6 +4,9 @@ import type { OptimizationOptions } from '../../domain/operations/optimization';
 import { formatOptimizationSize } from '../../domain/operations/optimization';
 import type { OptimizationSession } from './useOptimizationSession';
 import { isActiveJob } from '../../domain/operations/jobs';
+import { statusLabel } from '../ui/status-labels';
+import { homeText } from '../../domain/files/path-label';
+import { useHome } from '../ui/PathLabel';
 
 /** Paginated results keep the full batch available without retaining a thousand table rows. */
 export function OptimizationResults({
@@ -22,6 +25,7 @@ export function OptimizationResults({
   onOpen(file: string): void;
 }) {
   const [resultPage, setResultPage] = useState(0);
+  const home = useHome();
   return (
     <>
       <div className="optimize-results">
@@ -69,15 +73,15 @@ export function OptimizationResults({
                   <td>{candidate ? formatOptimizationSize(candidate.outputBytes) : ''}</td>
                   <td>
                     {failure ? (
-                      <span className="error">{failure}</span>
+                      <span className="error">{homeText(failure, home)}</span>
                     ) : row.preparing ? (
                       'Preparing…'
                     ) : job && isActiveJob(job) ? (
-                      `${job.status === 'running' ? 'Saving' : job.status}…`
+                      `${job.status === 'running' ? 'Saving' : statusLabel(job.status)}…`
                     ) : item?.optimized ? (
                       'Saved'
                     ) : job?.status === 'cancelled' ? (
-                      'Export cancelled'
+                      'Export canceled'
                     ) : candidate ? (
                       <>
                         {smaller ? (
@@ -138,7 +142,7 @@ export function OptimizationResults({
       {session.rows.length > 50 && (
         <div className="optimization-pagination">
           <button disabled={resultPage === 0} onClick={() => setResultPage((value) => value - 1)}>
-            Previous files
+            Previous Files
           </button>
           <span>
             {resultPage * 50 + 1}–{Math.min(session.rows.length, resultPage * 50 + 50)} of{' '}
@@ -148,7 +152,7 @@ export function OptimizationResults({
             disabled={(resultPage + 1) * 50 >= session.rows.length}
             onClick={() => setResultPage((value) => value + 1)}
           >
-            Next files
+            Next Files
           </button>
         </div>
       )}

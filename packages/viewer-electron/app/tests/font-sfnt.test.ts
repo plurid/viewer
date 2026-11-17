@@ -267,7 +267,7 @@ describe('WOFF', () => {
       format: 'woff2',
       faces: 1,
       names: {},
-      unread: 'WOFF2 tables use Brotli compression, which this preview cannot read.',
+      unread: 'Its WOFF2 tables are compressed with Brotli.',
     });
   });
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Late smart results must not move the command the person is about to choose. */
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { CommandPalette } from '../src/renderer/commands/CommandPalette';
@@ -9,8 +9,13 @@ import type { CommandContext, CommandDefinition } from '../src/renderer/commands
 import { CommandRegistry } from '../src/renderer/commands/registry';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
 import { activeWorkspace, initialize } from '../src/renderer/state/store';
-import { savePatch } from '../src/renderer/state/core';
+import { getState, savePatch, update } from '../src/renderer/state/core';
 import type { FileEntry } from '../src/domain/contracts';
+import type {
+  DefinitionCatalog,
+  WorkspaceDefinition,
+} from '../src/domain/workspaces/definitions/schema';
+import { sampleDefinition } from './workspace-definition-fixtures';
 
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
   this.setAttribute('open', '');
@@ -46,13 +51,13 @@ beforeEach(() => {
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
 });
 afterEach(cleanup);
-const show = (definitions: CommandDefinition[] = []) => {
+const show = (definitions: CommandDefinition[] = [], directory = '/fixtures') => {
   const registry = new CommandRegistry();
   const context = {
     scope: 'window',
     workspaceID: activeWorkspace().id,
     paneID: activeWorkspace().panes[0]!.id,
-    directory: '/fixtures',
+    directory,
     selection: [],
     jobs: [],
     clipboard: null,
@@ -103,7 +108,7 @@ it('lists a typed path’s folder and opens what is chosen', async () => {
 it('creates a folder by the name typed after the command', async () => {
   const { type, choose } = show();
   type('new folder Drafts');
-  await choose('New folder “Drafts”');
+  await choose('New Folder “Drafts”');
   await waitFor(() =>
     expect(viewer.operate).toHaveBeenCalledWith({
       kind: 'mkdir',
@@ -157,4 +162,90 @@ it('appends a late ~/Doc completion below the command and Return runs the visibl
   fireEvent.keyDown(search, { key: 'Enter' });
   await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
   expect(openPath).not.toHaveBeenCalled();
+});
+
+describe('the workspace offer in Suggested', () => {
+  const root = '/fixtures/code/inbox';
+  const definition = (): WorkspaceDefinition => {
+    const base = sampleDefinition('sample/inbox', { root, name: 'inbox' });
+    return { ...base, remembered: { at: Date.now(), basis: base.basis, planes: 5 } };
+  };
+  const definitionRow: CommandDefinition = {
+    id: 'defined:sample/inbox',
+    label: 'inbox',
+    group: 'Workspaces',
+    remember: false,
+    when: () => true,
+    run: vi.fn(),
+  };
+  // a row the palette lists with nothing typed, so an empty Suggested is seen, not waited for
+  const rows: CommandDefinition[] = [
+    definitionRow,
+    {
+      id: 'frame-all',
+      label: 'Frame all planes',
+      group: 'Space',
+      primary: true,
+      when: () => true,
+      run: vi.fn(),
+    },
+  ];
+  beforeEach(() => {
+    const catalog: DefinitionCatalog = {
+      revision: 1,
+      file: { path: '/data/workspaces.jsonc', state: 'absent' },
+      projectManager: {
+        path: '/source/projects.json',
+        state: 'off',
+        enabled: false,
+        projects: 0,
+        missing: 0,
+        disabled: 0,
+        remote: 0,
+        duplicateKeys: 0,
+      },
+      definitions: [definition()],
+      diagnostics: [],
+    };
+    Object.assign(viewer, { workspaceDefinitionFile: vi.fn(async () => catalog) });
+    const state = getState();
+    update({ ...state, bootstrap: { ...state.bootstrap, definitions: catalog } });
+  });
+  const offered = (view: ReturnType<typeof show>['view']) =>
+    view
+      .queryAllByRole('option')
+      .find((option) => option.textContent?.includes('Remembers 5 planes'));
+
+  it('offers the folder’s workspace with its reason before anything is typed', async () => {
+    const { view, type } = show(rows, root + '/src');
+    await waitFor(() => expect(offered(view)?.textContent).toContain('inbox'));
+    expect(view.container.textContent).toContain('Suggested');
+    type('inb');
+    await waitFor(() => expect(offered(view)).toBeUndefined());
+  });
+
+  it('leaves it out once the card is dismissed for its root, or with suggestions off', async () => {
+    savePatch({
+      ui: { ...getState().saved.ui, insightsDismissed: { [root]: ['workspace.open'] } },
+    });
+    const dismissed = show(rows, root + '/src');
+    await waitFor(() => expect(dismissed.view.getAllByRole('option').length).toBeGreaterThan(0));
+    expect(offered(dismissed.view)).toBeUndefined();
+    cleanup();
+    savePatch({ ui: { ...getState().saved.ui, insightsDismissed: {} } });
+    const { settings } = getState();
+    update({
+      ...getState(),
+      settings: {
+        ...settings,
+        settings: {
+          ...settings.settings,
+          browsing: { ...settings.settings.browsing, suggestions: false },
+        },
+      },
+    });
+    const off = show(rows, root + '/src');
+    await waitFor(() => expect(off.view.getAllByRole('option').length).toBeGreaterThan(0));
+    expect(offered(off.view)).toBeUndefined();
+  });
 });

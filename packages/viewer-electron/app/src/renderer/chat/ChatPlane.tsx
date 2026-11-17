@@ -1,4 +1,5 @@
 import { modelDataLabels } from '../../domain/models/permissions';
+import type { ModelDataLevel } from '../../domain/models/permissions';
 import { relativePathLabel } from '../../domain/files/paths';
 import { Disclosure } from '../ui/Disclosure';
 import '../canvases/canvas.css';
@@ -15,6 +16,15 @@ import { useConversation } from './useConversation';
 import './chat.css';
 import { useWorkspace } from '../workspace/context';
 import { flushCanvasWrites } from '../canvases/writes';
+import { messageAuthor } from './presentation';
+
+// the button that gives the level the sentence above it names
+const allowLabels: Readonly<Record<ModelDataLevel, string>> = {
+  names: 'Allow Names',
+  excerpts: 'Allow Excerpts',
+  'full-text': 'Allow Full Text',
+  images: 'Allow Text and Pictures',
+};
 
 export default function ChatPlane({ pane }: { pane: Pane }) {
   const workspace = useWorkspace();
@@ -48,7 +58,7 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
   }, [document, pane.id, workspace]);
   if (!document)
     return error ? (
-      <Empty icon="warning" title="Chat unavailable" detail={error} />
+      <Empty icon="warning" title="Can’t open this chat" detail={error} />
     ) : (
       <Loading label="Opening Chat…" />
     );
@@ -81,7 +91,7 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
           disabled={busy || running || !providers.length}
         />
         <button type="button" disabled={busy || running} onClick={() => void actions.addFolder()}>
-          Add folder…
+          Add Folder…
         </button>
         <button
           type="button"
@@ -101,9 +111,9 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
           disabled={busy || running}
           onClick={() => void actions.importCanvas()}
         >
-          Open canvas…
+          Open Canvas…
         </button>
-        <button onClick={() => workspace.openToolLibrary(pane.id)}>Tool library</button>
+        <button onClick={() => workspace.openToolLibrary(pane.id)}>Tool Library</button>
         <button type="button" disabled={busy} onClick={() => void actions.loadRecent()}>
           Conversations
         </button>
@@ -169,14 +179,14 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
                 .catch(actions.reportError)
             }
           >
-            Source conversation
+            Source Conversation
           </button>
           <blockquote>{document.branch.quote}</blockquote>
           <Disclosure variant="compact" summary="Inherited context">
-            <p>Captured through the quoted message. Later parent messages are not included.</p>
+            <p>Taken from the quoted message; later messages aren’t included.</p>
             {document.branch.context.map((message) => (
               <p key={message.id}>
-                {message.role}: {message.text}
+                {messageAuthor(message)}: {message.text}
               </p>
             ))}
           </Disclosure>
@@ -219,7 +229,7 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
               type="button"
               onClick={() => void window.viewer.openSettings('settings.providers').catch(report)}
             >
-              Add a model in Settings
+              Add a Model in Settings
             </button>
           </div>
         ) : permission.loading ? (
@@ -233,7 +243,7 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
               {level === 'names' ? 'file names and your request' : modelDataLabels[level]}.
             </p>
             <button type="button" disabled={busy} onClick={() => void actions.grantPermission()}>
-              Allow {level}
+              {allowLabels[level]}
             </button>
           </div>
         ) : null}

@@ -1,21 +1,64 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FileEntry, ViewerAPI } from '../../domain/contracts';
-import { imagePresetPlan, type ImageExportPreset } from '../../domain/operations/export-presets';
-import {
-  imageTransformSchema,
-  transformExtension,
-  type ImageTransform,
-} from '../../domain/operations/transforms';
+import { imagePresetPlan } from '../../domain/operations/export-presets';
+import type { ImageExportPreset } from '../../domain/operations/export-presets';
+import { imageTransformSchema, transformExtension } from '../../domain/operations/transforms';
+import type { ImageTransform } from '../../domain/operations/transforms';
 import { sourceVersion } from '../../domain/files/inspection';
 import { baseName } from '../../domain/workspaces/planes';
-import { Dialog, Empty, Loading, Row } from '../ui/primitives';
+import { Dialog, Failure, Loading } from '../ui/primitives';
+import { plural } from '../../domain/plural';
 import { ChoiceButton } from '../ui/ChoiceMenu';
-import { measureLocalPoint, type Point } from '../ui/projectedResize';
+import { DestinationField } from '../ui/DestinationField';
+import { FileNameField, fileNameError } from '../ui/FileNameField';
+import { FormField } from '../ui/FormField';
+import { useHomeText } from '../ui/PathLabel';
+import { measureLocalPoint } from '../ui/projectedResize';
+import type { Point } from '../ui/projectedResize';
 import { report, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import './image-tools.css';
 import { isActiveJob } from '../../domain/operations/jobs';
 import { errorMessage } from '../../domain/errors';
+
+type CropGesture =
+  | {
+      local(point: Point): Point | undefined;
+      start: Point;
+      before?: ImageTransform['crop'];
+    }
+  | undefined;
+
+function exportDimensions(width: number, height: number, plan: ImageTransform) {
+  const sourceWidth = plan.crop?.width ?? width;
+  const sourceHeight = plan.crop?.height ?? height;
+  let scaleX = plan.width ? plan.width / sourceWidth : 1;
+  let scaleY = plan.height ? plan.height / sourceHeight : 1;
+  if (plan.fit !== 'fill') {
+    const scale =
+      plan.width && plan.height
+        ? plan.fit === 'cover'
+          ? Math.max(scaleX, scaleY)
+          : Math.min(scaleX, scaleY)
+        : plan.width
+          ? scaleX
+          : scaleY;
+    scaleX = scale;
+    scaleY = scale;
+  }
+  const resizedWidth = Math.max(1, Math.round(sourceWidth * Math.min(1, scaleX)));
+  const resizedHeight = Math.max(1, Math.round(sourceHeight * Math.min(1, scaleY)));
+  const outputWidth =
+    plan.fit === 'cover' && plan.width ? Math.min(plan.width, resizedWidth) : resizedWidth;
+  const outputHeight =
+    plan.fit === 'cover' && plan.height ? Math.min(plan.height, resizedHeight) : resizedHeight;
+  return {
+    width: outputWidth,
+    height: outputHeight,
+    keepsSize:
+      (scaleX > 1 || scaleY > 1) && outputWidth === sourceWidth && outputHeight === sourceHeight,
+  };
+}
 
 export function ImageToolsDialog({
   files,
@@ -35,9 +78,7 @@ export function ImageToolsDialog({
     [previewError, setPreviewError] = useState(''),
     [previewAttempt, setPreviewAttempt] = useState(0);
   const [folder, setFolder] = useState(files[0]!.parent),
-    [name, setName] = useState(
-      baseName(files[0]!.path).replace(/\.[^.]+$/, '') + ' converted.webp',
-    );
+    [name, setName] = useState(baseName(files[0]!.path).replace(/\.[^.]+$/, '') + ' converted');
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [cropMode, setCropMode] = useState(false),
@@ -46,10 +87,9 @@ export function ImageToolsDialog({
     imageBox = useRef<HTMLDivElement>(null),
     canvas = useRef<HTMLCanvasElement>(null);
   const [bounds, setBounds] = useState({ width: 640, height: 420 });
-  const drag = useRef<
-    | { local(point: Point): Point | undefined; start: Point; before?: ImageTransform['crop'] }
-    | undefined
-  >(undefined);
+  const drag = useRef<CropGesture>(undefined);
+  const extension = transformExtension(plan.format);
+  const nameError = fileNameError(name, extension);
   const job = useViewer((state) => state.jobs.find((job) => job.id === jobID));
   const working = busy || (!!job && isActiveJob(job));
   useEffect(() => {
@@ -79,7 +119,7 @@ export function ImageToolsDialog({
         )
       ) {
         setInspection(undefined);
-        setPreviewError('File access changed. Retry to check the source.');
+        setPreviewError('File access changed. Try again to check the image.');
         if (resource) void window.viewer.release(resource).catch(() => {});
       }
     });
@@ -121,7 +161,7 @@ export function ImageToolsDialog({
     image.onerror = () => {
       if (!live) return;
       clearTimeout(timer);
-      setPreviewError('The source image preview could not be decoded.');
+      setPreviewError("Viewer couldn't read this image.");
     };
     image.src = inspection.preview.url;
     return () => {
@@ -138,7 +178,7 @@ export function ImageToolsDialog({
       element.height = swapped ? decoded.naturalWidth : decoded.naturalHeight;
       const context = element.getContext('2d');
       if (!context) {
-        setPreviewError('The image drawing surface is unavailable.');
+        setPreviewError("Viewer couldn't draw the preview.");
         return;
       }
       context.translate(element.width / 2, element.height / 2);
@@ -159,7 +199,7 @@ export function ImageToolsDialog({
     try {
       const normalized = imageTransformSchema.parse(plan);
       const extension = transformExtension(normalized.format);
-      const filename = name.replace(/\.[^.]+$/, '') + '.' + extension;
+      const filename = name + '.' + extension;
       const id = await window.viewer.operate({
         kind: 'convert',
         sources: files.map((file) => file.path),
@@ -176,12 +216,15 @@ export function ImageToolsDialog({
     }
   };
   const crop = plan.crop;
+  const output = inspection ? exportDimensions(width, height, plan) : undefined;
+  const shownError = useHomeText(error);
+  const status = useHomeText(job ? `${job.status}${job.detail ? ' · ' + job.detail : ''}` : '');
   return (
     <Dialog
       title={
         files.length === 1
-          ? `Image tools · ${files[0]!.name}`
-          : `Image tools · ${files.length} images`
+          ? `Image Tools · ${files[0]!.name}`
+          : `Image Tools · ${plural(files.length, 'image')}`
       }
       onClose={onClose}
       wide
@@ -190,11 +233,11 @@ export function ImageToolsDialog({
       <div className="image-tools-body">
         <div className="image-tools-preview" ref={preview}>
           {previewError ? (
-            <Empty icon="warning" title="Image preview unavailable" detail={previewError}>
-              <button onClick={() => setPreviewAttempt((value) => value + 1)}>
-                Retry image preview
-              </button>
-            </Empty>
+            <Failure
+              title="Can't show the image preview"
+              detail={previewError}
+              onRetry={() => setPreviewAttempt((value) => value + 1)}
+            />
           ) : !inspection || !decoded ? (
             <Loading label="Reading image…" />
           ) : (
@@ -256,79 +299,89 @@ export function ImageToolsDialog({
             </div>
           )}
         </div>
-        <div className="image-tools-options">
-          <Row
-            label="Format"
-            control={
-              <ChoiceButton
-                label="Image output format"
-                value={plan.format}
-                choices={[
-                  { value: 'webp', label: 'WebP' },
-                  { value: 'avif', label: 'AVIF' },
-                  { value: 'jpeg', label: 'JPEG' },
-                  { value: 'png', label: 'PNG' },
-                ]}
-                onChoose={(format) => {
-                  setPlan((plan) => ({ ...plan, format: format as ImageTransform['format'] }));
-                  setName(
-                    name.replace(/\.[^.]+$/, '') +
-                      '.' +
-                      transformExtension(format as ImageTransform['format']),
-                  );
-                }}
-              />
-            }
-          />
-          {plan.format !== 'png' && (
-            <Row
-              label={`Quality · ${plan.quality}`}
-              control={
-                <input
-                  aria-label="Image quality"
-                  type="range"
-                  min={1}
-                  max={100}
-                  value={plan.quality}
-                  onChange={(event) =>
-                    setPlan((plan) => ({ ...plan, quality: Number(event.target.value) }))
-                  }
-                />
+        <div className="image-tools-options dialog-form">
+          <FormField label="Format">
+            <ChoiceButton
+              label="Image output format"
+              value={plan.format}
+              choices={[
+                { value: 'webp', label: 'WebP' },
+                { value: 'avif', label: 'AVIF' },
+                { value: 'jpeg', label: 'JPEG' },
+                { value: 'png', label: 'PNG' },
+              ]}
+              onChoose={(format) =>
+                setPlan((plan) => ({ ...plan, format: format as ImageTransform['format'] }))
               }
             />
+          </FormField>
+          {plan.format !== 'png' && (
+            <FormField label={`Quality · ${plan.quality}`}>
+              <input
+                aria-label="Image quality"
+                type="range"
+                min={1}
+                max={100}
+                value={plan.quality}
+                onChange={(event) =>
+                  setPlan((plan) => ({ ...plan, quality: Number(event.target.value) }))
+                }
+              />
+            </FormField>
           )}
-          <div className="image-tools-dimensions">
-            <label>
-              Width
-              <input
-                aria-label="Output width"
-                type="number"
-                min={1}
-                max={32768}
-                placeholder="Original"
-                value={plan.width ?? ''}
-                onChange={(event) =>
-                  setPlan((plan) => ({ ...plan, width: Number(event.target.value) || undefined }))
-                }
-              />
-            </label>
-            <label>
-              Height
-              <input
-                aria-label="Output height"
-                type="number"
-                min={1}
-                max={32768}
-                placeholder="Original"
-                value={plan.height ?? ''}
-                onChange={(event) =>
-                  setPlan((plan) => ({ ...plan, height: Number(event.target.value) || undefined }))
-                }
-              />
-            </label>
+          <div className="image-size-controls">
+            {inspection && (
+              <p className="muted">
+                {files.length > 1 ? 'First image: ' : ''}
+                {inspection.width} × {inspection.height} px{inspection.alpha ? ', transparent' : ''}
+              </p>
+            )}
+            <div className="image-tools-dimensions">
+              <FormField label="Width">
+                <input
+                  aria-label="Output width"
+                  type="number"
+                  min={1}
+                  max={32768}
+                  placeholder="Original"
+                  value={plan.width ?? ''}
+                  onChange={(event) =>
+                    setPlan((plan) => ({ ...plan, width: Number(event.target.value) || undefined }))
+                  }
+                />
+              </FormField>
+              <FormField label="Height">
+                <input
+                  aria-label="Output height"
+                  type="number"
+                  min={1}
+                  max={32768}
+                  placeholder="Original"
+                  value={plan.height ?? ''}
+                  onChange={(event) =>
+                    setPlan((plan) => ({
+                      ...plan,
+                      height: Number(event.target.value) || undefined,
+                    }))
+                  }
+                />
+              </FormField>
+            </div>
+            {output && (
+              <>
+                <p role="status">
+                  {files.length > 1 ? 'First image exports' : 'Exports'} {output.width} ×{' '}
+                  {output.height} px {plan.format === 'webp' ? 'WebP' : plan.format.toUpperCase()}
+                </p>
+                {output.keepsSize && (
+                  <p className="muted">
+                    Already smaller than the target; keeps {output.width} × {output.height}.
+                  </p>
+                )}
+              </>
+            )}
           </div>
-          <label>
-            Resize
+          <FormField label="Resize">
             <ChoiceButton
               label="Image resize fit"
               value={plan.fit}
@@ -341,7 +394,7 @@ export function ImageToolsDialog({
                 setPlan((plan) => ({ ...plan, fit: fit as ImageTransform['fit'] }))
               }
             />
-          </label>
+          </FormField>
           <div className="image-tools-crop-actions">
             <button
               aria-pressed={cropMode}
@@ -361,7 +414,7 @@ export function ImageToolsDialog({
                 setPlan((plan) => ({ ...plan, crop: undefined }));
               }}
             >
-              Reset crop
+              Reset Crop
             </button>
             <button
               onClick={() =>
@@ -375,17 +428,11 @@ export function ImageToolsDialog({
               Rotate
             </button>
           </div>
-          {crop && (
-            <p className="muted">
-              Crop {crop.width} × {crop.height} at {crop.x}, {crop.y}
-              {files.length > 1 ? ' · applied to every image' : ''}
-            </p>
-          )}
+          {crop && files.length > 1 && <p className="muted">The crop applies to every image.</p>}
           {crop && (
             <div className="image-tools-dimensions">
               {(['x', 'y', 'width', 'height'] as const).map((field) => (
-                <label key={field}>
-                  Crop {field}
+                <FormField key={field} label={'Crop ' + field}>
                   <input
                     aria-label={'Crop ' + field}
                     type="number"
@@ -416,12 +463,11 @@ export function ImageToolsDialog({
                       setPlan((plan) => ({ ...plan, crop: { ...crop, [field]: value } }));
                     }}
                   />
-                </label>
+                </FormField>
               ))}
             </div>
           )}
-          <label>
-            Metadata
+          <FormField label="Metadata">
             <ChoiceButton
               label="Image metadata policy"
               value={plan.metadata}
@@ -434,10 +480,9 @@ export function ImageToolsDialog({
                 setPlan((plan) => ({ ...plan, metadata: metadata as ImageTransform['metadata'] }))
               }
             />
-          </label>
+          </FormField>
           {plan.format === 'jpeg' && (
-            <label>
-              Transparency background
+            <FormField label="Transparency background">
               <input
                 type="color"
                 aria-label="JPEG background color"
@@ -446,60 +491,31 @@ export function ImageToolsDialog({
                   setPlan((plan) => ({ ...plan, background: event.target.value }))
                 }
               />
-            </label>
+            </FormField>
           )}
           {files.length === 1 && (
-            <label>
-              Filename
-              <input
-                aria-label="Image output filename"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
+            <FileNameField
+              value={name}
+              extension={extension}
+              onChange={setName}
+              folder={folder}
+              disabled={working}
+            />
           )}
-          <label>
-            Save in
-            <div className="media-destination">
-              <input
-                aria-label="Image output folder"
-                value={folder}
-                onChange={(event) => setFolder(event.target.value)}
-              />
-              <button
-                onClick={() =>
-                  void window.viewer
-                    .chooseFolder(folder)
-                    .then((value) => {
-                      if (value) setFolder(value);
-                    })
-                    .catch(report)
-                }
-              >
-                Choose…
-              </button>
-            </div>
-          </label>
-          {inspection && (
-            <p className="muted">
-              Source {inspection.width} × {inspection.height}
-              {inspection.alpha ? ' · transparency' : ''}. Orientation is normalized. Smaller images
-              keep their original size.
-            </p>
-          )}
+          <DestinationField
+            path={folder}
+            onChange={setFolder}
+            disabled={working}
+          />
         </div>
       </div>
       {error && (
         <p className="dialog-error" role="alert">
-          {error}
+          {shownError}
         </p>
       )}
       <footer>
-        <span className="muted">
-          {job
-            ? `${job.status}${job.detail ? ' · ' + job.detail : ''}`
-            : 'Creates new files. Your originals are kept.'}
-        </span>
+        <span className="muted">{job ? status : 'Originals are kept.'}</span>
         <span className="toolbar-spacer" />
         {job?.completed[0]?.destination && (
           <button
@@ -514,13 +530,13 @@ export function ImageToolsDialog({
                 .catch(report)
             }
           >
-            Open result
+            Open Result
           </button>
         )}
         <button onClick={onClose}>Close</button>
         {job && isActiveJob(job) && (
           <button onClick={() => void window.viewer.cancelJob(job.id).catch(report)}>
-            Cancel export
+            Cancel Export
           </button>
         )}
         <button
@@ -530,13 +546,13 @@ export function ImageToolsDialog({
             !inspection ||
             !!previewError ||
             !folder.trim() ||
-            (files.length === 1 && !name.trim())
+            (files.length === 1 && !!nameError)
           }
           onClick={() => void exportImages()}
         >
           {busy
             ? 'Preparing…'
-            : `Export ${files.length === 1 ? 'image' : `${files.length} images`}`}
+            : `Export ${files.length === 1 ? 'Image' : `${files.length.toLocaleString('en-US')} Images`}`}
         </button>
       </footer>
     </Dialog>

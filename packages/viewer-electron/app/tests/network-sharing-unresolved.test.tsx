@@ -69,7 +69,7 @@ it.each(['dialog', 'info'])(
       ),
     );
     expect(
-      await screen.findByText('Viewer could not check whether this folder is shared.'),
+      await screen.findByText("Viewer couldn't check whether this folder is shared."),
     ).toBeTruthy();
     expect(screen.queryByText('This folder is not shared.')).toBeNull();
   },

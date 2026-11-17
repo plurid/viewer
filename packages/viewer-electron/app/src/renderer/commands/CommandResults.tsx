@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '../ui/Icon';
-import { FolderPath } from '../ui/FolderPath';
+import { PathLabel } from '../ui/PathLabel';
 import type { DiscoverableCommand, ResolvedCommand } from './registry';
 
 interface ResultOrder {
@@ -10,6 +10,13 @@ interface ResultOrder {
 }
 
 type ResultSectionKind = 'open-workspace' | 'defined-workspace' | 'summary' | 'ordinary';
+
+const absolutePath = /^(?:\/|[A-Za-z]:[\\/]|\\\\|viewer-sftp:)/i;
+
+/** A file or folder row's text that is a path, as a typed path's row and a found file's folder. */
+function isPath(row: ResolvedCommand, text: string | undefined): text is string {
+  return (row.icon === 'folder' || row.icon === 'file') && !!text && absolutePath.test(text);
+}
 
 /** Live results retain pointer stability within sections while respecting their current priority. */
 function resultSections(
@@ -62,9 +69,10 @@ export function CommandResults({
   unavailable = [],
   onSelect,
   onClose,
-  placeholder = 'Search actions…',
-  label = 'Search actions',
-  empty = 'No matching actions',
+  placeholder = 'Search commands…',
+  label = 'Search commands',
+  empty = 'No matching commands',
+  listLabel = 'Commands',
   recent = [],
   headings,
   leading,
@@ -86,6 +94,8 @@ export function CommandResults({
   placeholder?: string;
   label?: string;
   empty?: string;
+  /** The results' name: “Commands”, or what this mode lists, as “Files”. */
+  listLabel?: string;
   recent?: readonly string[];
   /** Section headings, by the id of the row each comes before. */
   headings?: ReadonlyMap<string, string>;
@@ -218,7 +228,7 @@ export function CommandResults({
               input.current?.focus({ preventScroll: true });
             }}
           >
-            Clear recent
+            Clear Recent
           </button>
         )}
         {trailing}
@@ -228,7 +238,7 @@ export function CommandResults({
         ref={list}
         id={`${id}-list`}
         role="listbox"
-        aria-label="Commands"
+        aria-label={listLabel}
       >
         {!rows.length && !unavailable.length && (
           <p className="command-empty" role="status">
@@ -267,10 +277,12 @@ export function CommandResults({
                 size={16}
               />
               <span className="command-result-text">
-                <span>{row.label}</span>
+                {isPath(row, row.label) ? <PathLabel path={row.label} /> : <span>{row.label}</span>}
                 {row.detail &&
-                  (row.id.startsWith('smart:folder:') ? (
-                    <FolderPath path={row.detail} />
+                  (isPath(row, row.detail) ? (
+                    <small>
+                      <PathLabel path={row.detail} />
+                    </small>
                   ) : (
                     <small>{row.detail}</small>
                   ))}

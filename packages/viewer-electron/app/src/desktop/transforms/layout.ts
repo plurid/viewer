@@ -294,7 +294,7 @@ export async function renderLayout(
         target,
         output,
       );
-    else if (!imaging) throw new Error('Image processing is unavailable here.');
+    else if (!imaging) throw new Error('This build of Viewer can’t process images for layouts.');
     else await writeImage(layout, layout.format, read, imaging(), target, signal, progress);
     await target.sync();
     progress(1, 'Layout ready');

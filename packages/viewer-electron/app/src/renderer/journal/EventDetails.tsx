@@ -72,13 +72,13 @@ export function EventDetails({
       </dl>
       <div className="journal-detail-actions">
         <button type="button" onClick={onTrace}>
-          Show trace
+          Show Trace
         </button>
         <button type="button" onClick={onSource} disabled={!sourceAvailable}>
-          {record.origin.planeID ? 'Go to plane' : 'Go to workspace'}
+          {record.origin.planeID ? 'Go to Plane' : 'Go to Workspace'}
         </button>
         <button type="button" onClick={onCopy}>
-          Copy event ID
+          Copy Event ID
         </button>
       </div>
       {!sourceAvailable && (

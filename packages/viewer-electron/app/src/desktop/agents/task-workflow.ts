@@ -127,7 +127,8 @@ export class AgentTaskWorkflows {
         window.id,
         context.signal,
       );
-      if (reply.kind !== 'catalog') throw new Error('The worktree catalog is unavailable.');
+      if (reply.kind !== 'catalog')
+        throw new Error('Viewer couldn’t list this repository’s worktrees.');
       const catalog = reply.catalog;
       const branches = catalog.branches ?? [];
       if (catalog.creationProblem) throw new Error(catalog.creationProblem);
@@ -274,7 +275,9 @@ export class AgentTaskWorkflows {
   cancel(id: string): void {
     const running = this.running.get(id);
     if (running)
-      running.abort(new Error('Task creation cancelled. Any created worktree is retained.'));
+      running.abort(
+        new Error('Task creation was canceled. A worktree it already made stays on disk.'),
+      );
     else {
       const lease = this.leases.get(id);
       if (lease?.setup.catalogID)
@@ -328,7 +331,8 @@ function taskBundle(
     { id: randomUUID(), type: 'git-changes', path: entry.path, activation: 'manual' },
   ];
   const terminal = panes[3];
-  if (terminal?.type !== 'terminal') throw new Error('Task terminal is unavailable.');
+  if (terminal?.type !== 'terminal')
+    throw new Error('The task’s terminal has closed. Open the task again.');
   const now = Date.now();
   const bundle: AgentTaskBundle = {
     workspaceID: setup.workspaceID,

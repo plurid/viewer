@@ -5,7 +5,7 @@ may need attention and suggests what to do next. If you add a model, it can also
 folder with you and identify files Viewer cannot show. Nothing changes until you choose an action or
 approve a review.
 
-**Find it:** the cards above a folder's files · **⌘K** → **File overview** · **⌘K** → **Explore this
+**Find it:** the cards above a folder's files · **⌘K** → **File Overview** · **⌘K** → **Explore this
 folder** · **Suggested** in the file menu
 
 ## See what needs attention
@@ -20,19 +20,21 @@ cards above the files say what and offer one action each:
 | Installers in Downloads older than a week      | **Move to Trash…**         |
 | Archives already extracted beside their folder | **Move to Trash…**         |
 | PDFs over 10 MB                                | **Optimize…**              |
-| Two or more names ending " copy" or "(1)"      | **Find duplicates…**       |
+| Two or more names ending " copy" or "(1)"      | **Find Duplicates…**       |
 | Five or more screenshots                       | **Put in a folder…**       |
 | Three or more HEIC photos                      | **Convert copies to JPEG** |
+| The folder's workspace remembers its planes    | **Open Workspace**         |
 
 The action selects the files it covers first, so you see what it will act on, then opens the same
 command as the file menu. **Move to Trash…** asks first, unless you turned off **Settings → Browsing
 → Confirm before moving to Trash**. Choose **×** on a card to hide it in that folder; **⌘K** →
-**Show hidden insights** brings them back. Turn the cards off with **Settings → Browsing →
-Suggestions → Show folder insights**.
+**Show Hidden Insights** brings them back. Turn the cards off with **Settings → Browsing →
+Suggestions → Show folder insights**. The workspace card hides for its whole workspace; see
+[Open the workspace a folder belongs to](workspaces.md#open-the-workspace-a-folder-belongs-to).
 
 ## See all your files at a glance
 
-Press **⌘K** and choose **File overview**. A File overview plane searches the filename index for
+Press **⌘K** and choose **File Overview**. A File Overview plane searches the filename index for
 what may need a look:
 
 ![File overview cards for old installers, large files, screenshots and more across a Home folder](../media/overview.png)
@@ -40,7 +42,7 @@ what may need a look:
 | Card                       | Looks for                                                          |
 | -------------------------- | ------------------------------------------------------------------ |
 | Old installers             | dmg and pkg files in Downloads older than a week                   |
-| Archives already extracted | Zip and tar archives with the folder Extract here made beside them |
+| Archives already extracted | Zip and tar archives with the folder Extract Here made beside them |
 | Files over 1 GB            | The largest files in every indexed location                        |
 | Screenshots on the Desktop | Names starting "Screenshot" or "Screen Recording"                  |
 | Old downloads              | Files in Downloads unchanged for three months                      |
@@ -50,14 +52,14 @@ what may need a look:
 | Changed this week          | Where your work has been                                           |
 
 Each card shows how many files match, their total size and the largest few (the latest, for Changed
-this week); choose a name to open it. **Show all** opens the matches as a search, where you select
+this week); choose a name to open it. **Show All** opens the matches as a search, where you select
 them and use any action, such as **Move to Trash…** or **Optimize…**. For archives already
 extracted, which no search can name, it opens a collection of exactly those archives, kept with the
 workspace and updated each time. Searches with no matches are listed in one line at the bottom.
 **Refresh** searches again.
 
 File overview reads only the index. When Downloads or the Desktop is not indexed, its card offers
-**Search it now**, which searches the folder directly, and **Add to the index**, which opens
+**Search It Now**, which searches the folder directly, and **Add to the Index**, which opens
 **Settings → Search**.
 
 ## Let the model pick suggestions
@@ -79,14 +81,14 @@ and never picks **Move to Trash**.
 
 ## Ask the model what is here
 
-1. Press **⌘K** and choose **Explore this folder**, or right-click empty space in the folder and
-   choose **More file actions → Explore this folder**. With files selected it reads **Explore
+1. Press **⌘K** and choose **Explore This Folder**, or right-click empty space in the folder and
+   choose **More file actions → Explore This Folder**. With files selected it reads **Explore
    selected items**; for a selected folder it also appears under **Suggested**.
 2. A Chat plane opens with the folder attached. When the model may already receive names, the
-   request goes at once; otherwise choose **Allow names**, then **Send**.
+   request goes at once; otherwise choose **Allow Names**, then **Send**.
 3. The model lists the folder, looks closer at a few files and answers with a summary. Files it
    mentions appear as buttons under the answer; choose one to open it beside the chat.
-4. A proposed action shows **Review proposal**. Nothing runs until you approve it.
+4. A proposed action shows **Review Changes**. Nothing runs until you approve it.
 
 ![A Chat plane answering Explore this folder, with buttons for the files it names](../media/explore.png)
 

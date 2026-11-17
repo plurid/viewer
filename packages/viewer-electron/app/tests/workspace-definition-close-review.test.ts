@@ -14,7 +14,11 @@ const discard = vi.fn(async () => {});
 let release: (() => void) | undefined;
 beforeEach(() => {
   vi.clearAllMocks();
-  request.mockRejectedValue(new Error('This workspace definition is unavailable.'));
+  request.mockRejectedValue(
+    new Error(
+      'Viewer can’t find this workspace’s definition. It may have been removed from its file.',
+    ),
+  );
   prompt.mockResolvedValue('discard');
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
@@ -85,7 +89,9 @@ it('M6: a refused reset after Don’t Save keeps the text and closes nothing', a
     subtree: (id: string) => [id],
     closePane: vi.fn(),
   } as unknown as WorkspaceController;
-  await expect(resetDefinition(controller)).rejects.toThrow('unavailable');
+  await expect(resetDefinition(controller)).rejects.toThrow(
+    'can’t find this workspace’s definition',
+  );
   expect(prompt).toHaveBeenCalledWith('close', 'Sample idea');
   expect(discard).not.toHaveBeenCalled();
   expect(controller.closePane).not.toHaveBeenCalled();
@@ -102,7 +108,9 @@ it('M5: Cancel on scratch text cancels Close before desktop access', async () =>
 });
 
 it('M5: Close defers Don’t Save until desktop acceptance', async () => {
-  await expect(closeDefinedWorkspace(activeWorkspace().id)).rejects.toThrow('unavailable');
+  await expect(closeDefinedWorkspace(activeWorkspace().id)).rejects.toThrow(
+    'can’t find this workspace’s definition',
+  );
   expect(prompt).toHaveBeenCalledOnce();
   expect(discard).not.toHaveBeenCalled();
   request.mockImplementation(async () => {

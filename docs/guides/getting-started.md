@@ -43,8 +43,8 @@ read at the same time.
 
 1. Press **⌘F** and type part of a filename. Matches in the folder appear as you type; choose one to
    open it.
-2. To look below the folder too, choose **This folder** beside the results and change it to
-   **Subfolders**. **Indexed locations** searches everything Viewer has indexed.
+2. To look below the folder too, choose **This Folder** beside the results and change it to
+   **Subfolders**. **Indexed Locations** searches everything Viewer has indexed.
 3. Narrow the results with a filter: `ext:pdf` shows PDFs, `kind:folder` shows folders, `size>10mb`
    shows large files.
 4. To find words inside documents, turn on **Document text**. It searches the locations whose

@@ -19,6 +19,7 @@ export function validRemoteUnicode(text: string): boolean {
 
 export const remoteUTF8Bytes = (text: string): number => new TextEncoder().encode(text).length;
 
+/** Zod continues after ordinary failures, so abort before the recursive path regex. */
 export const remotePath = z
   .string()
   .refine((file) => file.length <= remoteLimits.serverPathBytes, {
@@ -31,7 +32,10 @@ export const remotePath = z
     'Use a normalized server path.',
   )
   .refine(validRemoteUnicode, 'Use valid UTF-8 text.')
-  .refine((file) => remoteUTF8Bytes(file) <= remoteLimits.serverPathBytes)
+  .refine(
+    (file) => remoteUTF8Bytes(file) <= remoteLimits.serverPathBytes,
+    'The server path is too long.',
+  )
   .refine(
     (file) =>
       file.split('/').every((part) => remoteUTF8Bytes(part) <= remoteLimits.serverNameBytes),

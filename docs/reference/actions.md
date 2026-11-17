@@ -5,7 +5,7 @@ placeholders, limits and first-run confirmations.
 
 ## Custom commands
 
-**Settings → Actions → Custom commands** lists them; **New command** adds one. Each appears in ⌘K
+**Settings → Actions → Custom commands** lists them; **New Command** adds one. Each appears in ⌘K
 under **Actions** and in the file menu where its conditions match. Viewer keeps up to 200.
 
 | Field               | Values                                                                                         |
@@ -33,7 +33,7 @@ folders.
 | **Built-in command**         | `builtin`       | One command ID; not another custom command                             |
 | **Command sequence (macro)** | `sequence`      | 1 to 50 command lines in order                                         |
 | **Workflow**                 | `workflow`      | 1 to 20 steps: built-in command lines and executable or shell commands |
-| **Action recipe**            | `recipe`        | Opens **Run action** with the recipe chosen                            |
+| **Action recipe**            | `recipe`        | Opens **Run Action** with the recipe chosen                            |
 | **Terminal plane**           | `terminal`      | Opens a terminal plane with a shell profile                            |
 | **Executable**               | `executable`    | A program with literal arguments                                       |
 | **Shell script**             | `shell`         | A script run by the shell you name, up to 16,000 characters            |
@@ -96,7 +96,7 @@ command, so none runs itself.
 
 Give a sequence a command name (a capital, then up to 30 letters and digits) and it also runs as
 `:Name` on the command line, with its words as `$1` to `$9` and `$*`. Two sequences cannot share a
-name. **Record macro** saves the commands you run as a new sequence.
+name. **Record Macro** saves the commands you run as a new sequence.
 
 ## Workflow commands
 
@@ -110,8 +110,8 @@ For inspection, comparison and reviewed file changes with explicit dependencies,
 
 ## Run command drafts
 
-In **Run command…**, **Save as action…** then **Review in Settings** shows the draft at the top of
-**Custom commands**. **Add command** adds it as a shell command; **Dismiss** drops it. Nothing runs
+In **Run Command…**, **Save as Action…** then **Review in Settings** shows the draft at the top of
+**Custom commands**. **Add Command** adds it as a shell command; **Dismiss** drops it. Nothing runs
 until you choose the command, and its first run asks as below.
 
 ## First-run confirmation
@@ -152,14 +152,14 @@ recipes** and **Import recipes** manage them. Viewer keeps up to 100.
 | **Shortcut**           | As for custom commands                                              |
 
 **Rename as book** always reads local publication metadata and text, whatever it sends to a model.
-In **Run action**, **Batch rename** runs without a model and offers **Filename template**,
+In **Run Action**, **Batch rename** runs without a model and offers **Filename template**,
 **Prefix**, **Suffix**, **Find text**, **Replace with**, **Letter case** (**Keep**, **lowercase**,
 **UPPERCASE**, **Title Case**), **Number padding**, **Start numbering at**, **Find with regular
 expression**, **Ignore case** and **Read document metadata for template fields**.
 
 ## Review and Apply
 
-A recipe prepares a proposal; nothing changes until you choose **Apply N changes**. Each row shows
+A recipe prepares a proposal; nothing changes until you choose **Apply N Changes**. Each row shows
 its source, the proposed result and the evidence used. Untick a row to leave it out.
 
 | Row marked and left unticked                | Message                                           |
@@ -174,10 +174,10 @@ its source, the proposed result and the evidence used. Untick a row to leave it 
 Edit a marked row's name to include it. A proposal that fails while it is prepared, for example when
 a model names a file twice or leaves one out, shows only its error. Apply checks each source again;
 an Apply that stops before moving anything fails, and one that stops after moving some files is
-partial and offers **Review recovery**. **Undo changes** reverses an applied proposal while its
-results are unchanged. **Keep a content checkpoint** keeps a copy of the affected files' contents
-and mode before Apply, without Finder tags or ACLs, within `settings.checkpoints.budgetBytes` (5 GB
-by default).
+partial and offers **Review Recovery**. **Undo Changes** reverses an applied proposal while its
+results are unchanged. **Keep a copy of the originals** saves the affected files' contents and mode
+before Apply, without Finder tags or ACLs, within `settings.checkpoints.budgetBytes` (5 GB by
+default).
 
 A model's answer never changes a file by itself. A model-backed recipe sends only its **Permitted
 data**, and only with that provider's data permission.

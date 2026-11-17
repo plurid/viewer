@@ -3,11 +3,16 @@ import type { DuplicateGroup, DuplicateResult } from '../../../domain/comparison
 import { sourceVersion } from '../../../domain/files/inspection';
 import { formatBytes } from '../../../domain/files/entries';
 import { Dialog, Loading } from '../primitives';
+import { PathLabel } from '../PathLabel';
 import { prepareOperationReview } from '../operations/OperationReview';
 import { errorMessage } from '../../../domain/errors';
+import { commonFolder } from '../../../domain/files/path-label';
 import { useWindowEvent } from '../../app/window-events';
+import { plural } from '../../../domain/plural';
 
 const page = 100;
+/** The folder a group's copies share: each copy is read from it, so two copies never read alike. */
+const groupFolder = (group: DuplicateGroup) => commonFolder(group.files.map((file) => file.path));
 const reclaimable = (groups: readonly DuplicateGroup[], chosen?: ReadonlySet<string>) =>
   groups.reduce(
     (total, group) =>
@@ -81,7 +86,7 @@ export function DuplicateControls() {
       group.files.filter((file) => chosen.has(file.path)),
     );
     try {
-      await prepareOperationReview('Move duplicate files to Trash', [
+      await prepareOperationReview('Move Duplicate Files to Trash', [
         {
           kind: 'trash',
           sources: files.map((file) => file.path),
@@ -94,7 +99,7 @@ export function DuplicateControls() {
     }
   };
   return (
-    <Dialog wide title="Find duplicates" onClose={close}>
+    <Dialog wide title="Find Duplicates" onClose={close}>
       <div className="dialog-body duplicates-body">
         <p className="muted">
           Searches {roots.length ? roots.join(', ') : 'no folder yet'} for files with identical
@@ -102,15 +107,15 @@ export function DuplicateControls() {
         </p>
         <div className="project-control-row">
           <button disabled={!!running} onClick={() => void choose()}>
-            Choose folder…
+            Choose Folder…
           </button>
           {running ? (
             <button onClick={() => void window.viewer.duplicates({ kind: 'cancel', id: running })}>
-              Cancel search
+              Cancel Search
             </button>
           ) : (
             <button className="primary" disabled={!roots.length} onClick={() => void search()}>
-              Find duplicates
+              Find Duplicates
             </button>
           )}
         </div>
@@ -120,16 +125,16 @@ export function DuplicateControls() {
           <>
             <p role="status">
               {result.groups.length
-                ? `${result.groups.length.toLocaleString()} groups of identical files among ${result.scanned.toLocaleString()} checked; ${formatBytes(reclaimable(result.groups))} could be reclaimed.`
-                : `No identical files among ${result.scanned.toLocaleString()} checked.`}
+                ? `${plural(result.groups.length, 'group')} of identical files among ${result.scanned.toLocaleString('en-US')} checked; removing the copies frees ${formatBytes(reclaimable(result.groups))}.`
+                : `No identical files among ${result.scanned.toLocaleString('en-US')} checked.`}
               {result.coverage === 'partial' &&
-                ` Some items could not be read (${result.errors.length}), so the search is incomplete.`}
+                ` ${plural(result.errors.length, 'item')} couldn’t be read, so some duplicates may be missing.`}
             </p>
             {result.groups.length > 0 && (
               <div className="project-control-row">
-                <button onClick={allButOldest}>Choose all but the oldest copy</button>
+                <button onClick={allButOldest}>Choose All but the Oldest Copy</button>
                 <button disabled={!chosen.size} onClick={() => setChosen(new Set())}>
-                  Clear choices
+                  Clear Choices
                 </button>
               </div>
             )}
@@ -139,6 +144,9 @@ export function DuplicateControls() {
                   <legend>
                     {group.files.length} identical files · {formatBytes(group.size)} each
                   </legend>
+                  {groupFolder(group) && (
+                    <PathLabel className="duplicate-folder muted" path={groupFolder(group)} />
+                  )}
                   {group.files.map((file) => {
                     const last =
                       !chosen.has(file.path) &&
@@ -151,7 +159,7 @@ export function DuplicateControls() {
                           disabled={last}
                           onChange={() => toggle(group, file.path)}
                         />
-                        <span>{file.path}</span>
+                        <PathLabel path={file.path} base={groupFolder(group)} />
                         <small className="muted">{new Date(file.modified).toLocaleString()}</small>
                       </label>
                     );

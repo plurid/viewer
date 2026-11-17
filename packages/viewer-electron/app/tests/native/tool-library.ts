@@ -152,7 +152,7 @@ const click = (label: string) => pointer('.tool-library button', label);
 const openLibrary = async (id: string) => {
   const selector = '[data-canvas-id="' + id + '"]';
   await settled(selector);
-  await pointer(selector + ' .canvas-toolbar button', 'Tool library');
+  await pointer(selector + ' .canvas-toolbar button', 'Tool Library');
   await settled('.tool-library');
 };
 const screenshot = async (name: string) => {
@@ -201,7 +201,7 @@ try {
   );
   await settled('.tool-library');
   await screenshot('library-desktop');
-  await click('Open tool');
+  await click('Open Tool');
   await until(
     () => main.evaluate(pageCall(() => document.querySelector('.canvas-body')?.textContent)),
     (value) => !!value?.includes('Tool disabled'),
@@ -221,7 +221,7 @@ try {
     (value) => value === true,
     'enable persists',
   );
-  await click('Open tool');
+  await click('Open Tool');
   const frame = await canvasFrame(main, original.id);
   await until(
     () => frame.evaluate(pageCall(() => document.querySelector('output')?.textContent)),
@@ -308,7 +308,7 @@ try {
     false,
   );
   await select('Workshop quantity copy');
-  await click('Open tool');
+  await click('Open Tool');
   const reopened = await canvasFrame(main, copy.id);
   await until(
     () => reopened.evaluate(pageCall(() => document.querySelector('output')?.textContent)),

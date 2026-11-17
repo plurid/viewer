@@ -245,7 +245,7 @@ export class ActionPlanner {
   async get(id: string): Promise<ActionPlan> {
     await this.load();
     const plan = this.plans.get(id);
-    if (!plan) throw new Error('This proposal is unavailable.');
+    if (!plan) throw new Error('This review has ended. Prepare the action again.');
     return structuredClone(plan);
   }
   private async publish(plan: ActionPlan, durable = true) {
@@ -278,7 +278,7 @@ export class ActionPlanner {
     signal?.throwIfAborted();
     if (this.closed) throw new Error('Actions have closed.');
     const recipe = this.dependencies.recipes().find((recipe) => recipe.id === request.recipeID);
-    if (!recipe) throw new Error('This action recipe is unavailable.');
+    if (!recipe) throw new Error('This recipe was removed. Choose another.');
     if (expectedRecipe && JSON.stringify(recipe) !== JSON.stringify(expectedRecipe))
       throw new Error('The recipe changed after approval. Review the workflow rule again.');
     if (!request.context.sources.length) throw new Error('Select files or a folder first.');
@@ -608,7 +608,7 @@ export class ActionPlanner {
     if (!original.source) throw new Error('This row has no original file to restore.');
     const source = await entry(current);
     if (!same(original.source, source))
-      throw new Error('A recorded file changed. Restoration is unavailable.');
+      throw new Error('A recorded file changed since, so Viewer can’t restore it.');
     let root = original.scopeRoot;
     if (!root) {
       // Older plans have no canonical scope. Derive it from the verified surviving file,
@@ -621,7 +621,7 @@ export class ActionPlanner {
         path.isAbsolute(relative)
       )
         throw new Error(
-          'The recorded restoration scope is unavailable. Inspect the original paths.',
+          'Viewer no longer knows which files to restore. Check the original paths yourself.',
         );
       root = await realpath(current);
       for (const _part of relative.split(path.sep)) root = path.dirname(root);
@@ -713,7 +713,8 @@ export class ActionPlanner {
     }
   }
   private async takeCheckpoint({ plan, selected, signal }: Applying): Promise<void> {
-    if (!this.dependencies.snapshot) throw new Error('Checkpoints are unavailable in this build.');
+    if (!this.dependencies.snapshot)
+      throw new Error('This build of Viewer can’t keep checkpoints.');
     plan.checkpointID = await this.dependencies.snapshot(
       plan.title,
       selected.flatMap((row) => (row.source ? [row.source.path] : [])),
@@ -846,7 +847,7 @@ export class ActionPlanner {
     for (const row of plan.rows.filter((row) => row.completed && row.source)) {
       const current = await entry(row.destination);
       if (!same(row.source!, current))
-        throw new Error('A completed file changed. Undo is unavailable.');
+        throw new Error('A file changed after the action, so it can’t be undone.');
     }
     const reverse: ActionPlan = {
       ...structuredClone(plan),
@@ -886,7 +887,8 @@ export class ActionPlanner {
   async exportSummary(id: string, destination: string): Promise<void> {
     await this.load();
     const plan = this.plans.get(id);
-    if (!plan?.summary || plan.status !== 'review') throw new Error('This summary is unavailable.');
+    if (!plan?.summary || plan.status !== 'review')
+      throw new Error('This summary has ended. Prepare it again.');
     await this.dependencies.access?.([...plan.context.sources, destination]);
     await this.validateSummary(plan);
     if (await exists(destination)) throw new Error('Choose a new summary filename.');

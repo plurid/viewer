@@ -176,7 +176,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
             setOpen(id);
           }}
         >
-          New theme
+          New Theme
         </button>
         <button onClick={() => file.current?.click()}>Import…</button>
         <input

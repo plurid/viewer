@@ -105,12 +105,12 @@ describe('workspace definition dialogs', () => {
       />,
     );
     await waitFor(() => expect(view.getByText(/This definition is curated/)).toBeTruthy());
-    fireEvent.click(view.getByRole('button', { name: 'Save over definition' }));
+    fireEvent.click(view.getByRole('button', { name: 'Save over Definition' }));
     await waitFor(() =>
       expect(view.getByRole('alert').textContent).toContain('changed during this edit'),
     );
-    expect(view.queryByRole('button', { name: 'Save over definition' })).toBeNull();
-    fireEvent.click(view.getByRole('button', { name: 'Retry save' }));
+    expect(view.queryByRole('button', { name: 'Save over Definition' })).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'Try Again' }));
     await waitFor(() =>
       expect(actions.save).toHaveBeenLastCalledWith(activeWorkspace().id, false, undefined),
     );
@@ -119,7 +119,7 @@ describe('workspace definition dialogs', () => {
       'including planes closed here.',
     );
     expect(done).not.toHaveBeenCalled();
-    fireEvent.click(view.getByRole('button', { name: 'Save over definition' }));
+    fireEvent.click(view.getByRole('button', { name: 'Save over Definition' }));
     await waitFor(() => expect(done).toHaveBeenCalledOnce());
   });
   it('names running shells in Reset before asking to close them', async () => {
@@ -203,7 +203,7 @@ describe('workspace definition dialogs', () => {
       expect((view.getByLabelText('Key') as HTMLInputElement).value).toBe('sample/new'),
     );
     fireEvent.change(view.getByLabelText('Key'), { target: { value: '../bad key' } });
-    fireEvent.click(view.getByRole('button', { name: 'Save definition' }));
+    fireEvent.click(view.getByRole('button', { name: 'Save Definition' }));
     await waitFor(() => expect(view.getByRole('alert').textContent).toContain('Use a key'));
     expect(actions.save).not.toHaveBeenCalled();
   });
@@ -221,10 +221,10 @@ describe('workspace definition dialogs', () => {
         onClose={() => {}}
       />,
     );
-    await waitFor(() => expect(view.getByText(/Viewer cannot remember its planes/)).toBeTruthy());
+    await waitFor(() => expect(view.getByText(/Viewer can’t remember its planes/)).toBeTruthy());
     expect(view.queryByText(/0 terminals/)).toBeNull();
     expect(actions.close).not.toHaveBeenCalled();
-    fireEvent.click(view.getByRole('button', { name: 'Close workspace' }));
+    fireEvent.click(view.getByRole('button', { name: 'Close Workspace' }));
     await waitFor(() => expect(actions.close).toHaveBeenCalledWith(activeWorkspace().id, true));
   });
   it('M4: retries a failed first save without forcing until a confirmation reply is shown', async () => {
@@ -249,14 +249,14 @@ describe('workspace definition dialogs', () => {
     await waitFor(() =>
       expect(view.getByRole('alert').textContent).toContain('changed during this edit'),
     );
-    expect(view.queryByRole('button', { name: 'Save over definition' })).toBeNull();
-    fireEvent.click(view.getByRole('button', { name: 'Retry save' }));
+    expect(view.queryByRole('button', { name: 'Save over Definition' })).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'Try Again' }));
     await waitFor(() =>
       expect(actions.save).toHaveBeenLastCalledWith(activeWorkspace().id, false, undefined),
     );
     await waitFor(() => expect(view.getByText(/definition changed since/)).toBeTruthy());
     expect(done).not.toHaveBeenCalled();
-    fireEvent.click(view.getByRole('button', { name: 'Save over definition' }));
+    fireEvent.click(view.getByRole('button', { name: 'Save over Definition' }));
     await waitFor(() =>
       expect(actions.save).toHaveBeenLastCalledWith(activeWorkspace().id, true, undefined),
     );
@@ -315,7 +315,7 @@ describe('workspace definition dialogs', () => {
     );
     await waitFor(() => expect(view.getByText(/This definition is curated/)).toBeTruthy());
     expect(actions.save).toHaveBeenCalledTimes(1);
-    const save = view.getByRole('button', { name: 'Save over definition' });
+    const save = view.getByRole('button', { name: 'Save over Definition' });
     expect(save.classList.contains('danger')).toBe(true);
     fireEvent.click(save);
     await waitFor(() =>
@@ -376,7 +376,7 @@ describe('workspace definition dialogs', () => {
       expect((view.getByLabelText('Key') as HTMLInputElement).value).toBe('sample/new'),
     );
     fireEvent.change(view.getByLabelText('Name'), { target: { value: 'Sample room' } });
-    fireEvent.click(view.getByRole('button', { name: 'Save definition' }));
+    fireEvent.click(view.getByRole('button', { name: 'Save Definition' }));
     await waitFor(() =>
       expect(actions.save).toHaveBeenCalledWith(activeWorkspace().id, false, {
         key: 'sample/new',

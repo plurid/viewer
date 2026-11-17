@@ -6,6 +6,7 @@ import { normalizedPanePath } from '../../domain/workspaces/planes';
 import { activeWorkspace, getState, subscribe } from '../state/core';
 import { updatePane } from '../state/panes';
 import { effectiveWindowSettings } from '../state/effective-ui';
+import { shortcutFor, shortcutGlyphs } from '../../domain/preferences/shortcuts';
 import { TourPlayer, type PlayableTour, type TourPlayback, type TourPorts } from './tours/player';
 import type { TourStage } from './tours/stage';
 import { overlayOpen } from '../ui/modal';
@@ -195,7 +196,14 @@ export function playTour(
 /** The saved views as a tour, each shown for the Tour setting's time. */
 export function viewsTour(workspace: WorkspaceController, timing: TourTiming): PlayableTour {
   const views = workspace.bookmarks();
-  if (!views.length) throw new Error('Save a view first: ⌃⌥⌘1–9, or Save view… in the palette.');
+  if (!views.length) {
+    const save = shortcutGlyphs(
+      shortcutFor(effectiveWindowSettings(getState()).shortcuts, 'bookmark.save.1'),
+    );
+    throw new Error(
+      `Save a view first: choose Save View… in Commands${save ? `, or press ${save}` : ''}.`,
+    );
+  }
   return {
     name: 'Saved views',
     dwell: timing.dwell,

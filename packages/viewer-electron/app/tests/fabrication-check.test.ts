@@ -363,7 +363,7 @@ describe('fabrication check', () => {
     );
     await vi.waitFor(() => expect(generate).toHaveBeenCalled());
     await checks.request({ kind: 'cancel', id: opening.id }, 1);
-    await expect(running).rejects.toThrow('The check was cancelled. Nothing was graded.');
+    await expect(running).rejects.toThrow('The check was canceled. Nothing was graded.');
     expect(checks.handoff(opening.id)).toBeUndefined();
   });
 

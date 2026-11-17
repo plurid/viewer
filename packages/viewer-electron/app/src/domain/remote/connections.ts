@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { portablePath } from '../schemas';
 import { connectionID, remotePath, validRemoteUnicode } from './location';
 import { remoteLimits } from './limits';
 
@@ -54,12 +53,35 @@ export const remoteConnectionName = z
   .refine(
     (name) =>
       name.trim() === name &&
-      !/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u.test(name),
+      !/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u.test(
+        name
+          .replace(/\u{1f3f4}[\u{e0020}-\u{e007e}]+\u{e007f}/gu, '')
+          .replace(
+            /\p{Extended_Pictographic}[\ufe0e\ufe0f]?\p{Emoji_Modifier}?(?:\u200d\p{Extended_Pictographic}[\ufe0e\ufe0f]?\p{Emoji_Modifier}?)*/gu,
+            '',
+          )
+          .replace(/\p{Emoji}[\ufe0e\ufe0f]/gu, ''),
+      ),
   )
   .refine(validRemoteUnicode);
 
 export const sshConfigConsent = z.enum(['not-asked', 'allowed', 'declined']);
 export type SSHConfigConsent = z.infer<typeof sshConfigConsent>;
+
+/**
+ * OpenSSH expands `%` tokens, a leading `~` and `${VARIABLE}` in `-i`. A percent sign can be
+ * escaped and an absolute path never starts with `~`, but `${` has no escape, so it is refused.
+ */
+export const remoteIdentityFile = z
+  .string()
+  .min(1)
+  .max(32768)
+  .refine(
+    (file) =>
+      file.startsWith('/') && !file.includes('${') && !/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(file),
+    'Choose the key file with its full path.',
+  )
+  .refine(validRemoteUnicode);
 
 /** Saved records carry no credentials, process options or filesystem authority. */
 export const remoteConnection = z
@@ -70,7 +92,7 @@ export const remoteConnection = z
     user: remoteUser.optional(),
     port: remotePort.optional(),
     jump: z.array(remoteJumpHost).max(remoteLimits.jumpHosts).optional(),
-    identityFile: portablePath.optional(),
+    identityFile: remoteIdentityFile.optional(),
     startPath: remotePath.optional(),
     autoConnect: z.boolean().default(false),
     sshConfig: sshConfigConsent.default('not-asked'),

@@ -5,12 +5,16 @@ import {
   optimizationRecipeSchema,
 } from '../../domain/operations/optimization';
 import type { OptimizationOptions, OptimizationPreset } from '../../domain/operations/optimization';
-import { pdfEmailPreset, type PDFExportPreset } from '../../domain/operations/export-presets';
+import { pdfEmailPreset } from '../../domain/operations/export-presets';
+import type { PDFExportPreset } from '../../domain/operations/export-presets';
 import { formatOptimizationSize } from '../../domain/operations/optimization';
 import { optimizationTargetBytes } from '../../domain/operations/optimization-target';
 import { errorMessage } from '../../domain/errors';
 import { Dialog, Loading } from '../ui/primitives';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { DestinationField } from '../ui/DestinationField';
+import { FormField } from '../ui/FormField';
+import { useHomeText } from '../ui/PathLabel';
 import { getState, receiveSettings, report, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { useOptimizationSession } from './useOptimizationSession';
@@ -131,6 +135,7 @@ export function OptimizeDialog({
     (!validation.success
       ? 'Check the target size, quality and dimensions before preparing files.'
       : '');
+  const shownError = useHomeText(error);
   return (
     <Dialog
       wide
@@ -139,10 +144,9 @@ export function OptimizeDialog({
       className="optimize-dialog"
     >
       <div className="optimization-content">
-        <div className="dialog-body optimize-options">
+        <div className="dialog-body optimize-options dialog-form">
           <div className="optimization-main-options">
-            <label>
-              Preset
+            <FormField label="Preset">
               <ChoiceButton
                 label="Optimization preset"
                 value={options.preset}
@@ -155,8 +159,8 @@ export function OptimizeDialog({
                   })
                 }
               />
-            </label>
-            <label className="optimization-target-toggle">
+            </FormField>
+            <label className="optimization-target-toggle dialog-field-toggle">
               <input
                 type="checkbox"
                 disabled={working}
@@ -173,39 +177,40 @@ export function OptimizeDialog({
             </label>
             {options.targetSize && (
               <div className="optimization-target">
-                <OptimizationNumberField
-                  aria-label="Target size"
-                  min={optimizationTargetBytes.minimum / unit}
-                  max={optimizationTargetBytes.maximum / unit}
-                  step="any"
-                  disabled={working}
-                  value={options.targetSize.bytes / unit}
-                  onValue={(value) =>
-                    update({
-                      targetSize: {
-                        ...options.targetSize!,
-                        bytes: Math.round(value * unit),
-                      },
-                    })
-                  }
-                />
-                <ChoiceButton
-                  label="Target size unit"
-                  value={String(unit)}
-                  choices={[
-                    { value: '1000', label: 'KB' },
-                    { value: '1000000', label: 'MB' },
-                  ]}
-                  disabled={working}
-                  onChoose={(value) => setUnit(Number(value))}
-                />
+                <FormField label="Target size">
+                  <OptimizationNumberField
+                    aria-label="Target size"
+                    min={optimizationTargetBytes.minimum / unit}
+                    max={optimizationTargetBytes.maximum / unit}
+                    step="any"
+                    disabled={working}
+                    value={options.targetSize.bytes / unit}
+                    onValue={(value) =>
+                      update({
+                        targetSize: {
+                          ...options.targetSize!,
+                          bytes: Math.round(value * unit),
+                        },
+                      })
+                    }
+                  />
+                </FormField>
+                <FormField label="Unit">
+                  <ChoiceButton
+                    label="Target size unit"
+                    value={String(unit)}
+                    choices={[
+                      { value: '1000', label: 'KB' },
+                      { value: '1000000', label: 'MB' },
+                    ]}
+                    disabled={working}
+                    onChoose={(value) => setUnit(Number(value))}
+                  />
+                </FormField>
               </div>
             )}
           </div>
-          <p className="muted">
-            Prepare candidates, compare quality, then save selected smaller copies. Originals stay
-            intact.
-          </p>
+          <p className="muted">Originals are kept.</p>
           <Disclosure
             variant="compact"
             className="optimization-advanced"
@@ -213,8 +218,7 @@ export function OptimizeDialog({
           >
             <div className="optimization-advanced-fields">
               {options.targetSize && options.preset !== 'lossless' && (
-                <label>
-                  Minimum quality
+                <FormField label="Minimum quality">
                   <OptimizationNumberField
                     aria-label="Minimum optimization quality"
                     min={20}
@@ -230,22 +234,31 @@ export function OptimizeDialog({
                       })
                     }
                   />
-                  <span className="muted">Viewer stops here even if the target is missed.</span>
-                </label>
+                  <span className="dialog-field-help">
+                    Files that would need lower quality show Target not met.
+                  </span>
+                </FormField>
+              )}
+              {options.targetSize && options.preset === 'lossless' && (
+                <p className="muted">
+                  Lossless keeps full quality. Files still above the target show Target not met.
+                </p>
               )}
               {files.some((file) => file.extension.toLowerCase() !== 'pdf') && (
-                <label>
-                  <input
-                    type="checkbox"
-                    disabled={working || options.preset === 'lossless'}
-                    checked={options.maximum !== undefined}
-                    onChange={(event) =>
-                      update({ maximum: event.target.checked ? 2048 : undefined })
-                    }
-                  />
-                  Limit image dimensions
+                <div className="optimization-dimension-limit">
+                  <label className="dialog-field-toggle">
+                    <input
+                      type="checkbox"
+                      disabled={working || options.preset === 'lossless'}
+                      checked={options.maximum !== undefined}
+                      onChange={(event) =>
+                        update({ maximum: event.target.checked ? 2048 : undefined })
+                      }
+                    />
+                    Limit image dimensions
+                  </label>
                   {options.maximum !== undefined && (
-                    <>
+                    <FormField label="Longest edge (px)">
                       <OptimizationNumberField
                         aria-label="Maximum image edge"
                         min={64}
@@ -254,25 +267,26 @@ export function OptimizeDialog({
                         value={options.maximum}
                         onValue={(value) => update({ maximum: value })}
                       />
-                      <span>px longest edge</span>
-                    </>
+                    </FormField>
                   )}
-                </label>
+                </div>
               )}
               {files.some((file) => file.extension.toLowerCase() === 'pdf') && (
-                <label>
-                  <input
-                    type="checkbox"
-                    disabled={working || options.preset === 'lossless'}
-                    aria-label="Recompress scanned images"
-                    checked={!!options.pdfImages}
-                    onChange={(event) =>
-                      update({ pdfImages: event.target.checked ? { maximum: 2400 } : undefined })
-                    }
-                  />
-                  Recompress scanned images
+                <div className="optimization-dimension-limit">
+                  <label className="dialog-field-toggle">
+                    <input
+                      type="checkbox"
+                      disabled={working || options.preset === 'lossless'}
+                      aria-label="Recompress scanned images"
+                      checked={!!options.pdfImages}
+                      onChange={(event) =>
+                        update({ pdfImages: event.target.checked ? { maximum: 2400 } : undefined })
+                      }
+                    />
+                    Recompress scanned images
+                  </label>
                   {options.pdfImages && (
-                    <>
+                    <FormField label="Longest edge (px)">
                       <OptimizationNumberField
                         aria-label="PDF maximum image edge"
                         min={256}
@@ -281,16 +295,16 @@ export function OptimizeDialog({
                         value={options.pdfImages.maximum}
                         onValue={(value) => update({ pdfImages: { maximum: value } })}
                       />
-                      <span>px longest edge</span>
-                    </>
+                    </FormField>
                   )}
-                </label>
+                </div>
               )}
-              <p className="muted">
-                PDFs retain text, vectors and page sizes. Signed PDFs stay unchanged. Scanned-image
-                compression supports compatible JPEG scans. Lossless targets never lower image
-                quality.
-              </p>
+              {files.some((file) => file.extension.toLowerCase() === 'pdf') && (
+                <p className="muted">
+                  PDF text, drawings and page sizes are kept. Signed PDFs stay unchanged.
+                  {options.pdfImages ? ' Recompresses JPEG scans only.' : ''}
+                </p>
+              )}
             </div>
           </Disclosure>
           <Disclosure
@@ -301,27 +315,31 @@ export function OptimizeDialog({
           >
             <div className="optimization-recipe-fields">
               {!!recipes.length && (
-                <ChoiceButton
-                  label="Saved optimization recipe"
-                  value={recipeID}
-                  disabled={working || recipeBusy}
-                  choices={recipes.map((recipe) => ({ value: recipe.id, label: recipe.name }))}
-                  onChoose={chooseRecipe}
-                />
+                <FormField label="Saved recipe">
+                  <ChoiceButton
+                    label="Saved optimization recipe"
+                    value={recipeID}
+                    disabled={working || recipeBusy}
+                    choices={recipes.map((recipe) => ({ value: recipe.id, label: recipe.name }))}
+                    onChoose={chooseRecipe}
+                  />
+                </FormField>
               )}
-              <input
-                aria-label="Optimization recipe name"
-                placeholder="Recipe name"
-                value={recipeName}
-                maxLength={100}
-                disabled={working || recipeBusy}
-                onChange={(event) => setRecipeName(event.target.value)}
-              />
+              <FormField label="Recipe name">
+                <input
+                  aria-label="Optimization recipe name"
+                  placeholder="Recipe name"
+                  value={recipeName}
+                  maxLength={100}
+                  disabled={working || recipeBusy}
+                  onChange={(event) => setRecipeName(event.target.value)}
+                />
+              </FormField>
               <button
                 disabled={working || recipeBusy || !recipeName.trim() || !validation.success}
                 onClick={() => void saveRecipe()}
               >
-                {recipeID ? 'Update recipe' : 'Save recipe'}
+                {recipeID ? 'Update Recipe' : 'Save Recipe'}
               </button>
               {recipeID && (
                 <>
@@ -332,45 +350,27 @@ export function OptimizeDialog({
                       setRecipeName('');
                     }}
                   >
-                    Save as new
+                    Save as New
                   </button>
                   <button disabled={working || recipeBusy} onClick={() => void saveRecipe(true)}>
-                    Remove recipe
+                    Remove Recipe
                   </button>
                 </>
               )}
               <p className="muted">
-                Recipes remember compression, target size and folder layout. File locations stay
-                with this batch.
+                Recipes save compression, target size and folder layout. Source files and the output
+                folder are not saved.
               </p>
             </div>
           </Disclosure>
-          <label>
-            Save smaller copies in
-            <div className="media-destination">
-              <input
-                aria-label="Optimization output folder"
-                value={folder}
-                disabled={working}
-                onChange={(event) => setFolder(event.target.value)}
-              />
-              <button
-                disabled={working}
-                onClick={() =>
-                  void window.viewer
-                    .chooseFolder(folder)
-                    .then((value) => {
-                      if (value) setFolder(value);
-                    })
-                    .catch(report)
-                }
-              >
-                Choose…
-              </button>
-            </div>
-          </label>
+          <DestinationField
+            label="Save smaller copies in"
+            path={folder}
+            onChange={setFolder}
+            disabled={working}
+          />
           {root && (
-            <label className="optimization-preserve">
+            <label className="optimization-preserve dialog-field-toggle">
               <input
                 type="checkbox"
                 disabled={working}
@@ -382,7 +382,7 @@ export function OptimizeDialog({
           )}
           {error && (
             <p className="dialog-error" role="alert">
-              {error}
+              {shownError}
             </p>
           )}
         </div>
@@ -418,7 +418,7 @@ export function OptimizeDialog({
         <span className="toolbar-spacer" />
         <button onClick={onClose}>Close</button>
         {working ? (
-          <button onClick={() => void session.cancel().catch(report)}>Cancel optimization</button>
+          <button onClick={() => void session.cancel().catch(report)}>Cancel Optimization</button>
         ) : (
           <>
             <button

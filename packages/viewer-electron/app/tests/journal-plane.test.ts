@@ -105,9 +105,9 @@ describe('Journal plane integration', () => {
     fireEvent.click(row);
     expect(screen.getByRole('complementary', { name: 'Event details' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Paused · Resume' })).toBeTruthy();
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Go to plane' })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Go to Plane' })));
     expect(focus).toHaveBeenCalledWith(records[0]!.origin.planeID, { activate: true });
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Show trace' })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Show Trace' })));
     expect(query.mock.calls.at(-1)?.[0].filter.traceID).toBe(records[0]!.traceID);
     const restored = stateSchema.parse(getState().saved);
     expect(
@@ -119,7 +119,7 @@ describe('Journal plane integration', () => {
     mount();
     await act(async () => {});
     await act(async () =>
-      fireEvent.click(screen.getByRole('button', { name: 'Move history to Trash…' })),
+      fireEvent.click(screen.getByRole('button', { name: 'Move History to Trash…' })),
     );
     expect(clear).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Commit completed')).toBeTruthy();

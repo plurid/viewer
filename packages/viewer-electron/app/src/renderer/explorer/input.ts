@@ -2,12 +2,14 @@ import type { ApplicationSettings } from '../../domain/services';
 import {
   alternateShortcuts,
   defaultShortcuts,
+  isPreviewShortcut,
   matchesShortcut,
   shortcutCommandID,
 } from '../../domain/preferences/shortcuts';
 import { editable } from '../commands/editing';
 import { fileControlOwnsKey, type FileKey } from './selection';
 import { overlayOpen } from '../ui/modal';
+import { previewOwnsKey } from '../previews/keys';
 type RoutedKey = FileKey &
   Partial<Pick<KeyboardEvent, 'isComposing' | 'repeat' | 'defaultPrevented'>>;
 export const explorerCommandIDs = new Set([
@@ -34,9 +36,14 @@ export const explorerCommandIDs = new Set([
 ]);
 export function keyCommand(event: RoutedKey, settings: ApplicationSettings): string | undefined {
   if (event.isComposing || event.repeat) return;
+  // a picture that has the keyboard takes its own keys, as ⌘L and ⌘R (previews/keys.ts)
+  if (previewOwnsKey(event)) return;
   const bindings = {
     ...defaultShortcuts,
-    ...settings.shortcuts,
+    // a picture's keys are no window command
+    ...Object.fromEntries(
+      Object.entries(settings.shortcuts).filter(([id]) => !isPreviewShortcut(id)),
+    ),
     ...Object.fromEntries(
       settings.recipes
         .filter((item) => item.shortcut)
@@ -93,9 +100,8 @@ export function routeExplorerInput(event: RoutedKey, input: ExplorerInput): void
   if (
     event.defaultPrevented ||
     editable(event.target) ||
-    fileControlOwnsKey(event) ||
-    (event.target as Element | null)?.closest?.('.terminal-plane') ||
-    overlayOpen()
+    (!event.fromQuickPreview && (fileControlOwnsKey(event) || overlayOpen())) ||
+    (event.target as Element | null)?.closest?.('.terminal-plane')
   )
     return;
   const command = keyCommand(event, input.settings);

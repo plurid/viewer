@@ -63,7 +63,7 @@ export class TextBuffers {
       store = new DocumentStore(path.join(this.directory, id + '.json'), (value) => {
         const buffer = textBufferSchema.parse(value);
         if (buffer.id !== id)
-          throw new Error('The draft identity does not match its saved record.');
+          throw new Error('This draft’s file belongs to another draft. Nothing was changed.');
         return buffer;
       });
       this.stores.set(id, store);
@@ -156,10 +156,12 @@ export class TextBuffers {
           throw new Error('The draft is not an ordinary private document. It was preserved.');
         const { reviewed, bytes } = await inspectReviewedFile(store.file, 16_000_000);
         if (textBufferSchema.parse(JSON.parse(bytes.toString('utf8'))).id !== id)
-          throw new Error('The draft identity changed. The draft was preserved.');
+          throw new Error('This draft’s file now belongs to another draft. The draft was kept.');
         if (!this.trash) {
           assertTestRemovalAllowed(store.file);
-          throw new Error('Moving drafts to Trash is unavailable. The draft was preserved.');
+          throw new Error(
+            'This build of Viewer can’t move drafts to the Trash. The draft was kept.',
+          );
         }
         await this.trash(reviewed);
       }

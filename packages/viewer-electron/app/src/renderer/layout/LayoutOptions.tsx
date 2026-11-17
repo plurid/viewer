@@ -117,7 +117,7 @@ const orientations: readonly Segment<PageOrientation>[] = [
   { value: 'landscape', label: 'Landscape' },
 ];
 const anchorLabels = {
-  center: 'Centre',
+  center: 'Center',
   top: 'Top',
   bottom: 'Bottom',
   left: 'Left',
@@ -126,7 +126,7 @@ const anchorLabels = {
 const backgrounds = [
   { color: '#ffffff', label: 'White' },
   { color: '#f3efe6', label: 'Cream' },
-  { color: '#d9d9d9', label: 'Grey' },
+  { color: '#d9d9d9', label: 'Gray' },
   { color: '#000000', label: 'Black' },
 ];
 const pageGroups = { paper: 'Paper', photo: 'Photo print', screen: 'Screen' } as const;
@@ -588,7 +588,7 @@ function PageOptions({
               />
               <input
                 type="color"
-                aria-label="Background colour"
+                aria-label="Background color"
                 value={page.background || '#ffffff'}
                 onChange={(event) => set({ background: event.target.value.toLowerCase() })}
               />

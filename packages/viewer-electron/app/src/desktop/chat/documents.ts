@@ -31,7 +31,7 @@ export class ChatDocumentStore {
       try {
         const before = await fileStat(handle);
         if (!before.isFile() || before.size > maximumStoredBytes)
-          throw new Error('The conversation is not a bounded regular file.');
+          throw new Error('This conversation’s file is too large or is not a regular file.');
         const bytes = Buffer.alloc(before.size);
         let offset = 0;
         while (offset < bytes.length) {

@@ -276,12 +276,12 @@ it('states unknown sharing plainly and has no sharing UI or command in the Store
   );
   expect(screen.queryByRole('img', { name: 'Shared' })).toBeNull();
   expect(
-    await screen.findByText('Viewer could not check whether this folder is shared.'),
+    await screen.findByText("Viewer couldn't check whether this folder is shared."),
   ).toBeTruthy();
   unmount();
   const guidance = render(<NetworkSharingDialog path={file.path} onClose={() => {}} />);
   expect(
-    await screen.findByText('Viewer could not check whether this folder is shared.'),
+    await screen.findByText("Viewer couldn't check whether this folder is shared."),
   ).toBeTruthy();
   expect(screen.queryByText('This folder is not shared.')).toBeNull();
   guidance.unmount();
@@ -548,7 +548,7 @@ it('explains an unavailable build access list and suppresses impossible Windows 
   await readNetworkSharing([file.path]);
   render(<NetworkSharingSection path={file.path} />);
   expect(await screen.findByText(guestWarning(snapshot.shares[0]!)!)).toBeTruthy();
-  expect(screen.getByText(/Windows addresses are unavailable/)).toBeTruthy();
+  expect(screen.getByText(/Windows can’t use this address/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: /^Copy Windows address/ })).toBeNull();
   expect(screen.getByRole('button', { name: /Copy Mac address/ })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Copy permissions folder path' })).toBeNull();

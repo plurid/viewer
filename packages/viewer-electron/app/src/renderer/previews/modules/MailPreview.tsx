@@ -4,7 +4,7 @@ import type { DocumentData } from '../../../domain/services';
 import type { MailAttachment, MailMessage } from '../../../domain/previews/mail/message';
 import type { Mailbox } from '../../../domain/previews/mail/mailbox';
 import type { AttachmentDestination, PreviewContext } from '../contracts';
-import { formatBytes } from '../../../domain/files/entries';
+import { formatBytes, kindLabel } from '../../../domain/files/entries';
 import { anchoredLine } from '../../../domain/files/inspection';
 import { mailboxLimits } from '../../../domain/previews/mail/mailbox';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
@@ -12,6 +12,7 @@ import { usePreviewState } from '../state';
 import { useOfficeDocument } from '../useOfficeDocument';
 import { useHtmlPreview } from '../web/useHtmlPreview';
 import { Empty, Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
 import { report } from '../../state/store';
 import './mail.css';
 
@@ -36,9 +37,7 @@ function MessageFrame({ context, message }: { context: PreviewContext; message?:
   if (capability.status === 'loading') return <Loading label="Opening message…" />;
   if (capability.status === 'closed') return null;
   if (capability.status === 'error')
-    return (
-      <Empty icon="warning" title="The message could not be shown" detail={capability.message} />
-    );
+    return <Empty icon="warning" title="Can't show this message" detail={capability.message} />;
   return (
     <>
       {!!capability.preview.blocked && (
@@ -59,6 +58,20 @@ function MessageFrame({ context, message }: { context: PreviewContext; message?:
       />
     </>
   );
+}
+
+// the MIME family when a name has no extension; MIME types themselves are not for people
+const mimeFamilies: Readonly<Record<string, string>> = {
+  image: 'Image',
+  audio: 'Audio',
+  video: 'Video',
+  text: 'Text',
+};
+/** An attachment's kind as the Kind column names a file: by its extension, else its MIME family. */
+function attachmentKind({ name, type }: MailAttachment): string {
+  const extension = /\.([^./]+)$/.exec(name)?.[1];
+  if (extension) return kindLabel({ directory: false, extension, kind: 'file' });
+  return mimeFamilies[type.split('/')[0] ?? ''] ?? 'File';
 }
 
 /** A message's attachments, each saved beside the message or to a folder chosen, where the host
@@ -93,7 +106,7 @@ function Attachments({
           <li key={part} title={attachment.name}>
             <span className="mail-attachment-name">{attachment.name}</span>
             <span className="muted">
-              {attachment.type} · {formatBytes(attachment.size)}
+              {attachmentKind(attachment)} · {formatBytes(attachment.size)}
             </span>
             {save && (
               <span className="mail-attachment-actions">
@@ -111,7 +124,7 @@ function Attachments({
                   aria-label={`Save ${attachment.name} to…`}
                   onClick={() => run([part], 'choose')}
                 >
-                  Save to…
+                  Save To…
                 </button>
               </span>
             )}
@@ -124,7 +137,7 @@ function Attachments({
             Save All
           </button>
           <button type="button" disabled={saving} onClick={() => run(all, 'choose')}>
-            Save All to…
+            Save All To…
           </button>
         </div>
       )}
@@ -188,13 +201,13 @@ function MessageView({
       () => [
         {
           id: 'mail-view',
-          label: html ? 'Show plain text' : 'Show HTML message',
+          label: html ? 'Show Plain Text' : 'Show HTML Message',
           available: mail.html && mail.text !== undefined,
           run: () => setView(html ? 'text' : 'html'),
         },
         {
           id: 'mail-save-attachments',
-          label: mail.attachments.length === 1 ? 'Save attachment' : 'Save all attachments',
+          label: mail.attachments.length === 1 ? 'Save Attachment' : 'Save All Attachments',
           aliases: ['attachments', 'save attachments'],
           available: !!save && mail.attachments.length > 0,
           run: () =>
@@ -303,13 +316,13 @@ function MailboxView({ context, mailbox }: { context: PreviewContext; mailbox: M
       () => [
         {
           id: 'mail-next',
-          label: 'Next message',
+          label: 'Next Message',
           available: index < count - 1,
           run: () => setChosen(index + 1),
         },
         {
           id: 'mail-previous',
-          label: 'Previous message',
+          label: 'Previous Message',
           available: index > 0,
           run: () => setChosen(index - 1),
         },
@@ -321,8 +334,8 @@ function MailboxView({ context, mailbox }: { context: PreviewContext; mailbox: M
     return (
       <Empty
         icon="mail"
-        title="This mailbox has no messages"
-        detail="No message starts with a From line."
+        title="No messages"
+        detail="Viewer found no messages in this mailbox file."
       />
     );
   return (
@@ -359,11 +372,11 @@ function MailboxView({ context, mailbox }: { context: PreviewContext; mailbox: M
           {!message ? (
             <Loading label="Reading message…" />
           ) : message.error ? (
-            <Empty icon="warning" title="This message could not be read" detail={message.error} />
+            <Empty icon="warning" title="Can't read this message" detail={message.error} />
           ) : message.data?.mail ? (
             <MessageView key={index} context={context} mail={message.data.mail} index={index} />
           ) : (
-            <Empty icon="warning" title="This message could not be read" />
+            <Empty icon="warning" title="Can't read this message" />
           )}
         </div>
       </div>
@@ -376,9 +389,13 @@ export default function MailPreview(context: PreviewContext) {
   const { document, error, retry } = useOfficeDocument(context);
   if (error)
     return (
-      <Empty icon="warning" title="This email could not be read" detail={error}>
-        <button onClick={context.retry ?? retry}>Try again</button>
-      </Empty>
+      <PreviewFailure
+        context={context}
+        icon="warning"
+        title="Can't read this email"
+        detail={error}
+        onRetry={context.retry ?? retry}
+      />
     );
   if (!document) return <Loading label="Reading email…" />;
   if (document.mailbox) return <MailboxView context={context} mailbox={document.mailbox} />;
@@ -388,5 +405,12 @@ export default function MailPreview(context: PreviewContext) {
         <MessageView context={context} mail={document.mail} />
       </div>
     );
-  return <Empty icon="warning" title="This file holds no email message" />;
+  return (
+    <PreviewFailure
+      context={context}
+      icon="warning"
+      title="No email message"
+      detail="Viewer found no email message in this file."
+    />
+  );
 }

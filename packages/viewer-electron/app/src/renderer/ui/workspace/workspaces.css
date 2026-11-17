@@ -76,7 +76,27 @@
 }
 .workspace-catalog-count {
   flex: 1;
+  min-width: 0;
   text-align: right;
+}
+/* Not a Workspace's Undo, in the count's place: a long name gives way, Undo stays whole */
+.workspace-catalog-undo {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap-inline);
+  min-width: 0;
+}
+.workspace-catalog-undo > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-catalog-undo > button,
+.workspace-catalog-list li > button:not(.workspace-catalog-open) {
+  flex: none;
+  white-space: nowrap;
 }
 .workspace-catalog-panel > footer nav {
   display: flex;

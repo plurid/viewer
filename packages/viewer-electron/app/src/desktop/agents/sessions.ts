@@ -128,7 +128,7 @@ export class AgentSessions {
       };
     }
     const session = values.find((value) => value.id === request.id);
-    if (!session) throw new Error('This agent session is unavailable.');
+    if (!session) throw new Error('Viewer has no record of this agent session.');
     return { kind: 'session', session };
   }
   flush() {

@@ -95,12 +95,12 @@ export function StructuredTree({
           value=""
           placeholder="More"
           choices={[
-            { value: 'expand', label: 'Expand all' },
-            { value: 'collapse', label: 'Collapse all' },
+            { value: 'expand', label: 'Expand All' },
+            { value: 'collapse', label: 'Collapse All' },
             ...(node
               ? [
-                  { value: 'path', label: 'Copy path' },
-                  { value: 'value', label: 'Copy value' },
+                  { value: 'path', label: 'Copy Path' },
+                  { value: 'value', label: 'Copy Value' },
                 ]
               : []),
           ]}

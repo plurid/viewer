@@ -3,14 +3,14 @@
 This page states how Viewer copies, moves, creates, saves and removes files, and how collisions,
 Undo, the Trash and recovery work.
 
-Choose **File operations** in **⌘K**, or **File → File Operations**, to toggle the operations panel,
+Choose **File Operations** in **⌘K**, or **File → File Operations**, to toggle the operations panel,
 even when its list is empty. It lists each job with its progress, collision prompt, completed
 outputs, errors, recovery paths and **Undo**. Jobs run one at a time, in order. The list keeps the
 100 most recent finished jobs; a pending job is never dropped.
 
 The title-bar button appears when work lasts at least one second, when a conflict or unread failure
 needs attention, or while the panel is open. Fast successful operations keep the title bar quiet.
-**Settings → Space → Title bar icons → File operations** controls this button; the command remains
+**Settings → Space → Title bar icons → File Operations** controls this button; the command remains
 available when the button is hidden.
 
 ## Commands
@@ -18,26 +18,26 @@ available when the button is hidden.
 | Command                                          | Key      | What it does                                                                |
 | ------------------------------------------------ | -------- | --------------------------------------------------------------------------- |
 | **Copy**, **Cut**                                | ⌘C, ⌘X   | Puts the selection on the clipboard                                         |
-| **Paste here**                                   | ⌘V       | Copies or moves clipboard files; with a picture and no files, creates a PNG |
-| **Move copied items here**                       | ⌥⌘V      | Moves the clipboard's items here                                            |
-| **Copy to…**, **Move to…**                       |          | Asks for a folder, then copies or moves                                     |
+| **Paste Here**                                   | ⌘V       | Copies or moves clipboard files; with a picture and no files, creates a PNG |
+| **Move Copied Items Here**                       | ⌥⌘V      | Moves the clipboard's items here                                            |
+| **Copy To…**, **Move To…**                       |          | Asks for a folder, then copies or moves                                     |
 | **Copy to** _folder_, **Move to** _folder_       | ⌃⌘C, ⌃⌘X | Copies or moves to the other folder of a pair                               |
 | **Duplicate**                                    | ⌘D       | Makes `Name copy.ext` beside each item                                      |
-| **Make alias**                                   |          | Makes a Finder alias, such as `Report.pdf alias`, beside each item          |
-| **New folder…**                                  | ⌘N       | Creates an empty folder; it never replaces an existing item                 |
-| **New file…**                                    |          | Creates an empty file; it never replaces an existing item                   |
-| **New folder with selection…**                   | ⌃⌘N      | Asks for a name, then moves the selection into a new folder                 |
+| **Make Alias**                                   |          | Makes a Finder alias, such as `Report.pdf alias`, beside each item          |
+| **New Folder…**                                  | ⌘N       | Creates an empty folder; it never replaces an existing item                 |
+| **New File…**                                    |          | Creates an empty file; it never replaces an existing item                   |
+| **New Folder with Selection…**                   | ⌃⌘N      | Asks for a name, then moves the selection into a new folder                 |
 | **Rename…**                                      | Return   | Renames one item; a case-only rename works on a case-blind volume           |
 | **Compress to ZIP**                              |          | Makes `Photos.zip` for one item named `Photos`; `Archive.zip` for several   |
-| **Extract here**                                 |          | Extracts a ZIP or TAR archive into a new folder beside it                   |
+| **Extract Here**                                 |          | Extracts a ZIP or TAR archive into a new folder beside it                   |
 | **Move to Trash** (**Move to Trash…**)           | ⌘⌫       | Moves the selection to the system Trash                                     |
-| **Undo file operation**, **Redo file operation** | ⌘Z, ⇧⌘Z  | Reverses the latest job, or starts it again                                 |
+| **Undo File Operation**, **Redo File Operation** | ⌘Z, ⇧⌘Z  | Reverses the latest job, or starts it again                                 |
 
 **Move to Trash…** asks first while **Confirm before moving to Trash** is on
 (`settings.browsing.confirmTrash`, on by default).
 
 Clipboard files take priority over pictures, including file icons and previews. With a picture and
-no files, **Paste here** creates `Pasted image.png`, then `Pasted image 2.png`, `Pasted image 3.png`
+no files, **Paste Here** creates `Pasted image.png`, then `Pasted image 2.png`, `Pasted image 3.png`
 as needed. Its encoded PNG must be at most 64 MiB. Text-only and empty clipboards create nothing.
 Text alongside a picture does not prevent the PNG creation. Pictures waiting to be written share a
 128 MiB memory budget; wait for a paste to finish or cancel one when it is full. Picture pastes are
@@ -87,7 +87,7 @@ exists." and these choices:
 | Text save, extraction, new ZIP | New file, synced                                                     | Written to permanent storage                                                 |
 
 A pasted picture is written and synced in a private stage, then published exclusively under its
-final name, so a failed or cancelled write leaves no partial picture there.
+final name, so a failed or canceled write leaves no partial picture there.
 
 - A folder is cloned or copied file by file. A copy keeps the original's dates, permissions, ACLs
   and extended attributes.
@@ -148,7 +148,7 @@ deletes nothing permanently in this recovery path.
 The exact native and Node identities agree for empty file reservations on exFAT too. A genuinely
 changed recovery entry is kept and reported. Older safe integer identities remain readable; newer
 large identities carry an exact-value marker. An older rounded identity cannot authorize Undo:
-"Cannot undo because this older record does not have an exact file identity."
+"Can’t undo: this older record doesn’t say exactly which file it changed."
 
 Someone else's item, including content added to the reservation, is never sent to the Trash. Viewer
 puts it back when its original name is free, using the same guarded rename steps. If the name is
@@ -223,12 +223,12 @@ Viewer never deletes an item in place of moving it to the Trash.
   Undo.
 - **Redo** starts the job again as a new job with every usual check, only in the session that undid
   it. A text save or pasted picture has no Redo.
-- **Undo file operation** also undoes a lens edit when that was the latest change. Arrangement Undo
+- **Undo File Operation** also undoes a lens edit when that was the latest change. Arrangement Undo
   is separate, and so are Git actions and changes made by other apps.
 
 ## Archives
 
-**Extract here** writes into a new folder named after the archive, beside it (`Photos.zip` gives
+**Extract Here** writes into a new folder named after the archive, beside it (`Photos.zip` gives
 `Photos`). From search results, each archive extracts beside itself. An archive whose entries all
 sit in one top-level folder extracts that folder's contents, so `Photos.zip` holding `Photos/` gives
 `Photos/`, not `Photos/Photos/`. The `__MACOSX` folder of resource-fork copies is left out. An
@@ -241,24 +241,24 @@ existing name asks before replacing.
 | Size    | 32 MB per entry, 256 MB expanded in all; 64 MB for a compressed TAR                      | 2 GB of files                               |
 | Refused | Unsafe paths, links, special files, duplicate or conflicting names; nothing is extracted | Links and special files; names that collide |
 
-Previewing an archive never runs its contents. **Calculate Size**, **Find duplicates…** and
-**Compare locations…** measure only when you choose them.
+Previewing an archive never runs its contents. **Calculate Size**, **Find Duplicates…** and
+**Compare Locations…** measure only when you choose them.
 
 ## Trash and Restore
 
 Open **Trash** in the sidebar to browse the system Trash. Select an item for Quick Preview, its
-original location when known, **Restore** or **Restore to…**. A folder lists up to 4,000 items.
+original location when known, **Restore** or **Restore To…**. A folder lists up to 4,000 items.
 
 | Restore rule            | Value                                              |
 | ----------------------- | -------------------------------------------------- |
 | Items at once           | Up to 1,000                                        |
 | Destination             | Same disk only; an existing name is never replaced |
-| Missing original folder | Not recreated; use **Restore to…**                 |
+| Missing original folder | Not recreated; use **Restore To…**                 |
 | Changed item or folder  | Refused; refresh the Trash                         |
 | Link in the destination | Refused; choose the actual folder                  |
 
 Original locations come from Viewer's own receipts, matched by identity; an item Finder trashed may
-need **Restore to…**. **Date added** is the system's directory date, not a deletion time. Reading
+need **Restore To…**. **Date added** is the system's directory date, not a deletion time. Reading
 the macOS Trash can require Full Disk Access, which is separate from folder access.
 
 Viewer never empties the Trash: empty it in Finder. There is no command, API or agent tool that

@@ -263,7 +263,7 @@ describe('explicit folder loopback servers', () => {
     expect(other.port).not.toBe(first.port);
     expect(first.url).toBe(`http://127.0.0.1:${first.port}/`);
     expect(f.service.list(2)).toEqual([]);
-    expect(() => f.service.get(2, first.id)).toThrow('unavailable');
+    expect(() => f.service.get(2, first.id)).toThrow('has stopped');
     await f.service.dispose(2, first.id);
     expect(f.service.get(1, first.id).state).toBe('running');
   });

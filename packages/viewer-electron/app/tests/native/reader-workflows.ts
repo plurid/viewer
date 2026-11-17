@@ -202,11 +202,11 @@ function helpers(connection: Connection) {
       await evaluate(animationFrames(2));
       await evaluate(click('[aria-label="Layout"]'));
       await until(
-        () => evaluate(pageCall(menuItemShown, 'Fill workspace')),
+        () => evaluate(pageCall(menuItemShown, 'Fill Workspace')),
         Boolean,
         'Plane size action',
       );
-      await evaluate(pageCall(pressMenuItem, 'Fill workspace'));
+      await evaluate(pageCall(pressMenuItem, 'Fill Workspace'));
       await until(
         () => evaluate(pageCall(captureState)),
         (state) => state.opacity > 0.999 && !state.motion && state.fits,
@@ -255,7 +255,7 @@ try {
         ui.text,
         (text) =>
           text.includes('Partial coverage') &&
-          text.includes('No matches in the available search data'),
+          text.includes('No matches in the folders searched so far'),
         'Missing content coverage',
       );
       await ui.capture('search-minimum', 760, 540);
@@ -348,8 +348,8 @@ try {
         (value) => Math.abs(value - before) < 2,
         'Return to book scroll',
       );
-      await evaluate(pressButton('Find in book'));
-      await ui.fill('[aria-label="Search book text"]', 'copper circuit');
+      await evaluate(pressButton('Find in Book'));
+      await ui.fill('[aria-label="Find text"]', 'copper circuit');
       await until(ui.text, (text) => text.includes('2 matches'), 'Book search across formatting');
       await ui.click('.epub-search li:last-child button');
       await until(

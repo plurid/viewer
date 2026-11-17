@@ -6,6 +6,8 @@ import { activeWorkspace, useViewer } from '../state/store';
 import type { WorkspaceController } from '../workspace/context';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { Dialog } from '../ui/primitives';
+import { PathLabel } from '../ui/PathLabel';
+import { plural } from '../../domain/plural';
 import { receiptOutcome } from './ReceiptPlane';
 import './tasks.css';
 export function TasksDialog({
@@ -107,7 +109,7 @@ export function TasksDialog({
               setError('');
             }}
           >
-            Task areas
+            Task Areas
           </button>
           <button
             aria-pressed={history}
@@ -117,7 +119,7 @@ export function TasksDialog({
               setError('');
             }}
           >
-            Command history
+            Command History
           </button>
           <span className="toolbar-spacer" />
           {!history ? (
@@ -125,7 +127,7 @@ export function TasksDialog({
               disabled={busy || !folders.length}
               onClick={() => setCreating((value) => !value)}
             >
-              New task…
+              New Task…
             </button>
           ) : (
             <button disabled={busy} onClick={() => setRefresh((value) => value + 1)}>
@@ -179,7 +181,7 @@ export function TasksDialog({
                 Cancel
               </button>
               <button className="primary" disabled={busy || !name.trim() || !folderID}>
-                {busy ? 'Creating…' : 'Create task area'}
+                {busy ? 'Creating…' : 'Create Task Area'}
               </button>
             </div>
           </form>
@@ -188,8 +190,13 @@ export function TasksDialog({
           <p className="muted">
             {query
               ? 'No matching task areas.'
-              : 'Create a task from an open folder, then link its notes, conversations, terminals and review tools.'}
+              : folders.length
+                ? 'Create a task from an open folder, then link its notes, conversations, terminals and review tools.'
+                : 'Open a folder plane, then create a task from it.'}
           </p>
+        )}
+        {!history && !folders.length && areas.length > 0 && (
+          <p className="muted">Open a folder plane to create a task.</p>
         )}
         {history && !receipts && !error && (
           <p className="muted" role="status">
@@ -198,9 +205,7 @@ export function TasksDialog({
         )}
         {history && filtered?.length === 0 && (
           <p className="muted">
-            {query
-              ? 'No matching commands.'
-              : 'Run a command from a folder to keep its private receipt here.'}
+            {query ? 'No matching commands.' : 'Commands you run from a folder are listed here.'}
           </p>
         )}
         <div className="tasks-list">
@@ -217,7 +222,9 @@ export function TasksDialog({
                   <small>
                     {receiptOutcome(receipt)} · {new Date(receipt.started).toLocaleString()}
                   </small>
-                  <small>{receipt.directory}</small>
+                  <small>
+                    <PathLabel path={receipt.directory} />
+                  </small>
                 </button>
               ))
             : areas.map((area) => (
@@ -230,14 +237,17 @@ export function TasksDialog({
                 >
                   <strong>{area.name}</strong>
                   <small>
-                    {area.checkout.branch ?? 'Folder'} · {area.members.length} linked tools
+                    {area.checkout.branch ?? 'Folder'} ·{' '}
+                    {plural(area.members.length, 'linked tool')}
                   </small>
-                  <small>{area.checkout.path}</small>
+                  <small>
+                    <PathLabel path={area.checkout.path} />
+                  </small>
                 </button>
               ))}
         </div>
         {history && receipts && receipts.length > 100 && (
-          <p className="muted">Showing up to 100 matching receipts. Search to narrow the list.</p>
+          <p className="muted">Showing the first 100 commands.</p>
         )}
       </div>
       <footer>

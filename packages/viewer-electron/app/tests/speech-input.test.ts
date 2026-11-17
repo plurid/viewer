@@ -134,7 +134,7 @@ describe('human speech session ownership', () => {
     expect(f.speech.allowsMicrophone(1)).toBe(false);
     f.ports.foreground = () => false;
     await expect(f.speech.request({ kind: 'begin', id: randomUUID() }, 1)).rejects.toThrow(
-      'cancelled',
+      'canceled',
     );
   });
   it('binds PCM and cancellation to one window and releases microphone authority before inference', async () => {

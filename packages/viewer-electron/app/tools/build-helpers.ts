@@ -120,6 +120,21 @@ if (process.platform === 'darwin') {
       '-module-cache-path',
       cache,
       '-O',
+      'tools/askpass.swift',
+      '-o',
+      'assets/viewer-askpass',
+    ],
+    { stdio: 'inherit' },
+  );
+  execFileSync(
+    'xcrun',
+    [
+      'swiftc',
+      '-target',
+      target,
+      '-module-cache-path',
+      cache,
+      '-O',
       'tools/applications.swift',
       '-o',
       'assets/viewer-applications',

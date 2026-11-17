@@ -1,38 +1,63 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import { importMesh, meshObjects } from '../model/mesh';
 import { meshTriangleLimit, meshVertexLimit } from '../model/mesh-data';
+import type { MeshResult } from '../model/mesh-data';
 import { isSceneFormat, loadScene, sceneNotices } from '../model/scenes';
 import { assertModelMemory } from '../model/memory';
 import { cadFormats } from '../../../domain/previews/models/formats';
-import { importCad } from '../model/cad';
+import { cadObject, importCad, retainCadWorker } from '../model/cad';
+import { modelCacheKey, modelGeometryCache } from '../model/cache';
+import type { ParsedModel } from '../model/cache';
 import { printingScale } from '../model/printing';
 import {
-  cadMaterial,
   modelLighting,
   normalizeModelAppearance,
   defaultModelAppearance,
-  type ModelAppearance,
 } from '../model/appearance';
+import type { ModelAppearance } from '../model/appearance';
 import { modelSurfaceAppearance } from '../model/surface-appearance';
 import { ShadingControls } from '../model/ShadingControls';
 import { pickModelSurface } from '../model/pick-surface';
+import {
+  defaultModelUp,
+  modelNavigation,
+  modelRotation,
+  readModelCamera,
+} from '../model/navigation';
+import type { ModelCamera, ModelRotation } from '../model/navigation';
+import { homeOffset, standardModelView } from '../model/viewcube';
+import type { CubeView } from '../model/viewcube';
+import { ModelViewCube } from '../model/ModelViewCube';
+import type { ModelViewCubeHandle } from '../model/ModelViewCube';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { headerItem } from '../../workspace/header-overflow';
 import { usePreviewState } from '../state';
 import type { PreviewContext } from '../contracts';
-import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { IconButton, Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import type { Look } from '../../../domain/contracts';
 import { errorMessage } from '../../../domain/errors';
 
 interface ModelSession {
   frame(): void;
+  /** Turns to the fitted starting view, as Frame model places it. */
+  home(): void;
+  /** Turns to a standard view of the cube. */
+  standardView(view: CubeView): void;
+  turnStart(): void;
+  turn(x: number, y: number): void;
+  /** A wheel over the cube zooms or pans as it would over the canvas. */
+  wheel(event: WheelEvent): void;
+  /** Zooms by whole notches, in for positive steps. */
+  zoom(steps: number): void;
+  rotation(value: ModelRotation): void;
   /** Places the camera at `position`, looking at `target`, in the model's coordinates. */
   view(position: readonly number[], target: readonly number[]): void;
   wireframe(value: boolean): void;
@@ -44,9 +69,18 @@ interface ModelSession {
   background(look: Look): void;
 }
 const backgrounds = { dark: '#292d34', light: '#e9edf1' } as const;
-/** "1 mesh", "12 triangles": a count and its noun, singular for one. */
-function counted(count: number, one: string, many: string): string {
-  return `${count.toLocaleString()} ${count === 1 ? one : many}`;
+/** A cube turn's length; with reduced motion the view changes at once. */
+const turnMilliseconds = 320;
+function turnDuration(): number {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 0
+    : turnMilliseconds;
+}
+interface LoadedModel {
+  object: THREE.Object3D;
+  notes: string[];
+  /** The workers' arrays, kept for the next preview of this file version. */
+  parsed?: ParsedModel;
 }
 function disposeObject(object: THREE.Object3D): void {
   const materials = new Set<THREE.Material>(),
@@ -77,7 +111,10 @@ export default function ModelPreview(context: PreviewContext) {
   const { resource, signal, active, interactive, look } = context;
   const stage = useRef<HTMLDivElement>(null);
   const session = useRef<ModelSession | null>(null);
-  const [loading, setLoading] = useState(true);
+  const viewCube = useRef<ModelViewCubeHandle>(null);
+  const cacheKey = modelCacheKey(resource);
+  // A remembered model shows in the first paint, without a loading state.
+  const [loading, setLoading] = useState(() => !modelGeometryCache.has(cacheKey));
   const [error, setError] = useState('');
   const [warnings, setWarnings] = useState<string[]>([]);
   const [notices, setNotices] = useState<string[]>([]);
@@ -85,6 +122,9 @@ export default function ModelPreview(context: PreviewContext) {
   const [info, setInfo] = useState('');
   const [dimensions, setDimensions] = useState<number[]>([]);
   const [distance, setDistance] = useState<number>();
+  const [rotation, setRotation] = useState<ModelRotation>(() =>
+    modelRotation(resource.entry.extension, context.state?.get('model.camera')),
+  );
   const [measure, setMeasure] = usePreviewState(context, 'model.measure', false);
   const [assumedUnit, setAssumedUnit] = usePreviewState(context, 'model.unit', 'units');
   const physicalUnits =
@@ -110,8 +150,11 @@ export default function ModelPreview(context: PreviewContext) {
   const [playing, setPlaying] = useState(false);
   const visibility = useRef({ active, interactive });
   visibility.current = { active, interactive };
-  const playback = useRef({ wire, animation, playing, measure, appearance, look });
-  playback.current = { wire, animation, playing, measure, appearance, look };
+  // Read at each wheel event, so a change in Settings applies to an open preview.
+  const scrollDevice = useRef(context.limits?.modelScrollDevice ?? 'automatic');
+  scrollDevice.current = context.limits?.modelScrollDevice ?? 'automatic';
+  const playback = useRef({ wire, animation, playing, measure, appearance, look, rotation });
+  playback.current = { wire, animation, playing, measure, appearance, look, rotation };
   useEffect(() => {
     session.current?.active(active, interactive);
   }, [active, interactive]);
@@ -127,6 +170,9 @@ export default function ModelPreview(context: PreviewContext) {
   useEffect(() => {
     session.current?.measure(measure);
   }, [measure]);
+  useEffect(() => {
+    session.current?.rotation(rotation);
+  }, [rotation]);
   // A theme change recolors the live scene instead of reloading the model.
   useEffect(() => {
     session.current?.background(look);
@@ -138,12 +184,21 @@ export default function ModelPreview(context: PreviewContext) {
   }, [anchor, loading]);
   const maxModelMB = context.limits?.maxModelMB ?? 256;
   const previewStore = context.state;
+  // OCCT stays loaded while any 3D preview is open, and for a while after the last one closes.
+  useEffect(() => retainCadWorker(), []);
   // OrbitControls disconnects keyboard listeners from canvas.getRootNode().
   // Dispose while the canvas still belongs to that root, before React detaches it.
   useLayoutEffect(() => {
     const element = stage.current;
     if (!element) return;
-    setLoading(true);
+    const cached = modelGeometryCache.get(cacheKey);
+    // An OBJ's material library is read again, as it can change apart from the OBJ.
+    const library =
+      cached?.kind === 'mesh' && resource.entry.extension === 'obj'
+        ? cached.data.libraries[0]
+        : undefined;
+    const instant = cached && !library;
+    setLoading(!instant);
     setError('');
     setWarnings([]);
     setNotices([]);
@@ -171,11 +226,7 @@ export default function ModelPreview(context: PreviewContext) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(backgrounds[playback.current.look]);
     const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 10000);
-    if (
-      cadFormats.includes(resource.entry.extension) ||
-      ['stl', '3mf', '3ds'].includes(resource.entry.extension)
-    )
-      camera.up.set(0, 0, 1);
+    camera.up.fromArray(defaultModelUp(resource.entry.extension));
     const markings = new THREE.Group();
     scene.add(markings);
     const points: THREE.Vector3[] = [];
@@ -193,7 +244,9 @@ export default function ModelPreview(context: PreviewContext) {
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     } catch (error) {
-      setError(`3D graphics are unavailable: ${errorMessage(error)}`);
+      setError(
+        `3D graphics couldn't start: ${errorMessage(error)} Close other 3D previews, then try again.`,
+      );
       setLoading(false);
       return;
     }
@@ -202,40 +255,47 @@ export default function ModelPreview(context: PreviewContext) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = playback.current.appearance.exposure;
     renderer.shadowMap.type = THREE.PCFShadowMap;
-    element.append(renderer.domElement);
+    // First in the stage, so Tab reaches the model before the view cube.
+    element.prepend(renderer.domElement);
     renderer.domElement.setAttribute(
       'aria-label',
-      'Interactive 3D model. Drag to orbit, right-drag to pan, scroll to zoom.',
+      'Interactive 3D model. Drag to rotate, right-drag or two-finger scroll to pan, mouse wheel or pinch to zoom. Arrow keys pan, Shift+arrows rotate, plus and minus zoom, Home resets the view.',
     );
     renderer.domElement.tabIndex = 0;
-    const controls = new OrbitControls(camera, renderer.domElement);
-    const remembered = previewStore?.get('model.camera') as
-      { position?: number[]; target?: number[] } | undefined;
+    const remembered = readModelCamera(resource.entry.extension, previewStore?.get('model.camera'));
     let restoringView = true;
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.1;
-    controls.enabled = controlsInteractive;
-    // Orbiting changes the camera every frame; remember it at most every 250 ms.
+    // Damping changes the camera every frame; remember it at most every 250 ms.
     let cameraTimer: ReturnType<typeof setTimeout> | undefined;
     const rememberCamera = () => {
       clearTimeout(cameraTimer);
       cameraTimer = undefined;
-      previewStore?.set('model.camera', {
-        position: camera.position.toArray(),
-        target: controls.target.toArray(),
-      });
+      previewStore?.set('model.camera', controls.snapshot());
     };
-    controls.addEventListener('change', () => {
-      if (!restoringView && object) cameraTimer ??= setTimeout(rememberCamera, 250);
-      dirty = true;
-      schedule();
-    });
+    const controls = modelNavigation(
+      camera,
+      renderer.domElement,
+      playback.current.rotation,
+      {
+        change: () => {
+          if (!restoringView && object) cameraTimer ??= setTimeout(rememberCamera, 250);
+          dirty = true;
+          schedule();
+        },
+        wake: schedule,
+        frame: () => frame(),
+      },
+      {
+        top: defaultModelUp(resource.entry.extension),
+        scrollDevice: () => scrollDevice.current,
+      },
+    );
+    controls.enabled = renderActive && controlsInteractive;
     const flushCamera = () => {
       if (cameraTimer && !disposed) rememberCamera();
     };
     window.addEventListener('pagehide', flushCamera);
     window.addEventListener('viewer-preview-flush', flushCamera);
-    // Stop gesture initiation at the canvas. OrbitControls receives subsequent
+    // Stop gesture initiation at the canvas. Both controls receive subsequent
     // pointer moves/up on ownerDocument, so those events must keep bubbling.
     const isolate = (event: Event) => {
       if (controls.enabled) event.stopPropagation();
@@ -252,9 +312,17 @@ export default function ModelPreview(context: PreviewContext) {
     let press: { x: number; y: number; id: number } | undefined;
     const down = (event: PointerEvent) => {
       press =
-        event.button === 0 && measuring
+        event.button === 0 && measuring && controls.enabled
           ? { x: event.clientX, y: event.clientY, id: event.pointerId }
           : undefined;
+    };
+    const move = (event: PointerEvent) => {
+      // Crossing the threshold makes a drag even if the pointer returns to its start.
+      if (press && Math.hypot(press.x - event.clientX, press.y - event.clientY) > 4)
+        press = undefined;
+    };
+    const cancelPress = () => {
+      press = undefined;
     };
     const pick = (event: PointerEvent) => {
       const start = press;
@@ -308,6 +376,9 @@ export default function ModelPreview(context: PreviewContext) {
     };
     renderer.domElement.addEventListener('pointerdown', down);
     renderer.domElement.addEventListener('pointerup', pick);
+    renderer.domElement.ownerDocument.addEventListener('pointermove', move);
+    renderer.domElement.ownerDocument.addEventListener('pointerup', cancelPress);
+    renderer.domElement.ownerDocument.addEventListener('pointercancel', cancelPress);
     const lighting = modelLighting(scene, camera);
     const applyAppearance = (value: ModelAppearance, wireframe: boolean) => {
       renderer.toneMappingExposure = value.exposure;
@@ -354,6 +425,7 @@ export default function ModelPreview(context: PreviewContext) {
           memoryCheck = false;
           lighting.update();
           renderer.render(scene, camera);
+          viewCube.current?.update(camera);
         } catch (error) {
           graphicsFailed = true;
           setError(errorMessage(error));
@@ -364,7 +436,8 @@ export default function ModelPreview(context: PreviewContext) {
       }
       if (runningAnimation || changed) schedule();
     }
-    function frame() {
+    /** The fitted starting view; it also sets the clipping planes and distance limits. */
+    function fitted(): ModelCamera | undefined {
       if (!object) return;
       const box = new THREE.Box3().setFromObject(object);
       lighting.fit(box);
@@ -372,14 +445,26 @@ export default function ModelPreview(context: PreviewContext) {
       const center = box.getCenter(new THREE.Vector3());
       const extent = Math.max(size.x, size.y, size.z, 0.01);
       const distance = (extent / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))) * 1.5;
-      controls.target.copy(center);
-      camera.position.copy(center).add(new THREE.Vector3(distance * 0.7, distance * 0.5, distance));
       camera.near = Math.max(extent / 10000, 0.00001);
       camera.far = extent * 10000;
       camera.updateProjectionMatrix();
       controls.maxDistance = extent * 100;
       controls.minDistance = extent * 0.001;
-      controls.update();
+      return {
+        ...controls.snapshot(),
+        target: center.toArray(),
+        position: center
+          .clone()
+          .addScaledVector(homeOffset(resource.entry.extension), distance)
+          .toArray(),
+        up: defaultModelUp(resource.entry.extension),
+      };
+    }
+    function frame(turn = false) {
+      const view = fitted();
+      if (!view) return;
+      if (turn) controls.animate(view, turnDuration());
+      else controls.view(view);
       dirty = true;
       schedule();
     }
@@ -387,6 +472,7 @@ export default function ModelPreview(context: PreviewContext) {
       const width = Math.max(1, element.clientWidth),
         height = Math.max(1, element.clientHeight);
       renderer.setSize(width, height, false);
+      controls.resize();
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       dirty = true;
@@ -411,7 +497,7 @@ export default function ModelPreview(context: PreviewContext) {
       const scope = new URL(resource.url);
       if (local.protocol !== scope.protocol || local.host !== scope.host)
         throw new Error(
-          'Network assets are disabled. Place model textures and buffers beside the model.',
+          "This model loads files from the internet, which Viewer doesn't do. Put its textures next to the model file.",
         );
       return local.href;
     });
@@ -420,73 +506,98 @@ export default function ModelPreview(context: PreviewContext) {
       if (!disposed) setWarnings([...missing]);
     };
     const abort = new AbortController();
-    void (async () => {
+    const begun = modelGeometryCache.begin();
+    const materialLibrary = async (library: string | undefined) => {
+      if (!library) return;
+      try {
+        const url = manager.resolveURL(new URL(library, base).href);
+        const response = await fetch(url, { signal: abort.signal });
+        if (!response.ok) throw new Error(library);
+        const materials = new MTLLoader(manager).parse(
+          await response.text(),
+          new URL('.', url).href,
+        );
+        materials.preload();
+        return materials;
+      } catch {
+        missing.add(library);
+        if (!disposed) setWarnings([...missing]);
+      }
+    };
+    type Materials = Awaited<ReturnType<typeof materialLibrary>>;
+    /** A mesh parse two previews of one file version share. */
+    const shared = (parse: (signal: AbortSignal) => Promise<MeshResult>) =>
+      modelGeometryCache.share(
+        cacheKey,
+        resource.entry.path,
+        async (signal): Promise<ParsedModel> => ({ kind: 'mesh', data: await parse(signal) }),
+        abort.signal,
+      );
+    const parsedObject = (parsed: ParsedModel, materials?: Materials) =>
+      parsed.kind === 'cad' ? cadObject(parsed.meshes) : meshObjects(parsed.data, materials);
+    const load = async (): Promise<LoadedModel> => {
+      if (cached) {
+        const materials = await materialLibrary(library);
+        return { object: parsedObject(cached, materials), notes: [], parsed: cached };
+      }
       const response = await fetch(resource.url, { signal: abort.signal });
-      if (!response.ok) throw new Error('Model file is unavailable.');
+      if (!response.ok)
+        throw new Error(
+          "Couldn't read this model file. Check that it's still there, then try again.",
+        );
       const ext = resource.entry.extension;
-      let loaded: THREE.Object3D;
-      const notes: string[] = [];
       if (ext === 'gltf' || ext === 'glb') {
         const data = ext === 'gltf' ? await response.text() : await response.arrayBuffer();
         const gltf = await new GLTFLoader(manager).parseAsync(data, base);
-        loaded = gltf.scene;
         clips = gltf.animations;
-      } else if (ext === 'obj') {
+        return { object: gltf.scene, notes: [] };
+      }
+      if (ext === 'obj') {
         const source = await response.text();
-        const parsing = importMesh(source, 'obj', abort.signal);
+        const parsing = shared((signal) => importMesh(source, 'obj', signal));
         // Attach the rejection immediately while a companion request is pending.
         void parsing.catch(() => {});
-        let materials: ReturnType<MTLLoader['parse']> | undefined;
-        const library = /^mtllib\s+(.+)$/m.exec(source)?.[1]?.trim();
-        if (library) {
-          try {
-            const mtlURL = manager.resolveURL(new URL(library, base).href);
-            const mtl = await fetch(mtlURL, { signal: abort.signal });
-            if (!mtl.ok) throw new Error(library);
-            materials = new MTLLoader(manager).parse(await mtl.text(), new URL('.', mtlURL).href);
-            materials.preload();
-          } catch {
-            missing.add(library);
-            if (!disposed) setWarnings([...missing]);
-          }
-        }
-        loaded = meshObjects(await parsing, materials);
-      } else if (ext === 'stl') {
-        loaded = meshObjects(await importMesh(await response.arrayBuffer(), 'stl', abort.signal));
-      } else if (cadFormats.includes(ext)) {
+        const materials = await materialLibrary(/^mtllib\s+(.+)$/m.exec(source)?.[1]?.trim());
+        const parsed = await parsing;
+        return { object: parsedObject(parsed, materials), notes: [], parsed };
+      }
+      if (ext === 'stl' || ext === 'ply' || ext === 'off') {
+        const source = ext === 'off' ? await response.text() : await response.arrayBuffer();
+        const parsed = await shared((signal) => importMesh(source, ext, signal));
+        return { object: parsedObject(parsed), notes: [], parsed };
+      }
+      if (cadFormats.includes(ext)) {
         if (resource.entry.size > 64_000_000)
           throw new Error('This CAD file exceeds the conversion limit (64 MB).');
-        loaded = new THREE.Group();
-        const meshes = await importCad(await response.arrayBuffer(), ext, abort.signal);
-        for (const mesh of meshes) {
-          const geometry = new THREE.BufferGeometry();
-          geometry.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3));
-          geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
-          if (mesh.normals)
-            geometry.setAttribute('normal', new THREE.BufferAttribute(mesh.normals, 3));
-          else geometry.computeVertexNormals();
-          const part = new THREE.Mesh(geometry, cadMaterial(mesh.color));
-          part.name = mesh.name;
-          loaded.add(part);
-        }
-      } else if (ext === '3mf') {
+        const buffer = await response.arrayBuffer();
+        const parsed = await modelGeometryCache.share(
+          cacheKey,
+          resource.entry.path,
+          async (signal) => ({ kind: 'cad', meshes: await importCad(buffer, ext, signal) }),
+          abort.signal,
+        );
+        return { object: parsedObject(parsed), notes: [], parsed };
+      }
+      if (ext === '3mf') {
         const data = await response.arrayBuffer();
         const scale = printingScale(data);
-        loaded = new ThreeMFLoader(manager).parse(data);
-        loaded.scale.multiplyScalar(scale);
-      } else if (ext === 'ply') {
-        loaded = meshObjects(await importMesh(await response.arrayBuffer(), 'ply', abort.signal));
-      } else if (ext === 'fbx') {
-        loaded = new FBXLoader(manager).parse(await response.arrayBuffer(), base);
-        clips = loaded.animations;
-      } else if (ext === 'off') {
-        loaded = meshObjects(await importMesh(await response.text(), 'off', abort.signal));
-      } else if (isSceneFormat(ext)) {
+        const object = new ThreeMFLoader(manager).parse(data);
+        object.scale.multiplyScalar(scale);
+        return { object, notes: [] };
+      }
+      if (ext === 'fbx') {
+        const object = new FBXLoader(manager).parse(await response.arrayBuffer(), base);
+        clips = object.animations;
+        return { object, notes: [] };
+      }
+      if (isSceneFormat(ext)) {
         const scene = await loadScene(ext, resource.entry.size, response, abort.signal);
-        loaded = scene.object;
         clips = scene.clips;
-        notes.push(...sceneNotices(scene));
-      } else throw new Error('This 3D format is not supported.');
+        return { object: scene.object, notes: sceneNotices(scene) };
+      }
+      throw new Error('This 3D format is not supported.');
+    };
+    const show = ({ object: loaded, notes, parsed }: LoadedModel) => {
       if (disposed || signal.aborted) {
         disposeObject(loaded);
         return;
@@ -533,22 +644,36 @@ export default function ModelPreview(context: PreviewContext) {
       setHasDeformingMeshes(surfaces.hasDeformingMeshes);
       setInfo(
         [
-          counted(meshes, 'mesh', 'meshes'),
-          counted(Math.round(triangles), 'triangle', 'triangles'),
-          counted(vertices, 'vertex', 'vertices'),
+          plural(meshes, 'mesh', 'meshes'),
+          plural(Math.round(triangles), 'triangle'),
+          plural(vertices, 'vertex', 'vertices'),
         ].join(' · '),
       );
       setNotices(notes);
       setAnimations(clips.map((clip, index) => clip.name || `Animation ${index + 1}`));
       if (clips.length) mixer = new THREE.AnimationMixer(loaded);
       session.current = {
-        frame,
+        frame: () => frame(),
+        home: () => frame(true),
+        standardView: (view) =>
+          controls.animate(
+            standardModelView(view, resource.entry.extension, controls.destination()),
+            turnDuration(),
+          ),
+        turnStart: () => controls.hold(),
+        turn: (x, y) => controls.turn(x, y),
+        // The event itself: its legacy deltas and momentum tell a mouse from a trackpad.
+        wheel: (event) => controls.wheel(event),
+        zoom: (steps) => controls.zoom(steps),
+        // A remembered model has its session before the effects' first run: those calls only
+        // repeat what the session already holds, and must not save or clear anything.
+        rotation: (value) => {
+          if (controls.snapshot().rotation === value) return;
+          controls.rotation(value);
+          rememberCamera();
+        },
         view: (position, target) => {
-          camera.position.fromArray(position);
-          controls.target.fromArray(target);
-          controls.update();
-          dirty = true;
-          schedule();
+          controls.view({ ...controls.snapshot(), position: [...position], target: [...target] });
         },
         clearMeasure,
         background: (look) => {
@@ -557,6 +682,7 @@ export default function ModelPreview(context: PreviewContext) {
           schedule();
         },
         measure: (value) => {
+          if (measuring === value) return;
           measuring = value;
           if (!value) clearMeasure();
         },
@@ -587,25 +713,25 @@ export default function ModelPreview(context: PreviewContext) {
       session.current.animate(playback.current.animation, playback.current.playing);
       session.current.active(visibility.current.active, visibility.current.interactive);
       frame();
-      if (
-        remembered?.position?.length === 3 &&
-        remembered.target?.length === 3 &&
-        [...remembered.position, ...remembered.target].every(Number.isFinite)
-      ) {
-        camera.position.fromArray(remembered.position);
-        controls.target.fromArray(remembered.target);
-        controls.update();
-        dirty = true;
-        schedule();
-      }
+      if (remembered) controls.view({ ...remembered, rotation: playback.current.rotation });
       restoringView = false;
+      // Only a model that is shown is remembered: a failed or cancelled parse never is.
+      if (parsed) modelGeometryCache.set(cacheKey, resource.entry.path, parsed, begun);
       setLoading(false);
-    })().catch((error) => {
+    };
+    const fail = (error: unknown) => {
       if (!disposed && !abort.signal.aborted) {
-        setError(error.message);
+        setError(errorMessage(error));
         setLoading(false);
       }
-    });
+    };
+    if (cached && instant) {
+      try {
+        show({ object: parsedObject(cached), notes: [], parsed: cached });
+      } catch (error) {
+        fail(error);
+      }
+    } else void load().then(show).catch(fail);
     return () => {
       if (cameraTimer) rememberCamera();
       window.removeEventListener('pagehide', flushCamera);
@@ -629,6 +755,9 @@ export default function ModelPreview(context: PreviewContext) {
       renderer.domElement.removeEventListener('wheel', wheel);
       renderer.domElement.removeEventListener('pointerdown', down);
       renderer.domElement.removeEventListener('pointerup', pick);
+      renderer.domElement.ownerDocument.removeEventListener('pointermove', move);
+      renderer.domElement.ownerDocument.removeEventListener('pointerup', cancelPress);
+      renderer.domElement.ownerDocument.removeEventListener('pointercancel', cancelPress);
       renderer.domElement.removeEventListener('webglcontextlost', contextLost);
       renderer.domElement.removeEventListener('webglcontextrestored', contextRestored);
       renderer.dispose();
@@ -639,7 +768,9 @@ export default function ModelPreview(context: PreviewContext) {
     resource.id,
     resource.url,
     resource.entry.extension,
+    resource.entry.path,
     resource.entry.size,
+    cacheKey,
     maxModelMB,
     previewStore,
     signal,
@@ -657,10 +788,17 @@ export default function ModelPreview(context: PreviewContext) {
         {
           id: 'model-frame',
           label: 'Frame model',
-          aliases: ['fm'],
+          aliases: ['fm', 'reset view', 'reset rotation'],
           primary: true,
           available: !loading && !error,
           run: () => session.current?.frame(),
+        },
+        {
+          id: 'model-rotation',
+          label: rotation === 'free' ? 'Use turntable rotation' : 'Use free rotation',
+          aliases: ['rotation', 'free', 'turntable', 'trackball', 'tumble'],
+          available: !loading && !error,
+          run: () => setRotation((value) => (value === 'free' ? 'turntable' : 'free')),
         },
         {
           id: 'model-wireframe',
@@ -692,7 +830,18 @@ export default function ModelPreview(context: PreviewContext) {
           },
         })),
       ],
-      [loading, error, wire, playing, animations, measure, shadingOpen, setMeasure, setWire],
+      [
+        loading,
+        error,
+        wire,
+        playing,
+        animations,
+        measure,
+        shadingOpen,
+        rotation,
+        setMeasure,
+        setWire,
+      ],
     ),
   );
   return (
@@ -716,15 +865,29 @@ export default function ModelPreview(context: PreviewContext) {
         </button>
         {/* Essential leaves Wireframe to "…" */}
         {context.toolbar !== 'essential' && (
-          <button
-            {...headerItem('wireframe', 7, ['preview.model-wireframe'])}
-            className={wire ? 'selected' : ''}
-            aria-pressed={wire}
-            disabled={loading || !!error}
-            onClick={() => setWire(!wire)}
-          >
-            Wireframe
-          </button>
+          <>
+            <button
+              {...headerItem('wireframe', 7, ['preview.model-wireframe'])}
+              className={wire ? 'selected' : ''}
+              aria-pressed={wire}
+              disabled={loading || !!error}
+              onClick={() => setWire(!wire)}
+            >
+              Wireframe
+            </button>
+            <span {...headerItem('rotation', 8, ['preview.model-rotation'])}>
+              <ChoiceButton
+                label="Rotation"
+                value={rotation}
+                choices={[
+                  { value: 'free', label: 'Free' },
+                  { value: 'turntable', label: 'Turntable' },
+                ]}
+                disabled={loading || !!error}
+                onChoose={(value) => setRotation(value === 'free' ? 'free' : 'turntable')}
+              />
+            </span>
+          </>
         )}
         <button
           {...headerItem('shading', 6, ['preview.model-shading'])}
@@ -776,6 +939,18 @@ export default function ModelPreview(context: PreviewContext) {
         </span>
       </PreviewToolbar>
       <div className="model-stage" ref={stage}>
+        <ModelViewCube
+          ref={viewCube}
+          extension={resource.entry.extension}
+          hidden={loading || !!error || contextLost}
+          inactive={!active || !interactive}
+          choose={(view) => session.current?.standardView(view)}
+          home={() => session.current?.home()}
+          turnStart={() => session.current?.turnStart()}
+          turn={(x, y) => session.current?.turn(x, y)}
+          wheel={(event) => session.current?.wheel(event)}
+          zoom={(steps) => session.current?.zoom(steps)}
+        />
         {shadingOpen && !loading && !error && (
           <ShadingControls
             id={shadingID}
@@ -792,9 +967,12 @@ export default function ModelPreview(context: PreviewContext) {
         )}
         {error && (
           <div className="preview-overlay">
-            <Empty icon="model" title="Model could not be loaded" detail={error}>
-              {context.retry && <button onClick={context.retry}>Retry preview</button>}
-            </Empty>
+            <PreviewFailure
+              context={context}
+              icon="model"
+              title="Can't show this model"
+              detail={error}
+            />
           </div>
         )}
       </div>
@@ -805,7 +983,7 @@ export default function ModelPreview(context: PreviewContext) {
         </p>
       )}
       {warnings.length > 0 && (
-        <p className="inline-warning">Missing companion assets: {warnings.join(', ')}</p>
+        <p className="inline-warning">Missing files next to the model: {warnings.join(', ')}</p>
       )}
       {notices.map((notice) => (
         <p key={notice} className="inline-warning">
@@ -820,7 +998,7 @@ export default function ModelPreview(context: PreviewContext) {
         {measure ? (
           <span className="model-measurement" role="status">
             {distance === undefined
-              ? 'Click two surface points · drag to orbit'
+              ? 'Click two surface points · drag to rotate'
               : `Distance: ${distance.toLocaleString(undefined, { maximumFractionDigits: 3 })} ${unit}`}
             <button onClick={() => session.current?.clearMeasure()}>Clear</button>
           </span>

@@ -6,6 +6,7 @@ import { sourceVersion } from '../../domain/files/inspection';
 import { activeWorkspace } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { Empty, Loading, PathField } from '../ui/primitives';
+import { statusLabel } from '../ui/status-labels';
 import './chat.css';
 
 export default function SessionPlane({ pane }: { pane: ChatPane }) {
@@ -45,7 +46,7 @@ export default function SessionPlane({ pane }: { pane: ChatPane }) {
   }, [pane.externalSessionID]);
   if (!session)
     return error ? (
-      <Empty title="Agent session unavailable" detail={error} />
+      <Empty title="Can’t open this agent session" detail={error} />
     ) : (
       <Loading label="Opening agent session…" />
     );
@@ -59,8 +60,8 @@ export default function SessionPlane({ pane }: { pane: ChatPane }) {
         <PathField path={session.directory} />
       </div>
       <p className="session-reported-status" role="status">
-        Reported {session.status} · {new Date(session.updated).toLocaleString()} · sequence{' '}
-        {session.sequence}
+        Reported {statusLabel(session.status).toLowerCase()} ·{' '}
+        {new Date(session.updated).toLocaleString()} · report {session.sequence}
       </p>
       {error && (
         <p className="chat-error" role="alert">
@@ -96,7 +97,7 @@ export default function SessionPlane({ pane }: { pane: ChatPane }) {
                             !activeWorkspace().panes.some((value) => value.id === pane.id)
                           )
                             throw new Error(
-                              'The originating workspace changed. Open the reference again.',
+                              'This session’s workspace changed. Open the file again from its link.',
                             );
                           workspace.open(file, pane.id, {
                             activate: true,
@@ -115,9 +116,9 @@ export default function SessionPlane({ pane }: { pane: ChatPane }) {
                       })().catch((value) => setError(errorMessage(value)));
                     }}
                   >
-                    {link.kind === 'git-diff' ? 'Current diff: ' : 'Open current file: '}
+                    {link.kind === 'git-diff' ? 'Show Changes to “' : 'Open “'}
                     {link.path.split('/').at(-1)}
-                    {link.line ? ':' + link.line : ''}
+                    {link.line ? ':' + link.line : ''}”
                   </button>
                 ))}
               </div>
@@ -125,11 +126,11 @@ export default function SessionPlane({ pane }: { pane: ChatPane }) {
           </article>
         ))}
         {!session.entries.length && (
-          <Empty title="No messages reported" detail="The adapter has reported status only." />
+          <Empty title="No messages reported" detail="The agent reported its status only." />
         )}
       </div>
       <footer className="session-retention">
-        Read-only adapter reports. Returning here never resumes or starts an agent.
+        Reports from the agent. Opening this never starts or resumes it.
       </footer>
     </section>
   );

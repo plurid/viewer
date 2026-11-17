@@ -7,6 +7,7 @@ import { report } from '../state/store';
 import { IconButton } from '../ui/primitives';
 import { errorMessage } from '../../domain/errors';
 import { pathContains } from '../../domain/files/paths';
+import { plural } from '../../domain/plural';
 
 type Measurement = { task: FolderSizeTask; stale: boolean };
 const measurements = new Map<string, Measurement>();
@@ -131,16 +132,16 @@ function measuredSize(measurement: Measurement) {
   const task = measurement.task;
   const label =
     task.status === 'running'
-      ? `Calculating… ${task.files.toLocaleString()} files`
+      ? `Calculating… ${plural(task.files, 'file')}`
       : measurement.stale
-        ? 'Size needs recalculation'
+        ? 'Size out of date'
         : task.status === 'completed'
           ? task.skipped && !task.bytes
-            ? 'Size unavailable · Unreadable items'
-            : `${formatBytes(task.bytes)}${task.skipped ? ` · Partial (${task.skipped} unreadable)` : ''}`
+            ? "Size unknown: its items can't be read"
+            : `${formatBytes(task.bytes)}${task.skipped ? ` · ${plural(task.skipped, 'item')} not readable` : ''}`
           : task.status === 'cancelled'
-            ? 'Size calculation cancelled'
-            : 'Size could not be calculated';
+            ? 'Size calculation canceled'
+            : "Couldn't calculate the size";
   return { label, task, stale: measurement.stale };
 }
 /** Reuse individual measurements across selections; a parent's total already includes its descendants. */
@@ -180,14 +181,15 @@ export function selectionSize(entries: readonly FileEntry[], fallback = '') {
       unmeasured++;
     }
   }
+  // As Finder: a folder nobody measured adds nothing to the line, so a selection shows what is
+  // known, the files and measured folders, and a lone unmeasured folder shows no size at all.
   if (stale || unmeasured) {
-    const unknown = stale + unmeasured;
     const label =
-      !bytes && !parts.length
-        ? stale
-          ? 'Size needs recalculation'
-          : 'Size not calculated'
-        : `${formatBytes(bytes)} · ${unknown} ${unknown === 1 ? 'folder' : 'folders'} ${stale ? 'need recalculation' : 'not calculated'}`;
+      bytes || parts.length
+        ? formatBytes(bytes)
+        : stale && !unmeasured
+          ? 'Size out of date'
+          : fallback;
     return { label, task: undefined, stale: !!stale };
   }
   if (!parts.length)
@@ -213,17 +215,17 @@ export function FolderSizeValue({ path }: { path: string }) {
   const measurement = useFolderSize([path]);
   const task = measurement?.task;
   const fresh = task?.status === 'completed' && !measurement?.stale;
+  const shown =
+    fresh && (!task.skipped || task.bytes)
+      ? `${formatBytes(task.bytes)}${task.skipped ? ' (partial)' : ''}`
+      : task?.status === 'running'
+        ? '…'
+        : '';
+  // a tooltip only where it adds to the cell: why a size is partial, out of date or missing
+  const label = measurement ? measuredSize(measurement).label : '';
   return (
-    <span
-      title={
-        measurement ? measuredSize(measurement).label : 'Use Calculate Size to measure this folder.'
-      }
-    >
-      {fresh && (!task.skipped || task.bytes)
-        ? `${formatBytes(task.bytes)}${task.skipped ? ' (partial)' : ''}`
-        : task?.status === 'running'
-          ? '…'
-          : ''}
+    <span title={label && label !== shown ? label : undefined}>
+      {shown || <span className="muted">--</span>}
     </span>
   );
 }

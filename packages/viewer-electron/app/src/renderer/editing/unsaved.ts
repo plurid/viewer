@@ -3,6 +3,7 @@ import type { Pane } from '../../domain/contracts';
 import { textChangedCode, trimTrailingWhitespace } from '../../domain/editing/documents';
 import { languageByID, newFileExtension } from '../../domain/editing/languages';
 import { baseName } from '../../domain/workspaces/planes';
+import { plural } from '../../domain/plural';
 import {
   activeWorkspace,
   addPane,
@@ -219,7 +220,7 @@ export async function recoverBuffers(): Promise<number> {
   }
   if (recovered)
     announce(
-      `Recovered unsaved text in ${recovered} ${recovered === 1 ? 'plane' : 'planes'}. Save or discard it from each plane.`,
+      `Recovered unsaved text in ${plural(recovered, 'plane')}. Save or discard it from each plane.`,
     );
   return recovered;
 }

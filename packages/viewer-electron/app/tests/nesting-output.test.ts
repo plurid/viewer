@@ -97,7 +97,7 @@ describe('saved nesting', () => {
     const csv = written.files.at(-1)!.content;
     expect(csv.startsWith('﻿No.,Part,File,Requested,Placed,')).toBe(true);
     expect(csv).toContain('\r\n1,Bracket with holes,Bracket with holes.dxf,4,4,300,200,58400,');
-    expect(csv).toContain('\r\nSheet,Width (mm),Height (mm),Parts,Utilisation (%),');
+    expect(csv).toContain('\r\nSheet,Width (mm),Height (mm),Parts,Utilization (%),');
     const report = layoutTransformSchema.parse(written.report);
     expect(report.pages.length).toBe(1 + plan.sheets.length);
     expect(new Set(report.pages.flatMap((page) => page.items.map((item) => item.kind)))).toEqual(
@@ -128,7 +128,7 @@ describe('saved nesting', () => {
     // 300 × 200 mm is 11.811 × 7.874 in
     expect(csv).toContain('\r\n1,Bracket with holes,Bracket with holes.dxf,4,4,11.811,7.874,');
     expect(csv).toContain(
-      '\r\nSheet,Width (in),Height (in),Parts,Utilisation (%),Offcut width (in),',
+      '\r\nSheet,Width (in),Height (in),Parts,Utilization (%),Offcut width (in),',
     );
     expect(csv).toMatch(/\r\n1,39\.37,78\.74,8,[\d.]+,39\.37,[\d.]+,yes,/);
     const text = written.report.pages.flatMap((page) =>

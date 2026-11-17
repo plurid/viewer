@@ -8,9 +8,12 @@ import { getState, useViewer } from '../state/core';
 import { clearRecentFolders } from '../state/places';
 import { Button, Dialog } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
-import { FolderPath } from '../ui/FolderPath';
+import { PathLabel, useHomeText } from '../ui/PathLabel';
 import { useFolderSuggestions } from './useFolderSuggestions';
+import { plural } from '../../domain/plural';
 import './go-to-folder.css';
+
+const incompleteText = "Viewer couldn't check some folders. Type a path, or try again.";
 
 export function GoToFolderDialog({
   initial,
@@ -32,11 +35,10 @@ export function GoToFolderDialog({
   const [edited, setEdited] = useState(false);
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
+  const shownError = useHomeText(error);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(false);
-  const { paths, checking, hasHistory, incomplete, checkOnOpen } = useFolderSuggestions(
-    edited ? query : '',
-  );
+  const { paths, checking, hasHistory, incomplete } = useFolderSuggestions(edited ? query : '');
   const canClear = useViewer(
     (state) => state.saved.recents.length > 0 || Object.keys(state.saved.visits ?? {}).length > 0,
   );
@@ -86,13 +88,11 @@ export function GoToFolderDialog({
           : paths[0]);
       if (!path)
         throw new Error(
-          incomplete
-            ? 'Some folders could not be checked. Enter a folder path or try again.'
-            : 'No matching folder is available. Enter a folder path.',
+          incomplete ? incompleteText : 'No matching folders. Type a path such as ~/Documents.',
         );
       // Recheck on selection: a volume may have disappeared after the suggestions arrived.
       const entry = await window.viewer.stat(path);
-      if (!entry?.directory) throw new Error('Choose a folder path.');
+      if (!entry?.directory) throw new Error("That's a file, not a folder.");
       if (!live.current) return;
       await onOpen(entry.path);
       if (live.current) onClose();
@@ -101,7 +101,7 @@ export function GoToFolderDialog({
         const message = errorMessage(cause);
         setError(
           /^(?:\d|ENOENT|ENOTDIR)|Invalid input/i.test(message)
-            ? 'This folder could not be opened. Check the path and try again.'
+            ? "Can't open this folder. Check the path and try again."
             : /[.!?]$/.test(message)
               ? message
               : `${message}.`,
@@ -116,7 +116,7 @@ export function GoToFolderDialog({
   });
 
   return (
-    <Dialog title="Go to folder" onClose={onClose} className="go-to-folder-dialog">
+    <Dialog title="Go to Folder" onClose={onClose} className="go-to-folder-dialog">
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -173,17 +173,24 @@ export function GoToFolderDialog({
           }}
         />
         <p id={`${id}-status`} className="go-to-folder-status" role="status">
-          {checking
-            ? 'Checking folders…'
-            : paths.length
-              ? `${paths.length} suggested ${paths.length === 1 ? 'folder' : 'folders'}. ${incomplete ? 'Some folders could not be checked. ' : checkOnOpen ? 'Folders are checked when opened. ' : ''}Use ↑ and ↓ to choose.`
-              : incomplete
-                ? 'Some folders could not be checked. Enter a folder path or try again.'
-                : edited && query
-                  ? 'No matching folders. Enter a folder path.'
-                  : hasHistory
-                    ? 'No remembered folders are available. Enter a folder path.'
-                    : 'Visit a folder to see suggestions here.'}
+          {checking ? (
+            'Checking folders…'
+          ) : paths.length ? (
+            <>
+              {`${plural(paths.length, 'suggested folder')}.`}
+              {incomplete && ` Viewer couldn't check some folders.`}
+              {/* the keys are for a screen reader; sighted people see the list */}
+              <span className="visually-hidden"> Use ↑ and ↓ to choose.</span>
+            </>
+          ) : incomplete ? (
+            incompleteText
+          ) : edited && query ? (
+            'No matching folders. Type a path such as ~/Documents.'
+          ) : hasHistory ? (
+            'No recent folders. Type a path such as ~/Documents.'
+          ) : (
+            'Visit a folder to see suggestions here.'
+          )}
         </p>
         <div
           ref={list}
@@ -209,14 +216,16 @@ export function GoToFolderDialog({
               <Icon name="folder" size={16} />
               <span className="command-result-text">
                 <span>{baseName(path)}</span>
-                <FolderPath path={path} />
+                <small>
+                  <PathLabel path={path} tooltip={false} />
+                </small>
               </span>
             </button>
           ))}
         </div>
         {error && (
           <p className="error" role="alert">
-            {error}
+            {shownError}
           </p>
         )}
         <FolderHistoryRecovery onEnd={() => input.current?.focus()} />
@@ -232,7 +241,7 @@ export function GoToFolderDialog({
                 input.current?.focus();
               }}
             >
-              Clear recent folders
+              Clear Recent Folders
             </Button>
           )}
           <Button type="button" variant="secondary" onClick={onClose}>

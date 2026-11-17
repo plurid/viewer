@@ -22,7 +22,7 @@ export async function validateManualTarget(
     window.workspaceID !== target.workspaceID ||
     !space
   )
-    throw new Error('The originating workspace changed. Open the command again.');
+    throw new Error('The workspace this started from changed. Open the command again.');
   const pane = space.panes.find((pane) => pane.id === target.paneID);
   if (target.paneID) {
     const owner =
@@ -31,7 +31,7 @@ export async function validateManualTarget(
         : undefined;
     const root = pane && (space.roots.includes(pane.id) ? pane.id : owner);
     if (!pane || root !== target.rootID || !space.roots.includes(target.rootID))
-      throw new Error('The originating plane changed. Open the command again.');
+      throw new Error('The plane this started from changed. Open the command again.');
   } else if (target.rootID || target.panePath || target.selection.length) {
     throw new Error('An empty workspace command must use Home without a file selection.');
   }
@@ -39,7 +39,7 @@ export async function validateManualTarget(
   if (fileContext) assertLocalPath(pane.path);
   else assertLocalPath(home);
   if (fileContext && pane.path !== target.panePath)
-    throw new Error('The originating path changed. Open the command again.');
+    throw new Error('The folder this started from changed. Open the command again.');
   const source = fileContext
     ? pane.type === 'preview'
       ? path.dirname(pane.path)
@@ -47,11 +47,11 @@ export async function validateManualTarget(
     : home;
   const [expected, directory] = await Promise.all([canonical(source), canonical(target.directory)]);
   if (pane?.type === 'folder' ? !containsPath(expected, directory) : expected !== directory)
-    throw new Error('The command folder no longer matches its captured context.');
+    throw new Error('The command’s folder changed since you chose the command. Open it again.');
   for (const file of target.selection) {
     const parent = await canonical(path.dirname(path.resolve(file.path)));
     if (!containsPath(directory, parent))
-      throw new Error('A selected file is outside the captured command folder.');
+      throw new Error('A selected file is outside the command’s folder. Select it again.');
   }
 }
 
@@ -60,7 +60,7 @@ export async function bindManualTarget(
   window: GitTargetWindow | undefined,
   home: string,
 ): Promise<CapturedTarget> {
-  if (!window) throw new Error('The originating window closed. Open the command again.');
+  if (!window) throw new Error('The window this started from closed. Open the command again.');
   const target = { ...structuredClone(input), originID: window.originID };
   await validateManualTarget(target, window, home);
   return target;

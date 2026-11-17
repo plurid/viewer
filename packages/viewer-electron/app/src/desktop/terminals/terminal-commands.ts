@@ -49,7 +49,8 @@ export class TerminalCommands {
   }
 
   run: RunTerminalCommand = (program, signal, output) => {
-    if (signal.aborted) return Promise.reject(new Error('Command cancelled before launch.'));
+    if (signal.aborted)
+      return Promise.reject(new Error('The command was canceled before it started.'));
     if (this.has(program.id)) return Promise.reject(new Error('This command already started.'));
     let resolve!: Running['resolve'], reject!: Running['reject'];
     const promise = new Promise<number>((done, fail) => {
@@ -114,7 +115,7 @@ export class TerminalCommands {
   private stop(value: Running): void {
     if (value.stopping || value.finishing) return;
     value.stopping = true;
-    value.error ??= new Error('Command cancelled.');
+    value.error ??= new Error('The command was canceled.');
     try {
       this.post({ kind: 'close', id: value.program.id });
       if (value.finishing) return;

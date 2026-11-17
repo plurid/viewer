@@ -163,7 +163,7 @@ export function parseDrawing(source: string): Drawing {
   if (!source.trim() || !/\bSECTION\b/.test(source) || !/\bEOF\s*$/.test(source))
     throw new Error('This is not a complete ASCII DXF drawing.');
   if (source.length > DXF_MAX_BYTES || source.split('\n').length > 1200000)
-    throw new Error('This drawing exceeds the DXF preview limit (32 MB or 600,000 group codes).');
+    throw new Error('Viewer shows drawings up to 32 MB or 600,000 group codes.');
   const parsed = new DxfParser().parseSync(source);
   if (!parsed) throw new Error('The DXF drawing could not be parsed.');
   return drawingFrom(parsed, source);
@@ -214,7 +214,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
     depth: number,
     ancestry: Set<string>,
   ): void => {
-    if (++visits > 100000) throw new Error('Block expansion exceeds the preview limit.');
+    if (++visits > 100000) throw new Error("This drawing's blocks repeat too often to show.");
     if (depth > 16) {
       warnings.add('Block nesting exceeds 16 levels.');
       return;
@@ -268,7 +268,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
       const rows = raw.rowCount || 1,
         columns = raw.columnCount || 1;
       if (rows * columns > 10000 || rows < 1 || columns < 1)
-        throw new Error('A block array exceeds the preview limit.');
+        throw new Error('A block array is too large to show.');
       for (let row = 0; row < rows; row++)
         for (let column = 0; column < columns; column++) {
           const local: Matrix = [
@@ -356,7 +356,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
     } else if (['LINE', 'LWPOLYLINE', 'POLYLINE', 'SOLID', '3DFACE'].includes(raw.type)) {
       const vertices = raw.vertices ?? [];
       if (vertices.length < 2) return;
-      if (vertices.length > maxPoints) throw new Error('This entity exceeds the vertex limit.');
+      if (vertices.length > maxPoints) throw new Error('An object has too many points to show.');
       closed = !!raw.shape || raw.type === 'SOLID' || raw.type === '3DFACE';
       const ordered =
         raw.type === 'SOLID' && vertices.length === 4
@@ -372,7 +372,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
           throw new Error('A polyline has invalid vertices.');
         const arc = bulgeArc(a, b, a.bulge ?? 0);
         if (pointCount + points.length + arc.points.length > maxPoints)
-          throw new Error('Polyline tessellation exceeds the preview vertex limit.');
+          throw new Error('A polyline has too many points to show.');
         points.push(...arc.points.slice(i ? 1 : 0));
         length += arc.length;
         curvedArea += arc.area;
@@ -402,7 +402,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
         controls: (raw.controlPoints ?? []).filter(validPoint),
       };
       if (spline.controls.length > maxPoints)
-        throw new Error('This entity exceeds the vertex limit.');
+        throw new Error('An object has too many points to show.');
       points = validSpline(spline)
         ? splinePoints(spline, 1e-4 * extent(spline.controls), maxPoints - pointCount)
         : (raw.fitPoints ?? []).filter(validPoint).map((p) => ({ x: p.x, y: p.y }));
@@ -465,9 +465,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
     }
     pointCount += transformed.length;
     if (entities.length >= maxEntities || pointCount > maxPoints)
-      throw new Error(
-        'This drawing exceeds the geometry limit (50,000 entities or 1,000,000 preview vertices).',
-      );
+      throw new Error('Viewer shows drawings up to 50,000 objects or 1,000,000 points.');
     const color =
       raw.colorIndex === 0 || raw.colorIndex === 256
         ? rawLayers[layer]?.color

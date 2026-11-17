@@ -101,7 +101,7 @@ it('quotes exact text within one message and leaves unrelated selection alone af
     end: 15,
   });
   fireEvent.mouseUp(root);
-  fireEvent.click(screen.getByRole('button', { name: 'Ask about selection' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ask About Selection' }));
   expect(onQuote).toHaveBeenCalledWith({ messageID: message.id, start: 7, end: 15 });
   window.getSelection()!.removeAllRanges();
   view.rerender(createElement(Transcript, { ...props, messages: [...document.messages] }));
@@ -237,7 +237,7 @@ describe('Chat controls and state', () => {
         }),
       ),
     );
-    const branch = await screen.findByRole('button', { name: 'Branch from this message' });
+    const branch = await screen.findByRole('button', { name: 'Ask about this message' });
     const save = deferred();
     trackCanvasWrite(save.promise);
     try {
@@ -269,7 +269,7 @@ describe('Chat controls and state', () => {
     expect((field as HTMLTextAreaElement).value).toBe('A saved question');
     expect((field as HTMLTextAreaElement).disabled).toBe(false);
     expect(screen.getByText('Checking data permission…')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Allow names' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Allow Names' })).toBeNull();
     expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.change(field, { target: { value: 'A saved question, with more detail' } });
@@ -277,7 +277,7 @@ describe('Chat controls and state', () => {
     expect(
       screen.getByText(/needs permission to receive file names and your request/),
     ).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Allow names' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Allow Names' })).toBeTruthy();
     expect((field as HTMLTextAreaElement).value).toBe('A saved question, with more detail');
     expect(
       view.container.querySelector('.chat-footer')?.hasAttribute('data-viewer-overlay-protected'),
@@ -330,7 +330,7 @@ describe('Chat controls and state', () => {
     document.draft = 'Start here later';
     mount();
     const field = await screen.findByRole('textbox', { name: 'Chat message' });
-    expect(screen.getByRole('button', { name: 'Add a model in Settings' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add a Model in Settings' })).toBeTruthy();
     expect(screen.getByText('Add a model in Settings to send a message.')).toBeTruthy();
     expect((field as HTMLTextAreaElement).value).toBe('Start here later');
     expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);

@@ -80,7 +80,7 @@ export interface FolderProbe {
 export type FolderProbeResult = FolderProbe | FolderFactsFailure;
 export type FolderFactsRequest =
   | { id: number; kind: 'read'; path: string; maxBytes: number }
-  | { id: number; kind: 'probe'; path: string };
+  | { id: number; kind: 'probe'; path: string; identityOnly?: true };
 export type FolderFactsMessage =
   FolderFactsRequest | { id: number; kind: 'allow'; allowed: boolean; files?: string[] };
 export type FolderFactsReply =

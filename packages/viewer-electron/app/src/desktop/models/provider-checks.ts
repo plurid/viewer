@@ -28,7 +28,7 @@ export function waitForProviderCheck<T>(
         new DOMException(
           timeout
             ? `The compatibility check timed out while ${current}.${detail}`
-            : 'The compatibility check was cancelled.',
+            : 'The compatibility check was canceled.',
           timeout ? 'TimeoutError' : 'AbortError',
         ),
       );

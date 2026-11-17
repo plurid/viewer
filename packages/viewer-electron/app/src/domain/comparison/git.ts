@@ -120,7 +120,7 @@ export function parseGitStatus(output: string, root: string): GitSnapshot {
         status: row[0] === 'u' ? 'conflict' : status(xy),
       });
     } else if (!row.startsWith('# ') && !row.startsWith('! '))
-      throw new Error('Unrecognised Git status record.');
+      throw new Error('Git reported a status Viewer doesn’t recognize.');
   }
   if (result.branch === '(detached)') result.branch = result.commit?.slice(0, 8) ?? 'Detached';
   return result;

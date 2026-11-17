@@ -86,7 +86,7 @@ export function KeyCapture({
       const chord = chordFrom(event);
       if (!chord) return;
       if (!event.ctrlKey && !event.metaKey && !(kind === 'global-shortcut' && event.altKey)) {
-        setMessage('Hold ⌃ or ⌘ with the key');
+        setMessage('Hold ⌃ or ⌘ with the key.');
         return;
       }
       const taken = ownerRef.current?.(chord);
@@ -120,7 +120,7 @@ export function KeyCapture({
         type="button"
         aria-label={label}
         aria-pressed={listening}
-        title="Click and press. Escape keeps it, Backspace clears it."
+        title="Click, then press the keys. Esc keeps the current ones; ⌫ clears them."
         onClick={(event) => {
           // inside a settings row's label, the click would reach this button twice
           event.preventDefault();

@@ -96,7 +96,7 @@ export function ProviderDataPermission({
       }
     >
       <p className="settings-note">
-        Choose what this provider may receive. Access is granted only after your approval.
+        Choose what this provider may receive. Nothing is sent until you allow it.
       </p>
       <p className="settings-note" role="status">
         {loading
@@ -123,11 +123,11 @@ export function ProviderDataPermission({
           disabled={busy || loading || !!loadError}
           onClick={() => void save(level)}
         >
-          {busy ? 'Saving…' : 'Allow selected data'}
+          {busy ? 'Saving…' : 'Allow Selected Data'}
         </button>
         {permission && (
           <button type="button" disabled={busy || loading} onClick={() => void save(null)}>
-            Revoke access
+            Revoke Access
           </button>
         )}
       </div>

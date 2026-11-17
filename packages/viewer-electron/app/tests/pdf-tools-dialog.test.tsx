@@ -63,7 +63,7 @@ it('submits the reordered extraction with source versions from inspection and on
     ),
   );
   fireEvent.change(screen.getByLabelText('PDF page range'), { target: { value: '3-2' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Apply range' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Apply Range' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save PDF' }));
   await waitFor(() => expect(operate).toHaveBeenCalledOnce());
   expect(operate.mock.calls[0]![0]).toMatchObject({
@@ -99,9 +99,9 @@ it('cancels a split job admitted after Cancel and stops admitting the remaining 
     ),
   );
   fireEvent.click(screen.getByLabelText('Save each included page separately'));
-  fireEvent.click(screen.getByRole('button', { name: 'Split pages' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Split Pages' }));
   await waitFor(() => expect(operate).toHaveBeenCalledOnce());
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel export' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel Export' }));
   await act(async () => admitted('late-pdf'));
   await waitFor(() => expect(window.viewer.cancelJob).toHaveBeenCalledWith('late-pdf'));
   expect(operate).toHaveBeenCalledOnce();
@@ -134,7 +134,7 @@ it('clears the prior saved acknowledgement when the output draft changes', async
     } satisfies OperationJob);
   });
   await screen.findByText('1 PDF saved');
-  fireEvent.change(screen.getByLabelText('PDF output name'), { target: { value: 'Another.pdf' } });
+  fireEvent.change(screen.getByLabelText(/^File name:/), { target: { value: 'Another' } });
   await waitFor(() => expect(screen.queryByText('1 PDF saved')).toBeNull());
   expect(screen.queryByRole('button', { name: 'Open Merged.pdf' })).toBeNull();
 });

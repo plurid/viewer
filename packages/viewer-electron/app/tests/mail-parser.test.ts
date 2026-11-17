@@ -261,7 +261,7 @@ second`),
     expect(readMessage(bytes('\nBody without headers')).text).toBe('Body without headers');
     expect(readMessage(bytes('Content-Type: nonsense\n\nstill text')).text).toBe('still text');
     expect(() => parseMime(new Uint8Array(mimeLimits.headerBytes + 10).fill(65))).toThrow(
-      'headers exceed',
+      'headers are longer than Viewer reads',
     );
   });
 

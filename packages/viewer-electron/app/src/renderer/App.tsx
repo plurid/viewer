@@ -14,6 +14,7 @@ import {
 } from './state/effective-ui';
 import type { SpatialOverviewHandle } from './workspace/overlays/useSpatialOverview';
 import { errorMessage } from '../domain/errors';
+import { homeText } from '../domain/files/path-label';
 import { failedFlush } from '../domain/persistence/flush';
 import { prepareNoteTrash, finishNoteTrash } from './notes/sessions';
 import { savePatch } from './state/core';
@@ -103,8 +104,13 @@ import { openWorkspacePath } from './workspace/open-path';
 import { requestRefresh } from './state/refresh';
 import { useWindowEvent } from './app/window-events';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
-import { commandShortcutID, defaultShortcuts } from '../domain/preferences/shortcuts';
-import { keyGlyphs } from '../domain/preferences/keymap';
+import {
+  commandShortcutID,
+  shortcutFor,
+  shortcutGlyphs,
+  withShortcut,
+} from '../domain/preferences/shortcuts';
+import { plural } from '../domain/plural';
 import { dialogOpen, overlayOpen } from './ui/modal';
 import { savedDefinitionsKey } from './state/saved-keys';
 import { isActiveJob } from '../domain/operations/jobs';
@@ -161,7 +167,11 @@ function AppWindow() {
     if (target.paneID) setWindowDialog({ type: 'run-command', target });
   });
   const recordingMacro = useMacroRecording();
-  const [workspaceMenu, setWorkspaceMenu] = useState<{ x: number; y: number } | null>(null);
+  const [workspaceMenu, setWorkspaceMenu] = useState<{
+    x: number;
+    y: number;
+    anchor: HTMLButtonElement;
+  } | null>(null);
 
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   // what the palette opens with, and each opening's number: a new opening starts it afresh
@@ -204,9 +214,8 @@ function AppWindow() {
   const space = useViewer(activeWorkspace);
   const look = useViewer(effectiveWindowLook);
   const settings = useViewer(effectiveWindowSettings);
-  const newPlaneShortcut = keyGlyphs(
-    settings.shortcuts['new-root-folder'] ?? defaultShortcuts['new-root-folder'] ?? '',
-  );
+  const newPlaneShortcut = shortcutGlyphs(shortcutFor(settings.shortcuts, 'new-root-folder'));
+  const paletteShortcut = shortcutGlyphs(shortcutFor(settings.shortcuts, 'palette'));
   const [overview, setOverview] = useState<SpatialOverviewHandle>();
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
@@ -466,8 +475,10 @@ function AppWindow() {
       requestAnimationFrame(() => {
         void runLine(text, lineHost, model)
           .then((result) => {
-            if (result.ok) announce(result.message || 'Command completed.');
-            else if (result.message) report(new Error(result.message));
+            // a command that worked shows its result, as Finder does: nothing more to say
+            if (result.ok) {
+              if (result.message) announce(result.message);
+            } else if (result.message) report(new Error(result.message));
           })
           .catch(report);
       }),
@@ -491,7 +502,7 @@ function AppWindow() {
       const deadline = performance.now() + 5000;
       while (!readyRef.current) {
         if (performance.now() > deadline)
-          throw new Error('The workspace is still opening. Retry the command.');
+          throw new Error('The workspace is still opening. Try again in a moment.');
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       }
       if (getState().saved.activeWorkspace !== origin) return;
@@ -633,14 +644,14 @@ function AppWindow() {
         void (async () => {
           if (Date.now() > event.deadline)
             throw new Error(
-              'The task opening request expired. Inspect the retained worktree before retrying.',
+              'The request to open the task expired. Check the worktree it created before you ask again.',
             );
           if (dialogOpen())
-            throw new Error('Close the open dialog, then open the retained worktree.');
+            throw new Error('Close the open dialog, then open the task’s worktree again.');
           const destination = getState().saved.workspaces.find(
             (space) => space.id === event.bundle.workspaceID,
           );
-          if (!destination) throw new Error('The selected workspace is unavailable.');
+          if (!destination) throw new Error('The task’s workspace was closed or deleted.');
           deferTerminalStart(
             destination.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
           );
@@ -672,16 +683,16 @@ function AppWindow() {
           if (dialogOpen()) {
             if (performance.now() < deadline) requestAnimationFrame(execute);
             else {
-              report('Close the open dialog and request the action again.');
-              finish('Another dialog prevented the action.');
+              report('Close the open dialog, then ask for the action again.');
+              finish('An open dialog stopped the action.');
             }
             return;
           }
           const { target } = event;
           const origin = resolveAgentOrigin(target, activeWorkspace(), controller);
           if (!origin) {
-            report('The originating plane is no longer available. Request a new proposal.');
-            finish('The originating plane or folder changed.');
+            report('The plane this action was for is no longer open. Ask the agent again.');
+            finish('The plane or folder this action was for has changed.');
             return;
           }
           if (event.navigation) {
@@ -702,7 +713,7 @@ function AppWindow() {
           );
           void (command ? registry.run(command, false) : Promise.resolve(false))
             .then((executed) =>
-              finish(executed ? undefined : 'The command is no longer available for this context.'),
+              finish(executed ? undefined : 'The command no longer applies to this plane.'),
             )
             .catch((error: Error) => {
               report(error);
@@ -847,12 +858,16 @@ function AppWindow() {
           )}
           <button
             className="workspace-switcher"
-            aria-label="Workspace"
+            aria-label={`Workspace: ${space.name}`}
             aria-haspopup="dialog"
             aria-expanded={!!workspaceMenu}
             onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              setWorkspaceMenu({ x: rect.left, y: rect.bottom + 6 });
+              const anchor = event.currentTarget;
+              const rect = anchor.getBoundingClientRect();
+              // its menu leaves a press on the switcher to this toggle: the next press closes it
+              setWorkspaceMenu((open) =>
+                open ? null : { x: rect.left, y: rect.bottom + 6, anchor },
+              );
             }}
           >
             <span>{space.name}</span>
@@ -865,13 +880,13 @@ function AppWindow() {
               onClick={() => void invoke('record-macro').catch(report)}
             >
               <span aria-hidden className="macro-dot" />
-              Recording macro · {recordingMacro.length}
+              Recording macro · {plural(recordingMacro.length, 'command')}
             </button>
           )}
           {windowUI.titlebar.newPlane && (
             <IconButton
               icon="plus"
-              label={`New folder plane${newPlaneShortcut ? ` (${newPlaneShortcut})` : ''}`}
+              label={withShortcut('New folder plane', newPlaneShortcut)}
               disabled={!ready || space.panes.length >= 200}
               onClick={() => {
                 void invoke('new-root-folder').catch(report);
@@ -903,7 +918,7 @@ function AppWindow() {
           {windowUI.titlebar.commands && (
             <IconButton
               icon="command"
-              label="Commands (⌘K)"
+              label={withShortcut('Commands', paletteShortcut)}
               onClick={() => {
                 void invoke('palette').catch(report);
               }}
@@ -943,6 +958,8 @@ function AppWindow() {
         {workspaceMenu && (
           <ContextMenu
             position={workspaceMenu}
+            // placed from the switcher's box: below it, never over it in a short window
+            anchor={workspaceMenu.anchor}
             request={{
               sources: ['window'],
               scope: 'workspace',
@@ -976,17 +993,17 @@ function AppWindow() {
             role={noticeKind === 'info' ? 'status' : 'alert'}
           >
             <Icon name={noticeKind === 'info' ? 'info' : 'warning'} />
-            <span>{notice}</span>
+            <span>{homeText(notice, bootstrap.home)}</span>
             {definitionNotice && (
               <button
                 onClick={() =>
                   setWindowDialog({ type: 'workspace', kind: 'reset', id: definitionNotice })
                 }
               >
-                Reset to definition…
+                Reset to Definition…
               </button>
             )}
-            {unavailableFolder && <button onClick={forgetUnavailableFolder}>Forget folder</button>}
+            {unavailableFolder && <button onClick={forgetUnavailableFolder}>Forget Folder</button>}
             <IconButton icon="close" label="Dismiss message" onClick={dismissNotice} />
           </div>
         )}
@@ -995,7 +1012,7 @@ function AppWindow() {
         )}
         {deleted && showWorkspaceUndo && (
           <div className="bar bar-floating workspace-recovery" role="status">
-            <span>Deleted “{deleted.workspace.name}” workspace</span>
+            <span>Deleted the workspace “{deleted.workspace.name}”.</span>
             <button
               onClick={() => {
                 void transitionWorkspace(restoreWorkspace).catch(report);

@@ -67,7 +67,7 @@ describe('bounded provider responses', () => {
     const reading = providerResponseJSON(new Response(stream), controller.signal);
     const failure = expect(reading).rejects.toMatchObject({
       name: 'AbortError',
-      message: 'The provider request was cancelled.',
+      message: 'The provider request was canceled.',
     });
     controller.abort(new Error(privateText));
     await failure;
@@ -197,12 +197,12 @@ describe('private provider diagnostics', () => {
     {
       status: 404,
       error: { code: 'model_not_found', message: 'The selected model is not found' },
-      expected: ['model_not_found', 'selected model is unavailable'],
+      expected: ['model_not_found', 'doesn’t offer the selected model'],
     },
     {
       status: 400,
       error: { type: 'invalid_request_error', param: 'model', message: 'Unsupported value' },
-      expected: ['invalid_request_error', 'selected model is unavailable'],
+      expected: ['invalid_request_error', 'doesn’t offer the selected model'],
     },
     {
       status: 403,

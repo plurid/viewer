@@ -4,7 +4,7 @@ This page lists every default key on macOS: command shortcuts, menu keys, keys i
 Quick Preview, and the prefix keys.
 
 **Settings → Shortcuts** shows and changes the keys with an ID in the tables below; **Reset**
-returns one to its default and **Reset all shortcuts** returns them all. Changes are saved in
+returns one to its default and **Reset All Shortcuts** returns them all. Changes are saved in
 `settings.shortcuts` by ID; an empty value turns a key off. Every command is also in **⌘K**, with
 its key beside it. A key belongs to one command only.
 
@@ -12,27 +12,27 @@ its key beside it. A key belongs to one command only.
 
 | Action                                            | Key                                   | ID                                          |
 | ------------------------------------------------- | ------------------------------------- | ------------------------------------------- |
-| **Open folder…**                                  | **⇧⌘O**                               | `choose-folder`                             |
-| **New folder plane**                              | **⇧⌘N**                               | `new-root-folder`                           |
-| **Go to folder…**                                 | **⌘L**, also **⇧⌘G**                  | `go-to`                                     |
-| Choose a suggested folder in **Go to folder…**    | **↑** / **↓**, then **Return**        |                                             |
+| **Open Folder…**                                  | **⇧⌘O**                               | `choose-folder`                             |
+| **New Folder Plane**                              | **⇧⌘N**                               | `new-root-folder`                           |
+| **Go to Folder…**                                 | **⌘L**, also **⇧⌘G**                  | `go-to`                                     |
+| Choose a suggested folder in **Go to Folder…**    | **↑** / **↓**, then **Return**        |                                             |
 | **Open** the selection                            | **⌘O**, also **⌘↓** or **⌃↓**         | `open-selection`                            |
-| **Parent folder**                                 | **⌘↑**                                | `parent`                                    |
+| **Parent Folder**                                 | **⌘↑**                                | `parent`                                    |
 | **Back** / **Forward**                            | **⌘[** / **⌘]**, also **⌥←** / **⌥→** | `back` / `forward`                          |
-| **Get info…**                                     | **⌘I**                                | `info`                                      |
-| **Copy** / **Cut** / **Paste here**               | **⌘C** / **⌘X** / **⌘V**              | `copy` / `cut` / `paste`                    |
-| **Move copied items here**                        | **⌥⌘V**                               | `paste-move`                                |
-| **Copy path**                                     | **⌥⌘C**                               | `copy-path`                                 |
-| **Select all files**                              | **⌘A**                                | `select-all`                                |
-| **Select by pattern…** / **Deselect by pattern…** | **⌃⌘=** / **⌃⌘-**                     | `select-by-pattern` / `deselect-by-pattern` |
+| **Get Info…**                                     | **⌘I**                                | `info`                                      |
+| **Copy** / **Cut** / **Paste Here**               | **⌘C** / **⌘X** / **⌘V**              | `copy` / `cut` / `paste`                    |
+| **Move Copied Items Here**                        | **⌥⌘V**                               | `paste-move`                                |
+| **Copy Path**                                     | **⌥⌘C**                               | `copy-path`                                 |
+| **Select All Files**                              | **⌘A**                                | `select-all`                                |
+| **Select by Pattern…** / **Deselect by Pattern…** | **⌃⌘=** / **⌃⌘-**                     | `select-by-pattern` / `deselect-by-pattern` |
 | **Duplicate**                                     | **⌘D**                                | `duplicate`                                 |
 | **Move to Trash…**                                | **⌘⌫**                                | `trash`                                     |
-| **New folder…**                                   | **⌘N**                                | `new-folder`                                |
-| **New folder with selection…**                    | **⌃⌘N**                               | `new-folder-with-selection`                 |
-| **Show hidden files** / **Hide hidden files**     | **⇧⌘.**                               | `toggle-hidden`                             |
-| **Undo file operation** / **Redo file operation** | **⌘Z** / **⇧⌘Z**                      | `undo-file` / `redo-file`                   |
+| **New Folder…**                                   | **⌘N**                                | `new-folder`                                |
+| **New Folder with Selection…**                    | **⌃⌘N**                               | `new-folder-with-selection`                 |
+| **Show Hidden Files** / **Hide Hidden Files**     | **⇧⌘.**                               | `toggle-hidden`                             |
+| **Undo File Operation** / **Redo File Operation** | **⌘Z** / **⇧⌘Z**                      | `undo-file` / `redo-file`                   |
 | **Copy to** / **Move to** the paired folder       | **⌃⌘C** / **⌃⌘X**                     | `copy-to-pair` / `move-to-pair`             |
-| **Find file…**                                    | **⌘F**                                | `find-file`                                 |
+| **Find File…**                                    | **⌘F**                                | `find-file`                                 |
 
 **Move to Trash…** asks first; with **Confirm before moving to Trash** off, it is **Move to Trash**
 and does not ask. Either way the items go to the Trash. **⌥←** and **⌥→** go back and forward in a
@@ -40,22 +40,22 @@ folder; on a Map with a selection they move the selected items instead.
 
 ## Views
 
-| Action                                             | Key                                        | ID                                                                       |
-| -------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------ |
-| List / Grid / Columns / Gallery / Map              | **⌘1** / **⌘2** / **⌘3** / **⌘4** / **⌘5** | `view-list` / `view-grid` / `view-columns` / `view-gallery` / `view-map` |
-| **Show / Hide Window Navigation**                  | **⌥⌘S**                                    | `toggle-sidebar`                                                         |
-| **Show / Hide Title Bar**                          | **⌥⌘T**                                    | `toggle-titlebar`                                                        |
-| **Focus mode**: hide the window's chrome, and back | **⇧⌘F**                                    | `focus-mode`                                                             |
+| Action                                                  | Key                                        | ID                                                                       |
+| ------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------ |
+| List / Grid / Columns / Gallery / Map                   | **⌘1** / **⌘2** / **⌘3** / **⌘4** / **⌘5** | `view-list` / `view-grid` / `view-columns` / `view-gallery` / `view-map` |
+| **Show Window Navigation** / **Hide Window Navigation** | **⌥⌘S**                                    | `toggle-sidebar`                                                         |
+| **Show Title Bar** / **Hide Title Bar**                 | **⌥⌘T**                                    | `toggle-titlebar`                                                        |
+| **Focus Mode**: hide the window's chrome, and back      | **⇧⌘F**                                    | `focus-mode`                                                             |
 
 ## Planes and the space
 
 | Action                                      | Key                  | ID                                      |
 | ------------------------------------------- | -------------------- | --------------------------------------- |
-| **Frame all planes**                        | **⌘0**               | `frame-all`                             |
-| **Dock plane** / **Reveal space**           | **⌘Return**          | `dock`                                  |
+| **Frame All Planes**                        | **⌘0**               | `frame-all`                             |
+| **Dock Plane** / **Reveal Space**           | **⌘Return**          | `dock`                                  |
 | **Back to parent plane**                    | **⌥⌘↑**              | `parent-plane`                          |
-| **Close plane**                             | **⌥⌘W**              | `close-plane`                           |
-| **Undo arrangement** / **Redo arrangement** | **⌥⌘Z** / **⌥⇧⌘Z**   | `undo-arrangement` / `redo-arrangement` |
+| **Close Plane**                             | **⌥⌘W**              | `close-plane`                           |
+| **Undo Arrangement** / **Redo Arrangement** | **⌥⌘Z** / **⌥⇧⌘Z**   | `undo-arrangement` / `redo-arrangement` |
 | **Go to view 1** to **9**                   | **⌥⌘1** to **⌥⌘9**   | `bookmark.1` to `bookmark.9`            |
 | **Save view as 1** to **9**                 | **⌃⌥⌘1** to **⌃⌥⌘9** | `bookmark.save.1` to `bookmark.save.9`  |
 
@@ -63,9 +63,9 @@ folder; on a Map with a selection they move the selected items instead.
 
 | Action                  | Key              | ID                           |
 | ----------------------- | ---------------- | ---------------------------- |
-| **New scratch plane**   | **⌘T**           | `new-scratch-plane`          |
-| **Edit text**           | **⌘E**           | `edit-file`                  |
-| **Save** / **Save as…** | **⌘S** / **⇧⌘S** | `save-file` / `save-file-as` |
+| **New Scratch Plane**   | **⌘T**           | `new-scratch-plane`          |
+| **Edit Text**           | **⌘E**           | `edit-file`                  |
+| **Save** / **Save As…** | **⌘S** / **⇧⌘S** | `save-file` / `save-file-as` |
 
 In a text field or editor, **⌘Z**, **⇧⌘Z**, **⌘X**, **⌘C**, **⌘V** and **⌘A** edit the text, and
 file commands such as **Duplicate** and **Move to Trash** do not run. A text editor also keeps
@@ -77,7 +77,7 @@ file commands such as **Duplicate** and **Move to Trash** do not run. A text edi
 | -------------------------------- | -------------------------- | ---------------------------- |
 | **Commands…**                    | **⌘K**                     | `palette`                    |
 | **Settings…**                    | **⌘,**                     | `settings`                   |
-| **Ask Viewer by voice…**         | Hold **⌃⇧Space**           | `dictate`                    |
+| **Ask Viewer by Voice…**         | Hold **⌃⇧Space**           | `dictate`                    |
 | Key prefix                       | **⌃B**                     | `settings.keymap.prefix`     |
 | **Quit Viewer**                  | **⌘Q** twice               | `settings.quit.warnShortcut` |
 | Show or hide Viewer from any app | **⌥Space**, off by default | `settings.hotkey`            |
@@ -97,7 +97,7 @@ These keys are fixed. They work when the folder has the focus, not in a text fie
 
 | Key                                                        | Action                                                           |
 | ---------------------------------------------------------- | ---------------------------------------------------------------- |
-| **Space**                                                  | **Quick preview** of the selected files                          |
+| **Space**                                                  | **Quick Preview** of the selected files                          |
 | **Return**                                                 | **Rename…**                                                      |
 | **↑ ↓ ← →**, **Home**, **End**, **Page Up**, **Page Down** | Move the selection; with **⇧**, extend it                        |
 | **→** / **←** in Columns                                   | Into the selected folder / back a column, then the parent folder |
@@ -151,37 +151,37 @@ prefix does not work inside terminals or text fields by default.
 
 | Key after **⌃B**                        | Command                                                                         | ID                                                    |
 | --------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| **c**                                   | **New terminal plane**                                                          | `new-terminal-plane`                                  |
-| **x**                                   | **Close plane**                                                                 | `close-plane`                                         |
-| **z**                                   | **Dock plane** / **Reveal space**                                               | `dock`                                                |
-| **o**                                   | **Next plane**                                                                  | `focus-next-plane`                                    |
-| **h** **j** **k** **l**, or **← ↓ ↑ →** | **Plane to the left**, **Plane below**, **Plane above**, **Plane to the right** | `focus-left`, `focus-down`, `focus-up`, `focus-right` |
-| **f**                                   | **Jump to plane…**                                                              | `plane-hints`                                         |
-| **n** / **p**                           | **Next workspace** / **Previous workspace**                                     | `next-workspace` / `previous-workspace`               |
-| **w**                                   | **Change workspace…**                                                           | `change-workspace`                                    |
-| **,**                                   | **Rename workspace…**                                                           | `rename-workspace`                                    |
-| **:**                                   | **Command line…**                                                               | `command-line`                                        |
-| **?**                                   | **Show key sequences**                                                          | `keymap-help`                                         |
-| **q**                                   | **Record macro** / **Stop recording macro**                                     | `record-macro`                                        |
-| **t**                                   | **New scratch plane**                                                           | `new-scratch-plane`                                   |
-| **s**                                   | **Show window navigation** / **Hide window navigation**                         | `toggle-sidebar`                                      |
+| **c**                                   | **New Terminal Plane**                                                          | `new-terminal-plane`                                  |
+| **x**                                   | **Close Plane**                                                                 | `close-plane`                                         |
+| **z**                                   | **Dock Plane** / **Reveal Space**                                               | `dock`                                                |
+| **o**                                   | **Next Plane**                                                                  | `focus-next-plane`                                    |
+| **h** **j** **k** **l**, or **← ↓ ↑ →** | **Plane to the Left**, **Plane Below**, **Plane Above**, **Plane to the Right** | `focus-left`, `focus-down`, `focus-up`, `focus-right` |
+| **f**                                   | **Jump to Plane…**                                                              | `plane-hints`                                         |
+| **n** / **p**                           | **Next Workspace** / **Previous Workspace**                                     | `next-workspace` / `previous-workspace`               |
+| **w**                                   | **Change Workspace…**                                                           | `change-workspace`                                    |
+| **,**                                   | **Rename Workspace…**                                                           | `rename-workspace`                                    |
+| **:**                                   | **Command Line…**                                                               | `command-line`                                        |
+| **?**                                   | **Show Key Sequences**                                                          | `keymap-help`                                         |
+| **q**                                   | **Record Macro** / **Stop Recording Macro**                                     | `record-macro`                                        |
+| **t**                                   | **New Scratch Plane**                                                           | `new-scratch-plane`                                   |
+| **s**                                   | **Show Window Navigation** / **Hide Window Navigation**                         | `toggle-sidebar`                                      |
 | **1** to **9**                          | **Go to view 1** to **9**                                                       | `bookmark.1` to `bookmark.9`                          |
-| **b** then **s**                        | **Save view…**                                                                  | `bookmark-save`                                       |
+| **b** then **s**                        | **Save View…**                                                                  | `bookmark-save`                                       |
 | **b** then **m**                        | **Views…**                                                                      | `bookmark-manage`                                     |
-| **b** then **t**                        | **Tour the views** / **Stop tour**                                              | `tour`                                                |
-| **%**                                   | **Split right**                                                                 | `tile-split-right`                                    |
-| **"**                                   | **Split down**                                                                  | `tile-split-down`                                     |
-| **Space**                               | **Next tiling layout**                                                          | `tile-next-layout`                                    |
-| **=**                                   | **Tile the planes in view**                                                     | `tile-visible`                                        |
-| **{** / **}**                           | **Swap with the previous tile** / **Swap with the next tile**                   | `tile-swap-previous` / `tile-swap-next`               |
-| **M**                                   | **Make this the main tile**                                                     | `tile-promote`                                        |
-| **+** / **-**                           | **Grow the main tile** / **Shrink the main tile**                               | `tile-main-grow` / `tile-main-shrink`                 |
-| **!**                                   | **Stop tiling**                                                                 | `untile`                                              |
-| **e**                                   | **Explode folder**                                                              | `explode-folder`                                      |
-| **E**                                   | **Collapse exploded folders**                                                   | `collapse-folder`                                     |
+| **b** then **t**                        | **Tour the Views** / **Stop Tour**                                              | `tour`                                                |
+| **%**                                   | **Split Right**                                                                 | `tile-split-right`                                    |
+| **"**                                   | **Split Down**                                                                  | `tile-split-down`                                     |
+| **Space**                               | **Next Tiling Layout**                                                          | `tile-next-layout`                                    |
+| **=**                                   | **Tile the Planes in View**                                                     | `tile-visible`                                        |
+| **{** / **}**                           | **Swap with the Previous Tile** / **Swap with the Next Tile**                   | `tile-swap-previous` / `tile-swap-next`               |
+| **M**                                   | **Make This the Main Tile**                                                     | `tile-promote`                                        |
+| **+** / **-**                           | **Grow the Main Tile** / **Shrink the Main Tile**                               | `tile-main-grow` / `tile-main-shrink`                 |
+| **!**                                   | **Stop Tiling**                                                                 | `untile`                                              |
+| **e**                                   | **Explode Folder**                                                              | `explode-folder`                                      |
+| **E**                                   | **Collapse Exploded Folders**                                                   | `collapse-folder`                                     |
 | **>**                                   | **Copy to** the other folder of the pair                                        | `copy-to-pair`                                        |
-| **<**                                   | **Swap the pair’s folders**                                                     | `swap-pair-folders`                                   |
-| **Tab**                                 | **The other folder of the pair**                                                | `focus-pair`                                          |
+| **<**                                   | **Swap the Pair’s Folders**                                                     | `swap-pair-folders`                                   |
+| **Tab**                                 | **The Other Folder of the Pair**                                                | `focus-pair`                                          |
 | **R**                                   | Enter the `resize` mode                                                         | `mode resize`                                         |
 
 **+** and **-** repeat: within half a second, press them again without the prefix.
@@ -197,8 +197,8 @@ that many times, up to 99.
 | **l** or **→**  | **Grow tile right**         | `tile-resize-right` |
 | **k** or **↑**  | **Grow tile up**            | `tile-resize-up`    |
 | **j** or **↓**  | **Grow tile down**          | `tile-resize-down`  |
-| **Space**       | **Next tiling layout**      | `tile-next-layout`  |
-| **=**           | **Tile the planes in view** | `tile-visible`      |
+| **Space**       | **Next Tiling Layout**      | `tile-next-layout`  |
+| **=**           | **Tile the Planes in View** | `tile-visible`      |
 
 **Related:** [Your first five minutes](../guides/getting-started.md) ·
 [Keep your work together](../guides/workspaces.md) · [Command language](command-line.md) ·

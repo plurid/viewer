@@ -97,7 +97,7 @@ export function templateCommands({
   return [
     {
       id: 'layout-save-as',
-      label: 'Save layout as template…',
+      label: 'Save Layout as Template…',
       group: 'Workspace',
       icon: 'grid',
       aliases: ['template', 'layout', 'save layout', 'session'],
@@ -107,7 +107,7 @@ export function templateCommands({
     },
     ...layouts.map((template): CommandDefinition => ({
       id: `layout.${template.id}`,
-      label: `Open layout “${template.name}”`,
+      label: `Open Layout “${template.name}”`,
       group: 'Workspace',
       icon: 'grid',
       aliases: ['template', 'layout', template.name],
@@ -117,7 +117,7 @@ export function templateCommands({
     })),
     ...layouts.map((template): CommandDefinition => ({
       id: `layout-remove.${template.id}`,
-      label: `Remove layout “${template.name}”`,
+      label: `Remove Layout “${template.name}”`,
       group: 'Workspace',
       icon: 'trash',
       aliases: ['template', 'layout', 'delete layout'],

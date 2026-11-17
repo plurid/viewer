@@ -387,7 +387,7 @@ export function parseMime(bytes: Uint8Array): MimeMessage {
     parts++;
     let end = headerEnd(data);
     if (!end && data.length > mimeLimits.headerBytes) {
-      if (!depth) throw new Error('The message headers exceed the reader limit.');
+      if (!depth) throw new Error("This message's headers are longer than Viewer reads.");
       // a part without its blank line: all body
       end = { header: 0, body: 0 };
     }

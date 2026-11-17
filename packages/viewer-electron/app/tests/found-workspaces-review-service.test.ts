@@ -7,6 +7,7 @@ import type {
   FolderFactsReply,
   FolderFactsMessage,
   FolderFactsRequest,
+  FolderGitMarker,
 } from '../src/domain/workspaces/folder-facts';
 import { FoundWorkspaces } from '../src/desktop/workspaces/found-workspaces';
 import { FolderFacts } from '../src/desktop/workspaces/folder-facts';
@@ -23,7 +24,7 @@ afterEach(async () => {
 
 interface Folder {
   markers: string[];
-  git?: 'directory' | 'file' | 'worktree' | 'submodule';
+  git?: FolderGitMarker;
   ino: bigint;
   missing?: boolean;
   delay?: number;
@@ -79,7 +80,11 @@ async function fixture() {
     },
   );
   const ports = {
-    facts: { pass: () => ({ relaunches: 0, exhausted: false }), probe },
+    facts: {
+      pass: () => ({ relaunches: 0, exhausted: false }),
+      probe,
+      identity: (folder: string) => probe.getMockImplementation()!(folder),
+    },
     state: () => state,
     enabled: () => true,
     explicit: () => [],

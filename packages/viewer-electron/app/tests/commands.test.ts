@@ -628,7 +628,7 @@ describe('custom actions that name a missing item (2026-10-20)', () => {
 describe('where an action plan came from (2026-10-20)', () => {
   it('names a watch rule’s run as its own, not the person’s selection', () => {
     expect(planOrigin({ actor: 'user', workspaceID: 'watch-rule' })).toBe('Watch rule');
-    expect(planOrigin({ actor: 'agent', workspaceID: 'workspace' })).toBe('Agent proposal');
+    expect(planOrigin({ actor: 'agent', workspaceID: 'workspace' })).toBe('From an agent');
     expect(planOrigin({ actor: 'user', workspaceID: 'workspace' })).toBe('Your selection');
   });
 });

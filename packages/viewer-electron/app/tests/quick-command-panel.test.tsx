@@ -90,7 +90,7 @@ it('runs once, streams inline, and reconnects after closing without cancelling o
     send();
   });
   expect(await view.findByText('hello')).toBeTruthy();
-  expect(view.queryByRole('region', { name: 'Command progress' })).toBeNull();
+  expect(view.queryByRole('region', { name: 'Command Progress' })).toBeNull();
   view.rerender(mount(false));
   expect(executionCancel).not.toHaveBeenCalled();
   await act(async () => {
@@ -98,9 +98,9 @@ it('runs once, streams inline, and reconnects after closing without cancelling o
     send();
   });
   view.rerender(mount(true));
-  expect(await view.findByText('completed · exit 0')).toBeTruthy();
+  expect(await view.findByText('Done')).toBeTruthy();
   expect(view.getByText(/hello\s+finished/)).toBeTruthy();
   expect(runCommand).toHaveBeenCalledTimes(1);
-  fireEvent.click(view.getByRole('button', { name: 'Open receipt' }));
+  fireEvent.click(view.getByRole('button', { name: 'Open Receipt' }));
   expect(workspace.openReceipt).toHaveBeenCalledWith('quick-one', '/fixtures');
 });

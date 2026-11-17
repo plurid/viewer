@@ -3,6 +3,7 @@ import type { BackupRequest, BackupReview } from '../../domain/persistence/backu
 import type { WorkspaceController } from '../workspace/context';
 import { errorMessage } from '../../domain/errors';
 import { formatBytes } from '../../domain/files/entries';
+import { plural } from '../../domain/plural';
 import { Dialog, Loading, PathField } from '../ui/primitives';
 import {
   activeWorkspace,
@@ -13,6 +14,17 @@ import {
 } from '../state/store';
 import { appendRestoredWorkspaces } from '../state/workspaces';
 import './backup.css';
+
+/** A backup's document kinds as the review lists them. */
+const documentKinds: Readonly<Record<keyof BackupReview['documents'], string>> = {
+  notes: 'Notes and checklists',
+  drafts: 'Text drafts',
+  media: 'Media drafts',
+  conversations: 'Conversations',
+  canvases: 'Canvases',
+  receipts: 'Command records',
+  checks: 'Job checks',
+};
 
 export function BackupDialog({
   workspace,
@@ -80,7 +92,7 @@ export function BackupDialog({
   };
   return (
     <Dialog
-      title="Backup and restore"
+      title="Backup and Restore"
       wide
       className="backup-dialog"
       onClose={() => {
@@ -100,27 +112,24 @@ export function BackupDialog({
             </p>
             <div className="backup-choices">
               <button onClick={() => void run({ kind: 'prepare-export' })} disabled={busy}>
-                Create backup…
+                Create Backup…
               </button>
               <button onClick={() => void run({ kind: 'choose-import' })} disabled={busy}>
-                Open backup…
+                Open Backup…
               </button>
             </div>
           </>
         ) : (
           <>
             <p>
-              <strong>
-                {review.workspaces.length}{' '}
-                {review.workspaces.length === 1 ? 'workspace' : 'workspaces'}
-              </strong>{' '}
-              · {new Date(review.created).toLocaleString()} · {formatBytes(review.bytes)}
+              <strong>{plural(review.workspaces.length, 'workspace')}</strong> ·{' '}
+              {new Date(review.created).toLocaleString()} · {formatBytes(review.bytes)}
             </p>
             <p>{review.workspaces.join(', ')}</p>
             <dl className="backup-counts">
               {Object.entries(review.documents).map(([kind, count]) => (
                 <div key={kind}>
-                  <dt>{kind === 'drafts' ? 'Text drafts' : kind}</dt>
+                  <dt>{documentKinds[kind as keyof BackupReview['documents']]}</dt>
                   <dd>{count}</dd>
                 </div>
               ))}
@@ -213,7 +222,7 @@ export function BackupDialog({
               )
             }
           >
-            {review.mode === 'export' ? 'Save backup…' : 'Restore copies'}
+            {review.mode === 'export' ? 'Save Backup…' : 'Restore Copies'}
           </button>
         )}
       </footer>

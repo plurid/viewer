@@ -11,7 +11,7 @@ import {
   offsetText,
   readOffset,
 } from '../../domain/files/hex';
-import { Empty } from '../ui/primitives';
+import { Empty, tryAgainLabel } from '../ui/primitives';
 import { PreviewToolbar, usePreviewCommands } from './controls';
 import { usePreviewState } from './state';
 import './modules/inspection.css';
@@ -222,7 +222,7 @@ export function HexView({ context }: { context: PreviewContext }) {
       () => [
         {
           id: 'hex-go-to',
-          label: 'Go to offset',
+          label: 'Go to Offset',
           aliases: ['goto', 'offset'],
           run: () => field.current?.focus(),
         },
@@ -270,9 +270,9 @@ export function HexView({ context }: { context: PreviewContext }) {
       )}
       {failed && (
         <p className="inline-warning" role="alert">
-          Part of the file could not be read.{' '}
+          Part of the file couldn't be read.{' '}
           <button type="button" onClick={retry}>
-            Try again
+            {tryAgainLabel}
           </button>
         </p>
       )}

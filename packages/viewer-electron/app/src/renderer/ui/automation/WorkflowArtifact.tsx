@@ -93,5 +93,5 @@ export function WorkflowArtifact({ value }: { value: z.infer<typeof workflowArti
       </div>
     );
   }
-  return <p className="muted workflow-receipt">Completed task receipt saved.</p>;
+  return <p className="muted workflow-receipt">Saved a record of the finished task.</p>;
 }

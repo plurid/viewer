@@ -57,6 +57,7 @@ export const requirementClaimSchema = z
       .regex(/^S[1-9]\d{0,2}$/)
       .optional(),
     label: z.string().max(120).optional(),
+    // eslint-disable-next-line no-restricted-syntax -- a stored axis value, not shown text
     axis: z.enum(['x', 'y', 'centre']).nullable().optional(),
   })
   .strict();
@@ -221,6 +222,7 @@ function sourceValues(claim: RequirementClaim, quote: string, text: string): num
   };
   switch (claim.kind) {
     case 'pitch':
+      // eslint-disable-next-line no-restricted-syntax -- documents spell it both ways
       labeled('pitch|centre[ -]to[ -]centre|center[ -]to[ -]center');
       break;
     case 'diameter':

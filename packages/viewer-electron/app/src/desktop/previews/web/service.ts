@@ -148,7 +148,10 @@ export class WebPreviews {
               id,
             );
             if (response.status !== 200)
-              throw new WebPreviewError(response.status, 'HTML preview unavailable.');
+              throw new WebPreviewError(
+                response.status,
+                'This HTML preview has closed. Open the file again.',
+              );
             signal.throwIfAborted();
             if (
               this.previews.size >= webLimits.previews ||
@@ -276,7 +279,8 @@ export class WebPreviews {
       const url = new URL(request.url);
       const capability = htmlCapability(request.url);
       const grant = capability ? this.previews.get(capability) : undefined;
-      if (!grant) throw new WebPreviewError(404, 'HTML preview unavailable.');
+      if (!grant)
+        throw new WebPreviewError(404, 'This HTML preview has closed. Open the file again.');
       const origin = request.headers.get('origin');
       if (origin && origin !== 'null')
         throw new WebPreviewError(403, 'Cross-origin preview request.');
@@ -455,7 +459,7 @@ export class WebPreviews {
   private record(owner: number, id: string): ServerRecord {
     const record = this.servers.get(id);
     if (!record || record.owner !== owner)
-      throw new WebPreviewError(404, 'This local server is unavailable.');
+      throw new WebPreviewError(404, 'This local server has stopped. Start it again.');
     return record;
   }
   get(owner: number, id: string): LocalServer {

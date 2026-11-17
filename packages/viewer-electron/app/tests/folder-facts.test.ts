@@ -56,6 +56,57 @@ class FakeWorker implements OwnedWorker<FolderFactsReply> {
 }
 
 describe('folder facts review regressions', () => {
+  it('second round: quarantines the containing folder after a read timeout', async () => {
+    vi.useFakeTimers();
+    const service = new FolderFacts('worker.cjs', { worker: () => new FakeWorker() });
+    const slow = service.read('/slow/package.json', 100);
+    await vi.advanceTimersByTimeAsync(151);
+    expect(await slow).toEqual({ ok: false, reason: 'timeout' });
+    const sibling = service.read('/slow/Makefile', 100);
+    await vi.advanceTimersByTimeAsync(151);
+    expect(await sibling).toEqual({ ok: false, reason: 'quarantined' });
+    service.close();
+  });
+
+  it('second round: bounds stuck threads by mount while other mounts continue through the live worker', async () => {
+    vi.useFakeTimers();
+    const workers: FakeWorker[] = [];
+    const releases: (() => void)[] = [];
+    const service = new FolderFacts('worker.cjs', {
+      mounts: () => ['/Users/sample/mnt/nas'],
+      worker: () => {
+        const worker = new FakeWorker();
+        worker.terminate.mockImplementation(
+          () =>
+            new Promise<number>((resolve) => {
+              releases.push(() => resolve(0));
+            }),
+        );
+        workers.push(worker);
+        return worker;
+      },
+    });
+    for (const folder of ['/Users/sample/mnt/nas/a', '/Users/sample/mnt/nas/b']) {
+      const pending = service.probe(folder);
+      await vi.advanceTimersByTimeAsync(151);
+      expect(await pending).toEqual({ ok: false, reason: 'timeout' });
+    }
+    const elsewhere = service.read('/Users/sample/code/site/package.json', 100);
+    expect(workers).toHaveLength(3);
+    workers.at(-1)!.answer();
+    expect(await elsewhere).toMatchObject({ ok: true });
+    const refused = service.probe('/Users/sample/mnt/nas/c');
+    await vi.advanceTimersByTimeAsync(151);
+    expect(await refused).toEqual({ ok: false, reason: 'busy' });
+    releases[0]!();
+    await Promise.resolve();
+    const recovered = service.probe('/Users/sample/mnt/nas/c');
+    workers.at(-1)!.answer();
+    expect(await recovered).toMatchObject({ ok: true });
+    service.close();
+    for (const release of releases) release();
+  });
+
   it('quarantines only the stalled internal folder and descendants, keeping siblings available', async () => {
     vi.useFakeTimers();
     const workers: FakeWorker[] = [];
@@ -218,6 +269,19 @@ describe('folder facts review regressions', () => {
 });
 
 describe('folder facts filesystem operations', () => {
+  it('checks a cached root identity without enumerating or reading its markers', async () => {
+    await writeFile(path.join(root, 'package.json'), '{"name":"sample"}');
+    const before = vi.mocked(opendirSync).mock.calls.length;
+    const opens = vi.mocked(openSync).mock.calls.length;
+    const identity = probeFolder(root, root, new Set(), true);
+    expect(identity).toMatchObject({ ok: true, path: root, markers: [], capped: false });
+    expect(opendirSync).toHaveBeenCalledTimes(before);
+    expect(openSync).toHaveBeenCalledTimes(opens);
+    const complete = probeFolder(root);
+    if (!identity.ok || !complete.ok) throw new Error('Expected folder identities.');
+    expect(identity.identity).toEqual(complete.identity);
+    expect(complete.markers).toContain('package.json');
+  });
   it('refuses non-regular or oversized paths before opening and uses nonblocking no-follow opens', async () => {
     const file = path.join(root, 'sample');
     await writeFile(file, 'sample');
@@ -357,6 +421,9 @@ describe('folder facts scheduling', () => {
     const service = new FolderFacts('unused.cjs', { worker: () => worker });
     try {
       expect(await service.read(path.join(root, 'package.json'), 1000)).toMatchObject({ ok: true });
+      const identity = await service.identity(root);
+      expect(identity).toMatchObject({ ok: true, markers: [] });
+      expect(identity).not.toHaveProperty('package');
       expect(await service.probe(root)).toMatchObject({ ok: true, package: { name: 'sample' } });
     } finally {
       service.close();

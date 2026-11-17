@@ -117,7 +117,7 @@ describe('notebook preview', () => {
   it('shows invalid and oversized notebooks as text with a note', async () => {
     const invalid = show(NotebookPreview, 'broken.ipynb', '{"cells": [');
     await waitFor(() =>
-      expect(invalid.container.textContent).toContain('This notebook could not be read.'),
+      expect(invalid.container.textContent).toContain("Viewer couldn't read this notebook."),
     );
     await waitFor(() => expect(invalid.getByLabelText('File text')).toBeTruthy());
     cleanup();
@@ -125,7 +125,7 @@ describe('notebook preview', () => {
       <NotebookPreview {...context('large.ipynb', notebook, { truncated: true })} />,
     );
     await waitFor(() =>
-      expect(large.container.textContent).toContain('larger than the 4 MB preview limit'),
+      expect(large.container.textContent).toContain('Notebooks over 4 MB show as text.'),
     );
   });
 });

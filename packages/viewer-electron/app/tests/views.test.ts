@@ -62,9 +62,9 @@ describe('views', () => {
     expect(defaultShortcuts['bookmark.save.3']).toBe('Ctrl+Cmd+Alt+3');
     expect(defaultShortcuts['bookmark.3']).toBe('Cmd+Alt+3');
     expect(find('bookmark.3')!.when(context)).toBe(false);
-    expect(find('bookmark.save.3')!.label).toBe('Save view as 3');
+    expect(find('bookmark.save.3')!.label).toBe('Save View as 3');
     await find('bookmark.save.3')!.run(context);
-    expect(find('bookmark.save.3')!.label).toBe('Replace view 3 with this one');
+    expect(find('bookmark.save.3')!.label).toBe('Replace View 3 with This One');
     expect(find('bookmark.3')!.when(context)).toBe(true);
     await find('bookmark.3')!.run(context);
     expect(flights).toEqual(['3']);
@@ -72,7 +72,7 @@ describe('views', () => {
   it('offers each named view, and Views… once there is one', async () => {
     expect(find('bookmark-manage')!.when(context)).toBe(false);
     views = [{ name: 'Overview', label: 'Overview' }];
-    expect(find('bookmark:Overview')!.label).toBe('Go to view “Overview”');
+    expect(find('bookmark:Overview')!.label).toBe('Go to View “Overview”');
     expect(find('bookmark-manage')!.when(context)).toBe(true);
     await find('bookmark-save')!.run(context);
     expect(actions.viewDialog).toHaveBeenCalledWith('save');

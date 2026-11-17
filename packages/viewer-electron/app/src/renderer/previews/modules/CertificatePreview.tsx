@@ -16,7 +16,9 @@ import {
   nameText,
 } from '../../../domain/previews/keys/certificates';
 import { errorMessage } from '../../../domain/errors';
-import { Empty, Loading } from '../../ui/primitives';
+import { Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
 import { choosePreview, previewModules } from '../registry';
@@ -50,8 +52,6 @@ const keySize = (key: KeyDescription | undefined) =>
   key?.bits ? `${key.bits.toLocaleString()} bits` : undefined;
 /** "CERTIFICATE REQUEST" as "Certificate request". */
 const labelText = (label: string) => label.charAt(0) + label.slice(1).toLowerCase();
-const plural = (count: number, one: string, many: string) =>
-  `${count.toLocaleString()} ${count === 1 ? one : many}`;
 const privateNote = 'This file holds a private key. Viewer shows only its type and size.';
 /** Scrolls to another card of the same file. */
 function CardLink({ to, children }: { to: string; children: ReactNode }) {
@@ -310,7 +310,15 @@ function HandedOn(context: PreviewContext) {
       live = false;
     };
   }, [entry]);
-  if (failed) return <Empty icon="warning" title="Preview unavailable" detail={failed} />;
+  if (failed)
+    return (
+      <PreviewFailure
+        context={context}
+        icon="warning"
+        title="Can't show this file"
+        detail={failed}
+      />
+    );
   return Preview ? <Preview {...context} /> : <Loading />;
 }
 
@@ -338,14 +346,14 @@ export default function CertificatePreview(context: PreviewContext) {
       () => [
         {
           id: 'view-source',
-          label: source ? 'Show certificates' : 'Show source',
+          label: source ? 'Show Certificates' : 'Show Source',
           aliases: ['vs'],
           available: textual,
           run: () => setSource((value) => !value),
         },
         {
           id: 'hex',
-          label: 'Show as hex',
+          label: 'Show as Hex',
           aliases: ['hex', 'bytes'],
           available: bytes && !!showHex,
           run: () => showHex?.(),
@@ -355,8 +363,16 @@ export default function CertificatePreview(context: PreviewContext) {
     ),
   );
   if (inspection.status === 'loading') return <Loading label="Reading certificate…" />;
+  // a file Viewer could not read may hold a private key, so its failure offers no bytes
   if (inspection.status === 'failed')
-    return <Empty icon="warning" title="The file could not be read" detail={inspection.message} />;
+    return (
+      <PreviewFailure
+        context={{ resource: context.resource, retry: context.retry }}
+        icon="warning"
+        title="Can't read this file"
+        detail={inspection.message}
+      />
+    );
   const read = inspection.file;
   if (read.encoding === 'text') return <TextPreview {...context} />;
   if (read.encoding === 'other') return <HandedOn {...context} />;
@@ -406,7 +422,7 @@ export default function CertificatePreview(context: PreviewContext) {
         )}
         {bytes && showHex && (
           <button type="button" onClick={showHex}>
-            Show as hex
+            Show as Hex
           </button>
         )}
         <span className="toolbar-spacer" />

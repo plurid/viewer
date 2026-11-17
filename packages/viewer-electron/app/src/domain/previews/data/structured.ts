@@ -4,6 +4,7 @@ import { parseAllDocuments } from 'yaml';
 import { xmlPlistValue } from './plist';
 import { parseXML, type XMLNode } from './xml';
 import { errorMessage } from '../../errors';
+import { plural } from '../../plural';
 
 /** Map data is JSON (GeoJSON, TopoJSON) or XML (GPX tracks, KML places). */
 const xmlFormats = ['xml', 'gpx', 'kml'];
@@ -50,8 +51,7 @@ export function inspectStructured(
 ): StructuredData {
   const result: StructuredData = { nodes: [], roots: [], limited: false };
   try {
-    if (text.length > 1_000_000)
-      throw new Error('Tree inspection is limited to 1 MB. Use Source to read this file.');
+    if (text.length > 1_000_000) throw new Error('Files over 1 MB show as text only.');
     if (xmlFormats.includes(extension)) return inspectXMLTree(text, maximum);
     let values: unknown[];
     if (extension === 'yaml' || extension === 'yml') {
@@ -61,7 +61,7 @@ export function inspectStructured(
         logLevel: 'error',
       });
       if (documents.length > 100)
-        throw new Error('Tree inspection is limited to 100 YAML documents.');
+        throw new Error('Files with over 100 YAML documents show as text only.');
       values = documents.map((document) => {
         if (document.errors[0]) throw document.errors[0];
         return document.toJS({ maxAliasCount: 100 });
@@ -139,7 +139,15 @@ export function inspectStructured(
 }
 
 function inspectXMLTree(text: string, maximum: number): StructuredData {
-  const root = parseXML(new TextEncoder().encode(text), maximum);
+  let root: XMLNode;
+  try {
+    root = parseXML(new TextEncoder().encode(text), maximum);
+  } catch (error) {
+    // a file too large for the reader is not a broken file: it reads as text
+    if (error instanceof Error && error.message.endsWith('than Viewer reads.'))
+      throw new Error('XML this large shows as text only.', { cause: error });
+    throw error;
+  }
   const result: StructuredData = { format: 'xml', nodes: [], roots: [], limited: false };
   const add = (
     value: XMLNode | string,
@@ -161,7 +169,7 @@ function inspectXMLTree(text: string, maximum: number): StructuredData {
       depth,
       kind: element ? 'object' : 'value',
       summary: element
-        ? `${Object.keys(value.attributes).length} attributes · ${value.children.length} children`
+        ? `${plural(Object.keys(value.attributes).length, 'attribute')} · ${plural(value.children.length, 'child', 'children')}`
         : JSON.stringify(value).slice(0, 500),
       children: [],
     };

@@ -59,10 +59,10 @@ type CheckpointList = Extract<CheckpointReply, { records: CheckpointRecord[] }>;
 type CheckpointRestore = Extract<CheckpointReply, { jobs: string[] }>;
 const actionStart = (request: ActionRequest) => window.viewer.actionStart(request);
 const actionGet = (id: string) => window.viewer.actionGet(id);
-/** Presses Apply 2 changes: false when it is missing or disabled. */
+/** Presses Apply 2 Changes: false when it is missing or disabled. */
 function applyChanges() {
   const button = [...document.querySelectorAll<HTMLButtonElement>('.task-dialog button')].find(
-    (button) => /^Apply 2 changes$/.test(button.textContent.trim()),
+    (button) => /^Apply 2 Changes$/.test(button.textContent.trim()),
   );
   if (!button || button.disabled) return false;
   button.click();

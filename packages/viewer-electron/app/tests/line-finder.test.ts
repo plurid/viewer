@@ -145,6 +145,7 @@ it('shows a smart row’s line in the ordinary palette', async () => {
   await waitFor(() => expect(view.getAllByRole('option').length).toBeGreaterThan(0));
   // once: the smart row's own source is not listed again among the commands
   expect(view.getAllByRole('option').map((row) => row.textContent)).toEqual([
-    'New folder “Drafts”:mkdir Drafts · /fixtures',
+    // the folder is home here, which a row's text names as ~
+    'New Folder “Drafts”:mkdir Drafts · ~',
   ]);
 });

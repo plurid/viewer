@@ -45,7 +45,7 @@ export function saveCollection(value: Collection) {
 }
 export function addCollectionPane(collectionID: string): string {
   const collection = activeWorkspace().collections?.find((value) => value.id === collectionID);
-  if (!collection) throw new Error('This collection is unavailable.');
+  if (!collection) throw new Error('This collection was deleted.');
   if (activeWorkspace().panes.length >= 200)
     throw new Error('Close a plane before opening another.');
   const [source] = collection.sources;

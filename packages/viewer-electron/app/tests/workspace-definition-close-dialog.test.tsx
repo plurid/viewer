@@ -60,11 +60,11 @@ it.each([0, 2])(
     );
     if (shells) {
       await waitFor(() => expect(view.getByText(/Its 2 terminals stop/)).toBeTruthy());
-      fireEvent.click(view.getByRole('button', { name: 'Close workspace' }));
+      fireEvent.click(view.getByRole('button', { name: 'Close Workspace' }));
     }
     await waitFor(() =>
       expect(view.getByText(/^Close “Workspace”\?/).textContent).toContain(
-        'Viewer cannot remember its planes: the memory file must be repaired first.',
+        'Viewer can’t remember its planes: the memory file must be repaired first.',
       ),
     );
     expect(done).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ it.each([0, 2])(
       kind: 'close',
       workspaceID: workspace.id,
     });
-    fireEvent.click(view.getByRole('button', { name: 'Close workspace' }));
+    fireEvent.click(view.getByRole('button', { name: 'Close Workspace' }));
     await waitFor(() => expect(done).toHaveBeenCalledOnce());
     expect(window.viewer.workspaceDefinitions).toHaveBeenLastCalledWith({
       kind: 'close',

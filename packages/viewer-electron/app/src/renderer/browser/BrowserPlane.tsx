@@ -9,7 +9,7 @@ import {
 import type { BrowserPane as Pane } from '../../domain/contracts';
 import type { BrowserRequest, BrowserSnapshot } from '../../domain/previews/browser';
 import { browserAddress } from '../../domain/previews/browser';
-import { IconButton } from '../ui/primitives';
+import { IconButton, tryAgainLabel } from '../ui/primitives';
 import { measureLocalPoint, type Point } from '../ui/projectedResize';
 import { activeWorkspace, getState, updatePane } from '../state/store';
 import { localServerSessions } from '../local-servers/runtime';
@@ -232,11 +232,11 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
                 .catch((error) => setProblem(String(error.message || error)));
             }}
           >
-            Start server
+            Start Server
           </button>
           {workspace && (
             <button onClick={() => workspace.openServer(pane.serverRuntimeID!)}>
-              Server details
+              Server Details
             </button>
           )}
         </div>
@@ -250,7 +250,7 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
               action('reload');
             }}
           >
-            Retry
+            {tryAgainLabel}
           </button>
         </div>
       )}
@@ -409,9 +409,9 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
       <footer className="browser-status">
         <span>{snapshot?.loading ? 'Loading…' : snapshot?.title || 'Browser'}</span>
         <button disabled={!snapshot?.url} onClick={() => action('native-window')}>
-          Open page in window
+          Open Page in Window
         </button>
-        <button onClick={() => action('zoom-reset')}>
+        <button aria-label="Actual size" title="Actual size" onClick={() => action('zoom-reset')}>
           {Math.round((snapshot?.zoom ?? 1) * 100)}%
         </button>
       </footer>

@@ -27,7 +27,8 @@ export function indexedCoverage(
     if (root.status === 'indexing') reasons.push('Indexing is still in progress.');
     if (root.status === 'paused')
       reasons.push('Indexing is paused; saved results may be incomplete.');
-    if (root.status === 'offline') reasons.push('An indexed location is unavailable.');
+    if (root.status === 'offline')
+      reasons.push('An indexed location is offline, such as a disk that is not connected.');
     if (root.errors) reasons.push('Some files or folders could not be read.');
   }
   if (result.scanLimited)
@@ -36,7 +37,9 @@ export function indexedCoverage(
     const locations = request.root ? [request.root] : roots.map((root) => root.path);
     if (locations.some((location) => !contentRoots.some((root) => pathContains(root, location))))
       reasons.push('Document text is not enabled for every location in this search.');
-    reasons.push('Document text covers supported formats and bounded extracts, without OCR.');
+    reasons.push(
+      'Document text covers supported formats and the first part of long documents, not scanned text.',
+    );
   }
   const state = unavailable ? 'unavailable' : reasons.length ? 'partial' : 'complete';
   return {

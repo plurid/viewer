@@ -8,21 +8,19 @@ import type {
 import type { PreviewContext } from '../contracts';
 import type { ParsedText } from '../ParsedDocument';
 import { notebookLimits, parseNotebook } from '../../../domain/previews/data/notebook';
+import { plural } from '../../../domain/plural';
 import { ParsedDocument } from '../ParsedDocument';
 import { HighlightedCode, MarkdownContent } from '../Markdown';
 import { usePreviewScroll } from '../scroll';
 import { Disclosure } from '../../ui/Disclosure';
 
-const plural = (count: number, one: string, many: string) =>
-  `${count.toLocaleString()} ${count === 1 ? one : many}`;
-
 function readNotebook(read: ResourceRead): ParsedText<Notebook> {
   if (read.truncated)
     return {
-      notice: 'This notebook is larger than the 4 MB preview limit, so it is shown as text.',
+      notice: 'Notebooks over 4 MB show as text.',
     };
   const reading = parseNotebook(read.text);
-  if (!reading.ok) return { notice: `This notebook could not be read. ${reading.reason}` };
+  if (!reading.ok) return { notice: `Viewer couldn't read this notebook. ${reading.reason}` };
   const { notebook } = reading;
   return {
     document: notebook,

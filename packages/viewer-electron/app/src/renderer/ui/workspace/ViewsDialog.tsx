@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { WorkspaceController } from '../../workspace/context';
 import { Dialog } from '../primitives';
+import { useShortcutGlyphs } from '../../keys/hints';
 
 /**
  * VIEWS: the space's saved camera positions, to fly to, rename or remove. Views 1–9
@@ -17,6 +18,9 @@ export function ViewsDialog({
   const [renaming, setRenaming] = useState<{ name: string; text: string } | null>(null);
   const views = workspace.bookmarks();
   const changed = () => refresh((value) => value + 1);
+  // the keys that save views 1 and 9, as this window's shortcuts have them
+  const saveFirst = useShortcutGlyphs('bookmark.save.1');
+  const saveLast = useShortcutGlyphs('bookmark.save.9');
   return (
     <Dialog title="Views" onClose={onClose} className="views-dialog">
       {views.length ? (
@@ -71,7 +75,11 @@ export function ViewsDialog({
         </ul>
       ) : (
         <div className="dialog-copy">
-          <p>No views yet: ⌃⌥⌘1–9 saves the camera as view 1–9, or use Save view….</p>
+          <p>
+            No views yet. Choose Save View…
+            {saveFirst && saveLast ? `, or press ${saveFirst} to ${saveLast},` : ''} to keep the
+            camera as a view.
+          </p>
         </div>
       )}
       <footer>

@@ -117,7 +117,7 @@ it('stays on the anchored page while its quote lists the matching pages', async 
   const { view, page } = open({ kind: 'pdf', page: 3 });
   await waitFor(() =>
     expect(view.container.querySelector('.pdf-search-results')?.textContent).toContain(
-      '2 matching pages',
+      'Found on 2 pages',
     ),
   );
   expect(page()).toBe('3');
@@ -220,7 +220,7 @@ it('draws again only once a cancelled draw has let go of the canvas', async () =
   });
   await waitFor(() => expect(values.get('pdf.view')).toBe(2.94));
   await new Promise((resolve) => setTimeout(resolve, 200));
-  expect(view.container.textContent).not.toContain('PDF could not be displayed');
+  expect(view.container.textContent).not.toContain("Can't show this PDF");
   expect(view.container.textContent).not.toContain('Cannot use the same canvas');
   expect(draws).toBeGreaterThan(1);
 });

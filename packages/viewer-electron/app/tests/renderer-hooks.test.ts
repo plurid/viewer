@@ -242,7 +242,7 @@ describe('duplicate finder dialog', () => {
       window.dispatchEvent(new CustomEvent('viewer:duplicates', { detail: ['/Photos'] }));
     });
     await act(async () => {
-      fireEvent.click(screen.getByText('Find duplicates', { selector: 'button' }));
+      fireEvent.click(screen.getByText('Find Duplicates', { selector: 'button' }));
     });
     const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
     expect(boxes.map((box) => box.checked)).toEqual([false, false]);
@@ -286,9 +286,9 @@ describe('collision prompt', () => {
       setOperationsOpen(true);
     });
     render(createElement(OperationsPanel));
-    expect(screen.getByText('A new item cannot replace an existing one.')).toBeTruthy();
+    expect(screen.getByText('A new item can’t replace an existing one.')).toBeTruthy();
     expect(
-      screen.getByText('The existing item contains the source, so it cannot be replaced.'),
+      screen.getByText('The existing item holds what you’re moving, so it can’t be replaced.'),
     ).toBeTruthy();
     expect(screen.queryByText(/is a folder/)).toBeNull();
     expect(screen.queryByText('Replace')).toBeNull();

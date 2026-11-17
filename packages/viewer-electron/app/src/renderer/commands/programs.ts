@@ -71,7 +71,7 @@ export function programCommands(
   return [
     {
       id: 'agent-sessions',
-      label: 'Agent sessions…',
+      label: 'Agent Sessions…',
       group: 'Workspace',
       icon: 'command',
       aliases: ['agent conversations', 'codex sessions', 'claude sessions'],
@@ -80,7 +80,7 @@ export function programCommands(
     },
     {
       id: 'new-task-from-branch',
-      label: 'New task from branch…',
+      label: 'New Task from Branch…',
       group: 'Workspace',
       icon: 'folder',
       aliases: ['branch task', 'task worktree', 'new development task'],
@@ -98,7 +98,7 @@ export function programCommands(
     },
     {
       id: 'new-task-area',
-      label: 'New task area…',
+      label: 'New Task Area…',
       group: 'Workspace',
       icon: 'tasks',
       aliases: ['task', 'branch workspace', 'task context'],
@@ -107,7 +107,7 @@ export function programCommands(
     },
     ...(['note', 'checklist'] as const).map((kind): CommandDefinition => ({
       id: 'new-' + kind + '-plane',
-      label: kind === 'note' ? 'New note plane' : 'New checklist plane',
+      label: kind === 'note' ? 'New Note Plane' : 'New Checklist Plane',
       group: 'Text',
       icon: kind === 'note' ? 'text' : 'check',
       aliases: [kind, 'markdown'],
@@ -147,7 +147,7 @@ export function programCommands(
     })),
     {
       id: 'pdf-tools',
-      label: 'PDF tools…',
+      label: 'PDF Tools…',
       group: 'Files',
       icon: 'file',
       aliases: ['merge pdf', 'split pdf', 'extract pages', 'rotate pages', 'reorder pages'],
@@ -186,7 +186,7 @@ export function programCommands(
     },
     {
       id: 'edit-media',
-      label: 'Edit media…',
+      label: 'Edit Media…',
       group: 'Files',
       icon: 'video',
       aliases: ['trim', 'join clips', 'extract audio', 'mute video', 'mix audio', 'media editor'],
@@ -213,7 +213,7 @@ export function programCommands(
     ...checkResultCommands(workspace),
     {
       id: 'image-tools',
-      label: 'Image tools…',
+      label: 'Image Tools…',
       group: 'Images',
       icon: 'image',
       aliases: ['webp', 'avif', 'resize', 'crop', 'convert images', 'quality'],
@@ -230,7 +230,7 @@ export function programCommands(
     },
     {
       id: 'open-browser-plane',
-      label: 'Open web page…',
+      label: 'Open Web Page…',
       group: 'Workspace',
       icon: 'external',
       aliases: ['browser', 'website', 'url', 'web page'],
@@ -239,7 +239,7 @@ export function programCommands(
     },
     {
       id: 'command-progress',
-      label: 'Command progress',
+      label: 'Command Progress',
       group: 'Terminal',
       icon: 'list',
       aliases: ['running commands', 'command output', 'background commands'],
@@ -250,7 +250,7 @@ export function programCommands(
     },
     {
       id: 'run-command',
-      label: 'Run command…',
+      label: 'Run Command…',
       group: 'Terminal',
       icon: 'command',
       aliases: ['shell command', 'run in folder', 'execute', 'git init'],
@@ -277,7 +277,7 @@ export function programCommands(
     },
     {
       id: 'open-terminal-plane',
-      label: 'Open terminal plane',
+      label: 'Open Terminal Plane',
       group: 'Terminal',
       icon: 'terminal',
       primary: true,
@@ -287,7 +287,7 @@ export function programCommands(
     },
     {
       id: 'new-terminal-plane',
-      label: 'New terminal plane',
+      label: 'New Terminal Plane',
       group: 'Terminal',
       icon: 'terminal',
       aliases: ['nt', 'root terminal', 'new terminal', 'terminal', 'shell'],
@@ -319,7 +319,7 @@ export function programCommands(
     },
     {
       id: 'open-config',
-      label: 'Open configuration file',
+      label: 'Open Configuration File',
       group: 'App',
       icon: 'settings',
       aliases: ['config', 'jsonc', 'oc'],
@@ -363,7 +363,7 @@ export function programCommands(
                   (pane) => pane.id === captured.paneID && pane.path === captured.panePath,
                 )
               )
-                throw new Error('The originating plane changed. The workflow stopped.');
+                throw new Error('The plane this started from changed, so the workflow stopped.');
               try {
                 if (step.kind === 'action') {
                   const child = actions.find((action) => action.id === step.actionID);
@@ -372,7 +372,9 @@ export function programCommands(
                     !['shell', 'executable'].includes(child.executor.kind) ||
                     !actionAvailable(child, captured)
                   )
-                    throw new Error('The command is unavailable in the captured folder.');
+                    throw new Error(
+                      'This command doesn’t apply to the folder the workflow started in.',
+                    );
                   await executeAction(child, captured, values);
                 } else {
                   const result = line

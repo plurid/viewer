@@ -6,7 +6,8 @@ import type { TextPreviewProps } from './modules/TextPreview';
 import TextPreview from './modules/TextPreview';
 import { PreviewToolbar, usePreviewCommands } from './controls';
 import { usePreviewState } from './state';
-import { Empty, Loading } from '../ui/primitives';
+import { Loading } from '../ui/primitives';
+import { PreviewFailure } from './PreviewFailure';
 import { editingPlane, registerEditingPlane } from '../editing/planes';
 import { continueEditing, continuesEditing } from '../editing/sessions';
 import { activeWorkspace, report, useViewer } from '../state/store';
@@ -125,7 +126,7 @@ export function ParsedDocument<T>({
     () => [
       {
         id: 'view-source',
-        label: source ? `Show ${name.toLowerCase()}` : 'Show source',
+        label: source ? `Show ${name}` : 'Show Source',
         aliases: ['vs'],
         run: () => choose(!source),
       },
@@ -141,7 +142,15 @@ export function ParsedDocument<T>({
     () => ({ ...context, commands: undefined, onEditingChange: editingChanged }),
     [context, editingChanged],
   );
-  if (error) return <Empty icon="warning" title="The file could not be read" detail={error} />;
+  if (error)
+    return (
+      <PreviewFailure
+        context={context}
+        icon="warning"
+        title="Can't read this file"
+        detail={error}
+      />
+    );
   if (!read) return <Loading />;
   if (document === undefined)
     return (

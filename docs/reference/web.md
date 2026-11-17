@@ -11,7 +11,7 @@ built-in static server.
 
 ## Browser planes
 
-**Open web page…** asks for a **Web address** and opens a browser plane. A task's **+ Browser** and
+**Open Web Page…** asks for a **Web address** and opens a browser plane. A task's **+ Browser** and
 a server's **Open in Viewer** open one too.
 
 | Address typed                                               | Opens                                                                     |
@@ -27,9 +27,9 @@ a server's **Open in Viewer** open one too.
 | **Reload page**, **Stop loading** | Reloads, or stops a load. A hung page's process is ended first. |
 | **Go**                            | Opens the address in the field.                                 |
 | **Open in default browser**       | Opens the current address in your default browser.              |
-| **Open page in window**           | Opens the page in a separate Viewer window.                     |
+| **Open Page in Window**           | Opens the page in a separate Viewer window.                     |
 | Zoom (the **%** button)           | Shows the page zoom; choosing it resets to 100%.                |
-| **Retry**                         | Reloads after a failed load.                                    |
+| **Try Again**                     | Reloads after a failed load.                                    |
 
 With the page focused, **⌘C**, **⌘V**, **⌘X** and **⌘A** edit, **⌘R** reloads, **⌘+** or **⌘=**
 zooms in, **⌘-** zooms out and **⌘0** resets. Zoom runs from 50% to 300% in steps of 10%.
@@ -51,7 +51,7 @@ site works or keeps a sign-in depends on the site.
 Click the page to scroll it and type into it, as in any plane. Until then, scrolling over it moves
 the space. A pinch zooms the space, not the page.
 
-**Open page in window** opens a 1000 × 740 window with the page's own keyboard focus and
+**Open Page in Window** opens a 1000 × 740 window with the page's own keyboard focus and
 accessibility tree, for a screen reader. It uses the same browser profile, so sign-ins carry over;
 form values and scroll position do not. The plane stays open. Up to 8 page windows are open at once,
 and they do not reopen after quitting.
@@ -75,8 +75,8 @@ without scripts. For a site that needs a server, a build or a sign-in, use a bro
 
 ## Local servers
 
-**Start local server** (in a folder, or with one folder selected) opens a server plane and starts
-serving that folder. **Local servers…** lists this window's servers with **Show plane** and
+**Start Local Server** (in a folder, or with one folder selected) opens a server plane and starts
+serving that folder. **Local Servers…** lists this window's servers with **Show Plane** and
 **Stop**.
 
 | Control                                        | Does                                                                                                            |
@@ -113,9 +113,9 @@ start a project's own server with [Run command… or a terminal plane](terminals
 address in a browser plane.
 
 A listener belongs to its window, not its plane. Closing the plane keeps a running server; reopen it
-from **Local servers…**. Closing the window or quitting Viewer stops its servers. A saved server
+from **Local Servers…**. Closing the window or quitting Viewer stops its servers. A saved server
 plane restores stopped. When the server is stopped, a linked browser plane shows **The local server
-is stopped.** with **Start server** and **Server details**; after a restart it goes to the new
+is stopped.** with **Start Server** and **Server Details**; after a restart it goes to the new
 address and keeps its path.
 
 Agents cannot start servers or use a browser plane's sessions.

@@ -476,7 +476,7 @@ try {
       'Ten remaining planes',
     );
     await measure('ten-after-close-' + cycle);
-    for (let index = 0; index < closing.length; index += 1) await palette('Undo arrangement');
+    for (let index = 0; index < closing.length; index += 1) await palette('Undo Arrangement');
     await until(
       () => evaluate(countOf('.plane-controls')),
       (count) => count === 20,

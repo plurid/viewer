@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerURL from 'pdfjs-dist/build/pdf.worker.mjs?url';
-import { Empty, Loading } from '../ui/primitives';
+import { Failure, Loading } from '../ui/primitives';
 import type { Resource } from '../../domain/contracts';
 GlobalWorkerOptions.workerSrc = workerURL;
 
@@ -33,8 +33,7 @@ export function PDFPagePreview({
     setError('');
     setRendered(false);
     const timer = setTimeout(() => {
-      if (live)
-        setError('The page preview is taking longer than expected. Retry to load it again.');
+      if (live) setError('The page preview is taking longer than expected. Try again.');
     }, 15000);
     void (
       suppliedResource
@@ -84,7 +83,7 @@ export function PDFPagePreview({
           (file ?? suppliedResource?.entry.path)?.startsWith(event.path.replace(/\/$/, '') + '/'))
       ) {
         setPDF(undefined);
-        setError('File access changed. Retry after restoring access.');
+        setError('File access changed. Allow access again, then try again.');
         void task?.destroy();
       }
     });
@@ -142,13 +141,15 @@ export function PDFPagePreview({
           data-pdf-rotation={bitmap.rotate}
           hidden={!rendered || !!error}
           onLoad={() => setRendered(true)}
-          onError={() => setError('The page bitmap could not be displayed. Retry the preview.')}
+          onError={() => setError("Viewer couldn't show this page. Try again.")}
         />
       )}
       {error ? (
-        <Empty title="Page preview unavailable" detail={error}>
-          <button onClick={() => setAttempt((value) => value + 1)}>Retry preview</button>
-        </Empty>
+        <Failure
+          title="Can't show this page"
+          detail={error}
+          onRetry={() => setAttempt((value) => value + 1)}
+        />
       ) : (
         !rendered && <Loading label="Reading page…" />
       )}

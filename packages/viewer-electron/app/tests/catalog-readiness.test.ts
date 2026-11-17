@@ -138,10 +138,10 @@ describe('cold human command origin publication', () => {
       planeID: f.target().paneID,
     });
     await expect(f.invokeGit({ ...f.target(), rootID: 'another-root' })).rejects.toThrow(
-      'originating folder',
+      'folder or workspace this started from',
     );
     f.record.workspaceID = 'another-workspace';
-    await expect(f.invokeGit(f.target())).rejects.toThrow('originating folder');
+    await expect(f.invokeGit(f.target())).rejects.toThrow('folder or workspace this started from');
     expect(f.git).toHaveBeenCalledOnce();
   });
 

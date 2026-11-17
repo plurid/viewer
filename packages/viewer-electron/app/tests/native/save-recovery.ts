@@ -136,7 +136,7 @@ try {
   await connection!.evaluate(focus('.folder-explorer'));
   await actions!.key(' ', 'Space');
   await actions!.button('Open linked plane', '.quick-preview-dialog');
-  await actions!.palette('Edit text');
+  await actions!.palette('Edit Text');
   await actions!.text('.text-editing .cm-content', edited);
   const pane = await until(
     async () =>

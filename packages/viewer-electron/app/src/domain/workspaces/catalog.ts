@@ -32,6 +32,19 @@ export function linkedDefinition(space: Workspace, catalog?: DefinitionCatalog) 
   return catalog?.definitions.find((item) => definitionLinkMatches(space, item));
 }
 
+/**
+ * A definition that opens more than one folder plane at its root: several planes, a plane of
+ * another kind, tiling or its own look. Manage marks it Rich; the workspace offer names it.
+ */
+export function richDefinition(definition: WorkspaceDefinition): boolean {
+  return (
+    definition.planes.length > 1 ||
+    definition.planes[0]?.plane.kind !== 'folder' ||
+    !!definition.tiling ||
+    !!definition.look
+  );
+}
+
 export function definitionSourceNotice(
   space: Workspace,
   catalog?: DefinitionCatalog,
@@ -45,7 +58,7 @@ export function definitionSourceNotice(
     return catalog.found?.state === 'loading' ? undefined : 'Viewer no longer finds this folder.';
   }
   if (source.state === 'undecided')
-    return 'VS Code Project Manager is not in use. Choose Use VS Code projects in Manage workspaces to restore its projects.';
+    return 'VS Code Project Manager is not in use. Choose Use VS Code Projects in Manage Workspaces to restore its projects.';
   if (source.state === 'off')
     return 'VS Code Project Manager is not in use. Turn it on in Settings → Configuration → Workspace definitions.';
   if (source.state === 'absent' && source.enabled === undefined)

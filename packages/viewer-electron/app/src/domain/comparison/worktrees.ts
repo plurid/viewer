@@ -120,7 +120,9 @@ export function parseGitWorktrees(output: string): GitWorktreeRecord[] {
         !['worktree', 'HEAD', 'branch', 'bare', 'detached', 'locked', 'prunable'].includes(key) ||
         fields.has(key)
       )
-        throw new Error('Unrecognised or repeated Git worktree field.');
+        throw new Error(
+          'Git listed a worktree field Viewer doesn’t recognize, or listed one twice.',
+        );
       fields.set(key, value);
     }
     const location = fields.get('worktree');

@@ -4,6 +4,7 @@ import type { CommandRequest } from '../commands/registry';
 import type { CapturedTarget, CustomAction } from '../../domain/automation/actions';
 import { ActionParameters } from '../commands/ActionParameters';
 import type { FileEntry } from '../../domain/contracts';
+import { plural } from '../../domain/plural';
 import type { ImageExportPreset, PDFExportPreset } from '../../domain/operations/export-presets';
 import type { WorkspaceController } from '../workspace/context';
 import type { TaskWorkflowDraft } from '../../domain/command-line/task';
@@ -194,7 +195,7 @@ export function WindowDialogs({
         )}
         {dialog?.type === 'browser' && (
           <NameDialog
-            title="Open web page"
+            title="Open Web Page"
             label="Web address"
             maxLength={8192}
             action="Open"
@@ -260,7 +261,7 @@ export function WindowDialogs({
           workspaceDialog.kind !== 'manage' &&
           workspaceDialog.kind !== 'background' && (
             <NameDialog
-              title={workspaceDialog.kind === 'new' ? 'New workspace' : 'Rename workspace'}
+              title={workspaceDialog.kind === 'new' ? 'New Workspace' : 'Rename Workspace'}
               maxLength={100}
               initial={workspaceDialog.kind === 'rename' ? targetWorkspace?.name : ''}
               action={workspaceDialog.kind === 'new' ? 'Create' : 'Rename'}
@@ -283,13 +284,10 @@ export function WindowDialogs({
           >
             <div className="dialog-copy">
               <p>
-                Delete “{targetWorkspace.name}” and its {targetWorkspace.panes.length} open{' '}
-                {targetWorkspace.panes.length === 1 ? 'plane' : 'planes'}?
+                Delete “{targetWorkspace.name}” and its{' '}
+                {plural(targetWorkspace.panes.length, 'open plane')}?
               </p>
-              <p>
-                Your files and folders stay where they are. File operations continue. You can undo
-                this deletion during this session.
-              </p>
+              <p>You can undo this while this window stays open.</p>
             </div>
             <footer>
               <button disabled={busy} onClick={() => onClose()}>
@@ -306,14 +304,14 @@ export function WindowDialogs({
                     .finally(() => setBusy(false));
                 }}
               >
-                Delete workspace
+                Delete Workspace
               </button>
             </footer>
           </Dialog>
         )}
         {viewDialog === 'save' && (
           <NameDialog
-            title="Save view"
+            title="Save View"
             label="View name"
             maxLength={100}
             action="Save"
@@ -328,7 +326,7 @@ export function WindowDialogs({
         )}
         {profileDialog && (
           <NameDialog
-            title="Save profile as"
+            title="Save Profile As"
             label="Profile name"
             maxLength={100}
             action="Save"
@@ -343,7 +341,7 @@ export function WindowDialogs({
         )}
         {templateDialog && (
           <NameDialog
-            title="Save layout as template"
+            title="Save Layout as Template"
             label="Layout name"
             maxLength={100}
             action="Save"
@@ -361,7 +359,7 @@ export function WindowDialogs({
         )}
         {macroDraft && (
           <NameDialog
-            title="Save macro"
+            title="Save Macro"
             label="Macro name"
             initial="Macro"
             maxLength={100}
@@ -407,7 +405,7 @@ export function WindowDialogs({
         )}
         {shortcutDialog && (
           <NameDialog
-            title="Rename shortcut"
+            title="Rename Shortcut"
             initial={shortcutDialog.name}
             maxLength={200}
             action="Rename"
@@ -420,7 +418,7 @@ export function WindowDialogs({
         )}
         {connecting && (
           <NameDialog
-            title="Connect to server"
+            title="Connect to Server"
             label="Server address"
             maxLength={2048}
             initial="smb://"
@@ -431,7 +429,7 @@ export function WindowDialogs({
         )}
         {tagging && (
           <NameDialog
-            title="Find files with tag"
+            title="Find Files with Tag"
             label="Tag"
             action="Find"
             onClose={() => onClose()}

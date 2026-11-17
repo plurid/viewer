@@ -231,7 +231,7 @@ try {
       if (menu) await actions.key('Escape', 'Escape');
     };
     await neutralPress('[aria-label="View mode"]', true);
-    await neutralPress('[aria-label="Workspace"]', true);
+    await neutralPress('.workspace-switcher', true);
     await neutralPress('section[aria-label="Locations"] .sidebar-section-title', false);
     await actions.click('section[aria-label="Locations"] .sidebar-section-title');
     const divider = await evaluate(
@@ -316,7 +316,7 @@ try {
     );
     assert.equal(await readFile(file, 'utf8'), 'Retain this generated file.\n');
 
-    await actions.click('[aria-label="Workspace"]');
+    await actions.click('.workspace-switcher');
     await until(
       () => evaluate(exists('[data-menu-id="workspace:second"]')),
       Boolean,
@@ -383,7 +383,7 @@ try {
       Boolean,
       'Delete workspace review',
     );
-    await actions.button('Delete workspace', 'dialog[aria-label="Delete workspace?"]');
+    await actions.button('Delete Workspace', 'dialog[aria-label="Delete workspace?"]');
     await until(
       () => evaluate(exists('.workspace-catalog-list')),
       Boolean,
@@ -418,7 +418,7 @@ try {
     await actions.capture(path.join(app.evidenceDirectory, 'workspace-manager-compact.png'));
     await command('Emulation.clearDeviceMetricsOverride');
     await actions.key('Escape', 'Escape');
-    await actions.click('[aria-label="Workspace"]');
+    await actions.click('.workspace-switcher');
     await actions.click('[data-menu-id="workspace:second"]');
     await until(
       () => evaluate(pageCall(() => document.querySelector('.workspace-switcher')!.textContent)),
@@ -452,7 +452,7 @@ try {
       'Fixture collision remains pending',
     );
     await until(() => evaluate(exists('.operations-panel')), Boolean, 'Operations panel');
-    await actions.button('Clear all', '.operations-panel');
+    await actions.button('Clear Finished', '.operations-panel');
     await until(
       () => evaluate(pageCall(() => window.viewer.jobs())),
       (jobs) => !!jobs.find((job) => job.id === copied)?.dismissed,
@@ -478,13 +478,13 @@ try {
     if (await evaluate(exists('.operations-panel')))
       await actions.click('[aria-label="Close operations"]');
     await command('Page.reload', { ignoreCache: true });
-    await until(() => evaluate(exists('[aria-label="Workspace"]')), Boolean, 'Reloaded app');
+    await until(() => evaluate(exists('.workspace-switcher')), Boolean, 'Reloaded app');
     assert.equal(
       (await evaluate(pageCall(() => window.viewer.jobs()))).find((job) => job.id === copied)
         ?.dismissed,
       true,
     );
-    await actions.click('[aria-label="Workspace"]');
+    await actions.click('.workspace-switcher');
     assert.equal(
       await evaluate(
         pageCall(() =>

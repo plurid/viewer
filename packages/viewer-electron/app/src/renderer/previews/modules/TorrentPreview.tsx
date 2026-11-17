@@ -4,15 +4,15 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { PreviewContext } from '../contracts';
 import type { TorrentFacts } from '../../../domain/previews/data/torrent';
 import { formatBytes } from '../../../domain/files/entries';
-import { Empty, Loading } from '../../ui/primitives';
+import { Loading } from '../../ui/primitives';
+import { PreviewFailure } from '../PreviewFailure';
+import { plural } from '../../../domain/plural';
 import { PreviewToolbar } from '../controls';
 import { usePreviewScroll } from '../scroll';
 import { dateText, useInspected } from '../useInspected';
 import './inspection.css';
 
 const rowHeight = 28;
-const plural = (count: number, one: string, many: string) =>
-  `${count.toLocaleString()} ${count === 1 ? one : many}`;
 const versions: Readonly<Record<TorrentFacts['version'], string>> = {
   v1: 'BitTorrent v1',
   v2: 'BitTorrent v2',
@@ -82,7 +82,12 @@ export default function TorrentPreview(context: PreviewContext) {
   if (inspection.status === 'loading') return <Loading label="Reading torrent…" />;
   if (inspection.status === 'failed')
     return (
-      <Empty icon="warning" title="The torrent could not be read" detail={inspection.message} />
+      <PreviewFailure
+        context={context}
+        icon="warning"
+        title="Can't read this torrent"
+        detail={inspection.message}
+      />
     );
   const torrent = inspection.file;
   const addresses = (items: readonly string[]) =>

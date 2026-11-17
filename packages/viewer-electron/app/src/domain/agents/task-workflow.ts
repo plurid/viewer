@@ -53,7 +53,7 @@ export function selectAgentWorkspace(
     throw new Error(
       matches.length
         ? 'The workspace name is ambiguous. Use its ID.'
-        : 'That workspace is unavailable. Use workspace list.',
+        : 'No open workspace has that name or ID. Run workspace list to see them.',
     );
   return matches[0]!;
 }

@@ -92,7 +92,9 @@ export function searchPattern(source: string): SearchPattern {
   try {
     compiled = RE2JS.compile(RE2JS.translateRegExp(source), RE2JS.CASE_INSENSITIVE);
   } catch {
-    throw new Error('Use a valid RE2 name pattern. Lookaround and backreferences are unavailable.');
+    throw new Error(
+      'Use a valid RE2 name pattern. Lookaround and backreferences aren’t supported.',
+    );
   }
   const literal = requiredLiteral(source);
   if (!literal || !ascii.test(literal)) return compiled;

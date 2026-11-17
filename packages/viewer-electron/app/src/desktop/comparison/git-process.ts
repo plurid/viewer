@@ -86,7 +86,7 @@ export function gitOutput(
     child.on('close', (code) => {
       if (failure) reject(failure);
       else if (code !== 0 && !(code === 1 && difference))
-        reject(new Error(errors.trim().slice(0, 1000) || 'Git is unavailable.'));
+        reject(new Error(errors.trim().slice(0, 1000) || 'Git stopped without saying why.'));
       else resolve(Buffer.concat(chunks));
     });
   });

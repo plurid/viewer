@@ -307,7 +307,7 @@ try {
   const saved = async () =>
     JSON.parse(await readFile(path.join(profile, 'viewer-state-v1.json'), 'utf8')) as SavedState;
   await until(() => evaluate(exists('.folder-explorer')), Boolean, 'Folder');
-  await actions.palette('New task from branch');
+  await actions.palette('New Task from Branch');
   await actions.field('Branch task name', 'Generated branch task');
   await actions.field('New branch name', 'feature/generated-task');
   await actions.field('Worktree destination', checkout);
@@ -358,7 +358,7 @@ try {
     'Two review hunks',
   );
   await capture('hunk-review');
-  await actions.button('Stage hunk 1', '.git-review');
+  await actions.button('Stage Hunk 1', '.git-review');
   await until(
     async () => git(checkout, 'show', ':source.txt'),
     (text) => text === original.replace('line 2\n', 'first edit\n'),
@@ -379,7 +379,7 @@ try {
   );
   await evaluate(click('[aria-label="Review changes"]'));
   await actions.button('Staged', '.choice-menu');
-  await actions.button('Unstage hunk 1', '.git-review');
+  await actions.button('Unstage Hunk 1', '.git-review');
   await until(
     async () => git(checkout, 'show', ':source.txt'),
     (text) => text === original,
@@ -430,7 +430,7 @@ try {
     realpath,
   );
   await actions.palette('Generated branch task');
-  await actions.button('Attach conversation…', '.task-plane');
+  await actions.button('Attach Conversation…', '.task-plane');
   await actions.button('Attach', '.session-library');
   await until(
     () => evaluate(textOf('.session-reported-status')),
@@ -455,7 +455,7 @@ try {
     flag: 'wx',
   });
   await capture('agent-session');
-  await actions.button('Open current file: source.txt:2');
+  await actions.button('Open “source.txt:2”');
   await until(
     async () =>
       (await saved()).workspaces[0]?.panes.find(

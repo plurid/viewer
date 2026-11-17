@@ -20,25 +20,17 @@ import { ChoiceButton } from '../ChoiceMenu';
 import type { WatchRule } from '../../../domain/automation/watch-rules';
 import { errorMessage } from '../../../domain/errors';
 import { sendWindowEvent, useWindowEvent } from '../../app/window-events';
-const statusLabel: Record<WorkflowRun['status'] | WorkflowRun['steps'][number]['status'], string> =
-  {
-    running: 'Running',
-    paused: 'Paused',
-    pending: 'Pending',
-    completed: 'Completed',
-    failed: 'Failed',
-    cancelled: 'Cancelled',
-    'waiting-review': 'Needs review',
-  };
+import { statusLabel } from '../status-labels';
+import { plural } from '../../../domain/plural';
 
 function documentReply(reply: WorkflowReply): WorkflowDocument {
   if (!reply || typeof reply !== 'object' || Array.isArray(reply) || !('root' in reply))
-    throw new Error('The workflow definition could not be opened.');
+    throw new Error('Viewer couldn’t open the workflow definition.');
   return reply;
 }
 function runReply(reply: WorkflowReply): WorkflowRun {
   if (!reply || typeof reply !== 'object' || Array.isArray(reply) || !('status' in reply))
-    throw new Error('The workflow run could not be opened.');
+    throw new Error('Viewer couldn’t open the workflow run.');
   return reply;
 }
 export function WorkflowControls() {
@@ -111,7 +103,7 @@ export function WorkflowControls() {
     const refresh = async () => {
       try {
         const list = await window.viewer.workflow({ kind: 'list' });
-        if (!Array.isArray(list)) throw new Error('Workflow history is unavailable.');
+        if (!Array.isArray(list)) throw new Error('Viewer couldn’t read the workflow history.');
         if (alive) setRuns(list);
         if (selected) {
           const result = runReply(await window.viewer.workflow({ kind: 'get', id: selected }));
@@ -228,7 +220,7 @@ export function WorkflowControls() {
       <div className="dialog-body workflow-body">
         <div className="settings-actions">
           <button disabled={busy} onClick={() => void perform(() => choose('open'))}>
-            Open workflow…
+            Open Workflow…
           </button>
           <label>
             New workflow
@@ -296,7 +288,7 @@ export function WorkflowControls() {
                       })
                     }
                   >
-                    Choose folder…
+                    Choose Folder…
                   </button>
                 </div>
               ))}
@@ -326,16 +318,16 @@ export function WorkflowControls() {
                     })
                   }
                 >
-                  Run workflow
+                  Run Workflow
                 </button>
                 <button
                   disabled={busy}
                   onClick={() => setEditor(JSON.stringify(document.definition, null, 2))}
                 >
-                  Edit definition
+                  Edit Definition
                 </button>
                 <button disabled={busy} onClick={() => void perform(() => read(document.file))}>
-                  Reload file
+                  Reload File
                 </button>
                 <button
                   disabled={busy}
@@ -347,7 +339,7 @@ export function WorkflowControls() {
                     })
                   }
                 >
-                  Allow workflow folder…
+                  Allow Workflow Folder…
                 </button>
               </div>
               {editor !== undefined && (
@@ -390,10 +382,10 @@ export function WorkflowControls() {
                   </label>
                   <div className="settings-actions">
                     <button type="button" disabled={busy} onClick={() => setEditor(undefined)}>
-                      Cancel editing
+                      Cancel Editing
                     </button>
                     <button type="submit" disabled={busy}>
-                      Save definition
+                      Save Definition
                     </button>
                   </div>
                 </form>
@@ -423,7 +415,7 @@ export function WorkflowControls() {
             >
               <strong>{item.definition.name}</strong>
               <span>
-                {statusLabel[item.status]} · {new Date(item.created).toLocaleString()}
+                {statusLabel(item.status)} · {new Date(item.created).toLocaleString()}
               </span>
             </button>
           ))}
@@ -432,14 +424,14 @@ export function WorkflowControls() {
         {current && (
           <section aria-label="Selected run" className="workflow-run">
             <h3>
-              {current.definition.name} · {statusLabel[current.status]}
+              {current.definition.name} · {statusLabel(current.status)}
             </h3>
             <ol className="workflow-steps">
               {current.steps.map((record) => (
                 <li key={record.id}>
                   <div className="project-control-row">
                     <strong>{record.id}</strong>
-                    <span>{statusLabel[record.status]}</span>
+                    <span>{statusLabel(record.status)}</span>
                   </div>
                   {record.error && (
                     <p className="error" role="alert">
@@ -457,7 +449,8 @@ export function WorkflowControls() {
                               kind: 'get',
                               id: record.taskID!,
                             });
-                            if (Array.isArray(plan)) throw new Error('The task is unavailable.');
+                            if (Array.isArray(plan))
+                              throw new Error('This task is gone. Run the step again.');
                             reviewOperationPlan(plan);
                           } else sendWindowEvent('viewer:tasks', record.taskID);
                           setOpen(false);
@@ -475,10 +468,7 @@ export function WorkflowControls() {
                   )}
                   {record.artifact !== undefined && <WorkflowArtifact value={record.artifact} />}
                   {record.outputs.length > 0 && (
-                    <small className="muted">
-                      {record.outputs.length} output{' '}
-                      {record.outputs.length === 1 ? 'reference' : 'references'}
-                    </small>
+                    <small className="muted">{plural(record.outputs.length, 'output')}</small>
                   )}
                 </li>
               ))}
@@ -494,7 +484,7 @@ export function WorkflowControls() {
                   )
                 }
               >
-                Resume workflow
+                Resume Workflow
               </button>
               <button
                 disabled={busy || !['running', 'waiting-review', 'paused'].includes(current.status)}
@@ -506,7 +496,7 @@ export function WorkflowControls() {
                   )
                 }
               >
-                Cancel run
+                Cancel Run
               </button>
               <button
                 disabled={busy || !['completed', 'failed', 'cancelled'].includes(current.status)}
@@ -517,7 +507,7 @@ export function WorkflowControls() {
                   })
                 }
               >
-                Remove run history
+                Remove Run History
               </button>
             </div>
           </section>

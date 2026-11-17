@@ -12,6 +12,7 @@ import { pageLines } from './page-text';
 
 export const checkAnswerSchema = z.toJSONSchema(fabricationAnswerSchema) as Record<string, unknown>;
 
+// eslint-disable-next-line no-restricted-syntax -- the model reads this wording; its evaluation used it
 export const checkInstructions = `You check a laser-cutting job before it is cut.
 The job is the inventory: every file has a ref (S1, S2, …), a kind and its name. Name files only by ref.
 - request: the customer's message. List each part it asks for in request, with its quantity in pieces, thickness in millimetres and material, quoting the words you read them from, and the DXF ref it means. When a drawing's title block or parts list gives the same part's quantity, thickness or material, add them under drawing with their quote, even when they agree.

@@ -5,8 +5,9 @@
  */
 import { z } from 'zod';
 
+// eslint-disable-next-line no-restricted-syntax -- the stored axis value, not interface text
 export const pitchAxes = ['x', 'y', 'centre'] as const;
-/** Along x, along y, or centre to centre. */
+/** Along x, along y, or center to center. */
 export type PitchAxis = (typeof pitchAxes)[number];
 /** "48.00 mm". */
 export const millimetreText = (value: number) => `${value.toFixed(2)} mm`;
@@ -100,7 +101,8 @@ export type CorrectionReport = z.infer<typeof correctionReportSchema>;
 /** `g6-MB20-A1-4buc.dxf` → `g6-MB20-A1-4buc (corrected).dxf`. */
 export const correctedName = (name: string) => `${name.replace(/\.dxf$/i, '')} (corrected).dxf`;
 
-const axisWords = (axis: PitchAxis) => (axis === 'centre' ? 'centre to centre' : `along ${axis}`);
+// eslint-disable-next-line no-restricted-syntax -- the stored axis value, not interface text
+const axisWords = (axis: PitchAxis) => (axis === 'centre' ? 'center to center' : `along ${axis}`);
 /** "a", "a and b", "a, b and c". */
 export const listText = (items: readonly string[]) =>
   items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : (items[0] ?? '');

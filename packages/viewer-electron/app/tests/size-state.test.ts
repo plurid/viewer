@@ -128,19 +128,19 @@ it('shows each batch-measured folder independently, including a genuinely empty 
   expect(sizes.selectionSize([empty]).label).toBe('0 B');
 });
 
-it('includes known bytes while identifying only folders that are still unmeasured', async () => {
+it('shows the known bytes and nothing for a folder nobody measured, as Finder does', async () => {
   const sizes = await import('../src/renderer/explorer/sizes');
   sizes.receiveFolderSize(completed);
   const unknown = { ...folder, path: '/fixtures/unknown' };
-  const selection = sizes.selectionSize([folder, unknown]);
-  expect(selection.label).toBe('1.2 KB · 1 folder not calculated');
+  expect(sizes.selectionSize([folder, unknown]).label).toBe('1.2 KB');
+  expect(sizes.selectionSize([unknown], 'Hidden files shown').label).toBe('Hidden files shown');
 });
 
 it('invalidates totals after a descendant change and uses the refreshed individual measurement', async () => {
   const sizes = await import('../src/renderer/explorer/sizes');
   sizes.receiveFolderSize(completed);
   sizes.invalidateFolderSizes(folder.path + '/nested.txt');
-  expect(sizes.selectionSize([folder]).label).toBe('Size needs recalculation');
+  expect(sizes.selectionSize([folder]).label).toBe('Size out of date');
   sizes.receiveFolderSize({ ...completed, id: 'refreshed', bytes: 20 });
   expect(sizes.selectionSize([folder]).label).toBe('20 B');
   expect(sizes.useFolderSize([folder.path])?.stale).toBe(false);
@@ -150,7 +150,7 @@ it('preserves partial and unreadable results when composing selections', async (
   const sizes = await import('../src/renderer/explorer/sizes');
   sizes.receiveFolderSize({ ...completed, skipped: 1 });
   const file = { path: '/fixtures/note.txt', directory: false, size: 42 } as FileEntry;
-  expect(sizes.selectionSize([folder, file]).label).toContain('Partial (1 unreadable)');
+  expect(sizes.selectionSize([folder, file]).label).toContain('1 item not readable');
   sizes.receiveFolderSize({ ...completed, id: 'unreadable', skipped: 1, bytes: 0 });
-  expect(sizes.selectionSize([folder]).label).toContain('Size unavailable');
+  expect(sizes.selectionSize([folder]).label).toBe("Size unknown: its items can't be read");
 });

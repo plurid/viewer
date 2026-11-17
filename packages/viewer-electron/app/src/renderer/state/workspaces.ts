@@ -237,7 +237,9 @@ export function receiveWorkspaces(
 }
 export async function newWorkspace(name: string): Promise<void> {
   if (getState().saved.workspaces.length >= maximumWorkspaces)
-    throw new Error(`The maximum of ${maximumWorkspaces} workspaces has been reached.`);
+    throw new Error(
+      `You can have up to ${maximumWorkspaces} workspaces. Delete one to add another.`,
+    );
   await flushState();
   stopTour();
   const pane = folderPane(getState().bootstrap.home, {
@@ -268,10 +270,10 @@ export async function appendRestoredWorkspaces(imported: SavedState): Promise<vo
   const current = getState().saved;
   if (current.workspaces.length + imported.workspaces.length > maximumWorkspaces)
     throw new Error(
-      `There is room for at most ${maximumWorkspaces} workspaces. The restored documents were preserved.`,
+      `You can have up to ${maximumWorkspaces} workspaces. Delete some, then restore again. The backup’s documents were kept.`,
     );
   if (imported.workspaces.some((space) => current.workspaces.some((item) => item.id === space.id)))
-    throw new Error('A restored workspace identity is already open.');
+    throw new Error('A workspace in this backup is already open.');
   for (const space of imported.workspaces)
     adapters.set(space.id, new Map(Object.entries(space.arrangement)));
   const favorites = [...current.favorites];
@@ -341,7 +343,9 @@ export function setWorkspaceSpaceColor(color: string): void {
 export async function deleteWorkspace(id: string): Promise<void> {
   const linked = getState().saved.workspaces.find((space) => space.id === id);
   if (linked?.definition && !definitionWasRemoved(linked, getState().bootstrap.definitions))
-    throw new Error('Close it: its definition stays in workspaces.jsonc.');
+    throw new Error(
+      'This workspace comes from a definition. Close it instead, or remove the definition with Edit Workspace Definitions.',
+    );
   if (id !== activeWorkspace().id && getState().saved.openWindows?.includes(id))
     throw new Error('Switch to this workspace’s window to delete it.');
   const index = getState().saved.workspaces.findIndex((space) => space.id === id);

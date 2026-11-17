@@ -125,7 +125,7 @@ describe('job names', () => {
 describe('measurement', () => {
   it('finds the outline, holes drawn as circles or half arcs, and slots, in millimetres', () => {
     const plateMeasure = measured(dxfOf('g6-PL60-B2-2buc.dxf'));
-    expect(plateMeasure.units).toEqual({ code: 4, label: 'Millimetres', millimetres: 1 });
+    expect(plateMeasure.units).toEqual({ code: 4, label: 'Millimeters', millimetres: 1 });
     expect([plateMeasure.width, plateMeasure.height]).toEqual([160, 100]);
     expect(plateMeasure.outlines).toHaveLength(1);
     expect(plateMeasure.outlines[0]!.entities).toEqual(['0', '1', '2', '3', '4', '5', '6', '7']);

@@ -1,6 +1,7 @@
 /** Nesting figures in words, the same in the panel, the report and the CSV. Values arrive in
  * millimetres and read in the unit chosen: millimetres and metres, or inches and feet. */
 import { millimetresPerInch, type LengthUnit } from './plan';
+import { plural } from '../../plural';
 
 const number = (value: number, digits = 0) =>
   value.toLocaleString('en', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
@@ -77,5 +78,5 @@ export function moneyText(value: number, currency: string): string {
   if (!currency) return amount;
   return [...currency].length === 1 ? `${currency}${amount}` : `${amount} ${currency}`;
 }
-export const countText = (count: number, one: string, many = one + 's') =>
-  `${number(count)} ${count === 1 ? one : many}`;
+/** The shared count with its noun, by the name the nesting modules know it. */
+export const countText = plural;

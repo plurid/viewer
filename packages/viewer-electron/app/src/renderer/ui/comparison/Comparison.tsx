@@ -9,12 +9,13 @@ import { Disclosure } from '../Disclosure';
 import { prepareOperationReview } from '../operations/OperationReview';
 import { errorMessage } from '../../../domain/errors';
 import { useWindowEvent } from '../../app/window-events';
+import { plural } from '../../../domain/plural';
 const labels: Record<ComparisonRow['status'], string> = {
   'left-only': 'Only on left',
   'right-only': 'Only on right',
   different: 'Different',
-  same: 'Equal SHA-256',
-  'same-metadata': 'Matching metadata',
+  same: 'Same contents',
+  'same-metadata': 'Same size and date',
   unknown: 'Unknown',
 };
 export function ComparisonControls() {
@@ -110,7 +111,7 @@ export function ComparisonControls() {
             ? result.right.substring(0, result.right.lastIndexOf('/'))
             : result.right + '/' + row.path.split('/').slice(0, -1).join('/'),
       }));
-      await prepareOperationReview('Copy selected changes from left to right', intents);
+      await prepareOperationReview('Copy Selected Changes from Left to Right', intents);
       setOpen(false);
     } catch (error) {
       setError(errorMessage(error));
@@ -118,7 +119,7 @@ export function ComparisonControls() {
   };
   const start = page * 100;
   return (
-    <Dialog wide title="Compare locations" onClose={close}>
+    <Dialog wide title="Compare Locations" onClose={close}>
       <div className="dialog-body comparison-body">
         <div className="comparison-locations">
           {(['left', 'right'] as const).map((side) => (
@@ -145,7 +146,7 @@ export function ComparisonControls() {
                 disabled={!!running}
                 onClick={() => void choose(side).catch((error: Error) => setError(error.message))}
               >
-                Choose folder…
+                Choose Folder…
               </button>
             </label>
           ))}
@@ -160,8 +161,8 @@ export function ComparisonControls() {
           <span>
             Read file contents to compare SHA-256
             <small>
-              May download files stored in iCloud or another provider. Metadata comparison keeps
-              content unread.
+              May download files stored in iCloud or another provider. Without it, Viewer compares
+              size and date only.
             </small>
           </span>
         </label>
@@ -169,14 +170,14 @@ export function ComparisonControls() {
         {result && (
           <>
             <p className="muted">
-              {result.rows.length} entries ·{' '}
-              {result.coverage === 'complete' ? 'Complete traversal' : 'Partial coverage'} ·{' '}
+              {plural(result.rows.length, 'item')} ·{' '}
+              {result.coverage === 'complete' ? 'All files compared' : 'Some files not compared'} ·{' '}
               {selected.size} selected
             </p>
             {result.errors.length > 0 && (
               <Disclosure
                 variant="inline"
-                summary={`${result.errors.length} unreadable or changed ${result.errors.length === 1 ? 'location' : 'locations'}`}
+                summary={`${plural(result.errors.length, 'location')} unreadable or changed`}
               >
                 {result.errors.slice(0, 100).map((issue, index) => (
                   <p className="error" key={index}>
@@ -231,21 +232,21 @@ export function ComparisonControls() {
                             close();
                           }}
                         >
-                          Open diff
+                          Open Diff
                         </button>
                       )}
                       {row.left?.kind === 'file' && (
                         <button
                           onClick={() => workspace.open(row.left!, undefined, { another: true })}
                         >
-                          Open left
+                          Open Left
                         </button>
                       )}
                       {row.right?.kind === 'file' && (
                         <button
                           onClick={() => workspace.open(row.right!, undefined, { another: true })}
                         >
-                          Open right
+                          Open Right
                         </button>
                       )}
                     </span>
@@ -308,7 +309,7 @@ export function ComparisonControls() {
           disabled={!result || !selected.size || !!running || result.coverage !== 'complete'}
           onClick={() => void reconcile()}
         >
-          Review copy to right…
+          Review Copy to Right…
         </button>
       </footer>
     </Dialog>

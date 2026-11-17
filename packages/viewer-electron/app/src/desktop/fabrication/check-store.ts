@@ -19,7 +19,8 @@ export class CheckStore {
     if (!store) {
       store = new DocumentStore(path.join(this.folder, `${valid}.json`), (value) => {
         const document = checkDocumentSchema.parse(value);
-        if (document.id !== valid) throw new Error('This saved check has a different identity.');
+        if (document.id !== valid)
+          throw new Error('This saved check’s file belongs to another check.');
         return document;
       });
       this.documents.set(valid, store);

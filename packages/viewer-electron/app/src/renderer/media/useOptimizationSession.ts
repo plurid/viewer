@@ -115,7 +115,7 @@ export function useOptimizationSession(files: FileEntry[]) {
             options,
           });
           if (value?.kind !== 'prepared')
-            throw new Error('The processor returned no candidate. Retry this file.');
+            throw new Error("Viewer couldn't make a smaller copy. Retry this file.");
           if (!active.live || active.generation !== generation) {
             release([value.id]);
             break;
@@ -201,7 +201,7 @@ export function useOptimizationSession(files: FileEntry[]) {
     setRows((values) =>
       values.map((row) =>
         row.preparing
-          ? { ...row, preparing: false, error: 'Preparation cancelled. Retry when ready.' }
+          ? { ...row, preparing: false, error: 'Preparation canceled. Retry this file when ready.' }
           : row,
       ),
     );

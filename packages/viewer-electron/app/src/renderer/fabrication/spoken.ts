@@ -36,7 +36,8 @@ async function start(
   const provider = getState().settings.settings.providers.find(
     (item) => item.id === check.providerID,
   );
-  const files = `Check ${countText(check.opening?.sources.length ?? 0, 'file')}`;
+  // the run button's own name, Title Case as a button is
+  const files = `Check ${countText(check.opening?.sources.length ?? 0, 'File')}`;
   if (!provider?.model)
     return progress(`Choose a model to check with in the check panel, then choose ${files}.`);
   const permission = await window.viewer.providerPermissionGet(provider.id).catch(() => null);

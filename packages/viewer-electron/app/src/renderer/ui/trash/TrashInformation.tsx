@@ -1,7 +1,7 @@
 import type { TrashItem } from '../../../domain/files/trash';
-import { formatBytes } from '../../../domain/files/entries';
+import { formatBytes, kindLabel } from '../../../domain/files/entries';
 import { Dialog, PathField } from '../primitives';
-import { originUnavailable, trashDate } from './items';
+import { asFile, originUnavailable, trashDate } from './items';
 
 /** Get Info for a Trash item, with its recorded dates and original location. */
 export function TrashInformation({
@@ -18,36 +18,22 @@ export function TrashInformation({
   restore(item: TrashItem): void;
 }) {
   return (
-    <Dialog title={item.name} className="trash-info-dialog" onClose={onClose}>
+    <Dialog title={`“${item.name}” Info`} className="trash-info-dialog" onClose={onClose}>
       <dl>
         <dt>Kind</dt>
-        <dd>
-          {item.directory
-            ? 'Folder'
-            : item.symbolicLink
-              ? 'Symbolic link'
-              : item.previewable === false
-                ? 'Other'
-                : 'File'}
-        </dd>
+        <dd>{kindLabel(asFile(item))}</dd>
         <dt>Size</dt>
-        <dd>{item.directory ? 'Not calculated' : formatBytes(item.size)}</dd>
+        <dd>{item.directory ? '--' : formatBytes(item.size)}</dd>
         <dt>Modified</dt>
         <dd>{trashDate(item.modified)}</dd>
         <dt>{item.deleted ? 'Deleted' : 'Added to Trash'}</dt>
         <dd>
-          {item.deleted ? (
-            trashDate(item.deleted)
-          ) : item.addedToTrash ? (
-            <>
-              {trashDate(item.addedToTrash)}
-              <span className="trash-info-note muted">
-                macOS date added to this Trash folder; not a recorded deletion time.
-              </span>
-            </>
-          ) : (
-            'No date was recorded for this item.'
-          )}
+          {item.deleted
+            ? trashDate(item.deleted)
+            : item.addedToTrash
+              ? // the heading says what this date is: when it arrived, not when it was deleted
+                trashDate(item.addedToTrash)
+              : 'Unknown'}
         </dd>
         <dt>Original location</dt>
         <dd>
@@ -71,7 +57,7 @@ export function TrashInformation({
               openOriginal(item);
             }}
           >
-            Open original folder in plane
+            Show Original Folder
           </button>
         )}
         <button
@@ -81,7 +67,7 @@ export function TrashInformation({
             restore(item);
           }}
         >
-          {item.originalPath ? 'Restore' : 'Restore to…'}
+          {item.originalPath ? 'Restore' : 'Restore To…'}
         </button>
         <button onClick={onClose}>Done</button>
       </footer>

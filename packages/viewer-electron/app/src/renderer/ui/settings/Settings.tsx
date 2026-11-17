@@ -33,6 +33,7 @@ import { useTheme, useThemeVariables } from '../theme';
 import { settingsDiscovery } from './discovery';
 import { SpeechSettings } from '../../speech/SpeechSettings';
 import { errorMessage } from '../../../domain/errors';
+import { PathHome } from '../PathLabel';
 
 const noThemes = { themes: [], theme: { dark: '', light: '' } };
 export function SettingsWindow() {
@@ -219,110 +220,112 @@ export function SettingsWindow() {
   const discover = settingsDiscovery(settings, query);
   const page = !query && shownCategory;
   return (
-    <div className="settings-window">
-      <aside className="settings-navigation">
-        <div className="settings-search">
-          <Icon name="search" size={16} />
-          <input
-            ref={search}
-            aria-label="Search settings"
-            placeholder="Search settings"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
-        <nav aria-label="Settings categories">
-          {(license ? [...categories, 'License'] : categories).map((item) => (
-            <button
-              key={item}
-              className={!query && shownCategory === item ? 'selected' : ''}
-              onClick={() => selected(item)}
-            >
-              {item}
-            </button>
-          ))}
-        </nav>
-      </aside>
-      <main className="settings-page" key={query ? 'search' : category}>
-        <header>
-          <h1>{query ? 'Search results' : shownCategory}</h1>
-        </header>
-        {error && (
-          <p className="settings-error" role="alert">
-            {error}
-          </p>
-        )}
-        {query && !definitions.length && !discover.length && (
-          <p className="settings-note">
-            No settings match “{query}”. Use Actions, Models, or Agents to configure those services.
-          </p>
-        )}
-        {query &&
-          discover.map((item) => (
-            <button
-              className="settings-discovery"
-              key={item.category}
-              onClick={() => selected(item.category)}
-            >
-              Open {item.category.toLowerCase()} settings <Icon name="right" size={16} />
-            </button>
-          ))}
-        {!query && category === 'Permissions' && <FilePermissions error={setError} />}
-        {!query && category === 'Privacy' && <PrivacyInformation showLicense={!!license} />}
-        <CatalogSettings editor={editor} definitions={definitions} query={query} />
-        {page === 'Navigation' && <NavigationSettings editor={editor} />}
-        {page === 'License' && license && (
-          <LicenseSettings status={license} onChange={setLicense} />
-        )}
-        {page === 'Search' && <SearchSettings editor={editor} />}
-        {!query && category === 'Models' && (
-          <ModelSettings snapshot={snapshot} save={enqueue} error={setError} />
-        )}
-        {page === 'Speech' && <SpeechSettings shortcut={settings.shortcuts.dictate} />}
-        {page === 'Browsing' && <FolderOverrideSettings snapshot={snapshot} save={patches} />}
-        {!query && category === 'Terminals' && (
-          <TerminalSettings snapshot={snapshot} save={enqueue} />
-        )}
-        {!query && category === 'Configuration' && (
-          <ConfigurationSettings snapshot={snapshot} save={patches} />
-        )}
-        {!query && category === 'Actions' && (
-          <CustomActionSettings
-            snapshot={snapshot}
-            save={enqueue}
-            draft={commandDraft}
-            onDraftDone={() => setCommandDraft(undefined)}
-          />
-        )}
-        {page === 'Actions' && <RecipeSettings editor={editor} />}
-        {page === 'Agents' && <AgentSettings editor={editor} />}
-        {page === 'Shortcuts' && <ShortcutSettings editor={editor} />}
-        {page === 'Themes' && <ThemeSettings editor={editor} />}
-        {!query && ['Browsing', 'Previews', 'Editor', 'Terminals', 'Space'].includes(category) && (
-          <button
-            className="settings-reset"
-            onClick={() => {
-              const defaults = defaultSettings(settings.search.roots[0] || '/');
-              if (category === 'Space') patch('ui.space', normalizePreferences().space);
-              else if (category === 'Previews') patch('settings.previews', defaults.previews);
-              else if (category === 'Editor') patch('settings.editor', defaults.editor);
-              // the font only: profiles and programs are the person's own
-              else if (category === 'Terminals')
-                patch('settings.terminalFont', defaults.terminalFont);
-              else
-                patches([
-                  { path: 'settings.browsing', value: defaults.browsing },
-                  { path: 'settings.appearance', value: defaults.appearance },
-                  { path: 'ui.list', value: normalizePreferences().list },
-                ]);
-            }}
-          >
-            {category === 'Terminals'
-              ? 'Reset terminal font'
-              : `Reset ${category.toLowerCase()} defaults`}
-          </button>
-        )}
-      </main>
-    </div>
+    <PathHome.Provider value={snapshot.home ?? ''}>
+      <div className="settings-window">
+        <aside className="settings-navigation">
+          <div className="settings-search">
+            <Icon name="search" size={16} />
+            <input
+              ref={search}
+              aria-label="Search settings"
+              placeholder="Search settings"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+          <nav aria-label="Settings categories">
+            {(license ? [...categories, 'License'] : categories).map((item) => (
+              <button
+                key={item}
+                className={!query && shownCategory === item ? 'selected' : ''}
+                onClick={() => selected(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </nav>
+        </aside>
+        <main className="settings-page" key={query ? 'search' : category}>
+          <header>
+            <h1>{query ? 'Search results' : shownCategory}</h1>
+          </header>
+          {error && (
+            <p className="settings-error" role="alert">
+              {error}
+            </p>
+          )}
+          {query && !definitions.length && !discover.length && (
+            <p className="settings-note">
+              No settings match “{query}”. Actions, Models and Agents set up their services on their
+              own pages.
+            </p>
+          )}
+          {query &&
+            discover.map((item) => (
+              <button
+                className="settings-discovery"
+                key={item.category}
+                onClick={() => selected(item.category)}
+              >
+                Open {item.category} Settings <Icon name="right" size={16} />
+              </button>
+            ))}
+          {!query && category === 'Permissions' && <FilePermissions error={setError} />}
+          {!query && category === 'Privacy' && <PrivacyInformation showLicense={!!license} />}
+          <CatalogSettings editor={editor} definitions={definitions} query={query} />
+          {page === 'Navigation' && <NavigationSettings editor={editor} />}
+          {page === 'License' && license && (
+            <LicenseSettings status={license} onChange={setLicense} />
+          )}
+          {page === 'Search' && <SearchSettings editor={editor} />}
+          {!query && category === 'Models' && (
+            <ModelSettings snapshot={snapshot} save={enqueue} error={setError} />
+          )}
+          {page === 'Speech' && <SpeechSettings shortcut={settings.shortcuts.dictate} />}
+          {page === 'Browsing' && <FolderOverrideSettings snapshot={snapshot} save={patches} />}
+          {!query && category === 'Terminals' && (
+            <TerminalSettings snapshot={snapshot} save={enqueue} />
+          )}
+          {!query && category === 'Configuration' && (
+            <ConfigurationSettings snapshot={snapshot} save={patches} />
+          )}
+          {!query && category === 'Actions' && (
+            <CustomActionSettings
+              snapshot={snapshot}
+              save={enqueue}
+              draft={commandDraft}
+              onDraftDone={() => setCommandDraft(undefined)}
+            />
+          )}
+          {page === 'Actions' && <RecipeSettings editor={editor} />}
+          {page === 'Agents' && <AgentSettings editor={editor} />}
+          {page === 'Shortcuts' && <ShortcutSettings editor={editor} />}
+          {page === 'Themes' && <ThemeSettings editor={editor} />}
+          {!query &&
+            ['Browsing', 'Previews', 'Editor', 'Terminals', 'Space'].includes(category) && (
+              <button
+                className="settings-reset"
+                onClick={() => {
+                  const defaults = defaultSettings(settings.search.roots[0] || '/');
+                  if (category === 'Space') patch('ui.space', normalizePreferences().space);
+                  else if (category === 'Previews') patch('settings.previews', defaults.previews);
+                  else if (category === 'Editor') patch('settings.editor', defaults.editor);
+                  // the font only: profiles and programs are the person's own
+                  else if (category === 'Terminals')
+                    patch('settings.terminalFont', defaults.terminalFont);
+                  else
+                    patches([
+                      { path: 'settings.browsing', value: defaults.browsing },
+                      { path: 'settings.appearance', value: defaults.appearance },
+                      { path: 'ui.list', value: normalizePreferences().list },
+                    ]);
+                }}
+              >
+                {category === 'Terminals' ? 'Reset Terminal Font' : `Reset ${category} Defaults`}
+              </button>
+            )}
+        </main>
+      </div>
+    </PathHome.Provider>
   );
 }

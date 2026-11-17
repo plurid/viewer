@@ -133,7 +133,7 @@ it('shows exact reported status and opens current referenced files and diffs as 
     />,
   );
   expect((await screen.findByText(/^Reported waiting/)).textContent).toContain('Reported waiting');
-  fireEvent.click(screen.getByRole('button', { name: 'Open current file: source.ts:4' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open “source.ts:4”' }));
   await waitFor(() =>
     expect(workspace.open).toHaveBeenCalledWith(
       file,
@@ -144,6 +144,6 @@ it('shows exact reported status and opens current referenced files and diffs as 
       }),
     ),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Current diff: source.ts' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show Changes to “source.ts”' }));
   expect(workspace.openGitDiff).toHaveBeenCalledWith(file.path, 'session');
 });

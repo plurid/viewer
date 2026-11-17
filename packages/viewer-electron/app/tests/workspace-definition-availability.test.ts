@@ -156,7 +156,7 @@ it.each(['undecided', 'off', 'absent'] as const)(
     await expect(deleteWorkspace(activeWorkspace().id)).rejects.toThrow('Close it');
     expect(catalogCommands(scopes).find((item) => item.id.startsWith('workspace:'))!.detail).toBe(
       state === 'undecided'
-        ? 'VS Code Project Manager is not in use. Choose Use VS Code projects in Manage workspaces to restore its projects.'
+        ? 'VS Code Project Manager is not in use. Choose Use VS Code Projects in Manage Workspaces to restore its projects.'
         : state === 'off'
           ? 'VS Code Project Manager is not in use. Turn it on in Settings → Configuration → Workspace definitions.'
           : 'VS Code Project Manager’s list was not found. This workspace keeps its definition link.',

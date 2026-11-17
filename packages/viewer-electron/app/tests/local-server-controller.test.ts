@@ -178,7 +178,7 @@ describe('linked local server creation', () => {
     );
     const captured = target();
     const starting = controller.newServer(captured);
-    const rejected = expect(starting).rejects.toThrow('originating folder changed');
+    const rejected = expect(starting).rejects.toThrow('folder this started from changed');
     act(() => navigate(captured.paneID, '/fixture/elsewhere'));
     finish(folderEntry('/fixture'));
     await rejected;

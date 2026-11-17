@@ -184,30 +184,14 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+/* A dialog form (ui/form-fields.css): labels above their fields. */
 .media-export-options {
   width: 256px;
   flex: 0 0 256px;
   padding: var(--gap-panel);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  align-content: start;
   border-left: 1px solid var(--line);
   overflow: auto;
-}
-.media-export-options > label {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  color: var(--muted);
-  font-size: var(--text-label);
-}
-.media-export-options > label.media-export-toggle {
-  flex-direction: row;
-  align-items: center;
-}
-.media-export-options > label > input {
-  min-width: 0;
-  width: 100%;
 }
 .media-export-options p {
   font-size: var(--text-label);
@@ -221,15 +205,6 @@
 }
 .media-export-progress progress {
   width: 100%;
-}
-.media-destination {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap-small);
-}
-.media-destination input {
-  width: 100%;
-  min-width: 0;
 }
 @container (max-width: 720px) {
   .media-editor-body {

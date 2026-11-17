@@ -33,7 +33,7 @@ async function inputJSON(input: Readable, signal: AbortSignal): Promise<unknown>
   signal.throwIfAborted();
   const chunks: Buffer[] = [];
   let bytes = 0;
-  const abort = () => input.destroy(new Error('Input cancelled.'));
+  const abort = () => input.destroy(new Error('Input was canceled.'));
   signal.addEventListener('abort', abort, { once: true });
   try {
     for await (const chunk of input) {
@@ -204,7 +204,7 @@ export async function runCLI(
             ? cliExit.connection
             : cliExit.failed;
     const message = cancelled
-      ? 'CLI request cancelled. Use the operation ID to inspect or cancel work already submitted.'
+      ? 'The CLI request was canceled. Use the operation ID to check or cancel work already started.'
       : controller.signal.aborted
         ? 'CLI deadline exceeded. The operation may still be running; inspect its ID before retrying.'
         : errorMessage(error);

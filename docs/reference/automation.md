@@ -6,21 +6,21 @@ rules, and their limits.
 ## Open a workflow
 
 Choose **File → Workflows…** or **Workflows…** in ⌘K. With one `*.workflow.jsonc` file selected, it
-opens that file. **Open workflow…** reads a file. **New workflow** picks a template (**Inspect
+opens that file. **Open Workflow…** reads a file. **New workflow** picks a template (**Inspect
 files**, **Compare folders**, **Inspect and copy**, **Inspect selection** or **Inspect and copy
 selection**) and **Create…** writes it as `viewer.workflow.jsonc` in the folder you choose. Opening,
 importing or editing a file never runs a step.
 
 | Control                    | Effect                                                                     |
 | -------------------------- | -------------------------------------------------------------------------- |
-| **Choose folder…**         | Sets a folder binding for this run                                         |
-| **Allow workflow folder…** | Grants native access to the workflow's folder                              |
-| **Run workflow**           | Starts a run with the current selection                                    |
-| **Edit definition**        | Edits the JSONC; **Save definition** or **Cancel editing**                 |
-| **Reload file**            | Reads the file again                                                       |
-| **Resume workflow**        | Continues after you finish a step's review                                 |
-| **Cancel run**             | Stops the run                                                              |
-| **Remove run history**     | Removes a finished run's receipt; output files and operation receipts stay |
+| **Choose Folder…**         | Sets a folder binding for this run                                         |
+| **Allow Workflow Folder…** | Grants native access to the workflow's folder                              |
+| **Run Workflow**           | Starts a run with the current selection                                    |
+| **Edit Definition**        | Edits the JSONC; **Save Definition** or **Cancel Editing**                 |
+| **Reload File**            | Reads the file again                                                       |
+| **Resume Workflow**        | Continues after you finish a step's review                                 |
+| **Cancel Run**             | Stops the run                                                              |
+| **Remove Run History**     | Removes a finished run's receipt; output files and operation receipts stay |
 
 ## File format
 
@@ -80,14 +80,14 @@ undeclared input or binding, or a step reference that is not in `needs`.
 
 ## Run, review and resume
 
-**Run workflow** saves a private run receipt and runs steps in dependency order.
+**Run Workflow** saves a private run receipt and runs steps in dependency order.
 
 | Step                        | What happens                                                             |
 | --------------------------- | ------------------------------------------------------------------------ |
 | `inspect`, `compare`        | Runs and completes                                                       |
 | `copy`, `convert`, `recipe` | Prepares an ordinary review and pauses the run at **waiting for review** |
 
-Review and Apply in that review, then choose **Resume workflow**. A dependent step reads the outputs
+Review and Apply in that review, then choose **Resume Workflow**. A dependent step reads the outputs
 the operation receipt recorded, including any Keep both names. Before each step the run checks that
 its sources are unchanged; a changed source or a changed workflow file stops it.
 
@@ -95,10 +95,10 @@ its sources are unchanged; a changed source or a changed workflow file stops it.
 | ---------------- | ---------------------------------------------------------------- |
 | `running`        | A step is running                                                |
 | `waiting-review` | A review waits for you                                           |
-| `paused`         | Viewer quit during a read step; **Resume workflow** continues it |
+| `paused`         | Viewer quit during a read step; **Resume Workflow** continues it |
 | `completed`      | Every step finished                                              |
 | `failed`         | A step failed; the run does not continue                         |
-| `cancelled`      | You cancelled it                                                 |
+| `cancelled`      | You canceled it                                                  |
 
 A run never replays at launch. A file-changing step that was running when Viewer quit, and has no
 recorded review, fails with
@@ -126,15 +126,15 @@ never applies them.
 
 | Field                              | Values                                                         |
 | ---------------------------------- | -------------------------------------------------------------- |
-| **Choose folder…**                 | The watched folder                                             |
+| **Choose Folder…**                 | The watched folder                                             |
 | **File extensions**                | Up to 50, lowercase letters and digits; empty matches any file |
 | **Include subfolders**             | Watches below the folder                                       |
 | **Allow local content inspection** | Lets `inspect` steps read content or run OCR                   |
 | **Minimum time between runs**      | 30 seconds to 24 hours                                         |
 
-**Enable watch rule** stores an approval for the exact workflow file revision, bindings,
-destinations and rename recipes. **Pause** stops it; **Review and enable…** approves it again;
-**Remove rule** deletes it; **Open run** shows its latest run.
+**Enable Watch Rule** stores an approval for the exact workflow file revision, bindings,
+destinations and rename recipes. **Pause** stops it; **Review and Enable…** approves it again;
+**Remove Rule** deletes it; **Open Run** shows its latest run.
 
 | A watch workflow must                                                                       |
 | ------------------------------------------------------------------------------------------- |
@@ -153,12 +153,12 @@ destinations and rename recipes. **Pause** stops it; **Review and enable…** ap
 | Changed files that start one run | 50; more pauses the rule for a manual review               |
 
 A rule pauses itself, with the reason, when its workflow, recipe or destination changes, when access
-is revoked, when the folder moves or is unavailable, or when its last run failed or was cancelled. A
+is revoked, when the folder moves or is unavailable, or when its last run failed or was canceled. A
 rename the rule itself completed does not trigger it again.
 
 ## Related files
 
-**Related files…** shows how the selected files connect: outputs recorded by operation receipts,
+**Related Files…** shows how the selected files connect: outputs recorded by operation receipts,
 references found in local files, and notes reported to Viewer. Each relationship shows its source
 and basis. It is evidence, not permission to edit a file or start a program.
 

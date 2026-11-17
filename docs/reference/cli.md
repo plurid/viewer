@@ -7,12 +7,12 @@ codes.
 
 | Item         | Behavior                                                                                                                                                               |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Install      | **⌘K** → **Install Viewer CLI**, or **Settings → Navigation → Shell command → Install shell command**.                                                                 |
+| Install      | **⌘K** → **Install Viewer CLI**, or **Settings → Navigation → Shell command → Install Shell Command**.                                                                 |
 | File         | `~/.local/bin/viewer`, a `/bin/sh` script that runs this Viewer installation's executable with your arguments.                                                         |
 | Folders      | `~/.local` and `~/.local/bin` are created when missing. Neither may be a symbolic link.                                                                                |
 | Existing     | Another file at that path is never replaced: Settings shows **This path contains another command. It will be preserved.** Installing the same script again is a no-op. |
 | `PATH`       | Not changed. Viewer edits no shell startup file. Run `~/.local/bin/viewer` or add `~/.local/bin` to `PATH`.                                                            |
-| Uninstall    | **Uninstall shell command…** confirms the path, checks the file is still this Viewer's script, then moves it to the Trash.                                             |
+| Uninstall    | **Uninstall Shell Command…** confirms the path, checks the file is still this Viewer's script, then moves it to the Trash.                                             |
 | After a move | Moving Viewer leaves a script that no longer matches. It is preserved, and installing again is refused until that file is gone.                                        |
 | Availability | Direct build only. The App Store build shows **Shell integration is available in the direct build only.**                                                              |
 
@@ -33,7 +33,7 @@ viewer -- search
 | Paths               | Up to 100 paths, resolved against the terminal's current folder. `~` and `~/` expand to your home folder.                               |
 | `--new-window`      | Open the paths in a new independent window.                                                                                             |
 | `--workspace QUERY` | Resolve an open or defined workspace. Open definitions in a new window; focus an existing workspace's window. Wins over `--new-window`. |
-| `--workspace`       | Focus the front window and open **Change workspace…**.                                                                                  |
+| `--workspace`       | Focus the front window and open **Change Workspace…**.                                                                                  |
 | `--terminal`        | Open a terminal plane in each folder (a file's own folder) instead of opening the paths; with no path, the window's folder.             |
 | `--`                | Treat every later argument as a literal path.                                                                                           |
 
@@ -44,7 +44,7 @@ Workspace queries resolve in this order: exact open ID, unique exact open name, 
 (then a unique case-insensitive key), unique exact definition display name ignoring case, exact
 Project Manager name, unique alias, then a unique fuzzy match. An open workspace linked to a
 matching definition wins. Hidden and missing-root definitions are excluded. Ambiguous and unmatched
-queries open **Change workspace…** with the query filled in. An unmatched query shows a sentence
+queries open **Change Workspace…** with the query filled in. An unmatched query shows a sentence
 naming it, including on the first launch. Definition terminals with `command` fields offer **Run**
 and **Shell only**, with native approval for new or changed commands.
 
@@ -67,8 +67,8 @@ the same local connection as MCP clients. They create no window.
 
 1. Keep Viewer open.
 2. In **Settings → Agents**, turn on **Allow local agent clients** and confirm the system dialog.
-3. Under **Agent clients**, enter a **Name**, choose **Choose folder…** for each folder, tick the
-   capabilities, then choose **Create client**.
+3. Under **Agent clients**, enter a **Name**, choose **Choose Folder…** for each folder, tick the
+   capabilities, then choose **Create Client**.
 4. Copy the `VIEWER_AGENT_TOKEN` value from **Client MCP configuration**. It is shown once.
 5. Set it in your shell: `export VIEWER_AGENT_TOKEN=…`.
 
@@ -122,8 +122,8 @@ terminal's folder. A command's capability is checked again by the app on every c
 | ---------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
 | `search QUERY [--root DIR] [--content] [--offset N]` | `metadata`              | Searches an indexed granted folder by name. `--root` defaults to `.`.       |
 | `search … --content`                                 | `content`, named client | Also matches indexed document text and returns match evidence.              |
-| `inspect PATH`                                       | `metadata`              | Reads bounded metadata.                                                     |
-| `read PATH`                                          | `content`               | Reads bounded extracted passages with source versions.                      |
+| `inspect PATH`                                       | `metadata`              | Reads metadata.                                                             |
+| `read PATH`                                          | `content`               | Reads extracted passages with source versions.                              |
 | `table PATH [--sheet NAME] [--offset N] [--limit N]` | `content`               | Reads CSV, TSV or XLSX rows: stored values and formula text, no evaluation. |
 | `relations PATH [--content]`                         | `metadata`              | Reads operation provenance; `--content` also scans reference syntax.        |
 | `git status [DIR]`                                   | `metadata`              | Reads repository status; `DIR` defaults to `.`.                             |
@@ -145,7 +145,7 @@ fails with a request to read a smaller window.
 | `action list`                                                    | `metadata`              | Lists configured recipe actions and the data they read.                                 |
 | `action run RECIPE_ID PATH… [--instructions TEXT] [--recursive]` | `propose`               | Prepares a recipe; `content` too when the recipe reads contents.                        |
 | `action status ID`, `action cancel ID`                           | your own task           | Reads or cancels a recipe task you started.                                             |
-| `review status ID`, `review cancel ID`                           | your own proposal       | Reads or cancels your proposal; cancelling keeps its evidence and output.               |
+| `review status ID`, `review cancel ID`                           | your own proposal       | Reads or cancels your proposal; canceling keeps its evidence and output.                |
 | `config propose PATCHES`                                         | `propose`               | Submits configuration patches for review.                                               |
 | `task list [--workspace ID_OR_NAME]`                             | `metadata`              | Lists task areas whose checkouts are in your folders.                                   |
 | `task create NAME --branch B --path DIR …`                       | `propose`, `navigation` | Proposes a branch, worktree and task area. See below.                                   |
@@ -227,13 +227,13 @@ refused.
 | One file       | 64 MiB  |
 | Total          | 512 MiB |
 
-A larger repository, or one with executable Git filters, needs **New task from branch…** in the app.
+A larger repository, or one with executable Git filters, needs **New Task from Branch…** in the app.
 
 The proposal's `taskResult` has `workspaceID`, `taskID`, `path`, `branch`, `commit`,
 `terminal: "stopped"`, `stage` and, once ready, `planeIDs`. `stage` moves from `worktree-pending` to
 `worktree-created` to `ready`. The first reply is a review request, not a created task.
 
-If creation fails or is cancelled, Viewer keeps any created worktree, branch and note and removes
+If creation fails or is canceled, Viewer keeps any created worktree, branch and note and removes
 nothing. Check `stage`: `worktree-pending` does not prove Git finished. A failed `--json --wait`
 includes the last proposal in `result` and its `operationID`.
 
@@ -261,7 +261,7 @@ All three are multilingual and pinned by revision and SHA-256. `speech models` p
 | Storage   | Free space of the model's size plus 1 MiB.                                                           |
 | Reuse     | A verified installed model is reused, not downloaded again.                                          |
 | Selection | `speech use` selects an installed model. Installing does not select it.                              |
-| Attempts  | At most eight retained attempts. Failed, cancelled and interrupted files stay, unselected.           |
+| Attempts  | At most eight retained attempts. Failed, canceled and interrupted files stay, unselected.            |
 | Restart   | Quitting does not resume a download or record audio.                                                 |
 
 The CLI manages weights only. It cannot record, grant microphone access, set hosted keys or send
@@ -320,8 +320,8 @@ viewer completion zsh > ./viewer-completion.zsh
 ```
 
 **Control-C** (or `SIGTERM`) stops the CLI request or wait, not work Viewer already accepted. A
-cancelled or timed-out command prints the operation ID when it has one. Stop submitted work with
-`review cancel`, `action cancel` or `workflow cancel`; cancelling keeps completed output and
+canceled or timed-out command prints the operation ID when it has one. Stop submitted work with
+`review cancel`, `action cancel` or `workflow cancel`; canceling keeps completed output and
 evidence.
 
 ## Exit codes

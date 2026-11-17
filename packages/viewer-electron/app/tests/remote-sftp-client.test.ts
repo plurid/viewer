@@ -1,7 +1,7 @@
 import type { SFTPRequest } from '../src/desktop/remote/sftp/codec';
 import type { SFTPClient } from '../src/desktop/remote/sftp/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { encodeReply, sftpExtensions } from '../src/desktop/remote/sftp/codec';
+import { encodeReply, sftpBounds, sftpExtensions } from '../src/desktop/remote/sftp/codec';
 import { sftpStatusError } from '../src/desktop/remote/sftp/errors';
 import { assertSafeSFTPAfterEach } from './support/fake-sftp-server';
 import { sftpFixture, sftpTurn } from './support/sftp-fixture';
@@ -22,11 +22,16 @@ describe('transport-independent SFTP channel', () => {
     expect(client.connect()).toBe(first);
     await first;
     expect(client.connected).toBe(true);
-    expect([...client.extensions.keys()]).toEqual(Object.values(sftpExtensions));
+    expect([...client.extensions.keys()]).toEqual([
+      ...Object.values(sftpExtensions),
+      'fstatvfs@openssh.com',
+      'expand-path@openssh.com',
+      'home-directory',
+    ]);
     expect(client.serverLimits).toEqual({
       packetLength: 262144n,
-      readLength: 65536n,
-      writeLength: 65536n,
+      readLength: 261120n,
+      writeLength: 261120n,
       openHandles: 256n,
     });
     expect(server.packets.map((packet) => packet.type)).toEqual([1, 200]);
@@ -70,6 +75,8 @@ describe('transport-independent SFTP channel', () => {
     expect(await client.realpath(b('.'))).toEqual(b('/home'));
     const directory = await client.opendir(folder);
     expect(await client.readdir(directory)).toMatchObject([
+      { filename: b('.') },
+      { filename: b('..') },
       { filename: b('file'), attrs: { size: 5n } },
     ]);
     expect(await client.readdir(directory)).toBeUndefined();
@@ -103,7 +110,7 @@ describe('transport-independent SFTP channel', () => {
     const destination = await client.open(b('/home/copy'), 'create');
     await client.copyData(source, 1n, 3n, destination, 2n);
     expect(server.bytes('/home/copy')).toEqual(Buffer.from([0, 0, 98, 99, 100]));
-    await client.copyData(source, 3n, 0n, destination, 5n);
+    await client.copyData(source, 3n, 3n, destination, 5n);
     expect(server.bytes('/home/copy')).toEqual(Buffer.from([0, 0, 98, 99, 100, 100, 101, 102]));
     expect(await client.statvfs(b('/home'))).toMatchObject({
       filesystemID: 1n,
@@ -128,7 +135,6 @@ describe('transport-independent SFTP channel', () => {
     await client.connect();
     await expect(client.rename(b('/home/a'), b('/home/b'))).rejects.toMatchObject({
       code: 'VIEWER_REMOTE_FAILURE',
-      message: 'File exists',
     });
     await expect(client.rename(b('/home/first'), b('/home/second'))).rejects.toMatchObject({
       code: 'VIEWER_REMOTE_FAILURE',
@@ -205,16 +211,15 @@ describe('transport-independent SFTP channel', () => {
       code: 'VIEWER_REMOTE_PROTOCOL',
     });
     const before = server.packets.length;
-    await expect(client.opendir(b('/home'))).rejects.toMatchObject({
-      code: 'VIEWER_REMOTE_FAILURE',
-      message: expect.stringContaining('open-handle'),
-    });
+    const waiting = client.opendir(b('/home'));
+    await sftpTurn();
+    expect(client.stats.queued).toBe(1);
     await expect(client.stat(Buffer.alloc(100, 97))).rejects.toMatchObject({
       code: 'VIEWER_REMOTE_PROTOCOL',
     });
     expect(server.packets).toHaveLength(before);
     await client.close(source);
-    const dir = await client.opendir(b('/home'));
+    const dir = await waiting;
     await client.close(dir);
     await client.close(destination);
     expect(server.packets.every((packet) => packet.length <= 100)).toBe(true);
@@ -226,8 +231,8 @@ describe('transport-independent SFTP channel', () => {
         limits: { packetLength: value, readLength: value, writeLength: value, openHandles: value },
       });
       await client.connect();
-      expect(client.readChunkBytes).toBe(65536);
-      expect(client.writeChunkBytes(b('h'))).toBe(65536);
+      expect(client.readChunkBytes).toBe(sftpBounds.dataBytes);
+      expect(client.writeChunkBytes(b('h'))).toBe(sftpBounds.dataBytes);
     }
   });
 
@@ -241,7 +246,6 @@ describe('transport-independent SFTP channel', () => {
       () => client.copyData(b('a'), 0n, 1n, b('b'), 0n),
       () => client.usersGroupsByID([1], [2]),
       () => client.symlink(b('a'), b('/home/l')),
-      () => client.readlink(b('/home/l')),
     ])
       await expect(operation()).rejects.toMatchObject({ code: 'ENOTSUP' });
     expect(server.packets.map((packet) => packet.type)).toEqual([1]);
@@ -336,7 +340,7 @@ describe('transport-independent SFTP channel', () => {
     expect(server.packets).toHaveLength(65);
   });
 
-  it('retires the channel after an aborted open gets an ownerless handle', async () => {
+  it('closes an ownerless handle after an aborted open and keeps the channel', async () => {
     const { client, server } = sftpFixture({ extensions: false });
     await client.connect();
     server.holdReplies = true;
@@ -349,7 +353,8 @@ describe('transport-independent SFTP channel', () => {
     await cancelled;
     server.releaseReplies();
     await sftpTurn();
-    expect(client.connected).toBe(false);
+    expect(client.connected).toBe(true);
+    expect(client.stats.handles).toBe(0);
     expect(server.nodes.has('/home/partial')).toBe(true);
   });
 
@@ -389,12 +394,14 @@ describe('transport-independent SFTP channel', () => {
     const { client, server } = sftpFixture({ extensions: false });
     await client.connect();
     server.holdReplies = true;
-    const first = Array.from({ length: 64 + 1024 }, () => client.stat(b('/home')));
+    const first = Array.from({ length: 64 + sftpBounds.queueRequests }, () =>
+      client.stat(b('/home')),
+    );
     await expect(client.stat(b('/home'))).rejects.toMatchObject({
       code: 'VIEWER_REMOTE_FAILURE',
       message: expect.stringContaining('queue is full'),
     });
-    expect(client.stats).toMatchObject({ inFlight: 64, queued: 1024 });
+    expect(client.stats).toMatchObject({ inFlight: 64, queued: sftpBounds.queueRequests });
     await sftpTurn();
     server.releaseReplies();
     await Promise.all(first);

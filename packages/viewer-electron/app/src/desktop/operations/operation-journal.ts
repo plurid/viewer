@@ -351,7 +351,7 @@ export class OperationLog {
           const kept = `${file}.unreadable-${Date.now()}`;
           await rename(file, kept);
           notices.push(
-            `A file operation record could not be read, so its Undo is unavailable. It was kept at ${kept}. (${error.message})`,
+            `A file operation record couldn’t be read, so that operation can’t be undone. Viewer kept the record at ${kept}. (${error.message})`,
           );
           return undefined;
         });
@@ -435,7 +435,7 @@ export class OperationLog {
       const kept = `${previous.file}.unreadable-${Date.now()}`;
       await rename(previous.file, kept);
       notices.push(
-        `Recent file operation history could not be read, so earlier Undo is unavailable. It was kept at ${kept}.`,
+        `Recent file operation history couldn’t be read, so earlier operations can’t be undone. Viewer kept it at ${kept}.`,
       );
       return;
     }

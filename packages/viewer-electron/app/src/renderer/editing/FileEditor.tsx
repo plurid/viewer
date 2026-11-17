@@ -19,7 +19,9 @@ import {
 } from '../../domain/editing/documents';
 import { languageFor } from '../../domain/editing/languages';
 import { baseName } from '../../domain/workspaces/planes';
-import { Empty, Loading } from '../ui/primitives';
+import { Failure, Loading } from '../ui/primitives';
+import { useShortcutGlyphs } from '../keys/hints';
+import { withShortcut } from '../../domain/preferences/shortcuts';
 import { FolderAccessButton } from '../ui/permissions/FolderAccessButton';
 import { report, updatePane, useViewer } from '../state/store';
 import { discardBuffer, keepBuffer, readBuffer } from './buffers';
@@ -77,6 +79,7 @@ export function FileEditor({
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const session = useMemo(() => takeSession(paneID) ?? crypto.randomUUID(), [paneID]);
   const settings = useViewer((state) => effectiveWindowSettings(state).editor);
+  const saveKeys = useShortcutGlyphs('save-file');
   const Editor = CustomEditor ?? TextEditor;
   const document = loaded?.document;
   const name = document ? baseName(document.file) : 'this file';
@@ -299,7 +302,7 @@ export function FileEditor({
     return unavailable(refusal.reason);
   if (refusal)
     return (
-      <Empty icon="warning" title="This file is not edited here" detail={refusal.reason}>
+      <Failure icon="warning" title="Can't edit this file here" detail={refusal.reason}>
         {refusal.folder && (
           <FolderAccessButton folder={refusal.folder} onGranted={() => void open(true)} />
         )}
@@ -307,7 +310,7 @@ export function FileEditor({
           <button onClick={() => void saveAs().catch(report)}>Save Unsaved Edits As…</button>
         )}
         <button onClick={onClose}>Back to Preview</button>
-      </Empty>
+      </Failure>
     );
   if (!loaded) return <Loading label="Opening for editing…" />;
   const toolbar = (
@@ -315,7 +318,12 @@ export function FileEditor({
     // ⇧⌘S and ⌘Z, rather than buttons
     <div className="preview-toolbar text-editing-toolbar">
       {dirty && (
-        <button className="primary" disabled={saving} title="Save (⌘S)" onClick={() => void save()}>
+        <button
+          className="primary"
+          disabled={saving}
+          title={withShortcut('Save', saveKeys)}
+          onClick={() => void save()}
+        >
           Save
         </button>
       )}

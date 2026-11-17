@@ -33,7 +33,7 @@ export function tourCommands({
     commands.push(
       {
         id: 'tour-play',
-        label: `Play tour “${name}”`,
+        label: `Play Tour “${name}”`,
         group: 'Space',
         icon: 'play',
         aliases: ['tour', 'present', 'presentation', 'stops'],
@@ -42,7 +42,7 @@ export function tourCommands({
       },
       {
         id: 'tour-edit',
-        label: `Edit tour “${name}”`,
+        label: `Edit Tour “${name}”`,
         group: 'Space',
         icon: 'rename',
         aliases: ['tour', 'stops', 'captions'],
@@ -55,7 +55,7 @@ export function tourCommands({
     commands.push(
       {
         id: 'tour-next',
-        label: 'Next tour stop',
+        label: 'Next Tour Stop',
         group: 'Space',
         icon: 'right',
         aliases: ['tour', 'next stop'],
@@ -64,7 +64,7 @@ export function tourCommands({
       },
       {
         id: 'tour-previous',
-        label: 'Previous tour stop',
+        label: 'Previous Tour Stop',
         group: 'Space',
         icon: 'left',
         aliases: ['tour', 'previous stop', 'back'],
@@ -73,7 +73,7 @@ export function tourCommands({
       },
       {
         id: 'tour-pause',
-        label: playback.paused ? 'Resume tour' : 'Pause tour',
+        label: playback.paused ? 'Resume Tour' : 'Pause Tour',
         group: 'Space',
         icon: playback.paused ? 'play' : 'pause',
         aliases: ['tour', 'pause', 'resume'],
@@ -85,7 +85,7 @@ export function tourCommands({
     draft
       ? {
           id: 'tour-add-stop',
-          label: file ? `Add “${fileName(file)}” to the tour` : 'Add a file plane to the tour',
+          label: file ? `Add “${fileName(file)}” to the Tour` : 'Add a File Plane to the Tour',
           group: 'Space',
           icon: 'plus',
           aliases: ['tour', 'stop', 'record'],
@@ -94,7 +94,7 @@ export function tourCommands({
         }
       : {
           id: 'tour-record',
-          label: 'Record a tour',
+          label: 'Record a Tour',
           group: 'Space',
           icon: 'plus',
           aliases: ['tour', 'record tour', 'stops', 'captions', 'present'],

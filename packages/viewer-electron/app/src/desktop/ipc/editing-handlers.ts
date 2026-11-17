@@ -95,8 +95,9 @@ export function createEditingHandlers(ports: EditingPorts): EditingHandlers {
       const { response: choice } = await showViewerMessage(
         window,
         {
-          title: 'Save changes?',
-          message: `Save the changes to “${name}” before closing it?`,
+          // the question once: a message that matches its title shows only as the title
+          title: `Save changes to “${name}”?`,
+          message: `Save changes to “${name}”?`,
           detail: 'If you don’t save, your changes are discarded.',
           buttons: ['Save', 'Don’t Save', 'Cancel'],
           defaultId: 0,

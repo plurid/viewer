@@ -170,7 +170,7 @@ describe('a file no preview reads', () => {
     );
     expect(view.getByRole('button', { name: 'Quick Look in macOS' })).toBeTruthy();
     expect(view.getByRole('button', { name: 'Open in Default App' })).toBeTruthy();
-    fireEvent.click(view.getByRole('button', { name: 'Show as SQLite database' }));
+    fireEvent.click(view.getByRole('button', { name: 'Show as SQLite Database' }));
     const tables = await view.findByRole('navigation', { name: 'Tables and views' });
     expect(tables.textContent).toContain('materials');
     expect(sqlite).toHaveBeenCalledWith('resource', { kind: 'tables' });
@@ -194,14 +194,14 @@ describe('a file no preview reads', () => {
       'viewer-resource://resource/asset/Report',
       expect.objectContaining({ headers: { Range: `bytes=${11 * 512}-${12 * 512 - 1}` } }),
     );
-    expect(view.getByRole('button', { name: 'Show as Word 97-2003 document' })).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Show as Word 97-2003 Document' })).toBeTruthy();
   });
 
-  it('keeps Preview unavailable for bytes it cannot name, and asks no model unless one is set up', async () => {
+  it('says there is no preview for bytes it cannot name, and asks no model unless one is set up', async () => {
     served = new Uint8Array([0x13, 0x37, 0, 0, 0x42]);
     const { view } = preview();
     await waitFor(() => expect(fetched).toHaveBeenCalled());
-    expect(view.getByText('Preview unavailable')).toBeTruthy();
+    expect(view.getByText('No preview for this kind of file')).toBeTruthy();
     expect(view.queryByRole('button', { name: /^Ask/ })).toBeNull();
   });
 });
@@ -227,7 +227,7 @@ describe('asking the prompt model', () => {
     expect((await view.findByRole('status')).textContent).toBe(
       'Studio model suggests: Encrypted SQLite database (.sqlite). Opens in DB Browser for SQLite. The header may be encrypted.',
     );
-    fireEvent.click(view.getByRole('button', { name: 'Show as Encrypted SQLite database' }));
+    fireEvent.click(view.getByRole('button', { name: 'Show as Encrypted SQLite Database' }));
     await view.findByRole('navigation', { name: 'Tables and views' });
     expect(sqlite).toHaveBeenCalled();
   });
@@ -245,7 +245,7 @@ describe('asking the prompt model', () => {
     expect((await view.findByRole('alert')).textContent).toMatch(/Allow this provider/);
     fireEvent.click(view.getByRole('button', { name: 'Review in Settings' }));
     expect(viewer.openSettings).toHaveBeenCalledWith('settings.providers');
-    expect(screen.getByRole('button', { name: 'Ask again' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ask Again' })).toBeTruthy();
   });
 });
 
@@ -349,14 +349,14 @@ describe('a format the desktop service reads by its extension', () => {
 
   it('shows a misnamed EPUB once the desktop service confirms it from the bytes', async () => {
     const { view, resource } = await preview('Field notes.bin', await book());
-    fireEvent.click(await view.findByRole('button', { name: 'Show as EPUB book' }));
+    fireEvent.click(await view.findByRole('button', { name: 'Show as EPUB Book' }));
     expect(await view.findByRole('heading', { name: 'Look around' })).toBeTruthy();
     expect(viewer.resourceFormat).toHaveBeenCalledWith(resource.id, 'epub');
   });
 
   it('shows a misnamed Word document in its reading view', async () => {
     const { view, resource } = await preview('Materials', office('docx'));
-    fireEvent.click(await view.findByRole('button', { name: 'Show as Word document' }));
+    fireEvent.click(await view.findByRole('button', { name: 'Show as Word Document' }));
     // it opens in its layout, as a Word document does
     fireEvent.click(await view.findByRole('button', { name: 'Reading' }));
     expect(await view.findByText('Field notes: a spatial workbench')).toBeTruthy();
@@ -368,7 +368,7 @@ describe('a format the desktop service reads by its extension', () => {
       'Report',
       compoundFile(wordDirectory, { directory: 10 }),
     );
-    fireEvent.click(await view.findByRole('button', { name: 'Show as Word 97-2003 document' }));
+    fireEvent.click(await view.findByRole('button', { name: 'Show as Word 97-2003 Document' }));
     expect(await view.findByText(/^Rendered /)).toBeTruthy();
     expect(read).toHaveBeenCalledWith(
       resource.url,
@@ -384,7 +384,7 @@ describe('a format the desktop service reads by its extension', () => {
       Buffer.alloc(64),
     ]);
     const { view, resource } = await preview('IMG_0001', head);
-    fireEvent.click(await view.findByRole('button', { name: 'Show as Canon RAW image' }));
+    fireEvent.click(await view.findByRole('button', { name: 'Show as Canon RAW Image' }));
     expect(await view.findByText('Camera preview')).toBeTruthy();
     expect(view.getByRole('button', { name: 'Render RAW' })).toBeTruthy();
     expect(viewer.resourceFormat).toHaveBeenCalledWith(resource.id, 'cr2');
@@ -396,7 +396,7 @@ describe('a format the desktop service reads by its extension', () => {
 
   it('refuses a format the file’s own bytes do not say, whatever head the renderer saw', async () => {
     const { view } = await preview('Notes', new Uint8Array([0x13, 0x37, 0, 0, 0x42]), await book());
-    fireEvent.click(await view.findByRole('button', { name: 'Show as EPUB book' }));
+    fireEvent.click(await view.findByRole('button', { name: 'Show as EPUB Book' }));
     expect((await view.findByRole('alert')).textContent).toBe(
       'The contents of this file do not match .epub.',
     );

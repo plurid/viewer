@@ -51,7 +51,7 @@ export function InspectionControls() {
   }, [file, content, ocr]);
   if (note)
     return (
-      <Dialog title="Plane notes" onClose={() => setNote(undefined)}>
+      <Dialog title="Plane Notes" onClose={() => setNote(undefined)}>
         <div className="dialog-body">
           <textarea
             className="plane-notes"
@@ -74,18 +74,18 @@ export function InspectionControls() {
                 setNote({
                   ...note,
                   error:
-                    'These notes were not saved: this plane’s saved state would exceed its size limit, or the plane was closed. Shorten the notes or copy them elsewhere.',
+                    'These notes weren’t saved: they’re too long for this plane, or the plane closed. Shorten them, or copy them elsewhere.',
                 });
             }}
           >
-            Save notes
+            Save Notes
           </button>
         </footer>
       </Dialog>
     );
   if (!file) return null;
   return (
-    <Dialog title="Inspect file" onClose={() => setFile(undefined)}>
+    <Dialog title="Inspect File" onClose={() => setFile(undefined)}>
       <div className="dialog-body inspection-details">
         <PathField className="muted inspection-path" path={file} />
         <label>

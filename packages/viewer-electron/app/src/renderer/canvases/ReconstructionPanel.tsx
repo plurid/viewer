@@ -114,7 +114,7 @@ export function ReconstructionPanel({
           onChoose={setAssetID}
         />
       </label>
-      {!photos.length && <p>Drop a photo on the canvas toolbar to attach it.</p>}
+      {!photos.length && <p>Drop a photo on the canvas to attach it.</p>}
       <label>
         Selection model
         <ChoiceButton
@@ -147,7 +147,7 @@ export function ReconstructionPanel({
           )
         }
       >
-        {busy ? 'Working…' : 'Find object'}
+        {busy ? 'Working…' : 'Find Object'}
       </button>
       <button
         onClick={() =>
@@ -156,7 +156,7 @@ export function ReconstructionPanel({
             .catch((value: unknown) => setError(errorMessage(value)))
         }
       >
-        Model settings…
+        Model Settings…
       </button>
       {!configured && <p>Add your separate fal key in Settings → Models → 3D reconstruction.</p>}
       {jobs.length > 1 && (
@@ -197,7 +197,7 @@ export function ReconstructionPanel({
                 void run(() => window.viewer.reconstruction({ kind: 'cancel', id: job.id }))
               }
             >
-              Request cancellation
+              Request Cancellation
             </button>
           )}
           {job.state === 'cancel-requested' && (
@@ -218,7 +218,7 @@ export function ReconstructionPanel({
                 })
               }
             >
-              Show model in canvas
+              Show Model in Canvas
             </button>
           )}
           {job.remoteID && <small>fal request {job.remoteID}</small>}

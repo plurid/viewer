@@ -29,11 +29,17 @@ local paths in every edition. Raw location guards protect shared services and de
 entry points before path resolution.
 
 A **server connection** is a private saved SSH endpoint and its connection lifetime, distinct from a
-local server listener. The proposed `desktop/remote/*` owner coordinates system OpenSSH, askpass,
-the SFTP worker, remote resources, server Trash and operation executors. Existing Operations,
-Resources, Terminals and Trash retain their shared state and authority. SSH planes are proposed for
-the direct build behind `VIEWER_REMOTE=1` until qualification; connections and secrets stay outside
-editable JSONC and agent authority.
+local server listener. `desktop/remote/connections.ts` owns private saved records, state, window
+authority, idle release and connection-scoped quiescing; `control.ts` owns explicit system OpenSSH
+masters and their holders. `askpass.ts`, `native-prompts.ts` and the Swift relay attach native
+secure input to the clicking window. `session.ts` owns one lazy `UtilityClient` for
+`remote-worker.ts`, its SFTP channels and scheduler. `ssh-config.ts` reads host suggestions only
+after the person's yes. `domain/remote/ssh-arguments.ts` builds every argv and
+`domain/remote/ssh-errors.ts` classifies exits. Remote resources, server Trash and operation
+executors join this owner in later packages. Existing Operations, Resources, Terminals and Trash
+retain their shared state and authority. SSH planes are proposed for the direct build behind
+`VIEWER_REMOTE=1` until qualification; construction never connects or writes a connection record.
+Connections and secrets stay outside editable JSONC and agent authority.
 
 `desktop/remote/sftp` owns the bounded SFTP v3 codec, duplex client, stream windows and listing-name
 boundary.
@@ -59,7 +65,13 @@ owns the persisted renderer transitions; Manage is `ui/workspace/WorkspacesDialo
 `domain/workspaces/found` owns root rules, candidate evidence, keys and plain found definitions.
 `domain/workspaces/ownership.ts` indexes owning roots and workspace shares. The desktop
 `workspaces/found-workspaces.ts` schedules bounded probes through FolderFacts and keeps the private
-found cache, hidden roots and run references. Workspace links record their definition source.
+found cache and hidden roots; only the person's `workspaceDefinitionFile` requests hide or show one.
+Workspace links record their definition source.
+
+The **workspace offer** is `domain/workspaces/offer.ts`: the owning root for a folder and whether
+opening it adds something. `domain/suggestions/insights.ts` words it as the `workspace.open` card,
+`renderer/workspace/workspace-offer.ts` reads it for the folder in view, and the folder card and the
+palette's Suggested section show it. Its dismissals stay out of agents' configuration reads.
 
 - `domain/terminals/command-text.ts` validates command text.
 - `domain/terminals/declared-commands.ts` parses bounded file declarations without execution.
@@ -105,7 +117,10 @@ saved-value reader.
 Completed document data can outlive a view in `renderer/previews/document-cache.ts`, bounded per
 window and keyed by workspace and validated source version. It retains no resource URLs or mounted
 viewers. Every reuse follows fresh resource authorization; revocation invalidates pending and
-completed matching data. Desktop extraction and in-flight deduplication remain desktop-owned.
+completed matching data. Desktop extraction and in-flight deduplication remain desktop-owned. Parsed
+3D models outlive a view in `renderer/previews/model/cache.ts`: CPU geometry only, keyed by path and
+file version, bounded per window, forgotten on revocation; each preview builds and disposes its own
+GPU geometry.
 
 ## Documents and runtimes
 
@@ -211,6 +226,9 @@ approvals. [Window-owned dialogs](docs/adr/0012-window-owned-dialogs.md) records
 | `Disclosure`                    | `renderer/ui/Disclosure.tsx`; base.css draws every summary, `disclosure.css` places each variant |
 | `Button`, `Row`                 | `renderer/ui/primitives.tsx`; base.css styles the button kinds and the shared row edge           |
 | `CopyButton`, `PathField`       | `renderer/ui/primitives.tsx`, copying through the clipboard helpers below                        |
+| `PathLabel`, `PathHome`         | `renderer/ui/PathLabel.tsx`; `domain/files/path-label.ts` fits a path, home as `~`               |
+| `FormField`, `FileNameField`    | `renderer/ui/`; `form-fields.css` lays out output forms, labels above fields                     |
+| `DestinationField`              | `renderer/ui/DestinationField.tsx`: a folder's name, its path label and Choose…                  |
 | `Panel`, `PanelSection`         | `renderer/ui/Panel.tsx`; what holds a panel places it, such as `SpaceOverlay`'s grid             |
 | `Popover`, `useAnchoredLayer`   | `renderer/ui/Popover.tsx`; `ChoiceMenu` and `ContextMenu` place their layers with the hook       |
 | Type, spacing and shadow tokens | `renderer/styles/base.css` `:root`, checked against DESIGN.md by `tests/design-tokens.test.ts`   |

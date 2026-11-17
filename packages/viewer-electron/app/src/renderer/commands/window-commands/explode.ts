@@ -1,3 +1,4 @@
+import { plural } from '../../../domain/plural';
 import { activeWorkspace, announce, getState } from '../../state/store';
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
@@ -25,7 +26,7 @@ export function explodeCommands({ actions, windowScope }: WindowScopes): Command
   return [
     ...([1, 2, 3] as const).map((depth): CommandDefinition => ({
       id: depth === 1 ? 'explode-folder' : `explode-folder.${depth}`,
-      label: depth === 1 ? 'Explode folder' : `Explode folder, ${depth} levels`,
+      label: depth === 1 ? 'Explode Folder' : `Explode Folder, ${depth} Levels`,
       group: 'Folder',
       icon: 'folder',
       detail: 'Its subfolders as linked planes',
@@ -35,12 +36,12 @@ export function explodeCommands({ actions, windowScope }: WindowScopes): Command
         const { active } = current();
         if (active?.type !== 'folder') return;
         const opened = await actions.workspace.explode(active.id, depth);
-        if (opened) announce(`Opened ${opened} ${opened === 1 ? 'folder' : 'folders'} as planes.`);
+        if (opened) announce(`Opened ${plural(opened, 'folder')} as planes.`);
       },
     })),
     {
       id: 'collapse-folder',
-      label: 'Collapse exploded folders',
+      label: 'Collapse Exploded Folders',
       group: 'Folder',
       icon: 'close',
       aliases: ['collapse', 'implode', 'fold'],

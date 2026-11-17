@@ -142,7 +142,7 @@ describe('certificates and keys', () => {
       'Viewer Sample Root CA',
     ]);
     expect(view.getByText('3 certificates')).toBeTruthy();
-    fireEvent.click(view.getByRole('button', { name: 'Show as hex' }));
+    fireEvent.click(view.getByRole('button', { name: 'Show as Hex' }));
     expect(showHex).toHaveBeenCalledOnce();
     fireEvent.click(view.getByRole('button', { name: 'Source' }));
     expect(await view.findAllByText('-----BEGIN CERTIFICATE-----')).toHaveLength(3);
@@ -174,7 +174,7 @@ describe('certificates and keys', () => {
     expect(card.textContent).toContain('EC P-384');
     expect(card.textContent).toContain('384 bits');
     expect(view.queryByRole('button', { name: 'Source' })).toBeNull();
-    expect(view.queryByRole('button', { name: 'Show as hex' })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Show as Hex' })).toBeNull();
     const body = key.split('\n').slice(1, -2).join('');
     for (const piece of body.match(/.{16}/g)!)
       expect(view.container.textContent).not.toContain(piece);

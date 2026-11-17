@@ -90,7 +90,7 @@ describe('desktop workspace definition catalog', () => {
       f.service
         .snapshot()
         .diagnostics.some(
-          (issue) => issue.level === 'note' && issue.message.includes('last valid'),
+          (issue) => issue.level === 'note' && issue.message.includes('last projects it read'),
         ),
     ).toBe(true);
     await f.projects('Successor');
@@ -147,7 +147,7 @@ describe('desktop workspace definition catalog', () => {
       expect.objectContaining({ source: 'workspaces.jsonc', line: 2 }),
     );
     expect(
-      catalog.diagnostics.some((problem) => problem.message.includes('last valid projects')),
+      catalog.diagnostics.some((problem) => problem.message.includes('last projects it read')),
     ).toBe(true);
     const second = new WorkspaceDefinitions(f.root, f.home, {
       access: f.access,

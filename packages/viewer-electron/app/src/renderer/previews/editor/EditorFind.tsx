@@ -152,7 +152,7 @@ export function EditorFind({
       <IconButton
         className="editor-find-disclosure"
         icon={replacing ? 'down' : 'right'}
-        label="Toggle replace"
+        label={replacing ? 'Hide Replace' : 'Show Replace'}
         aria-expanded={replacing}
         onClick={() => setReplacing((value) => !value)}
       />
@@ -210,7 +210,7 @@ export function EditorFind({
               type="button"
               className="button-secondary editor-find-action"
               disabled={!found}
-              title="Replace (Enter)"
+              title="Replace (↩)"
               onClick={() => valid() && replaceNext(view)}
             >
               Replace
@@ -218,9 +218,9 @@ export function EditorFind({
             <button
               type="button"
               className="button-secondary editor-find-action"
-              aria-label="Replace all"
+              aria-label="Replace All"
               disabled={!found}
-              title="Replace all (⌘Enter)"
+              title="Replace All (⌘↩)"
               onClick={() => valid() && replaceAll(view)}
             >
               All

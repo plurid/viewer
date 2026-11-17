@@ -5,6 +5,7 @@ import type { ClipboardContent } from '../../domain/files/clipboard';
 import {
   CURRENT_STATE_VERSION,
   type Bootstrap,
+  type FileEntry,
   type OperationJob,
   type SavedState,
   type UIPreferences,
@@ -27,7 +28,15 @@ export interface ViewerState {
   bootstrap: Bootstrap;
   jobs: OperationJob[];
   activePane: string;
-  quickPreview: { paths: string[]; index: number; paneID?: string; workspaceID: string } | null;
+  quickPreview: {
+    paths: string[];
+    index: number;
+    paneID?: string;
+    workspaceID: string;
+    /** The folders among `paths`, which have no preview of their own: once it follows the plane's
+     * selection, Quick Preview names them. */
+    folders?: readonly FileEntry[];
+  } | null;
   notice: string | null;
   folderRecovery?: FolderRecovery;
   unavailableFolder?: string;

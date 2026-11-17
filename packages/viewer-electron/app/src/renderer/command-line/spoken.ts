@@ -248,7 +248,7 @@ async function runSteps(own: SpokenSession, from: number, pressed?: number): Pro
         scope: 'window',
         context: own.context,
       })[0];
-      return failed(found?.unavailable ?? 'It is no longer available here.');
+      return failed(found?.unavailable ?? 'It doesn’t apply here anymore.');
     }
     try {
       const outcome = await registry.runSpoken(

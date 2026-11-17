@@ -1,3 +1,4 @@
+import { titleCase } from '../../../domain/title-case';
 import { overridable } from '../../../domain/preferences/overrides';
 import { clearWorkspaceOverrides, setWorkspaceOverride } from '../../state/workspaces';
 import {
@@ -31,7 +32,6 @@ import {
 
 /** Settings whose command is their own: they keep its name and shortcut, with no second one. */
 const ownCommands = new Set(['ui.sidebar.visible', 'ui.titlebar.visible']);
-const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 /** A number's or colour's value as its palette row shows it; an empty colour is the automatic one. */
 const shown = (value: unknown) => (value === '' ? 'Automatic' : String(value ?? ''));
 /** A setting's name away from its Settings page: "Plane toolbar › Back button". */
@@ -96,8 +96,8 @@ export function settingsCommands({ windowScope }: WindowScopes): CommandDefiniti
             id: 'workspace-overrides-clear',
             label:
               getState().saved.profile || activeWorkspace().profileID
-                ? 'Use profile defaults in this workspace'
-                : 'Use the general settings in this workspace',
+                ? 'Use Profile Defaults in This Workspace'
+                : 'Use the General Settings in This Workspace',
             group: 'Settings',
             icon: 'restore',
             aliases: ['override', 'workspace settings', 'reset workspace'],
@@ -144,8 +144,8 @@ export function settingsCommands({ windowScope }: WindowScopes): CommandDefiniti
         const shows = definition.label.startsWith('Show ') && !settingContext(definition);
         const toggle = (value: boolean) =>
           shows
-            ? (value ? 'Hide ' : 'Show ') + definition.label.slice('Show '.length)
-            : `${value ? 'Turn off' : 'Turn on'}: ${name}`;
+            ? titleCase((value ? 'Hide ' : 'Show ') + definition.label.slice('Show '.length))
+            : `${value ? 'Turn Off' : 'Turn On'}: ${name}`;
         const commands: CommandDefinition[] = [
           {
             ...base,
@@ -192,7 +192,7 @@ export function settingsCommands({ windowScope }: WindowScopes): CommandDefiniti
         {
           ...base,
           id: 'setting.' + path,
-          label: `Change ${lowerFirst(name)}…`,
+          label: `Change ${titleCase(name)}…`,
           icon: 'settings',
           setting: { name, value: shown(current(path)) },
           run: () => window.viewer.openSettings(path),

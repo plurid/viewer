@@ -183,7 +183,7 @@ describe('renderer defined workspace opening', () => {
     await openDefinition(definition.key);
     expect(activeWorkspace().panes).toEqual(workspace.panes);
     expect(activeWorkspace().definition!.basis).toBe('a'.repeat(64));
-    expect(getState().notice).toContain('Definition changed');
+    expect(getState().notice).toContain('definition has changed since');
     expect(getState().definitionNotice).toBe(workspace.id);
     request.mockResolvedValueOnce({
       kind: 'saved',

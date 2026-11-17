@@ -95,7 +95,10 @@ it.each(['commands', 'files'] as const)(
     fireEvent.keyDown(field, { key: 'ArrowDown' });
     const selected = field.getAttribute('aria-activedescendant');
     expect(screen.getByText('2 selected ·')).toBeTruthy();
-    expect(screen.getByText(directory).title).toBe(directory);
+    // the footer's path label: the whole path in its tooltip and accessible text
+    expect(screen.getByText(directory).closest('.path-label')!.getAttribute('title')).toBe(
+      directory,
+    );
     const copy = screen.getByRole('button', { name: 'Copy path' });
     copy.focus();
     await act(async () => fireEvent.click(copy));
@@ -140,7 +143,7 @@ it.each([
     expect(editor.patches).not.toHaveBeenCalled();
     expect(chooseFolder).not.toHaveBeenCalled();
     expect(snapshot.settings.browsing[field]).toBe(directory);
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Change folder…' })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Change Folder…' })));
     expect(editor.patches).toHaveBeenCalledWith([
       { path: `settings.browsing.${field}`, value: '/fixtures/Next job' },
       { path: `settings.browsing.${location}`, value: 'custom' },

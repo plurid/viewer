@@ -339,7 +339,7 @@ try {
   main = await viewer.connect();
   await metrics(1440, 940);
   await select(folder);
-  await palette('Open linked plane');
+  await palette('Open Linked Plane');
   await until(
     () => evaluate(exists('[data-file-owner] [aria-label="View linked plane for Engineering"]')),
     Boolean,
@@ -350,7 +350,7 @@ try {
   const folderID = await evaluate(pageCall(linkedFolderID));
   assert.ok(await evaluate(exists(parentButton(folderID))));
   await select(step);
-  await palette('Quick preview');
+  await palette('Quick Preview');
   await models();
   if (process.argv.includes('--baseline')) {
     await capture('original-step-dark');
@@ -410,7 +410,7 @@ try {
     await evaluate(clickElement('[aria-label="Close shading controls"]'));
     await evaluate(clickElement('dialog[open] > header [aria-label="Close"]'));
     await select(stl);
-    await palette('Quick preview');
+    await palette('Quick Preview');
     await models();
     await click('Shading');
     await surface('clay');
@@ -418,7 +418,7 @@ try {
     await evaluate(clickElement('dialog[open] > header [aria-label="Close"]'));
     await theme('dark');
     await select(step);
-    await palette('Quick preview');
+    await palette('Quick Preview');
     await models();
     await click('Open linked plane');
     await models();
@@ -427,7 +427,7 @@ try {
     const modelID = await evaluate(pageCall(linkedModelID));
     await active(modelID);
     assert.ok(await evaluate(exists(parentButton(modelID))));
-    await palette('Dock plane');
+    await palette('Dock Plane');
     await settle();
     // Orbit once so this check compares a user camera pose, rather than an
     // absent default camera record (initial framing is deliberately unsaved).
@@ -494,7 +494,7 @@ try {
     await capture('parent-link-markers-dark', '[data-viewer-plane]');
     const count = (await saved()).workspaces[0].panes.length;
     await select(step);
-    await palette('View open plane');
+    await palette('View Open Plane');
     await active(modelID);
     await settle();
     assert.equal((await saved()).workspaces[0].panes.length, count, 'View open plane never spawns');
@@ -539,7 +539,7 @@ try {
     await capture('gallery-link-marker-dark', '[data-file-owner]');
     await palette('List view');
     await select(step);
-    await palette('View open plane');
+    await palette('View Open Plane');
     await active(modelID);
     await settle();
     await click('Shading');

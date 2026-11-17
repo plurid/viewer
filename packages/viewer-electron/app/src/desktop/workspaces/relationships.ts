@@ -187,9 +187,7 @@ export class Relationships {
               note: run.definition.name,
             });
           if (pairs.length > 200)
-            reasons.push(
-              'A workflow step has more than 200 related outputs; showing a bounded subset.',
-            );
+            reasons.push('A workflow step has more than 200 related outputs; showing 200 of them.');
         }
     if (request.content) {
       const before = sourceVersion(await entry(file));
@@ -221,8 +219,7 @@ export class Relationships {
             target + (exact ? '' : ' · Reference syntax match; code is not executed or resolved.'),
         });
     }
-    if (limited)
-      reasons.push('Showing 500 relationships from the retained operation and workflow history.');
+    if (limited) reasons.push('Showing 500 relationships from recent operations and workflows.');
     const visible = relations;
     const files: RelatedFile[] = [];
     const versions = new Map(

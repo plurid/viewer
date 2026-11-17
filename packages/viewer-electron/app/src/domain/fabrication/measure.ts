@@ -11,6 +11,7 @@ import { boundsOf, flat, insideRing, pointSegmentDistance } from '../layout/nest
 import { chain, suggestedMarks } from '../layout/nesting/parts';
 import type { PitchAxis } from './plan';
 
+import { plural } from '../plural';
 export { millimetreText, pitchAxes } from './plan';
 export type { PitchAxis } from './plan';
 
@@ -96,9 +97,6 @@ interface Ring extends Loop {
   depth: number;
 }
 
-const countText = (count: number, one: string, many = one + 's') =>
-  `${count} ${count === 1 ? one : many}`;
-
 export function measureDrawing(drawing: Drawing): MeasureOutcome {
   const unit = unitInfo(drawing.units);
   if (!unit.mm)
@@ -137,9 +135,7 @@ export function measureDrawing(drawing: Drawing): MeasureOutcome {
     return { status: 'refused', reason: 'The drawing has no lines, arcs or circles to measure.' };
   const twinCount = [...twins.values()].reduce((sum, list) => sum + list.length, 0);
   if (twinCount)
-    notes.push(
-      `${countText(twinCount, 'entity is', 'entities are')} drawn twice; each counts once.`,
-    );
+    notes.push(`${plural(twinCount, 'entity is', 'entities are')} drawn twice; each counts once.`);
   const withTwins = (ids: readonly string[]) => ids.flatMap((id) => [id, ...(twins.get(id) ?? [])]);
 
   const loops: Loop[] = [];
@@ -165,7 +161,7 @@ export function measureDrawing(drawing: Drawing): MeasureOutcome {
   const joined = chain(runs, measureTolerances.join);
   for (const run of joined.closed)
     loops.push({ points: opened(run.points), entities: run.entities.map(String) });
-  if (joined.open.length) notes.push(`${countText(joined.open.length, 'open path')} not measured.`);
+  if (joined.open.length) notes.push(`${plural(joined.open.length, 'open path')} not measured.`);
 
   const rings = nest(
     loops.flatMap((loop): Ring[] => {
@@ -235,7 +231,7 @@ export function measureDrawing(drawing: Drawing): MeasureOutcome {
   const approximate = holes.filter((hole) => hole.approximate);
   if (approximate.length)
     notes.push(
-      `${countText(approximate.length, 'hole is', 'holes are')} fitted to lines or splines: ${approximate
+      `${plural(approximate.length, 'hole is', 'holes are')} fitted to lines or splines: ${approximate
         .map((hole) => hole.number)
         .join(', ')}.`,
     );
@@ -423,6 +419,7 @@ export function pitchBetween(a: Hole, b: Hole, axis: PitchAxis): number {
 export function alignedAxis(a: Hole, b: Hole): PitchAxis {
   if (Math.abs(a.centre.y - b.centre.y) <= measureTolerances.aligned) return 'x';
   if (Math.abs(a.centre.x - b.centre.x) <= measureTolerances.aligned) return 'y';
+  // eslint-disable-next-line no-restricted-syntax -- the stored axis value, not interface text
   return 'centre';
 }
 export const pitchOf = (a: Hole, b: Hole, axis: PitchAxis): Pitch => ({
@@ -470,6 +467,7 @@ export function nearestPitches(measurement: Measurement): Pitch[] {
       distance = Infinity;
     for (const other of measurement.holes) {
       if (other === hole || other.outline !== hole.outline) continue;
+      // eslint-disable-next-line no-restricted-syntax -- the stored axis value, not interface text
       const between = pitchBetween(hole, other, 'centre');
       if (between < distance) {
         distance = between;
@@ -479,6 +477,7 @@ export function nearestPitches(measurement: Measurement): Pitch[] {
     if (!nearest) continue;
     const [a, b] = hole.number < nearest.number ? [hole, nearest] : [nearest, hole];
     const key = `${a.number}:${b.number}`;
+    // eslint-disable-next-line no-restricted-syntax -- the stored axis value, not interface text
     if (!pairs.has(key)) pairs.set(key, pitchOf(a, b, 'centre'));
   }
   return [...pairs.values()];

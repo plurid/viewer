@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import { createDefinitionHandlers } from '../src/desktop/ipc/definition-handlers';
+import { schemas } from '../src/desktop/ipc/schemas';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 import type { WorkspaceDefinitions } from '../src/desktop/workspaces/definitions';
 import type { DefinitionCatalog } from '../src/domain/workspaces/definitions/schema';
@@ -60,6 +61,8 @@ function fixture() {
     refreshSourceOffer: vi.fn(async () => {}),
     setProjectManager: vi.fn<WorkspaceDefinitions['setProjectManager']>(async () => {}),
     edit: vi.fn(async () => catalog.file.path),
+    hideFound: vi.fn(async (_key: string) => {}),
+    showFound: vi.fn(async (_root?: string) => {}),
   };
   const windows = new Map(
     [1, 2].map((owner) => [owner, { isDestroyed: () => false, show: vi.fn(), focus: vi.fn() }]),
@@ -397,13 +400,13 @@ describe('desktop definition open decisions', () => {
   it('refuses hidden, missing and nonexistent keys without a build', async () => {
     const f = fixture();
     f.definition.hidden = true;
-    await expect(f.open(1)).rejects.toThrow('unavailable');
+    await expect(f.open(1)).rejects.toThrow('can’t find this workspace’s definition');
     f.definition.hidden = false;
     f.definition.rootState = 'missing';
     await expect(f.open(1)).rejects.toThrow('missing');
     await expect(
       f.handlers.workspaceDefinitions([{ kind: 'open', key: 'missing' }], 1),
-    ).rejects.toThrow('unavailable');
+    ).rejects.toThrow('can’t find this workspace’s definition');
   });
   it('edits via the operating system and validates without mutating a definition', async () => {
     const f = fixture();
@@ -434,7 +437,7 @@ describe('desktop definition open decisions', () => {
     await f.handlers.workspaceDefinitionFile([{ kind: 'catalog' }], 1);
     expect(native.choose).not.toHaveBeenCalled();
     await expect(f.handlers.workspaceDefinitionFile([{ kind: 'allow-source' }], 1)).rejects.toThrow(
-      'Choose Use VS Code projects',
+      'Choose Use VS Code Projects',
     );
     expect(native.choose).not.toHaveBeenCalled();
     f.definitions.setProjectManager.mockImplementation(async (enabled, assertHuman) => {
@@ -459,5 +462,51 @@ describe('desktop definition open decisions', () => {
     await expect(
       f.handlers.workspaceDefinitionFile([{ kind: 'project-manager', enabled: true }], 1),
     ).rejects.toThrow('only to the person');
+  });
+});
+
+describe('Not a Workspace', () => {
+  it('accepts a definition key to hide and an absolute root to show', () => {
+    const valid = (request: unknown) =>
+      schemas.workspaceDefinitionFile.safeParse([request]).success;
+    expect(valid({ kind: 'not-a-workspace', key: 'code/site' })).toBe(true);
+    expect(valid({ kind: 'show-found' })).toBe(true);
+    expect(valid({ kind: 'show-found', root: '/home/sample/code/site' })).toBe(true);
+    expect(valid({ kind: 'show-found', root: 'code/site' })).toBe(false);
+    expect(valid({ kind: 'not-a-workspace' })).toBe(false);
+    expect(valid({ kind: 'not-a-workspace', key: 'code/site', root: '/x' })).toBe(false);
+  });
+  it('hides and shows found roots for the person only', async () => {
+    const f = fixture();
+    await f.handlers.workspaceDefinitionFile([{ kind: 'not-a-workspace', key: 'code/site' }], 1);
+    expect(f.definitions.hideFound).toHaveBeenCalledWith('code/site');
+    await f.handlers.workspaceDefinitionFile(
+      [{ kind: 'show-found', root: '/home/sample/code/site' }],
+      1,
+    );
+    expect(f.definitions.showFound).toHaveBeenCalledWith('/home/sample/code/site');
+    await f.handlers.workspaceDefinitionFile([{ kind: 'show-found' }], 1);
+    expect(f.definitions.showFound).toHaveBeenLastCalledWith(undefined);
+    f.isAgent.mockReturnValue(true);
+    f.definitions.hideFound.mockClear();
+    f.definitions.showFound.mockClear();
+    await expect(
+      f.handlers.workspaceDefinitionFile([{ kind: 'not-a-workspace', key: 'code/site' }], 1),
+    ).rejects.toThrow('only to the person');
+    await expect(f.handlers.workspaceDefinitionFile([{ kind: 'show-found' }], 1)).rejects.toThrow(
+      'only to the person',
+    );
+    expect(f.definitions.hideFound).not.toHaveBeenCalled();
+    expect(f.definitions.showFound).not.toHaveBeenCalled();
+  });
+  it('asks to close a workspace linked to the definition first', async () => {
+    const f = fixture();
+    const workspace = f.a.workspaces.find((item) => item.id === f.first)!;
+    workspace.definition = { key: 'code/site', basis: 'basis', source: 'found' };
+    f.sessions.save(1, f.a);
+    await expect(
+      f.handlers.workspaceDefinitionFile([{ kind: 'not-a-workspace', key: 'code/site' }], 2),
+    ).rejects.toThrow('Close “First” first.');
+    expect(f.definitions.hideFound).not.toHaveBeenCalled();
   });
 });

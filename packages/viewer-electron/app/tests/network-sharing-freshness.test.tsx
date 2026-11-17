@@ -65,7 +65,7 @@ it('does not flash a cached negative while the forced dialog read is outstanding
   expect(screen.queryByText('This folder is not shared.')).toBeNull();
   await act(async () => finish({ ...empty, status: 'unknown' }));
   expect(
-    await screen.findByText('Viewer could not check whether this folder is shared.'),
+    await screen.findByText("Viewer couldn't check whether this folder is shared."),
   ).toBeTruthy();
   expect(screen.queryByText('This folder is not shared.')).toBeNull();
 });

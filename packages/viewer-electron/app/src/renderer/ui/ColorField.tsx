@@ -40,7 +40,7 @@ export function ColorField({
   /** `#rrggbb`, or empty for the automatic colour. */
   value: string;
   look: Look;
-  /** The automatic choice's name: "Automatic", "General colour". */
+  /** The automatic choice's name: "Automatic", "General color". */
   automatic: string;
   /** What the automatic choice is now, shown on it and offered first by the picker. */
   automaticColor?: string;
@@ -76,12 +76,12 @@ export function ColorField({
       <label
         className="color-swatch color-own"
         data-selected={own}
-        title={own ? `Your colour (${value})` : 'A colour of your own'}
+        title={own ? `Your color (${value})` : 'A color of your own'}
         style={own ? swatch(value) : undefined}
       >
         <input
           type="color"
-          aria-label="Custom colour"
+          aria-label="Custom color"
           value={value || automaticColor || '#272a30'}
           onChange={(event) => onChange(event.target.value.toLowerCase())}
         />

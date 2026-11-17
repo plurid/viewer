@@ -112,14 +112,14 @@ describe('profiles', () => {
   });
   it('keeps window commands truthful while a profile hides chrome', async () => {
     await act(async () => find('profile.focus').run(context));
-    expect(label('toggle-titlebar')).toBe('Show title bar');
-    expect(label('setting.ui.space.grid@workspace')).toBe('This workspace: Show background grid');
+    expect(label('toggle-titlebar')).toBe('Show Title Bar');
+    expect(label('setting.ui.space.grid@workspace')).toBe('This workspace: Show Background Grid');
     await act(async () => find('toggle-titlebar').run(context));
     expect(effectiveWindowUI(getState()).titlebar.visible).toBe(true);
     expect(getState().saved.ui.titlebar.visible).toBe(true);
     await act(async () => find('setting.ui.space.grid@workspace').run(context));
     expect(space().grid).toBe(true);
-    expect(label('setting.ui.space.grid@workspace')).toBe('This workspace: Hide background grid');
+    expect(label('setting.ui.space.grid@workspace')).toBe('This workspace: Hide Background Grid');
     await act(async () => find('setting.ui.space.grid@workspace').run(context));
     expect(space().grid).toBe(false);
     expect(activeWorkspace().overrides).not.toHaveProperty('ui.space.grid');
@@ -171,13 +171,13 @@ describe('profiles', () => {
   });
   it('Focus hides the chrome, and leaving it puts back what was there', async () => {
     expect(defaultShortcuts['focus-mode']).toBe('Cmd+Shift+F');
-    expect(label('focus-mode')).toBe('Focus mode');
+    expect(label('focus-mode')).toBe('Focus Mode');
     await act(async () => find('focus-mode').run(context));
     expect(space()).toMatchObject({ toolbar: false, minimap: false, viewcube: false, grid: false });
     expect(effectiveWindowUI(getState()).titlebar.visible).toBe(false);
     expect(getState().saved.ui.titlebar.visible).toBe(true);
     expect(settingsPatch).not.toHaveBeenCalled();
-    expect(label('focus-mode')).toBe('Leave focus mode');
+    expect(label('focus-mode')).toBe('Leave Focus Mode');
     await act(async () => find('focus-mode').run(context));
     expect(space()).toMatchObject({ toolbar: true, minimap: true, viewcube: true, grid: true });
     expect(getState().saved.ui.titlebar.visible).toBe(true);

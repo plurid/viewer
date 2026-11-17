@@ -426,9 +426,9 @@ export class Archives {
           length = tail.readUInt32LE(end + 12),
           offset = tail.readUInt32LE(end + 16);
         if (tail.readUInt16LE(end + 4) || tail.readUInt16LE(end + 6))
-          throw new Error('Multi-volume ZIP archives need a future adapter.');
+          throw new Error('Viewer can’t open a ZIP archive split into several files.');
         if (count === 65535 || offset === 0xffffffff)
-          throw new Error('ZIP64 needs a future archive adapter.');
+          throw new Error('Viewer can’t open ZIP64 archives.');
         if (length > 16 * 1024 * 1024 || offset + length > info.size)
           throw new Error('ZIP index exceeds the preview limit or is malformed.');
         const directory = Buffer.alloc(length);

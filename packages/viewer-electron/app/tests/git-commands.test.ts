@@ -87,10 +87,10 @@ describe('explicit Git commands', () => {
     );
     expect(rankCommands(commands, 'git log', [])[0]?.id).toBe('git-action.log');
     expect(commands.find((command) => command.id === 'git-action.pull')?.label).toContain(
-      'fast-forward only',
+      'Fast-Forward Only',
     );
     expect(commands.find((command) => command.id === 'git-action.commit')?.label).toContain(
-      'staged changes',
+      'Staged Changes',
     );
   });
 

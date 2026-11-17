@@ -70,6 +70,7 @@ export function probeFolder(
   folder: string,
   approvedPath?: string,
   permittedFiles?: ReadonlySet<string>,
+  identityOnly = false,
 ): FolderProbeResult {
   try {
     lstatSync(folder);
@@ -78,6 +79,15 @@ export function probeFolder(
       return { ok: false, reason: 'changed' };
     const info = lstatSync(actual, { bigint: true });
     if (!info.isDirectory()) return { ok: false, reason: 'not-regular' };
+    // Cached roots need identity verification without another marker or manifest read.
+    if (identityOnly)
+      return {
+        ok: true,
+        path: actual,
+        identity: exactIdentityParts(info),
+        markers: [],
+        capped: false,
+      };
     const metadata = (name: string, maximum: number): FolderRead => {
       const file = path.join(actual, name);
       try {

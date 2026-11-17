@@ -42,7 +42,7 @@ const context = (selection: FileEntry[], directory?: string): CommandContext => 
 
 it('extracts into the folder in view', async () => {
   const files = [archive('/Downloads', 'a.zip'), archive('/Downloads', 'b.tar')];
-  expect(extract.label).toBe('Extract here');
+  expect(extract.label).toBe('Extract Here');
   await extract.run(context(files, '/Downloads'));
   expect(operate).toHaveBeenCalledOnce();
   expect(operate).toHaveBeenCalledWith({

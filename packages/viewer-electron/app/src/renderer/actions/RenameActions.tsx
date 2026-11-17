@@ -33,7 +33,7 @@ export function RenameActions({
       label="Rename actions"
       disabled={disabled}
       value=""
-      placeholder="Rename actions…"
+      placeholder="Rename Actions…"
       choices={ids.flatMap((id) => {
         const command = commands.find((command) => command.id === id);
         return command ? [{ value: id, label: command.label }] : [];
@@ -47,7 +47,7 @@ export function RenameActions({
           void registry
             .run(command)
             .then((ran) => {
-              if (!ran) report('The originating plane is unavailable. Reopen Rename to try again.');
+              if (!ran) report('That folder is no longer open. Open it again, then choose Rename.');
             })
             .catch(report);
         });

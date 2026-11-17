@@ -183,15 +183,14 @@ function scrollReviewToEnd() {
   detail.scrollTop = detail.scrollHeight;
 }
 
-/** Whether every settings row naming one of the labels has a disabled, unchecked input. */
-const inputsUnavailable = (labels: string[]) =>
-  labels.every((text) => {
-    const row = [...document.querySelectorAll('label.settings-row')].find((row) =>
-      row.textContent.includes(text),
-    );
-    const input = row?.querySelector('input');
-    return input?.disabled && !input.checked;
-  });
+/** Whether no settings row offers one of the labels: agents never get them, so they are no choice. */
+const notOffered = (labels: string[]) =>
+  labels.every(
+    (text) =>
+      ![...document.querySelectorAll('label.settings-row')].some((row) =>
+        row.textContent.includes(text),
+      ),
+  );
 
 /** Opens the disclosure whose summary reads `summary`, then scrolls `reveal` into view. */
 function openDisclosure(summary: string, reveal?: string) {
@@ -458,13 +457,13 @@ try {
   await settings.evaluate(pressButton('Agents', '.settings-navigation'));
   await until(
     () => settings.evaluate(textOf('.settings-page')),
-    (text) => text.includes('Unattended execution unavailable'),
+    (text) => text.includes('Read terminal output'),
     'agent settings',
   );
-  const disabled = await settings.evaluate(
-    pageCall(inputsUnavailable, ['Unattended execution unavailable', 'Terminal input unavailable']),
+  const absent = await settings.evaluate(
+    pageCall(notOffered, ['Run programs', 'Type into terminals']),
   );
-  assert.ok(disabled);
+  assert.ok(absent);
   await settings.evaluate(pageCall(openDisclosure, 'Shared connection'));
   await until(
     () => settings.evaluate(textOf('.settings-page')),
@@ -480,20 +479,20 @@ try {
   await settings.evaluate(pageCall(openDisclosure, 'Existing grants', '.settings-grant'));
   assert.ok(
     (await settings.evaluate(textOf('.settings-grant'))).includes(
-      'Inactive; approval is required each time',
+      'Not used: Viewer asks each time',
     ),
   );
   await metrics(settings, 1440, 940);
   await capture(settings, 'permissions-desktop-light', '.settings-grant');
   await metrics(settings, 900, 640);
   await capture(settings, 'permissions-compact-light', '.settings-grant');
-  await settings.evaluate(pageCall(revealSettingsRow, 'Unattended execution unavailable'));
+  await settings.evaluate(pageCall(revealSettingsRow, 'Read terminal output'));
   await capture(settings, 'client-compact-light', '.settings-page');
   await settings.evaluate(patchSettings({ path: 'settings.appearance', value: 'dark' }));
   await metrics(settings, 1440, 940);
   await capture(settings, 'client-desktop-dark', '.settings-page');
   evidence.push(
-    'Actual Settings renders unavailable execution/input checkboxes disabled, terminal-read grants separately, and old execution grants visibly inactive with Revoke retained.',
+    'Actual Settings offers no execution or terminal input choice, renders terminal-read grants separately, and shows old execution grants as not used with Revoke kept.',
   );
   assert.equal(await readFile(file, 'utf8'), original);
   assert.equal(await readFile(path.join(nested, 'Kept.txt'), 'utf8'), original);

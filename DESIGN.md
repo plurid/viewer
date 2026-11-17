@@ -342,7 +342,9 @@ current product preferences.
 
 Keep file rows dense and selectable in List, Grid, Columns, Gallery and Map. Distinguish the active
 column route from operation selection. Preserve cursor, range selection and type-ahead across
-rendering/culling. Blank space clears selection; its context menu targets the folder.
+rendering/culling. Blank space clears selection; its context menu targets the folder. Quick Preview
+follows its plane's selection: its arrows move the selection as the plane's own would, unless a
+focused preview scrolls or moves with them.
 
 Commands bind to a captured target and show applicability, active result and a useful empty state.
 The palette has a stable search position, bounded scrolling and keyboard navigation. Use concise
@@ -354,8 +356,9 @@ dialog icon buttons use the selected fill. Icon buttons need accessible action l
 document flow for warnings and recovery; they must not cover toolbars, lists or dialog actions.
 Modeless Settings keeps stable dimensions across sections and flushes changes on close.
 
-Respect the system-following and always-visible scrollbar choices. Reserve stable scrollbar space in
-long lists.
+Respect the system-following and always-visible scrollbar choices. Reserve stable scrollbar space
+only where a list's rows must align with its column headers. Headerless lists use the full width
+until their content scrolls.
 
 **The Essential Header Rule.** A plane header starts Essential: navigation, View, search, Frame,
 Dock, pinned tools, **…** and ×, and a format's main tools only, such as a PDF's pages, zoom and
@@ -370,6 +373,23 @@ command never gives way: the format's toolbar scrolls only as the last resort, w
 and a compact scrollbar. A format control the person also pinned shows once, as the pin.
 
 ## Preview controls
+
+**The Preview Bar Rule.** Keep preview toolbars one fixed-height line, in a plane header or where
+the preview stands. Measure controls with the shared header overflow rules: collapse labeled actions
+to named, tooltipped icons before spilling lower-priority actions into **…**, the shared button
+menu. Controls that act as one, such as zoom and its level, give way together. File facts belong in
+the footer. Controls without commands may scroll horizontally as a last resort.
+
+**The Preview Identity Rule.** Keep the footer one fixed-height line. Truncate the filename in the
+middle and retain its extension; it keeps 96 px before details give way. Dimensions give way before
+kind, then size; the complete filename and details remain in its tooltip and accessible name. Where
+a dialog's title names the file, the footer shows only the details. Selecting a file never resizes
+the frame or scrolls its column strip. List columns retain their widths; the resizable preview fills
+the rest.
+
+**The Picture Turn Rule.** Rotate left and Rotate right turn a picture's view, never its file, and
+the view remembers the turn. ⌘L, ⌘R and a trackpad turn act on the picture that has the keyboard or
+the pointer, and settle on a quarter. Save rotated copy keeps a turn as a new file beside it.
 
 Place format tools with their content. PDF page controls, worksheet tabs, model Shading and
 structured-tree controls stay usable in a narrow inspector. Keep Office Layout versus Reading/Sheet
@@ -447,6 +467,17 @@ available and offers Close project for a missing definition.
 Use persistent labels, clear action verbs, inline validation and reachable footers. A malformed
 branch name must explain the problem instead of silently disabling creation. Keep the checkout,
 branch/base and destination visible together.
+
+**The Output Form Rule.** Export forms, command parameters and project folder choices put labels
+above their fields, with the small gap below each label and the content gap between fields. Fields
+fill the available row; numbers, colors and toggles keep compact controls. Checkbox text stays
+beside its checkbox. File names use an editable stem and a fixed format suffix, keeping the suffix
+visible and opening long stems at their end. Folder choices lead with the folder's own name, then
+its path label, beside Choose…. Full names and paths remain available in tooltips and accessible
+names. Validation and name-conflict outcomes stay below the field and say what export does. Put
+source dimensions beside size controls and show the selected export's dimensions and format there;
+explain a skipped enlargement only when it applies. Help text states facts the person needs at that
+field; it never describes how Viewer works inside.
 
 Optimize follows Prepare candidates → Review/select → Save smaller copies. Keep the optional target
 size per file beside the preset; quality/dimensions and saved recipes use disclosures. Show relative
@@ -531,6 +562,12 @@ copied with the reason. A path wraps under its name, or keeps to one line where 
 shows all of it on hover. Paths copy through the desktop pasteboard, other text through the
 clipboard.
 
+**The Path Label Rule.** Every shown path is a path label: home reads `~`, and on one line the names
+after `~` or the root give way from the start, so the item's own name stays (`~/…/Job 1042/3D`); a
+name too long by itself loses its middle and keeps its extension. The tooltip and the accessible
+name hold the whole path, and copying, by button or by ⌘C, copies the whole path. A message that
+names a path writes home as `~`.
+
 **The Button Kinds Rule.** A context has at most one primary action, in the accent fill. A visible
 text button is secondary: an outline on the field fill. A bare button is the quiet ghost, filled
 only under the pointer, as icon buttons are. An action that removes or discards uses the danger ink.
@@ -557,8 +594,10 @@ a control the person clicked; Escape returns it to the connected opener.
 
 **The Anchored Layer Rule.** A popover or menu opens from its button or the pointer, placed from the
 anchor's box on screen, so it lines up with a control in a transformed plane. It stays 8 px inside
-the window, opens above the anchor when there is no room below, and closes on an outside press or
-Escape, returning focus to what opened it.
+the window and never covers its anchor: below it when it fits, else above, else on the side with
+more room, its list shortened to scroll. A second press on the anchor closes it, as do an outside
+press and Escape, returning focus to what opened it. A choice list of 8 or fewer has no search field
+and moves by type-ahead, as a native menu; a longer one keeps its search field.
 
 ### Ordinary window dialogs
 
@@ -590,8 +629,19 @@ Definitions are searched by name, not listed as hundreds of open workspaces. A f
 quiet: do not create a definition file or ask for source access until the person requests it.
 
 **The Found Workspaces Rule.** Find silently from folders the person uses. Show found workspaces
-only in search, Manage and Recently closed after planes are remembered. Mark them Found and show
-their root. Explicit definitions win for the same root. Any hiding action must offer Undo.
+only in search, Manage, Recently closed after planes are remembered, the workspace offer, and an
+empty Change workspace… that lists fewer than eight recent definitions, where up to three never
+opened fill it. Mark them Found and show their root as a path label. Explicit definitions win for
+the same root. Not a Workspace hides one at once and offers Undo for eight seconds in the place of
+the list's count; Settings counts found and hidden ones and shows hidden ones again.
+
+**The Workspace Offer Rule.** Offer the workspace a folder belongs to as one insight card in the
+folder's flow, after the first-run tips, in the first folder plane inside its root, within the three
+cards. Offer it only when opening adds something: remembered planes, a definition that opens more
+than a folder at its root, or the workspace already open elsewhere. Name the workspace and what it
+adds, show its root, and act with the row Change workspace… lists. Never offer it to the workspace
+linked to it or mostly in its root. Dismissal hides it for that root; the empty palette's Suggested
+lists it with the same reason until then.
 
 **The Definition Command Rule.** Every open, reopen, reset, launch restore and reload asks in each
 command plane: show the literal command and folder, primary **Run `npm run dev`**, secondary **Shell
@@ -646,12 +696,12 @@ the existing dialog, with Cancel and the save or restore action reachable around
 
 **The Speech Setup Rule.** Reuse compact Settings controls. Separate local model rows with the
 shared line role; show each model's name, MiB size, installation/selection state, description and
-applicable actions. Language and Microphone use shared searchable choice controls and stack below
-their labels at narrow widths. Keep a missing saved microphone visible as unavailable rather than
-silently selecting another device.
+applicable actions. Language and Microphone use the shared choice control, searchable above 8
+choices, and stack below their labels at narrow widths. Keep a missing saved microphone visible as
+unavailable rather than silently selecting another device.
 
 **The Hosted Speech Access Rule.** Keep the saved provider, full model ID and wrapping endpoint
-visible with ordinary setup actions. Use shared searchable choices and labeled fields; mask
+visible with ordinary setup actions. Use the shared choice control and labeled fields; mask
 credentials. Give Audio access its own status and explicit allow/revoke action for the saved
 endpoint and model, separate from microphone and chat permissions. Keep setup and access actions
 reachable through scrolling.

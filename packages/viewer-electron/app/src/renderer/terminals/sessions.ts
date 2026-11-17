@@ -113,7 +113,7 @@ function subscribe(): void {
             '\r\n' +
               (value.type === 'error'
                 ? value.message
-                : `${session.processLabel} exited (${value.code}). Close this plane to finish.`),
+                : `${session.processLabel} exited with code ${value.code}. Close this plane to finish.`),
           );
         }
       })

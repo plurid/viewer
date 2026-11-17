@@ -130,10 +130,10 @@ try {
       (value) => value === 'Search commands',
       'Commands focus',
     );
-    await command('Input.insertText', { text: 'Open worktree…' });
+    await command('Input.insertText', { text: 'Open Worktree…' });
     await until(
       () => evaluate(textOf('.command-result[aria-selected=true]')),
-      (value) => value.includes('Open worktree…'),
+      (value) => value.includes('Open Worktree…'),
       'Worktree command',
     );
     await evaluate(click('.command-result[aria-selected=true]'));
@@ -143,7 +143,7 @@ try {
       'Worktree picker',
     );
     await until(
-      () => evaluate(buttonState('Create worktree…', '.worktrees-dialog')),
+      () => evaluate(buttonState('Create Worktree…', '.worktrees-dialog')),
       (state) => state === 'enabled',
       'Creation available',
     );
@@ -169,7 +169,7 @@ try {
     'Source checkout',
   );
   await palette();
-  await press('Create worktree…');
+  await press('Create Worktree…');
   await type('input[aria-label="New branch name"]', 'invalid branch');
   assert.equal(
     await evaluate(attributeOf('input[aria-label="New branch name"]', 'aria-invalid')),
@@ -188,7 +188,7 @@ try {
     'Light worktree',
   );
   await capture('create-new-light');
-  await press('Create and open');
+  await press('Create and Open');
   await until(
     saved,
     (value) =>
@@ -217,10 +217,10 @@ try {
     'Parent checkout focus',
   );
   await palette();
-  await press('Create worktree…');
-  await press('Existing branch');
+  await press('Create Worktree…');
+  await press('Existing Branch');
   await capture('create-existing-light');
-  await press('Create and open');
+  await press('Create and Open');
   const existing = path.join(root, 'Repository-existing');
   await until(
     saved,

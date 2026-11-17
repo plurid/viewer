@@ -1,0 +1,138 @@
+/* The model preview's view cube: a corner of the stage, quiet until the pointer or focus is on it. */
+.model-stage {
+  container: model-stage / size;
+}
+
+.model-viewcube-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.model-viewcube {
+  position: absolute;
+  right: var(--gap-inline);
+  bottom: var(--gap-inline);
+  width: 104px;
+  height: 104px;
+  color: var(--muted);
+  font-size: var(--text-label);
+  user-select: none;
+  touch-action: none;
+  opacity: 0.6;
+  pointer-events: auto;
+  transition: opacity 120ms ease;
+}
+
+.model-viewcube[inert] {
+  pointer-events: none;
+}
+
+.model-viewcube:hover,
+.model-viewcube:focus-within {
+  opacity: 1;
+}
+
+.model-viewcube-view {
+  position: absolute;
+  inset: 0;
+  perspective: 480px;
+}
+
+.model-viewcube-solid {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-style: preserve-3d;
+}
+
+.model-viewcube-patch {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  line-height: 1;
+  white-space: nowrap;
+  backface-visibility: hidden;
+}
+
+.model-viewcube-edge,
+.model-viewcube-corner {
+  background: var(--raised);
+}
+
+.model-viewcube-patch:hover,
+#viewer .model-viewcube-patch:focus-visible {
+  background: var(--selection);
+  color: var(--ink);
+}
+
+.model-viewcube-home {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  padding: var(--gap-tight);
+}
+
+.model-viewcube-home svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Edges and corners carry no text: the side under the pointer, or under keyboard focus, is
+   named beside the cube. */
+.model-viewcube-caption {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  margin-right: var(--gap-tight);
+  padding: 0 var(--gap-small);
+  translate: 0 -50%;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  white-space: nowrap;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.model-viewcube-view:hover ~ .model-viewcube-caption,
+.model-viewcube:has(.model-viewcube-patch:focus-visible) .model-viewcube-caption {
+  visibility: visible;
+}
+
+/* A small stage keeps its room for the model; Frame model and the canvas keys still turn it. */
+@container model-stage (width < 260px) or (height < 220px) {
+  .model-viewcube {
+    display: none;
+  }
+}
+
+/* The shading panel ends above the cube; in a stage too short for both, the cube gives way. */
+@container model-stage (height >= 300px) {
+  .model-stage .model-shading-panel {
+    max-height: calc(100% - 136px);
+  }
+}
+
+@container model-stage (height < 300px) {
+  .model-stage:has(> .model-shading-panel) .model-viewcube {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-viewcube {
+    transition: none;
+  }
+}

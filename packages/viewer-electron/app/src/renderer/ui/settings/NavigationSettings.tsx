@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import type { ViewerAPI } from '../../../domain/contracts';
 import { KeyCapture } from './KeyCapture';
 import { errorMessage } from '../../../domain/errors';
+import { usePathText } from '../PathLabel';
 
 /** Sidebar section visibility and navigation defaults. */
 export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
   const { snapshot, patch } = editor;
   const [hotkey, setHotkey] = useState<Awaited<ReturnType<ViewerAPI['hotkeyStatus']>>>();
   const [command, setCommand] = useState<Awaited<ReturnType<ViewerAPI['shellCommand']>>>();
+  const commandPath = usePathText(command?.path ?? '~/.local/bin/viewer');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -62,18 +64,20 @@ export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
       {hotkey?.problem && <p className="error">{hotkey.problem}</p>}
       <h2>Shell command</h2>
       <p className="settings-note">
-        <code>{command?.path ?? '~/.local/bin/viewer'}</code>
+        <code>{commandPath}</code>
       </p>
       <div className="settings-actions">
         <button
           disabled={busy || !command || !!command.problem}
           onClick={() => void install(command?.installed ? 'uninstall' : 'install')}
         >
-          {command?.installed ? 'Uninstall shell command…' : 'Install shell command'}
+          {command?.installed ? 'Uninstall Shell Command…' : 'Install Shell Command'}
         </button>
       </div>
       {command?.installed && command.executable === false && (
-        <p className="settings-note">This Viewer script is present but is not executable.</p>
+        <p className="settings-note">
+          The command is installed but can’t run. Uninstall it, then install it again.
+        </p>
       )}
       {(error || command?.problem) && (
         <p className="error" role="alert">
@@ -103,7 +107,7 @@ export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
       </p>
       <div className="settings-actions">
         <button onClick={() => patch('ui.sidebar', normalizePreferences().sidebar)}>
-          Reset navigation defaults
+          Reset Navigation Defaults
         </button>
       </div>
     </>

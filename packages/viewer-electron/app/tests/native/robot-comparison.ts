@@ -309,7 +309,7 @@ try {
       main!.evaluate(
         pageCall(() =>
           [...document.querySelectorAll('button')].some(
-            (b) => b.textContent === 'Ask about selection',
+            (b) => b.textContent === 'Ask About Selection',
           ),
         ),
       ),
@@ -319,7 +319,7 @@ try {
   await main!.evaluate(
     pageCall(() =>
       [...document.querySelectorAll('button')]
-        .find((b) => b.textContent === 'Ask about selection')!
+        .find((b) => b.textContent === 'Ask About Selection')!
         .click(),
     ),
   );

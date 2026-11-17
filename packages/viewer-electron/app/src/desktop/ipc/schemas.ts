@@ -1,4 +1,5 @@
 import { readItemIdentity } from '../../domain/files/item-identity';
+import { remoteRequest } from '../../domain/remote/contracts';
 import { reconstructionRequestSchema } from '../../domain/canvases/reconstruction';
 import { licenseLimits } from '../../domain/license/license';
 import { dialogRequestSchema } from '../../domain/dialogs';
@@ -249,6 +250,7 @@ const gitActionRequestSchema = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export const schemas = {
+  remote: z.tuple([remoteRequest]),
   license: z.tuple([
     z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('status'), hideReminder: z.boolean().optional() }).strict(),
@@ -341,6 +343,8 @@ export const schemas = {
         })
         .strict(),
       z.object({ kind: z.literal('project-manager'), enabled: z.boolean() }).strict(),
+      z.object({ kind: z.literal('not-a-workspace'), key: definitionKeySchema }).strict(),
+      z.object({ kind: z.literal('show-found'), root: localPath.optional() }).strict(),
     ]),
   ]),
   newWindow: z.tuple([]),
@@ -977,6 +981,7 @@ export const schemas = {
  * provider's model data permission and the ⌘Q hint. The workspace window receives every event.
  */
 export const settingsEvents: readonly DesktopEvent['type'][] = [
+  'remote',
   'workspace-definitions',
   'license',
   'dialog',
@@ -993,6 +998,7 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
  * to Settings; the workspace window's file and workspace methods are unavailable there.
  */
 export const methodWindows = {
+  remote: 'both',
   license: 'both',
   dialog: 'both',
   speech: 'both',

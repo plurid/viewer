@@ -17,6 +17,11 @@ import { ColorField } from '../ColorField';
 import { looks } from '../../workspace/look';
 import { errorMessage } from '../../../domain/errors';
 import { DarkPagesDetail } from './DarkPagesSettings';
+import { FoundWorkspacesDetail } from './FoundWorkspacesSettings';
+import { baseName } from '../../../domain/workspaces/planes';
+
+/** The start-folder menus' last row: it picks a folder, and is never a value of its own. */
+const otherFolder = 'other';
 
 const toolbarIcons: Record<HeaderControl, IconName> = {
   parent: 'parent-plane',
@@ -99,6 +104,18 @@ export function CatalogSettings({
         const presetRow =
           toolbarKey && !definitions[index - 1]?.path.startsWith(headerControlsPath + '.');
         const checked = settingValue(snapshot, definition.path) === true;
+        const listed = (definition.choices ?? []).map(([value, label]) => ({ value, label }));
+        // a chosen start folder reads as its name, as Finder's New Finder windows show does, and
+        // Other… picks another: the button never names an action as the current value
+        const choices = locationField
+          ? [
+              ...listed.filter((choice) => choice.value !== 'custom'),
+              ...(customPath
+                ? [{ value: 'custom', label: baseName(customPath) || customPath }]
+                : []),
+              { value: otherFolder, label: 'Other…' },
+            ]
+          : listed;
         // a row of buttons is no label: a click on its text would press the first
         const element: RowElement = definition.kind === 'color' ? 'div' : 'label';
         return (
@@ -169,9 +186,12 @@ export function CatalogSettings({
                   <ChoiceButton
                     label={definition.label}
                     value={String(settingValue(snapshot, definition.path))}
-                    choices={(definition.choices ?? []).map(([value, label]) => ({ value, label }))}
+                    choices={choices}
                     onChoose={(value) => {
-                      if (locationField && value === 'custom') {
+                      if (
+                        locationField &&
+                        (value === otherFolder || (value === 'custom' && !customPath))
+                      ) {
                         chooseNewPlaneFolder(locationField);
                         return;
                       }
@@ -208,11 +228,12 @@ export function CatalogSettings({
             {definition.path === 'settings.previews.darkPages' && (
               <DarkPagesDetail editor={editor} />
             )}
+            {definition.path === 'settings.browsing.findWorkspaces' && <FoundWorkspacesDetail />}
             {locationField && settings.browsing[locationField] === 'custom' && (
               <div className="settings-folder-choice">
                 <PathField path={customPath} onError={(error) => setError(errorMessage(error))} />
                 <Button variant="secondary" onClick={() => chooseNewPlaneFolder(locationField)}>
-                  Change folder…
+                  Change Folder…
                 </Button>
               </div>
             )}

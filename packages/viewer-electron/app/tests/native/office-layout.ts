@@ -57,7 +57,7 @@ function paintedPage() {
 
 function officeViewChoices(): boolean {
   return [...document.querySelectorAll('.preview-toolbar button')].some((button) =>
-    ['Layout', 'Print layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
+    ['Layout', 'Print Layout', 'Reading', 'Sheet'].includes(button.textContent.trim()),
   );
 }
 
@@ -177,7 +177,7 @@ try {
       });
       if (name.endsWith('.xlsx')) {
         await until(() => evaluate(pageCall(officeViewChoices)), Boolean, 'Office mode controls');
-        await evaluate(pageCall(pressToolbarButton, 'Print layout'));
+        await evaluate(pageCall(pressToolbarButton, 'Print Layout'));
       }
       const first = await painted(connection);
       const firstText = await evaluate(textOf('.textLayer'));

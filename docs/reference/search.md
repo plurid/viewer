@@ -7,11 +7,11 @@ search covers.
 
 | Place                    | Opens with                                                              | Scope and controls                                                                                                                                                                           |
 | ------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Find file**            | **⌘F** (**Find file…**); in an editor or terminal ⌘F finds text instead | **Search scope**: **This folder**, **Subfolders** or **Indexed locations**. **Document text** searches indexed text. **Open results** opens a search plane; **Save search…** saves the query |
-| Folder filter row        | **Search this folder…**, or the plane toolbar's search button           | Filters the folder plane as you type. **Subfolders** searches below it. **Search contents** opens a search plane with document text on                                                       |
-| Search plane             | **Open results**, **Search contents**, `:find` or a saved search        | Editable query, **Document text** checkbox, coverage summary, 150 results a page with **Previous** and **Next**                                                                              |
+| **Find file**            | **⌘F** (**Find File…**); in an editor or terminal ⌘F finds text instead | **Search scope**: **This Folder**, **Subfolders** or **Indexed Locations**. **Document text** searches indexed text. **Open Results** opens a search plane; **Save Search…** saves the query |
+| Folder filter row        | **Search This Folder…**, or the plane toolbar's search button           | Filters the folder plane as you type. **Subfolders** searches below it. **Search contents** opens a search plane with document text on                                                       |
+| Search plane             | **Open Results**, **Search contents**, `:find` or a saved search        | Editable query, **Document text** checkbox, coverage summary, 150 results a page with **Previous** and **Next**                                                                              |
 | Command line             | `:filter`, `:find`, `:select`, `:deselect`                              | See [the command language](command-line.md)                                                                                                                                                  |
-| **Find files with tag…** | ⌘K                                                                      | One Finder tag; macOS only                                                                                                                                                                   |
+| **Find Files with Tag…** | ⌘K                                                                      | One Finder tag; macOS only                                                                                                                                                                   |
 
 ## Query syntax
 
@@ -107,7 +107,7 @@ is at most 512 characters. Quote a pattern that contains spaces or parentheses:
 
 ### Select by pattern
 
-**Select by pattern…** (⌃⌘=), **Deselect by pattern…** (⌃⌘-), `:select` and `:deselect` also take
+**Select by Pattern…** (⌃⌘=), **Deselect by Pattern…** (⌃⌘-), `:select` and `:deselect` also take
 globs. When every word contains `*` or `?` and none starts with `-`, `~` or `(` or contains `:`,
 `<`, `>`, `=` or `"`, each word is a glob and any of them may match: `*.md *.txt`, `IMG_????.jpg`.
 Otherwise the text is a query.
@@ -135,13 +135,13 @@ marks the column. A folder filter keeps its last valid query while you correct i
 
 | Control                                  | Effect                                                         |
 | ---------------------------------------- | -------------------------------------------------------------- |
-| **Indexed locations**, **Add location…** | Folders to index; the default is your Home folder; at most 100 |
+| **Indexed locations**, **Add Location…** | Folders to index; the default is your Home folder; at most 100 |
 | **Contents** beside a location           | Also extracts document text there; off by default              |
-| **Rebuild index**                        | Reads every location again                                     |
+| **Rebuild Index**                        | Reads every location again                                     |
 | **Pause background indexing**            | Stops indexing; results may be incomplete while paused         |
 | **Saved searches**                       | Lists saved searches; remove one here                          |
 | **Excluded names and paths**             | One name or absolute path per line; at most 200                |
-| **Add common exclusions**                | Adds the list below without replacing your rules               |
+| **Add Common Exclusions**                | Adds the list below without replacing your rules               |
 
 The index stores each file's name, path, extension, kind, size and modification time, locally.
 Indexing never runs OCR and never sends data to a model. Offline drives keep their last results.
@@ -190,10 +190,10 @@ shows 150 results a page; **Next** reads more known matches.
 
 | Command in a search plane             | Effect                                                                       |
 | ------------------------------------- | ---------------------------------------------------------------------------- |
-| **Add all indexed matches to basket** | Up to 10,000 matches, after indexing has finished; changed files are refused |
-| **Save as smart folder**              | A collection that follows the index                                          |
+| **Add All Indexed Matches to Basket** | Up to 10,000 matches, after indexing has finished; changed files are refused |
+| **Save as Smart Folder**              | A collection that follows the index                                          |
 
-**Save search…** in **Find file** stores the name, query, scope and **Document text** choice. A
+**Save Search…** in **Find file** stores the name, query, scope and **Document text** choice. A
 saved query is as long as any query, up to 1,000 characters. Its name starts as the query, cut at a
 word to 100 characters. You can keep 100 saved searches. Each saved search is a command in ⌘K under
 **Saved searches**; choosing it opens a search plane.
@@ -219,14 +219,14 @@ paths. Indexing in another location does not make this search incomplete.
 | Finder tag lookup                                                    | Spotlight, in the direct macOS build only                   |
 
 A live scan reports its checked entries, errors and limits; stopping it keeps the partial results.
-An empty search with partial coverage says **No matches in the available search data**; a complete
+An empty search with partial coverage says **No matches in the folders searched so far**; a complete
 one says **No matching files**.
 
 ## Fuzzy matching in ⌘K
 
 The command palette and **Find file** rank near-misses after exact, prefix and subsequence matches,
 in labels, aliases and file names. Each word of 3 to 5 letters may be one edit away, a longer word
-two, and a swap of adjacent letters counts as one edit: `git iint` finds **Run command…**, whose
+two, and a swap of adjacent letters counts as one edit: `git iint` finds **Run Command…**, whose
 aliases include `git init`. Words keep their order. This only ranks suggestions: it never rewrites
 or runs what you typed, and query filters stay literal.
 

@@ -1,12 +1,70 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { contextMenuSections, type MenuEntry, type MenuSection } from '../commands/menu';
-import { rankCommands, type ResolvedCommand } from '../commands/registry';
+import type { MenuEntry, MenuSection } from '../commands/menu';
+import type { ResolvedCommand } from '../commands/registry';
+import { contextMenuSections } from '../commands/menu';
+import { rankCommands } from '../commands/registry';
 import type { Suggestion } from '../commands/suggestions';
 import type { HeaderLead } from '../workspace/header-overflow';
 import { Icon } from './Icon';
+import { layerCoordinates } from './Popover';
 
 const entries = (sections: MenuSection[]) => sections.flatMap((section) => section.entries);
+const entryLabel = (entry: MenuEntry) =>
+  entry.kind === 'command' ? entry.command.label : entry.label;
+type MenuSide = 'left' | 'right';
+interface MenuPlacement {
+  style: CSSProperties;
+  side: MenuSide;
+}
+interface TypeAhead {
+  text: string;
+  at: number;
+}
+/** A pause in typing this long, in milliseconds, starts a new prefix, as in native menus. */
+const typeAheadPause = 1000;
+/** Text as type-ahead compares it: an é typed or stored as e and its accent is the same letter. */
+const folded = (text: string) => text.normalize('NFC').toLocaleLowerCase();
+
+/**
+ * Where type-ahead moves in a list without search: letters typed together spell a prefix, found
+ * from the active row on; one letter typed again moves on to the next row starting with it.
+ */
+function typeAhead(
+  rows: readonly MenuEntry[],
+  current: MenuEntry | undefined,
+  text: string,
+): MenuEntry | undefined {
+  const repeated = [...text].every((letter) => letter === text[0]);
+  const prefix = repeated ? text.slice(0, 1) : text;
+  const start = current ? rows.indexOf(current) : -1;
+  const from = repeated ? start + 1 : Math.max(0, start);
+  return [...rows.slice(from), ...rows.slice(0, from)].find((entry) =>
+    folded(entryLabel(entry)).startsWith(prefix),
+  );
+}
+
+/**
+ * Scrolls a row's list just enough to show the row. `scrollIntoView` may also scroll what holds
+ * the menu's button, which closes the menu.
+ */
+function reveal(row: HTMLElement | undefined): void {
+  const list = row?.closest<HTMLElement>('.command-results');
+  if (!row || !list) return;
+  const shown = list.getBoundingClientRect();
+  const box = row.getBoundingClientRect();
+  if (box.top < shown.top) list.scrollTop -= shown.top - box.top;
+  else if (box.bottom > shown.bottom) list.scrollTop += box.bottom - shown.bottom;
+}
+
+/** What holds the keyboard in a menu: its search field, or the list when it has none. */
+function keyboardTarget(content: HTMLElement | null): HTMLElement | null {
+  return (
+    content?.querySelector<HTMLElement>('.command-search-field input') ??
+    content?.querySelector<HTMLElement>('.context-menu > .command-results') ??
+    null
+  );
+}
 
 /** Native-style flyouts retain the search input and the invocation's captured target. */
 export function ContextMenuResults({
@@ -20,6 +78,11 @@ export function ContextMenuResults({
   onSelect,
   onClose,
   searchLabel = 'actions',
+  searchable = true,
+  listLabel = 'Actions',
+  empty = 'No matching actions',
+  none = 'No actions available',
+  currentID,
   blankIcons = false,
 }: {
   commands: readonly ResolvedCommand[];
@@ -35,15 +98,36 @@ export function ContextMenuResults({
   onClose(): void;
   /** What the search finds, in its label: “Search actions”, or a choice's name. */
   searchLabel?: string;
+  /** Short choice lists use type-ahead and Space in place of a search field. */
+  searchable?: boolean;
+  /** The list's name: “Actions”, or a choice's name. */
+  listLabel?: string;
+  /** What a search that finds nothing says: “No matching actions”, or “No matching choices”. */
+  empty?: string;
+  /** What a list with nothing in it says: “No actions available”, or “No choices”. */
+  none?: string;
+  /**
+   * The current choice: checked, shown and active as the menu opens, so Enter or Space keeps it.
+   * With it, rows are radio items.
+   */
+  currentID?: string;
   /** Rows without an icon keep its place blank, so a choice menu checks only the current one. */
   blankIcons?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [opened, setOpened] = useState<string[]>([]);
   const [active, setActive] = useState({ depth: 0, id: '' });
+  const [searchShown, setSearchShown] = useState(searchable);
+  if (searchShown !== searchable) {
+    // The choices changed under the open menu: what was typed to search them no longer shows.
+    setSearchShown(searchable);
+    setQuery('');
+  }
   const input = useRef<HTMLInputElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const typed = useRef<TypeAhead>({ text: '', at: 0 });
   const id = useId();
   const searching = !!query.trim();
   const sections = useMemo(
@@ -70,7 +154,10 @@ export function ContextMenuResults({
   const rows: MenuEntry[] = searching
     ? searchRows.map((command) => ({ kind: 'command', id: command.id, command }))
     : entries(levels[depth] ?? []);
-  const current = rows.find((row) => row.id === active.id) ?? rows[0];
+  const current =
+    rows.find((row) => row.id === active.id) ??
+    (searching ? undefined : rows.find((row) => row.id === currentID)) ??
+    rows[0];
   const cancelHover = () => {
     clearTimeout(timer.current);
     timer.current = undefined;
@@ -97,13 +184,12 @@ export function ContextMenuResults({
     setOpened(opened.slice(0, parent));
   };
   useEffect(() => {
-    const field = input.current;
-    field?.focus({ preventScroll: true });
     // A delayed docking effect may focus plane content after this overlay mounts.
     // Keep keyboard ownership here until dismissal; native window focus is unchanged.
-    const keepSearchFocus = (event: FocusEvent) => {
+    const keepMenuFocus = (event: FocusEvent) => {
+      const field = keyboardTarget(content.current);
       if (
-        field?.isConnected &&
+        field &&
         document.hasFocus() &&
         event.target instanceof Element &&
         event.target.closest(
@@ -112,11 +198,23 @@ export function ContextMenuResults({
       )
         field.focus({ preventScroll: true });
     };
-    document.addEventListener('focusin', keepSearchFocus);
+    document.addEventListener('focusin', keepMenuFocus);
     return () => {
       clearTimeout(timer.current);
-      document.removeEventListener('focusin', keepSearchFocus);
+      document.removeEventListener('focusin', keepMenuFocus);
     };
+  }, []);
+  // On opening, and when the search field comes or goes with the number of choices, the
+  // keyboard goes to what now holds it rather than to the page.
+  useEffect(() => {
+    keyboardTarget(content.current)?.focus({ preventScroll: true });
+  }, [searchable]);
+  // A long list opens on its current choice, shown, as a native menu does. This runs after the
+  // layer is placed, so the list already has its final height.
+  useEffect(() => {
+    if (currentID) reveal(buttons.current.get(rowID(0, currentID)));
+    // Once, as it opens: later the person moves through the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const select = (entry: MenuEntry, depth: number) => {
     cancelHover();
@@ -131,6 +229,7 @@ export function ContextMenuResults({
   const rowID = (depth: number, entryID: string) => `${id}-${depth}-${encodeURIComponent(entryID)}`;
   return (
     <div
+      ref={content}
       className="context-menu-content"
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) return;
@@ -163,49 +262,79 @@ export function ContextMenuResults({
           const target = rows[next];
           if (target) {
             setActive({ depth, id: target.id });
-            buttons.current.get(rowID(depth, target.id))?.scrollIntoView({ block: 'nearest' });
+            reveal(buttons.current.get(rowID(depth, target.id)));
           }
           if (!searching) setOpened(opened.slice(0, depth));
         } else if (event.key === 'Enter' && current) {
           event.preventDefault();
           event.stopPropagation();
           select(current, depth);
+        } else if (
+          !searchable &&
+          event.key.length === 1 &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          const now = Date.now();
+          const typing = now - typed.current.at < typeAheadPause;
+          // Space chooses, as in a native menu, unless it continues a name being typed.
+          if (event.key === ' ' && !typing) {
+            if (current) select(current, depth);
+            return;
+          }
+          const text = (typing ? typed.current.text : '') + folded(event.key);
+          typed.current = { text, at: now };
+          const target = typeAhead(rows, current, text);
+          if (target) {
+            cancelHover();
+            setActive({ depth, id: target.id });
+            reveal(buttons.current.get(rowID(depth, target.id)));
+          }
         }
       }}
     >
       <div className="context-menu command-search">
-        <div className="command-search-field">
-          <Icon name="search" size={16} />
-          <input
-            ref={input}
-            data-autofocus
-            aria-label={`Search ${searchLabel}`}
-            placeholder={`Search ${searchLabel}…`}
-            role={searching ? 'combobox' : undefined}
-            aria-autocomplete={searching ? 'list' : undefined}
-            aria-expanded={searching ? true : undefined}
-            aria-controls={`${id}-list-${depth}`}
-            aria-activedescendant={current ? rowID(depth, current.id) : undefined}
-            autoComplete="off"
-            spellCheck={false}
-            value={query}
-            onChange={(event) => {
-              cancelHover();
-              setQuery(event.target.value);
-              setOpened([]);
-              setActive({ depth: 0, id: '' });
-              const list = input.current
-                ?.closest('.context-menu')
-                ?.querySelector('.command-results');
-              if (list) list.scrollTop = 0;
-            }}
-          />
-        </div>
+        {searchable && (
+          <div className="command-search-field">
+            <Icon name="search" size={16} />
+            <input
+              ref={input}
+              data-autofocus
+              aria-label={`Search ${searchLabel}`}
+              placeholder={`Search ${searchLabel}…`}
+              role={searching ? 'combobox' : undefined}
+              aria-autocomplete={searching ? 'list' : undefined}
+              aria-expanded={searching ? true : undefined}
+              aria-controls={`${id}-list-${depth}`}
+              aria-activedescendant={current ? rowID(depth, current.id) : undefined}
+              autoComplete="off"
+              spellCheck={false}
+              value={query}
+              onChange={(event) => {
+                cancelHover();
+                setQuery(event.target.value);
+                setOpened([]);
+                setActive({ depth: 0, id: '' });
+                const list = input.current
+                  ?.closest('.context-menu')
+                  ?.querySelector('.command-results');
+                if (list) list.scrollTop = 0;
+              }}
+            />
+          </div>
+        )}
         <MenuList
           sections={rootSections}
           depth={0}
           id={`${id}-list-0`}
-          label="Actions"
+          label={listLabel}
+          empty={empty}
+          none={none}
+          checkedID={currentID}
+          focusable={!searchable}
           searching={searching}
           blankIcons={blankIcons}
           activeID={depth === 0 ? current?.id : opened[0]}
@@ -259,7 +388,11 @@ function MenuList({
   depth,
   id,
   label,
+  empty = 'No matching actions',
+  none = 'No actions available',
+  checkedID,
   searching = false,
+  focusable = false,
   blankIcons = false,
   anchor,
   activeID,
@@ -275,7 +408,12 @@ function MenuList({
   depth: number;
   id: string;
   label: string;
+  empty?: string;
+  none?: string;
+  /** With it, a list of choices: its rows are radio items, this one checked. */
+  checkedID?: string;
   searching?: boolean;
+  focusable?: boolean;
   blankIcons?: boolean;
   anchor?: HTMLElement;
   activeID?: string;
@@ -291,10 +429,10 @@ function MenuList({
   const hasSubmenus = sections.some((section) =>
     section.entries.some((entry) => entry.kind === 'submenu'),
   );
-  const [placement, setPlacement] = useState<{
-    style: CSSProperties;
-    side: 'left' | 'right';
-  }>({ style: { visibility: 'hidden' }, side: 'right' });
+  const [placement, setPlacement] = useState<MenuPlacement>({
+    style: { visibility: 'hidden' },
+    side: 'right',
+  });
   useLayoutEffect(() => {
     if (!anchor || !list.current) return;
     const row = anchor.getBoundingClientRect();
@@ -308,16 +446,19 @@ function MenuList({
     // When possible, reserve room for the next level before choosing a direction.
     // Otherwise a right-opening branch can immediately fold back over the root.
     const rightExtent = right + popup.width * (hasSubmenus ? 2 : 1);
-    const side =
+    const side: MenuSide =
       (left >= 8 && (preferLeft || rightExtent > innerWidth - 8)) ||
       right + popup.width > innerWidth - 8
         ? 'left'
         : 'right';
+    const position = layerCoordinates(list.current, {
+      left: Math.max(8, Math.min(side === 'left' ? left : right, innerWidth - popup.width - 8)),
+      top: Math.max(8, Math.min(row.top - 6, innerHeight - popup.height - 8)),
+    });
     setPlacement({
       side,
       style: {
-        left: Math.max(8, Math.min(side === 'left' ? left : right, innerWidth - popup.width - 8)),
-        top: Math.max(8, Math.min(row.top - 6, innerHeight - popup.height - 8)),
+        ...position,
         visibility: 'visible',
       },
     });
@@ -331,12 +472,14 @@ function MenuList({
       id={id}
       role={searching ? 'listbox' : 'menu'}
       aria-label={label}
+      tabIndex={focusable ? -1 : undefined}
+      aria-activedescendant={focusable && activeID ? rowID(depth, activeID) : undefined}
       onPointerEnter={onEnter}
       onScroll={onScroll}
     >
       {!entries(sections).length && (
         <p className="command-empty" role="status">
-          {searching ? 'No matching actions' : 'No actions available'}
+          {searching ? empty : none}
         </p>
       )}
       {sections.map((section, sectionIndex) => (
@@ -351,6 +494,7 @@ function MenuList({
             const command = entry.kind === 'command' ? entry.command : undefined;
             const name = command?.label ?? (entry.kind === 'submenu' ? entry.label : '');
             const elementID = rowID(depth, entry.id);
+            const radio = !searching && checkedID !== undefined;
             return (
               <button
                 type="button"
@@ -362,8 +506,9 @@ function MenuList({
                 id={elementID}
                 data-menu-id={entry.id}
                 tabIndex={-1}
-                role={searching ? 'option' : 'menuitem'}
+                role={searching ? 'option' : radio ? 'menuitemradio' : 'menuitem'}
                 aria-selected={searching ? activeID === entry.id : undefined}
+                aria-checked={radio ? checkedID === entry.id : undefined}
                 aria-haspopup={entry.kind === 'submenu' ? 'menu' : undefined}
                 aria-expanded={entry.kind === 'submenu' ? openedID === entry.id : undefined}
                 data-active={activeID === entry.id}

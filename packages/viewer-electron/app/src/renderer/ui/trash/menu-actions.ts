@@ -23,7 +23,7 @@ export function trashMenuActions(
           ? [
               {
                 id: 'open-selection',
-                label: 'Open folder',
+                label: 'Open Folder',
                 icon: 'folder' as const,
                 run: () => handlers.go(only.id),
               },
@@ -54,7 +54,7 @@ export function trashMenuActions(
           ? [
               {
                 id: 'restore-to',
-                label: 'Restore to…',
+                label: 'Restore To…',
                 icon: 'folder' as const,
                 run: () => handlers.act(() => handlers.restore(ids, 'choose')),
               },
@@ -72,7 +72,7 @@ export function trashMenuActions(
                 ? [
                     {
                       id: 'open-original-folder',
-                      label: 'Open original folder in plane',
+                      label: 'Show Original Folder',
                       icon: 'folder' as const,
                       run: () => handlers.act(() => handlers.openOriginal(only)),
                     },
